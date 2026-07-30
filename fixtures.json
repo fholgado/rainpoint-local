@@ -1,0 +1,77 @@
+[
+  {
+    "name": "valve_running_600_seconds",
+    "model": "HTV145FRF",
+    "frame": "10#E1B900DC01D82120B724A0FC19AD58029F2E000000FF0FAA9CFC19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -71,
+      "valve_state": "irrigation",
+      "is_watering": true,
+      "duration_seconds": 600,
+      "last_usage_liters": 4.6,
+      "event_time_local": "2026-07-30T10:00:36",
+      "report_time_local": "2026-07-30T09:50:42",
+      "alarm": 0
+    }
+  },
+  {
+    "name": "valve_stopped",
+    "model": "HTV145FRF",
+    "frame": "10#E1B900DC01D80020B700000000AD00009F64000000FF0FE89CFC19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -71,
+      "valve_state": "idle",
+      "is_watering": false,
+      "duration_seconds": 0,
+      "last_usage_liters": 10.0,
+      "report_time_local": "2026-07-30T09:51:40",
+      "alarm": 0
+    }
+  },
+  {
+    "name": "right_bed",
+    "model": "HCS026FRF",
+    "frame": "10#E1BA00DC01883AFF0F6C9CFC19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -70,
+      "soil_moisture_percent": 58,
+      "report_time_local": "2026-07-30T09:49:44"
+    }
+  },
+  {
+    "name": "left_bed",
+    "model": "HCS026FRF",
+    "frame": "10#E1B500DC01883FFF0F2090FC19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -75,
+      "soil_moisture_percent": 63,
+      "report_time_local": "2026-07-30T09:00:32"
+    }
+  },
+  {
+    "name": "front_yard_sensor_1",
+    "model": "HCS026FRF",
+    "frame": "10#E1B000DC01883DFF0F0745FB19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -80,
+      "soil_moisture_percent": 61,
+      "report_time_local": "2026-07-29T20:20:07"
+    }
+  },
+  {
+    "name": "front_yard_sensor_2",
+    "model": "HCS026FRF",
+    "frame": "10#E1B300DC018852FF0FD281FC19",
+    "expected": {
+      "battery_percent": 100,
+      "rssi_dbm": -77,
+      "soil_moisture_percent": 82,
+      "report_time_local": "2026-07-30T08:07:18"
+    }
+  }
+]

@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to rainpointd",
+        "description": "Enter the address of the local RainPoint gateway.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the local gateway",
+      "invalid_response": "The gateway returned an incompatible response"
+    },
+    "abort": {
+      "already_configured": "This local gateway is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "soil_moisture": { "name": "Soil moisture" },
+      "battery": { "name": "Battery" },
+      "signal_strength": { "name": "Signal strength" },
+      "valve_state": { "name": "Valve state" },
+      "duration": { "name": "Reported duration" },
+      "last_usage": { "name": "Last water usage" },
+      "report_time": { "name": "Device report time" }
+    },
+    "binary_sensor": {
+      "watering": { "name": "Watering" }
+    }
+  }
+}

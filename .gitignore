@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.pcap
+*.pcapng
+*.log
+.DS_Store
+.coverage
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Local-only research material and machine-specific capture helper.
+homgar-installed/
+start_passive_capture.sh
