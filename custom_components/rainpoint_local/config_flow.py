@@ -27,24 +27,14 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            client = RainPointLocalClient(
-                user_input[CONF_HOST],
-                user_input[CONF_PORT],
-                async_get_clientsession(self.hass),
-            )
             try:
-                info = await client.info()
+                info = await self._async_validate(user_input)
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"
             except RainPointLocalInvalidResponse:
                 errors["base"] = "invalid_response"
             else:
-                await self.async_set_unique_id(info["gateway_id"])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=f"RainPoint Local ({info['gateway_id']})",
-                    data=user_input,
-                )
+                return await self._async_create_gateway_entry(user_input, info)
 
         schema = vol.Schema(
             {
@@ -56,4 +46,36 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(
             step_id="user", data_schema=schema, errors=errors
+        )
+
+    async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
+        """Import a temporary YAML bootstrap as a normal config entry."""
+        try:
+            info = await self._async_validate(user_input)
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except RainPointLocalInvalidResponse:
+            return self.async_abort(reason="invalid_response")
+        return await self._async_create_gateway_entry(user_input, info)
+
+    async def _async_validate(
+        self, user_input: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Connect to rainpointd and return compatible gateway metadata."""
+        client = RainPointLocalClient(
+            user_input[CONF_HOST],
+            user_input[CONF_PORT],
+            async_get_clientsession(self.hass),
+        )
+        return await client.info()
+
+    async def _async_create_gateway_entry(
+        self, user_input: dict[str, Any], info: dict[str, Any]
+    ) -> FlowResult:
+        """Create one unique entry for a validated gateway."""
+        await self.async_set_unique_id(info["gateway_id"])
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=f"RainPoint Local ({info['gateway_id']})",
+            data=user_input,
         )

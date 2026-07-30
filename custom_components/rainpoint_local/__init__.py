@@ -2,14 +2,41 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
+import voluptuous as vol
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import config_validation as cv
 
 from .api import RainPointLocalClient, RainPointLocalError
-from .const import CONF_HOST, CONF_PORT, DOMAIN, PLATFORMS
+from .const import CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN, PLATFORMS
 from .coordinator import RainPointLocalCoordinator
+
+CONFIG_SCHEMA = vol.Schema(
+    {
+        DOMAIN: vol.Schema(
+            {
+                vol.Required(CONF_HOST): cv.string,
+                vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
+            }
+        )
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Import a temporary YAML bootstrap through the supported Config Flow."""
+    if yaml_config := config.get(DOMAIN):
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_IMPORT},
+                data=dict(yaml_config),
+            )
+        )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

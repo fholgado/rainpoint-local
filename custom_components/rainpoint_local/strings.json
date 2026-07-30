@@ -15,7 +15,9 @@
       "invalid_response": "The gateway returned an incompatible response"
     },
     "abort": {
-      "already_configured": "This local gateway is already configured"
+      "already_configured": "This local gateway is already configured",
+      "cannot_connect": "Unable to connect to the local gateway",
+      "invalid_response": "The gateway returned an incompatible response"
     }
   },
   "entity": {
