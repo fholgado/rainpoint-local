@@ -1,0 +1,6 @@
+configuration:
+  replay_interval:
+    name: Replay interval
+    description: Seconds between captured fixture observations
+network:
+  8787/tcp: Read-only RainPoint Local API

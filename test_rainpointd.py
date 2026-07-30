@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import unittest
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).parent
+sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server

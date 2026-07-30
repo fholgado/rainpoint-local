@@ -47,7 +47,8 @@ A dependency-light library owns frame parsing and encoding. It should:
 - expose typed device events rather than Home Assistant entities, and
 - use captured fixtures as regression tests.
 
-`rainpoint_protocol.py` and `fixtures.json` are the beginning of this layer.
+`rainpointd_addon/rainpoint_protocol.py` and
+`rainpointd_addon/fixtures.json` are the beginning of this layer.
 
 ### Local gateway service (`rainpointd`)
 

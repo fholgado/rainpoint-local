@@ -16,6 +16,8 @@ Working now:
 - decoding captured HCS026FRF soil-moisture status payloads,
 - decoding captured HTV145FRF valve status payloads,
 - replaying captured observations through a local `rainpointd` API,
+- running the replay gateway persistently as an experimental Home Assistant
+  app on `aarch64` or `amd64`,
 - reporting replayed soil, battery, signal, usage, and valve state to Home
   Assistant, and
 - rejecting every control request at the gateway boundary.
@@ -65,18 +67,30 @@ There are two pieces:
 
 1. `rainpoint_local`, the Home Assistant custom integration.
 2. `rainpointd`, the service that owns radio decoding, device state, and later
-   valve safety.
+   valve safety. It is now packaged in `rainpointd_addon` as an experimental
+   Home Assistant app.
 
 HACS can install the custom integration, but it cannot run `rainpointd`.
-`rainpointd` will ultimately be distributed as a Home Assistant app/add-on or
-run on the replacement RF gateway.
+The replay gateway is packaged as a Home Assistant app/add-on and can
+eventually be replaced by a service on the RF gateway.
+
+### Home Assistant app
+
+The `rainpointd_addon` directory is a Supervisor-compatible app package. For
+local development, copy it to `/addons/rainpointd`, reload the app store, and
+install **RainPoint Local Gateway** from the Local apps repository.
+
+Once this GitHub repository is public, it can also be added to the Home
+Assistant app store as a custom repository. The app exposes the read-only API
+on TCP port 8787 and has no HA API access, Supervisor API access, USB mapping,
+or privileged host permissions.
 
 ### Development installation
 
 Run the replay gateway:
 
 ```sh
-python3 -m rainpointd
+PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
 Copy `custom_components/rainpoint_local` into the Home Assistant configuration
@@ -104,7 +118,7 @@ still required.
 Decode a captured frame:
 
 ```sh
-python3 rainpoint_protocol.py HCS026FRF \
+python3 rainpointd_addon/rainpoint_protocol.py HCS026FRF \
   '10#E1BA00DC01883AFF0F6C9CFC19'
 ```
 

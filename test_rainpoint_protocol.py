@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from pathlib import Path
 
-from rainpoint_protocol import decode, parse_tlv
-
-
 ROOT = Path(__file__).parent
+sys.path.insert(0, str(ROOT / "rainpointd_addon"))
+
+from rainpoint_protocol import decode, parse_tlv  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
     def test_captured_fixtures(self) -> None:
-        fixtures = json.loads((ROOT / "fixtures.json").read_text())
+        fixtures = json.loads(
+            (ROOT / "rainpointd_addon" / "fixtures.json").read_text()
+        )
         for fixture in fixtures:
             with self.subTest(fixture=fixture["name"]):
                 actual = decode(fixture["frame"], fixture["model"])
