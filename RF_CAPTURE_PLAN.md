@@ -32,8 +32,27 @@ RTL-SDR plus CC1101 approach.
 
 ## Software
 
-Install `rtl_433` on the capture computer. The receiver is not currently
-installed or attached to the Mac used for this research.
+`rtl_433` 25.12 is installed on the capture Mac. The receiver is not currently
+attached.
+
+The repository includes a bounded capture helper that records raw I/Q signals,
+decoded JSON, analyzer logs, session metadata, and an action timeline in one
+ignored local directory:
+
+```sh
+./tools/capture_rainpoint_rf.sh --duration 15m
+```
+
+While it is running, timestamp an app or physical action from another terminal:
+
+```sh
+./tools/mark_rainpoint_rf_action.sh "valve start requested for 60 seconds"
+./tools/mark_rainpoint_rf_action.sh "valve stopped manually"
+```
+
+The most recent session is available at `captures/rf/latest`. Capture artifacts
+are intentionally ignored by Git because raw I/Q files can be large and may
+contain unrelated nearby radio traffic.
 
 Initial analyzer command:
 

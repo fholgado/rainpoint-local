@@ -131,6 +131,15 @@ python3 -m unittest -v test_rainpoint_protocol.py test_rainpointd.py
 The HTTP tests bind only an ephemeral loopback port. They do not contact the
 hub, cloud services, or RF hardware.
 
+Prepare or run a bounded receive-only RF capture:
+
+```sh
+./tools/capture_rainpoint_rf.sh --dry-run
+./tools/capture_rainpoint_rf.sh --duration 15m
+```
+
+See [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md) for the labeled capture sequence.
+
 ## Project documents
 
 - [PROTOCOL.md](PROTOCOL.md): decoded fields and current evidence
