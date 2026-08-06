@@ -369,6 +369,14 @@ Here `SS` was `9b`, `9c`, or `9d`. All three runs used the HA duration setting
 of four minutes, making `f8` a duration/setpoint candidate that needs captures
 at other configured durations before it can be decoded.
 
+Three later runs also retained the four-minute setting and produced sequence
+bytes `9e`, `9f`, then `80`. The wrap from `9f` to `80` strongly indicates a
+five-bit counter carried with a fixed high bit. Their actual watering times
+varied, but every open request still contained `f8`, supporting the conclusion
+that the field represents the configured limit rather than elapsed runtime.
+The `9f` open request was transmitted twice as the exact same frame, 709 ms
+apart, before its response.
+
 The third close request was transmitted twice, 690 ms apart, as the exact same
 38-byte frame, including trailer `35f2`. This proves there is no per-burst nonce
 and that the trailer is deterministic for a given frame. It does not yet prove
