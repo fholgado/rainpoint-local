@@ -331,6 +331,60 @@ close (`90 81 ...`). Confirmation frames advanced from `0x90` to `0x92` and
 message-type byte contains a transaction or sequence value rather than a fixed
 command opcode.
 
+### Controlled three-cycle valve command capture
+
+A 60-minute broad capture recorded three short, manually stopped Zone 1 runs.
+Home Assistant Recorder supplied the authoritative valve transitions, while
+the gateway event log supplied RF burst start times. Each cycle produced the
+same command and response shapes:
+
+To avoid publishing household activity times, the table keeps only delays from
+the beginning of each RF request:
+
+| Cycle | Open response | HA open | Close response | HA closed |
+|---|---:|---:|---:|---:|
+| 1 | +373 ms | +550 ms | +373 ms | +646 ms |
+| 2 | +377 ms | +664 ms | +376 ms | +664 ms |
+| 3 | +374 ms | +550 ms | +1,063 ms | +1,254 ms |
+
+The first body byte was `9b`, `9c`, then `9d`; it advanced once per watering
+cycle and was echoed by every request/response packet in that cycle. The
+second body byte reliably identifies the action and direction:
+
+| Body byte 1 | Endpoint order | Meaning |
+|---:|---|---|
+| `10` | `b42d008f` to `b9840280` | open request |
+| `50` | `b9840280` to `b42d008f` | open response |
+| `90` | `b42d008f` to `b9840280` | close request |
+| `d0` | `b9840280` to `b42d008f` | close response |
+
+The complete request bodies were stable except for that sequence byte:
+
+```text
+open:  SS 10 82 80 81 00 f8 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+close: SS 90 81 80 81 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+```
+
+Here `SS` was `9b`, `9c`, or `9d`. All three runs used the HA duration setting
+of four minutes, making `f8` a duration/setpoint candidate that needs captures
+at other configured durations before it can be decoded.
+
+The third close request was transmitted twice, 690 ms apart, as the exact same
+38-byte frame, including trailer `35f2`. This proves there is no per-burst nonce
+and that the trailer is deterministic for a given frame. It does not yet prove
+that an older sequence value can be replayed in a later session.
+
+Across otherwise identical `9b`/`9c`/`9d` requests, the trailer XOR deltas are
+consistent with the CRC-CCITT polynomial `0x1021`. None of the common CRC-16
+initialization/final-XOR variants, nor a simple contiguous frame slice, matches
+all request and response trailers yet. Treat `0x1021` as a differential clue,
+not a completed checksum algorithm.
+
+Short `.. c1 01 00 06 ..`, `.. 41 01 00 06 ..`, and `.. 42 00 80 ..` frames
+also surrounded the commands. Their counters advance independently, so they
+remain classified as status/heartbeat candidates rather than open/close
+commands.
+
 The Right Bed HCS026 endpoint `9ce58024` reported 60% before watering and 61%
 afterward. HA recorded the same 61% value 1.3 seconds later. No other HomGar
 moisture entity changed in the capture window, and no second HCS026
@@ -355,10 +409,10 @@ Advantages:
 
 Remaining RF unknowns:
 
-- endpoint direction and accessory-address semantics
+- pairing and accessory-address semantics
 - trailer checksum or message-authentication algorithm
-- exact open/close command bytes
-- replay protection, if any
+- duration/setpoint encoding in the open request
+- sequence freshness and replay protection, if any
 
 ### Public RF clues
 
