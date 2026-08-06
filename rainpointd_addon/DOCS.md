@@ -5,19 +5,27 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.1.0 replays captured, synthetic device observations. It does not
-connect to the RainPoint hub, the internet, or RF hardware. Every HTTP POST
-request is rejected.
+Version 0.2.0 supports captured replay and receive-only USB RTL-SDR modes. It
+does not connect to the RainPoint cloud, and every HTTP POST request is
+rejected.
 
 Installing this app does not make the physical irrigation system work offline.
-Its purpose is to validate the persistent gateway-to-Home-Assistant boundary
-before adding a receive-only 433 MHz transport.
+Replay remains the default after upgrade. Select `rtl433` only after attaching
+a supported RTL-SDR receiver to the Home Assistant host.
 
 ## Configuration
 
 ### Replay interval
 
 Number of seconds between fixture observations. The default is 5 seconds.
+
+### Transport
+
+- `replay`: captured development fixtures; does not use USB hardware.
+- `rtl433`: live receive-only RainPoint packets from the USB RTL-SDR.
+
+The live defaults are 434,000,000 Hz center frequency and 1,024,000 samples per
+second. These settings cover the locally observed RainPoint carriers.
 
 ## Home Assistant integration
 
@@ -27,10 +35,11 @@ The app exposes its read-only API on TCP port 8787. Configure the
 - Host: the IP address of the Home Assistant host
 - Port: `8787`
 
-The integration will create simulated soil-moisture, battery, signal, valve
-status, water-usage, and watering-status entities.
+Replay mode creates simulated entities. Live mode currently creates confirmed
+HCS026FRF soil-moisture entities; other RF fields remain research work.
 
 ## Safety
 
 This release has no RF transmitter, cloud transport, valve entity, or control
-API. It cannot operate the physical valve.
+API. USB access is used only by `rtl_433` for receiving, and the app cannot
+operate the physical valve.

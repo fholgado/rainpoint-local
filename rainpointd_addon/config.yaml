@@ -1,7 +1,7 @@
 name: RainPoint Local Gateway
-version: 0.1.0
+version: 0.2.0
 slug: rainpointd
-description: Read-only local RainPoint gateway using captured replay fixtures
+description: Read-only local RainPoint gateway with replay and RTL-SDR support
 url: https://github.com/fholgado/rainpoint-local
 arch:
   - aarch64
@@ -16,7 +16,14 @@ ports:
 ports_description:
   8787/tcp: Read-only RainPoint Local API
 watchdog: http://[HOST]:[PORT:8787]/health
+usb: true
 options:
+  transport: replay
   replay_interval: 5.0
+  frequency: 434000000
+  sample_rate: 1024000
 schema:
+  transport: "list(replay|rtl433)"
   replay_interval: "float(0.5,3600)"
+  frequency: "int(433000000,435000000)"
+  sample_rate: "int(250000,2400000)"

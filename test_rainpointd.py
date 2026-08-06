@@ -38,6 +38,19 @@ class GatewayTest(unittest.TestCase):
         ReplayTransport(gateway).seed()
         self.assertEqual([5, 6], [e["event_id"] for e in gateway.events(since=4)])
 
+    def test_transport_health(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        self.assertEqual("ok", gateway.health()["status"])
+        gateway.set_transport_status(False, "receiver disconnected")
+        self.assertEqual(
+            {
+                "status": "error",
+                "transport": "rtl433",
+                "detail": "receiver disconnected",
+            },
+            gateway.health(),
+        )
+
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
@@ -78,6 +91,12 @@ class HTTPAPITest(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen(request, timeout=2)
         self.assertEqual(405, raised.exception.code)
+
+    def test_unhealthy_transport_returns_503(self) -> None:
+        self.server.gateway.set_transport_status(False, "receiver disconnected")
+        with self.assertRaises(HTTPError) as raised:
+            urlopen(f"{self.base}/health", timeout=2)
+        self.assertEqual(503, raised.exception.code)
 
 
 if __name__ == "__main__":

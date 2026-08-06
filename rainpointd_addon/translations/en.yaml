@@ -1,6 +1,15 @@
 configuration:
+  transport:
+    name: Transport
+    description: Use captured replay fixtures or a receive-only USB RTL-SDR
   replay_interval:
     name: Replay interval
     description: Seconds between captured fixture observations
+  frequency:
+    name: Center frequency
+    description: RTL-SDR center frequency in hertz
+  sample_rate:
+    name: Sample rate
+    description: RTL-SDR sample rate in samples per second
 network:
   8787/tcp: Read-only RainPoint Local API

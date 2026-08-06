@@ -80,6 +80,7 @@ class RTL433Transport:
             text=True,
             bufsize=1,
         )
+        self.gateway.set_transport_status(True)
         if self._process.stdout is None:
             raise RuntimeError("rtl_433 stdout pipe was not created")
         self._thread = threading.Thread(
@@ -147,7 +148,17 @@ class RTL433Transport:
         return published
 
     def _run(self, stream: TextIO) -> None:
-        for line in stream:
-            if self._stop.is_set():
-                return
-            self.consume_line(line)
+        try:
+            for line in stream:
+                if self._stop.is_set():
+                    return
+                self.consume_line(line)
+        except Exception as exc:  # Keep health visible if the reader fails.
+            if not self._stop.is_set():
+                self.gateway.set_transport_status(False, str(exc))
+            return
+        if not self._stop.is_set():
+            returncode = self._process.wait() if self._process else None
+            self.gateway.set_transport_status(
+                False, f"rtl_433 exited unexpectedly ({returncode})"
+            )

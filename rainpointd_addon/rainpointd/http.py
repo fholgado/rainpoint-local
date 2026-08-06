@@ -24,7 +24,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         parsed = urlparse(self.path)
         if parsed.path == "/health":
-            self._json(200, {"status": "ok"})
+            health = self.server.gateway.health()
+            self._json(200 if health["status"] == "ok" else 503, health)
             return
         if parsed.path == f"/api/{API_VERSION}/info":
             self._json(200, self.server.gateway.info())

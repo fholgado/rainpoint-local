@@ -32,6 +32,8 @@ class Gateway:
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._next_event_id = 1
         self._lock = threading.Lock()
+        self._transport_healthy = True
+        self._transport_error: str | None = None
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -42,6 +44,25 @@ class Gateway:
                 "transport": self.transport,
                 "read_only": self.read_only,
                 "device_count": len(self._devices),
+                "transport_healthy": self._transport_healthy,
+                "transport_error": self._transport_error,
+            }
+
+    def set_transport_status(
+        self, healthy: bool, error: str | None = None
+    ) -> None:
+        """Update transport health for API and Supervisor watchdog checks."""
+        with self._lock:
+            self._transport_healthy = healthy
+            self._transport_error = error
+
+    def health(self) -> dict[str, Any]:
+        """Return health separately from capability metadata."""
+        with self._lock:
+            return {
+                "status": "ok" if self._transport_healthy else "error",
+                "transport": self.transport,
+                "detail": self._transport_error,
             }
 
     def observe(
