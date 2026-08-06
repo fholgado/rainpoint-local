@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+- Add a bounded receive-only broad-capture phase for decoder research.
+- Keep the API and persistent event decoder active while saving raw detected
+  signals.
+- Automatically return to normal live decoding when the configured capture
+  duration ends.
+- Store raw captures under `/share/rainpoint-captures` for local analysis.
+
 ## 0.3.0
 
 - Persist live normalized RF events in SQLite under the app data volume.

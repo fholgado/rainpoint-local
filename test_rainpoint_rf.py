@@ -127,6 +127,22 @@ class RainPointRFTest(unittest.TestCase):
         self.assertIn("match={40}79f4882f28", " ".join(command))
         self.assertNotIn("-S", command)
 
+        capture_command = rtl_433_command(
+            434_000_000,
+            1_024_000,
+            signal_capture_seconds=3600,
+        )
+        self.assertIn("-A", capture_command)
+        self.assertEqual("all", capture_command[capture_command.index("-S") + 1])
+        self.assertEqual("3600", capture_command[capture_command.index("-T") + 1])
+
+    def test_raw_capture_requires_a_directory(self) -> None:
+        with self.assertRaisesRegex(ValueError, "signal_directory"):
+            RTL433Transport(
+                Gateway(transport="rtl433"),
+                signal_capture_seconds=60,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

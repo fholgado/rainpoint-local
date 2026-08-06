@@ -25,6 +25,8 @@ def main() -> int:
     )
     parser.add_argument("--frequency", type=int, default=434_000_000)
     parser.add_argument("--sample-rate", type=int, default=1_024_000)
+    parser.add_argument("--signal-capture-seconds", type=int, default=0)
+    parser.add_argument("--signal-directory")
     parser.add_argument(
         "--storage",
         help="SQLite path for persistent events and endpoint inventory",
@@ -41,6 +43,8 @@ def main() -> int:
             gateway,
             frequency=args.frequency,
             sample_rate=args.sample_rate,
+            signal_capture_seconds=args.signal_capture_seconds,
+            signal_directory=args.signal_directory,
         )
     else:
         transport = ReplayTransport(gateway, interval=args.interval)

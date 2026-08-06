@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.2.0 supports captured replay and receive-only USB RTL-SDR modes. It
+Version 0.3.1 supports captured replay and receive-only USB RTL-SDR modes. It
 does not connect to the RainPoint cloud, and every HTTP POST request is
 rejected.
 
@@ -26,6 +26,16 @@ Number of seconds between fixture observations. The default is 5 seconds.
 
 The live defaults are 434,000,000 Hz center frequency and 1,024,000 samples per
 second. These settings cover the locally observed RainPoint carriers.
+
+### Broad capture duration
+
+Set `research_capture_minutes` to a nonzero value to save every detected raw RF
+signal for that many minutes while the normal RainPoint event decoder and API
+remain active. The app then returns automatically to ordinary live decoding.
+Raw I/Q files are written beneath `/share/rainpoint-captures`; they may include
+unrelated nearby 433 MHz transmissions and must remain local. Reset the option
+to `0` after starting a one-time capture so a future app restart does not begin
+another capture.
 
 ## Home Assistant integration
 
@@ -49,5 +59,6 @@ message byte, signal level, and frame.
 ## Safety
 
 This release has no RF transmitter, cloud transport, valve entity, or control
-API. USB access is used only by `rtl_433` for receiving, and the app cannot
-operate the physical valve.
+API. USB access is used only by `rtl_433` for receiving. Share access is used
+only for explicitly enabled raw captures, and the app cannot operate the
+physical valve.

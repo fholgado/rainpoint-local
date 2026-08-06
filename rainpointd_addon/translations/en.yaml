@@ -11,5 +11,8 @@ configuration:
   sample_rate:
     name: Sample rate
     description: RTL-SDR sample rate in samples per second
+  research_capture_minutes:
+    name: Broad capture duration
+    description: Minutes to save all detected raw RF signals before returning to normal decoding
 network:
   8787/tcp: Read-only RainPoint Local API

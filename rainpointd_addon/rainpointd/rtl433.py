@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
-from typing import Any, Callable, Sequence, TextIO
+from pathlib import Path
+from typing import Any, Callable, Sequence
 
 from .gateway import Gateway
 from .rf import FLEX_DECODER, normalize_row
@@ -16,9 +17,14 @@ KNOWN_HCS026 = {
 }
 
 
-def rtl_433_command(frequency: int, sample_rate: int) -> list[str]:
+def rtl_433_command(
+    frequency: int,
+    sample_rate: int,
+    *,
+    signal_capture_seconds: int = 0,
+) -> list[str]:
     """Build the receive-only rtl_433 command without any transmit capability."""
-    return [
+    command = [
         "rtl_433",
         "-f",
         str(frequency),
@@ -37,6 +43,11 @@ def rtl_433_command(frequency: int, sample_rate: int) -> list[str]:
         "-F",
         "json",
     ]
+    if signal_capture_seconds > 0:
+        command.extend(
+            ["-A", "-S", "all", "-T", str(signal_capture_seconds)]
+        )
+    return command
 
 
 class RTL433Transport:
@@ -48,11 +59,28 @@ class RTL433Transport:
         *,
         frequency: int = 434_000_000,
         sample_rate: int = 1_024_000,
+        signal_capture_seconds: int = 0,
+        signal_directory: str | None = None,
         command: Sequence[str] | None = None,
         process_factory: Callable[..., subprocess.Popen[str]] = subprocess.Popen,
     ) -> None:
         self.gateway = gateway
         self.command = list(command or rtl_433_command(frequency, sample_rate))
+        self._capture_command = (
+            rtl_433_command(
+                frequency,
+                sample_rate,
+                signal_capture_seconds=signal_capture_seconds,
+            )
+            if command is None and signal_capture_seconds > 0
+            else None
+        )
+        self._signal_directory = signal_directory
+        if self._capture_command and not self._signal_directory:
+            raise ValueError("signal_directory is required for raw capture")
+        if self._signal_directory:
+            Path(self._signal_directory).mkdir(parents=True, exist_ok=True)
+        self._capture_pending = self._capture_command is not None
         self.process_factory = process_factory
         self._process: subprocess.Popen[str] | None = None
         self._thread: threading.Thread | None = None
@@ -73,23 +101,33 @@ class RTL433Transport:
         if self._thread is not None:
             return
         self._stop.clear()
-        self._process = self.process_factory(
-            self.command,
-            stdout=subprocess.PIPE,
-            stderr=None,
-            text=True,
-            bufsize=1,
+        self._process = self._start_process(
+            self._capture_command or self.command,
+            cwd=self._signal_directory if self._capture_pending else None,
         )
         self.gateway.set_transport_status(True)
-        if self._process.stdout is None:
-            raise RuntimeError("rtl_433 stdout pipe was not created")
         self._thread = threading.Thread(
             target=self._run,
-            args=(self._process.stdout,),
             name="rainpoint-rtl433",
             daemon=True,
         )
         self._thread.start()
+
+    def _start_process(
+        self, command: Sequence[str], *, cwd: str | None = None
+    ) -> subprocess.Popen[str]:
+        """Start one receive-only rtl_433 phase."""
+        process = self.process_factory(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=None,
+            text=True,
+            bufsize=1,
+            cwd=cwd,
+        )
+        if process.stdout is None:
+            raise RuntimeError("rtl_433 stdout pipe was not created")
+        return process
 
     def stop(self) -> None:
         """Stop the receive process and reader thread."""
@@ -163,18 +201,34 @@ class RTL433Transport:
             published += 1
         return published
 
-    def _run(self, stream: TextIO) -> None:
-        try:
-            for line in stream:
-                if self._stop.is_set():
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            process = self._process
+            if process is None or process.stdout is None:
+                return
+            try:
+                for line in process.stdout:
+                    if self._stop.is_set():
+                        return
+                    self.consume_line(line)
+            except Exception as exc:  # Keep health visible if reader fails.
+                if not self._stop.is_set():
+                    self.gateway.set_transport_status(False, str(exc))
+                return
+
+            returncode = process.wait()
+            if self._stop.is_set():
+                return
+            if self._capture_pending:
+                self._capture_pending = False
+                try:
+                    self._process = self._start_process(self.command)
+                except Exception as exc:
+                    self.gateway.set_transport_status(False, str(exc))
                     return
-                self.consume_line(line)
-        except Exception as exc:  # Keep health visible if the reader fails.
-            if not self._stop.is_set():
-                self.gateway.set_transport_status(False, str(exc))
-            return
-        if not self._stop.is_set():
-            returncode = self._process.wait() if self._process else None
+                self.gateway.set_transport_status(True)
+                continue
             self.gateway.set_transport_status(
                 False, f"rtl_433 exited unexpectedly ({returncode})"
             )
+            return
