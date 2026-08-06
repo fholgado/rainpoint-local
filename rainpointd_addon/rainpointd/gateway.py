@@ -54,8 +54,51 @@ class Gateway:
         observed_at: str | None = None,
     ) -> dict[str, Any]:
         """Decode one observation, update state, and append an immutable event."""
-        decoded = decode(frame, model)
+        return self.observe_decoded(
+            device_id=device_id,
+            name=name,
+            model=model,
+            frame=frame,
+            state=decode(frame, model),
+            observed_at=observed_at,
+        )
+
+    def register(
+        self,
+        *,
+        device_id: str,
+        name: str,
+        model: str,
+        state: dict[str, Any] | None = None,
+    ) -> None:
+        """Register an unavailable device before its first observation."""
+        with self._lock:
+            self._devices.setdefault(
+                device_id,
+                {
+                    "device_id": device_id,
+                    "name": name,
+                    "model": model,
+                    "available": False,
+                    "last_event_id": 0,
+                    "observed_at": None,
+                    "state": copy.deepcopy(state or {}),
+                },
+            )
+
+    def observe_decoded(
+        self,
+        *,
+        device_id: str,
+        name: str,
+        model: str,
+        frame: str,
+        state: dict[str, Any],
+        observed_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Store a transport-decoded observation and append an event."""
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        decoded = copy.deepcopy(state)
 
         with self._lock:
             event_id = self._next_event_id

@@ -9,12 +9,18 @@ eventually control irrigation with independent safety limits.
 
 ## Current status
 
-This project is in the protocol-research and simulator phase.
+This project now has a working receive-only SDR prototype. Valve control and
+fully local pairing remain protocol-research work.
 
 Working now:
 
 - decoding captured HCS026FRF soil-moisture status payloads,
 - decoding captured HTV145FRF valve status payloads,
+- receiving live RainPoint 2-FSK packets through `rtl_433`,
+- reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
+  API,
+- dynamically creating Home Assistant sensor entities for newly observed RF
+  endpoints,
 - replaying captured observations through a local `rainpointd` API,
 - running the replay gateway persistently as an experimental Home Assistant
   app on `aarch64` or `amd64`,
@@ -24,14 +30,15 @@ Working now:
 
 Not working yet:
 
-- receiving live 433 MHz data directly,
+- running the live SDR transport inside the packaged Home Assistant app,
+- identifying every installed sensor endpoint,
 - operating without the stock hub's cloud connection,
 - locally pairing or forgetting physical devices, and
 - locally opening or closing the physical valve.
 
-Installing the current code does **not** make the existing RainPoint system
-offline-capable. It reports replay fixtures until a real receive-only RF adapter
-or a stock-hub local transport is implemented.
+The standalone gateway can now report one confirmed physical soil sensor. The
+packaged Home Assistant app still runs replay fixtures, so installing the app
+alone does **not** make the existing RainPoint system offline-capable.
 
 ## Architecture
 
@@ -42,7 +49,7 @@ HCS026 sensors / HTV145 valve
              |
    interchangeable transport
    - replay fixtures (implemented)
-   - receive-only SDR (next)
+   - receive-only SDR (implemented for standalone gateway)
    - open CC1101 gateway
    - original-hub emulator
              |
@@ -93,6 +100,17 @@ Run the replay gateway:
 PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
+Run the live, receive-only SDR gateway on the machine containing the USB
+receiver:
+
+```sh
+PYTHONPATH=rainpointd_addon python3 -m rainpointd \
+  --transport rtl433 --host 0.0.0.0
+```
+
+This requires `rtl_433`. It starts no transmitter and publishes only RF frames
+matching the confirmed RainPoint sync word.
+
 Copy `custom_components/rainpoint_local` into the Home Assistant configuration
 directory, restart Home Assistant, and add **RainPoint Local** from
 **Settings → Devices & services**.
@@ -125,7 +143,8 @@ python3 rainpointd_addon/rainpoint_protocol.py HCS026FRF \
 Run the regression and API tests:
 
 ```sh
-python3 -m unittest -v test_rainpoint_protocol.py test_rainpointd.py
+python3 -m unittest -v \
+  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py
 ```
 
 The HTTP tests bind only an ephemeral loopback port. They do not contact the

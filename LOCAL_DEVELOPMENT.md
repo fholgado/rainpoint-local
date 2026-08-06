@@ -1,13 +1,14 @@
 # Local gateway and Home Assistant development
 
-This milestone is a read-only replay environment. It never connects to the
-RainPoint hub, HomGar services, or RF hardware, and it rejects all HTTP POST
-requests.
+The gateway supports captured replay and a receive-only RTL-SDR transport. It
+never connects to HomGar services and rejects all HTTP POST requests.
 
 ## Components
 
 - `rainpointd_addon/rainpointd/`: state/event store and versioned HTTP API
 - `rainpointd_addon/rainpointd/replay.py`: captured-fixture transport
+- `rainpointd_addon/rainpointd/rtl433.py`: live receive-only SDR transport
+- `rainpointd_addon/rainpointd/rf.py`: RF framing and HCS026 field decoder
 - `rainpointd_addon/`: installable Home Assistant app package
 - `custom_components/rainpoint_local/`: Home Assistant integration
 - `test_rainpointd.py`: gateway and HTTP contract tests
@@ -44,6 +45,29 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd --host 0.0.0.0
 This is a development convenience. For persistent replay testing on HAOS, use
 the app package in `rainpointd_addon`. The eventual live gateway should run
 there or on the machine that owns the RF receiver.
+
+## Run the live SDR gateway
+
+Install `rtl_433`, attach the RTL-SDR receiver, and run:
+
+```sh
+PYTHONPATH=rainpointd_addon python3 -m rainpointd \
+  --transport rtl433 --host 0.0.0.0
+```
+
+The transport invokes this receive-only pipeline internally:
+
+```text
+434.0 MHz / 1.024 Msps → FSK PCM / 48 us → sync 79f4882f28
+```
+
+Right Bed endpoint `9ce58024` is registered as unavailable at startup and
+becomes available after its first valid HCS026 report. Unknown endpoints with
+the confirmed moisture layout receive deterministic IDs of the form
+`hcs026-<endpoint>`.
+
+The standalone process is suitable for development on the Mac containing the
+receiver. It is not yet installed as a persistent macOS service.
 
 ## API contract
 
@@ -103,7 +127,8 @@ There is intentionally no valve entity or control service in this milestone.
 ## Run tests
 
 ```sh
-python3 -m unittest -v test_rainpoint_protocol.py test_rainpointd.py
+python3 -m unittest -v \
+  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py
 ```
 
 The HTTP tests bind only an ephemeral loopback port.
@@ -135,18 +160,10 @@ curl http://HOME_ASSISTANT_IP:8787/api/v1/info
 The response from `/api/v1/info` must report `"read_only": true` and
 `"transport": "replay"`.
 
-## Next transport
+## Next receive-only milestones
 
-The next adapter should accept decoded messages from an RTL-SDR/`rtl_433`
-receiver and call `Gateway.observe(...)`. It must not add control endpoints.
-The replay and RF transports should emit the same event schema so the Home
-Assistant integration does not change when live receive-only data arrives.
-
-Open questions that RF capture must answer:
-
-- where the stable device identity appears in the over-the-air frame,
-- checksum or CRC coverage,
-- exact modulation and bit timing,
-- whether valve status and sensor reports share framing,
-- duplicate/retry semantics, and
-- whether rolling counters affect passive decoding.
+- Map the remaining installed HCS026 endpoint IDs to friendly names.
+- Package `rtl_433` and an explicit USB device mapping for the Home Assistant
+  app, or install the standalone gateway persistently beside the receiver.
+- Determine trailer integrity coverage and duplicate/retry semantics.
+- Decode passive valve state while retaining the read-only API boundary.

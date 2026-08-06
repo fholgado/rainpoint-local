@@ -18,7 +18,7 @@ from homeassistant.const import (
     UnitOfTime,
     UnitOfVolume,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -95,15 +95,28 @@ async def async_setup_entry(
 ) -> None:
     """Create sensors for fields present in the initial snapshot."""
     coordinator: RainPointLocalCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for device_id, device in coordinator.data.items():
-        state = device.get("state", {})
-        entities.extend(
-            RainPointLocalSensor(coordinator, device_id, description)
-            for description in DESCRIPTIONS
-            if description.state_key in state
-        )
-    async_add_entities(entities)
+    known: set[tuple[str, str]] = set()
+
+    @callback
+    def async_add_missing_entities() -> None:
+        entities = []
+        for device_id, device in coordinator.data.items():
+            state = device.get("state", {})
+            for description in DESCRIPTIONS:
+                identity = (device_id, description.key)
+                if description.state_key not in state or identity in known:
+                    continue
+                known.add(identity)
+                entities.append(
+                    RainPointLocalSensor(coordinator, device_id, description)
+                )
+        if entities:
+            async_add_entities(entities)
+
+    async_add_missing_entities()
+    entry.async_on_unload(
+        coordinator.async_add_listener(async_add_missing_entities)
+    )
 
 
 class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
