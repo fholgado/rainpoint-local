@@ -101,6 +101,14 @@ also supplies manual notes. Always include other irrigation systems in the
 query so unrelated Zigbee or Wi-Fi valve actions are not attributed to
 RainPoint RF traffic.
 
+Use the repository helper to produce that timeline directly from the HA box:
+
+```sh
+./tools/correlate_ha_recorder.sh \
+  --start '2026-01-01 12:00:00' \
+  --end '2026-01-01 12:15:00'
+```
+
 ## Analysis goals
 
 Receive path:

@@ -28,6 +28,7 @@ case "${transport}" in
       --host 0.0.0.0 \
       --port 8787 \
       --transport rtl433 \
+      --storage /data/rainpointd.sqlite3 \
       --frequency "${frequency}" \
       --sample-rate "${sample_rate}"
     ;;

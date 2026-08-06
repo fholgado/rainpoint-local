@@ -21,24 +21,25 @@ Working now:
   API,
 - dynamically creating Home Assistant sensor entities for newly observed RF
   endpoints,
+- retaining normalized RF events and endpoint inventory across app restarts,
 - replaying captured observations through a local `rainpointd` API,
-- running the replay gateway persistently as an experimental Home Assistant
-  app on `aarch64` or `amd64`,
+- running live RTL-SDR or replay transport persistently as a protected Home
+  Assistant app on `aarch64` or `amd64`,
 - reporting replayed soil, battery, signal, usage, and valve state to Home
   Assistant, and
 - rejecting every control request at the gateway boundary.
 
 Not working yet:
 
-- running the live SDR transport inside the packaged Home Assistant app,
 - identifying every installed sensor endpoint,
 - operating without the stock hub's cloud connection,
 - locally pairing or forgetting physical devices, and
 - locally opening or closing the physical valve.
 
-The standalone gateway can now report one confirmed physical soil sensor. The
-packaged Home Assistant app still runs replay fixtures, so installing the app
-alone does **not** make the existing RainPoint system offline-capable.
+The packaged gateway now reports one confirmed physical soil sensor directly
+from local RF and retains unknown RainPoint frames for discovery. The receive
+path does not depend on the stock hub or RainPoint cloud, but valve control and
+pairing are not yet locally implemented.
 
 ## Architecture
 
@@ -49,7 +50,7 @@ HCS026 sensors / HTV145 valve
              |
    interchangeable transport
    - replay fixtures (implemented)
-   - receive-only SDR (implemented for standalone gateway)
+   - receive-only SDR (implemented in the HA app)
    - open CC1101 gateway
    - original-hub emulator
              |
@@ -78,8 +79,8 @@ There are two pieces:
    Home Assistant app.
 
 HACS can install the custom integration, but it cannot run `rainpointd`.
-The replay gateway is packaged as a Home Assistant app/add-on and can
-eventually be replaced by a service on the RF gateway.
+The live/replay gateway is packaged as a Home Assistant app/add-on and can
+eventually be replaced by a service on a dedicated RF gateway.
 
 ### Home Assistant app
 
@@ -87,10 +88,9 @@ The `rainpointd_addon` directory is a Supervisor-compatible app package. For
 local development, copy it to `/addons/rainpointd`, reload the app store, and
 install **RainPoint Local Gateway** from the Local apps repository.
 
-Once this GitHub repository is public, it can also be added to the Home
-Assistant app store as a custom repository. The app exposes the read-only API
-on TCP port 8787 and has no HA API access, Supervisor API access, USB mapping,
-or privileged host permissions.
+The app exposes the read-only API on TCP port 8787, maps raw USB for the SDR,
+and has no HA API access, Supervisor API access, privileged mode, or full host
+access. Live events are stored in the app's persistent data volume.
 
 ### Development installation
 

@@ -40,6 +40,12 @@ HCS026FRF soil-moisture entities. Valid RainPoint frames that do not match the
 confirmed moisture layout are retained as `rf_frame` records in `/api/v1/events`
 for endpoint discovery; other RF fields remain research work.
 
+In live RTL-SDR mode, normalized events and decoded device state are persisted
+to `/data/rainpointd.sqlite3`, which survives app rebuilds and restarts. The
+read-only `/api/v1/endpoints` endpoint summarizes every observed RF endpoint,
+including first/last seen time, packet count, address-field roles, latest
+message byte, signal level, and frame.
+
 ## Safety
 
 This release has no RF transmitter, cloud transport, valve entity, or control

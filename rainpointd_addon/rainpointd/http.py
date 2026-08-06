@@ -33,6 +33,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if parsed.path == f"/api/{API_VERSION}/devices":
             self._json(200, {"devices": self.server.gateway.devices()})
             return
+        if parsed.path == f"/api/{API_VERSION}/endpoints":
+            self._json(200, {"endpoints": self.server.gateway.endpoints()})
+            return
         if parsed.path == f"/api/{API_VERSION}/events":
             query = parse_qs(parsed.query)
             try:
@@ -44,7 +47,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "events": self.server.gateway.events(since),
-                    "next_since": self._latest_event_id(),
+                    "next_since": self._page_cursor(since),
                 },
             )
             return
@@ -62,9 +65,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         """Keep command-line output concise."""
 
-    def _latest_event_id(self) -> int:
-        events = self.server.gateway.events()
-        return events[-1]["event_id"] if events else 0
+    def _page_cursor(self, since: int) -> int:
+        events = self.server.gateway.events(since)
+        return events[-1]["event_id"] if events else since
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()

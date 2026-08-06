@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Persist live normalized RF events in SQLite under the app data volume.
+- Restore decoded device state after app restarts.
+- Add an endpoint inventory with first/last seen times, role counts, message
+  type, signal level, and most recent frame.
+- Expose the inventory at the read-only `/api/v1/endpoints` endpoint.
+
 ## 0.2.1
 
 - Retain normalized non-moisture RainPoint RF frames in the event stream for

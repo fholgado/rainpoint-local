@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -51,6 +52,47 @@ class GatewayTest(unittest.TestCase):
             gateway.health(),
         )
 
+    def test_persistent_events_devices_and_endpoint_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_rf_frame(
+                frame="aa",
+                observed_at="2026-08-06T12:35:44",
+                state={
+                    "rf_endpoint_a": "hub00001",
+                    "rf_endpoint_b": "valve001",
+                    "rf_message_type": 0x98,
+                    "rf_rssi_db": -1.5,
+                },
+            )
+            gateway.observe_decoded(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                frame="bb",
+                observed_at="2026-08-06T12:36:00",
+                state={
+                    "rf_endpoint": "sensor01",
+                    "rf_endpoint_a": "hub00001",
+                    "rf_endpoint_b": "sensor01",
+                    "soil_moisture_percent": 44,
+                },
+            )
+            self.assertEqual(2, gateway.info()["stored_event_count"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            self.assertEqual([1, 2], [e["event_id"] for e in restored.events()])
+            self.assertEqual(44, restored.devices()[0]["state"]["soil_moisture_percent"])
+            inventory = {item["endpoint"]: item for item in restored.endpoints()}
+            self.assertEqual(2, inventory["hub00001"]["frame_count"])
+            self.assertEqual(1, inventory["valve001"]["as_b_count"])
+            self.assertEqual(1, inventory["sensor01"]["as_sensor_count"])
+            event = restored.observe_rf_frame(frame="cc", state={})
+            self.assertEqual(3, event["event_id"])
+            restored.close()
+
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
@@ -76,6 +118,7 @@ class HTTPAPITest(unittest.TestCase):
         self.assertTrue(info["read_only"])
         self.assertEqual(5, info["device_count"])
         self.assertEqual(5, len(self.get_json("/api/v1/devices")["devices"]))
+        self.assertEqual([], self.get_json("/api/v1/endpoints")["endpoints"])
 
     def test_event_cursor(self) -> None:
         result = self.get_json("/api/v1/events?since=5")

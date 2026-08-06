@@ -25,11 +25,16 @@ def main() -> int:
     )
     parser.add_argument("--frequency", type=int, default=434_000_000)
     parser.add_argument("--sample-rate", type=int, default=1_024_000)
+    parser.add_argument(
+        "--storage",
+        help="SQLite path for persistent events and endpoint inventory",
+    )
     args = parser.parse_args()
 
     gateway = Gateway(
         gateway_id=f"rainpoint-{args.transport}",
         transport=args.transport,
+        storage_path=args.storage,
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(
@@ -54,6 +59,7 @@ def main() -> int:
         server.shutdown()
         server.server_close()
         transport.stop()
+        gateway.close()
     return 0
 
 

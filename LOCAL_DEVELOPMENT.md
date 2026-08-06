@@ -76,6 +76,7 @@ Read-only endpoints:
 - `GET /health`
 - `GET /api/v1/info`
 - `GET /api/v1/devices`
+- `GET /api/v1/endpoints`
 - `GET /api/v1/events?since=<event_id>`
 
 Each observation includes:
@@ -88,8 +89,9 @@ Each observation includes:
 - decoded typed state.
 
 The event cursor allows a future push adapter or recorder to resume without
-requiring Home Assistant to interpret RF framing. The in-memory history is
-bounded and is not yet a durable event log.
+requiring Home Assistant to interpret RF framing. Pass `--storage <path>` to
+persist events, endpoint inventory, and decoded device state in SQLite. The
+packaged live app uses `/data/rainpointd.sqlite3` automatically.
 
 ## Install the development integration
 

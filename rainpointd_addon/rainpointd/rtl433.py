@@ -146,6 +146,8 @@ class RTL433Transport:
                 "model": "HCS026FRF",
                 "raw": decoded["frame_hex"],
                 "rf_endpoint": endpoint,
+                "rf_endpoint_a": decoded["endpoint_a"],
+                "rf_endpoint_b": decoded["endpoint_b"],
                 "soil_moisture_percent": moisture,
             }
             if "rssi" in event:
