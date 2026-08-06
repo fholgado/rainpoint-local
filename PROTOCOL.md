@@ -495,7 +495,14 @@ route currently has more unknowns than the direct-RF bridge.
    separate command, acknowledgement, and status fields.
 3. Deploy and validate receive-only reporting for all four confirmed soil
    endpoints.
-4. Consider exact replay only after close behavior, counters, and independent
+4. Use a test HCS026 sensor to identify its coarse battery-status flag by
+   correlating normal and deliberately low-voltage reports with the cloud
+   transition from battery OK (`100%`) to battery low (`10%`). Compare both
+   the data-rich report and its companion heartbeat, especially the currently
+   constant `... 41 81 00 01 00 ...` status bytes. Verify nominal voltage and
+   polarity first, use a current-limited supply or known-low batteries, and
+   never exceed the sensor's nominal supply voltage.
+5. Consider exact replay only after close behavior, counters, and independent
    timeout safety are understood.
 
 ## References

@@ -118,6 +118,7 @@ Receive path:
 - identify preamble/sync and repeated packets
 - locate device identity/address
 - map the HCS026FRF moisture value to over-the-air bytes
+- locate the HCS026FRF battery OK/low flag using a test sensor
 - determine checksum/CRC
 
 Transmit path:
@@ -126,6 +127,30 @@ Transmit path:
 - determine how duration is encoded
 - determine whether a counter, nonce, or rolling code is present
 - test replay only with physical observation and a ready stop path
+
+## Battery-status experiment
+
+The HomGar payload does not expose a granular battery percentage. Its known
+status values map to either battery OK (`100%`) or battery low (`10%`), so the
+RF experiment should look for a flag or small enum rather than a voltage or
+percentage field. Hub RSSI is receiver-measured and is not expected to appear
+inside the transmitted packet.
+
+1. Pair a test HCS026 sensor and confirm that HomGar reports battery `100%`.
+2. Record several button-triggered and periodic full-report/heartbeat pairs at
+   normal battery voltage.
+3. Verify the sensor's nominal voltage and polarity. Using a current-limited
+   bench supply, reduce voltage in small steps without exceeding the nominal
+   voltage; alternatively use measured, known-low batteries.
+4. At each voltage, trigger a report and retain the raw RF frames plus the HA
+   cloud battery state and timestamp.
+5. Continue only until HomGar changes from `100%` to `10%`, then restore normal
+   power promptly.
+6. Diff both packet types bit-for-bit. Prioritize the heartbeat status sequence
+   currently observed as `... 41 81 00 01 00 ...`, while accounting for the
+   `41`/`c1` retransmission-bit change.
+7. Repeat the transition at least twice before assigning a battery field, then
+   add positive and negative decoder fixtures.
 
 ## Safety constraints
 
