@@ -47,3 +47,10 @@
 - Expose the read-only API on TCP port 8787.
 - Add Supervisor health monitoring.
 - Support `aarch64` and `amd64`.
+## 0.3.3
+
+- Ignore obsolete auto-discovered HCS026 devices whose RF endpoint is not a
+  confirmed moisture sensor, preventing valve responses from returning as
+  phantom sensors after a restart.
+- Keep existing Home Assistant entities safely unavailable when a gateway
+  device is reclassified and removed from discovery.

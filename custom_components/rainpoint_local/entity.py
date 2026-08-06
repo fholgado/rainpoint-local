@@ -25,7 +25,15 @@ class RainPointLocalEntity(CoordinatorEntity[RainPointLocalCoordinator]):
     @property
     def device(self) -> dict[str, Any]:
         """Return the latest device snapshot."""
-        return self.coordinator.data[self.device_id]
+        return self.coordinator.data.get(
+            self.device_id,
+            {
+                "device_id": self.device_id,
+                "name": self.device_id,
+                "available": False,
+                "state": {},
+            },
+        )
 
     @property
     def decoded_state(self) -> dict[str, Any]:

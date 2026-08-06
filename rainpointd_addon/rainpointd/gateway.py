@@ -10,6 +10,7 @@ from typing import Any
 
 from rainpoint_protocol import decode
 
+from .rf import HCS026_ENDPOINTS
 from .storage import SQLiteEventStore
 
 
@@ -222,6 +223,8 @@ class Gateway:
         for event in self._events:
             if event.get("event_type") != "device_observation":
                 continue
+            if not self._is_restorable_device(event):
+                continue
             self._devices[event["device_id"]] = {
                 "device_id": event["device_id"],
                 "name": event["name"],
@@ -231,3 +234,14 @@ class Gateway:
                 "observed_at": event["observed_at"],
                 "state": copy.deepcopy(event["state"]),
             }
+
+    @staticmethod
+    def _is_restorable_device(event: dict[str, Any]) -> bool:
+        """Reject obsolete auto-discoveries that predate endpoint validation."""
+        if event.get("model") != "HCS026FRF":
+            return True
+        device_id = str(event.get("device_id", ""))
+        if not device_id.startswith("hcs026-"):
+            return True
+        endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
+        return endpoint in HCS026_ENDPOINTS

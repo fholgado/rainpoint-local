@@ -93,6 +93,27 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(3, event["event_id"])
             restored.close()
 
+    def test_restore_ignores_obsolete_auto_discovered_hcs026_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="hcs026-b42d008f",
+                name="RainPoint HCS026 b42d008f",
+                model="HCS026FRF",
+                frame="valve-response",
+                state={
+                    "rf_endpoint": "b42d008f",
+                    "soil_moisture_percent": 60,
+                },
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            self.assertEqual([], restored.devices())
+            self.assertEqual(1, len(restored.events()))
+            restored.close()
+
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
