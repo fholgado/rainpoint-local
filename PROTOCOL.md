@@ -288,8 +288,18 @@ Its moisture field is `200`: `0x20 * 2` plus a clear odd-value flag, or 64%.
 Home Assistant recorded Right Bed at 64% at 11:09:17.985, 91 ms after the
 following short RF packet began (about 60 ms after it completed). This confirms
 direct local moisture extraction for one HCS026FRF report. The decoder exposes
-the result as `soil_moisture_candidate_percent` until more samples confirm the
-field marker and offset.
+the result as `soil_moisture_percent`.
+
+A subsequent receive-only session confirmed the field twice more without any
+user action:
+
+| RF time | Moisture field | Local result | HA device/recorder time |
+|---|---|---:|---|
+| 11:35:33.326 | `1f0` | 62% | 11:35:34.517, 62% |
+| 11:37:30.086 | `1f0` | 62% | 11:37:30.927, 62% |
+
+The preceding packed byte varied from `44` to `c4`, confirming that its high
+bit must be masked independently of the three-nibble moisture field.
 
 ## Local architecture decision
 

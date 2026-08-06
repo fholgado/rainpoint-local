@@ -57,14 +57,22 @@ class RainPointRFTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "truncated"):
             MODULE.normalize_row({"len": 48, "data": "79f4882f2800"})
 
-    def test_decodes_correlated_hcs026_moisture_candidate(self) -> None:
+    def test_decodes_correlated_hcs026_moisture(self) -> None:
         # Right Bed was 64% in HA after this packet and its short follow-up.
         frame = bytes.fromhex(
             "79f4882f28b42d008f9ce580240784830701800544200000000000000000000000000000308a"
         )
         row = {"len": len(frame) * 8, "data": frame.hex()}
         decoded = MODULE.normalize_row(row)
-        self.assertEqual(64, decoded["soil_moisture_candidate_percent"])
+        self.assertEqual(64, decoded["soil_moisture_percent"])
+
+        # The high bit in the preceding packed byte varies independently.
+        frame = bytes.fromhex(
+            "79f4882f28b42d008f9ce580240c048307018005c41f00000000000000000000000000003114"
+        )
+        row = {"len": len(frame) * 8, "data": frame.hex()}
+        decoded = MODULE.normalize_row(row)
+        self.assertEqual(62, decoded["soil_moisture_percent"])
 
 
 if __name__ == "__main__":

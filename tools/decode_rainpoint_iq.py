@@ -27,11 +27,11 @@ def _row_bits(row: dict[str, Any]) -> str:
     return bits[:bit_count]
 
 
-def _soil_moisture_candidate(frame: bytes) -> int | None:
+def _soil_moisture(frame: bytes) -> int | None:
     """Decode the field position seen in a correlated HCS026FRF report."""
     # HCS026FRF marker observed immediately before its three-nibble moisture
     # field. More captures are needed before treating this as model-agnostic.
-    if len(frame) != FRAME_BYTES or frame[20] != 0x44:
+    if len(frame) != FRAME_BYTES or frame[20] & 0x7F != 0x44:
         return None
     percent = frame[21] * 2 + (1 if frame[22] & 0x80 else 0)
     return percent if 0 <= percent <= 100 else None
@@ -78,9 +78,9 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "message_body": frame[13:-2].hex(),
         "trailer": frame[-2:].hex(),
     }
-    moisture = _soil_moisture_candidate(frame)
+    moisture = _soil_moisture(frame)
     if moisture is not None:
-        result["soil_moisture_candidate_percent"] = moisture
+        result["soil_moisture_percent"] = moisture
     return result
 
 
