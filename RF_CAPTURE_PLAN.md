@@ -60,19 +60,18 @@ captures also contain tone energy as high as approximately 434.38 MHz. Use a
 1.024 MHz window centered at 434.0 MHz so captures include the nominal,
 measured, and locally observed carriers instead of clipping the modulation.
 
-Initial analyzer command:
+Receive and save only matching RainPoint packets:
 
 ```sh
-rtl_433 -f 434000000 -s 1024000 -R 0 -A -S all \
-  -M time:iso:usec -M level
+rtl_433 -f 434000000 -s 1024000 -R 0 -S known \
+  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28' \
+  -M time:iso:usec -M level -M bits
 ```
 
-Candidate flex decoder based on a prior RainPoint sensor investigation:
+Decode an existing CU8 capture into a normalized 38-byte frame:
 
 ```sh
-rtl_433 -f 434000000 -s 1024000 -R 0 \
-  -X 'n=RainPoint,m=OOK_MC_ZEROBIT,s=500,l=500,r=1500' \
-  -S all -F json
+./tools/decode_rainpoint_iq.py captures/rf/<session>/g001_*.cu8
 ```
 
 Keep the raw captures even when a decoded row looks correct. We need IQ/pulse
@@ -127,6 +126,8 @@ Transmit path:
   <https://fccid.io/2AWDBHTV145FRF>
 - HCS026FRF test report, confirming ASK and the measured 434.07 MHz carrier:
   <https://device.report/m/c7ca872340efa550c43d8d4d9a2e9d8d50873e184d8837862a58108496aa0697.pdf>
+- Community HCS021FRF FSK decoder and sensor-field analysis:
+  <https://github.com/user-attachments/files/26152016/rainpoint_decoding.txt>
 - Prior RainPoint OOK/Manchester investigation:
   <https://github.com/merbanan/rtl_433/issues/1781>
 - `rtl_433`:

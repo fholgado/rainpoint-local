@@ -62,13 +62,12 @@ command_args=(
   -f "${frequency_hz}"
   -s "${sample_rate}"
   -R 0
-  -A
-  -S all
+  -S known
   -M time:iso:usec
   -M level
   -M bits
   -M protocol
-  -X "n=RainPoint,m=OOK_MC_ZEROBIT,s=500,l=500,r=1500"
+  -X "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28"
   -F json:events.jsonl
   -F log:rtl_433.log
   -T "${duration}"

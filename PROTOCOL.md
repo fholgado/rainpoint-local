@@ -238,6 +238,59 @@ at 434.0 MHz. Do not infer hub-versus-valve direction from carrier frequency
 until additional exchanges are captured with relative signal-strength or
 proximity evidence.
 
+### Confirmed modulation and frame extraction
+
+A community HCS021FRF investigation supplied the missing demodulator settings:
+
+```sh
+rtl_433 -f 434000000 -s 1024000 -R 0 \
+  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28'
+```
+
+Those settings decode every labeled valve file and the right-bed exchange.
+They confirm 2-FSK pulse-code modulation with 48 microsecond symbols. The two
+observed preamble forms are 320 alternating bits for short packets and 1,201
+bits before sync for long wake/command packets.
+
+Both forms normalize to a 38-byte frame beginning with the same five-byte sync
+word:
+
+```text
+79 f4 88 2f 28 | endpoint A (4) | endpoint B (4) | body (23) | trailer (2)
+```
+
+Endpoint direction and the trailer algorithm remain provisional. The endpoint
+order reverses between the initial valve exchange packets, but more evidence is
+needed before naming either field as source or destination.
+
+Normalized frames from the short valve cycle:
+
+| Role | Frame |
+|---|---|
+| Open command candidate | `79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824` |
+| Open response candidate | `79f4882f28b9840280b42d008f9750868010cf92800000409e00569e000000000000000044ce` |
+| Running confirmation candidate | `79f4882f28b42d008fb98402809ec10100060000000000000000000000000000000000006bea` |
+| Close command candidate | `79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf` |
+| Close response candidate | `79f4882f28b9840280b42d008f97d08680104f90800000408000569e00000000000000001f46` |
+| Stopped confirmation candidate | `79f4882f28b42d008fb98402809f410100060000000000000000000000000000000000003c64` |
+
+`tools/decode_rainpoint_iq.py` automates the flex decode, finds sync across both
+preamble alignments, and emits normalized JSON without assigning unproven
+direction semantics.
+
+The long packet at 11:09:16.876 normalized to:
+
+```text
+79f4882f28b42d008f9ce580240784830701800544200000000000000000000000000000308a
+```
+
+Its moisture field is `200`: `0x20 * 2` plus a clear odd-value flag, or 64%.
+Home Assistant recorded Right Bed at 64% at 11:09:17.985, 91 ms after the
+following short RF packet began (about 60 ms after it completed). This confirms
+direct local moisture extraction for one HCS026FRF report. The decoder exposes
+the result as `soil_moisture_candidate_percent` until more samples confirm the
+field marker and offset.
+
 ## Local architecture decision
 
 ### Preferred: direct 433 MHz bridge
@@ -254,9 +307,8 @@ Advantages:
 
 Remaining RF unknowns:
 
-- exact modulation parameters, bitrate, line coding, sync word, and framing
-- accessory address placement
-- checksum or message authentication
+- endpoint direction and accessory-address semantics
+- trailer checksum or message-authentication algorithm
 - exact open/close command bytes
 - replay protection, if any
 
@@ -315,6 +367,8 @@ route currently has more unknowns than the direct-RF bridge.
   <https://fccid.io/2AWDBHTV145FRF>
 - Prior RainPoint RF analysis in `rtl_433`:
   <https://github.com/merbanan/rtl_433/issues/1781>
+- Community HCS021FRF FSK decoding and sensor-field notes:
+  <https://github.com/user-attachments/files/26152016/rainpoint_decoding.txt>
 - `rtl_433` receiver and analyzer:
   <https://github.com/merbanan/rtl_433>
 - Cloud integration research source:
