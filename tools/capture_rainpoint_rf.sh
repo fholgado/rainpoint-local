@@ -6,12 +6,13 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 duration="15m"
-frequency_hz="433700000"
+frequency_hz="434000000"
+sample_rate="1024000"
 output_root="${repo_root}/captures/rf"
 dry_run=false
 
 usage() {
-  echo "Usage: $0 [--duration 15m] [--frequency 433700000] [--output DIR] [--dry-run]"
+  echo "Usage: $0 [--duration 15m] [--frequency 434000000] [--sample-rate 1024000] [--output DIR] [--dry-run]"
 }
 
 while (($#)); do
@@ -22,6 +23,10 @@ while (($#)); do
       ;;
     --frequency)
       frequency_hz="${2:?--frequency requires a value}"
+      shift 2
+      ;;
+    --sample-rate)
+      sample_rate="${2:?--sample-rate requires a value}"
       shift 2
       ;;
     --output)
@@ -55,6 +60,7 @@ session_dir="${output_root}/${session_name}"
 command_args=(
   rtl_433
   -f "${frequency_hz}"
+  -s "${sample_rate}"
   -R 0
   -A
   -S all
@@ -82,13 +88,14 @@ ln -sfn "${session_name}" "${output_root}/latest"
   printf 'started_utc\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'started_local\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S%z)"
   printf 'frequency_hz\t%s\n' "${frequency_hz}"
+  printf 'sample_rate\t%s\n' "${sample_rate}"
   printf 'duration\t%s\n' "${duration}"
   printf 'rtl_433\t%s\n' "$(rtl_433 -V 2>&1 | head -n 1)"
 } >"${session_dir}/session.tsv"
 printf 'timestamp_utc\ttimestamp_local\taction\n' >"${session_dir}/actions.tsv"
 
 echo "Receive-only capture directory: ${session_dir}"
-echo "Frequency: ${frequency_hz} Hz; duration: ${duration}"
+echo "Frequency: ${frequency_hz} Hz; sample rate: ${sample_rate}; duration: ${duration}"
 echo "Raw I/Q signals, decoded JSON, and logs will be kept together."
 echo "To timestamp an action from another terminal:"
 echo "  ./tools/mark_rainpoint_rf_action.sh \"description\""

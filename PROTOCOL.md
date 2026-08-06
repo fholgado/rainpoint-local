@@ -192,6 +192,52 @@ Stop uses mode and duration `0`.
 
 This describes the cloud request but not the hub-to-valve RF command.
 
+## Labeled local RF captures (2026-08-06)
+
+A Nooelec NESDR SMArt v5 passively captured the installed devices. Home
+Assistant recorder timestamps positively correlate local RF bursts with the
+HomGar integration's raw payload and valve state changes.
+
+The first 250 ksample/s capture centered at 433.7 MHz clipped most of the
+transmission. Despite that limitation, it produced two useful soil-sensor
+correlations:
+
+| RF capture time | HA raw-payload time | Device |
+|---|---|---|
+| 11:01:15.562 | 11:01:15.655 | Left Bed HCS026FRF |
+| 11:02:33.795 | 11:02:34.533 | Right Bed HCS026FRF |
+
+A corrected 1.024 Msps capture centered at 433.92 MHz recorded one short valve
+cycle. The raw files are intentionally retained locally rather than committed.
+
+| File | RF time | HA correlation | SHA-256 |
+|---|---|---|---|
+| `g004_433.92M_1024k.cu8` | 11:08:40.017 | valve open at 11:08:40.677 | `560072d3f3a414bf0e20893333590150defd2a9c9db1ad691e1a86b0da8bb848` |
+| `g005_433.92M_1024k.cu8` | 11:08:40.395 | same open exchange | `10387364cbea3ff8796239b2bacfffc3d941583d155e4f2e705c7135f24bc060` |
+| `g006_433.92M_1024k.cu8` | 11:08:46.443 | running report at 11:08:46.533 | `8df74ffdd2c6af7b4c0972ad588d689fcd8ef51c37fc63e85e24ddb2db361463` |
+| `g007_433.92M_1024k.cu8` | 11:09:00.498 | valve close at 11:09:01.182 | `2df35809e608b6e40393622c71618a8ced9f69da41c1aee63d8e72b8bc5bfe2a` |
+| `g008_433.92M_1024k.cu8` | 11:09:00.878 | same close exchange | `1934e0f21cf49f97716849636f7ed8e560e65acf8eda4f207073e9c1b9ed95d0` |
+| `g009_433.92M_1024k.cu8` | 11:09:06.952 | stopped report at 11:09:07.044 | `5cefbcc445ba96fb61eafd64aa8cbf3b1c57e198b98b2f302ec3cc86ce2f18c8` |
+
+The filing labels HCS026FRF modulation as ASK. The local wideband samples,
+however, are detected as two-tone FSK when replayed through `rtl_433`'s min/max
+FSK detector. Approximate tone estimates vary by burst:
+
+| File | Lower tone | Upper tone | Burst role |
+|---|---:|---:|---|
+| `g004` | 434.183 MHz | 434.378 MHz | open exchange, 135 ms |
+| `g005` | 434.069 MHz | 434.103 MHz | open exchange reply, 31 ms |
+| `g006` | 434.164 MHz | 434.318 MHz | running confirmation, 31 ms |
+| `g007` | 434.160 MHz | 434.369 MHz | close exchange, 135 ms |
+| `g008` | 434.089 MHz | 434.133 MHz | close exchange reply, 31 ms |
+| `g009` | 434.175 MHz | 434.340 MHz | stopped confirmation, 31 ms |
+
+These frequency estimates are provisional because several upper tones were
+near the capture passband edge. Future captures use a 1.024 MHz window centered
+at 434.0 MHz. Do not infer hub-versus-valve direction from carrier frequency
+until additional exchanges are captured with relative signal-strength or
+proximity evidence.
+
 ## Local architecture decision
 
 ### Preferred: direct 433 MHz bridge
@@ -206,9 +252,9 @@ Advantages:
 - One local radio can expose valve and soil entities to Home Assistant.
 - The sensor application payload is already decoded.
 
-Unknowns that require an RF capture:
+Remaining RF unknowns:
 
-- modulation, bitrate, sync word, and packet framing
+- exact modulation parameters, bitrate, line coding, sync word, and framing
 - accessory address placement
 - checksum or message authentication
 - exact open/close command bytes
@@ -222,14 +268,14 @@ temperature/humidity sensor at 433.9 MHz found OOK with Manchester-style
 encoding and proposed this flex decoder:
 
 ```sh
-rtl_433 -f 433700000 -R 0 \
+rtl_433 -f 433900000 -R 0 \
   -X 'n=RainPoint,m=OOK_MC_ZEROBIT,s=500,l=500,r=1500' \
   -S unknown
 ```
 
-That older sensor is not the HCS026FRF, so these modulation and timing
-parameters are a starting hypothesis, not a confirmed match. Raw IQ capture
-must remain enabled even if the flex decoder produces no output.
+That older sensor is not the HCS026FRF. The 2026-08-06 local captures do not
+match its timing, so this decoder remains historical context rather than the
+working hypothesis.
 
 ### Alternative: emulate the HomGar services for the original hub
 
@@ -253,20 +299,15 @@ route currently has more unknowns than the direct-RF bridge.
 
 ## Next safe experiments
 
-While remote:
-
-1. Analyze the captured TLS handshakes and message-size sequences.
-2. Preserve and test every decoded RF status fixture.
-3. Inspect available app/integration code and product metadata for RF command
-   construction or firmware-download endpoints.
-
-When physically present:
-
-1. Capture 433.7 MHz IQ data during one idle interval, one start, and one stop.
-2. Test whether the valve accepts an exact replay while ready to stop it.
-3. Identify the RF parameters and packet checksum.
-4. Implement receive-only soil sensing first.
-5. Add valve transmit support with duration limits and fail-safe close logic.
+1. Capture several full-band soil reports centered at 434.0 MHz and correlate
+   each with the Home Assistant raw payload.
+2. Recover stable bit rows from the labeled IQ files and determine preamble,
+   sync, bitrate, line coding, address, and checksum.
+3. Capture additional short valve cycles with different requested durations to
+   separate command, acknowledgement, and status fields.
+4. Implement and validate receive-only soil sensing first.
+5. Consider exact replay only after close behavior, counters, and independent
+   timeout safety are understood.
 
 ## References
 

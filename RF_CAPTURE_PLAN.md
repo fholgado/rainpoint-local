@@ -1,4 +1,4 @@
-# RainPoint 433.7 MHz capture plan
+# RainPoint 433/434 MHz capture plan
 
 ## Minimum hardware
 
@@ -54,17 +54,23 @@ The most recent session is available at `captures/rf/latest`. Capture artifacts
 are intentionally ignored by Git because raw I/Q files can be large and may
 contain unrelated nearby radio traffic.
 
+The HCS026FRF filing specifies 433.7 MHz ASK, but its radiated-emission test
+measured the fundamental at 434.07 MHz with 184.2 kHz occupied bandwidth. Local
+captures also contain tone energy as high as approximately 434.38 MHz. Use a
+1.024 MHz window centered at 434.0 MHz so captures include the nominal,
+measured, and locally observed carriers instead of clipping the modulation.
+
 Initial analyzer command:
 
 ```sh
-rtl_433 -f 433700000 -R 0 -A -S all \
+rtl_433 -f 434000000 -s 1024000 -R 0 -A -S all \
   -M time:iso:usec -M level
 ```
 
 Candidate flex decoder based on a prior RainPoint sensor investigation:
 
 ```sh
-rtl_433 -f 433700000 -R 0 \
+rtl_433 -f 434000000 -s 1024000 -R 0 \
   -X 'n=RainPoint,m=OOK_MC_ZEROBIT,s=500,l=500,r=1500' \
   -S all -F json
 ```
@@ -119,6 +125,8 @@ Transmit path:
 
 - Exact HTV145FRF filing, confirming 433.7 MHz:
   <https://fccid.io/2AWDBHTV145FRF>
+- HCS026FRF test report, confirming ASK and the measured 434.07 MHz carrier:
+  <https://device.report/m/c7ca872340efa550c43d8d4d9a2e9d8d50873e184d8837862a58108496aa0697.pdf>
 - Prior RainPoint OOK/Manchester investigation:
   <https://github.com/merbanan/rtl_433/issues/1781>
 - `rtl_433`:

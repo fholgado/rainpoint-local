@@ -26,7 +26,7 @@ fi
 description="${description//$'\t'/ }"
 description="${description//$'\n'/ }"
 printf '%s\t%s\t%s\n' \
-  "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   "$(date +%Y-%m-%dT%H:%M:%S%z)" \
   "${description}" >>"${action_file}"
 
