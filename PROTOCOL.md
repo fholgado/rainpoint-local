@@ -304,9 +304,18 @@ bit must be masked independently of the three-nibble moisture field.
 ### Persistent Pi capture and irrigation correlation (2026-08-06)
 
 The protected Home Assistant app received the SDR directly and retained valid
-non-moisture frames in its read-only event stream. An irrigation start/stop
-experiment at 12:35--12:39 EDT confirmed the existing valve endpoint pair and
-revealed additional RainPoint endpoints.
+non-moisture frames in its read-only event stream. A controlled irrigation
+experiment confirmed the existing valve endpoint pair and revealed additional
+RainPoint endpoints.
+
+Home Assistant recorder correlation separated an unrelated Zigbee valve action
+from two RainPoint Zone 1 cycles. Only the RainPoint cycles aligned with the
+`b42d008f` / `b9840280` request-response exchanges, within 1.3 seconds of the
+corresponding HA transitions.
+
+The RF request precedes the cloud-backed HA transition, while the response and
+confirmation surround it. This independently assigns `b42d008f` / `b9840280`
+to the RainPoint Zone 1 valve and rules out the Zigbee front-bed valve.
 
 | Role | Endpoint A | Endpoint B | Evidence |
 |---|---|---|---|
@@ -323,9 +332,11 @@ message-type byte contains a transaction or sequence value rather than a fixed
 command opcode.
 
 The Right Bed HCS026 endpoint `9ce58024` reported 60% before watering and 61%
-at 12:38:37 EDT. No second HCS026 moisture-layout endpoint was observed in this
-experiment. The two unidentified accessory IDs must remain unlabeled until a
-device action or Home Assistant state transition correlates with them.
+afterward. HA recorded the same 61% value 1.3 seconds later. No other HomGar
+moisture entity changed in the capture window, and no second HCS026
+moisture-layout endpoint was observed. The two unidentified accessory IDs must
+remain unlabeled until a device action or HA state transition correlates with
+them.
 
 ## Local architecture decision
 

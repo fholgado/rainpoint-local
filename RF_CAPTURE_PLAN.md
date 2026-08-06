@@ -94,6 +94,13 @@ overloading the front end.
 For every action, record local time to the second. Do not operate any unrelated
 433 MHz remote during the experiment.
 
+After every capture, query the Home Assistant recorder for all relevant valve,
+script, and HomGar sensor entities over the capture window. Treat recorder
+timestamps as the authoritative action/state timeline even when the operator
+also supplies manual notes. Always include other irrigation systems in the
+query so unrelated Zigbee or Wi-Fi valve actions are not attributed to
+RainPoint RF traffic.
+
 ## Analysis goals
 
 Receive path:
