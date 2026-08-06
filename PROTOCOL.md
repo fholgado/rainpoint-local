@@ -321,8 +321,8 @@ to the RainPoint Zone 1 valve and rules out the Zigbee front-bed valve.
 |---|---|---|---|
 | Hub/controller | `b42d008f` | `b9840280` | Start/stop requests; endpoint order reverses in responses |
 | HTV145 valve | `b9840280` | `b42d008f` | Immediate response to each request |
-| Unidentified accessory | `ce628024` | `39840280` | Repeated `0x85`/`0x86` frames during and after irrigation |
-| Unidentified accessory | `c4e50024` | `39840280` | Repeated `0x86` frames; shares the second endpoint |
+| Front Yard Sensor 1 | `ce628024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 97 ms |
+| Left Bed sensor | `c4e50024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 89 ms |
 
 The first valve cycle used message byte `0x98`; the next used `0x99`. The
 request body, not that rolling byte, distinguishes open (`10 82 ...`) from
@@ -334,9 +334,10 @@ command opcode.
 The Right Bed HCS026 endpoint `9ce58024` reported 60% before watering and 61%
 afterward. HA recorded the same 61% value 1.3 seconds later. No other HomGar
 moisture entity changed in the capture window, and no second HCS026
-moisture-layout endpoint was observed. The two unidentified accessory IDs must
-remain unlabeled until a device action or HA state transition correlates with
-them.
+moisture-layout endpoint was observed in that experiment. Subsequent persistent
+capture assigned `c4e50024` to Left Bed and `ce628024` to Front Yard Sensor 1
+through sub-100-ms HA recorder correlations. Front Yard Sensor 2 remains
+unassigned because it has not produced a directly correlated update.
 
 ## Local architecture decision
 
