@@ -121,6 +121,20 @@ class RTL433Transport:
                 continue
             moisture = decoded.get("soil_moisture_percent")
             if moisture is None:
+                state: dict[str, Any] = {
+                    "raw": decoded["frame_hex"],
+                    "rf_endpoint_a": decoded["endpoint_a"],
+                    "rf_endpoint_b": decoded["endpoint_b"],
+                    "rf_message_type": decoded["message_type"],
+                }
+                if "rssi" in event:
+                    state["rf_rssi_db"] = event["rssi"]
+                self.gateway.observe_rf_frame(
+                    frame=decoded["frame_hex"],
+                    state=state,
+                    observed_at=event.get("time"),
+                )
+                published += 1
                 continue
 
             endpoint = decoded["endpoint_b"]

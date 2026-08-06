@@ -36,7 +36,9 @@ The app exposes its read-only API on TCP port 8787. Configure the
 - Port: `8787`
 
 Replay mode creates simulated entities. Live mode currently creates confirmed
-HCS026FRF soil-moisture entities; other RF fields remain research work.
+HCS026FRF soil-moisture entities. Valid RainPoint frames that do not match the
+confirmed moisture layout are retained as `rf_frame` records in `/api/v1/events`
+for endpoint discovery; other RF fields remain research work.
 
 ## Safety
 

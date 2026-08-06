@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Retain normalized non-moisture RainPoint RF frames in the event stream for
+  endpoint discovery and valve-traffic correlation.
+- Keep raw-frame discovery receive-only and separate from Home Assistant device
+  state.
+
 ## 0.2.0
 
 - Add a receive-only `rtl_433` transport for USB RTL-SDR receivers.

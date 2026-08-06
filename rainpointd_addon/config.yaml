@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.2.0
+version: 0.2.1
 slug: rainpointd
 description: Read-only local RainPoint gateway with replay and RTL-SDR support
 url: https://github.com/fholgado/rainpoint-local

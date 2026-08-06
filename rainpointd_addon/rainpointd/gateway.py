@@ -146,6 +146,28 @@ class Gateway:
             }
             return copy.deepcopy(event)
 
+    def observe_rf_frame(
+        self,
+        *,
+        frame: str,
+        state: dict[str, Any],
+        observed_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Retain a normalized RF frame without creating a HA device."""
+        timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            event_id = self._next_event_id
+            self._next_event_id += 1
+            event = {
+                "event_id": event_id,
+                "event_type": "rf_frame",
+                "observed_at": timestamp,
+                "raw": frame,
+                "state": copy.deepcopy(state),
+            }
+            self._events.append(event)
+            return copy.deepcopy(event)
+
     def devices(self) -> list[dict[str, Any]]:
         """Return a stable snapshot of all known devices."""
         with self._lock:

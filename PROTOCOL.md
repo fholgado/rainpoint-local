@@ -301,6 +301,32 @@ user action:
 The preceding packed byte varied from `44` to `c4`, confirming that its high
 bit must be masked independently of the three-nibble moisture field.
 
+### Persistent Pi capture and irrigation correlation (2026-08-06)
+
+The protected Home Assistant app received the SDR directly and retained valid
+non-moisture frames in its read-only event stream. An irrigation start/stop
+experiment at 12:35--12:39 EDT confirmed the existing valve endpoint pair and
+revealed additional RainPoint endpoints.
+
+| Role | Endpoint A | Endpoint B | Evidence |
+|---|---|---|---|
+| Hub/controller | `b42d008f` | `b9840280` | Start/stop requests; endpoint order reverses in responses |
+| HTV145 valve | `b9840280` | `b42d008f` | Immediate response to each request |
+| Unidentified accessory | `ce628024` | `39840280` | Repeated `0x85`/`0x86` frames during and after irrigation |
+| Unidentified accessory | `c4e50024` | `39840280` | Repeated `0x86` frames; shares the second endpoint |
+
+The first valve cycle used message byte `0x98`; the next used `0x99`. The
+request body, not that rolling byte, distinguishes open (`10 82 ...`) from
+close (`90 81 ...`). Confirmation frames advanced from `0x90` to `0x92` and
+`0x93` during subsequent activity. This is strong evidence that the apparent
+message-type byte contains a transaction or sequence value rather than a fixed
+command opcode.
+
+The Right Bed HCS026 endpoint `9ce58024` reported 60% before watering and 61%
+at 12:38:37 EDT. No second HCS026 moisture-layout endpoint was observed in this
+experiment. The two unidentified accessory IDs must remain unlabeled until a
+device action or Home Assistant state transition correlates with them.
+
 ## Local architecture decision
 
 ### Preferred: direct 433 MHz bridge

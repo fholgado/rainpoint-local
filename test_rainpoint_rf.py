@@ -98,22 +98,28 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(62, device["state"]["soil_moisture_percent"])
         self.assertEqual("9ce58024", device["state"]["rf_endpoint"])
 
-    def test_live_transport_ignores_non_sensor_and_invalid_rows(self) -> None:
+    def test_live_transport_retains_non_sensor_and_ignores_invalid_rows(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
         self.assertEqual(0, transport.consume_line("not json"))
         event = {
             "rows": [
                 {
-                    "len": 627,
-                    "data": "55" * 40
-                    + "79f4882f28b42d008fb98402808541038006325c060d02"
-                    + "00000000000000000000007e850",
+                    "len": 304,
+                    "data": (
+                        "79f4882f28b42d008fb98402809ec1010006000000000000"
+                        "0000000000000000000000006bea"
+                    ),
                 }
             ]
         }
-        self.assertEqual(0, transport.consume_line(json.dumps(event)))
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
         self.assertEqual([], gateway.devices())
+        raw_event = gateway.events()[0]
+        self.assertEqual("rf_frame", raw_event["event_type"])
+        self.assertEqual("b42d008f", raw_event["state"]["rf_endpoint_a"])
+        self.assertEqual("b9840280", raw_event["state"]["rf_endpoint_b"])
+        self.assertEqual(0x9E, raw_event["state"]["rf_message_type"])
 
     def test_rtl_command_is_receive_only_and_filtered(self) -> None:
         command = rtl_433_command(434_000_000, 1_024_000)
