@@ -7,6 +7,8 @@
   reports.
 - Map the confirmed Left Bed, Front Yard Sensor 1, and newly identified Front
   Yard Sensor 2 RF endpoints.
+- Restrict moisture decoding to confirmed sensor endpoints so valve payloads
+  cannot create false sensor observations.
 
 ## 0.3.1
 

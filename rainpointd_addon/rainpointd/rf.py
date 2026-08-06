@@ -7,6 +7,12 @@ from typing import Any
 
 SYNC = bytes.fromhex("79f4882f28")
 FRAME_BYTES = 38
+HCS026_ENDPOINTS = {
+    "9ce58024",
+    "c4e50024",
+    "ce628024",
+    "d1e28024",
+}
 FLEX_DECODER = (
     "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,"
     "bits>=620,match={40}79f4882f28"
@@ -25,6 +31,8 @@ def _row_bits(row: dict[str, Any]) -> str:
 def _soil_moisture(frame: bytes) -> int | None:
     """Decode either field position confirmed in HCS026FRF reports."""
     if len(frame) != FRAME_BYTES:
+        return None
+    if frame[9:13].hex() not in HCS026_ENDPOINTS:
         return None
     for marker_index in (20, 18):
         if frame[marker_index] & 0x7F != 0x44:

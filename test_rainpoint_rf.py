@@ -93,6 +93,24 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("d1e28024", decoded["endpoint_b"])
         self.assertEqual(79, decoded["soil_moisture_percent"])
 
+        # Left Bed uses the same lower-channel layout without the odd flag.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280c4e500240e01820385441d00"
+            "000000000000000000000000000000001a57"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual("c4e50024", decoded["endpoint_b"])
+        self.assertEqual(58, decoded["soil_moisture_percent"])
+
+    def test_does_not_treat_valve_payload_as_moisture(self) -> None:
+        # This valve response contains a marker-like byte sequence by chance.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280b42d008f9d05040581800544"
+            "1e7058000000000000000000000000007be3"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertNotIn("soil_moisture_percent", decoded)
+
     def test_live_transport_publishes_confirmed_moisture(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])

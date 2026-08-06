@@ -416,14 +416,18 @@ notifications:
 |---|---|---|---:|
 | Front Yard Sensor 1 | `b9840280` to `ce628024` | `09 81 82 03 05 c4 1d 80` | 59% |
 | Front Yard Sensor 2 | `b9840280` to `d1e28024` | `00 81 82 07 85 c4 27 80` | 79% |
+| Left Bed | `b9840280` to `c4e50024` | `0e 01 82 03 85 44 1d 00` | 58% |
 
 These reports use the same packed moisture representation as Right Bed, but
 the `0x44` marker and value begin two bytes earlier. For Front Yard Sensor 1,
 `0x1d * 2 + 1 = 59`; for Sensor 2, `0x27 * 2 + 1 = 79`. The latter matches the
 last independently retained HA cloud reading and assigns the previously unseen
 `d1e28024` endpoint to Front Yard Sensor 2. The decoder now accepts both field
-positions. A full lower-channel `c4e50024` report is still needed to confirm
-Left Bed uses the same alternate position.
+positions. A focused 433.15 MHz capture subsequently recovered two full Left
+Bed reports at 58%, matching HA's independently retained 58% cloud value. Soil
+field detection is restricted to the four confirmed HCS026 endpoint IDs so a
+marker-like byte sequence in a valve response cannot create a false moisture
+observation.
 
 ## Local architecture decision
 
@@ -485,14 +489,13 @@ route currently has more unknowns than the direct-RF bridge.
 
 ## Next safe experiments
 
-1. Retain a full lower-channel `c4e50024` report and correlate its moisture
-   value with Home Assistant.
-2. Determine the trailer checksum or authentication algorithm across the
+1. Determine the trailer checksum or authentication algorithm across the
    expanded set of labeled frames.
-3. Capture additional short valve cycles with different requested durations to
+2. Capture additional short valve cycles with different requested durations to
    separate command, acknowledgement, and status fields.
-4. Implement and validate receive-only soil sensing first.
-5. Consider exact replay only after close behavior, counters, and independent
+3. Deploy and validate receive-only reporting for all four confirmed soil
+   endpoints.
+4. Consider exact replay only after close behavior, counters, and independent
    timeout safety are understood.
 
 ## References
