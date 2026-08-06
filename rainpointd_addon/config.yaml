@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.3.1
+version: 0.3.2
 slug: rainpointd
 description: Read-only local RainPoint gateway with replay and RTL-SDR support
 url: https://github.com/fholgado/rainpoint-local
@@ -22,8 +22,8 @@ map:
 options:
   transport: replay
   replay_interval: 5.0
-  frequency: 434000000
-  sample_rate: 1024000
+  frequency: 433700000
+  sample_rate: 2000000
   research_capture_minutes: 0
 schema:
   transport: "list(replay|rtl433)"

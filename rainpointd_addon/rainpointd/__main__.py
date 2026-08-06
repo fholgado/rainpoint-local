@@ -23,8 +23,8 @@ def main() -> int:
         default=5.0,
         help="seconds between replayed observations",
     )
-    parser.add_argument("--frequency", type=int, default=434_000_000)
-    parser.add_argument("--sample-rate", type=int, default=1_024_000)
+    parser.add_argument("--frequency", type=int, default=433_700_000)
+    parser.add_argument("--sample-rate", type=int, default=2_000_000)
     parser.add_argument("--signal-capture-seconds", type=int, default=0)
     parser.add_argument("--signal-directory")
     parser.add_argument(

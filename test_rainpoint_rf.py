@@ -74,11 +74,34 @@ class RainPointRFTest(unittest.TestCase):
         decoded = normalize_row(row)
         self.assertEqual(62, decoded["soil_moisture_percent"])
 
+    def test_decodes_lower_channel_hcs026_moisture_layout(self) -> None:
+        # Front Yard Sensor 1: 0x1d * 2 plus the following high bit = 59%.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280ce6280240981820305c41d80"
+            "000000000000000000000000000000005e4e"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual("ce628024", decoded["endpoint_b"])
+        self.assertEqual(59, decoded["soil_moisture_percent"])
+
+        # The previously unassigned endpoint matches Front Yard Sensor 2 at 79%.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280d1e280240081820785c42780"
+            "000000000000000000000000000000006e5c"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual("d1e28024", decoded["endpoint_b"])
+        self.assertEqual(79, decoded["soil_moisture_percent"])
+
     def test_live_transport_publishes_confirmed_moisture(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
         transport.seed()
-        before = gateway.devices()[0]
+        before = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "soil-right-bed"
+        )
         self.assertFalse(before["available"])
 
         data = (
@@ -92,7 +115,11 @@ class RainPointRFTest(unittest.TestCase):
             "rssi": -1.99,
         }
         self.assertEqual(1, transport.consume_line(json.dumps(event)))
-        device = gateway.devices()[0]
+        device = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "soil-right-bed"
+        )
         self.assertTrue(device["available"])
         self.assertEqual("soil-right-bed", device["device_id"])
         self.assertEqual(62, device["state"]["soil_moisture_percent"])

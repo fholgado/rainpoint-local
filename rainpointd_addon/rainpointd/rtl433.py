@@ -13,6 +13,9 @@ from .rf import FLEX_DECODER, normalize_row
 
 
 KNOWN_HCS026 = {
+    "c4e50024": ("soil-left-bed", "Left Bed"),
+    "ce628024": ("soil-front-1", "Front Yard Sensor 1"),
+    "d1e28024": ("soil-front-2", "Front Yard Sensor 2"),
     "9ce58024": ("soil-right-bed", "Right Bed"),
 }
 
@@ -57,8 +60,8 @@ class RTL433Transport:
         self,
         gateway: Gateway,
         *,
-        frequency: int = 434_000_000,
-        sample_rate: int = 1_024_000,
+        frequency: int = 433_700_000,
+        sample_rate: int = 2_000_000,
         signal_capture_seconds: int = 0,
         signal_directory: str | None = None,
         command: Sequence[str] | None = None,

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- Expand the default receive window to cover both observed RainPoint channels.
+- Decode the alternate HCS026FRF moisture-field position used by lower-channel
+  reports.
+- Map the confirmed Left Bed, Front Yard Sensor 1, and newly identified Front
+  Yard Sensor 2 RF endpoints.
+
 ## 0.3.1
 
 - Add a bounded receive-only broad-capture phase for decoder research.

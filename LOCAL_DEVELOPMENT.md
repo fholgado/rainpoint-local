@@ -58,7 +58,7 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd \
 The transport invokes this receive-only pipeline internally:
 
 ```text
-434.0 MHz / 1.024 Msps → FSK PCM / 48 us → sync 79f4882f28
+433.7 MHz / 2.0 Msps → FSK PCM / 48 us → sync 79f4882f28
 ```
 
 Right Bed endpoint `9ce58024` is registered as unavailable at startup and

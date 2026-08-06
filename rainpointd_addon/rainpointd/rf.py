@@ -23,11 +23,18 @@ def _row_bits(row: dict[str, Any]) -> str:
 
 
 def _soil_moisture(frame: bytes) -> int | None:
-    """Decode the field position confirmed in correlated HCS026FRF reports."""
-    if len(frame) != FRAME_BYTES or frame[20] & 0x7F != 0x44:
+    """Decode either field position confirmed in HCS026FRF reports."""
+    if len(frame) != FRAME_BYTES:
         return None
-    percent = frame[21] * 2 + (1 if frame[22] & 0x80 else 0)
-    return percent if 0 <= percent <= 100 else None
+    for marker_index in (20, 18):
+        if frame[marker_index] & 0x7F != 0x44:
+            continue
+        percent = frame[marker_index + 1] * 2 + (
+            1 if frame[marker_index + 2] & 0x80 else 0
+        )
+        if 0 <= percent <= 100:
+            return percent
+    return None
 
 
 def normalize_row(row: dict[str, Any]) -> dict[str, Any]:

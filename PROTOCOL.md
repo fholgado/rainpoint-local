@@ -323,6 +323,7 @@ to the RainPoint Zone 1 valve and rules out the Zigbee front-bed valve.
 | HTV145 valve | `b9840280` | `b42d008f` | Immediate response to each request |
 | Front Yard Sensor 1 | `ce628024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 97 ms |
 | Left Bed sensor | `c4e50024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 89 ms |
+| Front Yard Sensor 2 | `d1e28024` | `39840280` | Lower-channel full frame decodes to the sensor's independently observed 79% value |
 
 The first valve cycle used message byte `0x98`; the next used `0x99`. The
 request body, not that rolling byte, distinguishes open (`10 82 ...`) from
@@ -398,8 +399,31 @@ afterward. HA recorded the same 61% value 1.3 seconds later. No other HomGar
 moisture entity changed in the capture window, and no second HCS026
 moisture-layout endpoint was observed in that experiment. Subsequent persistent
 capture assigned `c4e50024` to Left Bed and `ce628024` to Front Yard Sensor 1
-through sub-100-ms HA recorder correlations. Front Yard Sensor 2 remains
-unassigned because it has not produced a directly correlated update.
+through sub-100-ms HA recorder correlations.
+
+### Dual-channel HCS026 reports
+
+The initial 1.024 Msps capture centered at 434.0 MHz spanned approximately
+433.49--434.51 MHz. It retained the short `c4e50024` and `ce628024`
+notifications but no data-rich report for either sensor. A 2.0 Msps capture
+centered at 433.7 MHz exposed companion long packets with tone energy reaching
+approximately 433.08 MHz, below the old window.
+
+The wider capture recovered these full frames immediately before their short
+notifications:
+
+| Assignment | Full-frame route | Relevant body | Local moisture |
+|---|---|---|---:|
+| Front Yard Sensor 1 | `b9840280` to `ce628024` | `09 81 82 03 05 c4 1d 80` | 59% |
+| Front Yard Sensor 2 | `b9840280` to `d1e28024` | `00 81 82 07 85 c4 27 80` | 79% |
+
+These reports use the same packed moisture representation as Right Bed, but
+the `0x44` marker and value begin two bytes earlier. For Front Yard Sensor 1,
+`0x1d * 2 + 1 = 59`; for Sensor 2, `0x27 * 2 + 1 = 79`. The latter matches the
+last independently retained HA cloud reading and assigns the previously unseen
+`d1e28024` endpoint to Front Yard Sensor 2. The decoder now accepts both field
+positions. A full lower-channel `c4e50024` report is still needed to confirm
+Left Bed uses the same alternate position.
 
 ## Local architecture decision
 
@@ -461,10 +485,10 @@ route currently has more unknowns than the direct-RF bridge.
 
 ## Next safe experiments
 
-1. Capture several full-band soil reports centered at 434.0 MHz and correlate
-   each with the Home Assistant raw payload.
-2. Recover stable bit rows from the labeled IQ files and determine preamble,
-   sync, bitrate, line coding, address, and checksum.
+1. Retain a full lower-channel `c4e50024` report and correlate its moisture
+   value with Home Assistant.
+2. Determine the trailer checksum or authentication algorithm across the
+   expanded set of labeled frames.
 3. Capture additional short valve cycles with different requested durations to
    separate command, acknowledgement, and status fields.
 4. Implement and validate receive-only soil sensing first.

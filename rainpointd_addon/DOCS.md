@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.3.1 supports captured replay and receive-only USB RTL-SDR modes. It
+Version 0.3.2 supports captured replay and receive-only USB RTL-SDR modes. It
 does not connect to the RainPoint cloud, and every HTTP POST request is
 rejected.
 
@@ -24,8 +24,9 @@ Number of seconds between fixture observations. The default is 5 seconds.
 - `replay`: captured development fixtures; does not use USB hardware.
 - `rtl433`: live receive-only RainPoint packets from the USB RTL-SDR.
 
-The live defaults are 434,000,000 Hz center frequency and 1,024,000 samples per
-second. These settings cover the locally observed RainPoint carriers.
+The live defaults are 433,700,000 Hz center frequency and 2,000,000 samples per
+second. This window covers both the lower data-rich sensor channel near
+433.08 MHz and the previously observed RainPoint traffic above 434 MHz.
 
 ### Broad capture duration
 

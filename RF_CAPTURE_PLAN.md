@@ -56,14 +56,15 @@ contain unrelated nearby radio traffic.
 
 The HCS026FRF filing specifies 433.7 MHz ASK, but its radiated-emission test
 measured the fundamental at 434.07 MHz with 184.2 kHz occupied bandwidth. Local
-captures also contain tone energy as high as approximately 434.38 MHz. Use a
-1.024 MHz window centered at 434.0 MHz so captures include the nominal,
-measured, and locally observed carriers instead of clipping the modulation.
+captures contain RainPoint tone energy from approximately 433.08 MHz through
+434.38 MHz. Use a 2.0 MHz window centered at 433.7 MHz so both the lower
+data-rich sensor reports and the upper notification/control channel fit in one
+capture.
 
 Receive and save only matching RainPoint packets:
 
 ```sh
-rtl_433 -f 434000000 -s 1024000 -R 0 -S known \
+rtl_433 -f 433700000 -s 2000000 -R 0 -S known \
   -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28' \
   -M time:iso:usec -M level -M bits
 ```
