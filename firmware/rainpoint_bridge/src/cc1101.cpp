@@ -191,7 +191,7 @@ void Cc1101::configureRainPoint() {
     writeRegister(kTest0, 0x09);
 }
 
-bool Cc1101::begin() {
+bool Cc1101::begin(std::uint8_t initialChannel) {
     pinMode(chipSelectPin_, OUTPUT);
     digitalWrite(chipSelectPin_, HIGH);
     pinMode(misoPin_, INPUT);
@@ -202,7 +202,7 @@ bool Cc1101::begin() {
     if (partNumber() != 0x00 || version() == 0x00 || version() == 0xff) {
         return false;
     }
-    return setChannel(0);
+    return setChannel(initialChannel);
 }
 
 bool Cc1101::setChannel(std::uint8_t channel) {

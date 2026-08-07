@@ -20,7 +20,7 @@ class Cc1101 {
 public:
     Cc1101(SPIClass& spi, int chipSelectPin, int misoPin);
 
-    bool begin();
+    bool begin(std::uint8_t initialChannel = 0);
     bool setChannel(std::uint8_t channel);
     bool poll(RadioPacket& packet);
     std::uint8_t channel() const;

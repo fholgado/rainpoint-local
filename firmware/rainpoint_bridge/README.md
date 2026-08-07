@@ -1,26 +1,34 @@
 # RainPoint ESP32/CC1101 bridge firmware
 
-This is the first receive-only firmware scaffold for the ELEGOO ESP-WROOM-32
-USB-C development board and a **433 MHz** CC1101 module. It contains no transmit
-API, no valve commands, and no `STX` path.
+This is the receive-only firmware scaffold for the ELEGOO ESP-WROOM-32 USB-C
+development board and one or two **433 MHz** CC1101 modules. It contains no
+transmit API, no valve commands, and no `STX` path.
 
 ## Wiring
 
 Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
 
-| CC1101 | ESP32 |
-|---|---:|
-| VCC | 3V3 |
-| GND | GND |
-| SCK | GPIO18 |
-| MISO | GPIO19 |
-| MOSI | GPIO23 |
-| CSN | GPIO27 |
-| GDO0 | GPIO26, reserved for the next interrupt-driven revision |
-| GDO2 | GPIO25, optional/reserved |
+The two radios share SPI clock and data. Each must have its own chip-select;
+never connect the two CSN pins together.
 
-Keep the module close to the ESP32, add a 100 nF ceramic capacitor directly
-across CC1101 VCC/GND, and connect the correct 433 MHz antenna before testing.
+| Signal | Lower radio | Upper radio | ESP32 |
+|---|---|---|---:|
+| VCC | VCC | VCC | 3V3 |
+| GND | GND | GND | GND |
+| SCK | SCK | SCK | GPIO18 |
+| MISO | MISO | MISO | GPIO19 |
+| MOSI | MOSI | MOSI | GPIO23 |
+| CSN | CSN | — | GPIO27 |
+| CSN | — | CSN | GPIO14 |
+| GDO0 | GDO0 | — | GPIO26, reserved |
+| GDO0 | — | GDO0 | GPIO33, reserved |
+| GDO2 | GDO2 | — | GPIO25, optional/reserved |
+| GDO2 | — | GDO2 | GPIO32, optional/reserved |
+
+Keep each module close to the ESP32, add a 100 nF ceramic capacitor directly
+across each CC1101 VCC/GND pair, and connect the correct 433 MHz antenna before
+testing. Each module should initially use its own antenna; combining both RF
+ports onto one antenna requires a proper RF combiner or switch.
 
 ## Current behavior
 
@@ -33,11 +41,11 @@ across CC1101 VCC/GND, and connect the correct 433 MHz antenna before testing.
   and the ordinary CRC-CCITT trailer residual.
 - Rejects no research frames solely because their ordinary trailer is invalid.
 
-The default discovery mode alternates channels every 500 ms. This is useful
-for bring-up but cannot guarantee reception because one CC1101 cannot listen to
-channels 1.1 MHz apart simultaneously. Send `0` over serial to lock the lower
-channel, `1` to lock the upper channel, or `s` to resume scanning. Reliable
-production reception will require two radios or continued RTL-SDR reception.
+The dual-radio build fixes the lower radio to channel 0 and the upper radio to
+channel 11, receiving both RainPoint channels continuously. The single-radio
+build alternates channels every 500 ms. In that build, send `0` over serial to
+lock the lower channel, `1` to lock the upper channel, or `s` to resume
+scanning.
 
 ## Build and flash
 
@@ -46,9 +54,13 @@ Install PlatformIO, connect the board by USB-C, then run:
 ```sh
 cd firmware/rainpoint_bridge
 pio run
-pio run --target upload
+pio run --environment esp32dev_dual --target upload
 pio device monitor
 ```
+
+Use `esp32dev_single` instead when only one CC1101 is connected. A normal
+`pio run` compiles both configurations so shared code cannot silently break
+one of them.
 
 The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and
@@ -65,9 +77,9 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ## Next firmware increments
 
-1. Compile and flash on the physical ESP32.
-2. Verify CC1101 identity and receive both channels while the RTL-SDR records
-   the same packets.
+1. Flash on the physical ESP32.
+2. Verify both CC1101 identities and receive both channels while the RTL-SDR
+   records the same packets.
 3. Tune deviation, RX bandwidth, AFC, AGC, and frequency calibration from
    measured packet success and CC1101 frequency-offset estimates.
 4. Add a local network transport into `rainpointd` without adding control.
