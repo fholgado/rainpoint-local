@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.pio/
 captures/rf/
 
 # Local-only research material and machine-specific capture helper.

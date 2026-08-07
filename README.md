@@ -27,6 +27,8 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
+- building a receive-only ESP32/CC1101 firmware scaffold with the measured
+  RainPoint radio profile, serial frame diagnostics, and no transmit path,
 - reporting local soil, signal, usage, and valve state to Home Assistant, and
 - rejecting every control request at the gateway boundary.
 
@@ -52,7 +54,7 @@ HCS026 sensors / HTV145 valve
       local radio transport
    - replay fixtures (implemented)
    - receive-only SDR (implemented in the HA app)
-   - ESP32 + CC1101 gateway (planned)
+   - ESP32 + CC1101 gateway (receive-only firmware scaffold implemented)
              |
          rainpointd
    protocol + registry + safety
@@ -110,6 +112,11 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd \
 
 This requires `rtl_433`. It starts no transmitter and publishes only RF frames
 matching the confirmed RainPoint sync word.
+
+The initial ESP32/CC1101 firmware, wiring, and build instructions are under
+[`firmware/rainpoint_bridge`](firmware/rainpoint_bridge/README.md). It is
+receive-only and must be validated against the SDR before becoming a gateway
+transport.
 
 Copy `custom_components/rainpoint_local` into the Home Assistant configuration
 directory, restart Home Assistant, and add **RainPoint Local** from

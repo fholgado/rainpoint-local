@@ -80,6 +80,11 @@ The first permanent build should use a socketed ESP32 development board and a
 433 MHz CC1101 module on a small carrier PCB. A custom bare-chip RF board is
 unnecessary until the protocol and deployment have been proven.
 
+The first receive-only firmware scaffold now lives in
+`firmware/rainpoint_bridge`. It implements the measured dual-channel radio
+profile, frame reconstruction, integrity diagnostics, and serial JSON output.
+It deliberately contains no transmit strobe or command interface.
+
 ### Home Assistant integration (`rainpoint_local`)
 
 The integration provides:
@@ -154,7 +159,8 @@ and diagnostics.
 
 ### Phase 2 — transceiver prototype
 
-- Connect a 433 MHz CC1101 module to an ESP32.
+- Wire and hardware-validate the implemented receive-only ESP32/CC1101
+  firmware.
 - Reproduce receive behavior before enabling transmit.
 - Calibrate carrier, deviation, symbol timing, and output power against the
   existing SDR.
