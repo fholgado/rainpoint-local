@@ -30,9 +30,10 @@ Working now:
 - reporting local soil, signal, usage, and valve state to Home Assistant, and
 - rejecting every control request at the gateway boundary.
 
-Not working yet:
+Still provisional or not working yet:
 
-- decoding the HCS026FRF battery-low flag,
+- confirming the provisional HCS026FRF heartbeat battery-status byte with a
+  controlled normal-to-low transition,
 - guaranteeing reliable reception at the final antenna location,
 - locally pairing or forgetting physical devices, and
 - locally opening or closing the physical valve.

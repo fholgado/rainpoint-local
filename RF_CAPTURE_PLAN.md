@@ -140,13 +140,21 @@ transmitted packet.
    restore normal power promptly.
 6. Diff both packet types bit-for-bit. Prioritize the heartbeat status sequence
    currently observed as `... 41 81 00 01 00 ...`, while accounting for the
-   `41`/`c1` retransmission-bit change.
+   `41`/`c1` retransmission-bit change. Across 358 retained normal-battery
+   heartbeats, normalized offset 17 was always `01`; the primary confirmation
+   target is therefore a repeatable change from `01` to `02`--`04` as the stock
+   reference changes to low.
 7. Also look for a compact one-byte battery TLV. HomGar metadata assigns
    battery type 31, whose one-byte compact header is expected to be `0xdc`;
    candidate normal/low sequences are therefore `dc 01` and `dc 02`. Treat
    these only as search signatures until an RF transition confirms them.
 8. Repeat the transition at least twice before assigning a battery field, then
    add positive and negative decoder fixtures.
+
+The decoder currently retains `battery_status_candidate` and
+`battery_percent_candidate` on raw heartbeat events. These names are
+deliberately provisional and must not be promoted to Home Assistant entities
+until the controlled transition succeeds.
 
 ## Pairing discovery signatures
 

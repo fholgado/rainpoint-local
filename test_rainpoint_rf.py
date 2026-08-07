@@ -126,6 +126,44 @@ class RainPointRFTest(unittest.TestCase):
         self.assertNotIn("canonical_endpoint_b", decoded_unknown)
         self.assertNotIn("soil_moisture_percent", decoded_unknown)
 
+    def test_retains_provisional_battery_status_from_companion_heartbeat(self) -> None:
+        # Every one of 358 retained companion heartbeats used status 1 while
+        # the stock battery entities independently remained normal/100%.
+        frame = bytes.fromhex(
+            "79f4882f28c4e500243984028088c181000100000000"
+            "000000000000000000000000000022e3"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual("c4e50024", decoded["battery_endpoint"])
+        self.assertEqual(1, decoded["battery_status_candidate"])
+        self.assertEqual(100, decoded["battery_percent_candidate"])
+        self.assertEqual("c713", decoded["trailer_residual"])
+        self.assertTrue(decoded["trailer_valid"])
+
+    def test_marks_known_crc_residue_and_special_frame_separately(self) -> None:
+        open_frame = bytes.fromhex(
+            "79f4882f28b42d008fb9840280811082808100fe0180"
+            "00000000000000000000000000007669"
+        )
+        decoded = normalize_row(
+            {"len": len(open_frame) * 8, "data": open_frame.hex()}
+        )
+        self.assertEqual("4f03", decoded["trailer_residual"])
+        self.assertTrue(decoded["trailer_valid"])
+
+        # The compact product-code family has a different trailer rule. Keep
+        # decoding it, but do not label it as an ordinary validated frame.
+        product_frame = bytes.fromhex(
+            "79f4882f28b9840280d1e280482c03040f0a884f"
+            "000000000000000000000000000000001b77"
+        )
+        decoded = normalize_row(
+            {"len": len(product_frame) * 8, "data": product_frame.hex()}
+        )
+        self.assertEqual("94c2", decoded["trailer_residual"])
+        self.assertFalse(decoded["trailer_valid"])
+        self.assertEqual(79, decoded["soil_moisture_percent"])
+
     def test_retains_unassigned_compact_moisture_and_hub_rssi(self) -> None:
         # This followed a normal Right Bed 57% report by 835 ms. Its compact
         # status values also matched the stock integration's -79 dBm reading,
@@ -296,6 +334,24 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("b42d008f", raw_event["state"]["rf_endpoint_a"])
         self.assertEqual("b9840280", raw_event["state"]["rf_endpoint_b"])
         self.assertEqual(0x9E, raw_event["state"]["rf_message_type"])
+        self.assertIn("rf_trailer_residual", raw_event["state"])
+        self.assertIn("rf_trailer_valid", raw_event["state"])
+
+    def test_live_transport_retains_battery_candidate_as_raw_research_data(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        frame = (
+            "79f4882f28c4e500243984028088c181000100000000"
+            "000000000000000000000000000022e3"
+        )
+        event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
+        raw_event = gateway.events()[0]
+        self.assertEqual("rf_frame", raw_event["event_type"])
+        self.assertEqual(1, raw_event["state"]["battery_status_candidate"])
+        self.assertEqual(100, raw_event["state"]["battery_percent_candidate"])
+        self.assertTrue(raw_event["state"]["rf_trailer_valid"])
+        self.assertEqual([], gateway.devices())
 
     def test_rtl_command_is_receive_only_and_filtered(self) -> None:
         command = rtl_433_command(434_000_000, 1_024_000)

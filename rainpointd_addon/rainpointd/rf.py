@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 from typing import Any
 
 
@@ -19,6 +20,11 @@ HCS026_ENDPOINTS = {
 # catalog product code 0x48. Canonicalize only identities already established
 # by ordinary telemetry so a marker-like payload cannot create a new device.
 HCS026_PRODUCT_CODE = 0x48
+HCS026_COMPANION_ENDPOINT = "39840280"
+# Ordinary 38-byte frames use CRC-CCITT (poly 0x1021, init 0) over bytes
+# 0..35. The transmitted trailer differs by one of two unresolved residues.
+# Both residues occur with both preamble lengths and with open/close traffic.
+TRAILER_RESIDUES = {0xC713, 0x4F03}
 FLEX_DECODER = (
     "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,"
     "bits>=620,match={40}79f4882f28"
@@ -64,6 +70,51 @@ def _compact_status_fields(frame: bytes) -> dict[str, Any]:
                 result["hub_rssi_db"] = hub_rssi
         break
     return result
+
+
+def _trailer_fields(frame: bytes) -> dict[str, Any]:
+    """Return the observed CRC-CCITT residual for a normalized frame."""
+    if len(frame) != FRAME_BYTES:
+        return {}
+    computed = binascii.crc_hqx(frame[:-2], 0)
+    observed = int.from_bytes(frame[-2:], "big")
+    residual = computed ^ observed
+    return {
+        "trailer_residual": f"{residual:04x}",
+        "trailer_valid": residual in TRAILER_RESIDUES,
+    }
+
+
+def _hcs026_battery_candidate(frame: bytes) -> dict[str, Any]:
+    """Retain the provisional HCS026 heartbeat battery field.
+
+    All 358 companion heartbeats in the retained capture used status 1 while
+    the independently observed stock entities reported normal/100%. A
+    controlled low-battery transition is still required before this can be a
+    supported device field.
+    """
+    if len(frame) != FRAME_BYTES:
+        return {}
+    endpoint = frame[5:9].hex()
+    if endpoint not in HCS026_ENDPOINTS:
+        return {}
+    if frame[9:13].hex() != HCS026_COMPANION_ENDPOINT:
+        return {}
+    if (
+        frame[14] & 0x7F != 0x41
+        or frame[15] != 0x81
+        or frame[16] != 0x00
+        or frame[18] != 0x00
+    ):
+        return {}
+    status = frame[17]
+    if status > 4:
+        return {}
+    return {
+        "battery_endpoint": endpoint,
+        "battery_status_candidate": status,
+        "battery_percent_candidate": 100 if status in (0, 1) else 10,
+    }
 
 
 def _soil_moisture(frame: bytes) -> int | None:
@@ -165,11 +216,13 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "message_body": frame[13:-2].hex(),
         "trailer": frame[-2:].hex(),
     }
+    result.update(_trailer_fields(frame))
     canonical_endpoint_b = _canonical_hcs026_endpoint(frame[9:13])
     if canonical_endpoint_b and canonical_endpoint_b != result["endpoint_b"]:
         result["canonical_endpoint_b"] = canonical_endpoint_b
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
+    result.update(_hcs026_battery_candidate(frame))
     moisture = _soil_moisture(frame)
     if moisture is not None:
         result["soil_moisture_percent"] = moisture

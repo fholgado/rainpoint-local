@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.3.5 supports captured replay and receive-only USB RTL-SDR modes. It
+Version 0.3.6 supports captured replay and receive-only USB RTL-SDR modes. It
 does not connect to the RainPoint cloud, and every HTTP POST request is
 rejected.
 

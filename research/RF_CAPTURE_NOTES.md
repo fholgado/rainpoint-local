@@ -41,8 +41,11 @@ Exact open or close packets were sometimes repeated about 0.7 seconds later,
 including an identical trailer. This established deterministic per-frame
 encoding and the absence of a per-burst nonce.
 
-Trailer XOR deltas are compatible with polynomial `0x1021`, but common CRC-16
-parameter combinations have not yet reproduced all observed trailers.
+Subsequent corpus analysis established CRC-CCITT (`0x1021`, initial value zero)
+over normalized bytes 0--35. Of 705 usable unique ordinary frames, 687 (97.4%)
+had transmitted-trailer XOR residues `0xc713` or `0x4f03`; the other 18 were
+visibly clipped or corrupted. Both residues occurred with both preamble forms
+and in open/close commands, leaving only the residue-selection rule unresolved.
 
 ## Multi-channel sensor discovery
 
@@ -123,8 +126,13 @@ observed Right Bed cloud state. Because that frame's routing fields were
 decoder retains the decoded values for research but does not yet apply them to
 the device.
 
-No retained HCS026 frame contained the catalog-implied one-byte battery TLV
-signature. A controlled normal-to-low battery transition remains necessary.
+No retained HCS026 RF frame contained the catalog-implied `dc 01` one-byte
+battery TLV signature. However, all 358 companion heartbeats in the analyzed
+window used `... 41 81 00 01 00 ...`, with normalized offset 17 fixed at
+`0x01`. During the same period, all 5,485 cloud-reference reports contained
+`dc 01` and every stock battery entity reported normal/100%. Offset 17 is now
+the leading RF battery-status candidate, but a controlled normal-to-low
+transition remains necessary before promotion to a supported field.
 
 ## Current capture guidance
 

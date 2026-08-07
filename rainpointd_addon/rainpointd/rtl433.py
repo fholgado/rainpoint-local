@@ -190,6 +190,8 @@ class RTL433Transport:
                     "raw": decoded["frame_hex"],
                     "rf_endpoint_a": decoded["endpoint_a"],
                     "rf_endpoint_b": decoded["endpoint_b"],
+                    "rf_trailer_residual": decoded["trailer_residual"],
+                    "rf_trailer_valid": decoded["trailer_valid"],
                     **self._valve_state,
                 }
                 if "rssi" in event:
@@ -211,7 +213,15 @@ class RTL433Transport:
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_message_type": decoded["message_type"],
                 }
-                for key in ("status_soil_moisture_percent", "hub_rssi_db"):
+                for key in ("trailer_residual", "trailer_valid"):
+                    state[f"rf_{key}"] = decoded[key]
+                for key in (
+                    "status_soil_moisture_percent",
+                    "hub_rssi_db",
+                    "battery_endpoint",
+                    "battery_status_candidate",
+                    "battery_percent_candidate",
+                ):
                     if key in decoded:
                         state[key] = decoded[key]
                 if "rssi" in event:
@@ -235,6 +245,8 @@ class RTL433Transport:
                 "rf_endpoint": endpoint,
                 "rf_endpoint_a": decoded["endpoint_a"],
                 "rf_endpoint_b": decoded["endpoint_b"],
+                "rf_trailer_residual": decoded["trailer_residual"],
+                "rf_trailer_valid": decoded["trailer_valid"],
                 "soil_moisture_percent": moisture,
             }
             if "product_code" in decoded:

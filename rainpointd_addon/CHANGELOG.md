@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.6
+
+- Retain the provisional HCS026 heartbeat battery status for controlled
+  transition analysis without exposing it as a supported battery entity.
+- Calculate and retain the ordinary-frame CRC-CCITT residual and validation
+  result using the two residues established from the capture corpus.
+
 ## 0.3.5
 
 - Decode the HCS026 product-code/TLV moisture report and canonicalize it to the
