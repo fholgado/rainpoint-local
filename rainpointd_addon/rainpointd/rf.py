@@ -23,10 +23,10 @@ HCS026_PRODUCT_CODE = 0x48
 HCS026_COMPANION_ENDPOINT = "39840280"
 # Ordinary 38-byte frames use CRC-CCITT (poly 0x1021, init 0) over bytes
 # 0..35. The transmitted trailer differs by one of two unresolved residues.
-# Both residues occur with both preamble lengths and with open/close traffic.
+# Both residues occur across prefix lengths and with open/close traffic.
 TRAILER_RESIDUES = {0xC713, 0x4F03}
 FLEX_DECODER = (
-    "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,"
+    "n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,"
     "bits>=620,match={40}79f4882f28"
 )
 
@@ -177,7 +177,7 @@ def _valve_fields(frame: bytes) -> dict[str, Any]:
 
 
 def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Locate sync and normalize either observed preamble length."""
+    """Locate sync and normalize any observed wake/prefix length."""
     bits = _row_bits(row)
     sync_bits = "".join(f"{byte:08b}" for byte in SYNC)
     sync_offset = bits.find(sync_bits)

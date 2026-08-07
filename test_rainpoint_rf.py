@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,9 +16,37 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
+from tools.characterize_rainpoint_iq import characterize  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    def test_characterizes_synthetic_two_fsk_capture(self) -> None:
+        sample_rate = 2_000_000
+        center = 433_700_000
+        tones = (434_200_000, 434_280_000)
+        phase = 0.0
+        data = bytearray()
+        for index in range(65_536):
+            tone = tones[(index // 100) % 2]
+            phase += 2 * math.pi * (tone - center) / sample_rate
+            data.extend(
+                (
+                    round(127.5 + 80 * math.cos(phase)),
+                    round(127.5 + 80 * math.sin(phase)),
+                )
+            )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(data)
+            capture.flush()
+            measured = characterize(
+                Path(capture.name),
+                sample_rate=sample_rate,
+                center_frequency=center,
+            )
+        self.assertAlmostEqual(tones[0], measured["low_tone_hz"], delta=50)
+        self.assertAlmostEqual(tones[1], measured["high_tone_hz"], delta=50)
+        self.assertAlmostEqual(80_000, measured["tone_separation_hz"], delta=50)
+
     def test_normalizes_short_preamble_frame(self) -> None:
         row = {
             "len": 627,

@@ -57,7 +57,7 @@ Receive and save only matching RainPoint packets:
 
 ```sh
 rtl_433 -f 433700000 -s 2000000 -R 0 -S known \
-  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28' \
+  -X 'n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,bits>=620,match={40}79f4882f28' \
   -M time:iso:usec -M level -M bits
 ```
 

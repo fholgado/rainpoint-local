@@ -16,15 +16,37 @@ it aligned Left Bed and Right Bed reports with independently observed state.
 A corrected 1.024 Msps recording centered near 434 MHz captured a complete
 short valve cycle. Replaying the IQ through `rtl_433` established:
 
-- 2-FSK PCM with 48-microsecond symbols,
+- 2-FSK PCM with 50-microsecond / 20-ksymbol/s timing,
 - sync word `79f4882f28`,
 - 38-byte normalized frames,
-- 320-bit and 1,201-bit preamble forms, and
+- approximately 320-, 1,200-, and 2,400-symbol wake/prefix forms, and
 - request, response, and confirmation bursts around open and close actions.
 
 The useful capture family was retained as files `g004` through `g009`. Their
 SHA-256 values were recorded during analysis, but file names and absolute
 household action times are not part of the protocol specification.
+
+## Physical-layer refinement — 2026-08-07
+
+FFT and pulse analysis across 25 clean wide-band captures refined the initial
+rtl_433 tolerance-based timing. Dominant runs were 100 samples at 2.0 Msps,
+establishing a 50.0 microsecond symbol and 20.0 ksymbol/s rate. Both observed
+RF channels used essentially the same 79.997 kHz tone separation, or +/-40.0
+kHz deviation.
+
+Twenty-one lower-channel samples averaged 433.142217 MHz; four upper-channel
+samples averaged 434.241535 MHz. Their approximately 1.100 MHz separation and
+per-device offsets support nominal centers of 433.140 and 434.240 MHz, with the
+remaining error attributed to device and RTL-SDR oscillators. Typical 95%
+occupied bandwidth was 100--105 kHz. The 99% result was usually 180--207 kHz
+and varied with CU8 clipping, supporting a conservative 203.125 kHz initial
+CC1101 receive bandwidth.
+
+Several Front Yard Sensor 1 reports also exposed a repeatable 2,400-symbol
+prefix. It begins with a variable constant-tone interval and ends with a long
+alternating sequence before sync. This joins the approximately 320-symbol
+short and 1,200-symbol long forms and makes ordinary CC1101 packet-mode
+preamble generation insufficient for faithful future transmission.
 
 ## Valve endpoint and action correlation
 
@@ -44,7 +66,7 @@ encoding and the absence of a per-burst nonce.
 Subsequent corpus analysis established CRC-CCITT (`0x1021`, initial value zero)
 over normalized bytes 0--35. Of 705 usable unique ordinary frames, 687 (97.4%)
 had transmitted-trailer XOR residues `0xc713` or `0x4f03`; the other 18 were
-visibly clipped or corrupted. Both residues occurred with both preamble forms
+visibly clipped or corrupted. Both residues occurred across prefix forms
 and in open/close commands, leaving only the residue-selection rule unresolved.
 
 ## Multi-channel sensor discovery

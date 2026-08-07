@@ -67,7 +67,7 @@ command_args=(
   -M level
   -M bits
   -M protocol
-  -X "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28"
+  -X "n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,bits>=620,match={40}79f4882f28"
   -F json:events.jsonl
   -F log:rtl_433.log
   -T "${duration}"

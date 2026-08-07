@@ -12,22 +12,84 @@ part of the protocol contract.
 | Devices tested | HTV145FRF valve, HCS026FRF soil sensor, HWG023WBRF-V2 hub |
 | Band | 433/434 MHz |
 | Modulation | 2-FSK PCM |
-| Symbol width | 48 microseconds, approximately 20.83 ksymbols/s |
+| Symbol width | 50 microseconds, 20.0 ksymbols/s |
 | Sync word | `79 f4 88 2f 28` |
 | Normalized frame | 38 bytes |
-| Preamble | 320-bit short form or 1,201-bit long wake/command form |
+| Prefix/wake forms | About 320, 1,200, or 2,400 symbols before sync |
 | Receive implementation | RTL-SDR with `rtl_433` |
 | Planned transceiver | ESP32 with a 433 MHz CC1101-class radio |
 
 The working `rtl_433` flex decoder is:
 
 ```text
-n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28
+n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,bits>=620,match={40}79f4882f28
 ```
 
 A 2.0 Msps capture centered at 433.7 MHz has been the most useful general
 receive configuration. Installed-device energy has appeared across roughly
 433.08--434.38 MHz, so narrower captures can miss valid report types.
+
+### Measured RF parameters
+
+FFT and pulse analysis of 25 clean 2.0 Msps CU8 captures produced:
+
+| Parameter | Measured result |
+|---|---:|
+| Symbol rate | 20,000 symbols/s |
+| Symbol period | 50.0 microseconds; dominant runs were 100 samples at 2.0 Msps |
+| Tone separation | 79.997 kHz average |
+| Frequency deviation | approximately +/-40.0 kHz |
+| Lower channel center | 433.142217 MHz mean across 21 captures |
+| Upper channel center | 434.241535 MHz mean across 4 captures |
+| Channel separation | approximately 1.100 MHz |
+| 95% occupied bandwidth | typically 100--105 kHz |
+| 99% occupied bandwidth | typically 180--207 kHz; sensitive to CU8 clipping |
+
+The per-device lower-channel centers differ by several hundred hertz, while
+the two channel groups are almost exactly 1.100 MHz apart. The working nominal
+centers are therefore `433.140 MHz` and `434.240 MHz`; the additional measured
+1--3 kHz is consistent with transmitter and RTL-SDR oscillator error. Both
+channels use the same approximately 80 kHz tone separation.
+
+The short prefix is approximately 320 alternating symbols (16 ms). Long
+wake/command traffic uses approximately 1,200 alternating symbols (60 ms).
+A repeatable 2,400-symbol sensor form lasts 120 ms and begins with a variable
+constant-tone interval before a long alternating suffix. The 38-byte frame
+itself lasts 15.2 ms. Pulse-slicer start alignment can move the reported prefix
+count by a few symbols, so these durations are more portable than a particular
+decoded offset.
+
+### Initial CC1101 receive profile
+
+For a CC1101 module with a 26 MHz crystal, the first receive-only prototype
+should use this profile and validate it against the RTL-SDR before refinement:
+
+| Setting | Candidate value | Actual result |
+|---|---:|---:|
+| Modulation | 2-FSK | no Manchester, whitening, FEC, or hardware CRC |
+| `MDMCFG4` | `0x89` | 203.125 kHz RX bandwidth; data-rate exponent 9 |
+| `MDMCFG3` | `0x93` | 19.9852 ksymbols/s |
+| `MDMCFG2` | `0x02` | 2-FSK with exact 16/16 sync qualification |
+| `DEVIATN` | `0x45` | 41.2598 kHz expected deviation |
+| `FREQ2/1/0` | `10 a8 c3` | 433.139862 MHz base channel |
+| `MDMCFG1.CHANSPC_E` | `1` | used with `CHANSPC_M` below |
+| `MDMCFG0` | `0xf8` | 99.9756 kHz channel spacing |
+| Channel number | `0` or `11` | 433.139862 or 434.239594 MHz |
+| `SYNC1/0` | `79 f4` | validate the remaining `88 2f 28` in software |
+| `PKTLEN` | `0x24` | 36 bytes after the two hardware-sync bytes |
+| `PKTCTRL0` | `0x00` | fixed length; hardware whitening and CRC disabled |
+| Fixed received bytes after hardware sync | 36 | prepend `79 f4` to reconstruct the 38-byte normalized frame |
+
+The CC1101's closest deviation setting is about 1.26 kHz above the measured
+value; receive validation will show whether `0x45` or the next-lower `0x44`
+performs better. The 203 kHz filter is intentionally conservative enough to
+cover the clipped-capture 99% bandwidth and oscillator error.
+
+This is a receive profile, not yet a safe transmit recipe. The CC1101 hardware
+preamble generator is shorter than RainPoint's observed 40-, 150-, and
+300-byte-equivalent prefixes. Transmit firmware will need FIFO/continuous or
+asynchronous streaming to reproduce the complete wake sequence, sync, frame,
+and retry timing rather than relying on ordinary packet-mode preamble output.
 
 ## Frame format
 
@@ -265,7 +327,7 @@ Live receive:
 
 ```sh
 rtl_433 -f 433700000 -s 2000000 -R 0 \
-  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28' \
+  -X 'n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,bits>=620,match={40}79f4882f28' \
   -M time:iso:usec -M level -M bits
 ```
 
@@ -273,6 +335,13 @@ Normalize saved CU8 captures:
 
 ```sh
 python3 tools/decode_rainpoint_iq.py \
+  --sample-rate 2000000 --frequency 433700000 capture.cu8
+```
+
+Measure FSK tones and occupied bandwidth from saved CU8 captures:
+
+```sh
+python3 tools/characterize_rainpoint_iq.py \
   --sample-rate 2000000 --frequency 433700000 capture.cu8
 ```
 
@@ -284,7 +353,8 @@ normalization and confirmed field decoding. Regression examples live in
 
 1. Identify the selector between ordinary trailer residues `0xc713` and
    `0x4f03`, then characterize the compact-frame trailer family.
-2. Measure the exact carrier center and 2-FSK deviation for CC1101 transmit.
+2. Validate the measured channel, rate, deviation, bandwidth, and sync profile
+   on receive-only CC1101 hardware, including both RF channels.
 3. Test whether a captured request is accepted outside its original sequence
    window.
 4. Decode battery-low state with a controlled test sensor.
