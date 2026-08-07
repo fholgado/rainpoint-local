@@ -88,9 +88,21 @@ class RTL433Transport:
         self._process: subprocess.Popen[str] | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self._valve_state: dict[str, Any] = {
+            "valve_state": None,
+            "is_watering": None,
+            "duration_seconds": None,
+            "last_usage_liters": None,
+        }
 
     def seed(self) -> None:
         """Register known sensors before their first periodic packet arrives."""
+        self.gateway.register(
+            device_id="valve-1",
+            name="Garden Valve",
+            model="HTV145FRF",
+            state=self._valve_state,
+        )
         for endpoint, (device_id, name) in KNOWN_HCS026.items():
             self.gateway.register(
                 device_id=device_id,
@@ -161,6 +173,37 @@ class RTL433Transport:
             except (KeyError, TypeError, ValueError):
                 continue
             moisture = decoded.get("soil_moisture_percent")
+            valve_update = {
+                key: decoded[key]
+                for key in (
+                    "valve_state",
+                    "is_watering",
+                    "duration_seconds",
+                    "last_usage_liters",
+                )
+                if key in decoded
+            }
+            if valve_update:
+                self._valve_state.update(valve_update)
+                state = {
+                    "model": "HTV145FRF",
+                    "raw": decoded["frame_hex"],
+                    "rf_endpoint_a": decoded["endpoint_a"],
+                    "rf_endpoint_b": decoded["endpoint_b"],
+                    **self._valve_state,
+                }
+                if "rssi" in event:
+                    state["rf_rssi_db"] = event["rssi"]
+                self.gateway.observe_decoded(
+                    device_id="valve-1",
+                    name="Garden Valve",
+                    model="HTV145FRF",
+                    frame=decoded["frame_hex"],
+                    state=state,
+                    observed_at=event.get("time"),
+                )
+                published += 1
+                continue
             if moisture is None:
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],

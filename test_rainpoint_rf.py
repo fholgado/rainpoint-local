@@ -111,6 +111,52 @@ class RainPointRFTest(unittest.TestCase):
         decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
         self.assertNotIn("soil_moisture_percent", decoded)
 
+    def test_decodes_valve_duration_and_close_state(self) -> None:
+        open_frame = bytes.fromhex(
+            "79f4882f28b42d008fb9840280811082808100fe0180"
+            "0000000000000000000000000000007669"
+        )
+        decoded = normalize_row(
+            {"len": len(open_frame) * 8, "data": open_frame.hex()}
+        )
+        self.assertTrue(decoded["is_watering"])
+        self.assertEqual("watering", decoded["valve_state"])
+        self.assertEqual(1020, decoded["duration_seconds"])
+
+        close_frame = bytes.fromhex(
+            "79f4882f28b42d008fb9840280819081808100000000"
+            "00000000000000000000000000000011a2"
+        )
+        decoded = normalize_row(
+            {"len": len(close_frame) * 8, "data": close_frame.hex()}
+        )
+        self.assertFalse(decoded["is_watering"])
+        self.assertEqual("idle", decoded["valve_state"])
+        self.assertNotIn("duration_seconds", decoded)
+
+    def test_decodes_packed_valve_last_usage(self) -> None:
+        cases = (
+            # Historical short sessions independently reported by HA.
+            ("8500", 1.0),
+            ("8480", 0.9),
+            ("8e00", 2.8),
+            ("d300", 16.6),
+            ("b300", 10.2),
+            # Today's 17-minute run: 175.2 L = 46.2829435731476 gal.
+            ("ec03", 175.2),
+        )
+        for packed, liters in cases:
+            with self.subTest(packed=packed):
+                frame = bytes.fromhex(
+                    "79f4882f28b9840280b42d008f810107858700904f"
+                    + packed
+                    + "000040858056fe0180000000002739"
+                )
+                decoded = normalize_row(
+                    {"len": len(frame) * 8, "data": frame.hex()}
+                )
+                self.assertEqual(liters, decoded["last_usage_liters"])
+
     def test_live_transport_publishes_confirmed_moisture(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
@@ -142,6 +188,29 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("soil-right-bed", device["device_id"])
         self.assertEqual(62, device["state"]["soil_moisture_percent"])
         self.assertEqual("9ce58024", device["state"]["rf_endpoint"])
+
+    def test_live_transport_merges_valve_duration_and_usage(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        open_frame = (
+            "79f4882f28b42d008fb9840280811082808100fe0180"
+            "0000000000000000000000000000007669"
+        )
+        usage_frame = (
+            "79f4882f28b9840280b42d008f810107858700904f"
+            "ec03000040858056fe0180000000002739"
+        )
+        for frame in (open_frame, usage_frame):
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        valve = next(
+            device for device in gateway.devices() if device["device_id"] == "valve-1"
+        )
+        self.assertTrue(valve["state"]["is_watering"])
+        self.assertEqual(1020, valve["state"]["duration_seconds"])
+        self.assertEqual(175.2, valve["state"]["last_usage_liters"])
 
     def test_live_transport_retains_non_sensor_and_ignores_invalid_rows(self) -> None:
         gateway = Gateway(transport="rtl433")

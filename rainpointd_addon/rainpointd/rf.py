@@ -7,6 +7,8 @@ from typing import Any
 
 SYNC = bytes.fromhex("79f4882f28")
 FRAME_BYTES = 38
+HUB_ENDPOINT = "b42d008f"
+VALVE_ENDPOINT = "b9840280"
 HCS026_ENDPOINTS = {
     "9ce58024",
     "c4e50024",
@@ -43,6 +45,41 @@ def _soil_moisture(frame: bytes) -> int | None:
         if 0 <= percent <= 100:
             return percent
     return None
+
+
+def _valve_fields(frame: bytes) -> dict[str, Any]:
+    """Decode confirmed receive-only HTV145 command and usage fields."""
+    if len(frame) != FRAME_BYTES:
+        return {}
+    endpoint_a = frame[5:9].hex()
+    endpoint_b = frame[9:13].hex()
+
+    if endpoint_a == HUB_ENDPOINT and endpoint_b == VALVE_ENDPOINT:
+        # The open/close flag is the high bit of byte 14. Open commands carry
+        # the requested duration at bytes 19-20 in two-second units.
+        if frame[14] & 0x7F != 0x10:
+            return {}
+        watering = not bool(frame[14] & 0x80)
+        result: dict[str, Any] = {
+            "is_watering": watering,
+            "valve_state": "watering" if watering else "idle",
+        }
+        if watering:
+            duration_seconds = int.from_bytes(frame[19:21], "little") * 2
+            if 0 < duration_seconds <= 24 * 60 * 60:
+                result["duration_seconds"] = duration_seconds
+        return result
+
+    if endpoint_a == VALVE_ENDPOINT and endpoint_b == HUB_ENDPOINT:
+        # 0x4f/0xcf marks last-session usage. The following bytes hold a
+        # packed half-value plus an odd-value flag, in tenths of a liter.
+        if frame[20] & 0x7F != 0x4F:
+            return {}
+        half_tenths = ((frame[22] & 0x7F) << 8) | (frame[21] & 0x7F)
+        tenths_liters = half_tenths * 2 + int(bool(frame[22] & 0x80))
+        if 0 <= tenths_liters <= 100_000:
+            return {"last_usage_liters": round(tenths_liters / 10, 1)}
+    return {}
 
 
 def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -88,4 +125,5 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     moisture = _soil_moisture(frame)
     if moisture is not None:
         result["soil_moisture_percent"] = moisture
+    result.update(_valve_fields(frame))
     return result

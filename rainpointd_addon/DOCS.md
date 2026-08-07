@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.3.2 supports captured replay and receive-only USB RTL-SDR modes. It
+Version 0.3.4 supports captured replay and receive-only USB RTL-SDR modes. It
 does not connect to the RainPoint cloud, and every HTTP POST request is
 rejected.
 
@@ -47,9 +47,11 @@ The app exposes its read-only API on TCP port 8787. Configure the
 - Port: `8787`
 
 Replay mode creates simulated entities. Live mode currently creates confirmed
-HCS026FRF soil-moisture entities. Valid RainPoint frames that do not match the
-confirmed moisture layout are retained as `rf_frame` records in `/api/v1/events`
-for endpoint discovery; other RF fields remain research work.
+HCS026FRF soil-moisture entities and a receive-only HTV145 valve device with
+confirmed watering state, requested duration, and last-session water usage.
+Valid RainPoint frames that do not match the confirmed layouts are retained as
+`rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
+remain research work.
 
 In live RTL-SDR mode, normalized events and decoded device state are persisted
 to `/data/rainpointd.sqlite3`, which survives app rebuilds and restarts. The

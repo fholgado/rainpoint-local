@@ -429,6 +429,44 @@ field detection is restricted to the four confirmed HCS026 endpoint IDs so a
 marker-like byte sequence in a valve response cannot create a false moisture
 observation.
 
+### Local valve duration and last-session usage
+
+A scheduled 17-minute run produced a complete pre-run, open, watering, close,
+and post-run capture. Home Assistant reported 1,020 seconds and 46.2829435731476
+gallons (175.2 liters). The open command contained `fe 01` at bytes 19--20:
+
+```text
+little_endian(fe 01) * 2 = 510 * 2 = 1020 seconds
+```
+
+The close request replaced that field with zero. The valve's packed
+last-session-usage field is marked by `4f` or `cf` at byte 20. Given the next
+two bytes `first` and `second`, its value is:
+
+```text
+half_tenths = ((second & 0x7f) << 8) | (first & 0x7f)
+tenths_liters = half_tenths * 2 + bool(second & 0x80)
+```
+
+Independent HA correlations validate the packing over both odd and multi-byte
+values:
+
+| Packed bytes | Local result | HA result |
+|---|---:|---:|
+| `85 00` | 1.0 L | 1.0 L |
+| `84 80` | 0.9 L | 0.9 L |
+| `8e 00` | 2.8 L | 2.8 L |
+| `d3 00` | 16.6 L | 16.6 L |
+| `b3 00` | 10.2 L | 10.2 L |
+| `ec 03` | 175.2 L | 46.2829435731476 gal |
+
+The final close response in the long-run capture had address-bit damage, but
+its preserved `ec 03` usage field independently decoded to the exact HA value.
+Runtime publication therefore remains restricted to frames with the confirmed
+hub/valve endpoint pair. The request, HA open transition, close request, HA
+closed transition, and volume update all aligned within sub-second delays;
+the public notes omit absolute household schedule times.
+
 ## Local architecture decision
 
 ### Preferred: direct 433 MHz bridge

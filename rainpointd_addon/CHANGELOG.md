@@ -54,3 +54,9 @@
   phantom sensors after a restart.
 - Keep existing Home Assistant entities safely unavailable when a gateway
   device is reclassified and removed from discovery.
+## 0.3.4
+
+- Decode confirmed HTV145 open/close state and requested duration from local RF.
+- Decode packed last-session water usage, including values larger than 25.5 L.
+- Register the live Garden Valve device so duration, watering state, and last
+  usage can populate in Home Assistant without the RainPoint cloud.
