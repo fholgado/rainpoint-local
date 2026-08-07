@@ -91,6 +91,26 @@ The existing integration called `/app/device/controlWorkMode` with a port,
 mode, and duration. That described an internet API request only; it did not
 explain the hub-to-valve RF command.
 
+The current request body is now known exactly:
+
+```text
+deviceName, productKey, mid, addr, port, mode, duration, param, hid
+```
+
+For the legacy RF valve path, `param` is empty, `mode` is `1` to open or `0`
+to close, and `duration` is supplied in whole seconds. There is no request
+nonce, timestamp, sequence number, checksum, CRC mode, or trailer selector.
+The optional cloud response `data.state` is an application TLV state snapshot,
+not the hub-to-valve RF frame. Consequently, the hub firmware must construct
+the RF sequence field and trailer after receiving this higher-level command.
+
+The integration deliberately does not automatically retry ordinary transient
+failures for this endpoint because an irrigation start is not idempotent: a
+duplicate could restart or extend a watering session. Cloud result code `4`
+is treated as a non-fatal busy/already-in-state result. These are useful safety
+semantics for a future local controller, but neither behavior identifies the
+RF trailer selector.
+
 ## Product catalog metadata
 
 The data-driven product catalog in `homeassistant-homgar` supplies useful
@@ -108,6 +128,20 @@ confirms compatibility and gives future pairing captures concrete byte
 signatures to search in both byte orders. It does not reveal the enrollment
 exchange, device address assignment, or RF trailer algorithm.
 
+For HTV145FRF specifically, `CTL_WATER` is declared as endpoint `7`, DP code
+`1`, DP type `2`, and length `2`. Its shared valve default parameter begins
+`58 02`, which is `600` when interpreted as a little-endian 16-bit integer and
+matches the integration's ten-minute default watering duration. This supports
+a two-byte duration/value at the application-device boundary. It should not be
+copied directly into an RF command: observed RF request durations use a
+different half-second representation. The remaining default bytes
+`0a 00 1e 00 00...` are not yet assigned meanings.
+
+No catalog field represents either observed ordinary-frame CRC residue
+(`0xc713` or `0x4f03`). The catalog and API therefore describe the semantic
+command that enters the hub, while the unresolved selector belongs to a lower
+RF framing layer.
+
 The catalog describes HCS026 battery as a one-byte `STA_BAT` value. The
 accompanying cloud decoder treats `0`/`1` as normal (`100%`) and `2`--`4` as
 low (`10%`). Its `STA_RSSI` value is receiver-measured at the hub. These facts
@@ -116,6 +150,11 @@ unchanged in every over-the-air report.
 
 Source snapshot:
 <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/data/product_models.json>
+
+Control implementation snapshots:
+
+- <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/api/client.py>
+- <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/valve.py>
 
 ## Passive monitoring snapshot — 2026-07-30
 

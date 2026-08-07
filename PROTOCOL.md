@@ -331,6 +331,16 @@ route, message counter, or global toggle. It may depend on omitted transmitter
 state or a nonlinear rule. Passive evidence can validate either residue but
 cannot yet choose one when constructing a new payload.
 
+Cloud/API correlation narrows this further. The legacy valve-control request
+contains only hub/device identity, subdevice address, port, open/close mode,
+duration, an empty parameter, and the hub ID. It contains no nonce, timestamp,
+RF sequence, checksum mode, or trailer selector. The HTV145FRF product catalog
+likewise describes `CTL_WATER` as a two-byte control on endpoint 7 but has no
+CRC selector. Therefore the sequence and trailer are generated inside the
+hub's RF stack. The two-residue choice is most plausibly hidden transmitter
+state, an omitted lower-layer input, or two forms accepted by the receiver;
+the cloud API does not provide a missing bit that can simply be copied.
+
 This is sufficient to validate ordinary received frames and reject most
 demodulation artifacts. It is not yet sufficient to generate arbitrary
 commands because the rule selecting the two residues remains unknown. Compact
