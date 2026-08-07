@@ -55,16 +55,23 @@ def _compact_status_fields(frame: bytes) -> dict[str, Any]:
     """Decode catalog-correlated status TLVs without assigning a device."""
     body = frame[13:-2]
     result: dict[str, Any] = {}
-    for index in range(len(body) - 2):
-        # Field code 10 followed by compact type-10/U8 header and value.
-        if body[index : index + 2] != b"\x0a\x88":
+    for index in range(len(body) - 1):
+        # 0x88 is the compact type-10/U8 header. Ordinary product-code reports
+        # prefix it with field code 10. Other retained status frames prefix it
+        # with a slot-like byte but immediately follow the value with the
+        # type-32 signed RSSI header, which makes the sequence unambiguous.
+        if body[index] != 0x88:
             continue
-        moisture = body[index + 2]
+        has_field_code = index > 0 and body[index - 1] == 0x0A
+        has_rssi = index + 3 < len(body) and body[index + 2] == 0xE0
+        if not has_field_code and not has_rssi:
+            continue
+        moisture = body[index + 1]
         if moisture <= 100:
             result["status_soil_moisture_percent"] = moisture
         # Compact type 32 / signed-byte RSSI can immediately follow moisture.
-        if index + 4 < len(body) and body[index + 3] == 0xE0:
-            raw_rssi = body[index + 4]
+        if has_rssi:
+            raw_rssi = body[index + 3]
             hub_rssi = raw_rssi - 256 if raw_rssi > 127 else raw_rssi
             if -120 <= hub_rssi <= 0:
                 result["hub_rssi_db"] = hub_rssi

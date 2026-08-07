@@ -148,6 +148,20 @@ observed Right Bed cloud state. Because that frame's routing fields were
 decoder retains the decoded values for research but does not yet apply them to
 the device.
 
+Reanalysis of all 2,900-plus persisted events found two earlier instances of
+the same compact `88 39 e0 b1` values. Each arrived within 1.040 seconds of a
+normal Right Bed 57% report. Those instances used a slot-like `0x0b` before
+the type-10 header and also had unstable routing fields. Three independent
+timing/value matches associate this compact family with Right Bed, but the
+unstable route still prevents safe automatic assignment.
+
+The same expanded corpus contained 1,296 unique ordinary frames with valid
+residues: 649 used `0xc713` and 647 used `0x4f03`. Single-bit, pairwise-XOR,
+route, message-counter, and global-alternation tests failed to predict the
+selector above near-chance accuracy. This materially narrows the remaining
+possibilities to omitted transmitter state, a nonlinear rule, or two checksum
+states accepted without an exposed selector.
+
 No retained HCS026 RF frame contained the catalog-implied `dc 01` one-byte
 battery TLV signature. However, all 358 companion heartbeats in the analyzed
 window used `... 41 81 00 01 00 ...`, with normalized offset 17 fixed at

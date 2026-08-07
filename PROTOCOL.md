@@ -169,8 +169,8 @@ later, and surrounding independently decoded reports held steady at 79%.
 its established `...24` endpoint and decodes `88 VV` as direct percentage
 `VV`. It does not apply that rule to an unknown endpoint.
 
-A second compact-status frame followed a normal Right Bed 57% report by 835
-milliseconds:
+A compact-status family was observed three times within 0.835--1.040 seconds
+of a normal Right Bed 57% report:
 
 ```text
 ... 0a 88 39 e0 b1 ...
@@ -180,10 +180,13 @@ milliseconds:
        +------------- field code 10 / STA_RH
 ```
 
-Both values match the independently observed Right Bed state. Its routing
-fields do not match the established sensor endpoint, so the decoder retains
-these as unassigned status fields rather than updating a device. More samples
-are required before defining the association rule.
+All three carried moisture 57% and hub RSSI -79 dBm, matching the independently
+observed Right Bed state. Two forms used a slot-like `0x0b` byte before the
+same compact `88 39 e0 b1` TLVs instead of field code `0x0a`. Their routing
+fields varied and did not provide a stable Right Bed identity, so the decoder
+retains these as unassigned status fields rather than updating a device. The
+repeatable timing and values associate the family with Right Bed, but more
+samples are required before defining a safe automatic routing rule.
 
 The controlled 12% sample was produced by removing the Left Bed probe from the
 ground. Its display, independently observed reference entity, local decoder,
@@ -315,6 +318,19 @@ Both residues also occur in hub-to-valve command traffic. A scheduled 1,020
 second open and its close used `0x4f03`; controlled short cycles used each
 residue across different transaction sequence values.
 
+An expanded passive analysis of 1,296 unique clean frames found 649 using
+`0xc713` and 647 using `0x4f03`. Every established route contained both. The
+best single transmitted-bit predictor was only 52.0% accurate, and the best
+two-bit XOR predictor was 53.0%; neither is materially better than chance for
+this balanced corpus. Collapsing exact retransmission bursts also rejected a
+simple alternating selector: 1,396 adjacent residues differed and 1,339 were
+the same. No identical 36-byte payload was observed with conflicting trailers.
+
+The selector is therefore not a simple exposed frame bit, pairwise parity,
+route, message counter, or global toggle. It may depend on omitted transmitter
+state or a nonlinear rule. Passive evidence can validate either residue but
+cannot yet choose one when constructing a new payload.
+
 This is sufficient to validate ordinary received frames and reject most
 demodulation artifacts. It is not yet sufficient to generate arbitrary
 commands because the rule selecting the two residues remains unknown. Compact
@@ -351,8 +367,9 @@ normalization and confirmed field decoding. Regression examples live in
 
 ## Remaining protocol work
 
-1. Identify the selector between ordinary trailer residues `0xc713` and
-   `0x4f03`, then characterize the compact-frame trailer family.
+1. Determine by bounded active acceptance testing whether either ordinary
+   trailer residue is accepted for a newly constructed payload, then
+   characterize the compact-frame trailer family.
 2. Validate the measured channel, rate, deviation, bandwidth, and sync profile
    on receive-only CC1101 hardware, including both RF channels.
 3. Test whether a captured request is accepted outside its original sequence

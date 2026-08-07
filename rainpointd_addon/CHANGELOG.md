@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Decode the repeated compact `88 VV e0 RR` moisture/RSSI form even when its
+  preceding slot byte is not field code 10.
+- Keep the compact values unassigned until their changing route fields can be
+  mapped safely to a stable sensor identity.
+- Add offline event-corpus analysis for trailer selectors and status timing.
+
 ## 0.4.0
 
 - Add a receive-only USB serial transport for the ESP32/CC1101 bridge.

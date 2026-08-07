@@ -152,7 +152,15 @@ Run the regression and API tests:
 
 ```sh
 python3 -m unittest -v \
-  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py
+  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py \
+  test_rainpoint_analysis.py
+```
+
+Analyze one or more concatenated `rainpointd` event API pages without changing
+gateway state:
+
+```sh
+python3 tools/analyze_rainpoint_events.py events.json --pretty
 ```
 
 The HTTP tests bind only an ephemeral loopback port. They do not contact the

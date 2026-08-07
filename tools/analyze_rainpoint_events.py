@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Analyze retained rainpointd events without modifying gateway state."""
+
+from __future__ import annotations
+
+import argparse
+import binascii
+import json
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable
+
+
+SYNC = bytes.fromhex("79f4882f28")
+FRAME_BYTES = 38
+RESIDUES = (0xC713, 0x4F03)
+SENSOR_ENDPOINTS = {
+    "9ce58024": "Right Bed",
+    "c4e50024": "Left Bed",
+    "ce628024": "Front Yard Sensor 1",
+    "d1e28024": "Front Yard Sensor 2",
+}
+
+
+def trailer_residual(frame: bytes) -> int:
+    """Return the observed CRC-CCITT/XOR trailer residue."""
+    return binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(frame[-2:], "big")
+
+
+def load_events(source: Any) -> list[dict[str, Any]]:
+    """Load one or more concatenated API pages or a bare event list."""
+    content = source.read()
+    decoder = json.JSONDecoder()
+    offset = 0
+    events: list[dict[str, Any]] = []
+    while offset < len(content):
+        while offset < len(content) and content[offset].isspace():
+            offset += 1
+        if offset >= len(content):
+            break
+        payload, offset = decoder.raw_decode(content, offset)
+        if isinstance(payload, dict):
+            payload = payload.get("events", [])
+        if not isinstance(payload, list):
+            raise ValueError(
+                "expected event lists or objects containing events"
+            )
+        events.extend(event for event in payload if isinstance(event, dict))
+    return events
+
+
+def event_frame(event: dict[str, Any]) -> bytes | None:
+    """Return a structurally valid normalized frame from an event."""
+    raw = event.get("raw") or event.get("state", {}).get("raw")
+    if not isinstance(raw, str) or len(raw) != FRAME_BYTES * 2:
+        return None
+    try:
+        frame = bytes.fromhex(raw)
+    except ValueError:
+        return None
+    return frame if frame.startswith(SYNC) else None
+
+
+def _feature_accuracy(
+    frames: Iterable[tuple[bytes, int]], byte_index: int, bit: int
+) -> tuple[float, dict[int, Counter[int]]]:
+    groups: dict[int, Counter[int]] = defaultdict(Counter)
+    count = 0
+    correct = 0
+    for frame, label in frames:
+        groups[(frame[byte_index] >> bit) & 1][label] += 1
+        count += 1
+    for labels in groups.values():
+        correct += max(labels.values())
+    return (correct / count if count else 0.0), groups
+
+
+def _timestamp(event: dict[str, Any]) -> datetime | None:
+    value = event.get("observed_at")
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _top_xor_features(
+    frames: list[tuple[bytes, int]], limit: int = 12
+) -> list[dict[str, Any]]:
+    """Find the best one- or two-bit XOR predictors for the residue selector."""
+    if not frames:
+        return []
+    feature_masks = []
+    for byte_index in range(FRAME_BYTES - 2):
+        for bit in range(8):
+            mask = 0
+            for row, (frame, _) in enumerate(frames):
+                if (frame[byte_index] >> bit) & 1:
+                    mask |= 1 << row
+            feature_masks.append((byte_index, bit, mask))
+    label_mask = 0
+    for row, (_, label) in enumerate(frames):
+        if label:
+            label_mask |= 1 << row
+
+    candidates = []
+    row_count = len(frames)
+    for left in range(len(feature_masks)):
+        left_byte, left_bit, left_mask = feature_masks[left]
+        for right in range(left + 1, len(feature_masks)):
+            right_byte, right_bit, right_mask = feature_masks[right]
+            errors = bin((left_mask ^ right_mask) ^ label_mask).count("1")
+            correct = max(errors, row_count - errors)
+            candidates.append(
+                (
+                    correct,
+                    left_byte,
+                    left_bit,
+                    right_byte,
+                    right_bit,
+                    errors > row_count - errors,
+                )
+            )
+    candidates.sort(reverse=True)
+    return [
+        {
+            "left_byte": left_byte,
+            "left_bit": left_bit,
+            "right_byte": right_byte,
+            "right_bit": right_bit,
+            "inverted": inverted,
+            "accuracy": round(correct / row_count, 6),
+        }
+        for (
+            correct,
+            left_byte,
+            left_bit,
+            right_byte,
+            right_bit,
+            inverted,
+        ) in candidates[:limit]
+    ]
+
+
+def _transition_counts(residues: Iterable[int]) -> dict[str, int]:
+    previous = None
+    result = Counter()
+    for residual in residues:
+        if previous is not None:
+            result["same" if residual == previous else "different"] += 1
+        previous = residual
+    return dict(result)
+
+
+def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return integrity, selector-feature, and compact-routing evidence."""
+    normalized: list[tuple[dict[str, Any], bytes, int]] = []
+    invalid_residues: Counter[str] = Counter()
+    for event in events:
+        frame = event_frame(event)
+        if frame is None:
+            continue
+        residual = trailer_residual(frame)
+        normalized.append((event, frame, residual))
+        if residual not in RESIDUES:
+            invalid_residues[f"{residual:04x}"] += 1
+
+    unique_by_raw: dict[bytes, tuple[dict[str, Any], int]] = {}
+    for event, frame, residual in normalized:
+        unique_by_raw.setdefault(frame, (event, residual))
+    clean_unique = [
+        (frame, residual)
+        for frame, (_, residual) in unique_by_raw.items()
+        if residual in RESIDUES
+    ]
+
+    payload_residues: dict[bytes, set[int]] = defaultdict(set)
+    for frame, residual in clean_unique:
+        payload_residues[frame[:-2]].add(residual)
+    conflicting_payloads = sum(
+        1 for residues in payload_residues.values() if len(residues) > 1
+    )
+
+    bit_features = []
+    labels = {RESIDUES[0]: 0, RESIDUES[1]: 1}
+    labeled = [(frame, labels[residual]) for frame, residual in clean_unique]
+    for byte_index in range(FRAME_BYTES - 2):
+        for bit in range(8):
+            accuracy, groups = _feature_accuracy(labeled, byte_index, bit)
+            bit_features.append(
+                {
+                    "byte": byte_index,
+                    "bit": bit,
+                    "accuracy": round(accuracy, 6),
+                    "zero": dict(groups[0]),
+                    "one": dict(groups[1]),
+                }
+            )
+    bit_features.sort(key=lambda item: item["accuracy"], reverse=True)
+
+    clean_events = [
+        (event, frame, residual)
+        for event, frame, residual in normalized
+        if residual in RESIDUES
+    ]
+    clean_events.sort(key=lambda item: item[0].get("event_id", 0))
+    bursts = []
+    previous_frame = None
+    for event, frame, residual in clean_events:
+        if frame == previous_frame:
+            continue
+        bursts.append((event, frame, residual))
+        previous_frame = frame
+
+    route_transitions: dict[str, list[int]] = defaultdict(list)
+    for _, frame, residual in bursts:
+        route = f"{frame[5:9].hex()}->{frame[9:13].hex()}"
+        route_transitions[route].append(residual)
+
+    route_residues: dict[str, Counter[str]] = defaultdict(Counter)
+    message_residues: dict[str, Counter[str]] = defaultdict(Counter)
+    route_labeled: dict[str, list[tuple[bytes, int]]] = defaultdict(list)
+    for frame, residual in clean_unique:
+        residue = f"{residual:04x}"
+        route = f"{frame[5:9].hex()}->{frame[9:13].hex()}"
+        route_residues[route][residue] += 1
+        message_residues[f"{frame[13]:02x}"][residue] += 1
+        route_labeled[route].append((frame, labels[residual]))
+
+    route_selector_bits = {}
+    for route, frames in route_labeled.items():
+        if len(frames) < 10:
+            continue
+        candidates = []
+        for byte_index in range(FRAME_BYTES - 2):
+            for bit in range(8):
+                accuracy, groups = _feature_accuracy(frames, byte_index, bit)
+                candidates.append((accuracy, byte_index, bit, groups))
+        accuracy, byte_index, bit, groups = max(candidates)
+        message_bit_accuracy, message_groups = _feature_accuracy(frames, 13, 0)
+        route_selector_bits[route] = {
+            "frame_count": len(frames),
+            "best_byte": byte_index,
+            "best_bit": bit,
+            "best_accuracy": round(accuracy, 6),
+            "best_zero": dict(groups[0]),
+            "best_one": dict(groups[1]),
+            "message_lsb_accuracy": round(message_bit_accuracy, 6),
+            "message_lsb_zero": dict(message_groups[0]),
+            "message_lsb_one": dict(message_groups[1]),
+        }
+
+    known_observations = []
+    compact_frames = []
+    for event, frame, residual in normalized:
+        observed_at = _timestamp(event)
+        if observed_at is None:
+            continue
+        state = event.get("state", {})
+        endpoint = state.get("rf_endpoint")
+        moisture = state.get("soil_moisture_percent")
+        if endpoint in SENSOR_ENDPOINTS and isinstance(moisture, int):
+            known_observations.append((observed_at, endpoint, moisture))
+
+        status_moisture = state.get("status_soil_moisture_percent")
+        if status_moisture is None:
+            body = frame[13:-2]
+            for marker in range(len(body) - 1):
+                if body[marker] != 0x88:
+                    continue
+                has_field_code = marker > 0 and body[marker - 1] == 0x0A
+                has_rssi = marker + 3 < len(body) and body[marker + 2] == 0xE0
+                if not has_field_code and not has_rssi:
+                    continue
+                candidate = body[marker + 1]
+                if candidate <= 100:
+                    status_moisture = candidate
+                    break
+        if isinstance(status_moisture, int):
+            compact_frames.append((event, frame, observed_at, status_moisture))
+
+    compact_associations = []
+    for event, frame, observed_at, moisture in compact_frames:
+        nearest_by_endpoint: dict[str, dict[str, Any]] = {}
+        for known_at, endpoint, known_moisture in known_observations:
+            delta = (observed_at - known_at).total_seconds()
+            candidate = {
+                "endpoint": endpoint,
+                "name": SENSOR_ENDPOINTS[endpoint],
+                "moisture": known_moisture,
+                "delta_seconds": round(delta, 6),
+                "value_matches": known_moisture == moisture,
+            }
+            previous = nearest_by_endpoint.get(endpoint)
+            if previous is None or abs(delta) < abs(previous["delta_seconds"]):
+                nearest_by_endpoint[endpoint] = candidate
+        candidates = list(nearest_by_endpoint.values())
+        candidates.sort(key=lambda item: abs(item["delta_seconds"]))
+        compact_associations.append(
+            {
+                "event_id": event.get("event_id"),
+                "observed_at": event.get("observed_at"),
+                "route": f"{frame[5:9].hex()}->{frame[9:13].hex()}",
+                "moisture": moisture,
+                "residual": f"{trailer_residual(frame):04x}",
+                "candidates": candidates,
+            }
+        )
+
+    return {
+        "event_count": len(events),
+        "normalized_event_count": len(normalized),
+        "unique_frame_count": len(unique_by_raw),
+        "clean_unique_count": len(clean_unique),
+        "clean_unique_residues": dict(
+            Counter(f"{residual:04x}" for _, residual in clean_unique)
+        ),
+        "invalid_residue_event_count": sum(invalid_residues.values()),
+        "common_invalid_residues": invalid_residues.most_common(10),
+        "same_payload_conflicting_residue_count": conflicting_payloads,
+        "top_selector_bits": bit_features[:12],
+        "top_two_bit_xor_selectors": _top_xor_features(labeled),
+        "event_residue_transitions": _transition_counts(
+            residual for _, _, residual in clean_events
+        ),
+        "burst_count": len(bursts),
+        "burst_residue_transitions": _transition_counts(
+            residual for _, _, residual in bursts
+        ),
+        "route_burst_transitions": {
+            route: _transition_counts(residues)
+            for route, residues in sorted(
+                route_transitions.items(), key=lambda item: -len(item[1])
+            )
+            if len(residues) >= 10
+        },
+        "route_residues": {
+            route: dict(counts)
+            for route, counts in sorted(
+                route_residues.items(), key=lambda item: -sum(item[1].values())
+            )
+        },
+        "route_selector_bits": {
+            route: details
+            for route, details in sorted(
+                route_selector_bits.items(),
+                key=lambda item: -item[1]["frame_count"],
+            )
+        },
+        "message_residues": {
+            message: dict(counts)
+            for message, counts in sorted(
+                message_residues.items(), key=lambda item: -sum(item[1].values())
+            )
+        },
+        "compact_associations": compact_associations,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "events",
+        nargs="?",
+        type=Path,
+        help="rainpointd events JSON; omit to read stdin",
+    )
+    parser.add_argument("--pretty", action="store_true")
+    args = parser.parse_args()
+
+    if args.events:
+        with args.events.open(encoding="utf-8") as source:
+            events = load_events(source)
+    else:
+        events = load_events(sys.stdin)
+    json.dump(analyze(events), sys.stdout, indent=2 if args.pretty else None)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

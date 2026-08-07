@@ -209,6 +209,17 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(-79, decoded["hub_rssi_db"])
         self.assertNotIn("soil_moisture_percent", decoded)
 
+        # A second retained form uses a slot-like 0x0b byte before the same
+        # compact type-10 and type-32 headers. It remains unassigned too.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280b42d008f8805040703000b8839e0b1"
+            "00000000000000000000000001c8"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual(57, decoded["status_soil_moisture_percent"])
+        self.assertEqual(-79, decoded["hub_rssi_db"])
+        self.assertNotIn("soil_moisture_percent", decoded)
+
     def test_does_not_treat_valve_payload_as_moisture(self) -> None:
         # This valve response contains a marker-like byte sequence by chance.
         frame = bytes.fromhex(
