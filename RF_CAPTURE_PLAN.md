@@ -141,8 +141,28 @@ transmitted packet.
 6. Diff both packet types bit-for-bit. Prioritize the heartbeat status sequence
    currently observed as `... 41 81 00 01 00 ...`, while accounting for the
    `41`/`c1` retransmission-bit change.
-7. Repeat the transition at least twice before assigning a battery field, then
+7. Also look for a compact one-byte battery TLV. HomGar metadata assigns
+   battery type 31, whose one-byte compact header is expected to be `0xdc`;
+   candidate normal/low sequences are therefore `dc 01` and `dc 02`. Treat
+   these only as search signatures until an RF transition confirms them.
+8. Repeat the transition at least twice before assigning a battery field, then
    add positive and negative decoder fixtures.
+
+## Pairing discovery signatures
+
+The product catalog gives exact model identifiers that may appear only during
+enrollment or capability exchange:
+
+| Device | Model code | Search both byte orders |
+|---|---:|---|
+| HWG023WBRF-V2 hub | `0x0121` | `01 21`, `21 01` |
+| HTV145FRF valve | `0x012e` | `01 2e`, `2e 01` |
+| HCS026FRF sensor | `0x013d` | `01 3d`, `3d 01` |
+
+These sequences did not occur outside trailers in the 2,189 retained ordinary
+telemetry events. A pairing experiment must save all detected signals because
+the enrollment exchange may use a different sync word or frame length from
+the known 38-byte telemetry format.
 
 ## Safety constraints
 

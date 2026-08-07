@@ -93,6 +93,39 @@ The recording had approximately 15 dB analyzer SNR. This established that the
 earlier unavailable state was a reception problem rather than a distinct
 packet format.
 
+## Product metadata correlation — 2026-08-07
+
+The HomGar product catalog assigns product code 72 (`0x48`) to HCS021FRF,
+HCS024FRF, and HCS026FRF. A scan of all 2,189 events retained by the deployed
+gateway found no ordinary telemetry containing the exact model codes for the
+hub (`0x0121`), valve (`0x012e`), or sensor (`0x013d`). Those identifiers are
+therefore pairing/control-plane candidates, not established telemetry fields.
+
+The scan did find one coherent extended Front Yard Sensor 2 sequence:
+
+```text
+10:36:56.394  79f4882f28 b9840280 d1e28048 2c03040f0a884f...
+10:36:56.574  79f4882f28 d1e28024 39840280 9641810001...
+```
+
+The `0x48` endpoint suffix matches the HCS02x product code. In the first body,
+`88 4f` follows HomGar's compact TLV grammar: type 10 (`STA_RH`) with a
+one-byte value of `0x4f`, or 79%. Normal Front Yard Sensor 2 reports immediately
+before and after this sequence also decoded to 79%. This supplies a confirmed
+third HCS026 moisture layout and explains at least one previously strange
+packet without making the cloud representation a runtime dependency.
+
+Another compact-status frame followed a normal Right Bed 57% report by 835
+milliseconds. Its body contained `0a 88 39 e0 b1`, which decodes as type-10
+moisture 57% and signed type-32 RSSI -79 dBm. Both matched the independently
+observed Right Bed cloud state. Because that frame's routing fields were
+`b9000101` and `685a011f`, not the established Right Bed endpoint, the local
+decoder retains the decoded values for research but does not yet apply them to
+the device.
+
+No retained HCS026 frame contained the catalog-implied one-byte battery TLV
+signature. A controlled normal-to-low battery transition remains necessary.
+
 ## Current capture guidance
 
 - Use 2.0 Msps centered at 433.7 MHz for broad passive operation.

@@ -102,6 +102,44 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("c4e50024", decoded["endpoint_b"])
         self.assertEqual(58, decoded["soil_moisture_percent"])
 
+    def test_decodes_hcs026_product_code_tlv_layout(self) -> None:
+        # Front Yard Sensor 2 used the full 0x48 product code in this extended
+        # report. The normal d1e28024 acknowledgement followed 180 ms later,
+        # and 0x88 0x4f carries its independently observed 79% moisture value.
+        frame = bytes.fromhex(
+            "79f4882f28b9840280d1e280482c03040f0a884f"
+            "000000000000000000000000000000001b77"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual("d1e28048", decoded["endpoint_b"])
+        self.assertEqual("d1e28024", decoded["canonical_endpoint_b"])
+        self.assertEqual(72, decoded["product_code"])
+        self.assertEqual(79, decoded["status_soil_moisture_percent"])
+        self.assertEqual(79, decoded["soil_moisture_percent"])
+
+        unknown = bytearray(frame)
+        unknown[9:13] = bytes.fromhex("aabbcc48")
+        decoded_unknown = normalize_row(
+            {"len": len(unknown) * 8, "data": unknown.hex()}
+        )
+        self.assertEqual(79, decoded_unknown["status_soil_moisture_percent"])
+        self.assertNotIn("canonical_endpoint_b", decoded_unknown)
+        self.assertNotIn("soil_moisture_percent", decoded_unknown)
+
+    def test_retains_unassigned_compact_moisture_and_hub_rssi(self) -> None:
+        # This followed a normal Right Bed 57% report by 835 ms. Its compact
+        # status values also matched the stock integration's -79 dBm reading,
+        # but the alternate routing fields are not yet sufficient to assign it
+        # to a device automatically.
+        frame = bytes.fromhex(
+            "79f4882f28b9000101685a011f2e0a080b03000a8839e0b1"
+            "000000000000000000000000000000"
+        )
+        decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual(57, decoded["status_soil_moisture_percent"])
+        self.assertEqual(-79, decoded["hub_rssi_db"])
+        self.assertNotIn("soil_moisture_percent", decoded)
+
     def test_does_not_treat_valve_payload_as_moisture(self) -> None:
         # This valve response contains a marker-like byte sequence by chance.
         frame = bytes.fromhex(
@@ -188,6 +226,30 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("soil-right-bed", device["device_id"])
         self.assertEqual(62, device["state"]["soil_moisture_percent"])
         self.assertEqual("9ce58024", device["state"]["rf_endpoint"])
+
+    def test_live_transport_canonicalizes_product_code_report(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        frame = (
+            "79f4882f28b9840280d1e280482c03040f0a884f"
+            "000000000000000000000000000000001b77"
+        )
+        event = {
+            "time": "2026-08-07T10:36:56.394439",
+            "rows": [{"len": len(frame) * 4, "data": frame}],
+            "rssi": -1.596,
+        }
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
+        device = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "soil-front-2"
+        )
+        self.assertEqual(79, device["state"]["soil_moisture_percent"])
+        self.assertEqual("d1e28024", device["state"]["rf_endpoint"])
+        self.assertEqual("d1e28048", device["state"]["rf_endpoint_b"])
+        self.assertEqual(72, device["state"]["rf_product_code"])
 
     def test_live_transport_merges_valve_duration_and_usage(self) -> None:
         gateway = Gateway(transport="rtl433")

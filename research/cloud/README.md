@@ -91,6 +91,32 @@ The existing integration called `/app/device/controlWorkMode` with a port,
 mode, and duration. That described an internet API request only; it did not
 explain the hub-to-valve RF command.
 
+## Product catalog metadata
+
+The data-driven product catalog in `homeassistant-homgar` supplies useful
+semantic labels and compatibility identifiers even though it describes
+HomGar application payloads rather than raw RF frames:
+
+| Device | Model code | Product code | Relevant declared fields |
+|---|---:|---:|---|
+| HWG023WBRF-V2 | 289 (`0x0121`) | 1 | Supported-device registry |
+| HTV145FRF | 302 (`0x012e`) | 31 (`0x1f`) | water control, battery, RSSI, work state, alarm, event times, duration, last usage |
+| HCS026FRF | 317 (`0x013d`) | 72 (`0x48`) | battery, RSSI, `STA_RH` soil moisture |
+
+The hub explicitly lists model codes 302 and 317 as supported subdevices. That
+confirms compatibility and gives future pairing captures concrete byte
+signatures to search in both byte orders. It does not reveal the enrollment
+exchange, device address assignment, or RF trailer algorithm.
+
+The catalog describes HCS026 battery as a one-byte `STA_BAT` value. The
+accompanying cloud decoder treats `0`/`1` as normal (`100%`) and `2`--`4` as
+low (`10%`). Its `STA_RSSI` value is receiver-measured at the hub. These facts
+refine the RF experiments but do not imply that either cloud TLV appears
+unchanged in every over-the-air report.
+
+Source snapshot:
+<https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/data/product_models.json>
+
 ## Passive monitoring snapshot — 2026-07-30
 
 A bounded UDM capture found a 217-byte encrypted hub record at the same instant

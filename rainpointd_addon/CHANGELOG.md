@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5
+
+- Decode the HCS026 product-code/TLV moisture report and canonicalize it to the
+  sensor's established endpoint.
+- Retain compact moisture and stock-hub RSSI fields from unassigned status
+  frames for further routing analysis without creating phantom devices.
+- Add regression fixtures for both newly correlated packet layouts.
+
 ## 0.3.2
 
 - Expand the default receive window to cover both observed RainPoint channels.

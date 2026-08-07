@@ -211,6 +211,9 @@ class RTL433Transport:
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_message_type": decoded["message_type"],
                 }
+                for key in ("status_soil_moisture_percent", "hub_rssi_db"):
+                    if key in decoded:
+                        state[key] = decoded[key]
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
                 self.gateway.observe_rf_frame(
@@ -221,7 +224,7 @@ class RTL433Transport:
                 published += 1
                 continue
 
-            endpoint = decoded["endpoint_b"]
+            endpoint = decoded.get("canonical_endpoint_b", decoded["endpoint_b"])
             device_id, name = KNOWN_HCS026.get(
                 endpoint,
                 (f"hcs026-{endpoint}", f"RainPoint HCS026 {endpoint}"),
@@ -234,6 +237,10 @@ class RTL433Transport:
                 "rf_endpoint_b": decoded["endpoint_b"],
                 "soil_moisture_percent": moisture,
             }
+            if "product_code" in decoded:
+                state["rf_product_code"] = decoded["product_code"]
+            if "hub_rssi_db" in decoded:
+                state["hub_rssi_db"] = decoded["hub_rssi_db"]
             if "rssi" in event:
                 state["rf_rssi_db"] = event["rssi"]
             self.gateway.observe_decoded(

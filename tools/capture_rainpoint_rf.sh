@@ -6,8 +6,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 duration="15m"
-frequency_hz="434000000"
-sample_rate="1024000"
+frequency_hz="433700000"
+sample_rate="2000000"
 output_root="${repo_root}/captures/rf"
 dry_run=false
 

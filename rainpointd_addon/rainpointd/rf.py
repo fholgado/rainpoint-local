@@ -15,6 +15,10 @@ HCS026_ENDPOINTS = {
     "ce628024",
     "d1e28024",
 }
+# HCS026 extended reports replace the normal 0x24 family suffix with the
+# catalog product code 0x48. Canonicalize only identities already established
+# by ordinary telemetry so a marker-like payload cannot create a new device.
+HCS026_PRODUCT_CODE = 0x48
 FLEX_DECODER = (
     "n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,"
     "bits>=620,match={40}79f4882f28"
@@ -30,12 +34,51 @@ def _row_bits(row: dict[str, Any]) -> str:
     return bits[:bit_count]
 
 
+def _canonical_hcs026_endpoint(endpoint: bytes) -> str | None:
+    """Return the established endpoint for normal or product-code reports."""
+    endpoint_hex = endpoint.hex()
+    if endpoint_hex in HCS026_ENDPOINTS:
+        return endpoint_hex
+    if endpoint[-1] != HCS026_PRODUCT_CODE:
+        return None
+    ordinary_endpoint = (endpoint[:-1] + bytes([HCS026_PRODUCT_CODE >> 1])).hex()
+    return ordinary_endpoint if ordinary_endpoint in HCS026_ENDPOINTS else None
+
+
+def _compact_status_fields(frame: bytes) -> dict[str, Any]:
+    """Decode catalog-correlated status TLVs without assigning a device."""
+    body = frame[13:-2]
+    result: dict[str, Any] = {}
+    for index in range(len(body) - 2):
+        # Field code 10 followed by compact type-10/U8 header and value.
+        if body[index : index + 2] != b"\x0a\x88":
+            continue
+        moisture = body[index + 2]
+        if moisture <= 100:
+            result["status_soil_moisture_percent"] = moisture
+        # Compact type 32 / signed-byte RSSI can immediately follow moisture.
+        if index + 4 < len(body) and body[index + 3] == 0xE0:
+            raw_rssi = body[index + 4]
+            hub_rssi = raw_rssi - 256 if raw_rssi > 127 else raw_rssi
+            if -120 <= hub_rssi <= 0:
+                result["hub_rssi_db"] = hub_rssi
+        break
+    return result
+
+
 def _soil_moisture(frame: bytes) -> int | None:
     """Decode either field position confirmed in HCS026FRF reports."""
     if len(frame) != FRAME_BYTES:
         return None
-    if frame[9:13].hex() not in HCS026_ENDPOINTS:
+    canonical_endpoint = _canonical_hcs026_endpoint(frame[9:13])
+    if canonical_endpoint is None:
         return None
+    # A retained Front Yard Sensor 2 report used the full HCS02x product code
+    # in its endpoint suffix and carried a HomGar-style one-byte type-10 TLV:
+    # 0x88 0x4f -> STA_RH/soil moisture, 79 percent. Its normal-endpoint
+    # acknowledgement followed 180 ms later.
+    if frame[12] == HCS026_PRODUCT_CODE:
+        return _compact_status_fields(frame).get("status_soil_moisture_percent")
     for marker_index in (20, 18):
         if frame[marker_index] & 0x7F != 0x44:
             continue
@@ -122,6 +165,11 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "message_body": frame[13:-2].hex(),
         "trailer": frame[-2:].hex(),
     }
+    canonical_endpoint_b = _canonical_hcs026_endpoint(frame[9:13])
+    if canonical_endpoint_b and canonical_endpoint_b != result["endpoint_b"]:
+        result["canonical_endpoint_b"] = canonical_endpoint_b
+        result["product_code"] = frame[12]
+    result.update(_compact_status_fields(frame))
     moisture = _soil_moisture(frame)
     if moisture is not None:
         result["soil_moisture_percent"] = moisture
