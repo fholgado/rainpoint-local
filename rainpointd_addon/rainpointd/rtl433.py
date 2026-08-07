@@ -20,6 +20,23 @@ KNOWN_HCS026 = {
 }
 
 
+def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
+    """Return optional receiver metadata supplied by an embedded bridge."""
+    metadata = event.get("bridge_metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    result = {}
+    for source, destination, expected_type in (
+        ("radio", "rf_radio", str),
+        ("channel", "rf_channel", int),
+        ("lqi", "rf_lqi", int),
+    ):
+        value = metadata.get(source)
+        if isinstance(value, expected_type) and not isinstance(value, bool):
+            result[destination] = value
+    return result
+
+
 def rtl_433_command(
     frequency: int,
     sample_rate: int,
@@ -167,6 +184,7 @@ class RTL433Transport:
             return 0
 
         published = 0
+        bridge_metadata = _bridge_metadata(event)
         for row in event.get("rows", []):
             try:
                 decoded = normalize_row(row)
@@ -196,6 +214,7 @@ class RTL433Transport:
                 }
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
+                state.update(bridge_metadata)
                 self.gateway.observe_decoded(
                     device_id="valve-1",
                     name="Garden Valve",
@@ -226,6 +245,7 @@ class RTL433Transport:
                         state[key] = decoded[key]
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
+                state.update(bridge_metadata)
                 self.gateway.observe_rf_frame(
                     frame=decoded["frame_hex"],
                     state=state,
@@ -255,6 +275,7 @@ class RTL433Transport:
                 state["hub_rssi_db"] = decoded["hub_rssi_db"]
             if "rssi" in event:
                 state["rf_rssi_db"] = event["rssi"]
+            state.update(bridge_metadata)
             self.gateway.observe_decoded(
                 device_id=device_id,
                 name=name,

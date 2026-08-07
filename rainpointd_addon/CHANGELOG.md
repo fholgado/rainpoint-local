@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Preserve the ESP32 radio name, channel, and CC1101 LQI alongside normalized
+  receive events.
+- Surface bridge radio initialization errors through gateway health instead of
+  silently ignoring diagnostic messages.
+
 ## 0.4.1
 
 - Decode the repeated compact `88 VV e0 RR` moisture/RSSI form even when its

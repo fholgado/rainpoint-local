@@ -78,7 +78,18 @@ class ESP32SerialTransport:
             message = json.loads(line)
         except (json.JSONDecodeError, TypeError):
             return 0
-        if message.get("type") != "rainpoint_rf":
+        message_type = message.get("type")
+        if message_type in {"fatal", "radio_error"}:
+            detail = str(message.get("error", "bridge reported a radio error"))
+            radio = message.get("radio")
+            if isinstance(radio, str):
+                detail = f"{radio}: {detail}"
+            self.gateway.set_transport_status(False, detail)
+            return 0
+        if message_type == "radio_ready":
+            self.gateway.set_transport_status(True)
+            return 0
+        if message_type != "rainpoint_rf":
             return 0
         frame_hex = message.get("frame")
         if not isinstance(frame_hex, str) or len(frame_hex) != FRAME_BYTES * 2:
@@ -92,6 +103,11 @@ class ESP32SerialTransport:
 
         event: dict[str, Any] = {
             "rows": [{"len": FRAME_BYTES * 8, "data": frame.hex()}],
+            "bridge_metadata": {
+                key: message[key]
+                for key in ("radio", "channel", "lqi")
+                if key in message
+            },
         }
         rssi = message.get("rssi_dbm")
         if isinstance(rssi, (int, float)) and not isinstance(rssi, bool):
@@ -110,4 +126,3 @@ class ESP32SerialTransport:
         except Exception as exc:
             if not self._stop.is_set():
                 self.gateway.set_transport_status(False, str(exc))
-

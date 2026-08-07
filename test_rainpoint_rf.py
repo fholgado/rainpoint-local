@@ -442,6 +442,9 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertEqual(64, right_bed["state"]["soil_moisture_percent"])
         self.assertEqual(-76.5, right_bed["state"]["rf_rssi_db"])
+        self.assertEqual("upper", right_bed["state"]["rf_radio"])
+        self.assertEqual(11, right_bed["state"]["rf_channel"])
+        self.assertEqual(91, right_bed["state"]["rf_lqi"])
 
     def test_esp32_serial_transport_rejects_non_frame_diagnostics(self) -> None:
         transport = ESP32SerialTransport(
@@ -460,6 +463,29 @@ class RainPointRFTest(unittest.TestCase):
                 json.dumps({"type": "rainpoint_rf", "frame": "00" * 38})
             ),
         )
+
+    def test_esp32_serial_transport_reports_radio_health(self) -> None:
+        gateway = Gateway(transport="esp32_serial")
+        transport = ESP32SerialTransport(gateway, device="unused")
+
+        transport.consume_line(
+            json.dumps(
+                {
+                    "type": "radio_error",
+                    "radio": "upper",
+                    "error": "cc1101_not_found",
+                }
+            )
+        )
+        self.assertEqual("error", gateway.health()["status"])
+        self.assertEqual(
+            "upper: cc1101_not_found", gateway.health()["detail"]
+        )
+
+        transport.consume_line(
+            json.dumps({"type": "radio_ready", "radio": "upper"})
+        )
+        self.assertEqual("ok", gateway.health()["status"])
 
 
 if __name__ == "__main__":
