@@ -61,9 +61,9 @@ The transport invokes this receive-only pipeline internally:
 433.7 MHz / 2.0 Msps → FSK PCM / 48 us → sync 79f4882f28
 ```
 
-Right Bed endpoint `9ce58024` is registered as unavailable at startup and
-becomes available after its first valid HCS026 report. Unknown endpoints with
-the confirmed moisture layout receive deterministic IDs of the form
+The four confirmed HCS026 endpoints are restored as unavailable at startup and
+become available after their first valid report. Unknown endpoints with the
+confirmed moisture layout receive deterministic IDs of the form
 `hcs026-<endpoint>`.
 
 The standalone process is suitable for development on the Mac containing the
@@ -148,9 +148,9 @@ ha apps start local_rainpointd
 ```
 
 The installed app is intentionally protected and requests no host privileges,
-HA or Supervisor API tokens, device mappings, USB, UART, or writable HA
-configuration directories. It publishes the read-only API on host TCP port
-8787.
+HA or Supervisor API tokens, UART, or writable HA configuration directories.
+Live mode receives through the explicitly exposed USB SDR and publishes the
+read-only API on host TCP port 8787.
 
 Verify it from another LAN machine:
 
@@ -162,10 +162,10 @@ curl http://HOME_ASSISTANT_IP:8787/api/v1/info
 The response from `/api/v1/info` must report `"read_only": true` and
 `"transport": "replay"`.
 
-## Next receive-only milestones
+## Next milestones
 
-- Map the remaining installed HCS026 endpoint IDs to friendly names.
-- Package `rtl_433` and an explicit USB device mapping for the Home Assistant
-  app, or install the standalone gateway persistently beside the receiver.
-- Determine trailer integrity coverage and duplicate/retry semantics.
-- Decode passive valve state while retaining the read-only API boundary.
+- Improve final antenna placement and reception reliability.
+- Decode the HCS026 battery-low flag with a controlled test sensor.
+- Determine trailer integrity coverage and replay/counter semantics.
+- Prototype the ESP32/CC1101 transport while retaining the read-only API
+  boundary until valve safety requirements are satisfied.

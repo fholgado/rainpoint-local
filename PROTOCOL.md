@@ -1,557 +1,256 @@
-# RainPoint local protocol research
+# RainPoint 433 MHz RF protocol
 
-This document records only behavior demonstrated by captures from the owner's
-RainPoint installation. Identifiers and credentials are intentionally omitted.
+This is the primary protocol reference for the RainPoint devices supported by
+this project. It describes behavior demonstrated by local RF captures. Dated
+capture notes and cloud-side observations live under `research/` and are not
+part of the protocol contract.
 
-## Devices
+## Protocol at a glance
 
-| Role | Model | Transport |
-|---|---|---|
-| Hub | HWG023WBRF-V2 | Wi-Fi to HomGar cloud; 433.7 MHz to accessories |
-| Valve | HTV145FRF | 433.7 MHz RF through the hub |
-| Soil probes | HCS026FRF | 433.7 MHz RF broadcasts through the hub |
+| Property | Confirmed value |
+|---|---|
+| Devices tested | HTV145FRF valve, HCS026FRF soil sensor, HWG023WBRF-V2 hub |
+| Band | 433/434 MHz |
+| Modulation | 2-FSK PCM |
+| Symbol width | 48 microseconds, approximately 20.83 ksymbols/s |
+| Sync word | `79 f4 88 2f 28` |
+| Normalized frame | 38 bytes |
+| Preamble | 320-bit short form or 1,201-bit long wake/command form |
+| Receive implementation | RTL-SDR with `rtl_433` |
+| Planned transceiver | ESP32 with a 433 MHz CC1101-class radio |
 
-The hub has not exposed a listening TCP service in the tested port range. It
-initiates its own outbound connections.
-
-## Cloud-side flow
-
-The hub maintains an encrypted MQTT connection:
-
-```text
-hub → HomGar/Aliyun broker: TCP 1883 with TLS
-```
-
-Despite the conventional plaintext port number, records begin with TLS
-application-data framing (`17 03 03`).
-
-Observed normal traffic:
-
-- 31-byte TLS heartbeat in each direction about every 55 seconds.
-- 217-byte hub telemetry records during periodic status reporting. A passive
-  capture at 10:07:20 EDT correlated one exactly with an HCS026FRF soil report.
-- 301-byte cloud-to-hub record for valve start.
-- 299-byte cloud-to-hub record for valve stop.
-- 244/245-byte hub response records after valve commands.
-
-Valve actions also cause short TLS 1.2 connections from the hub to a second
-HomGar endpoint on TCP 1446. The endpoint presents a certificate for
-`*.homgarus.com` and selected cipher suite `0x009d`
-(`TLS_RSA_WITH_AES_256_GCM_SHA384`).
-
-### MQTT observer envelope
-
-The Home Assistant integration receives plaintext observer messages on an
-Aliyun-style topic:
+The working `rtl_433` flex decoder is:
 
 ```text
-/sys/<product-key>/<observer-device>/thing/service/property/set
+n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28
 ```
 
-The JSON envelope has this shape:
+A 2.0 Msps capture centered at 433.7 MHz has been the most useful general
+receive configuration. Installed-device energy has appeared across roughly
+433.08--434.38 MHz, so narrower captures can miss valid report types.
 
-```json
-{
-  "method": "thing.service.property.set",
-  "id": "<message-id>",
-  "params": {
-    "param": "#P<prefix>|{\"D01\":{\"time\":<ms>,\"value\":\"10#...\"},\"update\":{\"time\":<ms>,\"value\":1},\"state\":{\"time\":<ms>,\"value\":\"0,-47\"}}|<ms>|<suffix>#"
-  },
-  "version": "1.0.0"
-}
-```
+## Frame format
 
-`D01` is RF accessory address 1, the HTV145FRF valve in this installation.
-Other accessory addresses are represented as `D02`, `D03`, and so on.
-
-The observer credentials used by Home Assistant are not assumed to be the
-physical hub's credentials. Publishing to the observer topic is therefore not
-yet evidence that a message can control the hub.
-
-## RF status payload
-
-The value beginning with `10#` is a compact TLV stream represented as hex.
-The current decoder treats the first two decimal characters and `#` as an
-envelope and parses the remaining bytes.
-
-### TLV header
-
-For the observed frames:
-
-- Header high bit clear: one-byte inline value; type code is bits 6–4.
-- Header high bit set:
-  - payload length is `(header & 0x03) + 1`
-  - short type code is `((header >> 2) & 0x1f) + 8`
-  - short code 31 introduces an extended type
-- Multi-byte numeric values are little-endian.
-
-### Observed fields
-
-| Type | Meaning | Encoding |
-|---:|---|---|
-| 2 | Alarm | low nibble |
-| 10 | Humidity / soil moisture | unsigned percent |
-| 15 | Last water usage | little-endian integer, tenths of liters |
-| 19 | Session duration | little-endian seconds |
-| 21 | Event/end time | packed local wall-clock |
-| 30 | Valve work state | low nibble: 0 idle, 1 irrigation |
-| 31 | Battery status | 0/1 normal, 2–4 low |
-| 32 | RSSI | signed 8-bit dBm |
-| 54 | Report time | packed local wall-clock |
-
-The event-time field contains the hub/device's local wall-clock. Home
-Assistant later applies the site's timezone to expose a UTC timestamp.
-
-## Labeled valve frames
-
-### Running
-
-```text
-10#E1B900DC01D82120B724A0FC19AD58029F2E000000FF0FAA9CFC19
-```
-
-Decoded:
-
-- battery 100%
-- RSSI -71 dBm
-- work state irrigation
-- duration 600 seconds
-- event/end local time 2026-07-30 10:00:36
-- report local time 2026-07-30 09:50:42
-- prior usage 4.6 L
-- alarm 0
-
-### Stopped
-
-```text
-10#E1B900DC01D80020B700000000AD00009F64000000FF0FE89CFC19
-```
-
-Decoded:
-
-- battery 100%
-- RSSI -71 dBm
-- work state idle
-- duration 0
-- last usage 10.0 L
-- report local time 2026-07-30 09:51:40
-- alarm 0
-
-The raw status frames are reports from the valve. They are not yet the
-over-the-air RF command needed to open or close it.
-
-## Soil-moisture frames
-
-All observed HCS026FRF frames share the same four-field layout:
-
-```text
-RSSI → battery → soil moisture → report time
-```
-
-| Sensor | Moisture | RSSI | Raw payload |
-|---|---:|---:|---|
-| Right Bed | 58% | -70 dBm | `10#E1BA00DC01883AFF0F6C9CFC19` |
-| Left Bed | 63% | -75 dBm | `10#E1B500DC01883FFF0F2090FC19` |
-| Front Yard 1 | 61% | -80 dBm | `10#E1B000DC01883DFF0F0745FB19` |
-| Front Yard 2 | 82% | -77 dBm | `10#E1B300DC018852FF0FD281FC19` |
-
-Sensor identity is supplied by the surrounding MQTT `Dxx` address, not by an
-obvious stable identifier in the decoded TLV fields.
-
-## Control API metadata
-
-HomGar product metadata for HTV145FRF identifies valve control as:
-
-```text
-identity: CTL_WATER
-dpId: 46
-dpCode: 1
-endpoint: 7
-dpLen: 2
-dpPort: 1
-```
-
-The existing cloud integration calls:
-
-```text
-POST /app/device/controlWorkMode
-```
-
-with hub/device identifiers plus:
-
-```json
-{
-  "port": 1,
-  "mode": 1,
-  "duration": 600,
-  "param": ""
-}
-```
-
-Stop uses mode and duration `0`.
-
-This describes the cloud request but not the hub-to-valve RF command.
-
-## Labeled local RF captures (2026-08-06)
-
-A Nooelec NESDR SMArt v5 passively captured the installed devices. Home
-Assistant recorder timestamps positively correlate local RF bursts with the
-HomGar integration's raw payload and valve state changes.
-
-The first 250 ksample/s capture centered at 433.7 MHz clipped most of the
-transmission. Despite that limitation, it produced two useful soil-sensor
-correlations:
-
-| RF capture time | HA raw-payload time | Device |
-|---|---|---|
-| 11:01:15.562 | 11:01:15.655 | Left Bed HCS026FRF |
-| 11:02:33.795 | 11:02:34.533 | Right Bed HCS026FRF |
-
-A corrected 1.024 Msps capture centered at 433.92 MHz recorded one short valve
-cycle. The raw files are intentionally retained locally rather than committed.
-
-| File | RF time | HA correlation | SHA-256 |
-|---|---|---|---|
-| `g004_433.92M_1024k.cu8` | 11:08:40.017 | valve open at 11:08:40.677 | `560072d3f3a414bf0e20893333590150defd2a9c9db1ad691e1a86b0da8bb848` |
-| `g005_433.92M_1024k.cu8` | 11:08:40.395 | same open exchange | `10387364cbea3ff8796239b2bacfffc3d941583d155e4f2e705c7135f24bc060` |
-| `g006_433.92M_1024k.cu8` | 11:08:46.443 | running report at 11:08:46.533 | `8df74ffdd2c6af7b4c0972ad588d689fcd8ef51c37fc63e85e24ddb2db361463` |
-| `g007_433.92M_1024k.cu8` | 11:09:00.498 | valve close at 11:09:01.182 | `2df35809e608b6e40393622c71618a8ced9f69da41c1aee63d8e72b8bc5bfe2a` |
-| `g008_433.92M_1024k.cu8` | 11:09:00.878 | same close exchange | `1934e0f21cf49f97716849636f7ed8e560e65acf8eda4f207073e9c1b9ed95d0` |
-| `g009_433.92M_1024k.cu8` | 11:09:06.952 | stopped report at 11:09:07.044 | `5cefbcc445ba96fb61eafd64aa8cbf3b1c57e198b98b2f302ec3cc86ce2f18c8` |
-
-The filing labels HCS026FRF modulation as ASK. The local wideband samples,
-however, are detected as two-tone FSK when replayed through `rtl_433`'s min/max
-FSK detector. Approximate tone estimates vary by burst:
-
-| File | Lower tone | Upper tone | Burst role |
-|---|---:|---:|---|
-| `g004` | 434.183 MHz | 434.378 MHz | open exchange, 135 ms |
-| `g005` | 434.069 MHz | 434.103 MHz | open exchange reply, 31 ms |
-| `g006` | 434.164 MHz | 434.318 MHz | running confirmation, 31 ms |
-| `g007` | 434.160 MHz | 434.369 MHz | close exchange, 135 ms |
-| `g008` | 434.089 MHz | 434.133 MHz | close exchange reply, 31 ms |
-| `g009` | 434.175 MHz | 434.340 MHz | stopped confirmation, 31 ms |
-
-These frequency estimates are provisional because several upper tones were
-near the capture passband edge. Future captures use a 1.024 MHz window centered
-at 434.0 MHz. Do not infer hub-versus-valve direction from carrier frequency
-until additional exchanges are captured with relative signal-strength or
-proximity evidence.
-
-### Confirmed modulation and frame extraction
-
-A community HCS021FRF investigation supplied the missing demodulator settings:
-
-```sh
-rtl_433 -f 434000000 -s 1024000 -R 0 \
-  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28'
-```
-
-Those settings decode every labeled valve file and the right-bed exchange.
-They confirm 2-FSK pulse-code modulation with 48 microsecond symbols. The two
-observed preamble forms are 320 alternating bits for short packets and 1,201
-bits before sync for long wake/command packets.
-
-Both forms normalize to a 38-byte frame beginning with the same five-byte sync
-word:
+Every decoded packet normalizes to:
 
 ```text
 79 f4 88 2f 28 | endpoint A (4) | endpoint B (4) | body (23) | trailer (2)
 ```
 
-Endpoint direction and the trailer algorithm remain provisional. The endpoint
-order reverses between the initial valve exchange packets, but more evidence is
-needed before naming either field as source or destination.
+| Offset | Length | Meaning | Status |
+|---:|---:|---|---|
+| 0 | 5 | Sync word | Confirmed |
+| 5 | 4 | Endpoint A | Confirmed field; physical direction is role-dependent |
+| 9 | 4 | Endpoint B | Confirmed field; physical direction is role-dependent |
+| 13 | 23 | Message body | Partially decoded |
+| 36 | 2 | Deterministic trailer | Algorithm unresolved |
 
-Normalized frames from the short valve cycle:
+The endpoint fields should not yet be treated as ordinary source and
+destination MAC addresses. Their order reverses in valve request/response
+traffic, while sensor reports use two observed route shapes.
 
-| Role | Frame |
-|---|---|
-| Open command candidate | `79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824` |
-| Open response candidate | `79f4882f28b9840280b42d008f9750868010cf92800000409e00569e000000000000000044ce` |
-| Running confirmation candidate | `79f4882f28b42d008fb98402809ec10100060000000000000000000000000000000000006bea` |
-| Close command candidate | `79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf` |
-| Close response candidate | `79f4882f28b9840280b42d008f97d08680104f90800000408000569e00000000000000001f46` |
-| Stopped confirmation candidate | `79f4882f28b42d008fb98402809f410100060000000000000000000000000000000000003c64` |
+## Known endpoints
 
-`tools/decode_rainpoint_iq.py` automates the flex decode, finds sync across both
-preamble alignments, and emits normalized JSON without assigning unproven
-direction semantics.
+| Association | Endpoint | Evidence |
+|---|---|---|
+| Hub/controller side of valve exchange | `b42d008f` | Open and close requests |
+| HTV145FRF valve side of exchange | `b9840280` | Immediate valve responses |
+| Right Bed HCS026FRF | `9ce58024` | Repeated moisture matches |
+| Left Bed HCS026FRF | `c4e50024` | Controlled 58% and 12% matches |
+| Front Yard Sensor 1 | `ce628024` | Repeated 59% matches |
+| Front Yard Sensor 2 | `d1e28024` | Repeated 78--79% matches |
+| Sensor companion/acknowledgement route | `39840280` | Short frames following lower-channel reports |
 
-The long packet at 11:09:16.876 normalized to:
+Friendly names are installation-specific. The stable endpoint values are the
+portable part of the protocol.
+
+## HCS026FRF soil-moisture reports
+
+Data-rich HCS026FRF frames carry a packed moisture value at one of two body
+positions. The decoder looks for a marker whose low seven bits equal `0x44`.
+The following byte contains half the percentage and the high bit of the next
+byte is the odd-value flag:
 
 ```text
-79f4882f28b42d008f9ce580240784830701800544200000000000000000000000000000308a
+percent = value * 2 + bool(odd_flag & 0x80)
 ```
 
-Its moisture field is `200`: `0x20 * 2` plus a clear odd-value flag, or 64%.
-Home Assistant recorded Right Bed at 64% at 11:09:17.985, 91 ms after the
-following short RF packet began (about 60 ms after it completed). This confirms
-direct local moisture extraction for one HCS026FRF report. The decoder exposes
-the result as `soil_moisture_percent`.
+The marker begins at normalized frame offset 18 or 20, depending on the report
+layout. Detection is restricted to confirmed HCS026 endpoint IDs to prevent a
+marker-like sequence in a valve frame from creating a false sensor reading.
 
-A subsequent receive-only session confirmed the field twice more without any
-user action:
+Confirmed examples:
 
-| RF time | Moisture field | Local result | HA device/recorder time |
-|---|---|---:|---|
-| 11:35:33.326 | `1f0` | 62% | 11:35:34.517, 62% |
-| 11:37:30.086 | `1f0` | 62% | 11:37:30.927, 62% |
+| Sensor endpoint | Relevant bytes | Result |
+|---|---|---:|
+| `ce628024` | `... c4 1d 80 ...` | 59% |
+| `d1e28024` | `... c4 27 80 ...` | 79% |
+| `c4e50024` | `... 44 1d 00 ...` | 58% |
+| `c4e50024` | `... c4 06 00 ...` | 12% |
+| `9ce58024` | `... 44 20 00 ...` | 64% |
 
-The preceding packed byte varied from `44` to `c4`, confirming that its high
-bit must be masked independently of the three-nibble moisture field.
+The controlled 12% sample was produced by removing the Left Bed probe from the
+ground. Its display, independently observed reference entity, local decoder,
+gateway API, and Home Assistant local entity all reported 12%. This validates
+the field across a much wider range than the earlier 58--79% samples.
 
-### Persistent Pi capture and irrigation correlation (2026-08-06)
-
-The protected Home Assistant app received the SDR directly and retained valid
-non-moisture frames in its read-only event stream. A controlled irrigation
-experiment confirmed the existing valve endpoint pair and revealed additional
-RainPoint endpoints.
-
-Home Assistant recorder correlation separated an unrelated Zigbee valve action
-from two RainPoint Zone 1 cycles. Only the RainPoint cycles aligned with the
-`b42d008f` / `b9840280` request-response exchanges, within 1.3 seconds of the
-corresponding HA transitions.
-
-The RF request precedes the cloud-backed HA transition, while the response and
-confirmation surround it. This independently assigns `b42d008f` / `b9840280`
-to the RainPoint Zone 1 valve and rules out the Zigbee front-bed valve.
-
-| Role | Endpoint A | Endpoint B | Evidence |
-|---|---|---|---|
-| Hub/controller | `b42d008f` | `b9840280` | Start/stop requests; endpoint order reverses in responses |
-| HTV145 valve | `b9840280` | `b42d008f` | Immediate response to each request |
-| Front Yard Sensor 1 | `ce628024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 97 ms |
-| Left Bed sensor | `c4e50024` | `39840280` | Full HA battery/RSSI/moisture/raw-payload update followed its RF frame by 89 ms |
-| Front Yard Sensor 2 | `d1e28024` | `39840280` | Lower-channel full frame decodes to the sensor's independently observed 79% value |
-
-The first valve cycle used message byte `0x98`; the next used `0x99`. The
-request body, not that rolling byte, distinguishes open (`10 82 ...`) from
-close (`90 81 ...`). Confirmation frames advanced from `0x90` to `0x92` and
-`0x93` during subsequent activity. This is strong evidence that the apparent
-message-type byte contains a transaction or sequence value rather than a fixed
-command opcode.
-
-### Controlled three-cycle valve command capture
-
-A 60-minute broad capture recorded three short, manually stopped Zone 1 runs.
-Home Assistant Recorder supplied the authoritative valve transitions, while
-the gateway event log supplied RF burst start times. Each cycle produced the
-same command and response shapes:
-
-To avoid publishing household activity times, the table keeps only delays from
-the beginning of each RF request:
-
-| Cycle | Open response | HA open | Close response | HA closed |
-|---|---:|---:|---:|---:|
-| 1 | +373 ms | +550 ms | +373 ms | +646 ms |
-| 2 | +377 ms | +664 ms | +376 ms | +664 ms |
-| 3 | +374 ms | +550 ms | +1,063 ms | +1,254 ms |
-
-The first body byte was `9b`, `9c`, then `9d`; it advanced once per watering
-cycle and was echoed by every request/response packet in that cycle. The
-second body byte reliably identifies the action and direction:
-
-| Body byte 1 | Endpoint order | Meaning |
-|---:|---|---|
-| `10` | `b42d008f` to `b9840280` | open request |
-| `50` | `b9840280` to `b42d008f` | open response |
-| `90` | `b42d008f` to `b9840280` | close request |
-| `d0` | `b9840280` to `b42d008f` | close response |
-
-The complete request bodies were stable except for that sequence byte:
+Example Left Bed frame:
 
 ```text
-open:  SS 10 82 80 81 00 f8 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+79f4882f28b9840280c4e500240981820385c406000000000000000000000000000000004cea
+```
+
+### Sensor fields not yet decoded
+
+- Battery is believed to be a coarse normal/low flag, not a percentage.
+- Hub-reported RSSI is receiver-measured and is not expected to be an
+  application field sent by the sensor.
+- The meaning of the first body byte and companion heartbeat fields remains
+  provisional.
+
+The gateway currently exposes SDR signal metadata separately as
+`rf_rssi_db`; it must not be presented as the stock hub's RSSI value.
+
+## HTV145FRF valve protocol
+
+### Request and response roles
+
+| Endpoint order | Body byte 1 | Meaning |
+|---|---:|---|
+| `b42d008f` to `b9840280` | `0x10` | Open request |
+| `b9840280` to `b42d008f` | `0x50` | Open response |
+| `b42d008f` to `b9840280` | `0x90` | Close request |
+| `b9840280` to `b42d008f` | `0xd0` | Close response |
+
+The first body byte is a transaction sequence. Observed watering cycles
+advanced through `0x9b`, `0x9c`, `0x9d`, `0x9e`, `0x9f`, then `0x80`, strongly
+indicating a five-bit counter with a fixed high bit. Every request and response
+in one cycle echoes the same sequence value.
+
+### Command bodies
+
+The stable request bodies are:
+
+```text
+open:  SS 10 82 80 81 00 DD DD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 close: SS 90 81 80 81 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 ```
 
-Here `SS` was `9b`, `9c`, or `9d`. All three runs used the HA duration setting
-of four minutes, making `f8` a duration/setpoint candidate that needs captures
-at other configured durations before it can be decoded.
-
-Three later runs also retained the four-minute setting and produced sequence
-bytes `9e`, `9f`, then `80`. The wrap from `9f` to `80` strongly indicates a
-five-bit counter carried with a fixed high bit. Their actual watering times
-varied, but every open request still contained `f8`, supporting the conclusion
-that the field represents the configured limit rather than elapsed runtime.
-The `9f` open request was transmitted twice as the exact same frame, 709 ms
-apart, before its response.
-
-The third close request was transmitted twice, 690 ms apart, as the exact same
-38-byte frame, including trailer `35f2`. This proves there is no per-burst nonce
-and that the trailer is deterministic for a given frame. It does not yet prove
-that an older sequence value can be replayed in a later session.
-
-Across otherwise identical `9b`/`9c`/`9d` requests, the trailer XOR deltas are
-consistent with the CRC-CCITT polynomial `0x1021`. None of the common CRC-16
-initialization/final-XOR variants, nor a simple contiguous frame slice, matches
-all request and response trailers yet. Treat `0x1021` as a differential clue,
-not a completed checksum algorithm.
-
-Short `.. c1 01 00 06 ..`, `.. 41 01 00 06 ..`, and `.. 42 00 80 ..` frames
-also surrounded the commands. Their counters advance independently, so they
-remain classified as status/heartbeat candidates rather than open/close
-commands.
-
-The Right Bed HCS026 endpoint `9ce58024` reported 60% before watering and 61%
-afterward. HA recorded the same 61% value 1.3 seconds later. No other HomGar
-moisture entity changed in the capture window, and no second HCS026
-moisture-layout endpoint was observed in that experiment. Subsequent persistent
-capture assigned `c4e50024` to Left Bed and `ce628024` to Front Yard Sensor 1
-through sub-100-ms HA recorder correlations.
-
-### Dual-channel HCS026 reports
-
-The initial 1.024 Msps capture centered at 434.0 MHz spanned approximately
-433.49--434.51 MHz. It retained the short `c4e50024` and `ce628024`
-notifications but no data-rich report for either sensor. A 2.0 Msps capture
-centered at 433.7 MHz exposed companion long packets with tone energy reaching
-approximately 433.08 MHz, below the old window.
-
-The wider capture recovered these full frames immediately before their short
-notifications:
-
-| Assignment | Full-frame route | Relevant body | Local moisture |
-|---|---|---|---:|
-| Front Yard Sensor 1 | `b9840280` to `ce628024` | `09 81 82 03 05 c4 1d 80` | 59% |
-| Front Yard Sensor 2 | `b9840280` to `d1e28024` | `00 81 82 07 85 c4 27 80` | 79% |
-| Left Bed | `b9840280` to `c4e50024` | `0e 01 82 03 85 44 1d 00` | 58% |
-
-These reports use the same packed moisture representation as Right Bed, but
-the `0x44` marker and value begin two bytes earlier. For Front Yard Sensor 1,
-`0x1d * 2 + 1 = 59`; for Sensor 2, `0x27 * 2 + 1 = 79`. The latter matches the
-last independently retained HA cloud reading and assigns the previously unseen
-`d1e28024` endpoint to Front Yard Sensor 2. The decoder now accepts both field
-positions. A focused 433.15 MHz capture subsequently recovered two full Left
-Bed reports at 58%, matching HA's independently retained 58% cloud value. Soil
-field detection is restricted to the four confirmed HCS026 endpoint IDs so a
-marker-like byte sequence in a valve response cannot create a false moisture
-observation.
-
-### Local valve duration and last-session usage
-
-A scheduled 17-minute run produced a complete pre-run, open, watering, close,
-and post-run capture. Home Assistant reported 1,020 seconds and 46.2829435731476
-gallons (175.2 liters). The open command contained `fe 01` at bytes 19--20:
+`SS` is the transaction sequence. `DD DD` is a little-endian duration stored
+in two-second units:
 
 ```text
-little_endian(fe 01) * 2 = 510 * 2 = 1020 seconds
+duration_seconds = little_endian(DD DD) * 2
 ```
 
-The close request replaced that field with zero. The valve's packed
-last-session-usage field is marked by `4f` or `cf` at byte 20. Given the next
-two bytes `first` and `second`, its value is:
+Confirmed duration examples:
+
+| Encoded | Requested duration |
+|---|---:|
+| `fe 01` | 1,020 seconds |
+
+### Representative frames
+
+```text
+open request
+79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824
+
+open response
+79f4882f28b9840280b42d008f9750868010cf92800000409e00569e000000000000000044ce
+
+close request
+79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf
+
+close response
+79f4882f28b9840280b42d008f97d08680104f90800000408000569e00000000000000001f46
+```
+
+Exact requests were observed retransmitted without changes, including the
+trailer. This proves there is no per-burst nonce. It does not yet prove that a
+request from an older transaction can be replayed later.
+
+### Last-session water usage
+
+Valve response frames use `0x4f` or `0xcf` as a marker at normalized frame
+offset 20. The next two bytes encode usage in tenths of a liter:
 
 ```text
 half_tenths = ((second & 0x7f) << 8) | (first & 0x7f)
 tenths_liters = half_tenths * 2 + bool(second & 0x80)
+liters = tenths_liters / 10
 ```
 
-Independent HA correlations validate the packing over both odd and multi-byte
-values:
+Confirmed examples:
 
-| Packed bytes | Local result | HA result |
-|---|---:|---:|
-| `85 00` | 1.0 L | 1.0 L |
-| `84 80` | 0.9 L | 0.9 L |
-| `8e 00` | 2.8 L | 2.8 L |
-| `d3 00` | 16.6 L | 16.6 L |
-| `b3 00` | 10.2 L | 10.2 L |
-| `ec 03` | 175.2 L | 46.2829435731476 gal |
+| Packed bytes | Result |
+|---|---:|
+| `85 00` | 1.0 L |
+| `84 80` | 0.9 L |
+| `8e 00` | 2.8 L |
+| `d3 00` | 16.6 L |
+| `b3 00` | 10.2 L |
+| `ec 03` | 175.2 L |
 
-The final close response in the long-run capture had address-bit damage, but
-its preserved `ec 03` usage field independently decoded to the exact HA value.
-Runtime publication therefore remains restricted to frames with the confirmed
-hub/valve endpoint pair. The request, HA open transition, close request, HA
-closed transition, and volume update all aligned within sub-second delays;
-the public notes omit absolute household schedule times.
+## Trailer status
 
-## Local architecture decision
+The final two bytes are deterministic for a complete frame. XOR deltas across
+otherwise identical requests are consistent with the CRC-CCITT polynomial
+`0x1021`, but no common initialization/final-XOR combination over a confirmed
+contiguous byte range matches all known request and response trailers.
 
-### Preferred: direct 433 MHz bridge
+Until the algorithm is solved, the trailer must be treated as an unresolved
+checksum or authentication field. This is the main blocker to generating
+arbitrary new command frames rather than replaying captured ones.
 
-Use an ESP32 with a CC1101-class transceiver, or an SDR during discovery, to
-receive the soil broadcasts and transmit valve commands locally.
+## Receive and decode
 
-Advantages:
-
-- Removes both HomGar cloud services.
-- Does not depend on compromising or replacing hub firmware.
-- One local radio can expose valve and soil entities to Home Assistant.
-- The sensor application payload is already decoded.
-
-Remaining RF unknowns:
-
-- pairing and accessory-address semantics
-- trailer checksum or message-authentication algorithm
-- duration/setpoint encoding in the open request
-- sequence freshness and replay protection, if any
-
-### Public RF clues
-
-The FCC filing for the exact HTV145FRF confirms a single 433.7 MHz Part 15
-transmitter. A prior `rtl_433` investigation of an older RainPoint
-temperature/humidity sensor at 433.9 MHz found OOK with Manchester-style
-encoding and proposed this flex decoder:
+Live receive:
 
 ```sh
-rtl_433 -f 433900000 -R 0 \
-  -X 'n=RainPoint,m=OOK_MC_ZEROBIT,s=500,l=500,r=1500' \
-  -S unknown
+rtl_433 -f 433700000 -s 2000000 -R 0 \
+  -X 'n=RainPoint,m=FSK_PCM,s=48,l=48,r=49152,bits>=620,match={40}79f4882f28' \
+  -M time:iso:usec -M level -M bits
 ```
 
-That older sensor is not the HCS026FRF. The 2026-08-06 local captures do not
-match its timing, so this decoder remains historical context rather than the
-working hypothesis.
+Normalize saved CU8 captures:
 
-### Alternative: emulate the HomGar services for the original hub
+```sh
+python3 tools/decode_rainpoint_iq.py \
+  --sample-rate 2000000 --frequency 433700000 capture.cu8
+```
 
-Redirect the hub to a local MQTT broker and secondary API endpoint, then
-reproduce the command/status protocol.
+`rainpointd_addon/rainpointd/rf.py` is the executable specification for frame
+normalization and confirmed field decoding. Regression examples live in
+`test_rainpoint_rf.py`.
 
-Advantages:
+## Remaining protocol work
 
-- Retains the existing RF hub and paired devices.
+1. Solve the two-byte trailer across sensor, valve, request, and response
+   frames.
+2. Measure the exact carrier center and 2-FSK deviation for CC1101 transmit.
+3. Test whether a captured request is accepted outside its original sequence
+   window.
+4. Decode battery-low state with a controlled test sensor.
+5. Capture sensor and valve enrollment, association, and forgetting traffic.
+6. Confirm retry timing, acknowledgement rules, and safe close behavior before
+   enabling Home Assistant control.
 
-Additional unknowns:
+## Safety boundary
 
-- broker hostname used by the physical hub
-- physical hub MQTT credentials
-- certificate-validation behavior
-- purpose and required responses of TCP 1446
-- whether commands require cloud-generated signatures or counters
+The current implementation is receive-only. Transmit support must enforce a
+local maximum duration, start an independent watchdog before opening, retry an
+idempotent close until idle is observed, and fail closed after gateway, Home
+Assistant, network, or power loss.
 
-Because the hub exposes no local listener and all relevant paths are TLS, this
-route currently has more unknowns than the direct-RF bridge.
+## Evidence and references
 
-## Next safe experiments
+The concise capture history is in
+[`research/RF_CAPTURE_NOTES.md`](research/RF_CAPTURE_NOTES.md). Cloud-side
+observations used only as a comparison oracle are isolated in
+[`research/cloud/README.md`](research/cloud/README.md).
 
-1. Determine the trailer checksum or authentication algorithm across the
-   expanded set of labeled frames.
-2. Capture additional short valve cycles with different requested durations to
-   separate command, acknowledgement, and status fields.
-3. Deploy and validate receive-only reporting for all four confirmed soil
-   endpoints.
-4. Use a test HCS026 sensor to identify its coarse battery-status flag by
-   correlating normal and deliberately low-voltage reports with the cloud
-   transition from battery OK (`100%`) to battery low (`10%`). Compare both
-   the data-rich report and its companion heartbeat, especially the currently
-   constant `... 41 81 00 01 00 ...` status bytes. Verify nominal voltage and
-   polarity first, use a current-limited supply or known-low batteries, and
-   never exceed the sensor's nominal supply voltage.
-5. Consider exact replay only after close behavior, counters, and independent
-   timeout safety are understood.
-
-## References
-
-- Exact valve FCC filing:
-  <https://fccid.io/2AWDBHTV145FRF>
-- Prior RainPoint RF analysis in `rtl_433`:
-  <https://github.com/merbanan/rtl_433/issues/1781>
-- Community HCS021FRF FSK decoding and sensor-field notes:
+- Exact valve FCC filing: <https://fccid.io/2AWDBHTV145FRF>
+- Community HCS021FRF FSK notes:
   <https://github.com/user-attachments/files/26152016/rainpoint_decoding.txt>
-- `rtl_433` receiver and analyzer:
-  <https://github.com/merbanan/rtl_433>
-- Cloud integration research source:
-  <https://github.com/martinpeniak/tao-irrigation>
+- `rtl_433`: <https://github.com/merbanan/rtl_433>
+- TI CC1101: <https://www.ti.com/product/CC1101>

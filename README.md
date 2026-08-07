@@ -1,21 +1,23 @@
 # RainPoint Local
 
-An experimental, local-first RainPoint irrigation integration for Home
-Assistant.
+An experimental local RainPoint irrigation integration for Home Assistant,
+built around the devices' 433 MHz RF protocol.
 
-The goal is to replace the HomGar/RainPoint cloud software stack with an open
-local gateway that can receive sensor data, manage device enrollment, and
-eventually control irrigation with independent safety limits.
+The goal is an open gateway that receives sensor and valve telemetry, manages
+device enrollment, and controls irrigation with independent local safety
+limits. The target system has no internet-service or vendor-app dependency.
 
 ## Current status
 
-This project now has a working receive-only SDR prototype. Valve control and
-fully local pairing remain protocol-research work.
+This project has a working receive-only SDR deployment. The RF frame format,
+all four installed soil-sensor endpoints, soil moisture, valve duration, and
+last-session water usage are confirmed. Valve transmission and local pairing
+remain protocol work.
 
 Working now:
 
-- decoding captured HCS026FRF soil-moisture status payloads,
-- decoding captured HTV145FRF valve status payloads,
+- decoding live and captured HCS026FRF soil-moisture RF frames,
+- decoding HTV145FRF valve command, state, duration, and usage fields,
 - receiving live RainPoint 2-FSK packets through `rtl_433`,
 - reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
   API,
@@ -25,21 +27,19 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
-- reporting replayed soil, battery, signal, usage, and valve state to Home
-  Assistant, and
+- reporting local soil, signal, usage, and valve state to Home Assistant, and
 - rejecting every control request at the gateway boundary.
 
 Not working yet:
 
-- identifying every installed sensor endpoint,
-- operating without the stock hub's cloud connection,
+- decoding the HCS026FRF battery-low flag,
+- guaranteeing reliable reception at the final antenna location,
 - locally pairing or forgetting physical devices, and
 - locally opening or closing the physical valve.
 
-The packaged gateway now reports one confirmed physical soil sensor directly
-from local RF and retains unknown RainPoint frames for discovery. The receive
-path does not depend on the stock hub or RainPoint cloud, but valve control and
-pairing are not yet locally implemented.
+The packaged gateway reports all four installed soil endpoints from local RF
+and retains unknown RainPoint frames for discovery. The receive path is fully
+local; valve control and pairing are not yet implemented.
 
 ## Architecture
 
@@ -48,11 +48,10 @@ HCS026 sensors / HTV145 valve
              |
           433 MHz
              |
-   interchangeable transport
+      local radio transport
    - replay fixtures (implemented)
    - receive-only SDR (implemented in the HA app)
-   - open CC1101 gateway
-   - original-hub emulator
+   - ESP32 + CC1101 gateway (planned)
              |
          rainpointd
    protocol + registry + safety
@@ -133,11 +132,11 @@ still required.
 
 ## Development
 
-Decode a captured frame:
+Decode a captured RF recording:
 
 ```sh
-python3 rainpointd_addon/rainpoint_protocol.py HCS026FRF \
-  '10#E1BA00DC01883AFF0F6C9CFC19'
+python3 tools/decode_rainpoint_iq.py \
+  --sample-rate 2000000 --frequency 433700000 capture.cu8
 ```
 
 Run the regression and API tests:
@@ -157,16 +156,20 @@ Prepare or run a bounded receive-only RF capture:
 ./tools/capture_rainpoint_rf.sh --duration 15m
 ```
 
-See [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md) for the labeled capture sequence.
+See [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md) for the receive and validation
+procedure.
 
 ## Project documents
 
-- [PROTOCOL.md](PROTOCOL.md): decoded fields and current evidence
-- [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md): end-to-end design
+- [PROTOCOL.md](PROTOCOL.md): primary 433 MHz protocol specification
+- [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md): direct local bridge
+  and safety architecture
 - [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md): replay gateway and HA setup
-- [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md): receive-only RF capture procedure
-- [HUB_EMULATION_PLAN.md](HUB_EMULATION_PLAN.md): retaining the original hub
-- [PASSIVE_MONITORING.md](PASSIVE_MONITORING.md): passive observations
+- [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md): RF capture and validation procedure
+- [research/RF_CAPTURE_NOTES.md](research/RF_CAPTURE_NOTES.md): concise dated
+  evidence behind the protocol conclusions
+- [research/cloud/README.md](research/cloud/README.md): archived cloud-side
+  observations, isolated from the local architecture
 
 ## Safety
 

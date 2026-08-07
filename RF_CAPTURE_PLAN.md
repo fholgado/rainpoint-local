@@ -1,20 +1,12 @@
-# RainPoint 433/434 MHz capture plan
+# RainPoint RF capture and validation guide
 
 ## Minimum hardware
 
-For receive-only discovery:
+For receive-only discovery and validation:
 
-- one RTL-SDR receiver covering 433.7 MHz
+- one RTL-SDR receiver covering the 433/434 MHz band
 - one 433 MHz antenna with the correct connector
-- a Mac or Linux computer near the RainPoint hub and valve
-
-Suitable current receiver families include:
-
-- RTL-SDR Blog V3
-- Nooelec NESDR SMArt v5
-
-The RTL-SDR Blog V4 also works technically, but its manufacturer announced it
-end-of-line in May 2026. There is no reason to seek one out for this project.
+- a Mac, Linux computer, or Home Assistant host near the devices
 
 For later transmit testing:
 
@@ -32,8 +24,8 @@ RTL-SDR plus CC1101 approach.
 
 ## Software
 
-`rtl_433` 25.12 is installed on the capture Mac. The receiver is not currently
-attached.
+The deployed Home Assistant app and standalone development commands both use
+`rtl_433`.
 
 The repository includes a bounded capture helper that records raw I/Q signals,
 decoded JSON, analyzer logs, session metadata, and an action timeline in one
@@ -79,7 +71,7 @@ Keep the raw captures even when a decoded row looks correct. We need IQ/pulse
 data to locate the address and checksum and to distinguish hub commands from
 valve acknowledgements.
 
-## Capture sequence
+## Controlled capture sequence
 
 Place the receiver close enough to see both hub and accessories without
 overloading the front end.
@@ -96,7 +88,7 @@ For every action, record local time to the second. Do not operate any unrelated
 433 MHz remote during the experiment.
 
 After every capture, query the Home Assistant recorder for all relevant valve,
-script, and HomGar sensor entities over the capture window. Treat recorder
+script, and reference sensor entities over the capture window. Treat recorder
 timestamps as the authoritative action/state timeline even when the operator
 also supplies manual notes. Always include other irrigation systems in the
 query so unrelated Zigbee or Wi-Fi valve actions are not attributed to
@@ -130,22 +122,22 @@ Transmit path:
 
 ## Battery-status experiment
 
-The HomGar payload does not expose a granular battery percentage. Its known
-status values map to either battery OK (`100%`) or battery low (`10%`), so the
-RF experiment should look for a flag or small enum rather than a voltage or
-percentage field. Hub RSSI is receiver-measured and is not expected to appear
-inside the transmitted packet.
+The stock system exposes only battery OK (`100%`) or battery low (`10%`), so
+the RF experiment should look for a flag or small enum rather than a voltage or
+percentage field. Receiver-measured RSSI is not expected to appear inside the
+transmitted packet.
 
-1. Pair a test HCS026 sensor and confirm that HomGar reports battery `100%`.
+1. Enroll a test HCS026 sensor and confirm the reference entity reports battery
+   `100%`.
 2. Record several button-triggered and periodic full-report/heartbeat pairs at
    normal battery voltage.
 3. Verify the sensor's nominal voltage and polarity. Using a current-limited
    bench supply, reduce voltage in small steps without exceeding the nominal
    voltage; alternatively use measured, known-low batteries.
 4. At each voltage, trigger a report and retain the raw RF frames plus the HA
-   cloud battery state and timestamp.
-5. Continue only until HomGar changes from `100%` to `10%`, then restore normal
-   power promptly.
+   independently observed battery state and timestamp.
+5. Continue only until the reference entity changes from `100%` to `10%`, then
+   restore normal power promptly.
 6. Diff both packet types bit-for-bit. Prioritize the heartbeat status sequence
    currently observed as `... 41 81 00 01 00 ...`, while accounting for the
    `41`/`c1` retransmission-bit change.
