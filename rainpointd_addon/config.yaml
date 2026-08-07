@@ -1,7 +1,7 @@
 name: RainPoint Local Gateway
-version: 0.3.6
+version: 0.4.0
 slug: rainpointd
-description: Read-only local RainPoint gateway with replay and RTL-SDR support
+description: Read-only local RainPoint gateway for RTL-SDR or ESP32 receivers
 url: https://github.com/fholgado/rainpoint-local
 arch:
   - aarch64
@@ -24,10 +24,14 @@ options:
   replay_interval: 5.0
   frequency: 433700000
   sample_rate: 2000000
+  serial_device: /dev/ttyUSB0
+  serial_baud: 115200
   research_capture_minutes: 0
 schema:
-  transport: "list(replay|rtl433)"
+  transport: "list(replay|rtl433|esp32_serial)"
   replay_interval: "float(0.5,3600)"
   frequency: "int(433000000,435000000)"
   sample_rate: "int(250000,2400000)"
+  serial_device: str
+  serial_baud: "int(9600,921600)"
   research_capture_minutes: "int(0,240)"

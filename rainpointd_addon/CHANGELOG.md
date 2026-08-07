@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Add a receive-only USB serial transport for the ESP32/CC1101 bridge.
+- Reuse the established RF decoder and device publisher so ESP32 and RTL-SDR
+  frames create identical local state.
+- Validate frame length and sync locally before accepting bridge input.
+
 ## 0.3.6
 
 - Retain the provisional HCS026 heartbeat battery status for controlled

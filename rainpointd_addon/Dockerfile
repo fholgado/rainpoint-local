@@ -10,7 +10,7 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache python3 rtl_433
+RUN apk add --no-cache python3 py3-pyserial rtl_433
 
 WORKDIR /opt/rainpoint
 

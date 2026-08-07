@@ -22,7 +22,7 @@ HCS026FRF sensors          HTV145FRF valve
                      |
              local radio backend
               - RTL-SDR receive-only
-              - ESP32 + CC1101 RX/TX
+              - ESP32 + dual CC1101 RX/TX
                      |
                  rainpointd
        protocol + registry + safety
@@ -65,7 +65,7 @@ The gateway owns state that must survive an HA restart:
 - append-only event and audit records, and
 - the versioned local API.
 
-### ESP32/CC1101 radio bridge
+### ESP32/dual-CC1101 radio bridge
 
 The permanent bridge will:
 
@@ -76,13 +76,15 @@ The permanent bridge will:
 - support local firmware updates, and
 - retain no watering schedule that can outlive its watchdog.
 
-The first permanent build should use a socketed ESP32 development board and a
-433 MHz CC1101 module on a small carrier PCB. A custom bare-chip RF board is
-unnecessary until the protocol and deployment have been proven.
+The first permanent build should use a socketed ESP32 development board and
+two 433 MHz CC1101 modules on a small carrier PCB. The modules share SPI while
+remaining fixed to the two observed RainPoint channels. A custom bare-chip RF
+board is unnecessary until the protocol and deployment have been proven.
 
-The first receive-only firmware scaffold now lives in
-`firmware/rainpoint_bridge`. It implements the measured dual-channel radio
-profile, frame reconstruction, integrity diagnostics, and serial JSON output.
+The receive-only firmware scaffold now lives in `firmware/rainpoint_bridge`.
+It implements a fixed radio per observed channel, frame reconstruction,
+integrity diagnostics, and serial JSON output. The `rainpointd` serial
+transport consumes that same output without changing Home Assistant entities.
 It deliberately contains no transmit strobe or command interface.
 
 ### Home Assistant integration (`rainpoint_local`)
@@ -102,7 +104,7 @@ The integration provides:
 |---|---|---|---|
 | Replay fixtures | Synthetic | Rejected | Deterministic development and tests |
 | RTL-SDR / `rtl_433` | Live local | No | Current safe receive-only deployment |
-| ESP32 + CC1101 | Live local | Bounded, after validation | Target production bridge |
+| ESP32 + dual CC1101 | Live local | Bounded, after validation | Target production bridge |
 
 The protocol, registry, API, and HA entity model remain stable while the radio
 backend changes.

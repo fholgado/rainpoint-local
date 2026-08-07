@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
+from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
 from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
@@ -404,6 +405,50 @@ class RainPointRFTest(unittest.TestCase):
                 Gateway(transport="rtl433"),
                 signal_capture_seconds=60,
             )
+
+    def test_esp32_serial_transport_publishes_the_same_device_state(self) -> None:
+        gateway = Gateway(transport="esp32_serial")
+        transport = ESP32SerialTransport(gateway, device="unused")
+        transport.seed()
+        frame = (
+            "79f4882f28b42d008f9ce580240784830701800544200000"
+            "000000000000000000000000308a"
+        )
+        message = {
+            "type": "rainpoint_rf",
+            "radio": "upper",
+            "channel": 11,
+            "rssi_dbm": -76.5,
+            "lqi": 91,
+            "frame": frame,
+        }
+
+        self.assertEqual(1, transport.consume_line(json.dumps(message)))
+        right_bed = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "soil-right-bed"
+        )
+        self.assertEqual(64, right_bed["state"]["soil_moisture_percent"])
+        self.assertEqual(-76.5, right_bed["state"]["rf_rssi_db"])
+
+    def test_esp32_serial_transport_rejects_non_frame_diagnostics(self) -> None:
+        transport = ESP32SerialTransport(
+            Gateway(transport="esp32_serial"), device="unused"
+        )
+        self.assertEqual(0, transport.consume_line(b"not json\n"))
+        self.assertEqual(
+            0,
+            transport.consume_line(
+                json.dumps({"type": "radio_ready", "channel": 0})
+            ),
+        )
+        self.assertEqual(
+            0,
+            transport.consume_line(
+                json.dumps({"type": "rainpoint_rf", "frame": "00" * 38})
+            ),
+        )
 
 
 if __name__ == "__main__":

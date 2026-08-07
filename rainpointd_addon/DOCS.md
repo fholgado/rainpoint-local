@@ -5,9 +5,9 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.3.6 supports captured replay and receive-only USB RTL-SDR modes. It
-does not connect to the RainPoint cloud, and every HTTP POST request is
-rejected.
+Version 0.4.0 supports captured replay, receive-only USB RTL-SDR, and
+receive-only ESP32/CC1101 serial modes. It does not connect to the RainPoint
+cloud, and every HTTP POST request is rejected.
 
 Installing this app does not make the physical irrigation system work offline.
 Replay remains the default after upgrade. Select `rtl433` only after attaching
@@ -23,10 +23,17 @@ Number of seconds between fixture observations. The default is 5 seconds.
 
 - `replay`: captured development fixtures; does not use USB hardware.
 - `rtl433`: live receive-only RainPoint packets from the USB RTL-SDR.
+- `esp32_serial`: normalized RainPoint frames from the receive-only ESP32
+  bridge connected by USB.
 
 The live defaults are 433,700,000 Hz center frequency and 2,000,000 samples per
 second. This window covers both the lower data-rich sensor channel near
 433.08 MHz and the previously observed RainPoint traffic above 434 MHz.
+
+For `esp32_serial`, set `serial_device` to the ESP32 USB serial path and leave
+`serial_baud` at `115200`. The stable `/dev/serial/by-id/...` path is preferable
+when the host exposes one; `/dev/ttyUSB0` is the portable default. The gateway
+revalidates every frame instead of trusting the bridge's diagnostic fields.
 
 ### Broad capture duration
 

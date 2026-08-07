@@ -82,5 +82,8 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
    records the same packets.
 3. Tune deviation, RX bandwidth, AFC, AGC, and frequency calibration from
    measured packet success and CC1101 frequency-offset estimates.
-4. Add a local network transport into `rainpointd` without adding control.
-5. Design transmission as a separate safety-reviewed milestone.
+4. Validate the implemented receive-only USB serial transport into
+   `rainpointd`.
+5. Add authenticated local-network transport only if USB deployment proves
+   impractical.
+6. Design transmission as a separate safety-reviewed milestone.

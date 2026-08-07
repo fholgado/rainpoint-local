@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from .esp32 import ESP32SerialTransport
 from .gateway import Gateway
 from .http import create_server
 from .replay import ReplayTransport
@@ -15,7 +16,9 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument(
-        "--transport", choices=("replay", "rtl433"), default="replay"
+        "--transport",
+        choices=("replay", "rtl433", "esp32_serial"),
+        default="replay",
     )
     parser.add_argument(
         "--interval",
@@ -27,6 +30,8 @@ def main() -> int:
     parser.add_argument("--sample-rate", type=int, default=2_000_000)
     parser.add_argument("--signal-capture-seconds", type=int, default=0)
     parser.add_argument("--signal-directory")
+    parser.add_argument("--serial-device", default="/dev/ttyUSB0")
+    parser.add_argument("--serial-baud", type=int, default=115_200)
     parser.add_argument(
         "--storage",
         help="SQLite path for persistent events and endpoint inventory",
@@ -45,6 +50,12 @@ def main() -> int:
             sample_rate=args.sample_rate,
             signal_capture_seconds=args.signal_capture_seconds,
             signal_directory=args.signal_directory,
+        )
+    elif args.transport == "esp32_serial":
+        transport = ESP32SerialTransport(
+            gateway,
+            device=args.serial_device,
+            baud=args.serial_baud,
         )
     else:
         transport = ReplayTransport(gateway, interval=args.interval)

@@ -5,6 +5,8 @@ replay_interval="$(bashio::config 'replay_interval')"
 transport="$(bashio::config 'transport')"
 frequency="$(bashio::config 'frequency')"
 sample_rate="$(bashio::config 'sample_rate')"
+serial_device="$(bashio::config 'serial_device')"
+serial_baud="$(bashio::config 'serial_baud')"
 research_capture_minutes="$(bashio::config 'research_capture_minutes')"
 if [[ "${research_capture_minutes}" == "null" ]]; then
   research_capture_minutes=0
@@ -49,6 +51,17 @@ case "${transport}" in
       --frequency "${frequency}" \
       --sample-rate "${sample_rate}" \
       "${capture_args[@]}"
+    ;;
+  esp32_serial)
+    bashio::log.info \
+      "Starting receive-only ESP32 bridge at ${serial_device} / ${serial_baud} baud"
+    exec python3 -m rainpointd \
+      --host 0.0.0.0 \
+      --port 8787 \
+      --transport esp32_serial \
+      --storage /data/rainpointd.sqlite3 \
+      --serial-device "${serial_device}" \
+      --serial-baud "${serial_baud}"
     ;;
   *)
     bashio::exit.nok "Unsupported transport: ${transport}"

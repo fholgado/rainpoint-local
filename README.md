@@ -27,8 +27,9 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
-- building a receive-only ESP32/CC1101 firmware scaffold with the measured
-  RainPoint radio profile, serial frame diagnostics, and no transmit path,
+- building a receive-only dual-CC1101 firmware scaffold with the measured
+  RainPoint radio profiles and serial frame diagnostics,
+- accepting those serial frames through a receive-only `rainpointd` transport,
 - reporting local soil, signal, usage, and valve state to Home Assistant, and
 - rejecting every control request at the gateway boundary.
 
