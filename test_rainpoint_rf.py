@@ -27,6 +27,11 @@ from rainpointd.valve_protocol import (  # noqa: E402
     open_candidates,
 )
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
+from tools.compare_rainpoint_iq import compare_waveforms  # noqa: E402
+from tools.generate_rainpoint_iq import (  # noqa: E402
+    command_symbols,
+    generate_command,
+)
 
 
 class RainPointRFTest(unittest.TestCase):
@@ -81,6 +86,70 @@ class RainPointRFTest(unittest.TestCase):
         self.assertAlmostEqual(tones[0], measured["low_tone_hz"], delta=50)
         self.assertAlmostEqual(tones[1], measured["high_tone_hz"], delta=50)
         self.assertAlmostEqual(80_000, measured["tone_separation_hz"], delta=50)
+
+    def test_generates_measured_command_waveform_offline(self) -> None:
+        frame = build_open_frame(0x97, 60, 0xC713)
+        symbols = command_symbols(frame)
+        self.assertEqual(1_504, len(symbols))
+        self.assertEqual([1, 0, 1, 0], symbols[:4])
+        self.assertEqual(
+            [int(bit) for bit in f"{frame[0]:08b}"], symbols[1_200:1_208]
+        )
+
+        data, metadata = generate_command(frame)
+        self.assertEqual(340_800, len(data))
+        self.assertEqual(60, metadata["wake_duration_ms"])
+        self.assertEqual(15.2, metadata["frame_duration_ms"])
+        self.assertEqual(80_000, metadata["deviation_hz"] * 2)
+        self.assertEqual(
+            "offline file only; no transmit path", metadata["safety"]
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(data)
+            capture.flush()
+            measured = characterize(
+                Path(capture.name),
+                sample_rate=metadata["sample_rate_sps"],
+                center_frequency=metadata["capture_center_hz"],
+            )
+        self.assertAlmostEqual(
+            metadata["channel_center_hz"],
+            measured["channel_center_hz"],
+            delta=50,
+        )
+        self.assertAlmostEqual(80_000, measured["tone_separation_hz"], delta=50)
+
+    def test_offline_waveform_rejects_invalid_frame(self) -> None:
+        with self.assertRaisesRegex(ValueError, "exactly 38 bytes"):
+            command_symbols(b"short")
+        with self.assertRaisesRegex(ValueError, "must begin with sync"):
+            command_symbols(bytes(38))
+
+    def test_compares_offline_waveform_spectral_profile(self) -> None:
+        frame = build_close_frame(0x97, 0x4F03)
+        reference_data, _ = generate_command(frame)
+        candidate_data, _ = generate_command(
+            frame,
+            channel_center_hz=434_242_000,
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            reference = Path(temporary_directory) / "reference.cu8"
+            candidate = Path(temporary_directory) / "candidate.cu8"
+            reference.write_bytes(reference_data)
+            candidate.write_bytes(candidate_data)
+            result = compare_waveforms(reference, candidate)
+        self.assertTrue(result["spectral_match"])
+        self.assertAlmostEqual(
+            2_000,
+            result["comparisons"]["channel_center_hz"]["delta_hz"],
+            delta=100,
+        )
+        self.assertAlmostEqual(
+            0,
+            result["comparisons"]["tone_separation_hz"]["delta_hz"],
+            delta=100,
+        )
 
     def test_normalizes_short_preamble_frame(self) -> None:
         row = {

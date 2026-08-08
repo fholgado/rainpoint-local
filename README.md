@@ -181,6 +181,23 @@ vectors and generate both unresolved trailer candidates. They are deliberately
 not connected to the HTTP API, ESP32 serial transport, or any radio transmit
 operation.
 
+Generate a matching command waveform for offline inspection with the same CU8
+format used by the receive tools:
+
+```sh
+python3 tools/generate_rainpoint_iq.py /tmp/rainpoint-command.cu8 \
+  --frame 79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824
+python3 tools/characterize_rainpoint_iq.py /tmp/rainpoint-command.cu8
+python3 tools/compare_rainpoint_iq.py captured-reference.cu8 \
+  /tmp/rainpoint-command.cu8
+```
+
+The generator reproduces the measured 60 ms alternating wake sequence,
+20 ksymbol/s timing, and +/-40 kHz 2-FSK deviation. It only writes a file and
+contains no socket, serial, GPIO, or radio transmission path.
+The comparator checks channel center, tone separation, and occupied bandwidth
+without requiring the two captures to have matching sample alignment.
+
 The target bridge uses one ESP32 and one half-duplex CC1101 transceiver. The
 current SDR/Pi remains the independent receive reference during development;
 the firmware's optional second CC1101 build is diagnostic only.
