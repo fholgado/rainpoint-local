@@ -52,7 +52,11 @@ constexpr std::uint8_t kRxFifo = 0x3f;
 constexpr std::uint8_t kPartNumber = 0x30;
 constexpr std::uint8_t kVersion = 0x31;
 constexpr std::uint8_t kFrequencyEstimate = 0x32;
+constexpr std::uint8_t kMainState = 0x35;
 constexpr std::uint8_t kRxBytes = 0x3b;
+
+constexpr std::uint8_t kMainStateIdle = 0x01;
+constexpr std::uint8_t kMainStateRx = 0x0d;
 
 std::int16_t decodeRssi(std::uint8_t raw) {
     const auto signedRaw = raw >= 128
@@ -266,24 +270,52 @@ bool Cc1101::begin(std::uint8_t initialChannel) {
     return setChannel(initialChannel);
 }
 
+bool Cc1101::waitForMainState(
+    std::uint8_t expectedState,
+    std::uint32_t timeoutMicros
+) {
+    const auto started = micros();
+    while ((readStatus(kMainState) & 0x1f) != expectedState) {
+        if (micros() - started >= timeoutMicros) {
+            return false;
+        }
+        yield();
+    }
+    return true;
+}
+
+bool Cc1101::enterIdle() {
+    if (strobe(kIdle) == 0xff) {
+        return false;
+    }
+    return waitForMainState(kMainStateIdle);
+}
+
+bool Cc1101::enterReceive() {
+    if (strobe(kEnterRx) == 0xff) {
+        return false;
+    }
+    return waitForMainState(kMainStateRx);
+}
+
 bool Cc1101::setChannel(std::uint8_t channel) {
     if (channel != 0 && channel != 11) {
         return false;
     }
-    strobe(kIdle);
+    if (!enterIdle()) {
+        return false;
+    }
     strobe(kFlushRx);
     writeRegister(kChannelNumber, channel);
     channel_ = channel;
-    strobe(kEnterRx);
-    delay(1);
-    return true;
+    return enterReceive();
 }
 
 void Cc1101::recoverRx() {
     ++recoveryCount_;
-    strobe(kIdle);
+    enterIdle();
     strobe(kFlushRx);
-    strobe(kEnterRx);
+    enterReceive();
 }
 
 bool Cc1101::poll(RadioPacket& packet) {

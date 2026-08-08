@@ -1,17 +1,19 @@
 # RainPoint ESP32/CC1101 bridge firmware
 
 This is the receive-only firmware scaffold for the ELEGOO ESP-WROOM-32 USB-C
-development board and one or two **433 MHz** CC1101 modules. It contains no
-transmit API, no valve commands, and no `STX` path.
+development board and one **433 MHz** CC1101 transceiver. A second module is
+supported only as an optional dual-channel receive diagnostic. The firmware
+contains no transmit API, no valve commands, and no `STX` path.
 
 ## Wiring
 
 Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
 
-The two radios share SPI clock and data. Each must have its own chip-select;
-never connect the two CSN pins together.
+The production wiring uses only the primary radio. If the optional diagnostic
+radio is fitted, the modules share SPI clock and data but must have independent
+chip-select pins; never connect the two CSN pins together.
 
-| Signal | Lower radio | Upper radio | ESP32 |
+| Signal | Primary radio | Optional diagnostic radio | ESP32 |
 |---|---|---|---:|
 | VCC | VCC | VCC | 3V3 |
 | GND | GND | GND | GND |
@@ -25,10 +27,10 @@ never connect the two CSN pins together.
 | GDO2 | GDO2 | — | GPIO25, optional/reserved |
 | GDO2 | — | GDO2 | GPIO32, optional/reserved |
 
-Keep each module close to the ESP32, add a 100 nF ceramic capacitor directly
-across each CC1101 VCC/GND pair, and connect the correct 433 MHz antenna before
-testing. Each module should initially use its own antenna; combining both RF
-ports onto one antenna requires a proper RF combiner or switch.
+Keep the module close to the ESP32, add a 100 nF ceramic capacitor directly
+across its VCC/GND pair, and connect the correct 433 MHz antenna before testing.
+The optional diagnostic module needs its own decoupling and antenna; combining
+two RF ports onto one antenna requires a proper RF combiner or switch.
 
 ## Current behavior
 
@@ -53,11 +55,19 @@ offset uses the CC1101 `FREQEST` status register and a 26 MHz crystal. These
 diagnostics follow the register definitions in the
 [TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
-The dual-radio build fixes the lower radio to channel 0 and the upper radio to
-channel 11, receiving both RainPoint channels continuously. The single-radio
-build alternates channels every 500 ms. In that build, send `0` over serial to
-lock the lower channel, `1` to lock the upper channel, or `s` to resume
-scanning.
+The production single-radio build alternates channels every 500 ms. Send `0`
+over serial to lock channel 0, `1` to lock channel 11, or `s` to resume
+scanning. The optional dual-radio diagnostic build fixes the primary radio to
+channel 0 and the second radio to channel 11 so both can be evaluated
+continuously against the existing RTL-SDR.
+
+The driver now exposes explicit IDLE and RX transitions and validates complete
+frames before extracting the 36 bytes that follow the CC1101 hardware sync.
+These are prerequisites for a future half-duplex TX path, but they cannot
+transmit. RainPoint command traffic uses an approximately 60 ms alternating
+wake prefix, longer than the CC1101 packet engine can generate normally. A
+future implementation must reproduce that wake sequence using a validated
+FIFO/continuous or asynchronous method before an `STX` path is permitted.
 
 ## Build and flash
 
@@ -66,17 +76,19 @@ Install PlatformIO, connect the board by USB-C, then run:
 ```sh
 cd firmware/rainpoint_bridge
 pio run
-pio run --environment esp32dev_dual --target upload
+pio run --environment esp32dev_single --target upload
 pio device monitor
 ```
 
-Use `esp32dev_single` instead when only one CC1101 is connected. A normal
-`pio run` compiles both configurations so shared code cannot silently break
-one of them.
+The default and production environment is `esp32dev_single`. Use
+`esp32dev_dual` only when the optional second receive module is connected:
 
-GitHub CI also compiles both configurations from a clean environment on every
-push and pull request, alongside the Python, protocol, analysis, and safety
-tests.
+```sh
+pio run --environment esp32dev_dual --target upload
+```
+
+GitHub CI explicitly compiles both configurations from a clean environment on
+every push and pull request so the diagnostic build cannot silently regress.
 
 The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and
@@ -94,12 +106,14 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 ## Next firmware increments
 
 1. Flash on the physical ESP32.
-2. Verify both CC1101 identities and receive both channels while the RTL-SDR
-   records the same packets.
+2. Verify the primary CC1101 on both channels while the existing RTL-SDR
+   records the same packets; use the optional second radio only for comparative
+   diagnostics.
 3. Tune deviation, RX bandwidth, AFC, AGC, and frequency calibration from
    measured packet success and CC1101 frequency-offset estimates.
 4. Validate the implemented receive-only USB serial transport into
    `rainpointd`.
 5. Add authenticated local-network transport only if USB deployment proves
    impractical.
-6. Design transmission as a separate safety-reviewed milestone.
+6. Reproduce the long command wake prefix without exposing a command surface.
+7. Design transmission as a separate safety-reviewed milestone.

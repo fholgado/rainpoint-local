@@ -7,20 +7,28 @@
 #include "cc1101.h"
 #include "rainpoint_protocol.h"
 
+#if RAINPOINT_RADIO_COUNT != 1 && RAINPOINT_RADIO_COUNT != 2
+#error "RAINPOINT_RADIO_COUNT must be 1 or 2"
+#endif
+
 namespace {
 
 constexpr int kSpiSckPin = 18;
 constexpr int kSpiMisoPin = 19;
 constexpr int kSpiMosiPin = 23;
-constexpr int kLowerChipSelectPin = 27;
-constexpr int kUpperChipSelectPin = 14;
+constexpr int kPrimaryChipSelectPin = 27;
+constexpr int kDiagnosticChipSelectPin = 14;
 constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 
 SPIClass radioSpi(VSPI);
-rainpoint::Cc1101 lowerRadio(radioSpi, kLowerChipSelectPin, kSpiMisoPin);
+rainpoint::Cc1101 primaryRadio(radioSpi, kPrimaryChipSelectPin, kSpiMisoPin);
 #if RAINPOINT_RADIO_COUNT == 2
-rainpoint::Cc1101 upperRadio(radioSpi, kUpperChipSelectPin, kSpiMisoPin);
+rainpoint::Cc1101 diagnosticRadio(
+    radioSpi,
+    kDiagnosticChipSelectPin,
+    kSpiMisoPin
+);
 #endif
 std::uint32_t lastHealthReport = 0;
 
@@ -83,16 +91,16 @@ void printRadioHealth(const char* name, const rainpoint::Cc1101& radio) {
 
 void reportHealth() {
 #if RAINPOINT_RADIO_COUNT == 1
-    printRadioHealth("scan", lowerRadio);
+    printRadioHealth("primary", primaryRadio);
 #else
-    printRadioHealth("lower", lowerRadio);
-    printRadioHealth("upper", upperRadio);
+    printRadioHealth("primary", primaryRadio);
+    printRadioHealth("diagnostic", diagnosticRadio);
 #endif
 }
 
 #if RAINPOINT_RADIO_COUNT == 1
 void selectChannel(std::uint8_t channel) {
-    if (lowerRadio.setChannel(channel)) {
+    if (primaryRadio.setChannel(channel)) {
         lastChannelChange = millis();
         Serial.printf("{\"type\":\"radio_channel\",\"channel\":%u}\n", channel);
     }
@@ -161,17 +169,17 @@ void setup() {
     );
 
     // Keep every device deselected before the shared SPI bus is started.
-    pinMode(kLowerChipSelectPin, OUTPUT);
-    digitalWrite(kLowerChipSelectPin, HIGH);
+    pinMode(kPrimaryChipSelectPin, OUTPUT);
+    digitalWrite(kPrimaryChipSelectPin, HIGH);
 #if RAINPOINT_RADIO_COUNT == 2
-    pinMode(kUpperChipSelectPin, OUTPUT);
-    digitalWrite(kUpperChipSelectPin, HIGH);
+    pinMode(kDiagnosticChipSelectPin, OUTPUT);
+    digitalWrite(kDiagnosticChipSelectPin, HIGH);
 #endif
     radioSpi.begin(kSpiSckPin, kSpiMisoPin, kSpiMosiPin);
 
-    bool ready = beginRadio("lower", lowerRadio, 0);
+    bool ready = beginRadio("primary", primaryRadio, 0);
 #if RAINPOINT_RADIO_COUNT == 2
-    ready = beginRadio("upper", upperRadio, 11) && ready;
+    ready = beginRadio("diagnostic", diagnosticRadio, 11) && ready;
 #endif
     if (!ready) {
         Serial.println(
@@ -192,14 +200,14 @@ void setup() {
 void loop() {
 #if RAINPOINT_RADIO_COUNT == 1
     handleSerialCommand();
-    pollRadio("scan", lowerRadio);
+    pollRadio("primary", primaryRadio);
 
     if (scanChannels && millis() - lastChannelChange >= kScanDwellMs) {
-        selectChannel(lowerRadio.channel() == 0 ? 11 : 0);
+        selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
     }
 #else
-    pollRadio("lower", lowerRadio);
-    pollRadio("upper", upperRadio);
+    pollRadio("primary", primaryRadio);
+    pollRadio("diagnostic", diagnosticRadio);
 #endif
     if (millis() - lastHealthReport >= kHealthIntervalMs) {
         reportHealth();

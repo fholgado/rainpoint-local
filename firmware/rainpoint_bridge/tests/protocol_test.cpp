@@ -30,13 +30,16 @@ int main() {
     assert(rainpoint::hasOrdinaryTrailer(heartbeat));
 
     std::array<std::uint8_t, rainpoint::kRadioPayloadBytes> payload{};
-    for (std::size_t index = 0; index < payload.size(); ++index) {
-        payload[index] = heartbeat[index + rainpoint::kHardwareSyncBytes];
-    }
+    assert(rainpoint::prepareRadioPayload(heartbeat, payload));
     assert(rainpoint::reconstructFrame(payload) == heartbeat);
 
     auto corrupt = heartbeat;
     corrupt[20] ^= 0x01;
     assert(!rainpoint::hasOrdinaryTrailer(corrupt));
+    assert(!rainpoint::prepareRadioPayload(corrupt, payload));
+
+    auto wrongSync = heartbeat;
+    wrongSync[0] ^= 0x01;
+    assert(!rainpoint::prepareRadioPayload(wrongSync, payload));
     return 0;
 }

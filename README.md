@@ -27,8 +27,9 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
-- building a receive-only dual-CC1101 firmware scaffold with the measured
-  RainPoint radio profiles and serial frame diagnostics,
+- building a receive-only single-CC1101 production firmware scaffold, with an
+  optional dual-radio diagnostic build, using the measured RainPoint radio
+  profiles and serial frame diagnostics,
 - accepting those serial frames through a receive-only `rainpointd` transport,
 - simulating fail-closed startup, bounded runs, acknowledgement timeouts,
   client loss, watchdog expiry, close retries, and persistent fault retries
@@ -177,6 +178,10 @@ Pure offline HTV145 open/close frame builders now reproduce captured command
 vectors and generate both unresolved trailer candidates. They are deliberately
 not connected to the HTTP API, ESP32 serial transport, or any radio transmit
 operation.
+
+The target bridge uses one ESP32 and one half-duplex CC1101 transceiver. The
+current SDR/Pi remains the independent receive reference during development;
+the firmware's optional second CC1101 build is diagnostic only.
 
 The HTTP tests bind only an ephemeral loopback port. They do not contact the
 hub, cloud services, or RF hardware.

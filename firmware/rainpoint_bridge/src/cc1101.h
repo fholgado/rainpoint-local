@@ -22,6 +22,8 @@ public:
     Cc1101(SPIClass& spi, int chipSelectPin, int misoPin);
 
     bool begin(std::uint8_t initialChannel = 0);
+    bool enterIdle();
+    bool enterReceive();
     bool setChannel(std::uint8_t channel);
     bool poll(RadioPacket& packet);
     std::uint8_t channel() const;
@@ -39,6 +41,10 @@ private:
     bool waitReady(std::uint32_t timeoutMicros = 2'000);
     void configureRainPoint();
     bool verifyConfiguration();
+    bool waitForMainState(
+        std::uint8_t expectedState,
+        std::uint32_t timeoutMicros = 10'000
+    );
     void recoverRx();
     std::uint8_t strobe(std::uint8_t command);
     void writeRegister(std::uint8_t address, std::uint8_t value);

@@ -40,4 +40,7 @@ jobs:
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
       - name: Build single- and dual-radio firmware
-        run: pio run --project-dir firmware/rainpoint_bridge
+        run: >-
+          pio run --project-dir firmware/rainpoint_bridge
+          --environment esp32dev_single
+          --environment esp32dev_dual

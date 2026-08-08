@@ -66,4 +66,17 @@ inline std::array<std::uint8_t, kFrameBytes> reconstructFrame(
     return frame;
 }
 
+inline bool prepareRadioPayload(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    std::array<std::uint8_t, kRadioPayloadBytes>& payload
+) {
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
+        return false;
+    }
+    for (std::size_t index = 0; index < payload.size(); ++index) {
+        payload[index] = frame[index + kHardwareSyncBytes];
+    }
+    return true;
+}
+
 }  // namespace rainpoint
