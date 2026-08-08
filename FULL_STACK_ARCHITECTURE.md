@@ -209,6 +209,23 @@ The gateway must guarantee:
 Scheduling may live in Home Assistant, but this contract must continue to work
 while Home Assistant is stopped.
 
+The hardware-independent safety state machine is implemented in
+`rainpointd_addon/rainpointd/safety.py` and exercised entirely with symbolic
+actions. It currently proves the intended behavior without being connected to
+HTTP, serial, frame construction, or radio hardware:
+
+- startup sends close and will not accept open until idle is observed,
+- the hard run deadline is armed before an open action is emitted,
+- a missing open acknowledgement transitions to close instead of retrying
+  the non-idempotent open,
+- client loss, unexpected watering, and watchdog expiry initiate close,
+- close retries every 1.5 seconds before entering a reported fault, and
+- fault state continues slower close attempts until idle is observed.
+
+This simulation is a prerequisite, not authorization to transmit. Integrating
+its symbolic actions with a radio transport remains a separately reviewed
+milestone after physical receive and bounded acceptance testing.
+
 ## Definition of independence
 
 The replacement is complete when a clean installation can, without internet

@@ -30,6 +30,9 @@ Working now:
 - building a receive-only dual-CC1101 firmware scaffold with the measured
   RainPoint radio profiles and serial frame diagnostics,
 - accepting those serial frames through a receive-only `rainpointd` transport,
+- simulating fail-closed startup, bounded runs, acknowledgement timeouts,
+  client loss, watchdog expiry, close retries, and persistent fault retries
+  without connecting those actions to a transmitter,
 - reporting local soil, signal, usage, and valve state to Home Assistant, and
 - rejecting every control request at the gateway boundary.
 
@@ -153,7 +156,7 @@ Run the regression and API tests:
 ```sh
 python3 -m unittest -v \
   test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py \
-  test_rainpoint_analysis.py
+  test_rainpoint_analysis.py test_rainpoint_safety.py
 ```
 
 Analyze one or more concatenated `rainpointd` event API pages without changing
