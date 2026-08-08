@@ -28,6 +28,59 @@ from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
 
 
+def _report_summary(device: dict[str, Any]) -> str:
+    """Build a concise summary for the device Activity row."""
+    state = device.get("state", {})
+    parts: list[str] = []
+
+    moisture = state.get("soil_moisture_percent")
+    if isinstance(moisture, (int, float)):
+        parts.append(f"Moisture {moisture:g}%")
+
+    valve_state = state.get("valve_state")
+    if isinstance(valve_state, str):
+        parts.append(valve_state.replace("_", " ").title())
+
+    duration = state.get("duration_seconds")
+    if isinstance(duration, (int, float)):
+        if duration % 60 == 0:
+            parts.append(f"{duration / 60:g} min")
+        else:
+            parts.append(f"{duration:g} sec")
+
+    usage = state.get("last_usage_liters")
+    if isinstance(usage, (int, float)):
+        parts.append(f"{usage:g} L")
+
+    battery = state.get("battery_percent")
+    if isinstance(battery, (int, float)):
+        parts.append(f"Battery {battery:g}%")
+
+    return " · ".join(parts) if parts else "Data received"
+
+
+def _report_attributes(device: dict[str, Any]) -> dict[str, Any]:
+    """Return useful report data without persisting raw RF frames."""
+    state = device.get("state", {})
+    attributes = {
+        "event_id": device.get("last_event_id"),
+        "model": device.get("model"),
+        "summary": _report_summary(device),
+    }
+    for key in (
+        "soil_moisture_percent",
+        "valve_state",
+        "is_watering",
+        "duration_seconds",
+        "last_usage_liters",
+        "battery_percent",
+        "rf_rssi_db",
+    ):
+        if key in state:
+            attributes[key] = state[key]
+    return attributes
+
+
 @dataclass(frozen=True, kw_only=True)
 class RainPointSensorDescription(SensorEntityDescription):
     """Describe a decoded gateway state field."""
@@ -139,6 +192,22 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
         super().__init__(coordinator, device_id)
         self.entity_description = description
         self._attr_unique_id = f"{device_id}_{description.key}"
+
+    @property
+    def name(self) -> Any:
+        """Include decoded report data in the timestamp Activity row."""
+        if self.entity_description.key != "report_time":
+            return super().name
+        if self.entity_id is None:
+            return "Device report time"
+        return f"Last report · {_report_summary(self.device)}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Attach structured report data to the last-report timestamp."""
+        if self.entity_description.key != "report_time":
+            return None
+        return _report_attributes(self.device)
 
     @property
     def native_value(self) -> Any:
