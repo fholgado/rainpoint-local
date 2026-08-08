@@ -185,6 +185,28 @@ views:
                 name: Left Sensor Last Report
               - entity: sensor.right_bed_device_report_time
                 name: Right Sensor Last Report
+          - type: entities
+            title: Receive Reliability
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.garden_valve_reporting
+                name: Valve Reporting
+              - entity: binary_sensor.left_bed_reporting
+                name: Left Sensor Reporting
+              - entity: binary_sensor.right_bed_reporting
+                name: Right Sensor Reporting
+              - entity: sensor.garden_valve_average_report_interval
+                name: Valve Average Interval
+              - entity: sensor.left_bed_average_report_interval
+                name: Left Average Interval
+              - entity: sensor.right_bed_average_report_interval
+                name: Right Average Interval
+              - entity: sensor.garden_valve_reports_received
+                name: Valve Reports Received
+              - entity: sensor.left_bed_reports_received
+                name: Left Reports Received
+              - entity: sensor.right_bed_reports_received
+                name: Right Reports Received
   - title: Front Yard
     path: front-yard
     icon: mdi:flower-tulip
@@ -370,3 +392,19 @@ views:
                 name: Sensor 1 Last Report
               - entity: sensor.front_yard_sensor_2_device_report_time
                 name: Sensor 2 Last Report
+          - type: entities
+            title: Receive Reliability
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.front_yard_sensor_1_reporting
+                name: Sensor 1 Reporting
+              - entity: binary_sensor.front_yard_sensor_2_reporting
+                name: Sensor 2 Reporting
+              - entity: sensor.front_yard_sensor_1_average_report_interval
+                name: Sensor 1 Average Interval
+              - entity: sensor.front_yard_sensor_2_average_report_interval
+                name: Sensor 2 Average Interval
+              - entity: sensor.front_yard_sensor_1_reports_received
+                name: Sensor 1 Reports Received
+              - entity: sensor.front_yard_sensor_2_reports_received
+                name: Sensor 2 Reports Received
