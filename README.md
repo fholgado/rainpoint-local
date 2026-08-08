@@ -95,11 +95,16 @@ The `rainpointd_addon` directory is a Supervisor-compatible app package. For
 local development, copy it to `/addons/rainpointd`, reload the app store, and
 install **RainPoint Local Gateway** from the Local apps repository.
 
-The app exposes the read-only API on TCP port 8787, maps raw USB for the SDR,
+The app exposes receive-only telemetry on TCP port 8787, maps raw USB for the SDR,
 and has no HA API access, Supervisor API access, privileged mode, or full host
 access. Live events are stored in the app's persistent data volume. The device
 API also reports persistent check-in counts and cadence, plus a current
 `reporting` status based on the measured intervals of each device class.
+
+An optional token-protected local registry can accept, rename, assign, or
+forget already observed endpoints. Its learning sessions are receive-only and
+its records are explicitly separate from physical RF pairing state. Valve
+control POST requests remain unavailable.
 
 ### Development installation
 

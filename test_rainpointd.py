@@ -176,6 +176,75 @@ class GatewayTest(unittest.TestCase):
             self.assertTrue(device["reporting"])
             restored.close()
 
+    def test_receive_only_learning_and_registry_persist(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(path),
+                registry_token="test-token",
+            )
+            gateway.observe_rf_frame(
+                frame="first",
+                observed_at="2026-08-08T12:00:00+00:00",
+                state={"rf_endpoint": "aabbcc01"},
+            )
+            session = gateway.start_learning(
+                120, now=datetime.fromisoformat("2026-08-08T12:01:00+00:00")
+            )
+            self.assertTrue(session["active"])
+            self.assertFalse(session["rf_pairing"])
+            self.assertEqual([], session["new_endpoints"])
+
+            gateway.observe_rf_frame(
+                frame="second",
+                observed_at="2026-08-08T12:01:30+00:00",
+                state={"rf_endpoint": "aabbcc02"},
+            )
+            learning = gateway.learning(
+                now=datetime.fromisoformat("2026-08-08T12:02:00+00:00")
+            )
+            self.assertEqual(
+                ["aabbcc02"],
+                [item["endpoint"] for item in learning["new_endpoints"]],
+            )
+            gateway.observe_rf_frame(
+                frame="too-late",
+                observed_at="2026-08-08T12:04:00+00:00",
+                state={"rf_endpoint": "aabbccff"},
+            )
+            expired = gateway.learning(
+                now=datetime.fromisoformat("2026-08-08T12:05:00+00:00")
+            )
+            self.assertFalse(expired["active"])
+            self.assertEqual(
+                ["aabbcc02"],
+                [item["endpoint"] for item in expired["new_endpoints"]],
+            )
+            accepted = gateway.accept_endpoint(
+                endpoint="AABBCC02",
+                name="Test Moisture",
+                model="HCS026FRF",
+                area="Bench",
+                now=datetime.fromisoformat("2026-08-08T12:02:00+00:00"),
+            )
+            self.assertEqual("local-aabbcc02", accepted["device_id"])
+            self.assertTrue(gateway.registry_authorized("test-token"))
+            self.assertFalse(gateway.registry_authorized("wrong"))
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            self.assertEqual("Test Moisture", restored.registry()[0]["name"])
+            renamed = restored.update_registry_device(
+                "local-aabbcc02", name="Patio Sensor"
+            )
+            self.assertEqual("Patio Sensor", renamed["name"])
+            self.assertEqual("Bench", renamed["area"])
+            forgotten = restored.forget_registry_device("local-aabbcc02")
+            self.assertEqual("aabbcc02", forgotten["endpoint"])
+            self.assertEqual([], restored.registry())
+            restored.close()
+
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
@@ -223,6 +292,93 @@ class HTTPAPITest(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen(f"{self.base}/health", timeout=2)
         self.assertEqual(503, raised.exception.code)
+
+    def test_registry_writes_are_disabled_without_token(self) -> None:
+        request = Request(
+            f"{self.base}/api/v1/learning",
+            data=b'{"duration_seconds":60}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as raised:
+            urlopen(request, timeout=2)
+        self.assertEqual(403, raised.exception.code)
+
+
+class RegistryHTTPAPITest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        path = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        gateway = Gateway(storage_path=str(path), registry_token="test-token")
+        gateway.observe_rf_frame(
+            frame="observed",
+            state={"rf_endpoint": "aabbcc03"},
+        )
+        self.server = create_server(gateway, port=0)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.server.gateway.close()
+        self.thread.join(timeout=2)
+        self.temporary_directory.cleanup()
+
+    def post_json(
+        self, path: str, payload: dict, *, token: str | None = "test-token"
+    ) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        request = Request(
+            f"{self.base}{path}",
+            data=json.dumps(payload).encode(),
+            headers=headers,
+            method="POST",
+        )
+        with urlopen(request, timeout=2) as response:
+            return json.load(response)
+
+    def test_authenticated_registry_lifecycle_never_claims_rf_pairing(self) -> None:
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                "/api/v1/registry/accept",
+                {
+                    "endpoint": "aabbcc03",
+                    "name": "Bench Sensor",
+                    "model": "HCS026FRF",
+                },
+                token=None,
+            )
+        self.assertEqual(401, raised.exception.code)
+
+        accepted = self.post_json(
+            "/api/v1/registry/accept",
+            {
+                "endpoint": "aabbcc03",
+                "name": "Bench Sensor",
+                "model": "HCS026FRF",
+            },
+        )
+        self.assertFalse(accepted["rf_paired"])
+        device_id = accepted["device"]["device_id"]
+        renamed = self.post_json(
+            f"/api/v1/registry/{device_id}/rename", {"area": "Garden"}
+        )
+        self.assertEqual("Garden", renamed["device"]["area"])
+        forgotten = self.post_json(
+            f"/api/v1/registry/{device_id}/forget", {}
+        )
+        self.assertFalse(forgotten["rf_unpaired"])
+
+    def test_learning_api_is_receive_only(self) -> None:
+        result = self.post_json(
+            "/api/v1/learning", {"duration_seconds": 60}
+        )
+        self.assertTrue(result["active"])
+        self.assertFalse(result["rf_pairing"])
 
 
 if __name__ == "__main__":

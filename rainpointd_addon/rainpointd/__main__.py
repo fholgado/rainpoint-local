@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from .esp32 import ESP32SerialTransport
 from .gateway import Gateway
@@ -42,6 +43,7 @@ def main() -> int:
         gateway_id=f"rainpoint-{args.transport}",
         transport=args.transport,
         storage_path=args.storage,
+        registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(

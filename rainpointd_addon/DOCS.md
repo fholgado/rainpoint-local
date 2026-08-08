@@ -5,9 +5,10 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.4.0 supports captured replay, receive-only USB RTL-SDR, and
+Version 0.5.0 supports captured replay, receive-only USB RTL-SDR, and
 receive-only ESP32/CC1101 serial modes. It does not connect to the RainPoint
-cloud, and every HTTP POST request is rejected.
+cloud. Valve-control POST requests remain rejected. Token-protected registry
+requests change local names and discovery metadata only; they never transmit.
 
 Installing this app does not make the physical irrigation system work offline.
 Replay remains the default after upgrade. Select `rtl433` only after attaching
@@ -45,9 +46,27 @@ unrelated nearby 433 MHz transmissions and must remain local. Reset the option
 to `0` after starting a one-time capture so a future app restart does not begin
 another capture.
 
+### Registry write token
+
+Leave `registry_write_token` empty to disable every registry mutation. To use
+the experimental local registry, configure a long random token and send it as
+`Authorization: Bearer <token>` to the registry endpoints. Telemetry and
+registry reads remain available without a token on the local API.
+
+The registry separates three concepts deliberately:
+
+- `/api/v1/endpoints` is the automatically observed RF inventory.
+- A timed `/api/v1/learning` session highlights endpoints that appear after
+  the session starts.
+- `/api/v1/registry` contains endpoints explicitly accepted into local
+  metadata, with user-defined names, models, and areas.
+
+Accepting or forgetting a registry record is not physical pairing or
+unpairing. True device enrollment remains a future protocol-research milestone.
+
 ## Home Assistant integration
 
-The app exposes its read-only API on TCP port 8787. Configure the
+The app exposes its receive-only device API on TCP port 8787. Configure the
 **RainPoint Local** integration with:
 
 - Host: the IP address of the Home Assistant host
@@ -66,9 +85,15 @@ read-only `/api/v1/endpoints` endpoint summarizes every observed RF endpoint,
 including first/last seen time, packet count, address-field roles, latest
 message byte, signal level, and frame.
 
+`/api/v1/devices` also includes persistent report count, average report
+interval, longest observed gap, and model-specific reporting freshness. The
+current measured timeout is 15 minutes for HCS026 sensors and 6 hours for the
+HTV145 valve.
+
 ## Safety
 
-This release has no RF transmitter, cloud transport, valve entity, or control
-API. USB access is used only by `rtl_433` for receiving. Share access is used
-only for explicitly enabled raw captures, and the app cannot operate the
-physical valve.
+This release has no RF transmitter, cloud transport, valve control entity, or
+control API. The optional POST surface can only mutate its own SQLite registry.
+USB access is used only by `rtl_433` for receiving. Share access is used only
+for explicitly enabled raw captures, and the app cannot operate the physical
+valve.

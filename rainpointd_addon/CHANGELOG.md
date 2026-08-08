@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Add a persistent local registry for accepting, naming, assigning, and
+  forgetting endpoints already observed by the receive-only gateway.
+- Add timed learning sessions that highlight endpoints first observed during
+  the window without transmitting pairing traffic.
+- Protect every registry mutation with an optional bearer token; writes remain
+  disabled when no token is configured.
+- State explicitly in every mutation response that local acceptance/forgetting
+  does not pair or unpair a physical RF device.
+
 ## 0.4.3
 
 - Persist per-device report counts, average intervals, and longest observed

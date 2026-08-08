@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import copy
+import hmac
+import re
 import threading
+import uuid
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from rainpoint_protocol import decode
@@ -20,6 +23,8 @@ REPORTING_TIMEOUTS = {
     "HTV145FRF": 6 * 60 * 60,
 }
 DEFAULT_REPORTING_TIMEOUT = 60 * 60
+REGISTRY_MODELS = {"HCS026FRF", "HTV145FRF"}
+_UNSET = object()
 
 
 class Gateway:
@@ -33,10 +38,12 @@ class Gateway:
         read_only: bool = True,
         event_limit: int = 1_000,
         storage_path: str | None = None,
+        registry_token: str | None = None,
     ) -> None:
         self.gateway_id = gateway_id
         self.transport = transport
         self.read_only = read_only
+        self._registry_token = registry_token or None
         self._devices: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
@@ -64,6 +71,9 @@ class Gateway:
                 "stored_event_count": (
                     self._store.event_count() if self._store else len(self._events)
                 ),
+                "registry_available": self._store is not None,
+                "registry_writes_enabled": self._registry_token is not None,
+                "rf_pairing_available": False,
             }
 
     def close(self) -> None:
@@ -274,6 +284,161 @@ class Gateway:
         with self._lock:
             return self._store.endpoints() if self._store else []
 
+    def registry_authorized(self, token: str | None) -> bool:
+        """Validate the optional registry-write token in constant time."""
+        expected = self._registry_token
+        return (
+            expected is not None
+            and token is not None
+            and hmac.compare_digest(token, expected)
+        )
+
+    def registry(self) -> list[dict[str, Any]]:
+        """Return accepted local metadata; this is not RF pairing state."""
+        with self._lock:
+            return self._store.registry() if self._store else []
+
+    def accept_endpoint(
+        self,
+        *,
+        endpoint: str,
+        name: str,
+        model: str,
+        area: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Accept an observed endpoint into the persistent local registry."""
+        endpoint = endpoint.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{8}", endpoint):
+            raise ValueError("endpoint must be exactly 8 hexadecimal characters")
+        if model not in REGISTRY_MODELS:
+            raise ValueError(f"unsupported model: {model}")
+        name = _clean_label(name, "name")
+        area = _clean_optional_label(area, "area")
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._store:
+                raise RuntimeError("persistent registry is unavailable")
+            known = {item["endpoint"] for item in self._store.endpoints()}
+            if endpoint not in known:
+                raise KeyError(endpoint)
+            return self._store.accept_endpoint(
+                endpoint=endpoint,
+                device_id=f"local-{endpoint}",
+                name=name,
+                model=model,
+                area=area,
+                accepted_at=timestamp,
+            )
+
+    def update_registry_device(
+        self,
+        device_id: str,
+        *,
+        name: str | None = None,
+        area: str | None | object = _UNSET,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Update human-facing metadata for a local registration."""
+        with self._lock:
+            if not self._store:
+                raise RuntimeError("persistent registry is unavailable")
+            existing = self._store.registry_device(device_id)
+            next_name = existing["name"] if name is None else _clean_label(name, "name")
+            next_area = (
+                existing["area"]
+                if area is _UNSET
+                else _clean_optional_label(area, "area")
+            )
+            timestamp = (now or datetime.now(timezone.utc)).isoformat()
+            return self._store.update_registry_device(
+                device_id,
+                name=next_name,
+                area=next_area,
+                updated_at=timestamp,
+            )
+
+    def forget_registry_device(self, device_id: str) -> dict[str, Any]:
+        """Forget local metadata without transmitting an RF unpair command."""
+        with self._lock:
+            if not self._store:
+                raise RuntimeError("persistent registry is unavailable")
+            return self._store.forget_registry_device(device_id)
+
+    def start_learning(
+        self,
+        duration_seconds: int = 300,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Start a receive-only window that highlights newly seen endpoints."""
+        if not 10 <= duration_seconds <= 3_600:
+            raise ValueError("duration_seconds must be between 10 and 3600")
+        started = now or datetime.now(timezone.utc)
+        with self._lock:
+            if not self._store:
+                raise RuntimeError("persistent registry is unavailable")
+            session = {
+                "session_id": uuid.uuid4().hex,
+                "started_at": started.isoformat(),
+                "expires_at": (started + timedelta(seconds=duration_seconds)).isoformat(),
+                "baseline_endpoints": [
+                    item["endpoint"] for item in self._store.endpoints()
+                ],
+            }
+            self._store.save_learning_session(session)
+            return self._learning_snapshot(session, started)
+
+    def learning(self, *, now: datetime | None = None) -> dict[str, Any]:
+        """Return current receive-only learning progress and discoveries."""
+        current = now or datetime.now(timezone.utc)
+        with self._lock:
+            if not self._store:
+                return {
+                    "active": False,
+                    "rf_pairing": False,
+                    "new_endpoints": [],
+                    "detail": "persistent registry is unavailable",
+                }
+            session = self._store.learning_session()
+            if session is None:
+                return {
+                    "active": False,
+                    "rf_pairing": False,
+                    "new_endpoints": [],
+                }
+            return self._learning_snapshot(session, current)
+
+    def _learning_snapshot(
+        self, session: dict[str, Any], current: datetime
+    ) -> dict[str, Any]:
+        """Merge a stored learning window with the current endpoint inventory."""
+        started = datetime.fromisoformat(session["started_at"].replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(session["expires_at"].replace("Z", "+00:00"))
+        if expires.tzinfo is None and current.tzinfo is not None:
+            current = current.replace(tzinfo=None)
+        elif expires.tzinfo is not None and current.tzinfo is None:
+            current = current.astimezone()
+        baseline = set(session["baseline_endpoints"])
+        endpoints = self._store.endpoints() if self._store else []
+        return {
+            "session_id": session["session_id"],
+            "started_at": session["started_at"],
+            "expires_at": session["expires_at"],
+            "active": current <= expires,
+            "rf_pairing": False,
+            "new_endpoints": [
+                item
+                for item in endpoints
+                if item["endpoint"] not in baseline
+                and _timestamp_in_window(item["first_seen"], started, expires)
+            ],
+            "detail": (
+                "receive-only discovery; accepting an endpoint changes local "
+                "metadata and does not pair the physical device"
+            ),
+        }
+
     def _restore_devices(self) -> None:
         """Rebuild decoded device state from retained observations."""
         for event in self._events:
@@ -334,3 +499,36 @@ class Gateway:
             return True
         endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
         return endpoint in HCS026_ENDPOINTS
+
+
+def _clean_label(value: str, field: str) -> str:
+    """Validate short human-facing registry labels."""
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > 80:
+        raise ValueError(f"{field} must contain 1 to 80 characters")
+    return cleaned
+
+
+def _clean_optional_label(value: Any, field: str) -> str | None:
+    """Validate an optional short registry label."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string or null")
+    return _clean_label(value, field)
+
+
+def _timestamp_in_window(
+    value: str, started: datetime, expires: datetime
+) -> bool:
+    """Compare rtl_433 local timestamps with an aware learning window."""
+    try:
+        observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if observed.tzinfo is None and started.tzinfo is not None:
+        started = started.astimezone().replace(tzinfo=None)
+        expires = expires.astimezone().replace(tzinfo=None)
+    elif observed.tzinfo is not None and started.tzinfo is None:
+        observed = observed.astimezone().replace(tzinfo=None)
+    return started <= observed <= expires

@@ -8,9 +8,14 @@ sample_rate="$(bashio::config 'sample_rate')"
 serial_device="$(bashio::config 'serial_device')"
 serial_baud="$(bashio::config 'serial_baud')"
 research_capture_minutes="$(bashio::config 'research_capture_minutes')"
+registry_write_token="$(bashio::config 'registry_write_token')"
 if [[ "${research_capture_minutes}" == "null" ]]; then
   research_capture_minutes=0
 fi
+if [[ "${registry_write_token}" == "null" ]]; then
+  registry_write_token=""
+fi
+export RAINPOINT_REGISTRY_TOKEN="${registry_write_token}"
 
 bashio::log.info "API listening on TCP 8787"
 

@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.4.3
+version: 0.5.0
 slug: rainpointd
 description: Read-only local RainPoint gateway for RTL-SDR or ESP32 receivers
 url: https://github.com/fholgado/rainpoint-local
@@ -27,6 +27,7 @@ options:
   serial_device: /dev/ttyUSB0
   serial_baud: 115200
   research_capture_minutes: 0
+  registry_write_token: ""
 schema:
   transport: "list(replay|rtl433|esp32_serial)"
   replay_interval: "float(0.5,3600)"
@@ -35,3 +36,4 @@ schema:
   serial_device: str
   serial_baud: "int(9600,921600)"
   research_capture_minutes: "int(0,240)"
+  registry_write_token: str?

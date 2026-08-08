@@ -48,6 +48,22 @@ class SQLiteEventStore:
                 total_interval_seconds REAL NOT NULL DEFAULT 0,
                 longest_report_gap_seconds REAL NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS device_registry (
+                endpoint TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                model TEXT NOT NULL,
+                area TEXT,
+                accepted_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS learning_session (
+                singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                session_id TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                baseline_endpoints TEXT NOT NULL
+            );
             """
         )
         self._backfill_device_metrics()
@@ -124,6 +140,116 @@ class SQLiteEventStore:
                 round(total / interval_count, 3) if interval_count else None
             )
             result[str(item.pop("device_id"))] = item
+        return result
+
+    def registry(self) -> list[dict[str, Any]]:
+        """Return accepted local device registrations."""
+        rows = self._connection.execute(
+            "SELECT * FROM device_registry ORDER BY name, endpoint"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def accept_endpoint(
+        self,
+        *,
+        endpoint: str,
+        device_id: str,
+        name: str,
+        model: str,
+        area: str | None,
+        accepted_at: str,
+    ) -> dict[str, Any]:
+        """Accept or update one observed endpoint in the local registry."""
+        self._connection.execute(
+            """
+            INSERT INTO device_registry(
+                endpoint, device_id, name, model, area,
+                accepted_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(endpoint) DO UPDATE SET
+                name=excluded.name,
+                model=excluded.model,
+                area=excluded.area,
+                updated_at=excluded.updated_at
+            """,
+            (
+                endpoint,
+                device_id,
+                name,
+                model,
+                area,
+                accepted_at,
+                accepted_at,
+            ),
+        )
+        self._connection.commit()
+        return self.registry_device(device_id)
+
+    def registry_device(self, device_id: str) -> dict[str, Any]:
+        """Return one accepted device or raise KeyError."""
+        row = self._connection.execute(
+            "SELECT * FROM device_registry WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(device_id)
+        return dict(row)
+
+    def update_registry_device(
+        self,
+        device_id: str,
+        *,
+        name: str,
+        area: str | None,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """Rename or reassign one local registration."""
+        cursor = self._connection.execute(
+            "UPDATE device_registry SET name = ?, area = ?, updated_at = ? "
+            "WHERE device_id = ?",
+            (name, area, updated_at, device_id),
+        )
+        if not cursor.rowcount:
+            raise KeyError(device_id)
+        self._connection.commit()
+        return self.registry_device(device_id)
+
+    def forget_registry_device(self, device_id: str) -> dict[str, Any]:
+        """Delete local metadata without sending an RF unpair command."""
+        device = self.registry_device(device_id)
+        self._connection.execute(
+            "DELETE FROM device_registry WHERE device_id = ?", (device_id,)
+        )
+        self._connection.commit()
+        return device
+
+    def save_learning_session(self, session: dict[str, Any]) -> None:
+        """Persist the current discovery window across gateway restarts."""
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO learning_session(
+                singleton, session_id, started_at, expires_at,
+                baseline_endpoints
+            ) VALUES (1, ?, ?, ?, ?)
+            """,
+            (
+                session["session_id"],
+                session["started_at"],
+                session["expires_at"],
+                json.dumps(session["baseline_endpoints"]),
+            ),
+        )
+        self._connection.commit()
+
+    def learning_session(self) -> dict[str, Any] | None:
+        """Return the most recent discovery window."""
+        row = self._connection.execute(
+            "SELECT * FROM learning_session WHERE singleton = 1"
+        ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result.pop("singleton")
+        result["baseline_endpoints"] = json.loads(result["baseline_endpoints"])
         return result
 
     def _update_endpoints(self, event: dict[str, Any]) -> None:
