@@ -245,18 +245,32 @@ open:  SS 10 82 80 81 00 DD DD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 close: SS 90 81 80 81 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 ```
 
-`SS` is the transaction sequence. `DD DD` is a little-endian duration stored
-in two-second units:
+`SS` is the transaction sequence. `DD DD` starts with the watering duration in
+two-second units, little-endian, but bit 7 of the low byte is forced on:
 
 ```text
-duration_seconds = little_endian(DD DD) * 2
+units = duration_seconds / 2
+DD DD = little_endian_16(units)
+DD[0] = DD[0] OR 0x80
 ```
+
+The forced bit makes arbitrary second values ambiguous. Every independently
+correlated command used whole minutes, which resolves the ambiguity: of
+`little_endian(DD DD) * 2` and `(little_endian(DD DD) & ~0x80) * 2`, exactly
+one is a positive multiple of 60. Initial local construction is therefore
+restricted to whole-minute durations.
 
 Confirmed duration examples:
 
 | Encoded | Requested duration |
 |---|---:|
+| `9e 00` | 60 seconds |
+| `f8 00` | 240 seconds |
 | `fe 01` | 1,020 seconds |
+
+The 240- and 1,020-second values were independently confirmed in the Home
+Assistant recorder at the corresponding RF timestamps. Treating `f8 00` as a
+plain 16-bit value would incorrectly produce 496 seconds.
 
 ### Representative frames
 
@@ -277,6 +291,14 @@ close response
 Exact requests were observed retransmitted without changes, including the
 trailer. This proves there is no per-burst nonce. It does not yet prove that a
 request from an older transaction can be replayed later.
+
+Across 14 captured commands (seven opens and seven closes), 12 had a retained
+reverse-route response within three seconds. Normal response latency was
+0.372--0.380 seconds; two responses arrived at 1.062 and 1.083 seconds. This
+supports a first acknowledgement timeout of at least 1.5 seconds and argues
+against immediately retrying a non-idempotent open command. The two missing
+responses were from the scheduled cycle and are consistent with missed RF
+reception rather than proven valve non-response.
 
 ### Last-session water usage
 
@@ -318,13 +340,13 @@ Both residues also occur in hub-to-valve command traffic. A scheduled 1,020
 second open and its close used `0x4f03`; controlled short cycles used each
 residue across different transaction sequence values.
 
-An expanded passive analysis of 1,296 unique clean frames found 649 using
-`0xc713` and 647 using `0x4f03`. Every established route contained both. The
-best single transmitted-bit predictor was only 52.0% accurate, and the best
-two-bit XOR predictor was 53.0%; neither is materially better than chance for
-this balanced corpus. Collapsing exact retransmission bursts also rejected a
-simple alternating selector: 1,396 adjacent residues differed and 1,339 were
-the same. No identical 36-byte payload was observed with conflicting trailers.
+An expanded passive analysis on 2026-08-07 found 1,456 unique clean frames:
+732 used `0xc713` and 724 used `0x4f03`. Every established route contained
+both. The best single transmitted-bit predictor was only 51.4% accurate, and
+the best two-bit XOR predictor was 53.3%; neither is materially better than
+chance for this balanced corpus. Collapsing exact retransmission bursts also
+rejected a simple alternating selector. No identical 36-byte payload was
+observed with conflicting trailers.
 
 The selector is therefore not a simple exposed frame bit, pairwise parity,
 route, message counter, or global toggle. It may depend on omitted transmitter

@@ -10,7 +10,9 @@ import sys
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.request import urlopen
 
 
 SYNC = bytes.fromhex("79f4882f28")
@@ -22,6 +24,8 @@ SENSOR_ENDPOINTS = {
     "ce628024": "Front Yard Sensor 1",
     "d1e28024": "Front Yard Sensor 2",
 }
+HUB_ENDPOINT = bytes.fromhex("b42d008f")
+VALVE_ENDPOINT = bytes.fromhex("b9840280")
 
 
 def trailer_residual(frame: bytes) -> int:
@@ -49,6 +53,46 @@ def load_events(source: Any) -> list[dict[str, Any]]:
             )
         events.extend(event for event in payload if isinstance(event, dict))
     return events
+
+
+def fetch_events(
+    url: str,
+    *,
+    timeout: float = 10.0,
+    max_pages: int = 10_000,
+    opener: Callable[..., Any] = urlopen,
+) -> list[dict[str, Any]]:
+    """Read every cursor page from a read-only rainpointd events endpoint."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("events URL must use http or https")
+
+    base_query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    try:
+        since = int(base_query.pop("since", "0"))
+    except ValueError as exc:
+        raise ValueError("events URL since value must be an integer") from exc
+
+    events: list[dict[str, Any]] = []
+    for _ in range(max_pages):
+        page_query = dict(base_query)
+        page_query["since"] = str(since)
+        page_url = urlunparse(parsed._replace(query=urlencode(page_query)))
+        with opener(page_url, timeout=timeout) as response:
+            payload = json.load(response)
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("events"), list
+        ):
+            raise ValueError("events endpoint returned an invalid page")
+        page = [event for event in payload["events"] if isinstance(event, dict)]
+        events.extend(page)
+        next_since = payload.get("next_since")
+        if not page:
+            return events
+        if not isinstance(next_since, int) or next_since <= since:
+            raise ValueError("events endpoint cursor did not advance")
+        since = next_since
+    raise ValueError(f"events endpoint exceeded {max_pages} pages")
 
 
 def event_frame(event: dict[str, Any]) -> bytes | None:
@@ -155,10 +199,121 @@ def _transition_counts(residues: Iterable[int]) -> dict[str, int]:
     return dict(result)
 
 
+def _hamming_distance(left: int, right: int) -> int:
+    return bin(left ^ right).count("1")
+
+
+def _latency_summary(values: list[float]) -> dict[str, float | int]:
+    if not values:
+        return {"count": 0}
+    ordered = sorted(values)
+
+    def percentile(fraction: float) -> float:
+        index = round((len(ordered) - 1) * fraction)
+        return round(ordered[index], 6)
+
+    return {
+        "count": len(ordered),
+        "minimum_seconds": round(ordered[0], 6),
+        "median_seconds": percentile(0.5),
+        "p95_seconds": percentile(0.95),
+        "maximum_seconds": round(ordered[-1], 6),
+    }
+
+
+def _valve_transaction_summary(
+    bursts: list[tuple[dict[str, Any], bytes, int]],
+    response_window_seconds: float = 3.0,
+) -> dict[str, Any]:
+    """Correlate captured hub commands with the next valve-to-hub frame."""
+    commands = []
+    latencies: dict[str, list[float]] = defaultdict(list)
+    duration_counts: Counter[int] = Counter()
+    acknowledged = Counter()
+    for position, (event, frame, residual) in enumerate(bursts):
+        if frame[5:9] != HUB_ENDPOINT or frame[9:13] != VALVE_ENDPOINT:
+            continue
+        if frame[14] & 0x7F != 0x10:
+            continue
+        observed_at = _timestamp(event)
+        if observed_at is None:
+            continue
+        mode = "close" if frame[14] & 0x80 else "open"
+        duration = 0
+        if mode == "open":
+            raw_duration = int.from_bytes(frame[19:21], "little")
+            candidates = {raw_duration * 2, (raw_duration & ~0x80) * 2}
+            confirmed = [
+                value
+                for value in candidates
+                if 0 < value <= 24 * 60 * 60 and value % 60 == 0
+            ]
+            duration = confirmed[0] if len(confirmed) == 1 else raw_duration * 2
+        duration_counts[duration] += 1
+        response_event_id = None
+        latency = None
+        for candidate_event, candidate_frame, _ in bursts[position + 1 :]:
+            candidate_at = _timestamp(candidate_event)
+            if candidate_at is None:
+                continue
+            delta = (candidate_at - observed_at).total_seconds()
+            if delta < 0:
+                continue
+            if delta > response_window_seconds:
+                break
+            if (
+                candidate_frame[5:9] == VALVE_ENDPOINT
+                and candidate_frame[9:13] == HUB_ENDPOINT
+            ):
+                latency = delta
+                response_event_id = candidate_event.get("event_id")
+                latencies[mode].append(delta)
+                acknowledged[mode] += 1
+                break
+        commands.append(
+            {
+                "event_id": event.get("event_id"),
+                "observed_at": event.get("observed_at"),
+                "mode": mode,
+                "sequence": f"{frame[13]:02x}",
+                "duration_bytes": frame[19:21].hex(),
+                "duration_seconds": duration,
+                "residual": f"{residual:04x}",
+                "response_event_id": response_event_id,
+                "response_latency_seconds": (
+                    round(latency, 6) if latency is not None else None
+                ),
+            }
+        )
+
+    mode_counts = Counter(command["mode"] for command in commands)
+    return {
+        "response_window_seconds": response_window_seconds,
+        "command_count": len(commands),
+        "mode_counts": dict(mode_counts),
+        "acknowledged_counts": dict(acknowledged),
+        "acknowledgement_rates": {
+            mode: round(acknowledged[mode] / count, 6)
+            for mode, count in mode_counts.items()
+        },
+        "response_latency": {
+            mode: _latency_summary(values)
+            for mode, values in sorted(latencies.items())
+        },
+        "open_duration_counts": {
+            str(duration): count
+            for duration, count in sorted(duration_counts.items())
+            if duration
+        },
+        "commands": commands,
+    }
+
+
 def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Return integrity, selector-feature, and compact-routing evidence."""
     normalized: list[tuple[dict[str, Any], bytes, int]] = []
     invalid_residues: Counter[str] = Counter()
+    invalid_residue_distances: Counter[int] = Counter()
     for event in events:
         frame = event_frame(event)
         if frame is None:
@@ -167,6 +322,9 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         normalized.append((event, frame, residual))
         if residual not in RESIDUES:
             invalid_residues[f"{residual:04x}"] += 1
+            invalid_residue_distances[
+                min(_hamming_distance(residual, known) for known in RESIDUES)
+            ] += 1
 
     unique_by_raw: dict[bytes, tuple[dict[str, Any], int]] = {}
     for event, frame, residual in normalized:
@@ -320,6 +478,10 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "invalid_residue_event_count": sum(invalid_residues.values()),
         "common_invalid_residues": invalid_residues.most_common(10),
+        "invalid_residue_min_hamming_distance": {
+            str(distance): count
+            for distance, count in sorted(invalid_residue_distances.items())
+        },
         "same_payload_conflicting_residue_count": conflicting_payloads,
         "top_selector_bits": bit_features[:12],
         "top_two_bit_xor_selectors": _top_xor_features(labeled),
@@ -356,6 +518,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 message_residues.items(), key=lambda item: -sum(item[1].values())
             )
         },
+        "valve_transactions": _valve_transaction_summary(bursts),
         "compact_associations": compact_associations,
     }
 
@@ -368,15 +531,44 @@ def main() -> int:
         type=Path,
         help="rainpointd events JSON; omit to read stdin",
     )
+    parser.add_argument(
+        "--url",
+        help="read all cursor pages from a rainpointd /api/v1/events URL",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="per-page HTTP timeout in seconds (default: 10)",
+    )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="omit per-command valve transaction rows",
+    )
+    parser.add_argument(
+        "--section",
+        choices=("valve_transactions", "compact_associations"),
+        help="emit only one detailed analysis section",
+    )
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args()
 
-    if args.events:
+    if args.url and args.events:
+        parser.error("events file and --url are mutually exclusive")
+    if args.url:
+        events = fetch_events(args.url, timeout=args.timeout)
+    elif args.events:
         with args.events.open(encoding="utf-8") as source:
             events = load_events(source)
     else:
         events = load_events(sys.stdin)
-    json.dump(analyze(events), sys.stdout, indent=2 if args.pretty else None)
+    result = analyze(events)
+    if args.summary:
+        result["valve_transactions"].pop("commands", None)
+    if args.section:
+        result = {args.section: result[args.section]}
+    json.dump(result, sys.stdout, indent=2 if args.pretty else None)
     sys.stdout.write("\n")
     return 0
 

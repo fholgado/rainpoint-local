@@ -5,6 +5,8 @@ from __future__ import annotations
 import binascii
 from typing import Any
 
+from .valve_protocol import decode_duration
+
 
 SYNC = bytes.fromhex("79f4882f28")
 FRAME_BYTES = 38
@@ -157,7 +159,8 @@ def _valve_fields(frame: bytes) -> dict[str, Any]:
 
     if endpoint_a == HUB_ENDPOINT and endpoint_b == VALVE_ENDPOINT:
         # The open/close flag is the high bit of byte 14. Open commands carry
-        # the requested duration at bytes 19-20 in two-second units.
+        # a whole-minute duration at bytes 19-20. The low duration byte has
+        # bit 7 forced on, so decode it with the confirmed minute constraint.
         if frame[14] & 0x7F != 0x10:
             return {}
         watering = not bool(frame[14] & 0x80)
@@ -166,8 +169,11 @@ def _valve_fields(frame: bytes) -> dict[str, Any]:
             "valve_state": "watering" if watering else "idle",
         }
         if watering:
-            duration_seconds = int.from_bytes(frame[19:21], "little") * 2
-            if 0 < duration_seconds <= 24 * 60 * 60:
+            try:
+                duration_seconds = decode_duration(frame[19:21])
+            except ValueError:
+                pass
+            else:
                 result["duration_seconds"] = duration_seconds
         return result
 

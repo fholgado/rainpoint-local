@@ -89,6 +89,19 @@ half-value plus odd-flag representation.
 
 ## Scheduled watering capture — 2026-08-07
 
+The scheduled 17-minute run produced `fe 01` in the open request. The Home
+Assistant recorder independently reported 1,020 seconds at the same moment.
+Earlier controlled four-minute commands produced `f8 00`, while the recorder
+reported 240 seconds. Together with the earlier one-minute `9e 00` command,
+these establish a two-second unit with bit 7 of the low byte forced on rather
+than a plain little-endian integer.
+
+Fourteen retained valve commands included seven opens and seven closes. Twelve
+had an observed valve-to-hub response within three seconds. Ten responses
+arrived in 0.372--0.380 seconds and two in 1.062--1.083 seconds. A future local
+controller should wait at least 1.5 seconds for the initial acknowledgement
+and must not immediately retry an open operation.
+
 A scheduled 17-minute run retained the pre-run, open, watering, close, and
 post-run sequence. The open request contained `fe 01` at normalized offsets
 19--20, which decodes as:
@@ -155,8 +168,8 @@ the type-10 header and also had unstable routing fields. Three independent
 timing/value matches associate this compact family with Right Bed, but the
 unstable route still prevents safe automatic assignment.
 
-The same expanded corpus contained 1,296 unique ordinary frames with valid
-residues: 649 used `0xc713` and 647 used `0x4f03`. Single-bit, pairwise-XOR,
+The latest expanded corpus contained 1,456 unique ordinary frames with valid
+residues: 732 used `0xc713` and 724 used `0x4f03`. Single-bit, pairwise-XOR,
 route, message-counter, and global-alternation tests failed to predict the
 selector above near-chance accuracy. This materially narrows the remaining
 possibilities to omitted transmitter state, a nonlinear rule, or two checksum

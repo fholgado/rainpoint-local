@@ -163,6 +163,18 @@ gateway state:
 python3 tools/analyze_rainpoint_events.py events.json --pretty
 ```
 
+Or read every cursor page directly from a local read-only gateway:
+
+```sh
+python3 tools/analyze_rainpoint_events.py \
+  --url http://homeassistant.local:8787/api/v1/events --summary --pretty
+```
+
+Pure offline HTV145 open/close frame builders now reproduce captured command
+vectors and generate both unresolved trailer candidates. They are deliberately
+not connected to the HTTP API, ESP32 serial transport, or any radio transmit
+operation.
+
 The HTTP tests bind only an ephemeral loopback port. They do not contact the
 hub, cloud services, or RF hardware.
 

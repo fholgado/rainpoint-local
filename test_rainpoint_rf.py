@@ -17,10 +17,44 @@ from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
 from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
+from rainpointd.valve_protocol import (  # noqa: E402
+    build_close_frame,
+    build_open_frame,
+    close_candidates,
+    decode_duration,
+    encode_duration,
+    next_sequence,
+    open_candidates,
+)
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    def test_builds_captured_valve_commands_offline(self) -> None:
+        open_frame = build_open_frame(0x97, 60, 0xC713)
+        self.assertEqual(
+            "79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824",
+            open_frame.hex(),
+        )
+        close_frame = build_close_frame(0x97, 0x4F03)
+        self.assertEqual(
+            "79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf",
+            close_frame.hex(),
+        )
+        self.assertEqual(2, len(open_candidates(0x97, 60)))
+        self.assertEqual(2, len(close_candidates(0x97)))
+        self.assertEqual(0x80, next_sequence(0x9F))
+
+    def test_encodes_confirmed_whole_minute_valve_durations(self) -> None:
+        self.assertEqual(bytes.fromhex("9e00"), encode_duration(60))
+        self.assertEqual(bytes.fromhex("f800"), encode_duration(240))
+        self.assertEqual(bytes.fromhex("fe01"), encode_duration(1020))
+        self.assertEqual(60, decode_duration(bytes.fromhex("9e00")))
+        self.assertEqual(240, decode_duration(bytes.fromhex("f800")))
+        self.assertEqual(1020, decode_duration(bytes.fromhex("fe01")))
+        with self.assertRaisesRegex(ValueError, "whole-minute"):
+            encode_duration(61)
+
     def test_characterizes_synthetic_two_fsk_capture(self) -> None:
         sample_rate = 2_000_000
         center = 433_700_000
@@ -240,6 +274,12 @@ class RainPointRFTest(unittest.TestCase):
         self.assertTrue(decoded["is_watering"])
         self.assertEqual("watering", decoded["valve_state"])
         self.assertEqual(1020, decoded["duration_seconds"])
+
+        four_minute_frame = build_open_frame(0x9B, 240, 0x4F03)
+        decoded = normalize_row(
+            {"len": len(four_minute_frame) * 8, "data": four_minute_frame.hex()}
+        )
+        self.assertEqual(240, decoded["duration_seconds"])
 
         close_frame = bytes.fromhex(
             "79f4882f28b42d008fb9840280819081808100000000"
