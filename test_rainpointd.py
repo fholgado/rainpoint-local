@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -112,6 +113,67 @@ class GatewayTest(unittest.TestCase):
             restored = Gateway(transport="rtl433", storage_path=str(path))
             self.assertEqual([], restored.devices())
             self.assertEqual(1, len(restored.events()))
+            restored.close()
+
+    def test_persistent_report_metrics_and_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            for minute in (0, 2, 7):
+                gateway.observe_decoded(
+                    device_id="soil-test",
+                    name="Test Soil",
+                    model="HCS026FRF",
+                    frame=f"frame-{minute}",
+                    observed_at=f"2026-08-08T12:{minute:02d}:00",
+                    state={"soil_moisture_percent": 44},
+                )
+
+            device = gateway.devices(now=datetime(2026, 8, 8, 12, 20))[0]
+            self.assertEqual(3, device["report_count"])
+            self.assertEqual(210, device["average_report_interval_seconds"])
+            self.assertEqual(300, device["longest_report_gap_seconds"])
+            self.assertEqual(780, device["report_age_seconds"])
+            self.assertEqual(900, device["reporting_timeout_seconds"])
+            self.assertTrue(device["reporting"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            stale = restored.devices(now=datetime(2026, 8, 8, 12, 23))[0]
+            self.assertEqual(3, stale["report_count"])
+            self.assertFalse(stale["reporting"])
+            restored.close()
+
+    def test_existing_database_metrics_are_backfilled(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Valve",
+                model="HTV145FRF",
+                frame="first",
+                observed_at="2026-08-08T01:00:00",
+                state={"is_watering": False},
+            )
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Valve",
+                model="HTV145FRF",
+                frame="second",
+                observed_at="2026-08-08T02:00:00",
+                state={"is_watering": False},
+            )
+            gateway._store._connection.execute("DELETE FROM device_metrics")
+            gateway._store._connection.commit()
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            device = restored.devices(now=datetime(2026, 8, 8, 7, 0))[0]
+            self.assertEqual(2, device["report_count"])
+            self.assertEqual(3600, device["average_report_interval_seconds"])
+            self.assertEqual(21600, device["reporting_timeout_seconds"])
+            self.assertTrue(device["reporting"])
             restored.close()
 
 

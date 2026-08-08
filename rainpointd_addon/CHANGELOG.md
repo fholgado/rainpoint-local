@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3
+
+- Persist per-device report counts, average intervals, and longest observed
+  gaps, including a one-time backfill from existing event history.
+- Publish model-specific reporting freshness using observed production cadence:
+  15 minutes for HCS026 moisture sensors and 6 hours for the HTV145 valve.
+- Correct the Home Assistant signal entity to use the receiver's `rf_rssi_db`
+  field and expose reporting-health diagnostics.
+
 ## 0.4.2
 
 - Preserve the ESP32 radio name, channel, and CC1101 LQI alongside normalized

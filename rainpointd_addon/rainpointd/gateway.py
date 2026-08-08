@@ -15,6 +15,11 @@ from .storage import SQLiteEventStore
 
 
 API_VERSION = "v1"
+REPORTING_TIMEOUTS = {
+    "HCS026FRF": 15 * 60,
+    "HTV145FRF": 6 * 60 * 60,
+}
+DEFAULT_REPORTING_TIMEOUT = 60 * 60
 
 
 class Gateway:
@@ -33,6 +38,7 @@ class Gateway:
         self.transport = transport
         self.read_only = read_only
         self._devices: dict[str, dict[str, Any]] = {}
+        self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = SQLiteEventStore(storage_path) if storage_path else None
         if self._store:
@@ -156,6 +162,8 @@ class Gateway:
             self._events.append(event)
             if self._store:
                 self._store.append(event)
+            else:
+                self._update_memory_metrics(device_id, timestamp)
             self._devices[device_id] = {
                 "device_id": device_id,
                 "name": name,
@@ -191,12 +199,60 @@ class Gateway:
                 self._store.append(event)
             return copy.deepcopy(event)
 
-    def devices(self) -> list[dict[str, Any]]:
+    def devices(
+        self, now: datetime | None = None
+    ) -> list[dict[str, Any]]:
         """Return a stable snapshot of all known devices."""
         with self._lock:
-            return copy.deepcopy(
-                sorted(self._devices.values(), key=lambda item: item["device_id"])
+            metrics = (
+                self._store.device_metrics()
+                if self._store
+                else self._memory_metrics
             )
+            devices = copy.deepcopy(self._devices)
+            for device_id, device in devices.items():
+                device.update(
+                    {
+                        key: value
+                        for key, value in metrics.get(device_id, {}).items()
+                        if not key.startswith("_")
+                    }
+                )
+                self._add_reporting_status(device, now)
+            return sorted(devices.values(), key=lambda item: item["device_id"])
+
+    def _update_memory_metrics(self, device_id: str, observed_at: str) -> None:
+        """Track cadence for ephemeral replay gateways without SQLite."""
+        metric = self._memory_metrics.get(device_id)
+        if metric is None:
+            self._memory_metrics[device_id] = {
+                "first_observed_at": observed_at,
+                "last_observed_at": observed_at,
+                "report_count": 1,
+                "average_report_interval_seconds": None,
+                "longest_report_gap_seconds": 0.0,
+                "_interval_count": 0,
+                "_total_interval_seconds": 0.0,
+            }
+            return
+        try:
+            current = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+            previous = datetime.fromisoformat(
+                metric["last_observed_at"].replace("Z", "+00:00")
+            )
+            gap = max(0.0, (current - previous).total_seconds())
+        except (TypeError, ValueError):
+            gap = 0.0
+        metric["last_observed_at"] = observed_at
+        metric["report_count"] += 1
+        metric["_interval_count"] += 1
+        metric["_total_interval_seconds"] += gap
+        metric["average_report_interval_seconds"] = round(
+            metric["_total_interval_seconds"] / metric["_interval_count"], 3
+        )
+        metric["longest_report_gap_seconds"] = max(
+            metric["longest_report_gap_seconds"], gap
+        )
 
     def events(self, since: int = 0) -> list[dict[str, Any]]:
         """Return retained events newer than an event ID."""
@@ -234,6 +290,39 @@ class Gateway:
                 "observed_at": event["observed_at"],
                 "state": copy.deepcopy(event["state"]),
             }
+
+    @staticmethod
+    def _add_reporting_status(
+        device: dict[str, Any], now: datetime | None
+    ) -> None:
+        """Attach current receive status without changing device availability."""
+        threshold = REPORTING_TIMEOUTS.get(
+            device.get("model"), DEFAULT_REPORTING_TIMEOUT
+        )
+        observed_at = device.get("observed_at")
+        age: float | None = None
+        if isinstance(observed_at, str):
+            try:
+                observed = datetime.fromisoformat(
+                    observed_at.replace("Z", "+00:00")
+                )
+                reference = now
+                if reference is None:
+                    reference = (
+                        datetime.now(timezone.utc)
+                        if observed.tzinfo is not None
+                        else datetime.now()
+                    )
+                elif observed.tzinfo is None and reference.tzinfo is not None:
+                    reference = reference.replace(tzinfo=None)
+                elif observed.tzinfo is not None and reference.tzinfo is None:
+                    reference = reference.replace(tzinfo=timezone.utc)
+                age = max(0.0, (reference - observed).total_seconds())
+            except ValueError:
+                pass
+        device["report_age_seconds"] = round(age, 3) if age is not None else None
+        device["reporting_timeout_seconds"] = threshold
+        device["reporting"] = age is not None and age <= threshold
 
     @staticmethod
     def _is_restorable_device(event: dict[str, Any]) -> bool:

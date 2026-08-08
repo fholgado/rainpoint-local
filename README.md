@@ -97,7 +97,9 @@ install **RainPoint Local Gateway** from the Local apps repository.
 
 The app exposes the read-only API on TCP port 8787, maps raw USB for the SDR,
 and has no HA API access, Supervisor API access, privileged mode, or full host
-access. Live events are stored in the app's persistent data volume.
+access. Live events are stored in the app's persistent data volume. The device
+API also reports persistent check-in counts and cadence, plus a current
+`reporting` status based on the measured intervals of each device class.
 
 ### Development installation
 

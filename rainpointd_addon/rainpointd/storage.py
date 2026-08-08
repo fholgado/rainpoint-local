@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -38,8 +39,18 @@ class SQLiteEventStore:
                 last_frame TEXT NOT NULL,
                 last_rssi REAL
             );
+            CREATE TABLE IF NOT EXISTS device_metrics (
+                device_id TEXT PRIMARY KEY,
+                first_observed_at TEXT NOT NULL,
+                last_observed_at TEXT NOT NULL,
+                report_count INTEGER NOT NULL DEFAULT 0,
+                interval_count INTEGER NOT NULL DEFAULT 0,
+                total_interval_seconds REAL NOT NULL DEFAULT 0,
+                longest_report_gap_seconds REAL NOT NULL DEFAULT 0
+            );
             """
         )
+        self._backfill_device_metrics()
         self._connection.commit()
 
     def close(self) -> None:
@@ -59,6 +70,7 @@ class SQLiteEventStore:
             ),
         )
         self._update_endpoints(event)
+        self._update_device_metrics(event)
         self._connection.commit()
 
     def recent_events(self, limit: int) -> list[dict[str, Any]]:
@@ -97,6 +109,22 @@ class SQLiteEventStore:
             "SELECT * FROM endpoints ORDER BY endpoint"
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def device_metrics(self) -> dict[str, dict[str, Any]]:
+        """Return persistent report-cadence metrics by device ID."""
+        rows = self._connection.execute(
+            "SELECT * FROM device_metrics ORDER BY device_id"
+        ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            item = dict(row)
+            interval_count = int(item.pop("interval_count"))
+            total = float(item.pop("total_interval_seconds"))
+            item["average_report_interval_seconds"] = (
+                round(total / interval_count, 3) if interval_count else None
+            )
+            result[str(item.pop("device_id"))] = item
+        return result
 
     def _update_endpoints(self, event: dict[str, Any]) -> None:
         state = event.get("state", {})
@@ -145,3 +173,79 @@ class SQLiteEventStore:
                     state.get("rf_rssi_db"),
                 ),
             )
+
+    def _update_device_metrics(self, event: dict[str, Any]) -> None:
+        """Update one device's cadence counters for a decoded observation."""
+        if event.get("event_type") != "device_observation":
+            return
+        device_id = event.get("device_id")
+        observed_at = event.get("observed_at")
+        if not device_id or not isinstance(observed_at, str):
+            return
+
+        existing = self._connection.execute(
+            "SELECT last_observed_at FROM device_metrics WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        gap = 0.0
+        interval_increment = 0
+        if existing:
+            previous = _parse_timestamp(existing["last_observed_at"])
+            current = _parse_timestamp(observed_at)
+            if previous is not None and current is not None:
+                try:
+                    gap = max(0.0, (current - previous).total_seconds())
+                    interval_increment = 1
+                except TypeError:
+                    # Ignore a mixed aware/naive timestamp during migration.
+                    pass
+
+        self._connection.execute(
+            """
+            INSERT INTO device_metrics(
+                device_id, first_observed_at, last_observed_at, report_count,
+                interval_count, total_interval_seconds,
+                longest_report_gap_seconds
+            ) VALUES (?, ?, ?, 1, 0, 0, 0)
+            ON CONFLICT(device_id) DO UPDATE SET
+                last_observed_at=excluded.last_observed_at,
+                report_count=device_metrics.report_count + 1,
+                interval_count=device_metrics.interval_count + ?,
+                total_interval_seconds=(
+                    device_metrics.total_interval_seconds + ?
+                ),
+                longest_report_gap_seconds=MAX(
+                    device_metrics.longest_report_gap_seconds, ?
+                )
+            """,
+            (
+                device_id,
+                observed_at,
+                observed_at,
+                interval_increment,
+                gap,
+                gap,
+            ),
+        )
+
+    def _backfill_device_metrics(self) -> None:
+        """Build cadence metrics once when upgrading an existing database."""
+        row = self._connection.execute(
+            "SELECT COUNT(*) AS count FROM device_metrics"
+        ).fetchone()
+        if int(row["count"]):
+            return
+        rows = self._connection.execute(
+            "SELECT payload FROM events WHERE event_type = 'device_observation' "
+            "ORDER BY event_id"
+        ).fetchall()
+        for event_row in rows:
+            self._update_device_metrics(json.loads(event_row["payload"]))
+
+
+def _parse_timestamp(value: str) -> datetime | None:
+    """Parse ISO timestamps used by rtl_433 and the replay transport."""
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None

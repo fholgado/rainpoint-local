@@ -28,10 +28,14 @@
       "valve_state": { "name": "Valve state" },
       "duration": { "name": "Reported duration" },
       "last_usage": { "name": "Last water usage" },
-      "report_time": { "name": "Device report time" }
+      "report_time": { "name": "Device report time" },
+      "report_count": { "name": "Reports received" },
+      "average_report_interval": { "name": "Average report interval" },
+      "longest_report_gap": { "name": "Longest report gap" }
     },
     "binary_sensor": {
-      "watering": { "name": "Watering" }
+      "watering": { "name": "Watering" },
+      "reporting": { "name": "Reporting" }
     }
   }
 }
