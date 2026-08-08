@@ -14,5 +14,8 @@ configuration:
   research_capture_minutes:
     name: Broad capture duration
     description: Minutes to save all detected raw RF signals before returning to normal decoding
+  registry_write_token:
+    name: Registry write token
+    description: Optional bearer token for local registry metadata changes; leave empty to disable writes
 network:
-  8787/tcp: Read-only RainPoint Local API
+  8787/tcp: Receive-only RainPoint telemetry and local registry API
