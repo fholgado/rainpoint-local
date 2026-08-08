@@ -32,6 +32,7 @@ class ESP32SerialTransport:
         self._serial: Any | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self.radio_health: dict[str, dict[str, Any]] = {}
 
     def seed(self) -> None:
         """Register the same known receive-only devices as the SDR backend."""
@@ -89,6 +90,26 @@ class ESP32SerialTransport:
         if message_type == "radio_ready":
             self.gateway.set_transport_status(True)
             return 0
+        if message_type == "radio_health":
+            radio = message.get("radio")
+            if not isinstance(radio, str):
+                return 0
+            self.radio_health[radio] = {
+                key: message[key]
+                for key in (
+                    "channel",
+                    "configuration_valid",
+                    "packets",
+                    "overflows",
+                    "recoveries",
+                )
+                if key in message
+            }
+            if message.get("configuration_valid") is False:
+                self.gateway.set_transport_status(
+                    False, f"{radio}: cc1101_configuration_mismatch"
+                )
+            return 0
         if message_type != "rainpoint_rf":
             return 0
         frame_hex = message.get("frame")
@@ -105,7 +126,7 @@ class ESP32SerialTransport:
             "rows": [{"len": FRAME_BYTES * 8, "data": frame.hex()}],
             "bridge_metadata": {
                 key: message[key]
-                for key in ("radio", "channel", "lqi")
+                for key in ("radio", "channel", "lqi", "frequency_offset_hz")
                 if key in message
             },
         }

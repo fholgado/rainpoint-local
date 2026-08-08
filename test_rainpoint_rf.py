@@ -471,6 +471,7 @@ class RainPointRFTest(unittest.TestCase):
             "channel": 11,
             "rssi_dbm": -76.5,
             "lqi": 91,
+            "frequency_offset_hz": -3175,
             "frame": frame,
         }
 
@@ -485,6 +486,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("upper", right_bed["state"]["rf_radio"])
         self.assertEqual(11, right_bed["state"]["rf_channel"])
         self.assertEqual(91, right_bed["state"]["rf_lqi"])
+        self.assertEqual(-3175, right_bed["state"]["rf_frequency_offset_hz"])
 
     def test_esp32_serial_transport_rejects_non_frame_diagnostics(self) -> None:
         transport = ESP32SerialTransport(
@@ -521,6 +523,34 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(
             "upper: cc1101_not_found", gateway.health()["detail"]
         )
+
+        transport.consume_line(
+            json.dumps(
+                {
+                    "type": "radio_health",
+                    "radio": "lower",
+                    "channel": 0,
+                    "configuration_valid": True,
+                    "packets": 42,
+                    "overflows": 1,
+                    "recoveries": 43,
+                }
+            )
+        )
+        self.assertEqual(42, transport.radio_health["lower"]["packets"])
+        self.assertEqual(1, transport.radio_health["lower"]["overflows"])
+
+        transport.consume_line(
+            json.dumps(
+                {
+                    "type": "radio_health",
+                    "radio": "upper",
+                    "configuration_valid": False,
+                }
+            )
+        )
+        self.assertEqual("error", gateway.health()["status"])
+        self.assertIn("configuration_mismatch", gateway.health()["detail"])
 
         transport.consume_line(
             json.dumps({"type": "radio_ready", "radio": "upper"})

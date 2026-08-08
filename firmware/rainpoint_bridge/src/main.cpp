@@ -15,12 +15,14 @@ constexpr int kSpiMosiPin = 23;
 constexpr int kLowerChipSelectPin = 27;
 constexpr int kUpperChipSelectPin = 14;
 constexpr std::uint32_t kScanDwellMs = 500;
+constexpr std::uint32_t kHealthIntervalMs = 30'000;
 
 SPIClass radioSpi(VSPI);
 rainpoint::Cc1101 lowerRadio(radioSpi, kLowerChipSelectPin, kSpiMisoPin);
 #if RAINPOINT_RADIO_COUNT == 2
 rainpoint::Cc1101 upperRadio(radioSpi, kUpperChipSelectPin, kSpiMisoPin);
 #endif
+std::uint32_t lastHealthReport = 0;
 
 #if RAINPOINT_RADIO_COUNT == 1
 bool scanChannels = true;
@@ -49,6 +51,8 @@ void printPacket(
     Serial.print(packet.rssiTenthsDbm / 10.0f, 1);
     Serial.print(",\"lqi\":");
     Serial.print(packet.lqi);
+    Serial.print(",\"frequency_offset_hz\":");
+    Serial.print(packet.frequencyOffsetHz);
     Serial.print(",\"sync_valid\":");
     Serial.print(rainpoint::hasSync(frame) ? "true" : "false");
     Serial.print(",\"trailer_residual\":\"");
@@ -61,6 +65,29 @@ void printPacket(
     Serial.print(",\"frame\":\"");
     printHex(frame.data(), frame.size());
     Serial.println("\"}");
+}
+
+void printRadioHealth(const char* name, const rainpoint::Cc1101& radio) {
+    Serial.printf(
+        "{\"type\":\"radio_health\",\"radio\":\"%s\",\"channel\":%u,"
+        "\"configuration_valid\":%s,\"packets\":%lu,\"overflows\":%lu,"
+        "\"recoveries\":%lu}\n",
+        name,
+        radio.channel(),
+        radio.configurationValid() ? "true" : "false",
+        static_cast<unsigned long>(radio.packetCount()),
+        static_cast<unsigned long>(radio.overflowCount()),
+        static_cast<unsigned long>(radio.recoveryCount())
+    );
+}
+
+void reportHealth() {
+#if RAINPOINT_RADIO_COUNT == 1
+    printRadioHealth("scan", lowerRadio);
+#else
+    printRadioHealth("lower", lowerRadio);
+    printRadioHealth("upper", upperRadio);
+#endif
 }
 
 #if RAINPOINT_RADIO_COUNT == 1
@@ -158,6 +185,8 @@ void setup() {
 #if RAINPOINT_RADIO_COUNT == 1
     lastChannelChange = millis();
 #endif
+    reportHealth();
+    lastHealthReport = millis();
 }
 
 void loop() {
@@ -172,5 +201,9 @@ void loop() {
     pollRadio("lower", lowerRadio);
     pollRadio("upper", upperRadio);
 #endif
+    if (millis() - lastHealthReport >= kHealthIntervalMs) {
+        reportHealth();
+        lastHealthReport = millis();
+    }
     delay(1);
 }

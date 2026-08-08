@@ -38,8 +38,20 @@ ports onto one antenna requires a proper RF combiner or switch.
 - Reconstructs the stripped first two sync bytes into the normalized 38-byte
   frame.
 - Reports serial JSON with channel, CC1101 RSSI/LQI, frame hex, sync validity,
-  and the ordinary CRC-CCITT trailer residual.
+  frequency-offset estimate, and the ordinary CRC-CCITT trailer residual.
+- Reads back critical modem, sync, packet, and frequency registers at startup
+  and refuses to report the radio ready if configuration did not stick.
+- Counts received packets, RX FIFO overflows, and FIFO recoveries per radio.
+- Emits a `radio_health` record at boot and every 30 seconds so wiring,
+  configuration, tuning, and FIFO problems can be distinguished.
 - Rejects no research frames solely because their ordinary trailer is invalid.
+
+`recoveries` includes the intentional FIFO reset after a successfully consumed
+fixed-length packet as well as overflow recovery; compare it with `packets` and
+`overflows` rather than treating it as an error count by itself. The frequency
+offset uses the CC1101 `FREQEST` status register and a 26 MHz crystal. These
+diagnostics follow the register definitions in the
+[TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
 The dual-radio build fixes the lower radio to channel 0 and the upper radio to
 channel 11, receiving both RainPoint channels continuously. The single-radio
@@ -61,6 +73,10 @@ pio device monitor
 Use `esp32dev_single` instead when only one CC1101 is connected. A normal
 `pio run` compiles both configurations so shared code cannot silently break
 one of them.
+
+GitHub CI also compiles both configurations from a clean environment on every
+push and pull request, alongside the Python, protocol, analysis, and safety
+tests.
 
 The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and

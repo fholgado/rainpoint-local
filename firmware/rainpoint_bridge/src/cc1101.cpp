@@ -4,6 +4,7 @@ namespace rainpoint {
 namespace {
 
 constexpr std::uint8_t kReadBurst = 0xc0;
+constexpr std::uint8_t kReadSingle = 0x80;
 
 constexpr std::uint8_t kIocfg2 = 0x00;
 constexpr std::uint8_t kIocfg0 = 0x02;
@@ -50,6 +51,7 @@ constexpr std::uint8_t kRxFifo = 0x3f;
 
 constexpr std::uint8_t kPartNumber = 0x30;
 constexpr std::uint8_t kVersion = 0x31;
+constexpr std::uint8_t kFrequencyEstimate = 0x32;
 constexpr std::uint8_t kRxBytes = 0x3b;
 
 std::int16_t decodeRssi(std::uint8_t raw) {
@@ -57,6 +59,15 @@ std::int16_t decodeRssi(std::uint8_t raw) {
         ? static_cast<std::int16_t>(raw) - 256
         : static_cast<std::int16_t>(raw);
     return static_cast<std::int16_t>(signedRaw * 5 - 740);
+}
+
+std::int32_t decodeFrequencyOffset(std::uint8_t raw) {
+    const auto signedRaw = raw >= 128
+        ? static_cast<std::int16_t>(raw) - 256
+        : static_cast<std::int16_t>(raw);
+    // FREQEST resolution is crystal_frequency / 2^14. The modules use the
+    // standard 26 MHz crystal, giving approximately 1.587 kHz per count.
+    return static_cast<std::int32_t>(signedRaw) * 26'000'000L / 16'384L;
 }
 
 }  // namespace
@@ -121,6 +132,19 @@ void Cc1101::writeRegister(std::uint8_t address, std::uint8_t value) {
     }
     digitalWrite(chipSelectPin_, HIGH);
     spi_.endTransaction();
+}
+
+std::uint8_t Cc1101::readRegister(std::uint8_t address) {
+    spi_.beginTransaction(SPISettings(kSpiHz, MSBFIRST, SPI_MODE0));
+    digitalWrite(chipSelectPin_, LOW);
+    std::uint8_t value = 0xff;
+    if (waitReady()) {
+        spi_.transfer(address | kReadSingle);
+        value = spi_.transfer(0);
+    }
+    digitalWrite(chipSelectPin_, HIGH);
+    spi_.endTransaction();
+    return value;
 }
 
 std::uint8_t Cc1101::readStatus(std::uint8_t address) {
@@ -191,6 +215,39 @@ void Cc1101::configureRainPoint() {
     writeRegister(kTest0, 0x09);
 }
 
+bool Cc1101::verifyConfiguration() {
+    struct ExpectedRegister {
+        std::uint8_t address;
+        std::uint8_t value;
+    };
+    constexpr std::array<ExpectedRegister, 18> expected = {{
+        {kSync1, 0x79},
+        {kSync0, 0xf4},
+        {kPacketLength, kRadioPayloadBytes},
+        {kPacketControl1, 0x04},
+        {kPacketControl0, 0x00},
+        {kFrequency2, 0x10},
+        {kFrequency1, 0xa8},
+        {kFrequency0, 0xc3},
+        {kModemConfig4, 0x89},
+        {kModemConfig3, 0x93},
+        {kModemConfig2, 0x02},
+        {kModemConfig1, 0x21},
+        {kModemConfig0, 0xf8},
+        {kDeviation, 0x45},
+        {kFrequencyOffsetCompensation, 0x16},
+        {kBitSynchronization, 0x6c},
+        {kAgcControl2, 0x43},
+        {kAgcControl0, 0x91},
+    }};
+    for (const auto& item : expected) {
+        if (readRegister(item.address) != item.value) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool Cc1101::begin(std::uint8_t initialChannel) {
     pinMode(chipSelectPin_, OUTPUT);
     digitalWrite(chipSelectPin_, HIGH);
@@ -200,6 +257,10 @@ bool Cc1101::begin(std::uint8_t initialChannel) {
     }
     configureRainPoint();
     if (partNumber() != 0x00 || version() == 0x00 || version() == 0xff) {
+        return false;
+    }
+    configurationValid_ = verifyConfiguration();
+    if (!configurationValid_) {
         return false;
     }
     return setChannel(initialChannel);
@@ -219,6 +280,7 @@ bool Cc1101::setChannel(std::uint8_t channel) {
 }
 
 void Cc1101::recoverRx() {
+    ++recoveryCount_;
     strobe(kIdle);
     strobe(kFlushRx);
     strobe(kEnterRx);
@@ -227,6 +289,7 @@ void Cc1101::recoverRx() {
 bool Cc1101::poll(RadioPacket& packet) {
     const auto rxBytes = readStatus(kRxBytes);
     if (rxBytes & 0x80) {
+        ++overflowCount_;
         recoverRx();
         return false;
     }
@@ -242,6 +305,10 @@ bool Cc1101::poll(RadioPacket& packet) {
     }
     packet.rssiTenthsDbm = decodeRssi(received[kRadioPayloadBytes]);
     packet.lqi = received[kRadioPayloadBytes + 1] & 0x7f;
+    packet.frequencyOffsetHz = decodeFrequencyOffset(
+        readStatus(kFrequencyEstimate)
+    );
+    ++packetCount_;
     recoverRx();
     return true;
 }
@@ -256,6 +323,22 @@ std::uint8_t Cc1101::partNumber() {
 
 std::uint8_t Cc1101::version() {
     return readStatus(kVersion);
+}
+
+bool Cc1101::configurationValid() const {
+    return configurationValid_;
+}
+
+std::uint32_t Cc1101::packetCount() const {
+    return packetCount_;
+}
+
+std::uint32_t Cc1101::overflowCount() const {
+    return overflowCount_;
+}
+
+std::uint32_t Cc1101::recoveryCount() const {
+    return recoveryCount_;
 }
 
 }  // namespace rainpoint

@@ -13,6 +13,7 @@ namespace rainpoint {
 struct RadioPacket {
     std::array<std::uint8_t, kRadioPayloadBytes> payload{};
     std::int16_t rssiTenthsDbm = 0;
+    std::int32_t frequencyOffsetHz = 0;
     std::uint8_t lqi = 0;
 };
 
@@ -26,6 +27,10 @@ public:
     std::uint8_t channel() const;
     std::uint8_t partNumber();
     std::uint8_t version();
+    bool configurationValid() const;
+    std::uint32_t packetCount() const;
+    std::uint32_t overflowCount() const;
+    std::uint32_t recoveryCount() const;
 
 private:
     static constexpr std::uint32_t kSpiHz = 4'000'000;
@@ -33,9 +38,11 @@ private:
     bool reset();
     bool waitReady(std::uint32_t timeoutMicros = 2'000);
     void configureRainPoint();
+    bool verifyConfiguration();
     void recoverRx();
     std::uint8_t strobe(std::uint8_t command);
     void writeRegister(std::uint8_t address, std::uint8_t value);
+    std::uint8_t readRegister(std::uint8_t address);
     std::uint8_t readStatus(std::uint8_t address);
     void readBurst(std::uint8_t address, std::uint8_t* data, std::size_t length);
 
@@ -43,6 +50,10 @@ private:
     int chipSelectPin_;
     int misoPin_;
     std::uint8_t channel_ = 0;
+    bool configurationValid_ = false;
+    std::uint32_t packetCount_ = 0;
+    std::uint32_t overflowCount_ = 0;
+    std::uint32_t recoveryCount_ = 0;
 };
 
 }  // namespace rainpoint

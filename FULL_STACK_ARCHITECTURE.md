@@ -83,9 +83,10 @@ board is unnecessary until the protocol and deployment have been proven.
 
 The receive-only firmware scaffold now lives in `firmware/rainpoint_bridge`.
 It implements a fixed radio per observed channel, frame reconstruction,
-integrity diagnostics, and serial JSON output. The `rainpointd` serial
-transport consumes that same output without changing Home Assistant entities.
-It deliberately contains no transmit strobe or command interface.
+integrity diagnostics, startup register verification, packet/overflow/recovery
+counters, frequency-offset estimates, and serial JSON output. The `rainpointd`
+serial transport consumes that same output without changing Home Assistant
+entities. It deliberately contains no transmit strobe or command interface.
 
 ### Home Assistant integration (`rainpoint_local`)
 

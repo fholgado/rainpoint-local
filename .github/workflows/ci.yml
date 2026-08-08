@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run protocol, gateway, analysis, and safety tests
+        run: |
+          python -m unittest -v \
+            test_rainpoint_protocol.py \
+            test_rainpointd.py \
+            test_rainpoint_rf.py \
+            test_rainpoint_analysis.py \
+            test_rainpoint_safety.py
+      - name: Compile hardware-independent firmware protocol tests
+        run: |
+          c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
+            firmware/rainpoint_bridge/tests/protocol_test.cpp \
+            -o /tmp/rainpoint-protocol-test
+          /tmp/rainpoint-protocol-test
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install "platformio==6.1.19"
+      - name: Build single- and dual-radio firmware
+        run: pio run --project-dir firmware/rainpoint_bridge
