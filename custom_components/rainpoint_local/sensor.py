@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -20,6 +21,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import RainPointLocalCoordinator
@@ -31,6 +33,7 @@ class RainPointSensorDescription(SensorEntityDescription):
     """Describe a decoded gateway state field."""
 
     state_key: str
+    device_field: bool = False
 
 
 DESCRIPTIONS = (
@@ -82,7 +85,9 @@ DESCRIPTIONS = (
     RainPointSensorDescription(
         key="report_time",
         translation_key="report_time",
-        state_key="report_time_local",
+        state_key="observed_at",
+        device_field=True,
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
@@ -104,7 +109,8 @@ async def async_setup_entry(
             state = device.get("state", {})
             for description in DESCRIPTIONS:
                 identity = (device_id, description.key)
-                if description.state_key not in state or identity in known:
+                source = device if description.device_field else state
+                if description.state_key not in source or identity in known:
                     continue
                 known.add(identity)
                 entities.append(
@@ -137,4 +143,18 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the current decoded value."""
-        return self.decoded_state.get(self.entity_description.state_key)
+        description = self.entity_description
+        source = self.device if description.device_field else self.decoded_state
+        value = source.get(description.state_key)
+        if description.device_class != SensorDeviceClass.TIMESTAMP:
+            return value
+        if not isinstance(value, str):
+            return None
+        parsed: datetime | None = dt_util.parse_datetime(value)
+        if parsed is None:
+            return None
+        # rtl_433 timestamps use the add-on's local clock but omit its offset.
+        # Timestamp sensors require a timezone-aware value.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        return parsed

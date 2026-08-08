@@ -1,0 +1,372 @@
+title: Garden Local
+views:
+  - title: Garden
+    path: garden
+    icon: mdi:flower
+    type: sections
+    max_columns: 4
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: >-
+              **Local RF telemetry.** This dashboard reads RainPoint moisture and
+              valve reports from `rainpoint_local`. Valve control and watering
+              automations remain on the existing production path for now.
+          - type: heading
+            heading: Garden Moisture
+            heading_style: title
+            icon: mdi:water-percent
+          - type: gauge
+            name: Left Bed
+            entity: sensor.left_bed_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
+          - type: gauge
+            name: Right Bed
+            entity: sensor.right_bed_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
+          - type: statistics-graph
+            title: Moisture Trend
+            chart_type: line
+            days_to_show: 2
+            period: hour
+            stat_types:
+              - mean
+            entities:
+              - sensor.left_bed_soil_moisture
+              - sensor.right_bed_soil_moisture
+      - type: grid
+        cards:
+          - type: heading
+            heading: Garden Schedule
+            heading_style: title
+            icon: mdi:calendar-clock
+          - type: tile
+            entity: input_boolean.garden_watering_season_enabled
+            name: Watering Season
+            icon: mdi:sprout
+            color: green
+            vertical: false
+          - type: tile
+            entity: binary_sensor.garden_watering_needed
+            name: Watering Needed
+            icon: mdi:sprinkler-variant
+            color: blue
+            vertical: false
+          - type: tile
+            entity: sensor.garden_soil_moisture_lowest
+            name: Driest Sensor
+            icon: mdi:water-percent
+            color: teal
+            vertical: false
+          - type: button
+            name: Run Now
+            icon: mdi:sprinkler-variant
+            tap_action:
+              action: call-service
+              service: script.garden_run_manual_watering_program
+          - type: entities
+            title: Decision Settings
+            show_header_toggle: false
+            entities:
+              - entity: input_datetime.garden_watering_start_time
+                name: Start Time
+              - entity: input_number.garden_watering_moisture_threshold
+                name: Moisture Threshold
+              - entity: input_number.garden_watering_duration
+                name: Duration
+              - entity: input_number.garden_watering_rain_probability_threshold
+                name: Rain Probability
+              - entity: input_number.garden_watering_meaningful_rain_amount
+                name: Meaningful Rain
+              - entity: sensor.nws_irrigation_rain_probability_next_18_hours
+                name: NWS Rain Probability
+              - entity: sensor.nws_irrigation_rain_amount_next_24_hours
+                name: NWS Rain Amount
+          - type: entities
+            title: Last Decision
+            show_header_toggle: false
+            entities:
+              - entity: input_datetime.garden_watering_last_checked
+                name: Last Checked
+              - entity: input_datetime.garden_watering_last_ran
+                name: Last Ran
+              - entity: input_text.garden_watering_last_rain_forecast
+                name: Rain Forecast
+              - entity: input_text.garden_watering_last_decision
+                name: Decision
+      - type: grid
+        cards:
+          - type: heading
+            heading: Garden Watering Today
+            heading_style: title
+            icon: mdi:sprinkler-variant
+          - type: tile
+            entity: input_number.garden_water_used_today
+            name: Water Used Today
+            icon: mdi:water
+            color: blue
+            vertical: false
+          - type: tile
+            entity: sensor.garden_valve_last_water_usage
+            name: Last Session
+            icon: mdi:cup-water
+            color: blue
+            vertical: false
+          - type: tile
+            entity: sensor.garden_valve_reported_duration
+            name: Session Duration
+            icon: mdi:timer-outline
+            color: teal
+            vertical: false
+          - type: history-graph
+            title: Watering Activity
+            hours_to_show: 24
+            entities:
+              - entity: sensor.garden_valve_last_water_usage
+                name: Liters
+              - entity: binary_sensor.garden_valve_watering
+                name: Zone 1
+      - type: grid
+        cards:
+          - type: heading
+            heading: Garden Valve
+            heading_style: title
+            icon: mdi:valve
+          - type: tile
+            entity: binary_sensor.garden_valve_watering
+            name: Zone 1 Watering
+            icon: mdi:valve
+            color: green
+          - type: tile
+            entity: sensor.garden_valve_device_report_time
+            name: Last Valve Report
+            icon: mdi:clock-check-outline
+            color: amber
+          - type: entities
+            title: Local Valve Report
+            show_header_toggle: false
+            entities:
+              - entity: sensor.garden_valve_valve_state
+                name: Valve State
+              - entity: sensor.garden_valve_reported_duration
+                name: Reported Duration
+              - entity: sensor.garden_valve_last_water_usage
+                name: Last Water Usage
+          - type: entities
+            title: Device Health
+            show_header_toggle: false
+            entities:
+              - entity: sensor.garden_valve_battery
+                name: Valve Battery
+              - entity: sensor.left_bed_battery
+                name: Left Sensor Battery
+              - entity: sensor.right_bed_battery
+                name: Right Sensor Battery
+              - entity: sensor.garden_valve_signal_strength
+                name: Valve Signal
+              - entity: sensor.left_bed_signal_strength
+                name: Left Sensor Signal
+              - entity: sensor.right_bed_signal_strength
+                name: Right Sensor Signal
+              - entity: sensor.left_bed_device_report_time
+                name: Left Sensor Last Report
+              - entity: sensor.right_bed_device_report_time
+                name: Right Sensor Last Report
+  - title: Front Yard
+    path: front-yard
+    icon: mdi:flower-tulip
+    type: sections
+    max_columns: 4
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: >-
+              **Local RF telemetry.** Soil readings and sensor health below come
+              from `rainpoint_local`; the existing front-yard valve remains on
+              its current local integration.
+          - type: heading
+            heading: Front Yard Moisture
+            heading_style: title
+            icon: mdi:water-percent
+          - type: gauge
+            name: Plant Bed 1
+            entity: sensor.front_yard_sensor_1_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
+          - type: gauge
+            name: Plant Bed 2
+            entity: sensor.front_yard_sensor_2_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
+          - type: statistics-graph
+            title: Moisture Trend
+            chart_type: line
+            days_to_show: 2
+            period: hour
+            stat_types:
+              - mean
+            entities:
+              - sensor.front_yard_sensor_1_soil_moisture
+              - sensor.front_yard_sensor_2_soil_moisture
+      - type: grid
+        cards:
+          - type: heading
+            heading: Front Yard Schedule
+            heading_style: title
+            icon: mdi:calendar-clock
+          - type: tile
+            entity: input_boolean.front_yard_watering_season_enabled
+            name: Watering Season
+            icon: mdi:sprout
+            color: green
+            vertical: false
+          - type: tile
+            entity: binary_sensor.front_yard_watering_needed
+            name: Watering Needed
+            icon: mdi:sprinkler-variant
+            color: blue
+            vertical: false
+          - type: tile
+            entity: sensor.front_yard_soil_moisture_lowest
+            name: Driest Sensor
+            icon: mdi:water-percent
+            color: teal
+            vertical: false
+          - type: button
+            name: Run Now
+            icon: mdi:sprinkler-variant
+            tap_action:
+              action: call-service
+              service: script.front_yard_run_manual_watering_program
+          - type: entities
+            title: Decision Settings
+            show_header_toggle: false
+            entities:
+              - entity: input_datetime.front_yard_watering_start_time
+                name: Start Time
+              - entity: input_number.front_yard_watering_moisture_threshold
+                name: Moisture Threshold
+              - entity: input_number.front_yard_watering_duration
+                name: Duration
+              - entity: input_number.front_yard_watering_rain_probability_threshold
+                name: Rain Probability
+              - entity: input_number.front_yard_watering_meaningful_rain_amount
+                name: Meaningful Rain
+              - entity: sensor.nws_irrigation_rain_probability_next_18_hours
+                name: NWS Rain Probability
+              - entity: sensor.nws_irrigation_rain_amount_next_24_hours
+                name: NWS Rain Amount
+          - type: entities
+            title: Last Decision
+            show_header_toggle: false
+            entities:
+              - entity: input_datetime.front_yard_watering_last_checked
+                name: Last Checked
+              - entity: input_datetime.front_yard_watering_last_ran
+                name: Last Ran
+              - entity: input_text.front_yard_watering_last_rain_forecast
+                name: Rain Forecast
+              - entity: input_text.front_yard_watering_last_decision
+                name: Decision
+      - type: grid
+        cards:
+          - type: heading
+            heading: Front Yard Watering Today
+            heading_style: title
+            icon: mdi:sprinkler-variant
+          - type: tile
+            entity: input_number.front_yard_water_used_today
+            name: Water Used Today
+            icon: mdi:water
+            color: blue
+            vertical: false
+          - type: tile
+            entity: input_number.front_yard_last_session_gallons
+            name: Last Session
+            icon: mdi:cup-water
+            color: blue
+            vertical: false
+          - type: tile
+            entity: sensor.front_garden_bed_water_valve_volume_flow_rate
+            name: Flow Rate
+            icon: mdi:water-pump
+            color: teal
+            vertical: false
+          - type: history-graph
+            title: Watering Activity
+            hours_to_show: 24
+            entities:
+              - entity: input_number.front_yard_last_session_gallons
+                name: Gallons
+              - entity: switch.front_garden_bed_water_valve
+                name: Valve
+      - type: grid
+        cards:
+          - type: heading
+            heading: Front Yard Valve
+            heading_style: title
+            icon: mdi:valve
+          - type: tile
+            entity: switch.front_garden_bed_water_valve
+            name: Water Valve
+            icon: mdi:valve
+            color: green
+            vertical: false
+          - type: tile
+            entity: input_number.front_yard_watering_duration
+            name: Zone Duration
+            icon: mdi:timer-cog-outline
+            color: amber
+            vertical: false
+          - type: entities
+            title: Meter
+            show_header_toggle: false
+            entities:
+              - entity: sensor.front_garden_bed_water_valve_total_gallons
+                name: Total Gallons
+              - entity: sensor.front_garden_bed_water_valve_total_volume
+                name: Total Volume
+              - entity: input_number.front_yard_water_meter_session_start
+                name: Session Start Meter
+          - type: entities
+            title: Device Health
+            show_header_toggle: false
+            entities:
+              - entity: sensor.front_garden_bed_water_valve_battery
+                name: Valve Battery
+              - entity: sensor.front_yard_sensor_1_battery
+                name: Sensor 1 Battery
+              - entity: sensor.front_yard_sensor_2_battery
+                name: Sensor 2 Battery
+              - entity: sensor.front_yard_sensor_1_signal_strength
+                name: Sensor 1 Signal
+              - entity: sensor.front_yard_sensor_2_signal_strength
+                name: Sensor 2 Signal
+              - entity: sensor.front_yard_sensor_1_device_report_time
+                name: Sensor 1 Last Report
+              - entity: sensor.front_yard_sensor_2_device_report_time
+                name: Sensor 2 Last Report

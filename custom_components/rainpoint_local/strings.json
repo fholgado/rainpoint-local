@@ -32,6 +32,9 @@
     },
     "binary_sensor": {
       "watering": { "name": "Watering" }
+    },
+    "event": {
+      "report_received": { "name": "Report received" }
     }
   }
 }
