@@ -17,6 +17,9 @@ fi
 if [[ "${registry_write_token}" == "null" ]]; then
   registry_write_token=""
 fi
+if [[ "${node_listen_port}" == "null" ]]; then
+  node_listen_port=8790
+fi
 if [[ "${node_tokens}" == "null" ]]; then
   node_tokens=""
 fi
