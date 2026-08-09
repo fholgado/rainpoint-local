@@ -62,10 +62,17 @@ not assume that only one node can exist:
 - Make central event handling capable of deduplicating the same frame received
   by several nodes.
 - Represent a preferred transmitter node separately from device identity.
+- Require the user to select the closest transmitter node for every valve in a
+  multi-node installation before enabling local control.
+- Validate the assignment with a close/idle exchange and retain receive-quality
+  data only as a recommendation.
 - Never broadcast valve-open commands through multiple nodes.
 - Require a node-local hard timeout for any node allowed to transmit.
 - Authenticate each future Wi-Fi node independently so one credential can be
   revoked without rebuilding the device registry.
+- Do not automatically fail an open command over to another node when the
+  assigned transmitter is unavailable; reserve alternate-node attempts for
+  sequential emergency close recovery.
 
 After the one-node transmit path is proven, add the Wi-Fi transport and a
 second node to validate deduplication, coverage reporting, transmitter

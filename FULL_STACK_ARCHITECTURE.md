@@ -104,6 +104,8 @@ Reception may use every healthy node concurrently. Transmission is centrally
 coordinated:
 
 - each device has one preferred transmitter node,
+- every valve in a multi-node installation requires an explicit user-selected
+  transmitter node before local control is enabled,
 - an open command is sent through exactly one node,
 - open commands are never broadcast for coverage,
 - alternate-node close attempts may occur only sequentially under the safety
@@ -115,6 +117,16 @@ The first end-to-end transmit prototype uses one USB-connected node to avoid
 adding Wi-Fi as a test variable. The eventual network transport should use an
 authenticated outbound connection from each node to `rainpointd`, making it
 possible to place nodes near the garden areas they serve.
+
+For installations with multiple RainPoint valves, setup must ask the user
+which local radio node is physically closest to each valve. Observed receive
+quality may be shown as a recommendation, but it cannot silently override the
+assignment. Commissioning should require a successful close/idle exchange
+through the selected node before enabling bounded open commands. If that node
+is unavailable, ordinary open control remains unavailable rather than failing
+over automatically to a more distant node. The safety controller may attempt
+sequential close through other authorized nodes only as an emergency recovery
+operation.
 
 The receive-only firmware scaffold now lives in `firmware/rainpoint_bridge`.
 Its production build scans both observed channels with one radio and implements
