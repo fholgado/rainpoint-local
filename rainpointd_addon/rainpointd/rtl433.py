@@ -31,6 +31,7 @@ def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
         ("channel", "rf_channel", int),
         ("lqi", "rf_lqi", int),
         ("frequency_offset_hz", "rf_frequency_offset_hz", int),
+        ("node_id", "rf_node_id", str),
     ):
         value = metadata.get(source)
         if isinstance(value, expected_type) and not isinstance(value, bool):

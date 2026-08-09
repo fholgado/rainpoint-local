@@ -1,0 +1,315 @@
+#include "wifi_transport.h"
+
+#include <ESP.h>
+#include <mbedtls/md.h>
+
+#include <array>
+#include <cctype>
+
+#ifndef RAINPOINT_FIRMWARE_VERSION
+#define RAINPOINT_FIRMWARE_VERSION "development"
+#endif
+
+namespace rainpoint {
+namespace {
+
+String stableNodeId() {
+    const std::uint64_t identifier = ESP.getEfuseMac();
+    char buffer[16];
+    std::snprintf(
+        buffer,
+        sizeof(buffer),
+        "rp-%04x%08x",
+        static_cast<unsigned int>((identifier >> 32) & 0xffff),
+        static_cast<unsigned int>(identifier & 0xffffffff)
+    );
+    return String(buffer);
+}
+
+String jsonString(const String& input, const char* key) {
+    const String marker = String('"') + key + "\":\"";
+    const int start = input.indexOf(marker);
+    if (start < 0) {
+        return String();
+    }
+    const int valueStart = start + marker.length();
+    const int end = input.indexOf('"', valueStart);
+    return end < 0 ? String() : input.substring(valueStart, end);
+}
+
+bool validHexToken(const String& token) {
+    if (token.length() != 64) {
+        return false;
+    }
+    for (std::size_t index = 0; index < token.length(); ++index) {
+        if (!std::isxdigit(static_cast<unsigned char>(token[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validHost(const String& host) {
+    if (host.isEmpty() || host.length() > 253) {
+        return false;
+    }
+    for (std::size_t index = 0; index < host.length(); ++index) {
+        const char value = host[index];
+        if (!(std::isalnum(static_cast<unsigned char>(value)) ||
+              value == '.' || value == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+String hmacProof(
+    const String& token,
+    const String& nonce,
+    const String& nodeId
+) {
+    const String message =
+        String("rainpoint-node-v1\n") + nonce + "\n" + nodeId;
+    std::array<unsigned char, 32> digest{};
+    const mbedtls_md_info_t* info =
+        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (info == nullptr ||
+        mbedtls_md_hmac(
+            info,
+            reinterpret_cast<const unsigned char*>(token.c_str()),
+            token.length(),
+            reinterpret_cast<const unsigned char*>(message.c_str()),
+            message.length(),
+            digest.data()
+        ) != 0) {
+        return String();
+    }
+    constexpr char digits[] = "0123456789abcdef";
+    String output;
+    output.reserve(digest.size() * 2);
+    for (const unsigned char value : digest) {
+        output += digits[value >> 4];
+        output += digits[value & 0x0f];
+    }
+    return output;
+}
+
+}  // namespace
+
+void WifiTransport::begin() {
+    nodeId_ = stableNodeId();
+    loadConfiguration();
+    if (configured_) {
+        startWifi();
+    } else {
+        reportNetworkState("unconfigured");
+    }
+}
+
+void WifiTransport::loadConfiguration() {
+    preferences_.begin("rainpoint", true);
+    ssid_ = preferences_.getString("ssid", "");
+    password_ = preferences_.getString("password", "");
+    gatewayHost_ = preferences_.getString("host", "");
+    gatewayPort_ = preferences_.getUShort("port", 8790);
+    token_ = preferences_.getString("token", "");
+    preferences_.end();
+    configured_ = !ssid_.isEmpty() && validHost(gatewayHost_) &&
+                  gatewayPort_ > 0 && validHexToken(token_);
+}
+
+void WifiTransport::startWifi() {
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.setHostname(nodeId_.c_str());
+    WiFi.begin(ssid_.c_str(), password_.c_str());
+    lastReconnectAttempt_ = millis();
+    reportNetworkState("connecting_wifi");
+}
+
+void WifiTransport::poll() {
+    if (!configured_) {
+        return;
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+        clearConnection();
+        if (millis() - lastReconnectAttempt_ >= kReconnectIntervalMs) {
+            WiFi.reconnect();
+            lastReconnectAttempt_ = millis();
+            reportNetworkState("reconnecting_wifi");
+        }
+        return;
+    }
+    if (!client_.connected()) {
+        authenticated_ = false;
+        if (millis() - lastReconnectAttempt_ >= kReconnectIntervalMs) {
+            connectGateway();
+            lastReconnectAttempt_ = millis();
+        }
+        return;
+    }
+    while (client_.available()) {
+        const char value = static_cast<char>(client_.read());
+        if (value == '\n') {
+            handleGatewayLine(inputLine_);
+            inputLine_.clear();
+        } else if (value != '\r') {
+            if (inputLine_.length() >= kMaximumLineBytes) {
+                reportNetworkState("protocol_error", "line_too_long");
+                clearConnection();
+                return;
+            }
+            inputLine_ += value;
+        }
+    }
+}
+
+void WifiTransport::connectGateway() {
+    reportNetworkState("connecting_gateway");
+    if (!client_.connect(gatewayHost_.c_str(), gatewayPort_)) {
+        reportNetworkState("gateway_unreachable");
+        return;
+    }
+    client_.setNoDelay(true);
+    reportNetworkState("awaiting_challenge");
+}
+
+void WifiTransport::handleGatewayLine(const String& line) {
+    const String type = jsonString(line, "type");
+    if (type == "node_challenge") {
+        const String nonce = jsonString(line, "nonce");
+        if (nonce.length() != 64) {
+            reportNetworkState("protocol_error", "invalid_challenge");
+            clearConnection();
+            return;
+        }
+        authenticate(nonce);
+        return;
+    }
+    if (type == "node_authenticated") {
+        if (jsonString(line, "node_id") != nodeId_) {
+            reportNetworkState("protocol_error", "node_identity_mismatch");
+            clearConnection();
+            return;
+        }
+        authenticated_ = true;
+        reportNetworkState("authenticated");
+        return;
+    }
+    if (type == "node_rejected") {
+        reportNetworkState("authentication_failed");
+        clearConnection();
+        return;
+    }
+    // Receive-only milestone: never interpret network messages as commands.
+}
+
+void WifiTransport::authenticate(const String& nonce) {
+    const String proof = hmacProof(token_, nonce, nodeId_);
+    if (proof.isEmpty()) {
+        reportNetworkState("protocol_error", "hmac_failed");
+        clearConnection();
+        return;
+    }
+    client_.printf(
+        "{\"type\":\"node_hello\",\"protocol_version\":%u,"
+        "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
+        "\"mode\":\"receive_only\",\"proof\":\"%s\"}\n",
+        kProtocolVersion,
+        nodeId_.c_str(),
+        RAINPOINT_FIRMWARE_VERSION,
+        proof.c_str()
+    );
+}
+
+void WifiTransport::sendLine(const String& line) {
+    if (!authenticated_ || !client_.connected()) {
+        return;
+    }
+    client_.print(line);
+    client_.print('\n');
+}
+
+bool WifiTransport::handleProvisioningCommand(const String& command) {
+    if (command == "show_node") {
+        Serial.printf(
+            "{\"type\":\"node_configuration\",\"node_id\":\"%s\","
+            "\"wifi_configured\":%s,\"gateway_host\":\"%s\","
+            "\"gateway_port\":%u}\n",
+            nodeId_.c_str(),
+            configured_ ? "true" : "false",
+            configured_ ? gatewayHost_.c_str() : "",
+            gatewayPort_
+        );
+        return true;
+    }
+    if (command == "clear_wifi") {
+        preferences_.begin("rainpoint", false);
+        preferences_.clear();
+        preferences_.end();
+        configured_ = false;
+        clearConnection();
+        WiFi.disconnect(true, true);
+        reportNetworkState("configuration_cleared");
+        return true;
+    }
+    if (!command.startsWith("configure_wifi\t")) {
+        return false;
+    }
+
+    std::array<String, 5> fields;
+    int start = String("configure_wifi\t").length();
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        const int separator = command.indexOf('\t', start);
+        if (index + 1 == fields.size()) {
+            fields[index] = command.substring(start);
+            start = command.length();
+        } else if (separator >= 0) {
+            fields[index] = command.substring(start, separator);
+            start = separator + 1;
+        } else {
+            reportNetworkState("configuration_error", "expected_five_fields");
+            return true;
+        }
+    }
+    const long port = fields[3].toInt();
+    if (fields[0].isEmpty() || fields[0].length() > 32 ||
+        fields[1].length() > 63 || !validHost(fields[2]) ||
+        port < 1 || port > 65535 || !validHexToken(fields[4])) {
+        reportNetworkState("configuration_error", "invalid_field");
+        return true;
+    }
+
+    preferences_.begin("rainpoint", false);
+    preferences_.putString("ssid", fields[0]);
+    preferences_.putString("password", fields[1]);
+    preferences_.putString("host", fields[2]);
+    preferences_.putUShort("port", static_cast<std::uint16_t>(port));
+    preferences_.putString("token", fields[4]);
+    preferences_.end();
+    loadConfiguration();
+    reportNetworkState("configuration_saved", "restart_required");
+    return true;
+}
+
+void WifiTransport::reportNetworkState(const char* state, const char* detail) {
+    Serial.printf(
+        "{\"type\":\"node_network\",\"node_id\":\"%s\","
+        "\"state\":\"%s\"",
+        nodeId_.c_str(),
+        state
+    );
+    if (detail != nullptr) {
+        Serial.printf(",\"detail\":\"%s\"", detail);
+    }
+    Serial.println("}");
+}
+
+void WifiTransport::clearConnection() {
+    authenticated_ = false;
+    inputLine_.clear();
+    client_.stop();
+}
+
+}  // namespace rainpoint

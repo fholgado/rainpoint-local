@@ -6,6 +6,7 @@
 
 #include "cc1101.h"
 #include "rainpoint_protocol.h"
+#include "wifi_transport.h"
 
 #if RAINPOINT_RADIO_COUNT != 1 && RAINPOINT_RADIO_COUNT != 2
 #error "RAINPOINT_RADIO_COUNT must be 1 or 2"
@@ -23,6 +24,7 @@ constexpr std::uint32_t kHealthIntervalMs = 30'000;
 
 SPIClass radioSpi(VSPI);
 rainpoint::Cc1101 primaryRadio(radioSpi, kPrimaryChipSelectPin, kSpiMisoPin);
+rainpoint::WifiTransport wifiTransport;
 #if RAINPOINT_RADIO_COUNT == 2
 rainpoint::Cc1101 diagnosticRadio(
     radioSpi,
@@ -31,19 +33,29 @@ rainpoint::Cc1101 diagnosticRadio(
 );
 #endif
 std::uint32_t lastHealthReport = 0;
+String serialCommand;
 
 #if RAINPOINT_RADIO_COUNT == 1
 bool scanChannels = true;
 std::uint32_t lastChannelChange = 0;
 #endif
 
-void printHex(const std::uint8_t* data, std::size_t length) {
+String hexString(const std::uint8_t* data, std::size_t length) {
     constexpr char digits[] = "0123456789abcdef";
+    String result;
+    result.reserve(length * 2);
     for (std::size_t index = 0; index < length; ++index) {
-        Serial.write(digits[data[index] >> 4]);
-        Serial.write(digits[data[index] & 0x0f]);
+        result += digits[data[index] >> 4];
+        result += digits[data[index] & 0x0f];
     }
+    return result;
 }
+
+void emitLine(const String& line) {
+    Serial.println(line);
+    wifiTransport.sendLine(line);
+}
+
 void printPacket(
     const char* radioName,
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
@@ -51,35 +63,44 @@ void printPacket(
     const rainpoint::Cc1101& radio
 ) {
     const auto residual = rainpoint::trailerResidual(frame);
-    Serial.print("{\"type\":\"rainpoint_rf\",\"radio\":\"");
-    Serial.print(radioName);
-    Serial.print("\",\"channel\":");
-    Serial.print(radio.channel());
-    Serial.print(",\"rssi_dbm\":");
-    Serial.print(packet.rssiTenthsDbm / 10.0f, 1);
-    Serial.print(",\"lqi\":");
-    Serial.print(packet.lqi);
-    Serial.print(",\"frequency_offset_hz\":");
-    Serial.print(packet.frequencyOffsetHz);
-    Serial.print(",\"sync_valid\":");
-    Serial.print(rainpoint::hasSync(frame) ? "true" : "false");
-    Serial.print(",\"trailer_residual\":\"");
-    if (residual < 0x1000) Serial.print('0');
-    if (residual < 0x0100) Serial.print('0');
-    if (residual < 0x0010) Serial.print('0');
-    Serial.print(residual, HEX);
-    Serial.print("\",\"trailer_valid\":");
-    Serial.print(rainpoint::hasOrdinaryTrailer(frame) ? "true" : "false");
-    Serial.print(",\"frame\":\"");
-    printHex(frame.data(), frame.size());
-    Serial.println("\"}");
+    char residualHex[5];
+    std::snprintf(residualHex, sizeof(residualHex), "%04x", residual);
+    String line;
+    line.reserve(360);
+    line += "{\"type\":\"rainpoint_rf\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"radio\":\"";
+    line += radioName;
+    line += "\",\"channel\":";
+    line += radio.channel();
+    line += ",\"rssi_dbm\":";
+    line += String(packet.rssiTenthsDbm / 10.0f, 1);
+    line += ",\"lqi\":";
+    line += packet.lqi;
+    line += ",\"frequency_offset_hz\":";
+    line += packet.frequencyOffsetHz;
+    line += ",\"sync_valid\":";
+    line += rainpoint::hasSync(frame) ? "true" : "false";
+    line += ",\"trailer_residual\":\"";
+    line += residualHex;
+    line += "\",\"trailer_valid\":";
+    line += rainpoint::hasOrdinaryTrailer(frame) ? "true" : "false";
+    line += ",\"frame\":\"";
+    line += hexString(frame.data(), frame.size());
+    line += "\"}";
+    emitLine(line);
 }
 
 void printRadioHealth(const char* name, const rainpoint::Cc1101& radio) {
-    Serial.printf(
-        "{\"type\":\"radio_health\",\"radio\":\"%s\",\"channel\":%u,"
+    char line[320];
+    std::snprintf(
+        line,
+        sizeof(line),
+        "{\"type\":\"radio_health\",\"node_id\":\"%s\","
+        "\"radio\":\"%s\",\"channel\":%u,"
         "\"configuration_valid\":%s,\"packets\":%lu,\"overflows\":%lu,"
         "\"recoveries\":%lu}\n",
+        wifiTransport.nodeId().c_str(),
         name,
         radio.channel(),
         radio.configurationValid() ? "true" : "false",
@@ -87,6 +108,9 @@ void printRadioHealth(const char* name, const rainpoint::Cc1101& radio) {
         static_cast<unsigned long>(radio.overflowCount()),
         static_cast<unsigned long>(radio.recoveryCount())
     );
+    String output(line);
+    output.trim();
+    emitLine(output);
 }
 
 void reportHealth() {
@@ -102,27 +126,51 @@ void reportHealth() {
 void selectChannel(std::uint8_t channel) {
     if (primaryRadio.setChannel(channel)) {
         lastChannelChange = millis();
-        Serial.printf("{\"type\":\"radio_channel\",\"channel\":%u}\n", channel);
-    }
-}
-
-void handleSerialCommand() {
-    if (!Serial.available()) {
-        return;
-    }
-    const char command = static_cast<char>(Serial.read());
-    if (command == '0') {
-        scanChannels = false;
-        selectChannel(0);
-    } else if (command == '1') {
-        scanChannels = false;
-        selectChannel(11);
-    } else if (command == 's' || command == 'S') {
-        scanChannels = true;
-        lastChannelChange = millis();
+        emitLine(
+            String("{\"type\":\"radio_channel\",\"node_id\":\"") +
+            wifiTransport.nodeId() + "\",\"channel\":" + channel + "}"
+        );
     }
 }
 #endif
+
+void handleSerialCommand() {
+    while (Serial.available()) {
+        const char value = static_cast<char>(Serial.read());
+        if (value == '\n' || value == '\r') {
+            if (serialCommand.isEmpty()) {
+                continue;
+            }
+#if RAINPOINT_RADIO_COUNT == 1
+            if (serialCommand == "0") {
+                scanChannels = false;
+                selectChannel(0);
+            } else if (serialCommand == "1") {
+                scanChannels = false;
+                selectChannel(11);
+            } else if (serialCommand == "s" || serialCommand == "S") {
+                scanChannels = true;
+                lastChannelChange = millis();
+            } else
+#endif
+            if (!wifiTransport.handleProvisioningCommand(serialCommand)) {
+                emitLine(
+                    String("{\"type\":\"command_error\",\"node_id\":\"") +
+                    wifiTransport.nodeId() + "\",\"error\":\"unknown_command\"}"
+                );
+            }
+            serialCommand = "";
+        } else if (serialCommand.length() < 512) {
+            serialCommand += value;
+        } else {
+            serialCommand = "";
+            emitLine(
+                String("{\"type\":\"command_error\",\"node_id\":\"") +
+                wifiTransport.nodeId() + "\",\"error\":\"command_too_long\"}"
+            );
+        }
+    }
+}
 
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
@@ -139,21 +187,19 @@ bool beginRadio(
     std::uint8_t channel
 ) {
     if (!radio.begin(channel)) {
-        Serial.printf(
-            "{\"type\":\"radio_error\",\"radio\":\"%s\",\"channel\":%u,"
-            "\"error\":\"cc1101_not_found\"}\n",
-            name,
-            channel
+        emitLine(
+            String("{\"type\":\"radio_error\",\"node_id\":\"") +
+            wifiTransport.nodeId() + "\",\"radio\":\"" + name +
+            "\",\"channel\":" + channel +
+            ",\"error\":\"cc1101_not_found\"}"
         );
         return false;
     }
-    Serial.printf(
-        "{\"type\":\"radio_ready\",\"radio\":\"%s\",\"channel\":%u,"
-        "\"part\":%u,\"version\":%u}\n",
-        name,
-        channel,
-        radio.partNumber(),
-        radio.version()
+    emitLine(
+        String("{\"type\":\"radio_ready\",\"node_id\":\"") +
+        wifiTransport.nodeId() + "\",\"radio\":\"" + name +
+        "\",\"channel\":" + channel + ",\"part\":" +
+        radio.partNumber() + ",\"version\":" + radio.version() + "}"
     );
     return true;
 }
@@ -163,9 +209,13 @@ bool beginRadio(
 void setup() {
     Serial.begin(115200);
     delay(250);
-    Serial.printf(
-        "{\"type\":\"boot\",\"mode\":\"receive_only\",\"radio_count\":%d}\n",
-        RAINPOINT_RADIO_COUNT
+    wifiTransport.begin();
+    emitLine(
+        String("{\"type\":\"boot\",\"node_id\":\"") +
+        wifiTransport.nodeId() + "\",\"mode\":\"receive_only\","
+        "\"wifi_configured\":" +
+        (wifiTransport.configured() ? "true" : "false") +
+        ",\"radio_count\":" + RAINPOINT_RADIO_COUNT + "}"
     );
 
     // Keep every device deselected before the shared SPI bus is started.
@@ -182,9 +232,10 @@ void setup() {
     ready = beginRadio("diagnostic", diagnosticRadio, 11) && ready;
 #endif
     if (!ready) {
-        Serial.println(
-            "{\"type\":\"fatal\","
-            "\"error\":\"radio_initialization_failed\"}"
+        emitLine(
+            String("{\"type\":\"fatal\",\"node_id\":\"") +
+            wifiTransport.nodeId() +
+            "\",\"error\":\"radio_initialization_failed\"}"
         );
         while (true) {
             delay(1'000);
@@ -198,8 +249,9 @@ void setup() {
 }
 
 void loop() {
-#if RAINPOINT_RADIO_COUNT == 1
+    wifiTransport.poll();
     handleSerialCommand();
+#if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);
 
     if (scanChannels && millis() - lastChannelChange >= kScanDwellMs) {

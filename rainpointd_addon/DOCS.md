@@ -5,8 +5,9 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.5.0 supports captured replay, receive-only USB RTL-SDR, and
-receive-only ESP32/CC1101 serial modes. It does not connect to the RainPoint
+Version 0.6.0 supports captured replay, receive-only USB RTL-SDR,
+receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
+one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. Valve-control POST requests remain rejected. Token-protected registry
 requests change local names and discovery metadata only; they never transmit.
 
@@ -35,6 +36,31 @@ For `esp32_serial`, set `serial_device` to the ESP32 USB serial path and leave
 `serial_baud` at `115200`. The stable `/dev/serial/by-id/...` path is preferable
 when the host exposes one; `/dev/ttyUSB0` is the portable default. The gateway
 revalidates every frame instead of trusting the bridge's diagnostic fields.
+
+### Wi-Fi radio nodes
+
+The Wi-Fi node listener is a sidecar to the selected transport. This means the
+existing RTL-SDR can remain the primary reference receiver while one or more
+ESP32 nodes send the same normalized frames over TCP port 8790. Frames carry
+their authenticated node ID, and a packet heard by two different nodes within
+250 ms is stored once. Repeated packets from the same node are preserved.
+
+Set `node_tokens` to a JSON object containing one independent 64-hex-character
+token per stable node ID:
+
+```json
+{"rp-001122334455":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+```
+
+Leave `node_tokens` empty to reject every connection. Set `node_listen_port` to
+`0` to disable the listener, or leave it at `8790`. Never reuse one node's
+token for another node and do not post real tokens in issues or logs. Current
+node state and receive counters are available from the read-only
+`/api/v1/nodes` endpoint.
+
+This configuration is intended for trusted-LAN hardware testing. It proves
+node authentication but does not yet encrypt or sign every telemetry record.
+Network valve commands remain unavailable.
 
 ### Broad capture duration
 

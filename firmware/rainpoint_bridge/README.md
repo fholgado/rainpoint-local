@@ -39,7 +39,8 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Supports RainPoint channel 0 near 433.140 MHz and channel 11 near 434.240 MHz.
 - Reconstructs the stripped first two sync bytes into the normalized 38-byte
   frame.
-- Reports serial JSON with channel, CC1101 RSSI/LQI, frame hex, sync validity,
+- Reports USB serial JSON with a stable node ID, channel, CC1101 RSSI/LQI,
+  frame hex, sync validity,
   frequency-offset estimate, and the ordinary CRC-CCITT trailer residual.
 - Reads back critical modem, sync, packet, and frequency registers at startup
   and refuses to report the radio ready if configuration did not stick.
@@ -47,6 +48,9 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Emits a `radio_health` record at boot and every 30 seconds so wiring,
   configuration, tuning, and FIFO problems can be distinguished.
 - Rejects no research frames solely because their ordinary trailer is invalid.
+- Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
+  `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
+  its enrollment token over the network.
 
 `recoveries` includes the intentional FIFO reset after a successfully consumed
 fixed-length packet as well as overflow recovery; compare it with `packets` and
@@ -56,8 +60,8 @@ diagnostics follow the register definitions in the
 [TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
 The production single-radio build alternates channels every 500 ms. Send `0`
-over serial to lock channel 0, `1` to lock channel 11, or `s` to resume
-scanning. The optional dual-radio diagnostic build fixes the primary radio to
+followed by Enter over serial to lock channel 0, `1` to lock channel 11, or `s`
+to resume scanning. The optional dual-radio diagnostic build fixes the primary radio to
 channel 0 and the second radio to channel 11 so both can be evaluated
 continuously against the existing RTL-SDR.
 
@@ -94,6 +98,37 @@ The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and
 release it when PlatformIO begins connecting.
 
+## Wi-Fi provisioning for prototype testing
+
+Wi-Fi is optional. An unconfigured node continues to work over USB exactly as
+before. Each board derives a stable ID such as `rp-001122334455` from its ESP32
+hardware identifier. Open the serial monitor at 115200 baud and enter:
+
+```text
+show_node
+```
+
+Generate a separate 32-byte token for this node (`openssl rand -hex 32` is one
+option), add the node-ID/token pair to `rainpointd`, then provision the board
+with one tab-separated line:
+
+```text
+configure_wifi<TAB>SSID<TAB>PASSWORD<TAB>HA_HOST<TAB>8790<TAB>64_HEX_TOKEN
+```
+
+Use literal Tab characters and press Enter. Restart the ESP32 after it reports
+`configuration_saved`. The board stores the values in ESP32 NVS, connects as a
+Wi-Fi station, and makes an outbound connection to the configured Home
+Assistant host. `show_node` reports only non-secret configuration. `clear_wifi`
+erases the saved Wi-Fi and token values.
+
+This is a trusted-LAN prototype transport. The HMAC challenge prevents an
+unknown node from enrolling and prevents the token itself from crossing the
+network, but TCP telemetry is not encrypted or individually signed. Before a
+published setup or any network valve control, the transport needs server
+authentication plus an encrypted, replay-protected session. No inbound
+network message is interpreted as a radio or valve command in this firmware.
+
 The hardware-independent protocol test can run without PlatformIO:
 
 ```sh
@@ -113,7 +148,8 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
    measured packet success and CC1101 frequency-offset estimates.
 4. Validate the implemented receive-only USB serial transport into
    `rainpointd`.
-5. Add authenticated local-network transport only if USB deployment proves
-   impractical.
+5. Validate authenticated Wi-Fi telemetry and reconnect behavior on the
+   physical board while preserving USB as a diagnostic mirror.
 6. Reproduce the long command wake prefix without exposing a command surface.
-7. Design transmission as a separate safety-reviewed milestone.
+7. Design encrypted, replay-protected transmission as a separate
+   safety-reviewed milestone.

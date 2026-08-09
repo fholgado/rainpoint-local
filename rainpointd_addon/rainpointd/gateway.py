@@ -45,6 +45,7 @@ class Gateway:
         self.read_only = read_only
         self._registry_token = registry_token or None
         self._devices: dict[str, dict[str, Any]] = {}
+        self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = SQLiteEventStore(storage_path) if storage_path else None
@@ -65,6 +66,7 @@ class Gateway:
                 "transport": self.transport,
                 "read_only": self.read_only,
                 "device_count": len(self._devices),
+                "node_count": len(self._nodes),
                 "transport_healthy": self._transport_healthy,
                 "transport_error": self._transport_error,
                 "persistent_storage": self._store is not None,
@@ -90,6 +92,20 @@ class Gateway:
         with self._lock:
             self._transport_healthy = healthy
             self._transport_error = error
+
+    def update_node(self, node_id: str, **fields: Any) -> None:
+        """Update ephemeral diagnostics for one authenticated radio node."""
+        with self._lock:
+            node = self._nodes.setdefault(node_id, {"node_id": node_id})
+            node.update(copy.deepcopy(fields))
+
+    def nodes(self) -> list[dict[str, Any]]:
+        """Return radio-node connection and receiver diagnostics."""
+        with self._lock:
+            return sorted(
+                copy.deepcopy(list(self._nodes.values())),
+                key=lambda item: item["node_id"],
+            )
 
     def health(self) -> dict[str, Any]:
         """Return health separately from capability metadata."""

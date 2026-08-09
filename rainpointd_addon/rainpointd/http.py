@@ -33,6 +33,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if parsed.path == f"/api/{API_VERSION}/devices":
             self._json(200, {"devices": self.server.gateway.devices()})
             return
+        if parsed.path == f"/api/{API_VERSION}/nodes":
+            self._json(200, {"nodes": self.server.gateway.nodes()})
+            return
         if parsed.path == f"/api/{API_VERSION}/endpoints":
             self._json(200, {"endpoints": self.server.gateway.endpoints()})
             return

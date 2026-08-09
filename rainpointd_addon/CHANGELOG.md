@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+- Accept telemetry from multiple outbound Wi-Fi ESP32/CC1101 connections while
+  retaining the existing RTL-SDR or replay backend.
+- Authenticate every node with a unique nonce/HMAC enrollment credential; the
+  credential itself is never sent over the network.
+- Attach authenticated node provenance to decoded RF state and expose
+  connection diagnostics at `/api/v1/nodes`.
+- Deduplicate the same frame heard by different nodes within 250 ms without
+  suppressing ordinary retransmissions heard by one node.
+- Keep the network surface receive-only; command and transmit messages are not
+  implemented.
+
 ## 0.5.0
 
 - Add a persistent local registry for accepting, naming, assigning, and

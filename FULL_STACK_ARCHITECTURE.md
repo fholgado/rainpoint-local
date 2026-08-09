@@ -113,10 +113,12 @@ coordinated:
 - every transmitting node enforces its own hard deadline if LAN connectivity
   or the controlling process is lost.
 
-The first end-to-end transmit prototype uses one USB-connected node to avoid
-adding Wi-Fi as a test variable. The eventual network transport should use an
-authenticated outbound connection from each node to `rainpointd`, making it
-possible to place nodes near the garden areas they serve.
+Receive-only firmware now supports both USB and an authenticated outbound Wi-Fi
+connection from each node to `rainpointd`, making it possible to place nodes
+near the garden areas they serve while keeping the existing SDR as a reference.
+The first transmit test may still use USB for isolation, but Wi-Fi telemetry is
+no longer coupled to that decision. Network control requires a separately
+reviewed encrypted and replay-protected session before it can be enabled.
 
 For installations with multiple RainPoint valves, setup must ask the user
 which local radio node is physically closest to each valve. Observed receive

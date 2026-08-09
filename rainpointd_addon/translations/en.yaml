@@ -17,5 +17,12 @@ configuration:
   registry_write_token:
     name: Registry write token
     description: Optional bearer token for local registry metadata changes; leave empty to disable writes
+  node_listen_port:
+    name: Wi-Fi node listener port
+    description: TCP port for authenticated inbound ESP32 radio-node telemetry; set to 0 to disable
+  node_tokens:
+    name: Wi-Fi node credentials
+    description: JSON object mapping each stable node ID to its unique 64-character hexadecimal token
 network:
   8787/tcp: Receive-only RainPoint telemetry and local registry API
+  8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes

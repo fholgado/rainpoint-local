@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.5.0
+version: 0.6.0
 slug: rainpointd
 description: Read-only local RainPoint gateway for RTL-SDR or ESP32 receivers
 url: https://github.com/fholgado/rainpoint-local
@@ -13,8 +13,10 @@ stage: experimental
 homeassistant: 2026.7.0
 ports:
   8787/tcp: 8787
+  8790/tcp: 8790
 ports_description:
   8787/tcp: Receive-only RainPoint telemetry and local registry API
+  8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes
 watchdog: http://[HOST]:[PORT:8787]/health
 usb: true
 map:
@@ -28,6 +30,8 @@ options:
   serial_baud: 115200
   research_capture_minutes: 0
   registry_write_token: ""
+  node_listen_port: 8790
+  node_tokens: ""
 schema:
   transport: "list(replay|rtl433|esp32_serial)"
   replay_interval: "float(0.5,3600)"
@@ -37,3 +41,5 @@ schema:
   serial_baud: "int(9600,921600)"
   research_capture_minutes: "int(0,240)"
   registry_write_token: str?
+  node_listen_port: "list(0|8790)"
+  node_tokens: str?

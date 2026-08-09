@@ -19,6 +19,7 @@ jobs:
         run: |
           python -m unittest -v \
             test_rainpoint_protocol.py \
+            test_esp32_network.py \
             test_rainpointd.py \
             test_rainpoint_rf.py \
             test_rainpoint_analysis.py \

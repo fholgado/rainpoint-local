@@ -68,7 +68,9 @@ class ESP32SerialTransport:
         self._serial = None
         self._thread = None
 
-    def consume_line(self, line: str | bytes) -> int:
+    def consume_line(
+        self, line: str | bytes, *, authenticated_node_id: str | None = None
+    ) -> int:
         """Validate one bridge line and publish it through the RF decoder."""
         if isinstance(line, bytes):
             try:
@@ -79,6 +81,13 @@ class ESP32SerialTransport:
             message = json.loads(line)
         except (json.JSONDecodeError, TypeError):
             return 0
+        if not isinstance(message, dict):
+            return 0
+        reported_node_id = message.get("node_id")
+        if authenticated_node_id is not None:
+            if reported_node_id not in (None, authenticated_node_id):
+                return 0
+            message["node_id"] = authenticated_node_id
         message_type = message.get("type")
         if message_type in {"fatal", "radio_error"}:
             detail = str(message.get("error", "bridge reported a radio error"))
@@ -94,7 +103,12 @@ class ESP32SerialTransport:
             radio = message.get("radio")
             if not isinstance(radio, str):
                 return 0
-            self.radio_health[radio] = {
+            health_key = (
+                f"{authenticated_node_id}:{radio}"
+                if authenticated_node_id
+                else radio
+            )
+            self.radio_health[health_key] = {
                 key: message[key]
                 for key in (
                     "channel",
@@ -108,6 +122,16 @@ class ESP32SerialTransport:
             if message.get("configuration_valid") is False:
                 self.gateway.set_transport_status(
                     False, f"{radio}: cc1101_configuration_mismatch"
+                )
+            if authenticated_node_id:
+                node_health = {
+                    key.removeprefix(f"{authenticated_node_id}:"): value
+                    for key, value in self.radio_health.items()
+                    if key.startswith(f"{authenticated_node_id}:")
+                }
+                self.gateway.update_node(
+                    authenticated_node_id,
+                    radio_health=node_health,
                 )
             return 0
         if message_type != "rainpoint_rf":
@@ -126,7 +150,13 @@ class ESP32SerialTransport:
             "rows": [{"len": FRAME_BYTES * 8, "data": frame.hex()}],
             "bridge_metadata": {
                 key: message[key]
-                for key in ("radio", "channel", "lqi", "frequency_offset_hz")
+                for key in (
+                    "node_id",
+                    "radio",
+                    "channel",
+                    "lqi",
+                    "frequency_offset_hz",
+                )
                 if key in message
             },
         }

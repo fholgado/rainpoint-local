@@ -271,6 +271,8 @@ class HTTPAPITest(unittest.TestCase):
         self.assertEqual(5, info["device_count"])
         self.assertEqual(5, len(self.get_json("/api/v1/devices")["devices"]))
         self.assertEqual([], self.get_json("/api/v1/endpoints")["endpoints"])
+        self.assertEqual(0, info["node_count"])
+        self.assertEqual([], self.get_json("/api/v1/nodes")["nodes"])
 
     def test_event_cursor(self) -> None:
         result = self.get_json("/api/v1/events?since=5")
