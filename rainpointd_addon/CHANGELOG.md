@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+- Retain trailer-invalid frames for research without allowing them to update
+  Home Assistant device state.
+- Track valid/invalid RF frame totals and reception-success percentage per
+  device for antenna-placement diagnostics.
+- Advance valve report freshness from valid routine frames on its established
+  endpoint link without changing the last decoded valve state.
+- Rebuild endpoint discovery from trailer-valid history so one-off corrupted
+  addresses no longer appear as candidate devices.
+
 ## 0.6.0
 
 - Accept telemetry from multiple outbound Wi-Fi ESP32/CC1101 connections while

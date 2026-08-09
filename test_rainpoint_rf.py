@@ -395,14 +395,10 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertFalse(before["available"])
 
-        data = (
-            "aa" * 150
-            + "bcfa4417945a168047ce72c01205c2418380c002a20f8"
-            + "000000000000000000000000000010780"
-        )
+        frame = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
         event = {
             "time": "2026-08-06T11:35:33.325850",
-            "rows": [{"len": 1508, "data": data}],
+            "rows": [{"len": len(frame) * 4, "data": frame}],
             "rssi": -1.99,
         }
         self.assertEqual(1, transport.consume_line(json.dumps(event)))
@@ -413,8 +409,70 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertTrue(device["available"])
         self.assertEqual("soil-right-bed", device["device_id"])
-        self.assertEqual(62, device["state"]["soil_moisture_percent"])
+        self.assertEqual(54, device["state"]["soil_moisture_percent"])
         self.assertEqual("9ce58024", device["state"]["rf_endpoint"])
+        self.assertEqual(100.0, device["rf_frame_success_percent"])
+
+    def test_invalid_moisture_is_retained_without_updating_state(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        valid = "79f4882f28b9840280d1e280241e8182078544268000000000000000000000000000000077e7"
+        corrupted = "79f4882f28b9840280d1e2802417018207854407000000000000000000000000000000000000"
+        transport.consume_line(
+            json.dumps(
+                {
+                    "time": "2026-08-09T18:25:27",
+                    "rows": [{"len": len(valid) * 4, "data": valid}],
+                }
+            )
+        )
+        transport.consume_line(
+            json.dumps(
+                {
+                    "time": "2026-08-09T18:26:27",
+                    "rows": [
+                        {"len": len(corrupted) * 4, "data": corrupted}
+                    ],
+                }
+            )
+        )
+
+        device = next(
+            item
+            for item in gateway.devices()
+            if item["device_id"] == "soil-front-2"
+        )
+        self.assertEqual(77, device["state"]["soil_moisture_percent"])
+        self.assertEqual("2026-08-09T18:25:27", device["observed_at"])
+        self.assertEqual(50.0, device["rf_frame_success_percent"])
+        self.assertEqual(1, device["valid_rf_frame_count"])
+        self.assertEqual(1, device["invalid_rf_frame_count"])
+        self.assertEqual("rf_frame", gateway.events()[-1]["event_type"])
+        self.assertFalse(gateway.events()[-1]["state"]["rf_frame_accepted"])
+
+    def test_valid_routine_valve_frame_advances_report_time_only(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        frame = "79f4882f28b42d008fb98402808845010001000000000000000000000000000000000000324c"
+        timestamp = "2026-08-09T18:28:35"
+        transport.consume_line(
+            json.dumps(
+                {
+                    "time": timestamp,
+                    "rows": [{"len": len(frame) * 4, "data": frame}],
+                }
+            )
+        )
+
+        valve = next(
+            item for item in gateway.devices() if item["device_id"] == "valve-1"
+        )
+        self.assertTrue(valve["available"])
+        self.assertEqual(timestamp, valve["observed_at"])
+        self.assertIsNone(valve["state"]["valve_state"])
+        self.assertEqual(100.0, valve["rf_frame_success_percent"])
 
     def test_live_transport_canonicalizes_product_code_report(self) -> None:
         gateway = Gateway(transport="rtl433")

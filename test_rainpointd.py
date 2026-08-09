@@ -144,6 +144,124 @@ class GatewayTest(unittest.TestCase):
             self.assertFalse(stale["reporting"])
             restored.close()
 
+    def test_reception_quality_persists_and_invalid_endpoint_is_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.register(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                state={"soil_moisture_percent": None},
+            )
+            gateway.observe_decoded(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                frame="valid",
+                observed_at="2026-08-08T12:00:00",
+                state={
+                    "soil_moisture_percent": 44,
+                    "rf_endpoint": "aabbcc01",
+                    "rf_endpoint_a": "11223344",
+                    "rf_endpoint_b": "aabbcc01",
+                    "rf_trailer_valid": True,
+                    "rf_frame_accepted": True,
+                },
+            )
+            gateway.observe_rf_frame(
+                device_id="soil-test",
+                frame="invalid",
+                observed_at="2026-08-08T12:01:00",
+                state={
+                    "soil_moisture_percent": 4,
+                    "rf_endpoint": "aabbcc00",
+                    "rf_endpoint_a": "11223340",
+                    "rf_endpoint_b": "aabbcc00",
+                    "rf_trailer_valid": False,
+                    "rf_frame_accepted": False,
+                },
+            )
+
+            device = gateway.devices(now=datetime(2026, 8, 8, 12, 2))[0]
+            self.assertEqual(44, device["state"]["soil_moisture_percent"])
+            self.assertEqual("2026-08-08T12:00:00", device["observed_at"])
+            self.assertEqual(50.0, device["rf_frame_success_percent"])
+            self.assertEqual(1, device["valid_rf_frame_count"])
+            self.assertEqual(1, device["invalid_rf_frame_count"])
+            endpoints = {item["endpoint"] for item in gateway.endpoints()}
+            self.assertIn("aabbcc01", endpoints)
+            self.assertNotIn("aabbcc00", endpoints)
+            self.assertNotIn("11223340", endpoints)
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            restored_device = restored.devices(
+                now=datetime(2026, 8, 8, 12, 2)
+            )[0]
+            self.assertEqual(44, restored_device["state"]["soil_moisture_percent"])
+            self.assertEqual(50.0, restored_device["rf_frame_success_percent"])
+            restored.close()
+
+    def test_legacy_rejected_observation_is_not_restored_or_counted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                frame="valid",
+                observed_at="2026-08-08T12:00:00",
+                state={
+                    "soil_moisture_percent": 78,
+                    "rf_endpoint": "aabbcc01",
+                    "rf_trailer_valid": True,
+                },
+            )
+            gateway.observe_decoded(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                frame="corrupted",
+                observed_at="2026-08-08T12:01:00",
+                state={
+                    "soil_moisture_percent": 14,
+                    "rf_endpoint": "aabbcc00",
+                    "rf_trailer_valid": False,
+                },
+            )
+            gateway._store._connection.execute(
+                "UPDATE device_metrics SET report_count = 2 "
+                "WHERE device_id = 'soil-test'"
+            )
+            gateway._store._connection.execute(
+                """
+                INSERT INTO endpoints(
+                    endpoint, first_seen, last_seen, frame_count,
+                    last_frame
+                ) VALUES ('aabbcc00', '2026-08-08T12:01:00',
+                          '2026-08-08T12:01:00', 1, 'corrupted')
+                """
+            )
+            gateway._store._connection.execute(
+                "DELETE FROM storage_metadata WHERE key IN "
+                "('device_metrics_version', 'endpoint_inventory_version')"
+            )
+            gateway._store._connection.commit()
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            device = restored.devices(now=datetime(2026, 8, 8, 12, 2))[0]
+            self.assertEqual(78, device["state"]["soil_moisture_percent"])
+            self.assertEqual("2026-08-08T12:00:00", device["observed_at"])
+            self.assertEqual(1, device["report_count"])
+            self.assertEqual(50.0, device["rf_frame_success_percent"])
+            self.assertNotIn(
+                "aabbcc00", {item["endpoint"] for item in restored.endpoints()}
+            )
+            restored.close()
+
     def test_existing_database_metrics_are_backfilled(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "rainpoint.sqlite3"

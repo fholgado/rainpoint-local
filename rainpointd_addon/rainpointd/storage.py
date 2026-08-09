@@ -9,6 +9,27 @@ from pathlib import Path
 from typing import Any
 
 
+def frame_accepted(event: dict[str, Any]) -> bool | None:
+    """Return the integrity decision while preserving legacy event meaning."""
+    state = event.get("state", {})
+    explicit = state.get("rf_frame_accepted")
+    if isinstance(explicit, bool):
+        return explicit
+    trailer_valid = state.get("rf_trailer_valid")
+    if trailer_valid is True:
+        return True
+    # Product-code reports and decoded valve transactions predate the ordinary
+    # trailer family. Their strict structural decoders are the current evidence.
+    if "rf_product_code" in state:
+        return True
+    if (
+        event.get("event_type") == "device_observation"
+        and event.get("model") == "HTV145FRF"
+    ):
+        return True
+    return trailer_valid if isinstance(trailer_valid, bool) else None
+
+
 class SQLiteEventStore:
     """Persist normalized events and summarize observed RF endpoints."""
 
@@ -48,6 +69,20 @@ class SQLiteEventStore:
                 total_interval_seconds REAL NOT NULL DEFAULT 0,
                 longest_report_gap_seconds REAL NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS device_reception_metrics (
+                device_id TEXT PRIMARY KEY,
+                valid_frame_count INTEGER NOT NULL DEFAULT 0,
+                invalid_frame_count INTEGER NOT NULL DEFAULT 0,
+                last_frame_at TEXT NOT NULL,
+                last_valid_frame_at TEXT,
+                last_invalid_frame_at TEXT,
+                last_frame_event_id INTEGER NOT NULL,
+                last_valid_frame_event_id INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS storage_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS device_registry (
                 endpoint TEXT PRIMARY KEY,
                 device_id TEXT NOT NULL UNIQUE,
@@ -66,7 +101,9 @@ class SQLiteEventStore:
             );
             """
         )
+        self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
+        self._backfill_reception_metrics()
         self._connection.commit()
 
     def close(self) -> None:
@@ -87,6 +124,7 @@ class SQLiteEventStore:
         )
         self._update_endpoints(event)
         self._update_device_metrics(event)
+        self._update_reception_metrics(event)
         self._connection.commit()
 
     def recent_events(self, limit: int) -> list[dict[str, Any]]:
@@ -95,6 +133,20 @@ class SQLiteEventStore:
             "SELECT payload FROM events ORDER BY event_id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [json.loads(row["payload"]) for row in reversed(rows)]
+
+    def latest_device_events(self) -> list[dict[str, Any]]:
+        """Return the newest accepted decoded observation for every device."""
+        rows = self._connection.execute(
+            "SELECT payload FROM events WHERE event_type = 'device_observation' "
+            "ORDER BY event_id"
+        ).fetchall()
+        latest: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            event = json.loads(row["payload"])
+            device_id = event.get("device_id")
+            if isinstance(device_id, str) and frame_accepted(event) is not False:
+                latest[device_id] = event
+        return list(latest.values())
 
     def events(self, since: int = 0, limit: int = 1_000) -> list[dict[str, Any]]:
         """Return one chronological page newer than an event ID."""
@@ -138,6 +190,30 @@ class SQLiteEventStore:
             total = float(item.pop("total_interval_seconds"))
             item["average_report_interval_seconds"] = (
                 round(total / interval_count, 3) if interval_count else None
+            )
+            result[str(item.pop("device_id"))] = item
+        return result
+
+    def reception_metrics(self) -> dict[str, dict[str, Any]]:
+        """Return valid/invalid RF reception quality by logical device."""
+        rows = self._connection.execute(
+            "SELECT * FROM device_reception_metrics ORDER BY device_id"
+        ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            item = dict(row)
+            valid = int(item.pop("valid_frame_count"))
+            invalid = int(item.pop("invalid_frame_count"))
+            total = valid + invalid
+            item.update(
+                {
+                    "valid_rf_frame_count": valid,
+                    "invalid_rf_frame_count": invalid,
+                    "rf_frame_count": total,
+                    "rf_frame_success_percent": (
+                        round(valid * 100 / total, 1) if total else None
+                    ),
+                }
             )
             result[str(item.pop("device_id"))] = item
         return result
@@ -254,6 +330,8 @@ class SQLiteEventStore:
 
     def _update_endpoints(self, event: dict[str, Any]) -> None:
         state = event.get("state", {})
+        if frame_accepted(event) is False:
+            return
         roles: dict[str, set[str]] = {}
         for key, role in (
             ("rf_endpoint_a", "a"),
@@ -261,6 +339,14 @@ class SQLiteEventStore:
             ("rf_endpoint", "sensor"),
         ):
             endpoint = state.get(key)
+            if (
+                key == "rf_endpoint_b"
+                and "rf_product_code" in state
+                and endpoint != state.get("rf_endpoint")
+            ):
+                # Product-code reports encode a variant in the address byte;
+                # discovery uses the separately retained canonical endpoint.
+                continue
             if endpoint:
                 roles.setdefault(str(endpoint), set()).add(role)
 
@@ -300,9 +386,65 @@ class SQLiteEventStore:
                 ),
             )
 
+    def _update_reception_metrics(self, event: dict[str, Any]) -> None:
+        """Track integrity separately from decoded device-state cadence."""
+        device_id = event.get("device_id")
+        valid = frame_accepted(event)
+        if not isinstance(device_id, str) or not isinstance(valid, bool):
+            return
+        observed_at = event.get("observed_at")
+        event_id = event.get("event_id")
+        if not isinstance(observed_at, str) or not isinstance(event_id, int):
+            return
+        self._connection.execute(
+            """
+            INSERT INTO device_reception_metrics(
+                device_id, valid_frame_count, invalid_frame_count,
+                last_frame_at, last_valid_frame_at, last_invalid_frame_at,
+                last_frame_event_id, last_valid_frame_event_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                valid_frame_count=(
+                    device_reception_metrics.valid_frame_count +
+                    excluded.valid_frame_count
+                ),
+                invalid_frame_count=(
+                    device_reception_metrics.invalid_frame_count +
+                    excluded.invalid_frame_count
+                ),
+                last_frame_at=excluded.last_frame_at,
+                last_valid_frame_at=COALESCE(
+                    excluded.last_valid_frame_at,
+                    device_reception_metrics.last_valid_frame_at
+                ),
+                last_invalid_frame_at=COALESCE(
+                    excluded.last_invalid_frame_at,
+                    device_reception_metrics.last_invalid_frame_at
+                ),
+                last_frame_event_id=excluded.last_frame_event_id,
+                last_valid_frame_event_id=COALESCE(
+                    excluded.last_valid_frame_event_id,
+                    device_reception_metrics.last_valid_frame_event_id
+                )
+            """,
+            (
+                device_id,
+                int(valid),
+                int(not valid),
+                observed_at,
+                observed_at if valid else None,
+                observed_at if not valid else None,
+                event_id,
+                event_id if valid else None,
+            ),
+        )
+
     def _update_device_metrics(self, event: dict[str, Any]) -> None:
         """Update one device's cadence counters for a decoded observation."""
-        if event.get("event_type") != "device_observation":
+        if (
+            event.get("event_type") != "device_observation"
+            or frame_accepted(event) is False
+        ):
             return
         device_id = event.get("device_id")
         observed_at = event.get("observed_at")
@@ -355,18 +497,61 @@ class SQLiteEventStore:
         )
 
     def _backfill_device_metrics(self) -> None:
-        """Build cadence metrics once when upgrading an existing database."""
-        row = self._connection.execute(
+        """Rebuild cadence once without trailer-rejected observations."""
+        count_row = self._connection.execute(
             "SELECT COUNT(*) AS count FROM device_metrics"
         ).fetchone()
-        if int(row["count"]):
+        version_row = self._connection.execute(
+            "SELECT value FROM storage_metadata WHERE key = ?",
+            ("device_metrics_version",),
+        ).fetchone()
+        if int(count_row["count"]) and (
+            version_row is not None and version_row["value"] == "2"
+        ):
             return
+        self._connection.execute("DELETE FROM device_metrics")
         rows = self._connection.execute(
             "SELECT payload FROM events WHERE event_type = 'device_observation' "
             "ORDER BY event_id"
         ).fetchall()
         for event_row in rows:
             self._update_device_metrics(json.loads(event_row["payload"]))
+        self._connection.execute(
+            "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+            ("device_metrics_version", "2"),
+        )
+
+    def _backfill_reception_metrics(self) -> None:
+        """Build RF integrity metrics once from retained device events."""
+        row = self._connection.execute(
+            "SELECT COUNT(*) AS count FROM device_reception_metrics"
+        ).fetchone()
+        if int(row["count"]):
+            return
+        rows = self._connection.execute(
+            "SELECT payload FROM events ORDER BY event_id"
+        ).fetchall()
+        for event_row in rows:
+            self._update_reception_metrics(json.loads(event_row["payload"]))
+
+    def _rebuild_endpoint_inventory(self) -> None:
+        """One-time rebuild that removes trailer-invalid phantom endpoints."""
+        row = self._connection.execute(
+            "SELECT value FROM storage_metadata WHERE key = ?",
+            ("endpoint_inventory_version",),
+        ).fetchone()
+        if row is not None and row["value"] == "2":
+            return
+        self._connection.execute("DELETE FROM endpoints")
+        rows = self._connection.execute(
+            "SELECT payload FROM events ORDER BY event_id"
+        ).fetchall()
+        for event_row in rows:
+            self._update_endpoints(json.loads(event_row["payload"]))
+        self._connection.execute(
+            "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+            ("endpoint_inventory_version", "2"),
+        )
 
 
 def _parse_timestamp(value: str) -> datetime | None:

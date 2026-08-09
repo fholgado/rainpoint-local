@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.6.0 supports captured replay, receive-only USB RTL-SDR,
+Version 0.6.1 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. Valve-control POST requests remain rejected. Token-protected registry
@@ -115,6 +115,15 @@ message byte, signal level, and frame.
 interval, longest observed gap, and model-specific reporting freshness. The
 current measured timeout is 15 minutes for HCS026 sensors and 6 hours for the
 HTV145 valve.
+
+Device snapshots also expose valid and rejected RF-frame counts plus an RF
+reception-success percentage. Ordinary moisture reports with an invalid
+trailer remain available in `/api/v1/events` for research but cannot update
+Home Assistant state or create endpoint-discovery candidates. Confirmed
+product-code reports and structurally decoded valve transactions are retained
+as accepted protocol families while their distinct trailer behavior remains
+under study. Valid routine traffic on the established valve endpoint pair
+advances its report time without overwriting the last decoded watering state.
 
 ## Safety
 

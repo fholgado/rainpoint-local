@@ -31,7 +31,8 @@
       "report_time": { "name": "Device report time" },
       "report_count": { "name": "Reports received" },
       "average_report_interval": { "name": "Average report interval" },
-      "longest_report_gap": { "name": "Longest report gap" }
+      "longest_report_gap": { "name": "Longest report gap" },
+      "reception_success": { "name": "RF reception success" }
     },
     "binary_sensor": {
       "watering": { "name": "Watering" },

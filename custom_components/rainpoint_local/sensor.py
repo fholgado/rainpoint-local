@@ -66,6 +66,7 @@ def _report_attributes(device: dict[str, Any]) -> dict[str, Any]:
         "event_id": device.get("last_event_id"),
         "model": device.get("model"),
         "summary": _report_summary(device),
+        "rf_frame_success_percent": device.get("rf_frame_success_percent"),
     }
     for key in (
         "soil_moisture_percent",
@@ -169,6 +170,15 @@ DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    RainPointSensorDescription(
+        key="reception_success",
+        translation_key="reception_success",
+        state_key="rf_frame_success_percent",
+        device_field=True,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 
@@ -231,9 +241,21 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Attach structured report data to the last-report timestamp."""
-        if self.entity_description.key != "report_time":
-            return None
-        return _report_attributes(self.device)
+        if self.entity_description.key == "report_time":
+            return _report_attributes(self.device)
+        if self.entity_description.key == "reception_success":
+            return {
+                key: self.device.get(key)
+                for key in (
+                    "valid_rf_frame_count",
+                    "invalid_rf_frame_count",
+                    "rf_frame_count",
+                    "last_frame_at",
+                    "last_valid_frame_at",
+                    "last_invalid_frame_at",
+                )
+            }
+        return None
 
     @property
     def native_value(self) -> Any:

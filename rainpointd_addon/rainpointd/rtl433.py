@@ -18,6 +18,7 @@ KNOWN_HCS026 = {
     "d1e28024": ("soil-front-2", "Front Yard Sensor 2"),
     "9ce58024": ("soil-right-bed", "Right Bed"),
 }
+VALVE_LINK_ENDPOINTS = frozenset(("b42d008f", "b9840280"))
 
 
 def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
@@ -193,6 +194,9 @@ class RTL433Transport:
             except (KeyError, TypeError, ValueError):
                 continue
             moisture = decoded.get("soil_moisture_percent")
+            valve_link = frozenset(
+                (decoded["endpoint_a"], decoded["endpoint_b"])
+            ) == VALVE_LINK_ENDPOINTS
             valve_update = {
                 key: decoded[key]
                 for key in (
@@ -204,7 +208,7 @@ class RTL433Transport:
                 if key in decoded
             }
             if valve_update:
-                self._valve_state.update(valve_update)
+                frame_accepted = True
                 state = {
                     "model": "HTV145FRF",
                     "raw": decoded["frame_hex"],
@@ -212,11 +216,14 @@ class RTL433Transport:
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_trailer_residual": decoded["trailer_residual"],
                     "rf_trailer_valid": decoded["trailer_valid"],
+                    "rf_frame_accepted": frame_accepted,
                     **self._valve_state,
+                    **valve_update,
                 }
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
                 state.update(bridge_metadata)
+                self._valve_state.update(valve_update)
                 self.gateway.observe_decoded(
                     device_id="valve-1",
                     name="Garden Valve",
@@ -228,11 +235,13 @@ class RTL433Transport:
                 published += 1
                 continue
             if moisture is None:
+                frame_accepted = decoded["trailer_valid"]
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],
                     "rf_endpoint_a": decoded["endpoint_a"],
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_message_type": decoded["message_type"],
+                    "rf_frame_accepted": frame_accepted,
                 }
                 for key in ("trailer_residual", "trailer_valid"):
                     state[f"rf_{key}"] = decoded[key]
@@ -252,6 +261,7 @@ class RTL433Transport:
                     frame=decoded["frame_hex"],
                     state=state,
                     observed_at=event.get("time"),
+                    device_id="valve-1" if valve_link else None,
                 )
                 published += 1
                 continue
@@ -261,6 +271,9 @@ class RTL433Transport:
                 endpoint,
                 (f"hcs026-{endpoint}", f"RainPoint HCS026 {endpoint}"),
             )
+            frame_accepted = bool(
+                decoded["trailer_valid"] or "product_code" in decoded
+            )
             state: dict[str, Any] = {
                 "model": "HCS026FRF",
                 "raw": decoded["frame_hex"],
@@ -269,6 +282,7 @@ class RTL433Transport:
                 "rf_endpoint_b": decoded["endpoint_b"],
                 "rf_trailer_residual": decoded["trailer_residual"],
                 "rf_trailer_valid": decoded["trailer_valid"],
+                "rf_frame_accepted": frame_accepted,
                 "soil_moisture_percent": moisture,
             }
             if "product_code" in decoded:
@@ -278,14 +292,22 @@ class RTL433Transport:
             if "rssi" in event:
                 state["rf_rssi_db"] = event["rssi"]
             state.update(bridge_metadata)
-            self.gateway.observe_decoded(
-                device_id=device_id,
-                name=name,
-                model="HCS026FRF",
-                frame=decoded["frame_hex"],
-                state=state,
-                observed_at=event.get("time"),
-            )
+            if frame_accepted:
+                self.gateway.observe_decoded(
+                    device_id=device_id,
+                    name=name,
+                    model="HCS026FRF",
+                    frame=decoded["frame_hex"],
+                    state=state,
+                    observed_at=event.get("time"),
+                )
+            else:
+                self.gateway.observe_rf_frame(
+                    frame=decoded["frame_hex"],
+                    state=state,
+                    observed_at=event.get("time"),
+                    device_id=device_id,
+                )
             published += 1
         return published
 

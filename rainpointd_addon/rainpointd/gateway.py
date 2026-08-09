@@ -14,7 +14,7 @@ from typing import Any
 from rainpoint_protocol import decode
 
 from .rf import HCS026_ENDPOINTS
-from .storage import SQLiteEventStore
+from .storage import SQLiteEventStore, frame_accepted
 
 
 API_VERSION = "v1"
@@ -47,6 +47,7 @@ class Gateway:
         self._devices: dict[str, dict[str, Any]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
+        self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = SQLiteEventStore(storage_path) if storage_path else None
         if self._store:
@@ -190,6 +191,7 @@ class Gateway:
                 self._store.append(event)
             else:
                 self._update_memory_metrics(device_id, timestamp)
+                self._update_memory_reception_metrics(event)
             self._devices[device_id] = {
                 "device_id": device_id,
                 "name": name,
@@ -207,6 +209,7 @@ class Gateway:
         frame: str,
         state: dict[str, Any],
         observed_at: str | None = None,
+        device_id: str | None = None,
     ) -> dict[str, Any]:
         """Retain a normalized RF frame without creating a HA device."""
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
@@ -220,9 +223,13 @@ class Gateway:
                 "raw": frame,
                 "state": copy.deepcopy(state),
             }
+            if device_id is not None:
+                event["device_id"] = device_id
             self._events.append(event)
             if self._store:
                 self._store.append(event)
+            else:
+                self._update_memory_reception_metrics(event)
             return copy.deepcopy(event)
 
     def devices(
@@ -235,6 +242,11 @@ class Gateway:
                 if self._store
                 else self._memory_metrics
             )
+            reception_metrics = (
+                self._store.reception_metrics()
+                if self._store
+                else self._memory_reception_metrics
+            )
             devices = copy.deepcopy(self._devices)
             for device_id, device in devices.items():
                 device.update(
@@ -244,6 +256,18 @@ class Gateway:
                         if not key.startswith("_")
                     }
                 )
+                reception = reception_metrics.get(device_id, {})
+                device.update(copy.deepcopy(reception))
+                last_valid = reception.get("last_valid_frame_at")
+                if isinstance(last_valid, str):
+                    state_observed_at = device.get("observed_at")
+                    if state_observed_at != last_valid:
+                        device["state_observed_at"] = state_observed_at
+                    device["observed_at"] = last_valid
+                    event_id = reception.get("last_valid_frame_event_id")
+                    if isinstance(event_id, int):
+                        device["last_event_id"] = event_id
+                    device["available"] = True
                 self._add_reporting_status(device, now)
             return sorted(devices.values(), key=lambda item: item["device_id"])
 
@@ -279,6 +303,47 @@ class Gateway:
         metric["longest_report_gap_seconds"] = max(
             metric["longest_report_gap_seconds"], gap
         )
+
+    def _update_memory_reception_metrics(self, event: dict[str, Any]) -> None:
+        """Track integrity for gateways running without persistent storage."""
+        device_id = event.get("device_id")
+        valid = frame_accepted(event)
+        observed_at = event.get("observed_at")
+        event_id = event.get("event_id")
+        if (
+            not isinstance(device_id, str)
+            or not isinstance(valid, bool)
+            or not isinstance(observed_at, str)
+            or not isinstance(event_id, int)
+        ):
+            return
+        metric = self._memory_reception_metrics.setdefault(
+            device_id,
+            {
+                "valid_rf_frame_count": 0,
+                "invalid_rf_frame_count": 0,
+            },
+        )
+        count_key = (
+            "valid_rf_frame_count" if valid else "invalid_rf_frame_count"
+        )
+        metric[count_key] += 1
+        valid_count = metric["valid_rf_frame_count"]
+        invalid_count = metric["invalid_rf_frame_count"]
+        total = valid_count + invalid_count
+        metric.update(
+            {
+                "rf_frame_count": total,
+                "rf_frame_success_percent": round(valid_count * 100 / total, 1),
+                "last_frame_at": observed_at,
+                "last_frame_event_id": event_id,
+            }
+        )
+        if valid:
+            metric["last_valid_frame_at"] = observed_at
+            metric["last_valid_frame_event_id"] = event_id
+        else:
+            metric["last_invalid_frame_at"] = observed_at
 
     def events(self, since: int = 0) -> list[dict[str, Any]]:
         """Return retained events newer than an event ID."""
@@ -457,7 +522,10 @@ class Gateway:
 
     def _restore_devices(self) -> None:
         """Rebuild decoded device state from retained observations."""
-        for event in self._events:
+        events = (
+            self._store.latest_device_events() if self._store else self._events
+        )
+        for event in events:
             if event.get("event_type") != "device_observation":
                 continue
             if not self._is_restorable_device(event):
@@ -508,6 +576,8 @@ class Gateway:
     @staticmethod
     def _is_restorable_device(event: dict[str, Any]) -> bool:
         """Reject obsolete auto-discoveries that predate endpoint validation."""
+        if frame_accepted(event) is False:
+            return False
         if event.get("model") != "HCS026FRF":
             return True
         device_id = str(event.get("device_id", ""))
