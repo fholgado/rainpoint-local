@@ -1,0 +1,219 @@
+"""Validated HCS026 pairing reply profiles and symbolic scheduling.
+
+This module has no socket, serial, or radio dependency. It can describe what a
+future transmitter must do, but cannot cause a transmission.
+"""
+
+from __future__ import annotations
+
+import binascii
+from dataclasses import asdict, dataclass
+from enum import Enum
+from typing import Any
+
+
+SYNC = bytes.fromhex("79f4882f28")
+COMPANION_ENDPOINT = bytes.fromhex("39840280")
+FRAME_BYTES = 38
+WAKE_SYMBOLS = 320
+SYMBOL_RATE = 20_000
+TRAILER_RESIDUES = {0xC713, 0x4F03}
+
+
+class PairingTrigger(str, Enum):
+    FACTORY_ANNOUNCEMENT = "factory_announcement"
+    PAIRED_MESSAGE_1 = "paired_message_1"
+    PAIRED_MESSAGE_2_DATA = "paired_message_2_data"
+    PAIRED_MESSAGE_2_SHORT = "paired_message_2_short"
+    PAIRED_MESSAGE_3 = "paired_message_3"
+
+
+@dataclass(frozen=True)
+class PairingReplyStep:
+    trigger: PairingTrigger
+    channel_center_hz: int
+    frame: bytes
+    wake_symbols: int = WAKE_SYMBOLS
+    symbol_rate_sps: int = SYMBOL_RATE
+    reply_deadline_ms: int = 250
+
+    def as_dict(self) -> dict[str, Any]:
+        result = asdict(self)
+        result["trigger"] = self.trigger.value
+        result["frame"] = self.frame.hex()
+        result["waveform_duration_ms"] = round(
+            (self.wake_symbols + len(self.frame) * 8)
+            * 1_000
+            / self.symbol_rate_sps,
+            3,
+        )
+        return result
+
+
+@dataclass(frozen=True)
+class PairingProfile:
+    model: str
+    factory_endpoint: str
+    paired_endpoint: str
+    evidence: str
+    steps: tuple[PairingReplyStep, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "factory_endpoint": self.factory_endpoint,
+            "paired_endpoint": self.paired_endpoint,
+            "evidence": self.evidence,
+            "transmit_enabled": False,
+            "steps": [step.as_dict() for step in self.steps],
+        }
+
+
+def _frame(value: str) -> bytes:
+    frame = bytes.fromhex(value)
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        raise ValueError("pairing reply must be one normalized RainPoint frame")
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(frame[-2:], "big")
+    if residual not in TRAILER_RESIDUES:
+        raise ValueError("pairing reply has an unknown trailer residual")
+    if frame[9:13] != COMPANION_ENDPOINT:
+        raise ValueError("pairing reply does not use the companion endpoint")
+    return frame
+
+
+SENSOR_B_PROFILE = PairingProfile(
+    model="HCS026FRF",
+    factory_endpoint="15a98024",
+    paired_endpoint="95a98024",
+    evidence="controlled first enrollment captured 2026-08-10",
+    steps=(
+        PairingReplyStep(
+            PairingTrigger.FACTORY_ANNOUNCEMENT,
+            433_471_500,
+            _frame(
+                "79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_1,
+            433_911_500,
+            _frame(
+                "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_2_DATA,
+            433_911_500,
+            _frame(
+                "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_2_SHORT,
+            433_911_500,
+            _frame(
+                "79f4882f2895a980243984028082c281000080000000000000000000000000000000000003df"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_3,
+            433_911_500,
+            _frame(
+                "79f4882f2895a980243984028083418100010000000000000000000000000000000000005329"
+            ),
+        ),
+    ),
+)
+
+
+def pairing_profile(factory_endpoint: str) -> PairingProfile:
+    """Return an evidence-backed profile or reject unsupported identities."""
+    if factory_endpoint.lower() != SENSOR_B_PROFILE.factory_endpoint:
+        raise KeyError(factory_endpoint)
+    return SENSOR_B_PROFILE
+
+
+class PairingPlanController:
+    """Advance a profile from observed sensor frames, emitting symbols only."""
+
+    def __init__(self, profile: PairingProfile) -> None:
+        self.profile = profile
+        self.next_step = 0
+        self.failed = False
+        self.pending: PairingReplyStep | None = None
+        self.pending_deadline_ms: int | None = None
+
+    @property
+    def complete(self) -> bool:
+        return self.next_step == len(self.profile.steps)
+
+    def observe(
+        self, trigger: PairingTrigger, *, now_ms: int
+    ) -> PairingReplyStep | None:
+        if self.failed or self.complete:
+            return None
+        if self.pending is not None:
+            return None if trigger == self.pending.trigger else self._fail()
+        expected = self.profile.steps[self.next_step]
+        if trigger == expected.trigger:
+            self.pending = expected
+            self.pending_deadline_ms = now_ms + expected.reply_deadline_ms
+            return expected
+        # Duplicate observations are harmless; a future transmitter may hear
+        # the sensor repeat while its prior reply is still being scheduled.
+        if any(step.trigger == trigger for step in self.profile.steps[: self.next_step]):
+            return None
+        return self._fail()
+
+    def mark_dispatched(self, trigger: PairingTrigger, *, now_ms: int) -> bool:
+        """Record a symbolic scheduler handoff before the reply deadline."""
+        if (
+            self.failed
+            or self.pending is None
+            or self.pending.trigger != trigger
+            or self.pending_deadline_ms is None
+            or now_ms > self.pending_deadline_ms
+        ):
+            self._fail()
+            return False
+        self.next_step += 1
+        self.pending = None
+        self.pending_deadline_ms = None
+        return True
+
+    def tick(self, *, now_ms: int) -> None:
+        if (
+            self.pending_deadline_ms is not None
+            and now_ms > self.pending_deadline_ms
+        ):
+            self._fail()
+
+    def interrupt(self) -> None:
+        self._fail()
+
+    def _fail(self) -> None:
+        self.failed = True
+        self.pending = None
+        self.pending_deadline_ms = None
+        return None
+
+    def status(self) -> dict[str, Any]:
+        next_trigger = (
+            self.profile.steps[self.next_step].trigger.value
+            if not self.complete and not self.failed
+            else None
+        )
+        return {
+            "factory_endpoint": self.profile.factory_endpoint,
+            "paired_endpoint": self.profile.paired_endpoint,
+            "completed_steps": self.next_step,
+            "step_count": len(self.profile.steps),
+            "next_trigger": next_trigger,
+            "pending_trigger": (
+                self.pending.trigger.value if self.pending is not None else None
+            ),
+            "pending_deadline_ms": self.pending_deadline_ms,
+            "complete": self.complete,
+            "failed": self.failed,
+            "transmit_enabled": False,
+        }

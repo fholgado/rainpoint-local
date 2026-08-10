@@ -3,7 +3,9 @@
 This is the receive-only firmware scaffold for the ELEGOO ESP-WROOM-32 USB-C
 development board and one **433 MHz** CC1101 transceiver. A second module is
 supported only as an optional dual-channel receive diagnostic. The firmware
-contains no transmit API, no valve commands, and no `STX` path.
+contains no transmit API, no valve commands, and no `STX` path. It can print a
+captured Sensor B pairing reply plan for inspection without changing radio
+state or sending it.
 
 ## Wiring
 
@@ -51,6 +53,9 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
   `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
   its enrollment token over the network.
+- Contains a five-step Sensor B pairing reply profile with the two captured
+  frequencies, 320-symbol wake prefix, and provisional 250 ms response
+  deadline. The profile is data only and cannot initiate transmission.
 
 `recoveries` includes the intentional FIFO reset after a successfully consumed
 fixed-length packet as well as overflow recovery; compare it with `packets` and
@@ -65,13 +70,17 @@ to resume scanning. The optional dual-radio diagnostic build fixes the primary r
 channel 0 and the second radio to channel 11 so both can be evaluated
 continuously against the existing RTL-SDR.
 
+Send `pairing_plan_b` over serial to print the five captured reply steps as
+JSON. Every record includes `transmit_enabled:false`; the command neither
+changes channel nor writes an RF FIFO.
+
 The driver now exposes explicit IDLE and RX transitions and validates complete
 frames before extracting the 36 bytes that follow the CC1101 hardware sync.
 These are prerequisites for a future half-duplex TX path, but they cannot
-transmit. RainPoint command traffic uses an approximately 60 ms alternating
-wake prefix, longer than the CC1101 packet engine can generate normally. A
-future implementation must reproduce that wake sequence using a validated
-FIFO/continuous or asynchronous method before an `STX` path is permitted.
+transmit. Valve command traffic uses an approximately 60 ms alternating wake
+prefix. The captured sensor-pairing replies use a 320-symbol (16 ms) wake
+followed by a 15.2 ms frame. Both require a validated FIFO/continuous or
+asynchronous implementation before an `STX` path is permitted.
 
 ## Build and flash
 
@@ -150,6 +159,8 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
    `rainpointd`.
 5. Validate authenticated Wi-Fi telemetry and reconnect behavior on the
    physical board while preserving USB as a diagnostic mirror.
-6. Reproduce the long command wake prefix without exposing a command surface.
-7. Design encrypted, replay-protected transmission as a separate
+6. Compare the Sensor B dry-run plan output with the committed capture fixture.
+7. Reproduce both pairing and valve-command wake forms without exposing a
+   command surface.
+8. Design encrypted, replay-protected transmission as a separate
    safety-reviewed milestone.

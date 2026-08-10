@@ -179,6 +179,14 @@ transmitter must reproduce it before physical pairing is supported. The valve
 association procedure still requires a spare-device capture before resetting
 the working installation.
 
+A first dry-run profile now encodes the five captured gateway replies for Test
+Sensor B, including trigger order, channel changes, wake length, and a
+provisional response deadline. It is intentionally profile-specific rather
+than extrapolated to unknown factory identities. `rainpointd` can describe and
+validate this plan, but it has no dispatch path. The ESP32 node protocol still
+rejects transmit capability or an armed transmitter, and the firmware contains
+no FIFO write or transmit strobe.
+
 The local registry can retain:
 
 - protocol endpoint and model,

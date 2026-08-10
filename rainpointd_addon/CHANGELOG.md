@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.5
+
+- Add a non-transmitting, capture-derived five-step Sensor B pairing profile.
+- Report whether a pairing monitor is waiting, has found an unsupported
+  factory identity, needs a transmitter, or observed a paired identity.
+- Reject Wi-Fi radio nodes that claim transmit capability or report an armed
+  transmitter while the node protocol remains receive-only.
+
 ## 0.6.4
 
 - Correct pairing capability after a controlled factory-only test proved that

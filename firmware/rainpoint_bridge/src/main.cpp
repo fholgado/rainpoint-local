@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "cc1101.h"
+#include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
 #include "wifi_transport.h"
 
@@ -141,19 +142,52 @@ void handleSerialCommand() {
             if (serialCommand.isEmpty()) {
                 continue;
             }
+            bool handled = false;
+            if (serialCommand == "pairing_plan_b") {
+                handled = true;
+                for (std::size_t index = 0;
+                     index < rainpoint::kSensorBPairingProfile.size();
+                     ++index) {
+                    const auto& step = rainpoint::kSensorBPairingProfile[index];
+                    String line;
+                    line.reserve(360);
+                    line += "{\"type\":\"pairing_dry_run\",\"step\":";
+                    line += index + 1;
+                    line += ",\"trigger\":\"";
+                    line += rainpoint::pairingTriggerName(step.trigger);
+                    line += "\",\"channel_center_hz\":";
+                    line += step.channelCenterHz;
+                    line += ",\"wake_symbols\":";
+                    line += step.wakeSymbols;
+                    line += ",\"reply_deadline_ms\":";
+                    line += step.replyDeadlineMs;
+                    line += ",\"transmit_enabled\":false,\"frame\":\"";
+                    line += hexString(step.frame.data(), step.frame.size());
+                    line += "\"}";
+                    emitLine(line);
+                }
+            }
 #if RAINPOINT_RADIO_COUNT == 1
-            if (serialCommand == "0") {
+            if (!handled && serialCommand == "0") {
+                handled = true;
                 scanChannels = false;
                 selectChannel(0);
-            } else if (serialCommand == "1") {
+            } else if (!handled && serialCommand == "1") {
+                handled = true;
                 scanChannels = false;
                 selectChannel(11);
-            } else if (serialCommand == "s" || serialCommand == "S") {
+            } else if (
+                !handled && (serialCommand == "s" || serialCommand == "S")
+            ) {
+                handled = true;
                 scanChannels = true;
                 lastChannelChange = millis();
-            } else
+            }
 #endif
-            if (!wifiTransport.handleProvisioningCommand(serialCommand)) {
+            if (
+                !handled &&
+                !wifiTransport.handleProvisioningCommand(serialCommand)
+            ) {
                 emitLine(
                     String("{\"type\":\"command_error\",\"node_id\":\"") +
                     wifiTransport.nodeId() + "\",\"error\":\"unknown_command\"}"
@@ -213,6 +247,7 @@ void setup() {
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
         wifiTransport.nodeId() + "\",\"mode\":\"receive_only\","
+        "\"pairing_plan_only\":true,\"transmit_enabled\":false,"
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +
         ",\"radio_count\":" + RAINPOINT_RADIO_COUNT + "}"

@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.6.2 supports captured replay, receive-only USB RTL-SDR,
+Version 0.6.5 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. Valve-control POST requests remain rejected. Token-protected registry
@@ -94,6 +94,12 @@ RTL-SDR receiver cannot complete physical pairing: controlled testing proved
 that the stock RainPoint gateway sends a short response on a second channel.
 Until a transmitter is connected, Home Assistant labels this workflow as
 **Discover a sensor for pairing** rather than claiming the sensor is paired.
+
+For Test Sensor B only, the service can expose a dry-run reply profile derived
+from the controlled stock-gateway capture. It describes the five frames,
+frequencies, wake length, trigger order, and conservative response deadline.
+It never dispatches a frame, and every connected ESP32 node is still required
+to identify as receive-only.
 
 ## Home Assistant integration
 

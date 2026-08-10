@@ -192,6 +192,28 @@ current receiver deliberately transmits nothing. The recovered stock-gateway
 frames are transmit candidates for the future ESP32/CC1101 prototype, not yet
 an enabled control path.
 
+### Sensor B dry-run pairing reply plan
+
+The executable prototype contains one deliberately narrow reply profile for
+factory identity `15a98024` / paired identity `95a98024`. It advances only
+after the matching sensor trigger has been observed:
+
+| Step | Sensor trigger | Reply frequency |
+|---:|---|---:|
+| 1 | Factory message `01` | 433.4715 MHz |
+| 2 | Paired message `01` | 433.9115 MHz |
+| 3 | Paired data message `02` | 433.9115 MHz |
+| 4 | Paired short message `02` | 433.9115 MHz |
+| 5 | Paired data message `03` | 433.9115 MHz |
+
+Each planned waveform has a 320-symbol alternating wake (16 ms) and a 304-bit
+frame (15.2 ms), or 31.2 ms of RF before any implementation-specific guard
+silence. The provisional reply deadline is 250 ms after the matching trigger;
+this is a conservative engineering bound, not a measured protocol constant.
+Duplicates are ignored, while timeout, out-of-order triggers, or interruption
+fail the plan closed. The current implementation is symbolic: it exposes and
+tests the plan but contains no dispatch, FIFO write, or transmit strobe.
+
 ## HCS026FRF soil-moisture reports
 
 Data-rich HCS026FRF frames carry a packed moisture value at one of two body

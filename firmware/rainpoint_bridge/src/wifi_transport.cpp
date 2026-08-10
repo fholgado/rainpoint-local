@@ -215,7 +215,9 @@ void WifiTransport::authenticate(const String& nonce) {
     client_.printf(
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
-        "\"mode\":\"receive_only\",\"proof\":\"%s\"}\n",
+        "\"mode\":\"receive_only\","
+        "\"capabilities\":[\"rx\",\"pairing_plan\"],"
+        "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,
         nodeId_.c_str(),
         RAINPOINT_FIRMWARE_VERSION,

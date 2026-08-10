@@ -173,6 +173,8 @@ class ESP32NetworkServer:
                 connected=True,
                 authenticated=True,
                 mode="receive_only",
+                capabilities=hello.get("capabilities", ["rx"]),
+                tx_armed=False,
                 firmware_version=hello.get("firmware_version"),
                 remote_address=address[0],
                 connected_at=now,
@@ -232,12 +234,20 @@ class ESP32NetworkServer:
             return None
         node_id = hello.get("node_id")
         proof = hello.get("proof")
+        capabilities = hello.get("capabilities", ["rx"])
         if (
             hello.get("protocol_version") != PROTOCOL_VERSION
             or hello.get("mode") != "receive_only"
             or not isinstance(node_id, str)
             or not _NODE_ID.fullmatch(node_id)
             or not isinstance(proof, str)
+            or not isinstance(capabilities, list)
+            or "rx" not in capabilities
+            or any(
+                capability not in {"rx", "pairing_plan"}
+                for capability in capabilities
+            )
+            or hello.get("tx_armed", False) is not False
         ):
             return None
         token = self.node_tokens.get(node_id)

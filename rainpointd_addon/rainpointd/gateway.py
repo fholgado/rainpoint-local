@@ -16,6 +16,7 @@ from rainpoint_protocol import decode
 
 from .rf import HCS026_ENDPOINTS
 from .pairing import HCS026EnrollmentManager
+from .pairing_protocol import pairing_profile
 from .storage import SQLiteEventStore, frame_accepted
 
 
@@ -412,12 +413,7 @@ class Gateway:
                     "new_records": [],
                     "records": [],
                 }
-            return {
-                "available": True,
-                "transmitter_available": False,
-                "transmitter_required": True,
-                **self._pairing.status(now=now),
-            }
+            return self._pairing_snapshot(now=now)
 
     def start_pairing(
         self, duration_seconds: int = 120, *, now: datetime | None = None
@@ -428,24 +424,46 @@ class Gateway:
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
-            return {
-                "available": True,
-                "transmitter_available": False,
-                "transmitter_required": True,
-                **self._pairing.start(duration_seconds, now=now),
-            }
+            self._pairing.start(duration_seconds, now=now)
+            return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
         """Close the current pairing window without transmitting anything."""
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
-            return {
-                "available": True,
-                "transmitter_available": False,
-                "transmitter_required": True,
-                **self._pairing.stop(),
-            }
+            self._pairing.stop()
+            return self._pairing_snapshot()
+
+    def _pairing_snapshot(
+        self, *, now: datetime | None = None
+    ) -> dict[str, Any]:
+        """Add dry-run transmitter capability and UI stage information."""
+        if self._pairing is None:
+            raise RuntimeError("persistent pairing state is unavailable")
+        snapshot = self._pairing.status(now=now)
+        profile: dict[str, Any] | None = None
+        candidates = snapshot.get("candidates", [])
+        if snapshot.get("new_records"):
+            stage = "paired_identity_observed"
+        elif candidates:
+            stage = "factory_detected_transmitter_required"
+            try:
+                profile = pairing_profile(str(candidates[0])).as_dict()
+            except KeyError:
+                stage = "factory_detected_unsupported_profile"
+        elif snapshot.get("active"):
+            stage = "waiting_for_factory_announcement"
+        else:
+            stage = "inactive"
+        return {
+            "available": True,
+            "transmitter_available": False,
+            "transmitter_required": True,
+            "stage": stage,
+            "dry_run_profile": profile,
+            **snapshot,
+        }
 
     def complete_hcs026_pairing(
         self,

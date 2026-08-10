@@ -519,6 +519,15 @@ class RegistryHTTPAPITest(unittest.TestCase):
                 "hcs026_factory_endpoint": "15a98024",
             },
         )
+        with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
+            candidate = json.load(response)
+        self.assertEqual(
+            "factory_detected_transmitter_required", candidate["stage"]
+        )
+        self.assertEqual(
+            "95a98024", candidate["dry_run_profile"]["paired_endpoint"]
+        )
+        self.assertFalse(candidate["dry_run_profile"]["transmit_enabled"])
         gateway.observe_decoded(
             device_id="hcs026-95a98024",
             name="RainPoint HCS026 95a98024",
@@ -538,6 +547,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
         with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
             progress = json.load(response)
         self.assertEqual("95a98024", progress["new_records"][0]["paired_endpoint"])
+        self.assertEqual("paired_identity_observed", progress["stage"])
 
         completed = self.post_json(
             "/api/v1/pairing/complete",

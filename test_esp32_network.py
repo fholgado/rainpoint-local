@@ -45,7 +45,12 @@ class ESP32NetworkTest(unittest.TestCase):
         self.gateway.close()
 
     def _connect(
-        self, node_id: str, token: str
+        self,
+        node_id: str,
+        token: str,
+        *,
+        capabilities: list[str] | None = None,
+        tx_armed: bool = False,
     ) -> tuple[socket.socket, Any, dict[str, Any]]:
         connection = socket.create_connection(
             ("127.0.0.1", self.server.server_port), timeout=2
@@ -62,6 +67,8 @@ class ESP32NetworkTest(unittest.TestCase):
             "node_id": node_id,
             "firmware_version": "test",
             "mode": "receive_only",
+            "capabilities": capabilities or ["rx", "pairing_plan"],
+            "tx_armed": tx_armed,
             "proof": proof,
         }
         stream.write(json.dumps(hello).encode() + b"\n")
@@ -106,6 +113,10 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(NODE_A, right_bed["state"]["rf_node_id"])
         self.assertEqual(64, right_bed["state"]["soil_moisture_percent"])
         self.assertTrue(self.gateway.nodes()[0]["authenticated"])
+        self.assertEqual(
+            ["rx", "pairing_plan"], self.gateway.nodes()[0]["capabilities"]
+        )
+        self.assertFalse(self.gateway.nodes()[0]["tx_armed"])
         self.assertEqual(1, self.gateway.nodes()[0]["received_frames"])
         self.assertEqual(1, self.gateway.nodes()[0]["invalid_messages"])
         stream.close()
@@ -116,6 +127,19 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("node_rejected", response["type"])
         stream.close()
         connection.close()
+
+    def test_v1_node_cannot_claim_transmit_capability_or_armed_state(self) -> None:
+        for capabilities, tx_armed in ((["rx", "tx"], False), (["rx"], True)):
+            with self.subTest(capabilities=capabilities, tx_armed=tx_armed):
+                connection, stream, response = self._connect(
+                    NODE_A,
+                    TOKEN_A,
+                    capabilities=capabilities,
+                    tx_armed=tx_armed,
+                )
+                self.assertEqual("node_rejected", response["type"])
+                stream.close()
+                connection.close()
 
     def test_second_session_for_same_node_is_rejected(self) -> None:
         first_connection, first, first_response = self._connect(NODE_A, TOKEN_A)

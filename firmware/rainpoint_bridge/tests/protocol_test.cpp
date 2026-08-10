@@ -4,6 +4,7 @@
 #include <string>
 
 #include "rainpoint_protocol.h"
+#include "rainpoint_pairing.h"
 
 namespace {
 
@@ -41,5 +42,18 @@ int main() {
     auto wrongSync = heartbeat;
     wrongSync[0] ^= 0x01;
     assert(!rainpoint::prepareRadioPayload(wrongSync, payload));
+    assert(rainpoint::validSensorBPairingProfile());
+    assert(rainpoint::kSensorBPairingProfile.size() == 5);
+    assert(
+        rainpoint::kSensorBPairingProfile[0].channelCenterHz == 433'471'500
+    );
+    assert(
+        rainpoint::kSensorBPairingProfile[1].channelCenterHz == 433'911'500
+    );
+    for (const auto& step : rainpoint::kSensorBPairingProfile) {
+        assert(step.wakeSymbols == 320);
+        assert(step.replyDeadlineMs == 250);
+        assert(rainpoint::hasOrdinaryTrailer(step.frame));
+    }
     return 0;
 }
