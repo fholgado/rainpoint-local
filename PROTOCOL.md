@@ -138,14 +138,25 @@ factory identity's first byte:
 | Test Sensor A | `1bce0024` | `9bce0024` |
 | Test Sensor B | `15a98024` | `95a98024` |
 
-Both enrollments used message types `01`, `02`, `02`, and `03` at the same
-repeatable cadence. Raw-IQ characterization found the factory frame and all
-subsequent paired frames from a given sensor within about 15 Hz of the same
-transmitter center. Sensor A measured about 433.140 MHz and Sensor B about
-433.144 MHz (absolute values include RTL-SDR oscillator error). This oscillator
-fingerprint is strong evidence that the sensor, not the RainPoint gateway,
-emits the entire observed sequence. No enrollment-response frame from the
-RainPoint gateway has been identified.
+Both enrollments used sensor message types `01`, `02`, `02`, and `03` at the
+same repeatable cadence. The sensor frames occupied a lower channel near
+433.14 MHz. Each was followed by a roughly 31 ms burst on a second channel;
+the normal decoder missed these because they use only a 320-symbol wake prefix.
+Offline clock recovery extracted valid 38-byte frames with the established sync
+word and trailer residues. Their endpoint direction is paired sensor identity
+to `39840280`, confirming that they are stock RainPoint gateway replies.
+
+The initial replies immediately following each factory announcement were:
+
+| Sensor | Reply channel | Initial gateway reply |
+|---|---:|---|
+| A | ~433.471 MHz | `79f4882f289bce002439840280814088050304f000adf18a0d00808000000000000000004c41` |
+| B | ~433.472 MHz | `79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8` |
+
+Subsequent gateway acknowledgements moved to a per-sensor channel: about
+434.021 MHz for Sensor A and 433.912 MHz for Sensor B. All recovered first
+enrollment and rejoin frames are retained in
+`research/fixtures/hcs026_gateway_pairing_replies.json`.
 
 The two first-enrollment sequences had the same cadence within measurement
 error:
@@ -161,20 +172,25 @@ These intervals are useful for recognizing a complete enrollment sequence but
 are not treated as hard deadlines; RF packet loss must not create a false
 association.
 
-A battery power cycle caused Sensor A to announce its factory identity and
-then automatically resume its paired identity without an app action. Deleting
-Sensor B from the app produced no RF frame. Until its next power cycle it
-continued transmitting on the paired identity; after reboot it returned to
-factory announcements. This is consistent with the RainPoint gateway retaining
-a logical enrollment record while the sensor derives or retains the high-bit
-identity, but does not prove that an RF association exchange exists.
+A battery power cycle caused Sensor A to announce its factory identity; the
+stock RainPoint gateway replied with a rejoin frame and restored its paired
+identity without an app action. Deleting Sensor B from the app produced no RF
+frame. Until its next power cycle it continued transmitting on the paired
+identity; after reboot it returned to factory announcements.
+
+In a controlled local-only test, Sensor B emitted factory messages `01`, `02`,
+and `04` six seconds apart while the RTL-SDR receiver remained healthy. It did
+not emit the paired identity and never flashed blue because no gateway reply
+was transmitted. Physical pairing therefore requires a transceiver; listening
+alone can discover the factory identity but cannot complete enrollment.
 
 The receive decoder recognizes this strict factory/paired structure and can
 create a generic HCS026 device from a trailer-valid paired telemetry report.
-The offline enrollment state machine opens an explicit learning window,
-requires the matching factory-to-paired transition, and persists the mapping.
-It deliberately transmits nothing because the captures do not show a gateway
-response that needs to be reproduced.
+The enrollment monitor opens an explicit learning window, reports the factory
+candidate, and persists only a matching factory-to-paired transition. The
+current receiver deliberately transmits nothing. The recovered stock-gateway
+frames are transmit candidates for the future ESP32/CC1101 prototype, not yet
+an enabled control path.
 
 ## HCS026FRF soil-moisture reports
 

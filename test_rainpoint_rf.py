@@ -28,6 +28,7 @@ from rainpointd.valve_protocol import (  # noqa: E402
 )
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
 from tools.compare_rainpoint_iq import compare_waveforms  # noqa: E402
+from tools.demod_rainpoint_reply_iq import demodulate  # noqa: E402
 from tools.generate_rainpoint_iq import (  # noqa: E402
     command_symbols,
     generate_command,
@@ -35,6 +36,42 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    def test_gateway_pairing_reply_fixture_has_valid_trailers(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research/fixtures/hcs026_gateway_pairing_replies.json"
+            ).read_text()
+        )
+        for sequence in fixture["sequences"]:
+            for frame in sequence["frames"]:
+                with self.subTest(sequence=sequence["name"], frame=frame):
+                    decoded = normalize_row({"len": len(frame) * 4, "data": frame})
+                    self.assertTrue(decoded["trailer_valid"])
+                    self.assertEqual(
+                        sequence["paired_endpoint"], decoded["endpoint_a"]
+                    )
+                    self.assertEqual("39840280", decoded["endpoint_b"])
+
+    def test_demodulates_short_gateway_pairing_reply_offline(self) -> None:
+        frame = bytes.fromhex(
+            "79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8"
+        )
+        data, _ = generate_command(
+            frame,
+            wake_symbols=320,
+            channel_center_hz=433_471_500,
+        )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(data)
+            capture.flush()
+            recovered = demodulate(
+                Path(capture.name),
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+            )
+        self.assertEqual(frame.hex(), recovered["matches"][0]["frame_hex"])
+
     def test_decodes_controlled_hcs026_pairing_and_battery_fixtures(self) -> None:
         fixture = json.loads(
             (ROOT / "research/fixtures/hcs026_pairing_battery.json").read_text()

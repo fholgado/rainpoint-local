@@ -85,8 +85,9 @@ class Gateway:
                 ),
                 "registry_available": self._store is not None,
                 "registry_writes_enabled": self._registry_token is not None,
-                "rf_pairing_available": self._pairing is not None,
-                "rf_pairing_receive_only": True,
+                "rf_pairing_available": False,
+                "rf_pairing_monitor_available": self._pairing is not None,
+                "rf_pairing_transmitter_required": True,
             }
 
     def close(self) -> None:
@@ -405,14 +406,16 @@ class Gateway:
                 return {
                     "active": False,
                     "available": False,
-                    "receive_only": True,
+                    "transmitter_available": False,
+                    "transmitter_required": True,
                     "candidates": [],
                     "new_records": [],
                     "records": [],
                 }
             return {
                 "available": True,
-                "receive_only": True,
+                "transmitter_available": False,
+                "transmitter_required": True,
                 **self._pairing.status(now=now),
             }
 
@@ -427,7 +430,8 @@ class Gateway:
                 raise RuntimeError("persistent pairing state is unavailable")
             return {
                 "available": True,
-                "receive_only": True,
+                "transmitter_available": False,
+                "transmitter_required": True,
                 **self._pairing.start(duration_seconds, now=now),
             }
 
@@ -438,7 +442,8 @@ class Gateway:
                 raise RuntimeError("persistent pairing state is unavailable")
             return {
                 "available": True,
-                "receive_only": True,
+                "transmitter_available": False,
+                "transmitter_required": True,
                 **self._pairing.stop(),
             }
 

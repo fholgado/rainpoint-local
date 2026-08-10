@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+- Correct pairing capability after a controlled factory-only test proved that
+  physical HCS026 enrollment requires a stock-gateway RF reply.
+- Report pairing monitoring separately from transmitter availability.
+- Add offline recovery and regression fixtures for the short gateway replies.
+
 ## 0.6.3
 
 - Add authenticated, receive-only HCS026 pairing windows and persistent

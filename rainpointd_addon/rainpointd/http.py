@@ -107,7 +107,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         {
                             "device": result,
                             "rf_paired": True,
-                            "receive_only": True,
+                            "transmit_performed": False,
                         },
                     )
                     return

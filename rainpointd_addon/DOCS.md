@@ -88,10 +88,12 @@ The registry separates three concepts deliberately:
   metadata, with user-defined names, models, and areas.
 
 Accepting or forgetting a registry record is not physical pairing or
-unpairing. The separate authenticated `/api/v1/pairing` workflow validates the
-captured HCS026 factory-to-paired identity transition and persists it without
-transmitting RF. In Home Assistant, open the integration's **Configure** flow,
-select **Pair a soil-moisture sensor**, and enter this token.
+unpairing. The separate authenticated `/api/v1/pairing` workflow discovers an
+HCS026 factory identity and monitors the factory-to-paired transition. The live
+RTL-SDR receiver cannot complete physical pairing: controlled testing proved
+that the stock RainPoint gateway sends a short response on a second channel.
+Until a transmitter is connected, Home Assistant labels this workflow as
+**Discover a sensor for pairing** rather than claiming the sensor is paired.
 
 ## Home Assistant integration
 

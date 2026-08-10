@@ -24,8 +24,8 @@ Working now:
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
   transition inside an explicit receive-only learning window,
-- pairing and naming an HCS026 sensor through the integration's **Configure**
-  flow using an authenticated local gateway token,
+- discovering an HCS026 factory identity and monitoring pairing progress
+  through the integration's authenticated **Configure** flow,
 - decoding HTV145FRF valve command, state, duration, and usage fields,
 - receiving live RainPoint 2-FSK packets through `rtl_433`,
 - reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
@@ -55,7 +55,8 @@ Still provisional or not working yet:
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
-local. Receive-only HCS026 pairing is implemented; valve control is not.
+local. HCS026 pairing discovery is implemented, but completing physical
+pairing and valve control both require the future transmitter.
 
 ## Architecture
 

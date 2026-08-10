@@ -500,12 +500,13 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertTrue(result["active"])
         self.assertFalse(result["rf_pairing"])
 
-    def test_authenticated_receive_only_sensor_pairing_lifecycle(self) -> None:
+    def test_authenticated_sensor_pairing_monitor_lifecycle(self) -> None:
         started = self.post_json(
             "/api/v1/pairing/start", {"duration_seconds": 120}
         )
         self.assertTrue(started["active"])
-        self.assertTrue(started["receive_only"])
+        self.assertTrue(started["transmitter_required"])
+        self.assertFalse(started["transmitter_available"])
 
         gateway = self.server.gateway
         gateway.observe_rf_frame(
@@ -547,7 +548,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
             },
         )
         self.assertTrue(completed["rf_paired"])
-        self.assertTrue(completed["receive_only"])
+        self.assertFalse(completed["transmit_performed"])
         device = next(
             item
             for item in gateway.devices()

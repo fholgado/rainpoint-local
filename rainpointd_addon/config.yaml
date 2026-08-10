@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.6.3
+version: 0.6.4
 slug: rainpointd
 description: Read-only local RainPoint gateway for RTL-SDR or ESP32 receivers
 url: https://github.com/fholgado/rainpoint-local

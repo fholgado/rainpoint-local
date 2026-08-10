@@ -170,13 +170,14 @@ Two operations must remain distinct:
 2. **RF association:** perform any address, channel, key, or counter exchange
    required by the physical device.
 
-Controlled HCS026 captures currently support receive-only registry enrollment:
-the sensor emits a factory identity followed by a deterministic paired identity
-whose first byte has bit 7 set. Both identities share the same transmitter
-oscillator fingerprint, so no gateway response should be synthesized without
-new contradictory evidence. The valve may still require a bidirectional
-association exchange. That procedure must be captured with a spare or test
-device before resetting the working installation.
+Controlled HCS026 captures now prove a bidirectional enrollment exchange. The
+sensor emits a factory identity; the stock RainPoint gateway answers with a
+short frame targeting the deterministic high-bit paired identity, then follows
+the sensor's sequence with acknowledgements on a per-sensor channel. The local
+receiver can discover and monitor this workflow, but the ESP32/CC1101
+transmitter must reproduce it before physical pairing is supported. The valve
+association procedure still requires a spare-device capture before resetting
+the working installation.
 
 The local registry can retain:
 

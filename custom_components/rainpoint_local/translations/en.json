@@ -25,12 +25,12 @@
       "init": {
         "title": "Manage RainPoint Local",
         "menu_options": {
-          "pair_sensor": "Pair a soil-moisture sensor"
+          "pair_sensor": "Discover a sensor for pairing"
         }
       },
       "pair_sensor": {
-        "title": "Pair a sensor",
-        "description": "Open a receive-only pairing window. No RF command will be transmitted.",
+        "title": "Discover a sensor for pairing",
+        "description": "Open a monitoring window for an HCS026 sensor. The current receiver can discover the factory identity but cannot finish physical pairing until a transmitter is connected.",
         "data": {
           "registry_write_token": "Gateway registry token",
           "duration_seconds": "Pairing window (seconds)"
@@ -38,7 +38,7 @@
       },
       "pairing_progress": {
         "title": "Waiting for sensor",
-        "description": "Insert the batteries or hold the sensor button until its LED flashes, then select Submit to check again. Factory candidates: {candidates}"
+        "description": "Insert the batteries or hold the sensor button until its LED flashes, then select Submit to check again. A factory candidate confirms reception; physical pairing still requires the gateway reply transmitter. Factory candidates: {candidates}"
       },
       "sensor_details": {
         "title": "Sensor discovered",
