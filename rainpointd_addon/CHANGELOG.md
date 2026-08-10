@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.2
+
+- Recognize validated HCS026 factory announcements and paired endpoint
+  identities from two controlled enrollment captures.
+- Discover new HCS026 sensors from the strict paired telemetry layout instead
+  of requiring an installation-specific endpoint allowlist.
+- Decode the controlled HCS026 full/low battery flag at frame byte 17, bit
+  `0x04`, for that paired report layout.
+- Preserve factory and paired identities in device state and restore dynamic
+  sensors from persistent observations after app restarts.
+
 ## 0.6.1
 
 - Retain trailer-invalid frames for research without allowing them to update

@@ -251,6 +251,9 @@ class RTL433Transport:
                     "battery_endpoint",
                     "battery_status_candidate",
                     "battery_percent_candidate",
+                    "hcs026_factory_endpoint",
+                    "hcs026_paired_endpoint",
+                    "hcs026_pairing_state",
                 ):
                     if key in decoded:
                         state[key] = decoded[key]
@@ -285,6 +288,16 @@ class RTL433Transport:
                 "rf_frame_accepted": frame_accepted,
                 "soil_moisture_percent": moisture,
             }
+            for key, state_key in (
+                ("hcs026_factory_endpoint", "rf_factory_endpoint"),
+                ("hcs026_paired_endpoint", "rf_paired_endpoint"),
+                ("hcs026_pairing_state", "rf_pairing_state"),
+                ("battery_low", "battery_low"),
+                ("battery_status", "battery_status"),
+                ("battery_percent", "battery_percent"),
+            ):
+                if key in decoded:
+                    state[state_key] = decoded[key]
             if "product_code" in decoded:
                 state["rf_product_code"] = decoded["product_code"]
             if "hub_rssi_db" in decoded:

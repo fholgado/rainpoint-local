@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.6.1 supports captured replay, receive-only USB RTL-SDR,
+Version 0.6.2 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. Valve-control POST requests remain rejected. Token-protected registry
@@ -124,6 +124,12 @@ product-code reports and structurally decoded valve transactions are retained
 as accepted protocol families while their distinct trailer behavior remains
 under study. Valid routine traffic on the established valve endpoint pair
 advances its report time without overwriting the last decoded watering state.
+
+Validated HCS026 factory and paired report layouts also expose the factory and
+paired RF identities. A newly paired sensor using this layout is discovered
+without an installation-specific endpoint allowlist. Its categorical battery
+field reports `100%` for normal and `10%` for low, matching the stock app's
+semantics. Older companion-heartbeat battery fields remain research metadata.
 
 ## Safety
 

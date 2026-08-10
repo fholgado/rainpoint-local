@@ -1,0 +1,68 @@
+{
+  "captured_at": "2026-08-10",
+  "gateway_endpoint": "b9840280",
+  "observations": [
+    {
+      "name": "sensor_a_factory_boot",
+      "frame": "79f4882f28800000001bce0024010083827fa41e8080b20000000000000000000000000073e3",
+      "factory_endpoint": "1bce0024",
+      "pairing_state": "factory"
+    },
+    {
+      "name": "sensor_a_paired_full",
+      "frame": "79f4882f28b98402809bce00240301820485c40080000000000000000000000000000000518b",
+      "factory_endpoint": "1bce0024",
+      "paired_endpoint": "9bce0024",
+      "pairing_state": "paired",
+      "soil_moisture_percent": 1,
+      "battery_percent": 100,
+      "battery_low": false
+    },
+    {
+      "name": "sensor_a_paired_low",
+      "frame": "79f4882f28b98402809bce00240301820481c400800000000000000000000000000000001994",
+      "factory_endpoint": "1bce0024",
+      "paired_endpoint": "9bce0024",
+      "pairing_state": "paired",
+      "soil_moisture_percent": 1,
+      "battery_percent": 10,
+      "battery_low": true
+    },
+    {
+      "name": "sensor_a_restored_full",
+      "frame": "79f4882f28b98402809bce002401818204e5c4008000000000000000000000000000000008d6",
+      "factory_endpoint": "1bce0024",
+      "paired_endpoint": "9bce0024",
+      "pairing_state": "paired",
+      "soil_moisture_percent": 1,
+      "battery_percent": 100,
+      "battery_low": false
+    },
+    {
+      "name": "sensor_b_factory_boot",
+      "frame": "79f4882f288000000015a98024010083827fa41e8080848000000000000000000000000022f1",
+      "factory_endpoint": "15a98024",
+      "pairing_state": "factory"
+    },
+    {
+      "name": "sensor_b_paired_full",
+      "frame": "79f4882f28b984028095a980240301820405c405000000000000000000000000000000002cb4",
+      "factory_endpoint": "15a98024",
+      "paired_endpoint": "95a98024",
+      "pairing_state": "paired",
+      "soil_moisture_percent": 10,
+      "battery_percent": 100,
+      "battery_low": false
+    },
+    {
+      "name": "sensor_b_after_app_delete",
+      "frame": "79f4882f28b984028095a980240401820405c402800000000000000000000000000000007d7b",
+      "factory_endpoint": "15a98024",
+      "paired_endpoint": "95a98024",
+      "pairing_state": "paired",
+      "soil_moisture_percent": 5,
+      "battery_percent": 100,
+      "battery_low": false
+    }
+  ]
+}

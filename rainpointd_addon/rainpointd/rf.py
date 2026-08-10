@@ -23,6 +23,7 @@ HCS026_ENDPOINTS = {
 # by ordinary telemetry so a marker-like payload cannot create a new device.
 HCS026_PRODUCT_CODE = 0x48
 HCS026_COMPANION_ENDPOINT = "39840280"
+HCS026_FACTORY_BROADCAST = "80000000"
 # Ordinary 38-byte frames use CRC-CCITT (poly 0x1021, init 0) over bytes
 # 0..35. The transmitted trailer differs by one of two unresolved residues.
 # Both residues occur across prefix lengths and with open/close traffic.
@@ -124,6 +125,63 @@ def _hcs026_battery_candidate(frame: bytes) -> dict[str, Any]:
         "battery_status_candidate": status,
         "battery_percent_candidate": 100 if status in (0, 1) else 10,
     }
+
+
+def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
+    """Decode the validated HCS026 factory/paired enrollment layout.
+
+    Two controlled sensors showed a four-byte factory identity whose first
+    byte gains bit 7 after enrollment. Factory announcements use 80000000 as
+    the other endpoint. Paired reports use the established b9840280 RainPoint
+    gateway and a distinct 0x82/0x04 body layout. The latter also provided a
+    controlled full/low/full battery transition at byte 17, bit 0x04.
+    """
+    if len(frame) != FRAME_BYTES or frame[12] != 0x24:
+        return {}
+    endpoint_a = frame[5:9].hex()
+    endpoint_b = frame[9:13]
+    message_type = frame[13] & 0x7F
+
+    if (
+        endpoint_a == HCS026_FACTORY_BROADCAST
+        and not endpoint_b[0] & 0x80
+        and message_type in {1, 2, 4}
+    ):
+        return {
+            "hcs026_factory_endpoint": endpoint_b.hex(),
+            "hcs026_pairing_state": "factory",
+        }
+
+    if (
+        endpoint_a != VALVE_ENDPOINT
+        or not endpoint_b[0] & 0x80
+        or message_type not in {1, 2, 3, 4}
+    ):
+        return {}
+
+    factory = bytes([endpoint_b[0] & 0x7F]) + endpoint_b[1:]
+    result: dict[str, Any] = {
+        "hcs026_factory_endpoint": factory.hex(),
+        "hcs026_paired_endpoint": endpoint_b.hex(),
+        "hcs026_pairing_state": "paired",
+    }
+    if (
+        frame[15] == 0x82
+        and frame[16] == 0x04
+        and frame[18] & 0x7F == 0x44
+    ):
+        moisture = frame[19] * 2 + int(bool(frame[20] & 0x80))
+        if 0 <= moisture <= 100:
+            battery_normal = bool(frame[17] & 0x04)
+            result.update(
+                {
+                    "soil_moisture_percent": moisture,
+                    "battery_low": not battery_normal,
+                    "battery_status": 1 if battery_normal else 2,
+                    "battery_percent": 100 if battery_normal else 10,
+                }
+            )
+    return result
 
 
 def _soil_moisture(frame: bytes) -> int | None:
@@ -236,7 +294,10 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
     result.update(_hcs026_battery_candidate(frame))
-    moisture = _soil_moisture(frame)
+    result.update(_hcs026_pairing_fields(frame))
+    moisture = result.get("soil_moisture_percent")
+    if moisture is None:
+        moisture = _soil_moisture(frame)
     if moisture is not None:
         result["soil_moisture_percent"] = moisture
     result.update(_valve_fields(frame))

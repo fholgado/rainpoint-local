@@ -10,13 +10,17 @@ limits. The target system has no internet-service or vendor-app dependency.
 ## Current status
 
 This project has a working receive-only SDR deployment. The RF frame format,
-all four installed soil-sensor endpoints, soil moisture, valve duration, and
-last-session water usage are confirmed. Valve transmission and local pairing
-remain protocol work.
+soil moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
+duration, and last-session water usage are confirmed. Valve transmission and
+active local pairing remain protocol work.
 
 Working now:
 
 - decoding live and captured HCS026FRF soil-moisture RF frames,
+- discovering HCS026FRF sensors from validated paired telemetry rather than a
+  household-specific endpoint list,
+- reporting the confirmed full/low battery flag used by newly tested HCS026
+  sensors,
 - decoding HTV145FRF valve command, state, duration, and usage fields,
 - receiving live RainPoint 2-FSK packets through `rtl_433`,
 - reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
@@ -39,8 +43,8 @@ Working now:
 
 Still provisional or not working yet:
 
-- confirming the provisional HCS026FRF heartbeat battery-status byte with a
-  controlled normal-to-low transition,
+- decoding the older installed sensors' separate companion-heartbeat battery
+  status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
 - locally pairing or forgetting physical devices, and
 - locally opening or closing the physical valve.

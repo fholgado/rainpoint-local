@@ -35,6 +35,88 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    def test_decodes_controlled_hcs026_pairing_and_battery_fixtures(self) -> None:
+        fixture = json.loads(
+            (ROOT / "research/fixtures/hcs026_pairing_battery.json").read_text()
+        )
+        for observation in fixture["observations"]:
+            with self.subTest(observation=observation["name"]):
+                frame = observation["frame"]
+                decoded = normalize_row({"len": len(frame) * 4, "data": frame})
+                self.assertTrue(decoded["trailer_valid"])
+                self.assertEqual(
+                    observation["factory_endpoint"],
+                    decoded["hcs026_factory_endpoint"],
+                )
+                self.assertEqual(
+                    observation["pairing_state"],
+                    decoded["hcs026_pairing_state"],
+                )
+                for key in (
+                    "paired_endpoint",
+                    "soil_moisture_percent",
+                    "battery_percent",
+                    "battery_low",
+                ):
+                    if key in observation:
+                        decoded_key = (
+                            "hcs026_paired_endpoint"
+                            if key == "paired_endpoint"
+                            else key
+                        )
+                        self.assertEqual(observation[key], decoded[decoded_key])
+
+    def test_dynamic_paired_hcs026_becomes_a_device_and_restores(self) -> None:
+        full_frame = (
+            "79f4882f28b98402809bce00240301820485c40080000000000000000000000000000000518b"
+        )
+        low_frame = (
+            "79f4882f28b98402809bce00240301820481c400800000000000000000000000000000001994"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            for frame in (full_frame, low_frame):
+                self.assertEqual(
+                    1,
+                    transport.consume_line(
+                        json.dumps({"rows": [{"len": len(frame) * 4, "data": frame}]})
+                    ),
+                )
+            device = gateway.devices()[0]
+            self.assertEqual("hcs026-9bce0024", device["device_id"])
+            self.assertEqual(1, device["state"]["soil_moisture_percent"])
+            self.assertEqual(10, device["state"]["battery_percent"])
+            self.assertTrue(device["state"]["battery_low"])
+            self.assertEqual("1bce0024", device["state"]["rf_factory_endpoint"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            restored_device = restored.devices()[0]
+            self.assertEqual("hcs026-9bce0024", restored_device["device_id"])
+            self.assertEqual(10, restored_device["state"]["battery_percent"])
+            restored.close()
+
+    def test_invalid_dynamic_hcs026_cannot_create_a_device(self) -> None:
+        frame = bytearray.fromhex(
+            "79f4882f28b98402809bce00240301820485c40080000000000000000000000000000000518b"
+        )
+        frame[-1] ^= 0x01
+        frame_hex = frame.hex()
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        self.assertEqual(
+            1,
+            transport.consume_line(
+                json.dumps({"rows": [{"len": len(frame_hex) * 4, "data": frame_hex}]})
+            ),
+        )
+        self.assertEqual([], gateway.devices())
+        event = gateway.events()[0]
+        self.assertEqual("hcs026-9bce0024", event["device_id"])
+        self.assertFalse(event["state"]["rf_frame_accepted"])
+
     def test_builds_captured_valve_commands_offline(self) -> None:
         open_frame = build_open_frame(0x97, 60, 0xC713)
         self.assertEqual(

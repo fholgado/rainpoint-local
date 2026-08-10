@@ -584,7 +584,11 @@ class Gateway:
         if not device_id.startswith("hcs026-"):
             return True
         endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
-        return endpoint in HCS026_ENDPOINTS
+        state = event.get("state", {})
+        return (
+            endpoint in HCS026_ENDPOINTS
+            or state.get("rf_pairing_state") == "paired"
+        )
 
 
 def _clean_label(value: str, field: str) -> str:
