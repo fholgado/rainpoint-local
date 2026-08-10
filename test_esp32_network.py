@@ -141,6 +141,39 @@ class ESP32NetworkTest(unittest.TestCase):
                 stream.close()
                 connection.close()
 
+    def test_v1_node_may_advertise_disarmed_pairing_bench_firmware(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            capabilities=["rx", "pairing_plan", "pairing_tx_bench"],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        self.assertEqual(
+            ["rx", "pairing_plan", "pairing_tx_bench"],
+            self.gateway.nodes()[0]["capabilities"],
+        )
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "state": "armed",
+                    "completed_steps": 1,
+                    "tx_armed": True,
+                    "detail": "reply_transmitted",
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while not self.gateway.nodes()[0].get("tx_armed"):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertEqual("armed", self.gateway.nodes()[0]["pairing_state"])
+        self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
+        stream.close()
+        connection.close()
+
     def test_second_session_for_same_node_is_rejected(self) -> None:
         first_connection, first, first_response = self._connect(NODE_A, TOKEN_A)
         second_connection, second, second_response = self._connect(NODE_A, TOKEN_A)

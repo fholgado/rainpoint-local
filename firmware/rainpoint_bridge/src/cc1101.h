@@ -19,12 +19,18 @@ struct RadioPacket {
 
 class Cc1101 {
 public:
-    Cc1101(SPIClass& spi, int chipSelectPin, int misoPin);
+    Cc1101(SPIClass& spi, int chipSelectPin, int misoPin, int dataPin);
 
     bool begin(std::uint8_t initialChannel = 0);
     bool enterIdle();
     bool enterReceive();
     bool setChannel(std::uint8_t channel);
+    bool transmitAsync(
+        const std::array<std::uint8_t, kFrameBytes>& frame,
+        std::uint32_t centerFrequencyHz,
+        std::uint16_t wakeSymbols,
+        bool invert = false
+    );
     bool poll(RadioPacket& packet);
     std::uint8_t channel() const;
     std::uint8_t partNumber();
@@ -40,6 +46,8 @@ private:
     bool reset();
     bool waitReady(std::uint32_t timeoutMicros = 2'000);
     void configureRainPoint();
+    bool restoreReceiveConfiguration(std::uint8_t channel);
+    void setFrequency(std::uint32_t frequencyHz);
     bool verifyConfiguration();
     bool waitForMainState(
         std::uint8_t expectedState,
@@ -48,6 +56,11 @@ private:
     void recoverRx();
     std::uint8_t strobe(std::uint8_t command);
     void writeRegister(std::uint8_t address, std::uint8_t value);
+    void writeBurst(
+        std::uint8_t address,
+        const std::uint8_t* data,
+        std::size_t length
+    );
     std::uint8_t readRegister(std::uint8_t address);
     std::uint8_t readStatus(std::uint8_t address);
     void readBurst(std::uint8_t address, std::uint8_t* data, std::size_t length);
@@ -55,6 +68,7 @@ private:
     SPIClass& spi_;
     int chipSelectPin_;
     int misoPin_;
+    int dataPin_;
     std::uint8_t channel_ = 0;
     bool configurationValid_ = false;
     std::uint32_t packetCount_ = 0;

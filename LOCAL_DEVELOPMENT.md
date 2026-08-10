@@ -1,7 +1,8 @@
 # Local gateway and Home Assistant development
 
 The gateway supports captured replay and a receive-only RTL-SDR transport. It
-never connects to HomGar services and rejects all HTTP POST requests.
+never connects to HomGar services. Registry and pairing-monitor metadata writes
+require a configured token; valve-control requests remain rejected.
 
 ## Components
 

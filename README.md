@@ -11,8 +11,9 @@ limits. The target system has no internet-service or vendor-app dependency.
 
 This project has a working receive-only SDR deployment. The RF frame format,
 soil moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
-duration, and last-session water usage are confirmed. A receive-only HCS026
-enrollment state machine is implemented offline; UI/API wiring and valve
+duration, and last-session water usage are confirmed. The ESP32/CC1101
+firmware now includes an explicitly armed physical TX bench path for the exact
+captured Test Sensor B enrollment sequence. Hardware validation and valve
 transmission remain protocol work.
 
 Working now:
@@ -36,9 +37,9 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
-- building a receive-only single-CC1101 production firmware scaffold, with an
+- building a single-CC1101 firmware prototype, with an
   optional dual-radio diagnostic build, using the measured RainPoint radio
-  profiles and serial frame diagnostics,
+  profiles, serial frame diagnostics, and a Sensor-B-specific pairing TX bench,
 - accepting those serial frames through a receive-only `rainpointd` transport,
 - simulating fail-closed startup, bounded runs, acknowledgement timeouts,
   client loss, watchdog expiry, close retries, and persistent fault retries
@@ -51,12 +52,14 @@ Still provisional or not working yet:
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
+- validating the pairing carrier, polarity, symbol timing, and complete
+  enrollment exchange on physical ESP32/CC1101 hardware,
 - locally opening or closing the physical valve.
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
-local. HCS026 pairing discovery is implemented, but completing physical
-pairing and valve control both require the future transmitter.
+local. HCS026 pairing discovery is implemented, and the first fixed pairing
+transmitter is ready for bench validation. Valve control remains absent.
 
 ## Architecture
 
@@ -68,7 +71,7 @@ HCS026 sensors / HTV145 valve
       local radio transport
    - replay fixtures (implemented)
    - receive-only SDR (implemented in the HA app)
-   - ESP32 + CC1101 gateway (receive-only firmware scaffold implemented)
+   - ESP32 + CC1101 node (receive plus Sensor B pairing TX bench)
              |
          rainpointd
    protocol + registry + safety

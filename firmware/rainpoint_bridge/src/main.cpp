@@ -20,19 +20,33 @@ constexpr int kSpiMisoPin = 19;
 constexpr int kSpiMosiPin = 23;
 constexpr int kPrimaryChipSelectPin = 27;
 constexpr int kDiagnosticChipSelectPin = 14;
+constexpr int kPrimaryDataPin = 26;
+constexpr int kDiagnosticDataPin = 33;
 constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 
 SPIClass radioSpi(VSPI);
-rainpoint::Cc1101 primaryRadio(radioSpi, kPrimaryChipSelectPin, kSpiMisoPin);
+rainpoint::Cc1101 primaryRadio(
+    radioSpi,
+    kPrimaryChipSelectPin,
+    kSpiMisoPin,
+    kPrimaryDataPin
+);
 rainpoint::WifiTransport wifiTransport;
 #if RAINPOINT_RADIO_COUNT == 2
 rainpoint::Cc1101 diagnosticRadio(
     radioSpi,
     kDiagnosticChipSelectPin,
-    kSpiMisoPin
+    kSpiMisoPin,
+    kDiagnosticDataPin
 );
 #endif
+rainpoint::SensorBPairingSession pairingSession;
+rainpoint::PairingSessionState reportedPairingState =
+    rainpoint::PairingSessionState::Disarmed;
+bool pairingInvert = false;
+std::int32_t pairingFrequencyOffsetHz = 0;
+bool pairingRequiresNetwork = false;
 std::uint32_t lastHealthReport = 0;
 String serialCommand;
 
@@ -123,6 +137,105 @@ void reportHealth() {
 #endif
 }
 
+const char* pairingStateName(rainpoint::PairingSessionState state) {
+    switch (state) {
+        case rainpoint::PairingSessionState::Disarmed:
+            return "disarmed";
+        case rainpoint::PairingSessionState::Armed:
+            return "armed";
+        case rainpoint::PairingSessionState::Completed:
+            return "completed";
+        case rainpoint::PairingSessionState::Failed:
+            return "failed";
+    }
+    return "unknown";
+}
+
+void reportPairingStatus(const char* detail = nullptr) {
+    String line;
+    line.reserve(320);
+    line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"profile\":\"sensor_b\",\"factory_endpoint\":"
+            "\"15a98024\",\"state\":\"";
+    line += pairingStateName(pairingSession.state());
+    line += "\",\"completed_steps\":";
+    line += pairingSession.completedSteps();
+    line += ",\"step_count\":";
+    line += rainpoint::kSensorBPairingProfile.size();
+    line += ",\"tx_armed\":";
+    line += pairingSession.state() == rainpoint::PairingSessionState::Armed
+        ? "true"
+        : "false";
+    line += ",\"invert\":";
+    line += pairingInvert ? "true" : "false";
+    line += ",\"frequency_offset_hz\":";
+    line += pairingFrequencyOffsetHz;
+    if (detail != nullptr) {
+        line += ",\"detail\":\"";
+        line += detail;
+        line += '"';
+    }
+    line += '}';
+    emitLine(line);
+    reportedPairingState = pairingSession.state();
+}
+
+void restoreScanningAfterPairing() {
+#if RAINPOINT_RADIO_COUNT == 1
+    scanChannels = true;
+    lastChannelChange = millis();
+#endif
+}
+
+void cancelPairing(const char* detail) {
+    pairingSession.cancel();
+    pairingRequiresNetwork = false;
+    restoreScanningAfterPairing();
+    reportPairingStatus(detail);
+}
+
+bool handlePairingProbe(const String& command) {
+    for (std::size_t index = 0;
+         index < rainpoint::kSensorBPairingProfile.size();
+         ++index) {
+        const String expected = String("pairing_probe_b ") + (index + 1) +
+            " 15a98024";
+        if (command != expected) {
+            continue;
+        }
+        if (pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+            emitLine(
+                "{\"type\":\"command_error\","
+                "\"error\":\"pairing_is_armed\"}"
+            );
+            return true;
+        }
+        const auto& step = rainpoint::kSensorBPairingProfile[index];
+        const std::int64_t adjustedFrequency =
+            static_cast<std::int64_t>(step.channelCenterHz) +
+            pairingFrequencyOffsetHz;
+        const bool sent = primaryRadio.transmitAsync(
+            step.frame,
+            static_cast<std::uint32_t>(adjustedFrequency),
+            step.wakeSymbols,
+            pairingInvert
+        );
+        String line =
+            "{\"type\":\"pairing_tx_probe\",\"profile\":\"sensor_b\","
+            "\"step\":";
+        line += index + 1;
+        line += ",\"channel_center_hz\":";
+        line += static_cast<long>(adjustedFrequency);
+        line += ",\"success\":";
+        line += sent ? "true" : "false";
+        line += '}';
+        emitLine(line);
+        return true;
+    }
+    return false;
+}
+
 #if RAINPOINT_RADIO_COUNT == 1
 void selectChannel(std::uint8_t channel) {
     if (primaryRadio.setChannel(channel)) {
@@ -165,6 +278,68 @@ void handleSerialCommand() {
                     line += hexString(step.frame.data(), step.frame.size());
                     line += "\"}";
                     emitLine(line);
+                }
+            }
+            if (!handled && serialCommand == "pairing_arm_b 15a98024") {
+                handled = true;
+#if RAINPOINT_RADIO_COUNT == 1
+                scanChannels = false;
+                selectChannel(0);
+#endif
+                pairingSession.arm(millis());
+                pairingRequiresNetwork = wifiTransport.authenticated();
+                reportPairingStatus("waiting_for_factory_message_1");
+            } else if (!handled && serialCommand == "pairing_cancel") {
+                handled = true;
+                cancelPairing("cancelled_by_operator");
+            } else if (!handled && serialCommand == "pairing_status") {
+                handled = true;
+                reportPairingStatus();
+            } else if (!handled && serialCommand.startsWith("pairing_probe_b ")) {
+                handled = handlePairingProbe(serialCommand);
+            } else if (!handled && serialCommand.startsWith("pairing_offset_hz ")) {
+                handled = true;
+                const long offset = serialCommand.substring(18).toInt();
+                if (offset < -20'000 || offset > 20'000) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_offset_out_of_range\"}"
+                    );
+                } else if (
+                    pairingSession.state() ==
+                    rainpoint::PairingSessionState::Armed
+                ) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_is_armed\"}"
+                    );
+                } else {
+                    pairingFrequencyOffsetHz = offset;
+                    reportPairingStatus("frequency_offset_updated");
+                }
+            } else if (!handled && serialCommand == "pairing_invert on") {
+                handled = true;
+                if (pairingSession.state() ==
+                    rainpoint::PairingSessionState::Armed) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_is_armed\"}"
+                    );
+                } else {
+                    pairingInvert = true;
+                    reportPairingStatus("polarity_updated");
+                }
+            } else if (!handled && serialCommand == "pairing_invert off") {
+                handled = true;
+                if (pairingSession.state() ==
+                    rainpoint::PairingSessionState::Armed) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_is_armed\"}"
+                    );
+                } else {
+                    pairingInvert = false;
+                    reportPairingStatus("polarity_updated");
                 }
             }
 #if RAINPOINT_RADIO_COUNT == 1
@@ -212,6 +387,29 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+    if (&radio == &primaryRadio &&
+        pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+        const rainpoint::PairingReplyStep* step =
+            pairingSession.claimReply(frame, millis());
+        if (step != nullptr) {
+            const std::int64_t adjustedFrequency =
+                static_cast<std::int64_t>(step->channelCenterHz) +
+                pairingFrequencyOffsetHz;
+            const bool sent = radio.transmitAsync(
+                step->frame,
+                static_cast<std::uint32_t>(adjustedFrequency),
+                step->wakeSymbols,
+                pairingInvert
+            );
+            pairingSession.finishReply(sent, millis());
+            reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
+            if (pairingSession.state() !=
+                rainpoint::PairingSessionState::Armed) {
+                pairingRequiresNetwork = false;
+                restoreScanningAfterPairing();
+            }
+        }
+    }
     printPacket(name, frame, packet, radio);
 }
 
@@ -246,8 +444,8 @@ void setup() {
     wifiTransport.begin();
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
-        wifiTransport.nodeId() + "\",\"mode\":\"receive_only\","
-        "\"pairing_plan_only\":true,\"transmit_enabled\":false,"
+        wifiTransport.nodeId() + "\",\"mode\":\"pairing_tx_bench\","
+        "\"pairing_tx_available\":true,\"tx_armed\":false,"
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +
         ",\"radio_count\":" + RAINPOINT_RADIO_COUNT + "}"
@@ -285,6 +483,9 @@ void setup() {
 
 void loop() {
     wifiTransport.poll();
+    if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
+        cancelPairing("gateway_connection_lost");
+    }
     handleSerialCommand();
 #if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);
@@ -296,6 +497,14 @@ void loop() {
     pollRadio("primary", primaryRadio);
     pollRadio("diagnostic", diagnosticRadio);
 #endif
+    pairingSession.tick(millis());
+    if (pairingSession.state() != reportedPairingState) {
+        if (pairingSession.state() != rainpoint::PairingSessionState::Armed) {
+            pairingRequiresNetwork = false;
+            restoreScanningAfterPairing();
+        }
+        reportPairingStatus("state_changed");
+    }
     if (millis() - lastHealthReport >= kHealthIntervalMs) {
         reportHealth();
         lastHealthReport = millis();

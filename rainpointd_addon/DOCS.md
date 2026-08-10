@@ -5,7 +5,7 @@ This experimental app runs the read-only `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.6.5 supports captured replay, receive-only USB RTL-SDR,
+Version 0.6.6 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. Valve-control POST requests remain rejected. Token-protected registry
@@ -61,6 +61,12 @@ node state and receive counters are available from the read-only
 This configuration is intended for trusted-LAN hardware testing. It proves
 node authentication but does not yet encrypt or sign every telemetry record.
 Network valve commands remain unavailable.
+
+Firmware advertising `pairing_tx_bench` may connect only while disarmed. Its
+reported pairing state, completed reply count, detail, and current armed state
+appear in `/api/v1/nodes`. The app does not send pairing or valve commands;
+the first physical pairing test is armed explicitly through the ESP32 serial
+console.
 
 ### Broad capture duration
 
@@ -144,8 +150,9 @@ semantics. Older companion-heartbeat battery fields remain research metadata.
 
 ## Safety
 
-This release has no RF transmitter, cloud transport, valve control entity, or
-control API. The optional POST surface can only mutate its own SQLite registry.
-USB access is used only by `rtl_433` for receiving. Share access is used only
-for explicitly enabled raw captures, and the app cannot operate the physical
-valve.
+This release issues no RF transmission and has no cloud transport, valve
+control entity, or control API. It may display status reported by explicitly
+disarmed Sensor B pairing-bench firmware, but cannot arm it. The optional POST
+surface can only mutate its own SQLite registry. USB access is used only by
+`rtl_433` for receiving. Share access is used only for explicitly enabled raw
+captures, and the app cannot operate the physical valve.

@@ -21,7 +21,8 @@ explicitly so users do not confuse the vendor hardware with this project.
 The current firmware derives a stable `rp-xxxxxxxxxxxx` node ID from the ESP32
 and accepts Wi-Fi configuration over its USB serial connection. The user:
 
-1. Flashes the receive-only firmware and runs `show_node` over USB.
+1. Flashes the radio-node firmware and runs `show_node` over USB. Pairing TX
+   remains disarmed after boot.
 2. Generates a unique 32-byte enrollment token.
 3. Adds the node-ID/token pair to the `rainpointd` app configuration.
 4. Sends the tab-separated `configure_wifi` command over USB and restarts.

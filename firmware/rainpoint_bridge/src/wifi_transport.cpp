@@ -216,7 +216,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"receive_only\","
-        "\"capabilities\":[\"rx\",\"pairing_plan\"],"
+        "\"capabilities\":[\"rx\",\"pairing_plan\",\"pairing_tx_bench\"],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,
         nodeId_.c_str(),

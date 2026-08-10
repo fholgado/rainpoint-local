@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6
+
+- Accept explicitly disarmed `pairing_tx_bench` ESP32 firmware while keeping
+  valve commands unavailable.
+- Surface the node's pairing state, completed reply count, and live armed state
+  in `/api/v1/nodes` for physical bench testing.
+
 ## 0.6.5
 
 - Add a non-transmitting, capture-derived five-step Sensor B pairing profile.

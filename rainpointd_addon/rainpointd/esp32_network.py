@@ -1,4 +1,4 @@
-"""Authenticated receive-only TCP listener for ESP32 radio nodes."""
+"""Authenticated TCP listener for ESP32 radio-node telemetry and status."""
 
 from __future__ import annotations
 
@@ -210,6 +210,14 @@ class ESP32NetworkServer:
                     self.gateway.update_node(
                         node_id, received_frames=received_frames
                     )
+                if message.get("type") == "pairing_tx_status":
+                    self.gateway.update_node(
+                        node_id,
+                        tx_armed=message.get("tx_armed") is True,
+                        pairing_state=message.get("state"),
+                        pairing_completed_steps=message.get("completed_steps"),
+                        pairing_detail=message.get("detail"),
+                    )
                 self._publisher.consume_line(
                     json.dumps(message), authenticated_node_id=node_id
                 )
@@ -244,7 +252,7 @@ class ESP32NetworkServer:
             or not isinstance(capabilities, list)
             or "rx" not in capabilities
             or any(
-                capability not in {"rx", "pairing_plan"}
+                capability not in {"rx", "pairing_plan", "pairing_tx_bench"}
                 for capability in capabilities
             )
             or hello.get("tx_armed", False) is not False

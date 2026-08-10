@@ -1,11 +1,11 @@
 # RainPoint ESP32/CC1101 bridge firmware
 
-This is the receive-only firmware scaffold for the ELEGOO ESP-WROOM-32 USB-C
-development board and one **433 MHz** CC1101 transceiver. A second module is
-supported only as an optional dual-channel receive diagnostic. The firmware
-contains no transmit API, no valve commands, and no `STX` path. It can print a
-captured Sensor B pairing reply plan for inspection without changing radio
-state or sending it.
+This is the receive firmware and sensor-pairing TX bench prototype for the
+ELEGOO ESP-WROOM-32 USB-C development board and one **433 MHz** CC1101
+transceiver. A second module is supported only as an optional dual-channel
+receive diagnostic. The firmware contains no valve commands. Its only TX path
+is the explicit Test Sensor B pairing profile recovered from controlled stock
+gateway captures.
 
 ## Wiring
 
@@ -24,8 +24,8 @@ chip-select pins; never connect the two CSN pins together.
 | MOSI | MOSI | MOSI | GPIO23 |
 | CSN | CSN | — | GPIO27 |
 | CSN | — | CSN | GPIO14 |
-| GDO0 | GDO0 | — | GPIO26, reserved |
-| GDO0 | — | GDO0 | GPIO33, reserved |
+| GDO0 | GDO0 | — | GPIO26, required for pairing TX data |
+| GDO0 | — | GDO0 | GPIO33, receive diagnostic only |
 | GDO2 | GDO2 | — | GPIO25, optional/reserved |
 | GDO2 | — | GDO2 | GPIO32, optional/reserved |
 
@@ -55,7 +55,15 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
   its enrollment token over the network.
 - Contains a five-step Sensor B pairing reply profile with the two captured
   frequencies, 320-symbol wake prefix, and provisional 250 ms response
-  deadline. The profile is data only and cannot initiate transmission.
+  deadline.
+- Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
+  the complete 20 ksymbol/s wake, sync, and frame on GDO0.
+- Starts disarmed after every boot. Only an exact serial arm command for factory
+  endpoint `15a98024` enables the time-limited automatic reply sequence.
+- Transmits the bench sequence at approximately 0 dBm and returns to the
+  receive configuration after every 31.2 ms reply.
+- Reports pairing state, completed steps, and armed state over serial and the
+  authenticated Wi-Fi telemetry connection. It accepts no network commands.
 
 `recoveries` includes the intentional FIFO reset after a successfully consumed
 fixed-length packet as well as overflow recovery; compare it with `packets` and
@@ -70,17 +78,34 @@ to resume scanning. The optional dual-radio diagnostic build fixes the primary r
 channel 0 and the second radio to channel 11 so both can be evaluated
 continuously against the existing RTL-SDR.
 
-Send `pairing_plan_b` over serial to print the five captured reply steps as
-JSON. Every record includes `transmit_enabled:false`; the command neither
-changes channel nor writes an RF FIFO.
+The pairing bench commands are:
 
-The driver now exposes explicit IDLE and RX transitions and validates complete
-frames before extracting the 36 bytes that follow the CC1101 hardware sync.
-These are prerequisites for a future half-duplex TX path, but they cannot
-transmit. Valve command traffic uses an approximately 60 ms alternating wake
-prefix. The captured sensor-pairing replies use a 320-symbol (16 ms) wake
-followed by a 15.2 ms frame. Both require a validated FIFO/continuous or
-asynchronous implementation before an `STX` path is permitted.
+```text
+pairing_status
+pairing_plan_b
+pairing_probe_b 1 15a98024
+pairing_probe_b 2 15a98024
+pairing_offset_hz -2000
+pairing_invert off
+pairing_arm_b 15a98024
+pairing_cancel
+```
+
+`pairing_probe_b` emits one captured reply so the independent RTL-SDR can
+measure it before a sensor is involved. Steps 1 and 2 cover both captured
+reply frequencies. The offset is limited to +/-20 kHz and polarity or offset
+cannot be changed while armed. `pairing_arm_b` locks the primary receiver to
+the lower sensor channel, expires after two minutes, and responds only to the
+five validated Sensor B trigger layouts in order. Duplicate earlier triggers
+are ignored; timeout, an unexpected later trigger, TX failure, or loss of an
+active gateway connection fails closed. `pairing_cancel` disarms immediately.
+
+The driver uses explicit IDLE/RX/TX transitions and restores the validated
+packet receive profile after each asynchronous pairing reply. Valve command
+traffic uses a different approximately 60 ms alternating wake and remains
+unimplemented. No pairing TX result should be considered valid until the
+independent SDR confirms carrier, deviation, polarity, symbol timing, and the
+complete decoded frame from physical hardware.
 
 ## Build and flash
 
@@ -134,9 +159,9 @@ erases the saved Wi-Fi and token values.
 This is a trusted-LAN prototype transport. The HMAC challenge prevents an
 unknown node from enrolling and prevents the token itself from crossing the
 network, but TCP telemetry is not encrypted or individually signed. Before a
-published setup or any network valve control, the transport needs server
-authentication plus an encrypted, replay-protected session. No inbound
-network message is interpreted as a radio or valve command in this firmware.
+published setup or any valve control, the transport will need further review.
+No inbound network message is interpreted as a radio or valve command in this
+firmware; pairing is armed only over local serial for the first bench test.
 
 The hardware-independent protocol test can run without PlatformIO:
 
@@ -149,18 +174,16 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ## Next firmware increments
 
-1. Flash on the physical ESP32.
-2. Verify the primary CC1101 on both channels while the existing RTL-SDR
+1. Follow [`PAIRING_BENCH_TEST.md`](PAIRING_BENCH_TEST.md) on the physical
+   ESP32 and primary CC1101.
+2. Verify the primary CC1101 receive path on both channels while the RTL-SDR
    records the same packets; use the optional second radio only for comparative
    diagnostics.
-3. Tune deviation, RX bandwidth, AFC, AGC, and frequency calibration from
-   measured packet success and CC1101 frequency-offset estimates.
-4. Validate the implemented receive-only USB serial transport into
-   `rainpointd`.
-5. Validate authenticated Wi-Fi telemetry and reconnect behavior on the
-   physical board while preserving USB as a diagnostic mirror.
-6. Compare the Sensor B dry-run plan output with the committed capture fixture.
-7. Reproduce both pairing and valve-command wake forms without exposing a
-   command surface.
-8. Design encrypted, replay-protected transmission as a separate
-   safety-reviewed milestone.
+3. Capture pairing probe steps 1 and 2 with the RTL-SDR and tune frequency
+   offset or polarity if required.
+4. Arm the exact Sensor B profile and attempt its physical enrollment.
+5. Confirm the paired endpoint and ordinary moisture reports locally.
+6. Generalize captured pairing replies only after the fixed Sensor B exchange
+   succeeds end to end.
+7. Implement and validate the distinct valve wake and close command before any
+   bounded open test.

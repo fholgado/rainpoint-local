@@ -211,8 +211,12 @@ frame (15.2 ms), or 31.2 ms of RF before any implementation-specific guard
 silence. The provisional reply deadline is 250 ms after the matching trigger;
 this is a conservative engineering bound, not a measured protocol constant.
 Duplicates are ignored, while timeout, out-of-order triggers, or interruption
-fail the plan closed. The current implementation is symbolic: it exposes and
-tests the plan but contains no dispatch, FIFO write, or transmit strobe.
+fail the plan closed. Firmware 0.3.0 implements this exact profile as an
+explicitly armed physical bench path using ESP32 RMT timing and CC1101
+asynchronous serial TX. It starts disarmed, uses approximately 0 dBm output,
+accepts no network command, and contains no valve frame path. Physical SDR
+validation remains required before its timing or polarity is considered
+confirmed.
 
 ## HCS026FRF soil-moisture reports
 

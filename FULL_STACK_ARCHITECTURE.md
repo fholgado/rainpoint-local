@@ -130,14 +130,15 @@ over automatically to a more distant node. The safety controller may attempt
 sequential close through other authorized nodes only as an emergency recovery
 operation.
 
-The receive-only firmware scaffold now lives in `firmware/rainpoint_bridge`.
-Its production build scans both observed channels with one radio and implements
+The radio-node firmware now lives in `firmware/rainpoint_bridge`. Its normal
+receive loop scans both observed channels with one radio and implements
 frame reconstruction, integrity diagnostics, startup register verification,
 packet/overflow/recovery counters, frequency-offset estimates, and serial JSON
 output. A dual-radio receive build remains available for diagnostics. The
 `rainpointd` serial transport consumes the same output without changing Home
-Assistant entities. The firmware deliberately contains no transmit strobe or
-command interface while the long RainPoint wake prefix remains unimplemented.
+Assistant entities. A locally armed bench path can transmit only the exact
+captured Sensor B pairing sequence. The distinct long valve-command wake and
+all valve TX commands remain unimplemented.
 
 ### Home Assistant integration (`rainpoint_local`)
 
@@ -179,13 +180,13 @@ transmitter must reproduce it before physical pairing is supported. The valve
 association procedure still requires a spare-device capture before resetting
 the working installation.
 
-A first dry-run profile now encodes the five captured gateway replies for Test
+A first bench profile now encodes the five captured gateway replies for Test
 Sensor B, including trigger order, channel changes, wake length, and a
 provisional response deadline. It is intentionally profile-specific rather
-than extrapolated to unknown factory identities. `rainpointd` can describe and
-validate this plan, but it has no dispatch path. The ESP32 node protocol still
-rejects transmit capability or an armed transmitter, and the firmware contains
-no FIFO write or transmit strobe.
+than extrapolated to unknown factory identities. Firmware can now emit it using
+asynchronous serial TX after an exact local serial arm command. `rainpointd`
+accepts the disarmed bench capability and records status but has no command
+dispatch path. Valve commands remain absent.
 
 The local registry can retain:
 

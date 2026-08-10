@@ -1,4 +1,9 @@
 #include "cc1101.h"
+#include "rainpoint_pairing.h"
+
+#include <driver/rmt.h>
+
+#include <vector>
 
 namespace rainpoint {
 namespace {
@@ -42,9 +47,11 @@ constexpr std::uint8_t kFrequencyCalibration0 = 0x26;
 constexpr std::uint8_t kTest2 = 0x2c;
 constexpr std::uint8_t kTest1 = 0x2d;
 constexpr std::uint8_t kTest0 = 0x2e;
+constexpr std::uint8_t kPaTable = 0x3e;
 
 constexpr std::uint8_t kReset = 0x30;
 constexpr std::uint8_t kEnterRx = 0x34;
+constexpr std::uint8_t kEnterTx = 0x35;
 constexpr std::uint8_t kIdle = 0x36;
 constexpr std::uint8_t kFlushRx = 0x3a;
 constexpr std::uint8_t kRxFifo = 0x3f;
@@ -57,6 +64,12 @@ constexpr std::uint8_t kRxBytes = 0x3b;
 
 constexpr std::uint8_t kMainStateIdle = 0x01;
 constexpr std::uint8_t kMainStateRx = 0x0d;
+constexpr std::uint8_t kMainStateTx = 0x13;
+
+constexpr std::uint32_t kCrystalFrequencyHz = 26'000'000;
+constexpr std::uint16_t kSymbolMicros = 50;
+constexpr std::uint8_t kBenchPower0Dbm = 0x60;
+constexpr rmt_channel_t kTxRmtChannel = RMT_CHANNEL_0;
 
 std::int16_t decodeRssi(std::uint8_t raw) {
     const auto signedRaw = raw >= 128
@@ -76,8 +89,11 @@ std::int32_t decodeFrequencyOffset(std::uint8_t raw) {
 
 }  // namespace
 
-Cc1101::Cc1101(SPIClass& spi, int chipSelectPin, int misoPin)
-    : spi_(spi), chipSelectPin_(chipSelectPin), misoPin_(misoPin) {}
+Cc1101::Cc1101(SPIClass& spi, int chipSelectPin, int misoPin, int dataPin)
+    : spi_(spi),
+      chipSelectPin_(chipSelectPin),
+      misoPin_(misoPin),
+      dataPin_(dataPin) {}
 
 bool Cc1101::waitReady(std::uint32_t timeoutMicros) {
     const auto started = micros();
@@ -133,6 +149,23 @@ void Cc1101::writeRegister(std::uint8_t address, std::uint8_t value) {
     if (waitReady()) {
         spi_.transfer(address);
         spi_.transfer(value);
+    }
+    digitalWrite(chipSelectPin_, HIGH);
+    spi_.endTransaction();
+}
+
+void Cc1101::writeBurst(
+    std::uint8_t address,
+    const std::uint8_t* data,
+    std::size_t length
+) {
+    spi_.beginTransaction(SPISettings(kSpiHz, MSBFIRST, SPI_MODE0));
+    digitalWrite(chipSelectPin_, LOW);
+    if (waitReady()) {
+        spi_.transfer(address | 0x40);
+        for (std::size_t index = 0; index < length; ++index) {
+            spi_.transfer(data[index]);
+        }
     }
     digitalWrite(chipSelectPin_, HIGH);
     spi_.endTransaction();
@@ -256,6 +289,8 @@ bool Cc1101::begin(std::uint8_t initialChannel) {
     pinMode(chipSelectPin_, OUTPUT);
     digitalWrite(chipSelectPin_, HIGH);
     pinMode(misoPin_, INPUT);
+    pinMode(dataPin_, OUTPUT);
+    digitalWrite(dataPin_, LOW);
     if (!reset()) {
         return false;
     }
@@ -268,6 +303,103 @@ bool Cc1101::begin(std::uint8_t initialChannel) {
         return false;
     }
     return setChannel(initialChannel);
+}
+
+void Cc1101::setFrequency(std::uint32_t frequencyHz) {
+    const std::uint32_t word = static_cast<std::uint32_t>(
+        (static_cast<std::uint64_t>(frequencyHz) * 65'536ULL +
+         kCrystalFrequencyHz / 2) /
+        kCrystalFrequencyHz
+    );
+    writeRegister(kFrequency2, (word >> 16) & 0xff);
+    writeRegister(kFrequency1, (word >> 8) & 0xff);
+    writeRegister(kFrequency0, word & 0xff);
+}
+
+bool Cc1101::restoreReceiveConfiguration(std::uint8_t channel) {
+    if (!enterIdle()) {
+        return false;
+    }
+    configureRainPoint();
+    configurationValid_ = verifyConfiguration();
+    if (!configurationValid_) {
+        return false;
+    }
+    return setChannel(channel);
+}
+
+bool Cc1101::transmitAsync(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    std::uint32_t centerFrequencyHz,
+    std::uint16_t wakeSymbols,
+    bool invert
+) {
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
+        wakeSymbols > 2'400 || centerFrequencyHz < 433'000'000 ||
+        centerFrequencyHz > 435'000'000) {
+        return false;
+    }
+
+    const std::uint8_t receiveChannel = channel_;
+    if (!enterIdle()) {
+        return false;
+    }
+
+    // TI CC1101 asynchronous serial mode takes TX data directly on GDO0.
+    // Packet automation, whitening, and the FIFO are deliberately bypassed so
+    // the ESP32 supplies the complete RainPoint wake, sync, and frame.
+    writeRegister(kPacketControl0, 0x30);
+    writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
+    writeRegister(kChannelNumber, 0);
+    setFrequency(centerFrequencyHz);
+    writeBurst(kPaTable, &kBenchPower0Dbm, 1);
+
+    const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols);
+    std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
+    const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
+        return rainpointSymbol(frame, wakeSymbols, index, invert);
+    };
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        const std::size_t first = index * 2;
+        const std::size_t second = first + 1;
+        items[index].level0 = symbolAt(first);
+        items[index].duration0 = kSymbolMicros;
+        items[index].level1 = second < symbolCount ? symbolAt(second) : 0;
+        items[index].duration1 = second < symbolCount ? kSymbolMicros : 1;
+    }
+
+    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(
+        static_cast<gpio_num_t>(dataPin_),
+        kTxRmtChannel
+    );
+    config.clk_div = 80;  // 80 MHz APB / 80 = one microsecond per tick.
+    config.mem_block_num = 1;
+    config.tx_config.idle_output_en = true;
+    config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
+
+    const bool rmtConfigured = rmt_config(&config) == ESP_OK;
+    const bool rmtInstalled = rmtConfigured &&
+        rmt_driver_install(kTxRmtChannel, 0, 0) == ESP_OK;
+    bool sent = rmtInstalled;
+    if (sent) {
+        digitalWrite(dataPin_, symbolAt(0));
+        sent = strobe(kEnterTx) != 0xff &&
+               waitForMainState(kMainStateTx, 10'000);
+    }
+    if (sent) {
+        sent = rmt_write_items(
+                   kTxRmtChannel,
+                   items.data(),
+                   items.size(),
+                   true
+               ) == ESP_OK;
+    }
+    if (rmtInstalled) {
+        rmt_driver_uninstall(kTxRmtChannel);
+    }
+    digitalWrite(dataPin_, LOW);
+    enterIdle();
+    return restoreReceiveConfiguration(receiveChannel) && sent;
 }
 
 bool Cc1101::waitForMainState(
