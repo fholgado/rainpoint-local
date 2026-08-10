@@ -111,6 +111,15 @@ class HCS026EnrollmentTest(unittest.TestCase):
                 "pairing_window_closed", restarted.observe(PAIRED, now=now)["reason"]
             )
 
+    def test_naive_rtl_timestamp_does_not_interrupt_aware_window(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = HCS026EnrollmentManager(Path(directory) / "pairing.json")
+            aware = datetime.now(timezone.utc)
+            manager.start(120, now=aware)
+            local_naive = datetime.now().replace(tzinfo=None)
+            result = manager.observe(FACTORY, now=local_naive)
+            self.assertEqual("candidate_observed", result["action"])
+
     def test_requires_factory_announcement_and_supports_local_forget(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = HCS026EnrollmentManager(Path(directory) / "pairing.json")

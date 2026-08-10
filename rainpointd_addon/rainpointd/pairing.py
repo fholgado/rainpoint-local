@@ -23,8 +23,13 @@ def _utc_now() -> datetime:
 
 def _timestamp(value: datetime) -> str:
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.astimezone()
     return value.astimezone(timezone.utc).isoformat()
+
+
+def _aware(value: datetime) -> datetime:
+    """Interpret naive rtl_433 timestamps in the gateway's local timezone."""
+    return value.astimezone() if value.tzinfo is None else value
 
 
 def _validate_endpoint(endpoint: str) -> bytes:
@@ -79,7 +84,7 @@ class HCS026EnrollmentManager:
     ) -> dict[str, Any]:
         if timeout_seconds < 1 or timeout_seconds > 900:
             raise ValueError("pairing timeout must be between 1 and 900 seconds")
-        current = now or _utc_now()
+        current = _aware(now or _utc_now())
         self._candidates.clear()
         self._session_enrolled.clear()
         self._window_expires_at = current + timedelta(seconds=timeout_seconds)
@@ -91,7 +96,7 @@ class HCS026EnrollmentManager:
         return self.status()
 
     def status(self, *, now: datetime | None = None) -> dict[str, Any]:
-        current = now or _utc_now()
+        current = _aware(now or _utc_now())
         self._expire(current)
         return {
             "active": self._window_expires_at is not None,
@@ -113,7 +118,7 @@ class HCS026EnrollmentManager:
         self, state: dict[str, Any], *, now: datetime | None = None
     ) -> dict[str, Any]:
         """Consume normalized decoder fields and return an idempotent action."""
-        current = now or _utc_now()
+        current = _aware(now or _utc_now())
         self._expire(current)
         pairing_state = state.get("hcs026_pairing_state")
         factory = state.get("hcs026_factory_endpoint")
