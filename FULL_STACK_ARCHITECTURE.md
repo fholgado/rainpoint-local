@@ -189,9 +189,9 @@ The local registry can retain:
 
 Supported operations should be explicit:
 
-- `start_learning(timeout)`
-- `list_candidates()`
-- `accept_device(candidate, name)`
+- `start_pairing(timeout)`
+- `pairing()`
+- `complete_pairing(endpoint, name, area)`
 - `rename_device(device_id, name)`
 - `forget_device(device_id, local_only=true)`
 - `factory_unpair(device_id)` only after its RF procedure is proven

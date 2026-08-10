@@ -53,4 +53,5 @@ class RainPointLocalEntity(CoordinatorEntity[RainPointLocalCoordinator]):
             name=self.device.get("name", self.device_id),
             manufacturer="RainPoint",
             model=self.device.get("model"),
+            suggested_area=self.device.get("area"),
         )

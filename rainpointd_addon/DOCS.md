@@ -88,7 +88,10 @@ The registry separates three concepts deliberately:
   metadata, with user-defined names, models, and areas.
 
 Accepting or forgetting a registry record is not physical pairing or
-unpairing. True device enrollment remains a future protocol-research milestone.
+unpairing. The separate authenticated `/api/v1/pairing` workflow validates the
+captured HCS026 factory-to-paired identity transition and persists it without
+transmitting RF. In Home Assistant, open the integration's **Configure** flow,
+select **Pair a soil-moisture sensor**, and enter this token.
 
 ## Home Assistant integration
 

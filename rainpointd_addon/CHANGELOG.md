@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.3
+
+- Add authenticated, receive-only HCS026 pairing windows and persistent
+  factory-to-paired identity mappings.
+- Allow a proven pairing result to be named and assigned to an area without
+  transmitting an RF enrollment or reset command.
+- Report pairing capability and progress through the local v1 API.
+
 ## 0.6.2
 
 - Recognize validated HCS026 factory announcements and paired endpoint

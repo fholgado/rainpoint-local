@@ -51,6 +51,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if parsed.path == f"/api/{API_VERSION}/learning":
             self._json(200, self.server.gateway.learning())
             return
+        if parsed.path == f"/api/{API_VERSION}/pairing":
+            self._json(200, self.server.gateway.pairing())
+            return
         if parsed.path == f"/api/{API_VERSION}/events":
             query = parse_qs(parsed.query)
             try:
@@ -72,7 +75,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         base = f"/api/{API_VERSION}"
         registry_path = parsed.path.startswith(f"{base}/registry/")
-        if parsed.path == f"{base}/learning" or registry_path:
+        pairing_path = parsed.path.startswith(f"{base}/pairing/")
+        if parsed.path == f"{base}/learning" or registry_path or pairing_path:
             if not self._authorize_registry_write():
                 return
             try:
@@ -82,6 +86,30 @@ class RequestHandler(BaseHTTPRequestHandler):
                         int(body.get("duration_seconds", 300))
                     )
                     self._json(201, result)
+                    return
+                if parsed.path == f"{base}/pairing/start":
+                    result = self.server.gateway.start_pairing(
+                        int(body.get("duration_seconds", 120))
+                    )
+                    self._json(201, result)
+                    return
+                if parsed.path == f"{base}/pairing/stop":
+                    self._json(200, self.server.gateway.stop_pairing())
+                    return
+                if parsed.path == f"{base}/pairing/complete":
+                    result = self.server.gateway.complete_hcs026_pairing(
+                        endpoint=str(body.get("endpoint", "")),
+                        name=str(body.get("name", "")),
+                        area=body.get("area"),
+                    )
+                    self._json(
+                        201,
+                        {
+                            "device": result,
+                            "rf_paired": True,
+                            "receive_only": True,
+                        },
+                    )
                     return
                 if parsed.path == f"{base}/registry/accept":
                     result = self.server.gateway.accept_endpoint(

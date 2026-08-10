@@ -70,6 +70,7 @@ class HCS026EnrollmentManager:
         self.path = Path(path)
         self._records: dict[str, EnrollmentRecord] = {}
         self._candidates: dict[str, str] = {}
+        self._session_enrolled: list[str] = []
         self._window_expires_at: datetime | None = None
         self._load()
 
@@ -80,6 +81,7 @@ class HCS026EnrollmentManager:
             raise ValueError("pairing timeout must be between 1 and 900 seconds")
         current = now or _utc_now()
         self._candidates.clear()
+        self._session_enrolled.clear()
         self._window_expires_at = current + timedelta(seconds=timeout_seconds)
         return self.status(now=current)
 
@@ -99,6 +101,11 @@ class HCS026EnrollmentManager:
                 else None
             ),
             "candidates": sorted(self._candidates),
+            "new_records": [
+                asdict(self._records[factory])
+                for factory in self._session_enrolled
+                if factory in self._records
+            ],
             "records": [asdict(record) for record in self.records()],
         }
 
@@ -153,6 +160,7 @@ class HCS026EnrollmentManager:
             last_seen_at=observed_at,
         )
         self._records[factory] = record
+        self._session_enrolled.append(factory)
         self._candidates.pop(factory, None)
         self._save()
         return {"action": "enrolled", "record": asdict(record)}

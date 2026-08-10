@@ -9,11 +9,13 @@ import threading
 import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from rainpoint_protocol import decode
 
 from .rf import HCS026_ENDPOINTS
+from .pairing import HCS026EnrollmentManager
 from .storage import SQLiteEventStore, frame_accepted
 
 
@@ -50,6 +52,13 @@ class Gateway:
         self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = SQLiteEventStore(storage_path) if storage_path else None
+        self._pairing = (
+            HCS026EnrollmentManager(
+                Path(storage_path).with_suffix(".hcs026-pairing.json")
+            )
+            if storage_path
+            else None
+        )
         if self._store:
             self._events.extend(self._store.recent_events(event_limit))
         self._restore_devices()
@@ -76,7 +85,8 @@ class Gateway:
                 ),
                 "registry_available": self._store is not None,
                 "registry_writes_enabled": self._registry_token is not None,
-                "rf_pairing_available": False,
+                "rf_pairing_available": self._pairing is not None,
+                "rf_pairing_receive_only": True,
             }
 
     def close(self) -> None:
@@ -201,6 +211,7 @@ class Gateway:
                 "observed_at": timestamp,
                 "state": decoded,
             }
+            self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 
     def observe_rf_frame(
@@ -230,6 +241,7 @@ class Gateway:
                 self._store.append(event)
             else:
                 self._update_memory_reception_metrics(event)
+            self._observe_pairing(state, timestamp)
             return copy.deepcopy(event)
 
     def devices(
@@ -248,7 +260,14 @@ class Gateway:
                 else self._memory_reception_metrics
             )
             devices = copy.deepcopy(self._devices)
+            registry = {
+                item["device_id"]: item
+                for item in (self._store.registry() if self._store else [])
+            }
             for device_id, device in devices.items():
+                if registered := registry.get(device_id):
+                    device["name"] = registered["name"]
+                    device["area"] = registered["area"]
                 device.update(
                     {
                         key: value
@@ -378,6 +397,120 @@ class Gateway:
         """Return accepted local metadata; this is not RF pairing state."""
         with self._lock:
             return self._store.registry() if self._store else []
+
+    def pairing(self, *, now: datetime | None = None) -> dict[str, Any]:
+        """Return receive-only HCS026 enrollment progress."""
+        with self._lock:
+            if self._pairing is None:
+                return {
+                    "active": False,
+                    "available": False,
+                    "receive_only": True,
+                    "candidates": [],
+                    "new_records": [],
+                    "records": [],
+                }
+            return {
+                "available": True,
+                "receive_only": True,
+                **self._pairing.status(now=now),
+            }
+
+    def start_pairing(
+        self, duration_seconds: int = 120, *, now: datetime | None = None
+    ) -> dict[str, Any]:
+        """Open a receive-only HCS026 enrollment window."""
+        if not 10 <= duration_seconds <= 900:
+            raise ValueError("duration_seconds must be between 10 and 900")
+        with self._lock:
+            if self._pairing is None:
+                raise RuntimeError("persistent pairing state is unavailable")
+            return {
+                "available": True,
+                "receive_only": True,
+                **self._pairing.start(duration_seconds, now=now),
+            }
+
+    def stop_pairing(self) -> dict[str, Any]:
+        """Close the current pairing window without transmitting anything."""
+        with self._lock:
+            if self._pairing is None:
+                raise RuntimeError("persistent pairing state is unavailable")
+            return {
+                "available": True,
+                "receive_only": True,
+                **self._pairing.stop(),
+            }
+
+    def complete_hcs026_pairing(
+        self,
+        *,
+        endpoint: str,
+        name: str,
+        area: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Name a sensor proven by the current receive-only pairing session."""
+        endpoint = endpoint.strip().lower()
+        name = _clean_label(name, "name")
+        area = _clean_optional_label(area, "area")
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if self._pairing is None or self._store is None:
+                raise RuntimeError("persistent pairing state is unavailable")
+            record = next(
+                (
+                    item
+                    for item in self._pairing.records()
+                    if item.paired_endpoint == endpoint
+                ),
+                None,
+            )
+            if record is None:
+                raise KeyError(endpoint)
+            if endpoint not in {item["endpoint"] for item in self._store.endpoints()}:
+                raise KeyError(endpoint)
+            device_id = f"hcs026-{endpoint}"
+            registered = self._store.accept_endpoint(
+                endpoint=endpoint,
+                device_id=device_id,
+                name=name,
+                model="HCS026FRF",
+                area=area,
+                accepted_at=timestamp,
+            )
+            if device_id in self._devices:
+                self._devices[device_id]["name"] = name
+                self._devices[device_id]["area"] = area
+            self._pairing.stop()
+            return registered
+
+    def _observe_pairing(self, state: dict[str, Any], timestamp: str) -> None:
+        """Feed accepted normalized enrollment fields to the state machine."""
+        if self._pairing is None or state.get("rf_frame_accepted") is False:
+            return
+        pairing_state = state.get(
+            "hcs026_pairing_state", state.get("rf_pairing_state")
+        )
+        factory = state.get(
+            "hcs026_factory_endpoint", state.get("rf_factory_endpoint")
+        )
+        paired = state.get(
+            "hcs026_paired_endpoint", state.get("rf_paired_endpoint")
+        )
+        if pairing_state not in {"factory", "paired"}:
+            return
+        fields = {
+            "hcs026_pairing_state": pairing_state,
+            "hcs026_factory_endpoint": factory,
+        }
+        if paired is not None:
+            fields["hcs026_paired_endpoint"] = paired
+        try:
+            observed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            observed = datetime.now(timezone.utc)
+        self._pairing.observe(fields, now=observed)
 
     def accept_endpoint(
         self,

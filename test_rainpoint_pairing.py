@@ -49,6 +49,9 @@ class HCS026EnrollmentTest(unittest.TestCase):
             )
             result = manager.observe(PAIRED, now=now + timedelta(seconds=3))
             self.assertEqual("enrolled", result["action"])
+            self.assertEqual(
+                "9bce0024", manager.status(now=now)["new_records"][0]["paired_endpoint"]
+            )
 
             restored = HCS026EnrollmentManager(path)
             self.assertEqual("9bce0024", restored.records()[0].paired_endpoint)

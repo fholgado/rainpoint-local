@@ -20,6 +20,44 @@
       "invalid_response": "The gateway returned an incompatible response"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage RainPoint Local",
+        "menu_options": {
+          "pair_sensor": "Pair a soil-moisture sensor"
+        }
+      },
+      "pair_sensor": {
+        "title": "Pair a sensor",
+        "description": "Open a receive-only pairing window. No RF command will be transmitted.",
+        "data": {
+          "registry_write_token": "Gateway registry token",
+          "duration_seconds": "Pairing window (seconds)"
+        }
+      },
+      "pairing_progress": {
+        "title": "Waiting for sensor",
+        "description": "Insert the batteries or hold the sensor button until its LED flashes, then select Submit to check again. Factory candidates: {candidates}"
+      },
+      "sensor_details": {
+        "title": "Sensor discovered",
+        "description": "The local gateway validated sensor endpoint {endpoint}. Choose its Home Assistant name and area.",
+        "data": {
+          "name": "Name",
+          "area": "Area"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the local gateway",
+      "invalid_auth": "The gateway registry token is incorrect",
+      "invalid_response": "The gateway returned an incompatible response"
+    },
+    "abort": {
+      "pairing_timeout": "The pairing window expired before a sensor completed enrollment"
+    }
+  },
   "entity": {
     "sensor": {
       "soil_moisture": { "name": "Soil moisture" },

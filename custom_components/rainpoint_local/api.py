@@ -21,6 +21,10 @@ class RainPointLocalInvalidResponse(RainPointLocalError):
     """The gateway returned an incompatible response."""
 
 
+class RainPointLocalUnauthorized(RainPointLocalError):
+    """The gateway rejected an authenticated operation."""
+
+
 class RainPointLocalClient:
     """Small asynchronous client for rainpointd."""
 
@@ -45,6 +49,39 @@ class RainPointLocalClient:
             raise RainPointLocalInvalidResponse("devices response is not a list")
         return devices
 
+    async def pairing(self) -> dict[str, Any]:
+        """Return receive-only sensor-pairing progress."""
+        return await self._get("pairing")
+
+    async def start_pairing(
+        self, token: str, duration_seconds: int = 120
+    ) -> dict[str, Any]:
+        """Open an authenticated receive-only pairing window."""
+        return await self._post(
+            "pairing/start",
+            {"duration_seconds": duration_seconds},
+            token,
+        )
+
+    async def stop_pairing(self, token: str) -> dict[str, Any]:
+        """Close the current receive-only pairing window."""
+        return await self._post("pairing/stop", {}, token)
+
+    async def complete_pairing(
+        self,
+        token: str,
+        *,
+        endpoint: str,
+        name: str,
+        area: str | None,
+    ) -> dict[str, Any]:
+        """Persist human-facing metadata for a proven paired sensor."""
+        return await self._post(
+            "pairing/complete",
+            {"endpoint": endpoint, "name": name, "area": area},
+            token,
+        )
+
     async def _get(self, path: str) -> dict[str, Any]:
         try:
             async with self._session.get(
@@ -60,3 +97,29 @@ class RainPointLocalClient:
         if not isinstance(payload, dict):
             raise RainPointLocalInvalidResponse("response is not an object")
         return payload
+
+    async def _post(
+        self, path: str, payload: dict[str, Any], token: str
+    ) -> dict[str, Any]:
+        try:
+            async with self._session.post(
+                f"{self._base_url}/{path}",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status in {401, 403}:
+                    raise RainPointLocalUnauthorized(
+                        "the gateway rejected the registry token"
+                    )
+                response.raise_for_status()
+                result = await response.json()
+        except RainPointLocalUnauthorized:
+            raise
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            raise RainPointLocalCannotConnect(str(exc)) from exc
+        except (ValueError, TypeError) as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
+        if not isinstance(result, dict):
+            raise RainPointLocalInvalidResponse("response is not an object")
+        return result

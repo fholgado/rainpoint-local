@@ -500,6 +500,62 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertTrue(result["active"])
         self.assertFalse(result["rf_pairing"])
 
+    def test_authenticated_receive_only_sensor_pairing_lifecycle(self) -> None:
+        started = self.post_json(
+            "/api/v1/pairing/start", {"duration_seconds": 120}
+        )
+        self.assertTrue(started["active"])
+        self.assertTrue(started["receive_only"])
+
+        gateway = self.server.gateway
+        gateway.observe_rf_frame(
+            frame="factory",
+            state={
+                "rf_endpoint_a": "80000000",
+                "rf_endpoint_b": "15a98024",
+                "rf_frame_accepted": True,
+                "hcs026_pairing_state": "factory",
+                "hcs026_factory_endpoint": "15a98024",
+            },
+        )
+        gateway.observe_decoded(
+            device_id="hcs026-95a98024",
+            name="RainPoint HCS026 95a98024",
+            model="HCS026FRF",
+            frame="paired",
+            state={
+                "rf_endpoint": "95a98024",
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "95a98024",
+                "rf_frame_accepted": True,
+                "rf_pairing_state": "paired",
+                "rf_factory_endpoint": "15a98024",
+                "rf_paired_endpoint": "95a98024",
+                "soil_moisture_percent": 10,
+            },
+        )
+        with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
+            progress = json.load(response)
+        self.assertEqual("95a98024", progress["new_records"][0]["paired_endpoint"])
+
+        completed = self.post_json(
+            "/api/v1/pairing/complete",
+            {
+                "endpoint": "95a98024",
+                "name": "Test Sensor B",
+                "area": "Garden",
+            },
+        )
+        self.assertTrue(completed["rf_paired"])
+        self.assertTrue(completed["receive_only"])
+        device = next(
+            item
+            for item in gateway.devices()
+            if item["device_id"] == "hcs026-95a98024"
+        )
+        self.assertEqual("Test Sensor B", device["name"])
+        self.assertEqual("Garden", device["area"])
+
 
 if __name__ == "__main__":
     unittest.main()
