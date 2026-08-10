@@ -130,28 +130,51 @@ portable part of the protocol.
 
 Two controlled sensors established the same receive-side enrollment sequence.
 An unpaired sensor announces a factory identity through endpoint `80000000`.
-The RainPoint gateway answers using a paired identity formed by setting bit 7
-of the factory identity's first byte:
+The subsequent sequence uses a paired identity formed by setting bit 7 of the
+factory identity's first byte:
 
 | Sensor | Factory identity | Paired identity |
 |---|---|---|
 | Test Sensor A | `1bce0024` | `9bce0024` |
 | Test Sensor B | `15a98024` | `95a98024` |
 
-Both enrollments used message types `01`, `02`, `02`, and `03`. A battery
-power cycle caused the sensor to announce its factory identity again; the
-RainPoint gateway automatically restored the paired identity without an app
-action. Deleting Sensor B from the app produced no RF frame. Until its next
-power cycle it continued transmitting on the paired identity; after reboot it
-returned to factory announcements and the RainPoint gateway no longer
-answered. This demonstrates that the gateway owns the persistent enrollment
-mapping and that app deletion removes that mapping without a sensor-side
-unpair transmission.
+Both enrollments used message types `01`, `02`, `02`, and `03` at the same
+repeatable cadence. Raw-IQ characterization found the factory frame and all
+subsequent paired frames from a given sensor within about 15 Hz of the same
+transmitter center. Sensor A measured about 433.140 MHz and Sensor B about
+433.144 MHz (absolute values include RTL-SDR oscillator error). This oscillator
+fingerprint is strong evidence that the sensor, not the RainPoint gateway,
+emits the entire observed sequence. No enrollment-response frame from the
+RainPoint gateway has been identified.
+
+The two first-enrollment sequences had the same cadence within measurement
+error:
+
+| Transition | Sensor A | Sensor B |
+|---|---:|---:|
+| factory `01` to paired `01` | 2.983 s | 2.992 s |
+| paired `01` to paired data `02` | 5.915 s | 5.890 s |
+| paired data `02` to short `02` | 1.942 s | 1.942 s |
+| short `02` to paired data `03` | 3.878 s | 3.898 s |
+
+These intervals are useful for recognizing a complete enrollment sequence but
+are not treated as hard deadlines; RF packet loss must not create a false
+association.
+
+A battery power cycle caused Sensor A to announce its factory identity and
+then automatically resume its paired identity without an app action. Deleting
+Sensor B from the app produced no RF frame. Until its next power cycle it
+continued transmitting on the paired identity; after reboot it returned to
+factory announcements. This is consistent with the RainPoint gateway retaining
+a logical enrollment record while the sensor derives or retains the high-bit
+identity, but does not prove that an RF association exchange exists.
 
 The receive decoder recognizes this strict factory/paired structure and can
 create a generic HCS026 device from a trailer-valid paired telemetry report.
-This does not implement RF enrollment transmission; it only removes the
-household-specific endpoint requirement from receive-side discovery.
+The offline enrollment state machine opens an explicit learning window,
+requires the matching factory-to-paired transition, and persists the mapping.
+It deliberately transmits nothing because the captures do not show a gateway
+response that needs to be reproduced.
 
 ## HCS026FRF soil-moisture reports
 

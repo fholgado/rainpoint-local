@@ -170,8 +170,11 @@ Two operations must remain distinct:
 2. **RF association:** perform any address, channel, key, or counter exchange
    required by the physical device.
 
-The sensors may require only registry enrollment if their endpoint remains
-stable across battery replacement. The valve may require a bidirectional
+Controlled HCS026 captures currently support receive-only registry enrollment:
+the sensor emits a factory identity followed by a deterministic paired identity
+whose first byte has bit 7 set. Both identities share the same transmitter
+oscillator fingerprint, so no gateway response should be synthesized without
+new contradictory evidence. The valve may still require a bidirectional
 association exchange. That procedure must be captured with a spare or test
 device before resetting the working installation.
 
