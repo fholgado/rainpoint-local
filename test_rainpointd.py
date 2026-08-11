@@ -493,6 +493,16 @@ class RegistryHTTPAPITest(unittest.TestCase):
         )
         self.assertFalse(forgotten["rf_unpaired"])
 
+    def test_auth_check_validates_without_mutating_gateway(self) -> None:
+        before = self.server.gateway.info()["stored_event_count"]
+        self.assertEqual(
+            {"authorized": True}, self.post_json("/api/v1/auth/check", {})
+        )
+        self.assertEqual(before, self.server.gateway.info()["stored_event_count"])
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json("/api/v1/auth/check", {}, token="wrong")
+        self.assertEqual(401, raised.exception.code)
+
     def test_learning_api_is_receive_only(self) -> None:
         result = self.post_json(
             "/api/v1/learning", {"duration_seconds": 60}

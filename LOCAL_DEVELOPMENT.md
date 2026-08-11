@@ -2,7 +2,10 @@
 
 The gateway supports captured replay and a receive-only RTL-SDR transport. It
 never connects to HomGar services. Registry and pairing-monitor metadata writes
-require a configured token; valve-control requests remain rejected.
+require gateway authorization; the Home Assistant app provisions this
+automatically through Supervisor discovery, while standalone development
+gateways require one-time authentication. Valve-control requests remain
+rejected.
 
 ## Components
 

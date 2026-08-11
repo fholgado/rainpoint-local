@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Generate and persist the gateway management credential inside app data.
+- Publish the gateway address and credential through supported Home Assistant
+  Supervisor discovery so users never copy it into an ordinary pairing flow.
+- Add a side-effect-free authenticated endpoint for standalone-gateway setup.
+
 ## 0.7.1
 
 - Make registry forget remove the corresponding local HCS026 enrollment mapping

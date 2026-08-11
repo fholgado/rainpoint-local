@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.7.0 supports captured replay, receive-only USB RTL-SDR,
+Version 0.8.0 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform the one physically validated, bounded
@@ -76,12 +76,16 @@ unrelated nearby 433 MHz transmissions and must remain local. Reset the option
 to `0` after starting a one-time capture so a future app restart does not begin
 another capture.
 
-### Registry write token
+### Gateway authorization
 
-Leave `registry_write_token` empty to disable every registry mutation. To use
-the experimental local registry, configure a long random token and send it as
-`Authorization: Bearer <token>` to the registry endpoints. Telemetry and
-registry reads remain available without a token on the local API.
+The app generates a persistent management credential in its private data and
+passes it to the RainPoint Local integration through supported Supervisor
+discovery. Users do not copy or paste this credential during sensor pairing.
+The legacy `registry_write_token` option is retained temporarily as an advanced
+migration override; leave it empty for normal managed setup. Standalone
+gateways can still be authenticated once from the integration's Configure flow.
+Telemetry and registry reads remain available without authentication on the
+local API during this prototype phase.
 
 The registry separates three concepts deliberately:
 

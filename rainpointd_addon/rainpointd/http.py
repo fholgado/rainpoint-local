@@ -74,6 +74,10 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         parsed = urlparse(self.path)
         base = f"/api/{API_VERSION}"
+        if parsed.path == f"{base}/auth/check":
+            if self._authorize_registry_write():
+                self._json(200, {"authorized": True})
+            return
         registry_path = parsed.path.startswith(f"{base}/registry/")
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
         if parsed.path == f"{base}/learning" or registry_path or pairing_path:

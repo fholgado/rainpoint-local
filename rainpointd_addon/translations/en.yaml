@@ -15,8 +15,8 @@ configuration:
     name: Broad capture duration
     description: Minutes to save all detected raw RF signals before returning to normal decoding
   registry_write_token:
-    name: Registry write token
-    description: Optional bearer token for local registry metadata changes; leave empty to disable writes
+    name: Legacy gateway token override
+    description: Advanced migration override; leave empty to generate and manage the gateway credential automatically
   node_listen_port:
     name: Wi-Fi node listener port
     description: TCP port for authenticated inbound ESP32 radio-node telemetry; set to 0 to disable

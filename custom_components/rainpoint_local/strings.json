@@ -8,6 +8,10 @@
           "host": "Host",
           "port": "Port"
         }
+      },
+      "hassio_confirm": {
+        "title": "Set up RainPoint Local Gateway",
+        "description": "Connect Home Assistant to the RainPoint Local Gateway add-on. Authorization will be configured automatically."
       }
     },
     "error": {
@@ -28,14 +32,21 @@
       "init": {
         "title": "Manage RainPoint Local",
         "menu_options": {
-          "pair_sensor": "Pair a sensor locally"
+          "pair_sensor": "Pair a sensor locally",
+          "authenticate_gateway": "Authenticate a standalone gateway"
+        }
+      },
+      "authenticate_gateway": {
+        "title": "Authenticate standalone gateway",
+        "description": "This is only needed for a gateway running outside Home Assistant. Add-on credentials are configured automatically during discovery.",
+        "data": {
+          "registry_write_token": "Gateway management token"
         }
       },
       "pair_sensor": {
         "title": "Pair a sensor locally",
         "description": "Temporarily unplug the original RainPoint gateway before continuing. Select the custom local radio node nearest the sensor; it will perform the validated local RF enrollment exchange.",
         "data": {
-          "registry_write_token": "Gateway registry token",
           "node_id": "Local radio node",
           "duration_seconds": "Pairing window (seconds)"
         }

@@ -53,6 +53,10 @@ class RainPointLocalClient:
         """Return receive-only sensor-pairing progress."""
         return await self._get("pairing")
 
+    async def authenticate(self, token: str) -> None:
+        """Verify a gateway management credential without changing state."""
+        await self._post("auth/check", {}, token)
+
     async def start_pairing(
         self, token: str, duration_seconds: int = 120, *, node_id: str
     ) -> dict[str, Any]:

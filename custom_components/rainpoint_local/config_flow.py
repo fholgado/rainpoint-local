@@ -11,6 +11,7 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 
 from .api import (
     RainPointLocalCannotConnect,
@@ -25,6 +26,9 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a local rainpointd gateway."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._hassio_discovery: dict[str, Any] | None = None
 
     @staticmethod
     @callback
@@ -70,6 +74,46 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_response")
         return await self._async_create_gateway_entry(user_input, info)
 
+    async def async_step_hassio(
+        self, discovery_info: HassioServiceInfo
+    ) -> FlowResult:
+        """Receive credentials through supported Supervisor discovery."""
+        config = discovery_info.config
+        try:
+            discovered = {
+                CONF_HOST: str(config[CONF_HOST]),
+                CONF_PORT: int(config[CONF_PORT]),
+                CONF_TOKEN: str(config[CONF_TOKEN]),
+            }
+            gateway_id = str(config["gateway_id"])
+        except (KeyError, TypeError, ValueError):
+            return self.async_abort(reason="invalid_response")
+        if not discovered[CONF_TOKEN] or not gateway_id:
+            return self.async_abort(reason="invalid_response")
+
+        await self.async_set_unique_id(gateway_id)
+        self._abort_if_unique_id_configured(updates=discovered)
+        self._hassio_discovery = discovered
+        return await self.async_step_hassio_confirm()
+
+    async def async_step_hassio_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Confirm setup of a Supervisor-discovered local gateway."""
+        if self._hassio_discovery is None:
+            return self.async_abort(reason="invalid_response")
+        if user_input is None:
+            return self.async_show_form(step_id="hassio_confirm")
+        try:
+            info = await self._async_validate(self._hassio_discovery)
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except RainPointLocalInvalidResponse:
+            return self.async_abort(reason="invalid_response")
+        return await self._async_create_gateway_entry(
+            self._hassio_discovery, info
+        )
+
     async def _async_validate(
         self, user_input: dict[str, Any]
     ) -> dict[str, Any]:
@@ -98,7 +142,9 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
-        self._token = str(entry.options.get(CONF_TOKEN, ""))
+        self._token = str(
+            entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, ""))
+        )
         self._paired_endpoint: str | None = None
         self._pairing_nodes: dict[str, str] = {}
         self._pairing_task: asyncio.Task[None] | None = None
@@ -114,11 +160,55 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["pair_sensor"])
+        if self._token and (
+            self._entry.data.get(CONF_TOKEN) != self._token
+            or CONF_TOKEN in self._entry.options
+        ):
+            self.hass.config_entries.async_update_entry(
+                self._entry,
+                data={**self._entry.data, CONF_TOKEN: self._token},
+                options={
+                    key: value
+                    for key, value in self._entry.options.items()
+                    if key != CONF_TOKEN
+                },
+            )
+        menu_options = ["pair_sensor"] if self._token else ["authenticate_gateway"]
+        return self.async_show_menu(step_id="init", menu_options=menu_options)
+
+    async def async_step_authenticate_gateway(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Authenticate a manually configured standalone gateway once."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            token = str(user_input[CONF_TOKEN]).strip()
+            try:
+                await self._client().authenticate(token)
+            except RainPointLocalUnauthorized:
+                errors["base"] = "invalid_auth"
+            except RainPointLocalCannotConnect:
+                errors["base"] = "cannot_connect"
+            except RainPointLocalInvalidResponse:
+                errors["base"] = "invalid_response"
+            else:
+                self._token = token
+                self.hass.config_entries.async_update_entry(
+                    self._entry,
+                    data={**self._entry.data, CONF_TOKEN: token},
+                )
+                return await self.async_step_pair_sensor()
+        return self.async_show_form(
+            step_id="authenticate_gateway",
+            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
+            errors=errors,
+        )
 
     async def async_step_pair_sensor(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        if not self._token:
+            return await self.async_step_authenticate_gateway()
         errors: dict[str, str] = {}
         try:
             progress = await self._client().pairing()
@@ -137,7 +227,6 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             if not self._pairing_nodes:
                 errors["base"] = "no_pairing_node"
         if user_input is not None:
-            self._token = str(user_input[CONF_TOKEN])
             node_id = str(user_input.get("node_id", ""))
             if node_id not in self._pairing_nodes:
                 errors["base"] = "no_pairing_node"
@@ -155,10 +244,6 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 except RainPointLocalInvalidResponse:
                     errors["base"] = "invalid_response"
                 else:
-                    self.hass.config_entries.async_update_entry(
-                        self._entry,
-                        options={**self._entry.options, CONF_TOKEN: self._token},
-                    )
                     self._pairing_task = self.hass.async_create_task(
                         self._async_wait_for_sensor()
                     )
@@ -173,7 +258,6 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             step_id="pair_sensor",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_TOKEN, default=self._token): str,
                     vol.Required("node_id", default=default_node): vol.In(
                         node_choices
                     ),

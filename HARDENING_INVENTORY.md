@@ -8,8 +8,8 @@ pairing through Home Assistant.
 
 Snapshot reviewed:
 
-- `rainpointd` add-on 0.7.1
-- `rainpoint_local` integration 0.2.2
+- `rainpointd` add-on 0.8.0
+- `rainpoint_local` integration 0.3.0
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
@@ -20,7 +20,7 @@ objective is to keep evidence and experimental controls out of generic runtime
 paths unless they are explicitly enabled and accurately represented as
 capabilities.
 
-## Why pairing currently asks for a key
+## Gateway and node credentials
 
 Two independent credentials exist:
 
@@ -29,28 +29,26 @@ Two independent credentials exist:
 2. The `registry_write_token` authenticates Home Assistant requests that mutate
    the local registry or arm the bounded sensor-pairing transmitter.
 
-The second credential is the value shown in the Home Assistant pairing form.
-It is a legitimate authorization boundary, but the current UX exposes an
-implementation detail. The token is copied from the add-on configuration on
-first use and then stored in the integration config-entry options.
+The second credential is now generated in private add-on data and delivered to
+the integration through supported Supervisor discovery. It no longer appears
+in ordinary sensor pairing. A separate one-time authentication step remains for
+standalone gateways that do not run under Home Assistant Supervisor.
 
-Target behavior:
+Remaining target behavior:
 
-- authenticate or claim the custom local gateway once during onboarding;
-- store the resulting credential in the config entry and never show it in an
-  ordinary sensor-pairing form;
+- formalize credential rotation and revocation after onboarding;
 - show a repair or reauthentication flow only when the credential is missing,
   revoked, or rotated;
 - support a one-time setup code or physical confirmation for a standalone
   custom local gateway;
-- use an add-on-aware claim path when the gateway and integration run on the
-  same Home Assistant installation;
+- retain supported Supervisor discovery when the gateway and integration run
+  on the same Home Assistant installation;
 - maintain independent, revocable credentials for every radio node.
 
-An immediate UX improvement can split `Authenticate gateway` from `Pair a
-sensor`: if a token is already stored, the pairing form should omit the field
-entirely. The long-term solution should auto-generate credentials and use a
-one-time claim exchange instead of manual token copying.
+`Authenticate gateway` is now separate from `Pair a sensor`. If a credential is
+already stored, the pairing form omits the field entirely. The remaining
+standalone-gateway work is a generic one-time claim exchange that replaces
+manual credential copying outside Supervisor installations.
 
 ## Classification
 

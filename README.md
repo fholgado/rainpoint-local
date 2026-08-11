@@ -125,8 +125,10 @@ access. Live events are stored in the app's persistent data volume. The device
 API also reports persistent check-in counts and cadence, plus a current
 `reporting` status based on the measured intervals of each device class.
 
-An optional token-protected local registry can accept, rename, assign, or
-forget observed endpoints. The pairing workflow can arm one authenticated
+An authenticated local registry can accept, rename, assign, or forget observed
+endpoints. The Home Assistant app provisions its management credential through
+Supervisor discovery, so it never appears in the normal pairing UI. The
+pairing workflow can arm one authenticated
 protocol-v2 node for the fixed Sensor B profile and persists the identity only
 after terminal RF confirmation. Valve-control POST requests remain unavailable.
 

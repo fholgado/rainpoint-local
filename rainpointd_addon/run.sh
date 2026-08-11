@@ -17,6 +17,18 @@ fi
 if [[ "${registry_write_token}" == "null" ]]; then
   registry_write_token=""
 fi
+registry_token_path="/data/registry-write-token"
+if [[ -n "${registry_write_token}" ]]; then
+  umask 077
+  printf '%s' "${registry_write_token}" > "${registry_token_path}"
+elif [[ -s "${registry_token_path}" ]]; then
+  registry_write_token="$(<"${registry_token_path}")"
+else
+  umask 077
+  registry_write_token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  printf '%s' "${registry_write_token}" > "${registry_token_path}"
+  bashio::log.info "Generated a persistent gateway management credential"
+fi
 if [[ "${node_listen_port}" == "null" ]]; then
   node_listen_port=8790
 fi
@@ -25,6 +37,19 @@ if [[ "${node_tokens}" == "null" ]]; then
 fi
 export RAINPOINT_REGISTRY_TOKEN="${registry_write_token}"
 export RAINPOINT_NODE_TOKENS="${node_tokens}"
+
+discovery_config="$(
+  bashio::var.json \
+    host "$(hostname)" \
+    port "^8787" \
+    gateway_id "rainpoint-${transport}" \
+    registry_write_token "${registry_write_token}"
+)"
+if bashio::discovery "rainpoint_local" "${discovery_config}" > /dev/null; then
+  bashio::log.info "Published RainPoint Local discovery to Home Assistant"
+else
+  bashio::log.warning "Could not publish RainPoint Local discovery"
+fi
 
 node_args=(
   --node-listen-host 0.0.0.0
