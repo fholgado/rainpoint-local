@@ -8,7 +8,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -21,12 +21,28 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create read-only watering state entities."""
+    """Create binary entities and add newly paired devices dynamically."""
     coordinator: RainPointLocalCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        entity
-        for device_id, device in coordinator.data.items()
-        for entity in _entities_for_device(coordinator, device_id, device)
+    known: set[tuple[str, str]] = set()
+
+    @callback
+    def async_add_missing_entities() -> None:
+        entities: list[BinarySensorEntity] = []
+        for device_id, device in coordinator.data.items():
+            for key, entity in _entities_for_device(
+                coordinator, device_id, device
+            ):
+                identity = (device_id, key)
+                if identity in known:
+                    continue
+                known.add(identity)
+                entities.append(entity)
+        if entities:
+            async_add_entities(entities)
+
+    async_add_missing_entities()
+    entry.async_on_unload(
+        coordinator.async_add_listener(async_add_missing_entities)
     )
 
 
@@ -34,13 +50,17 @@ def _entities_for_device(
     coordinator: RainPointLocalCoordinator,
     device_id: str,
     device: dict,
-) -> list[BinarySensorEntity]:
+) -> list[tuple[str, BinarySensorEntity]]:
     """Create binary diagnostics supported by a device snapshot."""
-    entities: list[BinarySensorEntity] = []
+    entities: list[tuple[str, BinarySensorEntity]] = []
     if "is_watering" in device.get("state", {}):
-        entities.append(RainPointWateringBinarySensor(coordinator, device_id))
+        entities.append(
+            ("watering", RainPointWateringBinarySensor(coordinator, device_id))
+        )
     if "reporting" in device:
-        entities.append(RainPointReportingBinarySensor(coordinator, device_id))
+        entities.append(
+            ("reporting", RainPointReportingBinarySensor(coordinator, device_id))
+        )
     return entities
 
 

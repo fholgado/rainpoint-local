@@ -283,6 +283,7 @@ class RTL433Transport:
                 "rf_endpoint": endpoint,
                 "rf_endpoint_a": decoded["endpoint_a"],
                 "rf_endpoint_b": decoded["endpoint_b"],
+                "rf_message_type": decoded["message_type"],
                 "rf_trailer_residual": decoded["trailer_residual"],
                 "rf_trailer_valid": decoded["trailer_valid"],
                 "rf_frame_accepted": frame_accepted,

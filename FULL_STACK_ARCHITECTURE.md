@@ -171,22 +171,23 @@ Two operations must remain distinct:
 2. **RF association:** perform any address, channel, key, or counter exchange
    required by the physical device.
 
-Controlled HCS026 captures now prove a bidirectional enrollment exchange. The
+Controlled HCS026 captures and a local physical enrollment now prove the
+bidirectional enrollment exchange. The
 sensor emits a factory identity; the stock RainPoint gateway answers with a
 short frame targeting the deterministic high-bit paired identity, then follows
-the sensor's sequence with acknowledgements on a per-sensor channel. The local
-receiver can discover and monitor this workflow, but the ESP32/CC1101
-transmitter must reproduce it before physical pairing is supported. The valve
-association procedure still requires a spare-device capture before resetting
-the working installation.
+the sensor's sequence with acknowledgements. The ESP32/CC1101 transmitter
+reproduced this exchange for Test Sensor B and received terminal message `03`
+plus later 11% telemetry without the stock gateway. The valve association
+procedure still requires a spare-device capture before resetting the working
+installation.
 
-A first bench profile now encodes the five captured gateway replies for Test
-Sensor B, including trigger order, channel changes, wake length, and a
-provisional response deadline. It is intentionally profile-specific rather
-than extrapolated to unknown factory identities. Firmware can now emit it using
-asynchronous serial TX after an exact local serial arm command. `rainpointd`
-accepts the disarmed bench capability and records status but has no command
-dispatch path. Valve commands remain absent.
+A first profile encodes the three required gateway replies for Test Sensor B,
+including trigger order, wake length, clock lead, measured radio correction,
+and response deadline. It remains profile-specific rather than extrapolated to
+unknown factory identities. Authenticated node protocol v2 allows `rainpointd`
+to start or cancel only this bounded exchange on an explicitly selected node.
+The registry requires the terminal RF frame and matching node command ID before
+finalization. Valve commands remain absent.
 
 The local registry can retain:
 

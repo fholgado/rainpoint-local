@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+- Add backward-compatible, mutually authenticated radio-node protocol v2 with
+  one bounded Sensor B pairing command and no valve-command vocabulary.
+- Start pairing on an explicitly selected node through the Home Assistant
+  Configure flow and require matching node completion plus terminal sensor
+  message `03` before registry finalization.
+- Decode the validated paired message `05`/`06` telemetry layout, including the
+  independently observed 11% report.
+- Keep protocol-v1 nodes receive-only and disconnect every active node when the
+  gateway shuts down so an armed session fails closed.
+
 ## 0.6.6
 
 - Accept explicitly disarmed `pairing_tx_bench` ESP32 firmware while keeping

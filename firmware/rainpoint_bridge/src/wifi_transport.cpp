@@ -66,10 +66,11 @@ bool validHost(const String& host) {
 String hmacProof(
     const String& token,
     const String& nonce,
-    const String& nodeId
+    const String& nodeId,
+    const char* domain
 ) {
     const String message =
-        String("rainpoint-node-v1\n") + nonce + "\n" + nodeId;
+        String(domain) + "\n" + nonce + "\n" + nodeId;
     std::array<unsigned char, 32> digest{};
     const mbedtls_md_info_t* info =
         mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -92,6 +93,17 @@ String hmacProof(
         output += digits[value & 0x0f];
     }
     return output;
+}
+
+bool constantTimeEqual(const String& left, const String& right) {
+    if (left.length() != right.length()) {
+        return false;
+    }
+    unsigned char difference = 0;
+    for (std::size_t index = 0; index < left.length(); ++index) {
+        difference |= static_cast<unsigned char>(left[index] ^ right[index]);
+    }
+    return difference == 0;
 }
 
 }  // namespace
@@ -184,15 +196,24 @@ void WifiTransport::handleGatewayLine(const String& line) {
             clearConnection();
             return;
         }
+        challengeNonce_ = nonce;
         authenticate(nonce);
         return;
     }
     if (type == "node_authenticated") {
-        if (jsonString(line, "node_id") != nodeId_) {
-            reportNetworkState("protocol_error", "node_identity_mismatch");
+        const String serverProof = jsonString(line, "server_proof");
+        const String expectedProof = hmacProof(
+            token_, challengeNonce_, nodeId_, "rainpoint-gateway-v2"
+        );
+        if (jsonString(line, "node_id") != nodeId_ ||
+            challengeNonce_.length() != 64 || serverProof.length() != 64 ||
+            expectedProof.isEmpty() ||
+            !constantTimeEqual(serverProof, expectedProof)) {
+            reportNetworkState("protocol_error", "gateway_authentication_failed");
             clearConnection();
             return;
         }
+        challengeNonce_.clear();
         authenticated_ = true;
         reportNetworkState("authenticated");
         return;
@@ -202,11 +223,20 @@ void WifiTransport::handleGatewayLine(const String& line) {
         clearConnection();
         return;
     }
-    // Receive-only milestone: never interpret network messages as commands.
+    if (authenticated_ &&
+        (type == "pairing_start" || type == "pairing_cancel")) {
+        if (!pendingCommand_.isEmpty()) {
+            reportNetworkState("protocol_error", "command_queue_full");
+            return;
+        }
+        pendingCommand_ = line;
+    }
 }
 
 void WifiTransport::authenticate(const String& nonce) {
-    const String proof = hmacProof(token_, nonce, nodeId_);
+    const String proof = hmacProof(
+        token_, nonce, nodeId_, "rainpoint-node-v2"
+    );
     if (proof.isEmpty()) {
         reportNetworkState("protocol_error", "hmac_failed");
         clearConnection();
@@ -215,14 +245,23 @@ void WifiTransport::authenticate(const String& nonce) {
     client_.printf(
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
-        "\"mode\":\"receive_only\","
-        "\"capabilities\":[\"rx\",\"pairing_plan\",\"pairing_tx_bench\"],"
+        "\"mode\":\"local_radio_node\","
+        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\"],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,
         nodeId_.c_str(),
         RAINPOINT_FIRMWARE_VERSION,
         proof.c_str()
     );
+}
+
+bool WifiTransport::takeCommand(String& command) {
+    if (pendingCommand_.isEmpty()) {
+        return false;
+    }
+    command = pendingCommand_;
+    pendingCommand_.clear();
+    return true;
 }
 
 void WifiTransport::sendLine(const String& line) {
@@ -311,6 +350,8 @@ void WifiTransport::reportNetworkState(const char* state, const char* detail) {
 void WifiTransport::clearConnection() {
     authenticated_ = false;
     inputLine_.clear();
+    pendingCommand_.clear();
+    challengeNonce_.clear();
     client_.stop();
 }
 

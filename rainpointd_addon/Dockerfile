@@ -5,7 +5,7 @@ ARG BUILD_ARCH
 
 LABEL \
     io.hass.name="RainPoint Local Gateway" \
-    io.hass.description="Read-only local RainPoint gateway" \
+  io.hass.description="Local RainPoint telemetry and bounded sensor pairing" \
     io.hass.version="${BUILD_VERSION}" \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"

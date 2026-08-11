@@ -10,7 +10,7 @@ import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from rainpoint_protocol import decode
 
@@ -67,6 +67,11 @@ class Gateway:
         self._lock = threading.Lock()
         self._transport_healthy = True
         self._transport_error: str | None = None
+        self._node_command_sender: (
+            Callable[[str, dict[str, Any]], None] | None
+        ) = None
+        self._active_pairing_node_id: str | None = None
+        self._active_pairing_command_id: str | None = None
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -86,7 +91,7 @@ class Gateway:
                 ),
                 "registry_available": self._store is not None,
                 "registry_writes_enabled": self._registry_token is not None,
-                "rf_pairing_available": False,
+                "rf_pairing_available": bool(self._pairing_nodes()),
                 "rf_pairing_monitor_available": self._pairing is not None,
                 "rf_pairing_transmitter_required": True,
             }
@@ -111,6 +116,13 @@ class Gateway:
         with self._lock:
             node = self._nodes.setdefault(node_id, {"node_id": node_id})
             node.update(copy.deepcopy(fields))
+
+    def set_node_command_sender(
+        self, sender: Callable[[str, dict[str, Any]], None] | None
+    ) -> None:
+        """Attach the authenticated node command boundary owned by the LAN server."""
+        with self._lock:
+            self._node_command_sender = sender
 
     def nodes(self) -> list[dict[str, Any]]:
         """Return radio-node connection and receiver diagnostics."""
@@ -401,7 +413,7 @@ class Gateway:
             return self._store.registry() if self._store else []
 
     def pairing(self, *, now: datetime | None = None) -> dict[str, Any]:
-        """Return receive-only HCS026 enrollment progress."""
+        """Return HCS026 enrollment progress and available radio nodes."""
         with self._lock:
             if self._pairing is None:
                 return {
@@ -416,22 +428,63 @@ class Gateway:
             return self._pairing_snapshot(now=now)
 
     def start_pairing(
-        self, duration_seconds: int = 120, *, now: datetime | None = None
+        self,
+        duration_seconds: int = 120,
+        *,
+        node_id: str | None = None,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
-        """Open a receive-only HCS026 enrollment window."""
+        """Open enrollment and optionally arm one authenticated radio node."""
         if not 10 <= duration_seconds <= 900:
             raise ValueError("duration_seconds must be between 10 and 900")
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
             self._pairing.start(duration_seconds, now=now)
+            self._active_pairing_node_id = None
+            self._active_pairing_command_id = None
+            if node_id is not None:
+                nodes = {item["node_id"]: item for item in self._pairing_nodes()}
+                if node_id not in nodes:
+                    self._pairing.stop()
+                    raise ValueError("selected radio node cannot transmit pairing")
+                if self._node_command_sender is None:
+                    self._pairing.stop()
+                    raise RuntimeError("radio-node command transport is unavailable")
+                profile = pairing_profile("15a98024")
+                local_clock = (
+                    (now or datetime.now().astimezone())
+                    + timedelta(seconds=profile.clock_lead_seconds)
+                ).strftime("%Y%m%d%H%M%S")
+                command_id = uuid.uuid4().hex
+                try:
+                    self._node_command_sender(
+                        node_id,
+                        {
+                            "type": "pairing_start",
+                            "command_id": command_id,
+                            "profile": "sensor_b",
+                            "factory_endpoint": profile.factory_endpoint,
+                            "duration_seconds": duration_seconds,
+                            "local_clock": local_clock,
+                            "frequency_offset_hz": 45_000,
+                            "power_dbm": 10,
+                            "invert": False,
+                        },
+                    )
+                except (ConnectionError, KeyError, RuntimeError, ValueError):
+                    self._pairing.stop()
+                    raise
+                self._active_pairing_node_id = node_id
+                self._active_pairing_command_id = command_id
             return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
-        """Close the current pairing window without transmitting anything."""
+        """Close the current pairing window and disarm its selected node."""
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
+            self._cancel_active_pairing_node()
             self._pairing.stop()
             return self._pairing_snapshot()
 
@@ -456,10 +509,36 @@ class Gateway:
             stage = "waiting_for_factory_announcement"
         else:
             stage = "inactive"
+        pairing_nodes = self._pairing_nodes()
+        selected_node = next(
+            (
+                item
+                for item in pairing_nodes
+                if item["node_id"] == self._active_pairing_node_id
+            ),
+            None,
+        )
+        if selected_node is not None:
+            node_state = (
+                selected_node.get("pairing_state")
+                if selected_node.get("pairing_command_id")
+                == self._active_pairing_command_id
+                else None
+            )
+            if node_state == "failed":
+                stage = "transmitter_failed"
+            elif node_state == "completed" and not snapshot.get("new_records"):
+                stage = "terminal_confirmation_processing"
+            elif node_state == "armed":
+                stage = "transmitter_armed"
         return {
             "available": True,
-            "transmitter_available": False,
+            "transmitter_available": bool(pairing_nodes),
             "transmitter_required": True,
+            "pairing_nodes": pairing_nodes,
+            "selected_node_id": self._active_pairing_node_id,
+            "command_id": self._active_pairing_command_id,
+            "transmit_performed": self._active_pairing_node_id is not None,
             "stage": stage,
             "dry_run_profile": profile,
             **snapshot,
@@ -481,6 +560,24 @@ class Gateway:
         with self._lock:
             if self._pairing is None or self._store is None:
                 raise RuntimeError("persistent pairing state is unavailable")
+            if self._active_pairing_node_id is not None:
+                node = next(
+                    (
+                        item
+                        for item in self._pairing_nodes()
+                        if item["node_id"] == self._active_pairing_node_id
+                    ),
+                    None,
+                )
+                if (
+                    node is None
+                    or node.get("pairing_command_id")
+                    != self._active_pairing_command_id
+                    or node.get("pairing_state") != "completed"
+                ):
+                    raise RuntimeError(
+                        "selected radio node has not confirmed pairing completion"
+                    )
             record = next(
                 (
                     item
@@ -505,6 +602,7 @@ class Gateway:
             if device_id in self._devices:
                 self._devices[device_id]["name"] = name
                 self._devices[device_id]["area"] = area
+            self._cancel_active_pairing_node()
             self._pairing.stop()
             return registered
 
@@ -529,11 +627,43 @@ class Gateway:
         }
         if paired is not None:
             fields["hcs026_paired_endpoint"] = paired
+        message_type = state.get("rf_message_type", state.get("message_type"))
+        if isinstance(message_type, int):
+            fields["message_type"] = message_type & 0x7F
         try:
             observed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except ValueError:
             observed = datetime.now(timezone.utc)
         self._pairing.observe(fields, now=observed)
+
+    def _pairing_nodes(self) -> list[dict[str, Any]]:
+        """Return connected protocol-v2 nodes with the narrow pairing capability."""
+        if self._node_command_sender is None:
+            return []
+        return [
+            copy.deepcopy(node)
+            for node in self._nodes.values()
+            if node.get("connected") is True
+            and node.get("authenticated") is True
+            and node.get("protocol_version") == 2
+            and "sensor_pairing_tx" in node.get("capabilities", [])
+        ]
+
+    def _cancel_active_pairing_node(self) -> None:
+        """Best-effort disarm for the node selected by the current session."""
+        node_id = self._active_pairing_node_id
+        command_id = self._active_pairing_command_id
+        sender = self._node_command_sender
+        if node_id is not None and command_id is not None and sender is not None:
+            try:
+                sender(
+                    node_id,
+                    {"type": "pairing_cancel", "command_id": command_id},
+                )
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                pass
+        self._active_pairing_node_id = None
+        self._active_pairing_command_id = None
 
     def accept_endpoint(
         self,

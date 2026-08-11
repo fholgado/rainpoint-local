@@ -22,11 +22,16 @@ from rainpointd.rf import normalize_row  # noqa: E402
 
 
 UTC = timezone.utc
-FACTORY = {"hcs026_pairing_state": "factory", "hcs026_factory_endpoint": "1bce0024"}
+FACTORY = {
+    "hcs026_pairing_state": "factory",
+    "hcs026_factory_endpoint": "1bce0024",
+    "message_type": 1,
+}
 PAIRED = {
     "hcs026_pairing_state": "paired",
     "hcs026_factory_endpoint": "1bce0024",
     "hcs026_paired_endpoint": "9bce0024",
+    "message_type": 3,
 }
 
 
@@ -92,6 +97,21 @@ class HCS026EnrollmentTest(unittest.TestCase):
             result = manager.observe(PAIRED, now=now + timedelta(seconds=6))
             self.assertEqual("known_paired", result["action"])
             self.assertEqual(1, len(manager.records()))
+
+    def test_paired_identity_without_terminal_message_is_only_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = HCS026EnrollmentManager(Path(directory) / "pairing.json")
+            now = datetime(2026, 8, 10, tzinfo=UTC)
+            manager.start(now=now)
+            manager.observe(FACTORY, now=now)
+            progress = manager.observe(
+                {**PAIRED, "message_type": 1},
+                now=now + timedelta(seconds=3),
+            )
+            self.assertEqual("paired_progress", progress["action"])
+            self.assertEqual([], manager.records())
+            enrolled = manager.observe(PAIRED, now=now + timedelta(seconds=12))
+            self.assertEqual("enrolled", enrolled["action"])
 
     def test_timeout_and_interrupted_window_do_not_enroll(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

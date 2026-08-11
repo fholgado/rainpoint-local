@@ -1,7 +1,7 @@
 name: RainPoint Local Gateway
-version: 0.6.6
+version: 0.7.0
 slug: rainpointd
-description: Read-only local RainPoint gateway for RTL-SDR or ESP32 receivers
+description: Local RainPoint telemetry and bounded sensor-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
 arch:
   - aarch64
@@ -15,7 +15,7 @@ ports:
   8787/tcp: 8787
   8790/tcp: 8790
 ports_description:
-  8787/tcp: Receive-only RainPoint telemetry and local registry API
+  8787/tcp: RainPoint telemetry, registry, and sensor-pairing API
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes
 watchdog: http://[HOST]:[PORT:8787]/health
 usb: true

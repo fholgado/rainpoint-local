@@ -541,6 +541,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
                 "rf_pairing_state": "paired",
                 "rf_factory_endpoint": "15a98024",
                 "rf_paired_endpoint": "95a98024",
+                "rf_message_type": 3,
                 "soil_moisture_percent": 10,
             },
         )

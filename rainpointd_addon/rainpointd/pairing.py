@@ -1,8 +1,8 @@
-"""Persistent, receive-only HCS026 enrollment state machine.
+"""Persistent HCS026 enrollment state machine.
 
 Controlled captures show the sensor emitting both its factory identity and the
-deterministically related paired identity.  This module intentionally builds
-no RF response: it records only transitions that have been observed on air.
+deterministically related paired identity. This module records only transitions
+observed on air; command dispatch remains a separate authenticated boundary.
 """
 
 from __future__ import annotations
@@ -156,6 +156,16 @@ class HCS026EnrollmentManager:
             return {"action": "ignored", "reason": "pairing_window_closed"}
         if factory not in self._candidates:
             return {"action": "ignored", "reason": "factory_announcement_missing"}
+
+        message_type = state.get("message_type", state.get("rf_message_type"))
+        if message_type != 3:
+            return {
+                "action": "paired_progress",
+                "factory_endpoint": factory,
+                "paired_endpoint": observed_paired,
+                "message_type": message_type,
+                "terminal_message_required": 3,
+            }
 
         observed_at = _timestamp(current)
         record = EnrollmentRecord(

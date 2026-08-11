@@ -87,6 +87,11 @@ class RainPointRFTest(unittest.TestCase):
         body = bytes.fromhex(telemetry["message_body"])
         moisture = body[6] * 2 + bool(body[7] & 0x80)
         self.assertEqual(sequence["first_telemetry_moisture_percent"], moisture)
+        self.assertEqual(
+            sequence["first_telemetry_moisture_percent"],
+            telemetry["soil_moisture_percent"],
+        )
+        self.assertEqual("paired", telemetry["hcs026_pairing_state"])
 
     def test_demodulates_short_gateway_pairing_reply_offline(self) -> None:
         frame = bytes.fromhex(

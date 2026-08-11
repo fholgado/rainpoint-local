@@ -59,12 +59,14 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
   before declaring enrollment complete.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
-- Starts disarmed after every boot. Only an exact serial arm command for factory
-  endpoint `15a98024` enables the time-limited automatic reply sequence.
-- Transmits the bench sequence at approximately 0 dBm and returns to the
+- Starts disarmed after every boot. An exact local serial command or an
+  authenticated protocol-v2 gateway command for factory endpoint `15a98024`
+  enables the time-limited automatic reply sequence.
+- Transmits the validated sequence at the configured 10 dBm prototype setting and returns to the
   receive configuration after every 31.2 ms reply.
-- Reports pairing state, completed steps, and armed state over serial and the
-  authenticated Wi-Fi telemetry connection. It accepts no network commands.
+- Reports pairing state, command ID, completed steps, and armed state over
+  serial and the authenticated Wi-Fi connection. The only accepted network
+  commands start or cancel the fixed sensor-pairing profile.
 
 `recoveries` includes the intentional FIFO reset after a successfully consumed
 fixed-length packet as well as overflow recovery; compare it with `packets` and
@@ -101,7 +103,8 @@ to 0, 5, 7, or 10 dBm. Polarity, offset, and power cannot be changed while
 armed. `pairing_clock_local` supplies the fresh target gateway-local time
 packed into the initial reply. The successful bench test used the observed
 RainPoint gateway clock, four minutes ahead of the Mac; this correction is not
-assumed universal. The supplied time advances internally after the command, so
+assumed universal beyond the currently fixed Sensor B profile. The supplied
+time advances internally after the command, so
 the reply does not become stale while the operator prepares the sensor.
 `pairing_arm_b` locks the primary receiver to the lower sensor
 channel, expires after two minutes, and responds only to the three validated
@@ -166,12 +169,12 @@ Wi-Fi station, and makes an outbound connection to the configured Home
 Assistant host. `show_node` reports only non-secret configuration. `clear_wifi`
 erases the saved Wi-Fi and token values.
 
-This is a trusted-LAN prototype transport. The HMAC challenge prevents an
-unknown node from enrolling and prevents the token itself from crossing the
+This is a trusted-LAN prototype transport. Separate nonce/HMAC proofs
+authenticate both the node and `rainpointd` and keep the token itself off the
 network, but TCP telemetry is not encrypted or individually signed. Before a
 published setup or any valve control, the transport will need further review.
-No inbound network message is interpreted as a radio or valve command in this
-firmware; pairing is armed only over local serial for the first bench test.
+Protocol v2 accepts only the bounded `pairing_start` and `pairing_cancel`
+messages after authentication. It contains no generic RF or valve command.
 
 The hardware-independent protocol test can run without PlatformIO:
 
@@ -184,16 +187,14 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ## Next firmware increments
 
-1. Follow [`PAIRING_BENCH_TEST.md`](PAIRING_BENCH_TEST.md) on the physical
-   ESP32 and primary CC1101.
-2. Verify the primary CC1101 receive path on both channels while the RTL-SDR
-   records the same packets; use the optional second radio only for comparative
-   diagnostics.
-3. Capture pairing probe steps 1 and 2 with the RTL-SDR and tune frequency
-   offset or polarity if required.
-4. Arm the exact Sensor B profile and attempt its physical enrollment.
-5. Confirm the paired endpoint and ordinary moisture reports locally.
-6. Generalize captured pairing replies only after the fixed Sensor B exchange
-   succeeds end to end.
-7. Implement and validate the distinct valve wake and close command before any
+1. Flash firmware 0.4.0 and verify the node authenticates to `rainpointd` as
+   protocol v2 while disarmed.
+2. Start the fixed Sensor B workflow from Home Assistant with the original
+   RainPoint gateway powered off.
+3. Confirm terminal message `03`, registry creation, and ordinary moisture
+   entities end to end.
+4. Characterize routine post-enrollment acknowledgements and long-term report
+   behavior.
+5. Generalize pairing only from additional controlled device captures.
+6. Implement and validate the distinct valve wake and close command before any
    bounded open test.

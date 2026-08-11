@@ -25,20 +25,21 @@
       "init": {
         "title": "Manage RainPoint Local",
         "menu_options": {
-          "pair_sensor": "Discover a sensor for pairing"
+          "pair_sensor": "Pair a sensor locally"
         }
       },
       "pair_sensor": {
-        "title": "Discover a sensor for pairing",
-        "description": "Open a monitoring window for an HCS026 sensor. The current receiver can discover the factory identity but cannot finish physical pairing until a transmitter is connected.",
+        "title": "Pair a sensor locally",
+        "description": "Temporarily unplug the original RainPoint gateway before continuing. Select the custom local radio node nearest the sensor; it will perform the validated local RF enrollment exchange.",
         "data": {
           "registry_write_token": "Gateway registry token",
+          "node_id": "Local radio node",
           "duration_seconds": "Pairing window (seconds)"
         }
       },
       "pairing_progress": {
         "title": "Waiting for sensor",
-        "description": "Insert the batteries or hold the sensor button until its LED flashes, then select Submit to check again. A factory candidate confirms reception; physical pairing still requires the gateway reply transmitter. Factory candidates: {candidates}"
+        "description": "With the original RainPoint gateway unplugged, insert the sensor batteries or hold its button until the LED flashes. Select Submit to check progress. The sensor is saved only after terminal confirmation. Factory candidates: {candidates}"
       },
       "sensor_details": {
         "title": "Sensor discovered",
@@ -52,7 +53,8 @@
     "error": {
       "cannot_connect": "Unable to connect to the local gateway",
       "invalid_auth": "The gateway registry token is incorrect",
-      "invalid_response": "The gateway returned an incompatible response"
+      "invalid_response": "The gateway returned an incompatible response",
+      "no_pairing_node": "No authenticated pairing-capable local radio node is connected"
     },
     "abort": {
       "pairing_timeout": "The pairing window expired before a sensor completed enrollment"

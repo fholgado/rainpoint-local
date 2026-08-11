@@ -7,8 +7,10 @@ import hmac
 import json
 import socket
 import sys
+import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +33,9 @@ TOKEN_B = "ab" * 32
 
 class ESP32NetworkTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.gateway = Gateway(transport="rtl433")
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        storage = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        self.gateway = Gateway(transport="rtl433", storage_path=str(storage))
         self.server = ESP32NetworkServer(
             self.gateway,
             host="127.0.0.1",
@@ -43,6 +47,7 @@ class ESP32NetworkTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.server.stop()
         self.gateway.close()
+        self.temporary_directory.cleanup()
 
     def _connect(
         self,
@@ -51,6 +56,7 @@ class ESP32NetworkTest(unittest.TestCase):
         *,
         capabilities: list[str] | None = None,
         tx_armed: bool = False,
+        protocol_version: int = 1,
     ) -> tuple[socket.socket, Any, dict[str, Any]]:
         connection = socket.create_connection(
             ("127.0.0.1", self.server.server_port), timeout=2
@@ -58,21 +64,42 @@ class ESP32NetworkTest(unittest.TestCase):
         stream = connection.makefile("rwb", buffering=0)
         challenge = json.loads(stream.readline())
         payload = (
-            f"rainpoint-node-v1\n{challenge['nonce']}\n{node_id}".encode()
+            f"rainpoint-node-v{protocol_version}\n"
+            f"{challenge['nonce']}\n{node_id}".encode()
         )
         proof = hmac.new(token.encode(), payload, hashlib.sha256).hexdigest()
         hello = {
             "type": "node_hello",
-            "protocol_version": 1,
+            "protocol_version": protocol_version,
             "node_id": node_id,
             "firmware_version": "test",
-            "mode": "receive_only",
-            "capabilities": capabilities or ["rx", "pairing_plan"],
+            "mode": (
+                "local_radio_node"
+                if protocol_version == 2
+                else "receive_only"
+            ),
+            "capabilities": capabilities
+            or (
+                ["rx", "sensor_pairing_tx"]
+                if protocol_version == 2
+                else ["rx", "pairing_plan"]
+            ),
             "tx_armed": tx_armed,
             "proof": proof,
         }
         stream.write(json.dumps(hello).encode() + b"\n")
         response = json.loads(stream.readline())
+        if protocol_version == 2 and response.get("type") == "node_authenticated":
+            expected_server_proof = hmac.new(
+                token.encode(),
+                f"rainpoint-gateway-v2\n{challenge['nonce']}\n{node_id}".encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            self.assertTrue(
+                hmac.compare_digest(
+                    expected_server_proof, response.get("server_proof", "")
+                )
+            )
         return connection, stream, response
 
     def test_authenticated_node_publishes_frame_with_provenance(self) -> None:
@@ -171,6 +198,95 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("armed", self.gateway.nodes()[0]["pairing_state"])
         self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
+        stream.close()
+        connection.close()
+
+    def test_v2_node_completes_bounded_pairing_and_registry_flow(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        pairing_started_at = datetime.now().astimezone()
+        started = self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            now=pairing_started_at,
+        )
+        self.assertTrue(started["transmitter_available"])
+        self.assertEqual(NODE_A, started["selected_node_id"])
+        command = json.loads(stream.readline())
+        self.assertEqual("pairing_start", command["type"])
+        self.assertEqual("sensor_b", command["profile"])
+        self.assertEqual("15a98024", command["factory_endpoint"])
+        encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
+        expected_clock = (
+            pairing_started_at + timedelta(seconds=240)
+        ).replace(tzinfo=None, microsecond=0)
+        self.assertLessEqual(abs((encoded_clock - expected_clock).total_seconds()), 1)
+        self.assertEqual(45_000, command["frequency_offset_hz"])
+        self.assertEqual(10, command["power_dbm"])
+        self.assertNotIn("valve", json.dumps(command))
+
+        factory = (
+            "79f4882f288000000015a98024010083827fa41e8080848000000000000000000000000022f1"
+        )
+        terminal = (
+            "79f4882f28b984028095a9802403028102008000000000000000000000000000000000000f0f"
+        )
+        for frame in (factory, terminal):
+            stream.write(
+                json.dumps(
+                    {"type": "rainpoint_rf", "node_id": NODE_A, "frame": frame}
+                ).encode()
+                + b"\n"
+            )
+
+        deadline = time.monotonic() + 2
+        while True:
+            progress = self.gateway.pairing()
+            if progress["new_records"]:
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertEqual(
+            "95a98024", progress["new_records"][0]["paired_endpoint"]
+        )
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "state": "completed",
+                    "completed_steps": 3,
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_state") != "completed":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        registered = self.gateway.complete_hcs026_pairing(
+            endpoint="95a98024", name="Test Sensor B", area="Garden"
+        )
+        self.assertEqual("hcs026-95a98024", registered["device_id"])
+        cancel = json.loads(stream.readline())
+        self.assertEqual("pairing_cancel", cancel["type"])
+        self.assertEqual(command["command_id"], cancel["command_id"])
+        stream.close()
+        connection.close()
+
+    def test_command_boundary_rejects_every_non_pairing_action(self) -> None:
+        connection, stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaises(ValueError):
+            self.server.send_command(
+                NODE_A,
+                {"type": "valve_open", "duration_seconds": 60},
+            )
         stream.close()
         connection.close()
 

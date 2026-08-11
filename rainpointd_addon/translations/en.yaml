@@ -24,5 +24,5 @@ configuration:
     name: Wi-Fi node credentials
     description: JSON object mapping each stable node ID to its unique 64-character hexadecimal token
 network:
-  8787/tcp: Receive-only RainPoint telemetry and local registry API
+  8787/tcp: RainPoint telemetry, registry, and sensor-pairing API
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes

@@ -155,7 +155,7 @@ def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
     if (
         endpoint_a != VALVE_ENDPOINT
         or not endpoint_b[0] & 0x80
-        or message_type not in {1, 2, 3, 4}
+        or message_type not in {1, 2, 3, 4, 5, 6}
     ):
         return {}
 
@@ -167,7 +167,7 @@ def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
     }
     if (
         frame[15] == 0x82
-        and frame[16] == 0x04
+        and frame[16] in {0x02, 0x04}
         and frame[18] & 0x7F == 0x44
     ):
         moisture = frame[19] * 2 + int(bool(frame[20] & 0x80))

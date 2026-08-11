@@ -58,6 +58,7 @@ class PairingProfile:
     evidence: str
     steps: tuple[PairingReplyStep, ...]
     completion_trigger: PairingTrigger = PairingTrigger.PAIRED_MESSAGE_3
+    clock_lead_seconds: int = 240
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -67,6 +68,7 @@ class PairingProfile:
             "evidence": self.evidence,
             "transmit_enabled": False,
             "completion_trigger": self.completion_trigger.value,
+            "clock_lead_seconds": self.clock_lead_seconds,
             "steps": [step.as_dict() for step in self.steps],
         }
 

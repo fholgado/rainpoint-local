@@ -2,6 +2,7 @@
 #include <SPI.h>
 
 #include <array>
+#include <cctype>
 #include <cstdint>
 
 #include "cc1101.h"
@@ -51,6 +52,7 @@ rainpoint::PairingLocalDateTime pairingLocalDateTime{};
 bool pairingLocalDateTimeSet = false;
 std::uint32_t pairingLocalDateTimeSetAtMs = 0;
 bool pairingRequiresNetwork = false;
+String pairingCommandId;
 std::uint32_t lastHealthReport = 0;
 String serialCommand;
 
@@ -111,6 +113,82 @@ bool parsePairingLocalDateTime(
         static_cast<std::uint8_t>(fields[5]),
     };
     return rainpoint::validPairingLocalDateTime(result);
+}
+
+String jsonStringField(const String& input, const char* key) {
+    const String marker = String('"') + key + "\":\"";
+    const int start = input.indexOf(marker);
+    if (start < 0) {
+        return String();
+    }
+    const int valueStart = start + marker.length();
+    const int end = input.indexOf('"', valueStart);
+    return end < 0 ? String() : input.substring(valueStart, end);
+}
+
+bool jsonLongField(const String& input, const char* key, long& result) {
+    const String marker = String('"') + key + "\":";
+    int position = input.indexOf(marker);
+    if (position < 0) {
+        return false;
+    }
+    position += marker.length();
+    if (position >= static_cast<int>(input.length())) {
+        return false;
+    }
+    bool negative = false;
+    if (input[position] == '-') {
+        negative = true;
+        ++position;
+    }
+    if (position >= static_cast<int>(input.length()) ||
+        !std::isdigit(static_cast<unsigned char>(input[position]))) {
+        return false;
+    }
+    long value = 0;
+    while (position < static_cast<int>(input.length()) &&
+           std::isdigit(static_cast<unsigned char>(input[position]))) {
+        value = value * 10 + input[position] - '0';
+        ++position;
+    }
+    if (position >= static_cast<int>(input.length()) ||
+        (input[position] != ',' && input[position] != '}')) {
+        return false;
+    }
+    result = negative ? -value : value;
+    return true;
+}
+
+bool jsonBoolField(const String& input, const char* key, bool& result) {
+    const String marker = String('"') + key + "\":";
+    const int position = input.indexOf(marker);
+    if (position < 0) {
+        return false;
+    }
+    const String value = input.substring(position + marker.length());
+    if (value.startsWith("true") &&
+        (value.length() == 4 || value[4] == ',' || value[4] == '}')) {
+        result = true;
+        return true;
+    }
+    if (value.startsWith("false") &&
+        (value.length() == 5 || value[5] == ',' || value[5] == '}')) {
+        result = false;
+        return true;
+    }
+    return false;
+}
+
+bool validCommandId(const String& value) {
+    if (value.length() != 32) {
+        return false;
+    }
+    for (std::size_t index = 0; index < value.length(); ++index) {
+        if (!std::isxdigit(static_cast<unsigned char>(value[index]))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void emitLine(const String& line) {
@@ -222,7 +300,13 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();
     line += "\",\"profile\":\"sensor_b\",\"factory_endpoint\":"
-            "\"15a98024\",\"state\":\"";
+            "\"15a98024\",\"paired_endpoint\":\"95a98024\"";
+    if (!pairingCommandId.isEmpty()) {
+        line += ",\"command_id\":\"";
+        line += pairingCommandId;
+        line += '"';
+    }
+    line += ",\"state\":\"";
     line += pairingStateName(pairingSession.state());
     line += "\",\"completed_steps\":";
     line += pairingSession.completedSteps();
@@ -324,6 +408,98 @@ void selectChannel(std::uint8_t channel) {
 }
 #endif
 
+void reportNetworkCommandError(const String& commandId, const char* error) {
+    String line = "{\"type\":\"command_error\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"command_id\":\"";
+    line += commandId;
+    line += "\",\"error\":\"";
+    line += error;
+    line += "\"}";
+    emitLine(line);
+}
+
+void handleNetworkCommand() {
+    String command;
+    if (!wifiTransport.takeCommand(command)) {
+        return;
+    }
+    const String type = jsonStringField(command, "type");
+    const String commandId = jsonStringField(command, "command_id");
+    if (!validCommandId(commandId)) {
+        reportNetworkCommandError("invalid", "invalid_command_id");
+        return;
+    }
+    if (type == "pairing_cancel") {
+        if (!pairingCommandId.isEmpty() && commandId != pairingCommandId) {
+            reportNetworkCommandError(commandId, "pairing_command_mismatch");
+            return;
+        }
+        pairingCommandId = commandId;
+        cancelPairing("cancelled_by_gateway");
+        return;
+    }
+    if (type != "pairing_start") {
+        reportNetworkCommandError(commandId, "unsupported_command");
+        return;
+    }
+    if (pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+        reportNetworkCommandError(commandId, "pairing_is_armed");
+        return;
+    }
+    const String profile = jsonStringField(command, "profile");
+    const String factory = jsonStringField(command, "factory_endpoint");
+    const String clock = jsonStringField(command, "local_clock");
+    long durationSeconds = 0;
+    long frequencyOffsetHz = 0;
+    long powerDbm = 0;
+    bool invert = false;
+    rainpoint::PairingLocalDateTime parsedClock{};
+    if (profile != "sensor_b" || factory != "15a98024") {
+        reportNetworkCommandError(commandId, "unsupported_pairing_profile");
+        return;
+    }
+    if (!jsonLongField(command, "duration_seconds", durationSeconds) ||
+        durationSeconds < 10 || durationSeconds > 900) {
+        reportNetworkCommandError(commandId, "invalid_pairing_duration");
+        return;
+    }
+    if (!jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
+        frequencyOffsetHz < -rainpoint::kMaxPairingFrequencyOffsetHz ||
+        frequencyOffsetHz > rainpoint::kMaxPairingFrequencyOffsetHz) {
+        reportNetworkCommandError(commandId, "pairing_offset_out_of_range");
+        return;
+    }
+    if (!jsonLongField(command, "power_dbm", powerDbm) ||
+        powerDbm < -128 || powerDbm > 127 ||
+        !rainpoint::validPairingPowerDbm(static_cast<std::int8_t>(powerDbm))) {
+        reportNetworkCommandError(commandId, "pairing_power_invalid");
+        return;
+    }
+    if (!jsonBoolField(command, "invert", invert) ||
+        !parsePairingLocalDateTime(clock, parsedClock)) {
+        reportNetworkCommandError(commandId, "pairing_parameters_invalid");
+        return;
+    }
+
+    pairingCommandId = commandId;
+    pairingFrequencyOffsetHz = static_cast<std::int32_t>(frequencyOffsetHz);
+    pairingPowerDbm = static_cast<std::int8_t>(powerDbm);
+    pairingInvert = invert;
+    pairingLocalDateTime = parsedClock;
+    pairingLocalDateTimeSet = true;
+    pairingLocalDateTimeSetAtMs = millis();
+#if RAINPOINT_RADIO_COUNT == 1
+    scanChannels = false;
+    selectChannel(0);
+#endif
+    pairingSession.arm(
+        millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
+    );
+    pairingRequiresNetwork = true;
+    reportPairingStatus("waiting_for_factory_message_1");
+}
+
 void handleSerialCommand() {
     while (Serial.available()) {
         const char value = static_cast<char>(Serial.read());
@@ -372,6 +548,7 @@ void handleSerialCommand() {
                 scanChannels = false;
                 selectChannel(0);
 #endif
+                pairingCommandId.clear();
                 pairingSession.arm(millis());
                 pairingRequiresNetwork = wifiTransport.authenticated();
                 reportPairingStatus("waiting_for_factory_message_1");
@@ -640,6 +817,7 @@ void loop() {
     if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
         cancelPairing("gateway_connection_lost");
     }
+    handleNetworkCommand();
     handleSerialCommand();
 #if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);

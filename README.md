@@ -25,13 +25,15 @@ Working now:
 - reporting the confirmed full/low battery flag used by newly tested HCS026
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
-  transition inside an explicit receive-only learning window,
+  transition inside an explicit pairing window,
 - physically enrolling Test Sensor B through a single ESP32/CC1101 radio node
   and requiring its terminal message `03` before declaring success,
+- starting that bounded pairing exchange from Home Assistant through an
+  authenticated, explicitly selected Wi-Fi radio node,
 - receiving post-enrollment moisture telemetry from that locally paired sensor
   without the stock RainPoint gateway or cloud service,
-- discovering an HCS026 factory identity and monitoring pairing progress
-  through the integration's authenticated **Configure** flow,
+- naming and assigning the terminal-confirmed sensor through the integration's
+  authenticated **Configure** flow,
 - decoding HTV145FRF valve command, state, duration, and usage fields,
 - receiving live RainPoint 2-FSK packets through `rtl_433`,
 - reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
@@ -45,20 +47,20 @@ Working now:
 - building a single-CC1101 firmware prototype, with an optional dual-radio
   diagnostic build, using the measured RainPoint radio profiles, serial frame
   diagnostics, and a validated Sensor-B-specific pairing TX path,
-- accepting those serial frames through a receive-only `rainpointd` transport,
+- accepting radio-node frames through serial or authenticated Wi-Fi transport,
 - simulating fail-closed startup, bounded runs, acknowledgement timeouts,
   client loss, watchdog expiry, close retries, and persistent fault retries
   without connecting those actions to a transmitter,
 - reporting local soil, signal, usage, and valve state to Home Assistant, and
-- rejecting every control request at the gateway boundary.
+- rejecting every valve-control request at the gateway boundary.
 
 Still provisional or not working yet:
 
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
-- integrating physical enrollment into the generalized authenticated Home
-  Assistant and Wi-Fi setup flow,
+- generalizing physical enrollment beyond the currently validated Sensor B
+  profile,
 - implementing and validating routine post-enrollment sensor acknowledgements,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
@@ -66,8 +68,9 @@ Still provisional or not working yet:
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
-local. HCS026 pairing discovery and the first fixed physical pairing exchange
-are validated. Generalized pairing UX and valve control remain absent.
+local. The first fixed physical pairing exchange is wired through the
+authenticated Home Assistant flow. Additional pairing profiles and valve
+control remain absent.
 
 ## Architecture
 
@@ -79,7 +82,7 @@ HCS026 sensors / HTV145 valve
       local radio transport
    - replay fixtures (implemented)
    - receive-only SDR (implemented in the HA app)
-   - ESP32 + CC1101 node (receive plus Sensor B pairing TX bench)
+   - ESP32 + CC1101 node (receive plus bounded Sensor B pairing TX)
              |
          rainpointd
    protocol + registry + safety
@@ -115,16 +118,17 @@ The `rainpointd_addon` directory is a Supervisor-compatible app package. For
 local development, copy it to `/addons/rainpointd`, reload the app store, and
 install **RainPoint Local Gateway** from the Local apps repository.
 
-The app exposes receive-only telemetry on TCP port 8787, maps raw USB for the SDR,
+The app exposes local telemetry and authenticated sensor pairing on TCP port
+8787, maps raw USB for the SDR,
 and has no HA API access, Supervisor API access, privileged mode, or full host
 access. Live events are stored in the app's persistent data volume. The device
 API also reports persistent check-in counts and cadence, plus a current
 `reporting` status based on the measured intervals of each device class.
 
 An optional token-protected local registry can accept, rename, assign, or
-forget already observed endpoints. Its learning sessions are receive-only and
-its records are explicitly separate from physical RF pairing state. Valve
-control POST requests remain unavailable.
+forget observed endpoints. The pairing workflow can arm one authenticated
+protocol-v2 node for the fixed Sensor B profile and persists the identity only
+after terminal RF confirmation. Valve-control POST requests remain unavailable.
 
 ### Development installation
 
@@ -145,10 +149,11 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd \
 This requires `rtl_433`. It starts no transmitter and publishes only RF frames
 matching the confirmed RainPoint sync word.
 
-The initial ESP32/CC1101 firmware, wiring, and build instructions are under
+The ESP32/CC1101 firmware, wiring, and build instructions are under
 [`firmware/rainpoint_bridge`](firmware/rainpoint_bridge/README.md). It is
-receive-only and must be validated against the SDR before becoming a gateway
-transport.
+receive-capable and exposes only the physically validated Sensor B pairing TX
+operation over its authenticated network protocol. It contains no valve TX
+path.
 
 Copy `custom_components/rainpoint_local` into the Home Assistant configuration
 directory, restart Home Assistant, and add **RainPoint Local** from
@@ -256,8 +261,10 @@ procedure.
 
 Physical valve control will not be added until the gateway can enforce a local
 maximum duration, start an independent close watchdog, confirm state from RF
-feedback, and make close commands idempotent. The installed garden system
-should remain on its known-working path during receive-only development.
+feedback, and make close commands idempotent. The installed valve should
+remain on its known-working path while valve TX is under development. Sensor
+pairing requires the original RainPoint gateway to be temporarily powered off
+so it cannot send a competing enrollment reply.
 
 ## License
 

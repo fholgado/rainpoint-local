@@ -17,7 +17,8 @@ from .esp32 import ESP32SerialTransport
 from .gateway import Gateway
 
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
+SUPPORTED_PROTOCOL_VERSIONS = {1, 2}
 DEFAULT_NODE_PORT = 8790
 MAXIMUM_LINE_BYTES = 8_192
 _NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
@@ -69,6 +70,7 @@ class ESP32NetworkServer:
         self._recent_frames: dict[str, tuple[str, float]] = {}
         self._sessions_lock = threading.Lock()
         self._active_nodes: set[str] = set()
+        self._sessions: dict[str, dict[str, Any]] = {}
 
     @property
     def server_port(self) -> int:
@@ -91,6 +93,7 @@ class ESP32NetworkServer:
         listener.settimeout(1)
         self._socket = listener
         self._publisher.seed()
+        self.gateway.set_node_command_sender(self.send_command)
         self._stop.clear()
         self._thread = threading.Thread(
             target=self._accept,
@@ -105,10 +108,36 @@ class ESP32NetworkServer:
         listener = self._socket
         if listener is not None:
             listener.close()
+        with self._sessions_lock:
+            active_connections = [
+                session["connection"] for session in self._sessions.values()
+            ]
+        for connection in active_connections:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            connection.close()
         if self._thread is not None:
             self._thread.join(timeout=3)
         self._socket = None
         self._thread = None
+        self.gateway.set_node_command_sender(None)
+
+    def send_command(self, node_id: str, message: dict[str, Any]) -> None:
+        """Send one bounded command to an authenticated protocol-v2 node."""
+        if message.get("type") not in {"pairing_start", "pairing_cancel"}:
+            raise ValueError("unsupported radio-node command")
+        with self._sessions_lock:
+            session = self._sessions.get(node_id)
+        if session is None:
+            raise ConnectionError(f"radio node is not connected: {node_id}")
+        if session["protocol_version"] != 2:
+            raise ValueError("radio node protocol does not permit commands")
+        if "sensor_pairing_tx" not in session["capabilities"]:
+            raise ValueError("radio node lacks sensor pairing capability")
+        with session["write_lock"]:
+            self._send(session["stream"], message)
 
     def _accept(self) -> None:
         while not self._stop.is_set():
@@ -146,10 +175,12 @@ class ESP32NetworkServer:
                 },
             )
             hello = self._receive(stream)
-            node_id = self._authenticate(hello, nonce)
-            if node_id is None:
+            authenticated = self._authenticate(hello, nonce)
+            if authenticated is None:
                 self._send(stream, {"type": "node_rejected"})
                 return
+            node_id, protocol_version = authenticated
+            capabilities = list(hello.get("capabilities", ["rx"]))
             with self._sessions_lock:
                 if node_id in self._active_nodes:
                     self._send(
@@ -158,22 +189,36 @@ class ESP32NetworkServer:
                     )
                     return
                 self._active_nodes.add(node_id)
+                self._sessions[node_id] = {
+                    "connection": connection,
+                    "stream": stream,
+                    "write_lock": threading.Lock(),
+                    "protocol_version": protocol_version,
+                    "capabilities": capabilities,
+                }
                 session_reserved = True
-            self._send(
-                stream,
-                {
-                    "type": "node_authenticated",
-                    "protocol_version": PROTOCOL_VERSION,
-                    "node_id": node_id,
-                },
-            )
+            authenticated_message = {
+                "type": "node_authenticated",
+                "protocol_version": protocol_version,
+                "node_id": node_id,
+            }
+            if protocol_version == 2:
+                token = self.node_tokens[node_id]
+                server_payload = (
+                    f"rainpoint-gateway-v2\n{nonce}\n{node_id}".encode()
+                )
+                authenticated_message["server_proof"] = hmac.new(
+                    token.encode(), server_payload, hashlib.sha256
+                ).hexdigest()
+            self._send(stream, authenticated_message)
             now = _timestamp()
             self.gateway.update_node(
                 node_id,
                 connected=True,
                 authenticated=True,
-                mode="receive_only",
-                capabilities=hello.get("capabilities", ["rx"]),
+                protocol_version=protocol_version,
+                mode=hello.get("mode"),
+                capabilities=capabilities,
                 tx_armed=False,
                 firmware_version=hello.get("firmware_version"),
                 remote_address=address[0],
@@ -217,6 +262,16 @@ class ESP32NetworkServer:
                         pairing_state=message.get("state"),
                         pairing_completed_steps=message.get("completed_steps"),
                         pairing_detail=message.get("detail"),
+                        pairing_command_id=message.get("command_id"),
+                        pairing_failure_reason=message.get("failure_reason"),
+                    )
+                if message.get("type") == "command_error":
+                    self.gateway.update_node(
+                        node_id,
+                        tx_armed=False,
+                        pairing_state="failed",
+                        pairing_command_id=message.get("command_id"),
+                        pairing_detail=message.get("error"),
                     )
                 self._publisher.consume_line(
                     json.dumps(message), authenticated_node_id=node_id
@@ -227,6 +282,7 @@ class ESP32NetworkServer:
             if node_id is not None and session_reserved:
                 with self._sessions_lock:
                     self._active_nodes.discard(node_id)
+                    self._sessions.pop(node_id, None)
                 self.gateway.update_node(
                     node_id, connected=False, disconnected_at=_timestamp()
                 )
@@ -237,33 +293,46 @@ class ESP32NetworkServer:
 
     def _authenticate(
         self, hello: dict[str, Any] | None, nonce: str
-    ) -> str | None:
+    ) -> tuple[str, int] | None:
         if hello is None or hello.get("type") != "node_hello":
             return None
         node_id = hello.get("node_id")
         proof = hello.get("proof")
         capabilities = hello.get("capabilities", ["rx"])
+        protocol_version = hello.get("protocol_version")
         if (
-            hello.get("protocol_version") != PROTOCOL_VERSION
-            or hello.get("mode") != "receive_only"
+            protocol_version not in SUPPORTED_PROTOCOL_VERSIONS
             or not isinstance(node_id, str)
             or not _NODE_ID.fullmatch(node_id)
             or not isinstance(proof, str)
             or not isinstance(capabilities, list)
             or "rx" not in capabilities
-            or any(
+            or hello.get("tx_armed", False) is not False
+        ):
+            return None
+        if protocol_version == 1:
+            if hello.get("mode") != "receive_only" or any(
                 capability not in {"rx", "pairing_plan", "pairing_tx_bench"}
                 for capability in capabilities
-            )
-            or hello.get("tx_armed", False) is not False
+            ):
+                return None
+        elif (
+            hello.get("mode") != "local_radio_node"
+            or set(capabilities) != {"rx", "sensor_pairing_tx"}
         ):
             return None
         token = self.node_tokens.get(node_id)
         if token is None:
             return None
-        payload = f"rainpoint-node-v1\n{nonce}\n{node_id}".encode()
+        payload = (
+            f"rainpoint-node-v{protocol_version}\n{nonce}\n{node_id}".encode()
+        )
         expected = hmac.new(token.encode(), payload, hashlib.sha256).hexdigest()
-        return node_id if hmac.compare_digest(proof, expected) else None
+        return (
+            (node_id, protocol_version)
+            if hmac.compare_digest(proof, expected)
+            else None
+        )
 
     def _duplicate(self, frame: str, node_id: str) -> bool:
         """Suppress only the same RF frame heard by a different receiver."""

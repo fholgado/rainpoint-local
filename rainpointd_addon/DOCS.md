@@ -1,15 +1,15 @@
 # RainPoint Local Gateway
 
-This experimental app runs the read-only `rainpointd` API used by the
+This experimental app runs the local `rainpointd` API used by the
 **RainPoint Local** Home Assistant integration.
 
 ## Current behavior
 
-Version 0.6.6 supports captured replay, receive-only USB RTL-SDR,
+Version 0.7.0 supports captured replay, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
-cloud. Valve-control POST requests remain rejected. Token-protected registry
-requests change local names and discovery metadata only; they never transmit.
+cloud. A protocol-v2 node can perform the one physically validated, bounded
+Sensor B enrollment exchange. Valve-control POST requests remain rejected.
 
 Installing this app does not make the physical irrigation system work offline.
 Replay remains the default after upgrade. Select `rtl433` only after attaching
@@ -58,15 +58,13 @@ token for another node and do not post real tokens in issues or logs. Current
 node state and receive counters are available from the read-only
 `/api/v1/nodes` endpoint.
 
-This configuration is intended for trusted-LAN hardware testing. It proves
-node authentication but does not yet encrypt or sign every telemetry record.
-Network valve commands remain unavailable.
-
-Firmware advertising `pairing_tx_bench` may connect only while disarmed. Its
-reported pairing state, completed reply count, detail, and current armed state
-appear in `/api/v1/nodes`. The app does not send pairing or valve commands;
-the first physical pairing test is armed explicitly through the ESP32 serial
-console.
+This configuration is intended for trusted-LAN hardware testing. Protocol v2
+uses separate nonce/HMAC proofs to authenticate both the node and gateway
+before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2 firmware advertises only `rx` and
+`sensor_pairing_tx`; no generic or valve TX capability exists. The app sends a
+time-limited pairing command only after an authenticated Home Assistant request
+selects that node. Its state, command ID, completed reply count, and armed state
+appear in `/api/v1/nodes`.
 
 ### Broad capture duration
 
@@ -93,23 +91,23 @@ The registry separates three concepts deliberately:
 - `/api/v1/registry` contains endpoints explicitly accepted into local
   metadata, with user-defined names, models, and areas.
 
-Accepting or forgetting a registry record is not physical pairing or
-unpairing. The separate authenticated `/api/v1/pairing` workflow discovers an
-HCS026 factory identity and monitors the factory-to-paired transition. The live
-RTL-SDR receiver cannot complete physical pairing: controlled testing proved
-that the stock RainPoint gateway sends a short response on a second channel.
-Until a transmitter is connected, Home Assistant labels this workflow as
-**Discover a sensor for pairing** rather than claiming the sensor is paired.
+Accepting or forgetting an ordinary registry record is not physical pairing or
+unpairing. The separate authenticated `/api/v1/pairing` workflow can select a
+protocol-v2 radio node and arm the fixed Test Sensor B profile. The original
+RainPoint gateway must be powered off during this exchange because it was
+observed sending a competing reply even after the sensor was removed from the
+vendor app. The workflow requires the selected node's matching command ID and
+terminal sensor message `03` before Home Assistant may name the device.
 
-For Test Sensor B only, the service can expose a dry-run reply profile derived
-from the controlled stock-gateway capture. It describes the five frames,
-frequencies, wake length, trigger order, and conservative response deadline.
-It never dispatches a frame, and every connected ESP32 node is still required
-to identify as receive-only.
+Only factory identity `15a98024` / paired identity `95a98024` is currently
+supported for physical TX. The command applies the capture-derived 240-second
+pairing clock lead, 45 kHz radio correction, 10 dBm power, three replies, and a
+strict timeout. Additional sensors require evidence-backed profiles rather
+than guessing these fields.
 
 ## Home Assistant integration
 
-The app exposes its receive-only device API on TCP port 8787. Configure the
+The app exposes its local device and pairing API on TCP port 8787. Configure the
 **RainPoint Local** integration with:
 
 - Host: the IP address of the Home Assistant host
@@ -150,9 +148,9 @@ semantics. Older companion-heartbeat battery fields remain research metadata.
 
 ## Safety
 
-This release issues no RF transmission and has no cloud transport, valve
-control entity, or control API. It may display status reported by explicitly
-disarmed Sensor B pairing-bench firmware, but cannot arm it. The optional POST
-surface can only mutate its own SQLite registry. USB access is used only by
-`rtl_433` for receiving. Share access is used only for explicitly enabled raw
-captures, and the app cannot operate the physical valve.
+This release has no cloud transport, valve control entity, valve command API,
+or valve frame in its network vocabulary. Its sole RF mutation is the fixed,
+time-limited Sensor B enrollment profile on a user-selected authenticated node.
+It starts disarmed, cancels on coordinator loss, and requires terminal RF
+confirmation. USB access is used only by `rtl_433` for receiving. Share access
+is used only for explicitly enabled raw captures.

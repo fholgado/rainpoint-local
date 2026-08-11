@@ -89,7 +89,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 if parsed.path == f"{base}/pairing/start":
                     result = self.server.gateway.start_pairing(
-                        int(body.get("duration_seconds", 120))
+                        int(body.get("duration_seconds", 120)),
+                        node_id=(
+                            str(body["node_id"])
+                            if body.get("node_id") is not None
+                            else None
+                        ),
                     )
                     self._json(201, result)
                     return
@@ -97,6 +102,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self._json(200, self.server.gateway.stop_pairing())
                     return
                 if parsed.path == f"{base}/pairing/complete":
+                    transmit_performed = bool(
+                        self.server.gateway.pairing().get("transmit_performed")
+                    )
                     result = self.server.gateway.complete_hcs026_pairing(
                         endpoint=str(body.get("endpoint", "")),
                         name=str(body.get("name", "")),
@@ -107,7 +115,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         {
                             "device": result,
                             "rf_paired": True,
-                            "transmit_performed": False,
+                            "transmit_performed": transmit_performed,
                         },
                     )
                     return

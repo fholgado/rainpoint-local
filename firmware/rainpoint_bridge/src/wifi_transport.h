@@ -13,6 +13,7 @@ public:
     void begin();
     void poll();
     void sendLine(const String& line);
+    bool takeCommand(String& command);
     bool handleProvisioningCommand(const String& command);
 
     const String& nodeId() const { return nodeId_; }
@@ -20,7 +21,7 @@ public:
     bool authenticated() const { return authenticated_; }
 
 private:
-    static constexpr std::uint16_t kProtocolVersion = 1;
+    static constexpr std::uint16_t kProtocolVersion = 2;
     static constexpr std::uint32_t kReconnectIntervalMs = 5'000;
     static constexpr std::size_t kMaximumLineBytes = 1'024;
 
@@ -40,6 +41,8 @@ private:
     String gatewayHost_;
     String token_;
     String inputLine_;
+    String pendingCommand_;
+    String challengeNonce_;
     std::uint16_t gatewayPort_ = 8790;
     std::uint32_t lastReconnectAttempt_ = 0;
     bool configured_ = false;

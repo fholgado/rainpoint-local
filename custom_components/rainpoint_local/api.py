@@ -54,12 +54,12 @@ class RainPointLocalClient:
         return await self._get("pairing")
 
     async def start_pairing(
-        self, token: str, duration_seconds: int = 120
+        self, token: str, duration_seconds: int = 120, *, node_id: str
     ) -> dict[str, Any]:
-        """Open an authenticated receive-only pairing window."""
+        """Open pairing and arm one authenticated local radio node."""
         return await self._post(
             "pairing/start",
-            {"duration_seconds": duration_seconds},
+            {"duration_seconds": duration_seconds, "node_id": node_id},
             token,
         )
 

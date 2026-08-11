@@ -98,6 +98,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._entry = entry
         self._token = str(entry.options.get(CONF_TOKEN, ""))
         self._paired_endpoint: str | None = None
+        self._pairing_nodes: dict[str, str] = {}
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -115,30 +116,60 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors: dict[str, str] = {}
+        try:
+            progress = await self._client().pairing()
+        except RainPointLocalCannotConnect:
+            errors["base"] = "cannot_connect"
+        except RainPointLocalInvalidResponse:
+            errors["base"] = "invalid_response"
+        else:
+            self._pairing_nodes = {
+                str(node["node_id"]): (
+                    f"{node['node_id']} ({node.get('firmware_version') or 'unknown firmware'})"
+                )
+                for node in progress.get("pairing_nodes", [])
+                if isinstance(node, dict) and isinstance(node.get("node_id"), str)
+            }
+            if not self._pairing_nodes:
+                errors["base"] = "no_pairing_node"
         if user_input is not None:
             self._token = str(user_input[CONF_TOKEN])
-            try:
-                await self._client().start_pairing(
-                    self._token, int(user_input["duration_seconds"])
-                )
-            except RainPointLocalUnauthorized:
-                errors["base"] = "invalid_auth"
-            except RainPointLocalCannotConnect:
-                errors["base"] = "cannot_connect"
-            except RainPointLocalInvalidResponse:
-                errors["base"] = "invalid_response"
+            node_id = str(user_input.get("node_id", ""))
+            if node_id not in self._pairing_nodes:
+                errors["base"] = "no_pairing_node"
             else:
-                self.hass.config_entries.async_update_entry(
-                    self._entry,
-                    options={**self._entry.options, CONF_TOKEN: self._token},
-                )
-                return await self.async_step_pairing_progress()
+                try:
+                    await self._client().start_pairing(
+                        self._token,
+                        int(user_input["duration_seconds"]),
+                        node_id=node_id,
+                    )
+                except RainPointLocalUnauthorized:
+                    errors["base"] = "invalid_auth"
+                except RainPointLocalCannotConnect:
+                    errors["base"] = "cannot_connect"
+                except RainPointLocalInvalidResponse:
+                    errors["base"] = "invalid_response"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        self._entry,
+                        options={**self._entry.options, CONF_TOKEN: self._token},
+                    )
+                    return await self.async_step_pairing_progress()
+
+        node_choices = self._pairing_nodes or {
+            "": "No pairing-capable radio node connected"
+        }
+        default_node = next(iter(node_choices))
 
         return self.async_show_form(
             step_id="pair_sensor",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_TOKEN, default=self._token): str,
+                    vol.Required("node_id", default=default_node): vol.In(
+                        node_choices
+                    ),
                     vol.Required("duration_seconds", default=120): vol.All(
                         vol.Coerce(int), vol.Range(min=10, max=900)
                     ),

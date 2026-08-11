@@ -346,6 +346,14 @@ timing, polarity, and three-reply sequence. The path remains a deliberately
 fixed research profile rather than a generalized user-facing pairing
 implementation.
 
+Firmware 0.4.0 exposes that fixed profile through mutually authenticated radio
+node protocol v2. `rainpointd` supplies the validated 240-second clock lead,
+45 kHz correction, 10 dBm setting, and session timeout in one bounded command.
+Home Assistant requires an explicitly selected node, terminal sensor message
+`03`, and a matching node command ID before registry finalization. The protocol
+has no generic RF or valve-command operation; protocol-v1 nodes remain
+receive-only.
+
 ## HCS026FRF soil-moisture reports
 
 Data-rich HCS026FRF frames carry a packed moisture value at one of two body
