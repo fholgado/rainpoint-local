@@ -21,6 +21,9 @@
     }
   },
   "options": {
+    "progress": {
+      "wait_for_sensor": "Hold the sensor button until its pairing LED sequence completes. Home Assistant will continue automatically when the local radio node confirms enrollment."
+    },
     "step": {
       "init": {
         "title": "Manage RainPoint Local",
@@ -39,7 +42,7 @@
       },
       "pairing_progress": {
         "title": "Waiting for sensor",
-        "description": "With the original RainPoint gateway unplugged, insert the sensor batteries or hold its button until the LED flashes. Select Submit to check progress. The sensor is saved only after terminal confirmation. Factory candidates: {candidates}"
+        "description": "With the original RainPoint gateway unplugged, hold the sensor button until the LED flashes. Home Assistant will continue automatically after terminal confirmation."
       },
       "sensor_details": {
         "title": "Sensor discovered",
@@ -57,7 +60,8 @@
       "no_pairing_node": "No authenticated pairing-capable local radio node is connected"
     },
     "abort": {
-      "pairing_timeout": "The pairing window expired before a sensor completed enrollment"
+      "pairing_timeout": "The pairing window expired before a sensor completed enrollment",
+      "pairing_failed": "The local radio node could not complete the sensor enrollment exchange"
     }
   },
   "entity": {

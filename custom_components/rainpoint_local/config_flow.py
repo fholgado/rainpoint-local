@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import voluptuous as vol
@@ -100,6 +101,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._token = str(entry.options.get(CONF_TOKEN, ""))
         self._paired_endpoint: str | None = None
         self._pairing_nodes: dict[str, str] = {}
+        self._pairing_task: asyncio.Task[None] | None = None
+        self._pairing_error: str | None = None
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -156,6 +159,9 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         self._entry,
                         options={**self._entry.options, CONF_TOKEN: self._token},
                     )
+                    self._pairing_task = self.hass.async_create_task(
+                        self._async_wait_for_sensor()
+                    )
                     return await self.async_step_pairing_progress()
 
         node_choices = self._pairing_nodes or {
@@ -182,30 +188,60 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
     async def async_step_pairing_progress(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        errors: dict[str, str] = {}
-        try:
-            progress = await self._client().pairing()
-        except RainPointLocalCannotConnect:
-            progress = {"active": True, "candidates": []}
-            errors["base"] = "cannot_connect"
-        except RainPointLocalInvalidResponse:
-            progress = {"active": True, "candidates": []}
-            errors["base"] = "invalid_response"
-        else:
-            new_records = progress.get("new_records", [])
-            if new_records:
-                self._paired_endpoint = str(new_records[0]["paired_endpoint"])
-                return await self.async_step_sensor_details()
-            if not progress.get("active"):
-                return self.async_abort(reason="pairing_timeout")
-
-        candidates = ", ".join(progress.get("candidates", [])) or "None yet"
-        return self.async_show_form(
+        if self._pairing_task is None:
+            return self.async_abort(reason="pairing_timeout")
+        if self._pairing_task.done():
+            return self.async_show_progress_done(next_step_id="pairing_result")
+        return self.async_show_progress(
             step_id="pairing_progress",
-            data_schema=vol.Schema({}),
-            errors=errors,
-            description_placeholders={"candidates": candidates},
+            progress_action="wait_for_sensor",
+            progress_task=self._pairing_task,
         )
+
+    async def _async_wait_for_sensor(self) -> None:
+        """Poll pairing state until the selected sensor finishes enrollment."""
+        try:
+            while True:
+                try:
+                    progress = await self._client().pairing()
+                except RainPointLocalCannotConnect:
+                    self._pairing_error = "cannot_connect"
+                    return
+                except RainPointLocalInvalidResponse:
+                    self._pairing_error = "invalid_response"
+                    return
+
+                new_records = progress.get("new_records", [])
+                if new_records:
+                    self._paired_endpoint = str(
+                        new_records[0]["paired_endpoint"]
+                    )
+                    return
+                if progress.get("stage") == "transmitter_failed":
+                    self._pairing_error = "pairing_failed"
+                    return
+                if not progress.get("active"):
+                    self._pairing_error = "pairing_timeout"
+                    return
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            try:
+                await self._client().stop_pairing(self._token)
+            except (
+                RainPointLocalCannotConnect,
+                RainPointLocalInvalidResponse,
+                RainPointLocalUnauthorized,
+            ):
+                pass
+            raise
+
+    async def async_step_pairing_result(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Advance automatically after the pairing progress task completes."""
+        if self._pairing_error is not None:
+            return self.async_abort(reason=self._pairing_error)
+        return await self.async_step_sensor_details()
 
     async def async_step_sensor_details(
         self, user_input: dict[str, Any] | None = None
