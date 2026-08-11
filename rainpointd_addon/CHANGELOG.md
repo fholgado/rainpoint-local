@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- Make registry forget remove the corresponding local HCS026 enrollment mapping
+  while explicitly sending no RF unpair command.
+
 ## 0.7.0
 
 - Add backward-compatible, mutually authenticated radio-node protocol v2 with

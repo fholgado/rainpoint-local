@@ -156,7 +156,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                         {
                             "forgotten": result,
                             "rf_unpaired": False,
-                            "detail": "local metadata removed; no RF unpair sent",
+                            "detail": (
+                                "local metadata and enrollment removed; "
+                                "no RF unpair sent"
+                            ),
                         },
                     )
                     return

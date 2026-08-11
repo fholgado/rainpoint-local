@@ -726,11 +726,18 @@ class Gateway:
             )
 
     def forget_registry_device(self, device_id: str) -> dict[str, Any]:
-        """Forget local metadata without transmitting an RF unpair command."""
+        """Forget local metadata and enrollment without RF transmission."""
         with self._lock:
             if not self._store:
                 raise RuntimeError("persistent registry is unavailable")
-            return self._store.forget_registry_device(device_id)
+            forgotten = self._store.forget_registry_device(device_id)
+            if (
+                self._pairing is not None
+                and forgotten.get("model") == "HCS026FRF"
+                and str(forgotten.get("endpoint", "")).endswith("24")
+            ):
+                self._pairing.forget(str(forgotten["endpoint"]))
+            return forgotten
 
     def start_learning(
         self,

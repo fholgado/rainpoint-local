@@ -568,6 +568,14 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("Test Sensor B", device["name"])
         self.assertEqual("Garden", device["area"])
 
+        forgotten = self.post_json(
+            "/api/v1/registry/hcs026-95a98024/forget", {}
+        )
+        self.assertFalse(forgotten["rf_unpaired"])
+        with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
+            reset_progress = json.load(response)
+        self.assertEqual([], reset_progress["records"])
+
 
 if __name__ == "__main__":
     unittest.main()
