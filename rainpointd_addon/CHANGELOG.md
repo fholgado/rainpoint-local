@@ -7,6 +7,8 @@
   replay data.
 - Persist gateway identity independently of receiver transport while preserving
   the legacy identity when an existing database is first migrated.
+- Migrate a legacy transport-derived Home Assistant config-entry identity when
+  Supervisor discovery first publishes the persistent gateway identity.
 
 ## 0.8.0
 

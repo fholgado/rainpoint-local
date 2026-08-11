@@ -72,6 +72,7 @@ manual credential copying outside Supervisor installations.
 | P0 | Node protocol authenticates the connection but subsequent TCP messages are neither encrypted nor individually authenticated | Appropriate only for the current trusted-LAN prototype | Define a production session transport with confidentiality, integrity, replay handling, and key rotation before valve control |
 | P0 | Forget/delete semantics span SQLite, a separate pairing JSON file, in-memory devices, and HA registries | State can diverge; entity deletion can be immediately undone by RF rediscovery | Define one authoritative device/association lifecycle and transactional operations across registry and enrollment state |
 | Completed | Production firmware excludes physical serial probe, tuning, and pairing-arm controls | Local TX bench controls exist only in `esp32dev_single_bench`, and CI inspects binaries for leakage | Keep the research target explicit and the authenticated network command boundary narrow |
+| Completed | Gateway identity used to change with the selected receiver transport | Add-on 0.9 persists identity independently and Supervisor discovery migrates legacy transport-derived config entries | Keep identity immutable across transport and radio-node changes |
 
 ## Runtime inventory
 

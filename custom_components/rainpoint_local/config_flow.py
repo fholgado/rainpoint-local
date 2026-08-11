@@ -22,6 +22,13 @@ from .api import (
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
 
 
+LEGACY_TRANSPORT_GATEWAY_IDS = {
+    "rainpoint-replay",
+    "rainpoint-rtl433",
+    "rainpoint-esp32_serial",
+}
+
+
 class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a local rainpointd gateway."""
 
@@ -90,6 +97,22 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_response")
         if not discovered[CONF_TOKEN] or not gateway_id:
             return self.async_abort(reason="invalid_response")
+
+        legacy_entry = next(
+            (
+                entry
+                for entry in self._async_current_entries()
+                if entry.unique_id in LEGACY_TRANSPORT_GATEWAY_IDS
+            ),
+            None,
+        )
+        if legacy_entry is not None:
+            self.hass.config_entries.async_update_entry(
+                legacy_entry,
+                data=discovered,
+                unique_id=gateway_id,
+            )
+            return self.async_abort(reason="already_configured")
 
         await self.async_set_unique_id(gateway_id)
         self._abort_if_unique_id_configured(updates=discovered)
