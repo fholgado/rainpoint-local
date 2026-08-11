@@ -57,6 +57,7 @@ class PairingProfile:
     paired_endpoint: str
     evidence: str
     steps: tuple[PairingReplyStep, ...]
+    completion_trigger: PairingTrigger = PairingTrigger.PAIRED_MESSAGE_3
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +66,7 @@ class PairingProfile:
             "paired_endpoint": self.paired_endpoint,
             "evidence": self.evidence,
             "transmit_enabled": False,
+            "completion_trigger": self.completion_trigger.value,
             "steps": [step.as_dict() for step in self.steps],
         }
 
@@ -126,11 +128,17 @@ class PairingPlanController:
         self.profile = profile
         self.next_step = 0
         self.failed = False
+        self.failure_reason: str | None = None
+        self.terminal_confirmed = False
         self.pending: PairingReplyStep | None = None
         self.pending_deadline_ms: int | None = None
 
     @property
     def complete(self) -> bool:
+        return self.replies_complete and self.terminal_confirmed
+
+    @property
+    def replies_complete(self) -> bool:
         return self.next_step == len(self.profile.steps)
 
     def observe(
@@ -139,7 +147,20 @@ class PairingPlanController:
         if self.failed or self.complete:
             return None
         if self.pending is not None:
-            return None if trigger == self.pending.trigger else self._fail()
+            return (
+                None
+                if trigger == self.pending.trigger
+                else self._fail("unexpected_trigger")
+            )
+        if self.replies_complete:
+            if trigger == self.profile.completion_trigger:
+                self.terminal_confirmed = True
+                return None
+            if trigger == PairingTrigger.PAIRED_MESSAGE_2_SHORT:
+                return None
+            if any(step.trigger == trigger for step in self.profile.steps):
+                return None
+            return self._fail("unexpected_trigger")
         expected = self.profile.steps[self.next_step]
         if trigger == expected.trigger:
             self.pending = expected
@@ -149,7 +170,7 @@ class PairingPlanController:
         # the sensor repeat while its prior reply is still being scheduled.
         if any(step.trigger == trigger for step in self.profile.steps[: self.next_step]):
             return None
-        return self._fail()
+        return self._fail("unexpected_trigger")
 
     def mark_dispatched(self, trigger: PairingTrigger, *, now_ms: int) -> bool:
         """Record a symbolic scheduler handoff before the reply deadline."""
@@ -160,7 +181,7 @@ class PairingPlanController:
             or self.pending_deadline_ms is None
             or now_ms > self.pending_deadline_ms
         ):
-            self._fail()
+            self._fail("reply_deadline_missed")
             return False
         self.next_step += 1
         self.pending = None
@@ -172,28 +193,33 @@ class PairingPlanController:
             self.pending_deadline_ms is not None
             and now_ms > self.pending_deadline_ms
         ):
-            self._fail()
+            self._fail("reply_deadline_missed")
 
     def interrupt(self) -> None:
-        self._fail()
+        self._fail("interrupted")
 
-    def _fail(self) -> None:
+    def _fail(self, reason: str) -> None:
         self.failed = True
+        self.failure_reason = reason
         self.pending = None
         self.pending_deadline_ms = None
         return None
 
     def status(self) -> dict[str, Any]:
-        next_trigger = (
-            self.profile.steps[self.next_step].trigger.value
-            if not self.complete and not self.failed
-            else None
-        )
+        if self.failed or self.complete:
+            next_trigger = None
+        elif self.replies_complete:
+            next_trigger = self.profile.completion_trigger.value
+        else:
+            next_trigger = self.profile.steps[self.next_step].trigger.value
         return {
             "factory_endpoint": self.profile.factory_endpoint,
             "paired_endpoint": self.profile.paired_endpoint,
             "completed_steps": self.next_step,
             "step_count": len(self.profile.steps),
+            "replies_complete": self.replies_complete,
+            "terminal_trigger": self.profile.completion_trigger.value,
+            "terminal_confirmed": self.terminal_confirmed,
             "next_trigger": next_trigger,
             "pending_trigger": (
                 self.pending.trigger.value if self.pending is not None else None
@@ -201,5 +227,6 @@ class PairingPlanController:
             "pending_deadline_ms": self.pending_deadline_ms,
             "complete": self.complete,
             "failed": self.failed,
+            "failure_reason": self.failure_reason,
             "transmit_enabled": False,
         }

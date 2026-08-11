@@ -197,6 +197,24 @@ const char* pairingStateName(rainpoint::PairingSessionState state) {
     return "unknown";
 }
 
+const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
+    switch (reason) {
+        case rainpoint::PairingFailureReason::None:
+            return "none";
+        case rainpoint::PairingFailureReason::SessionTimeout:
+            return "session_timeout";
+        case rainpoint::PairingFailureReason::TerminalConfirmationTimeout:
+            return "terminal_confirmation_timeout";
+        case rainpoint::PairingFailureReason::UnexpectedTrigger:
+            return "unexpected_trigger";
+        case rainpoint::PairingFailureReason::ReplyFailed:
+            return "reply_failed";
+        case rainpoint::PairingFailureReason::ReplyDeadlineMissed:
+            return "reply_deadline_missed";
+    }
+    return "unknown";
+}
+
 void reportPairingStatus(const char* detail = nullptr) {
     String line;
     line.reserve(320);
@@ -209,6 +227,12 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += pairingSession.completedSteps();
     line += ",\"step_count\":";
     line += rainpoint::kSensorBPairingProfile.size();
+    line += ",\"awaiting_terminal_confirmation\":";
+    line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
+    line += ",\"terminal_trigger\":\"paired_message_3\"";
+    line += ",\"failure_reason\":\"";
+    line += pairingFailureReasonName(pairingSession.failureReason());
+    line += '"';
     line += ",\"tx_armed\":";
     line += pairingSession.state() == rainpoint::PairingSessionState::Armed
         ? "true"

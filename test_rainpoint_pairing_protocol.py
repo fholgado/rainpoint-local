@@ -84,8 +84,20 @@ class HCS026PairingProtocolTest(unittest.TestCase):
                     step.trigger, now_ms=index * 1_000 + 100
                 )
             )
+        self.assertFalse(controller.complete)
+        self.assertTrue(controller.replies_complete)
+        self.assertEqual(
+            "paired_message_3", controller.status()["next_trigger"]
+        )
+        self.assertIsNone(
+            controller.observe(PairingTrigger.PAIRED_MESSAGE_2_SHORT, now_ms=3_000)
+        )
+        self.assertIsNone(
+            controller.observe(PairingTrigger.PAIRED_MESSAGE_3, now_ms=4_000)
+        )
         self.assertTrue(controller.complete)
         self.assertFalse(controller.failed)
+        self.assertTrue(controller.status()["terminal_confirmed"])
 
     def test_duplicate_timeout_out_of_order_and_interruption_fail_safe(self) -> None:
         controller = PairingPlanController(SENSOR_B_PROFILE)
@@ -104,7 +116,19 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         interrupted = PairingPlanController(SENSOR_B_PROFILE)
         interrupted.interrupt()
         self.assertTrue(interrupted.failed)
+        self.assertEqual("interrupted", interrupted.status()["failure_reason"])
         self.assertIsNone(interrupted.observe(first, now_ms=0))
+
+    def test_all_replies_without_terminal_message_are_not_complete(self) -> None:
+        controller = PairingPlanController(SENSOR_B_PROFILE)
+        for index, step in enumerate(SENSOR_B_PROFILE.steps):
+            self.assertIsNotNone(controller.observe(step.trigger, now_ms=index * 100))
+            self.assertTrue(
+                controller.mark_dispatched(step.trigger, now_ms=index * 100 + 50)
+            )
+        self.assertTrue(controller.replies_complete)
+        self.assertFalse(controller.complete)
+        self.assertFalse(controller.failed)
 
 
 if __name__ == "__main__":

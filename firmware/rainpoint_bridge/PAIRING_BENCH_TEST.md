@@ -98,8 +98,11 @@ three successful replies in this order:
 1. factory message 1
 2. paired message 1
 3. paired data message 2
-Success is `state: completed` with `completed_steps:3`, followed by ordinary
-reports from paired endpoint `95a98024`. The sensor's blue indication is useful
+After reply 3, expect `completed_steps:3` while the session remains armed with
+`awaiting_terminal_confirmation:true`. The sensor should emit its short message
+`02` and then terminal message `03`; only `03` changes the state to `completed`.
+Ordinary reports from paired endpoint `95a98024` provide the subsequent
+end-to-end telemetry check. The sensor's blue indication is useful
 corroboration but the RF frames are authoritative.
 
 Enter `pairing_cancel` at any time to stop. The session also fails closed after

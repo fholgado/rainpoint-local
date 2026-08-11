@@ -61,7 +61,7 @@
         "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc",
         "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
       ],
-      "notes": "First successful ESP32/CC1101 local enrollment. Reply 1 encoded 2026-08-11 15:13:42, matching the observed stock RainPoint gateway clock four minutes ahead of the Mac. The sensor changed to paired identity after reply 1; firmware completed and disarmed after reply 3."
+      "notes": "First ESP32/CC1101 exchange to assign Sensor B's paired identity. Reply 1 encoded 2026-08-11 15:13:42, matching the observed stock RainPoint gateway clock four minutes ahead of the Mac. The sensor changed to paired identity after reply 1 and emitted short message 02 after reply 3, but never emitted terminal message 03 or later telemetry. The original firmware's completed state was therefore a false-positive completion, not a successful end-to-end enrollment."
     },
     {
       "name": "sensor_a_rejoin",

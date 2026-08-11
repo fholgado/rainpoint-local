@@ -53,9 +53,10 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
   `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
   its enrollment token over the network.
-- Contains a three-step Sensor B pairing reply profile from the successful
-  repeat-enrollment capture, a 320-symbol wake prefix, and provisional 250 ms response
-  deadline.
+- Contains a three-reply Sensor B pairing profile from the successful stock
+  repeat-enrollment capture, a 320-symbol wake prefix, and provisional 250 ms
+  response deadline. It requires the sensor's later terminal message `03`
+  before declaring enrollment complete.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
 - Starts disarmed after every boot. Only an exact serial arm command for factory
@@ -102,7 +103,8 @@ packed into the initial reply. The successful bench test used the observed
 RainPoint gateway clock, four minutes ahead of the Mac; this correction is not
 assumed universal. `pairing_arm_b` locks the primary receiver to the lower sensor
 channel, expires after two minutes, and responds only to the three validated
-Sensor B trigger layouts in order. Duplicate earlier triggers
+Sensor B trigger layouts in order. After the replies it remains armed through
+the short message `02` until terminal message `03` confirms completion. Duplicate earlier triggers
 are ignored; timeout, an unexpected later trigger, TX failure, or loss of an
 active gateway connection fails closed. `pairing_cancel` disarms immediately.
 

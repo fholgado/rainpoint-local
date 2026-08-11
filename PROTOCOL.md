@@ -172,12 +172,17 @@ patches these four bytes, and regenerates the known `0x4f03` trailer residual.
 Other changed initial-reply bits remain session/allocation candidates rather
 than generalized fields.
 
-The first successful ESP32/CC1101 enrollment followed on August 11. A reply
+The first ESP32/CC1101 exchange to assign a paired identity followed on August
+11. A reply
 using the Mac's current local time was ignored; using the stock RainPoint
 gateway's observed clock, four minutes ahead, was accepted immediately. Sensor
 B changed to paired identity `95a98024`, the prototype sent the two follow-up
-acknowledgements, reached `completed_steps: 3`, disarmed, and resumed receive
-scanning. The exact locally transmitted sequence is preserved as
+acknowledgements, and emitted its short message `02`. The original firmware
+then incorrectly treated three transmitted replies as completion and disarmed.
+Unlike both stock enrollments, the sensor never emitted terminal message `03`
+and produced no later moisture reports, including after a controlled change to
+66%. This was a successful reply/identity-assignment milestone, but not a
+complete enrollment. The exact locally transmitted sequence is preserved as
 `sensor_b_local_enrollment_20260811` in the fixture. The four-minute correction
 is an observed clock offset for this installation, not yet a universal
 protocol constant; a publishable coordinator should obtain or configure its
@@ -229,10 +234,16 @@ after the matching sensor trigger has been observed:
 | 2 | Paired message `01` | 433.4715 MHz |
 | 3 | Paired data message `02` | 433.4715 MHz |
 
-The repeat enrollment completed with these three gateway replies. The sensor
-still emitted its short message `02` and data message `03`, but the stock
+The stock repeat enrollment completed with these three gateway replies. The
+sensor still emitted its short message `02` and terminal message `03`, but the stock
 gateway did not answer either one. The earlier five-reply sequence remains
 preserved as historical evidence rather than the active bench profile.
+
+Three successful gateway replies are therefore necessary but not sufficient.
+The coordinator must remain armed after reply 3, tolerate the intervening short
+message `02`, and require terminal sensor message `03` before reporting
+completion. If `03` never arrives, the session expires as an incomplete
+enrollment rather than producing a false success.
 
 Each planned waveform has a 320-symbol alternating wake (16 ms) and a 304-bit
 frame (15.2 ms), or 31.2 ms of RF. Comparing fixed-length IQ buffers and their

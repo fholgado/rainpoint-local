@@ -22,6 +22,15 @@ enum class PairingSessionState : std::uint8_t {
     Failed,
 };
 
+enum class PairingFailureReason : std::uint8_t {
+    None,
+    SessionTimeout,
+    TerminalConfirmationTimeout,
+    UnexpectedTrigger,
+    ReplyFailed,
+    ReplyDeadlineMissed,
+};
+
 struct PairingLocalDateTime {
     std::uint16_t year;
     std::uint8_t month;
@@ -45,6 +54,8 @@ constexpr std::uint16_t kPairingReplyDelayMs = 60;
 constexpr std::uint16_t kPairingReplyDeadlineMs = 250;
 constexpr std::int32_t kMaxPairingFrequencyOffsetHz = 100'000;
 constexpr std::uint16_t kCurrentPairingTrailerResidual = 0x4f03;
+constexpr PairingTrigger kPairingCompletionTrigger =
+    PairingTrigger::PairedMessage3;
 
 constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
     return value.year >= 2020 && value.year <= 2147 &&
@@ -252,18 +263,24 @@ public:
         step_ = 0;
         expiresAtMs_ = nowMs + durationMs;
         pending_ = false;
+        failureReason_ = PairingFailureReason::None;
     }
 
     void cancel() {
         state_ = PairingSessionState::Disarmed;
         step_ = 0;
         pending_ = false;
+        failureReason_ = PairingFailureReason::None;
     }
 
     void tick(std::uint32_t nowMs) {
         if (state_ == PairingSessionState::Armed &&
             static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0) {
-            fail();
+            fail(
+                step_ == kSensorBPairingProfile.size()
+                    ? PairingFailureReason::TerminalConfirmationTimeout
+                    : PairingFailureReason::SessionTimeout
+            );
         }
     }
 
@@ -279,6 +296,24 @@ public:
         if (!sensorBTrigger(frame, observed)) {
             return nullptr;
         }
+        if (step_ == kSensorBPairingProfile.size()) {
+            if (observed == kPairingCompletionTrigger) {
+                state_ = PairingSessionState::Completed;
+                return nullptr;
+            }
+            // Stock enrollment emits this short message between the final
+            // gateway reply and terminal message 03. It requires no reply.
+            if (observed == PairingTrigger::PairedMessage2Short) {
+                return nullptr;
+            }
+            for (const auto& step : kSensorBPairingProfile) {
+                if (step.trigger == observed) {
+                    return nullptr;
+                }
+            }
+            fail(PairingFailureReason::UnexpectedTrigger);
+            return nullptr;
+        }
         const PairingTrigger expected = kSensorBPairingProfile[step_].trigger;
         if (observed == expected) {
             pending_ = true;
@@ -290,34 +325,40 @@ public:
                 return nullptr;
             }
         }
-        fail();
+        fail(PairingFailureReason::UnexpectedTrigger);
         return nullptr;
     }
 
     bool finishReply(bool success, std::uint32_t nowMs) {
-        if (state_ != PairingSessionState::Armed || !pending_ || !success ||
-            nowMs - claimedAtMs_ >
-                kSensorBPairingProfile[step_].replyDeadlineMs) {
-            fail();
+        if (state_ != PairingSessionState::Armed || !pending_ || !success) {
+            fail(PairingFailureReason::ReplyFailed);
+            return false;
+        }
+        if (nowMs - claimedAtMs_ >
+            kSensorBPairingProfile[step_].replyDeadlineMs) {
+            fail(PairingFailureReason::ReplyDeadlineMissed);
             return false;
         }
         pending_ = false;
         ++step_;
-        if (step_ == kSensorBPairingProfile.size()) {
-            state_ = PairingSessionState::Completed;
-        }
         return true;
     }
 
     PairingSessionState state() const { return state_; }
     std::size_t completedSteps() const { return step_; }
     bool pending() const { return pending_; }
+    bool awaitingTerminalConfirmation() const {
+        return state_ == PairingSessionState::Armed &&
+            step_ == kSensorBPairingProfile.size();
+    }
+    PairingFailureReason failureReason() const { return failureReason_; }
     std::uint32_t expiresAtMs() const { return expiresAtMs_; }
 
 private:
-    void fail() {
+    void fail(PairingFailureReason reason) {
         state_ = PairingSessionState::Failed;
         pending_ = false;
+        failureReason_ = reason;
     }
 
     PairingSessionState state_ = PairingSessionState::Disarmed;
@@ -325,6 +366,7 @@ private:
     std::uint32_t expiresAtMs_ = 0;
     std::uint32_t claimedAtMs_ = 0;
     bool pending_ = false;
+    PairingFailureReason failureReason_ = PairingFailureReason::None;
 };
 
 }  // namespace rainpoint

@@ -66,6 +66,12 @@ int main() {
     const auto pairedMessage2Data = fromHex(
         "79f4882f28b984028095a980240201820425c405000000000000000000000000000000002905"
     );
+    const auto pairedMessage2Short = fromHex(
+        "79f4882f28b984028095a9802402828102008000000000000000000000000000000000005881"
+    );
+    const auto pairedMessage3 = fromHex(
+        "79f4882f28b984028095a980240301820205c40580000000000000000000000000000000117f"
+    );
     const std::array triggers = {
         factoryTrigger,
         pairedMessage1,
@@ -78,8 +84,17 @@ int main() {
         assert(reply == &rainpoint::kSensorBPairingProfile[index]);
         assert(session.finishReply(true, 2'100 + index));
     }
-    assert(session.state() == rainpoint::PairingSessionState::Completed);
+    assert(session.state() == rainpoint::PairingSessionState::Armed);
     assert(session.completedSteps() == 3);
+    assert(session.awaitingTerminalConfirmation());
+    assert(session.claimReply(pairedMessage2Short, 5'000) == nullptr);
+    assert(session.state() == rainpoint::PairingSessionState::Armed);
+    assert(session.claimReply(pairedMessage3, 9'000) == nullptr);
+    assert(session.state() == rainpoint::PairingSessionState::Completed);
+    assert(!session.awaitingTerminalConfirmation());
+    assert(
+        session.failureReason() == rainpoint::PairingFailureReason::None
+    );
 
     auto datedReply = rainpoint::kSensorBPairingProfile[0].frame;
     const rainpoint::PairingLocalDateTime capturedAt = {
@@ -163,5 +178,23 @@ int main() {
     expired.arm(0, 100);
     expired.tick(100);
     assert(expired.state() == rainpoint::PairingSessionState::Failed);
+    assert(
+        expired.failureReason() ==
+        rainpoint::PairingFailureReason::SessionTimeout
+    );
+
+    rainpoint::SensorBPairingSession incomplete;
+    incomplete.arm(0, 10'000);
+    for (std::size_t index = 0; index < triggers.size(); ++index) {
+        assert(incomplete.claimReply(triggers[index], index * 1'000) != nullptr);
+        assert(incomplete.finishReply(true, index * 1'000 + 100));
+    }
+    assert(incomplete.awaitingTerminalConfirmation());
+    incomplete.tick(10'000);
+    assert(incomplete.state() == rainpoint::PairingSessionState::Failed);
+    assert(
+        incomplete.failureReason() ==
+        rainpoint::PairingFailureReason::TerminalConfirmationTimeout
+    );
     return 0;
 }
