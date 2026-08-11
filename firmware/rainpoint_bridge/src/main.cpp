@@ -49,6 +49,7 @@ std::int32_t pairingFrequencyOffsetHz = 0;
 std::int8_t pairingPowerDbm = 0;
 rainpoint::PairingLocalDateTime pairingLocalDateTime{};
 bool pairingLocalDateTimeSet = false;
+std::uint32_t pairingLocalDateTimeSetAtMs = 0;
 bool pairingRequiresNetwork = false;
 std::uint32_t lastHealthReport = 0;
 String serialCommand;
@@ -447,6 +448,7 @@ void handleSerialCommand() {
                     } else {
                         pairingLocalDateTime = parsed;
                         pairingLocalDateTimeSet = true;
+                        pairingLocalDateTimeSetAtMs = millis();
                         reportPairingStatus("local_clock_updated");
                     }
                 }
@@ -530,12 +532,16 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 pairingFrequencyOffsetHz;
             delay(rainpoint::kPairingReplyDelayMs);
             auto replyFrame = step->frame;
-            if (
-                step->trigger == rainpoint::PairingTrigger::FactoryAnnouncement &&
-                !rainpoint::applyPairingLocalDateTime(
-                    replyFrame, pairingLocalDateTime
-                )
-            ) {
+            auto replyDateTime = pairingLocalDateTime;
+            const bool pairingClockValid =
+                rainpoint::advancePairingLocalDateTime(
+                    replyDateTime,
+                    (millis() - pairingLocalDateTimeSetAtMs) / 1'000
+                );
+            if (step->trigger == rainpoint::PairingTrigger::FactoryAnnouncement &&
+                (!pairingClockValid || !rainpoint::applyPairingLocalDateTime(
+                    replyFrame, replyDateTime
+                ))) {
                 pairingSession.finishReply(false, millis());
                 reportPairingStatus("invalid_local_clock");
                 restoreScanningAfterPairing();

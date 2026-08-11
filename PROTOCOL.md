@@ -188,6 +188,16 @@ is an observed clock offset for this installation, not yet a universal
 protocol constant; a publishable coordinator should obtain or configure its
 target pairing clock instead of hard-coding it.
 
+The paired sensor's stock message `01` and data message `02` set byte 20 to
+`0x80`; the corresponding local exchange set it to `0x00`. Their other payload
+bytes matched, and their subsequent short message `02` was identical. This is
+therefore an acceptance/session flag candidate and may explain the missing
+terminal message. The local reply encoded 15:13:42 for a factory announcement
+at 15:10:12—only 3 minutes 30 seconds ahead—because the bench firmware froze
+the operator-supplied time while the stock reply was exactly four minutes
+ahead. Firmware 0.3.2 advances the supplied gateway clock with elapsed time so
+the next test can isolate this candidate without operator-delay drift.
+
 The two first-enrollment sequences had the same cadence within measurement
 error:
 

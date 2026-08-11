@@ -117,6 +117,22 @@ int main() {
     };
     assert(!rainpoint::applyPairingLocalDateTime(datedReply, invalidDate));
 
+    rainpoint::PairingLocalDateTime advancing = {
+        2026, 8, 11, 15, 13, 42,
+    };
+    assert(rainpoint::advancePairingLocalDateTime(advancing, 30));
+    assert(advancing.year == 2026 && advancing.month == 8 && advancing.day == 11);
+    assert(advancing.hour == 15 && advancing.minute == 14 && advancing.second == 12);
+    rainpoint::PairingLocalDateTime leapBoundary = {
+        2028, 2, 28, 23, 59, 59,
+    };
+    assert(rainpoint::advancePairingLocalDateTime(leapBoundary, 2));
+    assert(
+        leapBoundary.year == 2028 && leapBoundary.month == 2 &&
+        leapBoundary.day == 29 && leapBoundary.hour == 0 &&
+        leapBoundary.minute == 0 && leapBoundary.second == 1
+    );
+
     rainpoint::PairingTrigger trigger;
     assert(rainpoint::sensorBTrigger(pairedMessage2Data, trigger));
     assert(trigger == rainpoint::PairingTrigger::PairedMessage2Data);

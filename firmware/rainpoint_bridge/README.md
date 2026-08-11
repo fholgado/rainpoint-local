@@ -101,7 +101,9 @@ to 0, 5, 7, or 10 dBm. Polarity, offset, and power cannot be changed while
 armed. `pairing_clock_local` supplies the fresh target gateway-local time
 packed into the initial reply. The successful bench test used the observed
 RainPoint gateway clock, four minutes ahead of the Mac; this correction is not
-assumed universal. `pairing_arm_b` locks the primary receiver to the lower sensor
+assumed universal. The supplied time advances internally after the command, so
+the reply does not become stale while the operator prepares the sensor.
+`pairing_arm_b` locks the primary receiver to the lower sensor
 channel, expires after two minutes, and responds only to the three validated
 Sensor B trigger layouts in order. After the replies it remains armed through
 the short message `02` until terminal message `03` confirms completion. Duplicate earlier triggers

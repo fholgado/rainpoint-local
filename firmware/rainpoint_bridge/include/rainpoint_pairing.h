@@ -64,6 +64,55 @@ constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
         value.minute <= 59 && value.second <= 59;
 }
 
+constexpr bool pairingLeapYear(std::uint16_t year) {
+    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+constexpr std::uint8_t pairingDaysInMonth(
+    std::uint16_t year,
+    std::uint8_t month
+) {
+    return month == 2 ? static_cast<std::uint8_t>(pairingLeapYear(year) ? 29 : 28)
+        : month == 4 || month == 6 || month == 9 || month == 11 ? 30
+        : 31;
+}
+
+inline bool advancePairingLocalDateTime(
+    PairingLocalDateTime& value,
+    std::uint32_t elapsedSeconds
+) {
+    if (!validPairingLocalDateTime(value) ||
+        value.day > pairingDaysInMonth(value.year, value.month)) {
+        return false;
+    }
+    std::uint32_t secondsOfDay =
+        static_cast<std::uint32_t>(value.hour) * 3'600 +
+        static_cast<std::uint32_t>(value.minute) * 60 + value.second +
+        elapsedSeconds;
+    std::uint32_t elapsedDays = secondsOfDay / 86'400;
+    secondsOfDay %= 86'400;
+    value.hour = static_cast<std::uint8_t>(secondsOfDay / 3'600);
+    value.minute = static_cast<std::uint8_t>((secondsOfDay % 3'600) / 60);
+    value.second = static_cast<std::uint8_t>(secondsOfDay % 60);
+    while (elapsedDays-- > 0) {
+        if (value.day < pairingDaysInMonth(value.year, value.month)) {
+            ++value.day;
+            continue;
+        }
+        value.day = 1;
+        if (value.month < 12) {
+            ++value.month;
+            continue;
+        }
+        value.month = 1;
+        if (value.year == 2147) {
+            return false;
+        }
+        ++value.year;
+    }
+    return true;
+}
+
 inline bool applyPairingLocalDateTime(
     std::array<std::uint8_t, kFrameBytes>& frame,
     const PairingLocalDateTime& value
