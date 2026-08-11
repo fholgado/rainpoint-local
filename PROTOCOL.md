@@ -210,6 +210,28 @@ and matched deviation and occupied bandwidth. The remaining failure is not
 explained by the previously suspected status byte or an obvious decoded RF
 parameter.
 
+Envelope comparison did expose one RF-layer difference: the prototype enabled
+its PA about 140 microseconds before RMT began the alternating wake, while the
+stock gateway's usable carrier began within about 30 microseconds of the wake
+boundary. The prototype had entered TX directly from IDLE, leaving the first
+data level static while the CC1101 synthesizer calibrated. Firmware 0.3.3 first
+entered `FSTXON`, moving calibration and settling behind the gated PA, but an
+SDR probe still measured a 110-microsecond lead. The remaining delay was the
+firmware's MARCSTATE SPI polling after `STX`, during which the PA was already
+active. Firmware 0.3.4 removed that poll, but two controlled probes emitted no
+recoverable RF burst; starting synchronous RMT immediately after the strobe was
+not a valid replacement. Firmware 0.3.5 instead starts the 320-symbol RMT wake
+asynchronously with the PA gated, issues `STX` immediately, and then waits for
+RMT completion. This overlaps only the expendable beginning of the long wake
+with the STX-to-PA transition and avoids a static carrier lead. Physical SDR
+validation recovered the exact 38-byte probe frame. Its carrier was 473 Hz
+from stock, tone separation was within 152 Hz, and 95% occupied bandwidth was
+within 91 Hz. Usable carrier began 10 microseconds before the nominal wake
+boundary, versus 30 microseconds after it for stock: a 40-microsecond difference
+smaller than one 50-microsecond symbol. Firmware 0.3.5 is therefore the first
+probe to match both the decoded waveform and the stock envelope closely enough
+for another controlled enrollment attempt.
+
 The two first-enrollment sequences had the same cadence within measurement
 error:
 

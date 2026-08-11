@@ -50,6 +50,7 @@ constexpr std::uint8_t kTest0 = 0x2e;
 constexpr std::uint8_t kPaTable = 0x3e;
 
 constexpr std::uint8_t kReset = 0x30;
+constexpr std::uint8_t kFrequencySynthOn = 0x31;
 constexpr std::uint8_t kEnterRx = 0x34;
 constexpr std::uint8_t kEnterTx = 0x35;
 constexpr std::uint8_t kIdle = 0x36;
@@ -64,7 +65,7 @@ constexpr std::uint8_t kRxBytes = 0x3b;
 
 constexpr std::uint8_t kMainStateIdle = 0x01;
 constexpr std::uint8_t kMainStateRx = 0x0d;
-constexpr std::uint8_t kMainStateTx = 0x13;
+constexpr std::uint8_t kMainStateFrequencySynthOn = 0x12;
 
 constexpr std::uint32_t kCrystalFrequencyHz = 26'000'000;
 constexpr std::uint16_t kSymbolMicros = 50;
@@ -382,17 +383,32 @@ bool Cc1101::transmitAsync(
         rmt_driver_install(kTxRmtChannel, 0, 0) == ESP_OK;
     bool sent = rmtInstalled;
     if (sent) {
-        digitalWrite(dataPin_, symbolAt(0));
-        sent = strobe(kEnterTx) != 0xff &&
-               waitForMainState(kMainStateTx, 10'000);
+        // Calibrate and settle the synthesizer with the PA still gated. Going
+        // directly from IDLE to TX exposed roughly 140 us of constant carrier
+        // before RMT began the alternating RainPoint wake; stock starts the
+        // usable carrier and wake together. FSTXON keeps that settling period
+        // off-air and makes the subsequent TX transition immediate.
+        sent = strobe(kFrequencySynthOn) != 0xff &&
+               waitForMainState(kMainStateFrequencySynthOn, 10'000);
     }
     if (sent) {
+        digitalWrite(dataPin_, symbolAt(0));
+        // Start the long alternating wake asynchronously with the PA still
+        // gated, then enter TX immediately. This overlaps the short STX-to-PA
+        // transition with the expendable beginning of the 320-symbol wake and
+        // avoids exposing a static data level while polling MARCSTATE.
         sent = rmt_write_items(
                    kTxRmtChannel,
                    items.data(),
                    items.size(),
-                   true
+                   false
                ) == ESP_OK;
+        if (sent) {
+            sent = strobe(kEnterTx) != 0xff;
+        }
+        const bool rmtCompleted =
+            rmt_wait_tx_done(kTxRmtChannel, pdMS_TO_TICKS(100)) == ESP_OK;
+        sent = sent && rmtCompleted;
     }
     if (rmtInstalled) {
         rmt_driver_uninstall(kTxRmtChannel);
