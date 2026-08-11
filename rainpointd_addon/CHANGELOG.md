@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+- Separate installation identities and transport-neutral RF ingestion from the
+  RTL-SDR process adapter.
+- Make accepted HCS026 registry metadata drive live decoding, names, and areas
+  without changing established Home Assistant device IDs.
+- Migrate legacy registry rows for known prototype endpoints onto their
+  already-exposed stable device identities.
+- Persist forgotten endpoint suppression so later RF traffic remains raw
+  evidence and cannot recreate a removed device until it is accepted again.
+
 ## 0.9.0
 
 - Add a network-only production transport for authenticated Wi-Fi radio nodes.
