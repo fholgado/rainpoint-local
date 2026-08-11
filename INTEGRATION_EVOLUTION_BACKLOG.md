@@ -74,6 +74,17 @@ not assume that only one node can exist:
   assigned transmitter is unavailable; reserve alternate-node attempts for
   sequential emergency close recovery.
 
+### Radio-node commissioning gap
+
+The current HA **Add** control configures another logical custom local RF
+gateway; it does not commission a radio node. Nodes still require a manually
+generated credential in the add-on configuration plus USB serial Wi-Fi
+provisioning. Before the integration is publishable, add a separate **Add local
+radio node** options flow backed by a persistent gateway-owned node registry,
+time-limited commissioning, automatic authenticated completion, HA device
+registration, credential rotation, and revocation. Adding a node must never
+create another integration entry or change RainPoint device identities.
+
 After the one-node transmit path is proven, add the Wi-Fi transport and a
 second node to validate deduplication, coverage reporting, transmitter
 selection, and controlled failover.

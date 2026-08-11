@@ -212,7 +212,11 @@ Hardening gaps:
 
 - Add gateway claim, secret rotation, and repair flows.
 - Remove the token from ordinary pairing forms.
-- Replace the `node_tokens` JSON option with managed node enrollment.
+- Replace the `node_tokens` JSON option with a persistent node registry and
+  managed commissioning sessions.
+- Wire **Add local radio node** only after HA can provision, auto-detect,
+  represent, rotate, and revoke a node end to end; the current generic Add
+  control adds a gateway entry and must not be described as node pairing.
 - Review transport encryption and replay protection before valve control.
 
 ### 5. Harden release surfaces

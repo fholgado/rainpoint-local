@@ -1,5 +1,19 @@
 # Local radio-node onboarding
 
+## Implementation status
+
+Radio-node commissioning is **not wired into Home Assistant yet**. The native
+**Add entry/device** control currently starts the integration's gateway config
+flow; it does not enroll an ESP32/CC1101 radio node. The integration's working
+Configure action currently pairs a supported RainPoint sensor through an
+already-authenticated node.
+
+The deployed prototype still provisions nodes manually through `show_node`, the
+add-on's `node_tokens` option, and `configure_wifi`. Connected nodes authenticate
+to the custom local RF gateway and can be selected during sensor pairing, but
+they are not yet represented as managed HA devices and cannot be added,
+renamed, rotated, or revoked from HA.
+
 ## Product goal
 
 Adding a custom local radio node should feel like adding a Zigbee coordinator
@@ -47,6 +61,32 @@ commissioning window, much like permitting joins on a Zigbee network.
 
 Adding another node repeats the same flow; it does not create another HA
 integration entry or another logical device network.
+
+### Required implementation boundary
+
+The **Add local radio node** action should not appear until these pieces work
+end to end:
+
+1. `rainpointd` owns a persistent node registry instead of parsing the
+   `node_tokens` JSON app option.
+2. Its authenticated management API can open and cancel a time-limited
+   commissioning session, issue one node credential, and revoke or rotate an
+   existing node independently.
+3. Factory firmware exposes a bounded commissioning transport—temporary setup
+   access point, Bluetooth, or USB—with a one-time setup code and physical
+   reset path.
+4. The HA options flow starts commissioning, auto-advances only after the node
+   authenticates, and then asks for its friendly name and area.
+5. The connected node is registered beneath the existing custom local RF
+   gateway as an HA device with firmware, connection, radio health, and last
+   report diagnostics.
+6. Removing a node revokes its credential without deleting RainPoint sensors;
+   valves assigned to it become unavailable until explicitly reassigned and
+   validated.
+
+The first publishable commissioning path may use a temporary setup access point
+and printed setup code. BLE discovery can improve convenience later without
+changing the gateway registry or HA flow contract.
 
 The separate **Add RainPoint device** action then:
 
