@@ -111,6 +111,23 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 legacy_entry,
                 data=discovered,
                 unique_id=gateway_id,
+                title=f"RainPoint Local ({gateway_id})",
+            )
+            return self.async_abort(reason="already_configured")
+
+        current_entry = next(
+            (
+                entry
+                for entry in self._async_current_entries()
+                if entry.unique_id == gateway_id
+            ),
+            None,
+        )
+        if current_entry is not None:
+            self.hass.config_entries.async_update_entry(
+                current_entry,
+                data=discovered,
+                title=f"RainPoint Local ({gateway_id})",
             )
             return self.async_abort(reason="already_configured")
 
