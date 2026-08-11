@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Add a network-only production transport for authenticated Wi-Fi radio nodes.
+- Make network mode the default for new app installations instead of synthetic
+  replay data.
+- Persist gateway identity independently of receiver transport while preserving
+  the legacy identity when an existing database is first migrated.
+
 ## 0.8.0
 
 - Generate and persist the gateway management credential inside app data.

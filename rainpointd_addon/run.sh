@@ -38,11 +38,25 @@ fi
 export RAINPOINT_REGISTRY_TOKEN="${registry_write_token}"
 export RAINPOINT_NODE_TOKENS="${node_tokens}"
 
+gateway_id_path="/data/gateway-id"
+if [[ -s "${gateway_id_path}" ]]; then
+  gateway_id="$(<"${gateway_id_path}")"
+elif [[ -s "/data/rainpointd.sqlite3" ]]; then
+  # Preserve the identity already used by pre-0.9.0 config entries.
+  gateway_id="rainpoint-${transport}"
+  printf '%s' "${gateway_id}" > "${gateway_id_path}"
+  bashio::log.info "Preserved legacy gateway identity during migration"
+else
+  gateway_id="rainpoint-$(python3 -c 'import secrets; print(secrets.token_hex(8))')"
+  printf '%s' "${gateway_id}" > "${gateway_id_path}"
+  bashio::log.info "Generated a persistent local gateway identity"
+fi
+
 discovery_config="$(
   bashio::var.json \
     host "$(hostname)" \
     port "^8787" \
-    gateway_id "rainpoint-${transport}" \
+    gateway_id "${gateway_id}" \
     registry_write_token "${registry_write_token}"
 )"
 if bashio::discovery "rainpoint_local" "${discovery_config}" > /dev/null; then
@@ -55,6 +69,9 @@ node_args=(
   --node-listen-host 0.0.0.0
   --node-listen-port "${node_listen_port}"
 )
+gateway_args=(
+  --gateway-id "${gateway_id}"
+)
 
 bashio::log.info "API listening on TCP 8787"
 if (( node_listen_port > 0 )); then
@@ -65,6 +82,16 @@ fi
 cd /opt/rainpoint
 
 case "${transport}" in
+  network)
+    bashio::log.info "Starting network-only gateway for Wi-Fi radio nodes"
+    exec python3 -m rainpointd \
+      --host 0.0.0.0 \
+      --port 8787 \
+      --transport network \
+      --storage /data/rainpointd.sqlite3 \
+      "${gateway_args[@]}" \
+      "${node_args[@]}"
+    ;;
   replay)
     bashio::log.warning \
       "Starting read-only replay mode; live RainPoint hardware is not used"
@@ -74,6 +101,7 @@ case "${transport}" in
       --port 8787 \
       --transport replay \
       --interval "${replay_interval}" \
+      "${gateway_args[@]}" \
       "${node_args[@]}"
     ;;
   rtl433)
@@ -99,6 +127,7 @@ case "${transport}" in
       --storage /data/rainpointd.sqlite3 \
       --frequency "${frequency}" \
       --sample-rate "${sample_rate}" \
+      "${gateway_args[@]}" \
       "${node_args[@]}" \
       "${capture_args[@]}"
     ;;
@@ -112,6 +141,7 @@ case "${transport}" in
       --storage /data/rainpointd.sqlite3 \
       --serial-device "${serial_device}" \
       --serial-baud "${serial_baud}" \
+      "${gateway_args[@]}" \
       "${node_args[@]}"
     ;;
   *)

@@ -5,7 +5,8 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.8.0 supports captured replay, receive-only USB RTL-SDR,
+Version 0.9.0 supports authenticated network radio nodes, captured replay,
+receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform the one physically validated, bounded
@@ -23,6 +24,8 @@ Number of seconds between fixture observations. The default is 5 seconds.
 
 ### Transport
 
+- `network`: production mode for one or more authenticated Wi-Fi radio nodes;
+  no local receiver or synthetic devices.
 - `replay`: captured development fixtures; does not use USB hardware.
 - `rtl433`: live receive-only RainPoint packets from the USB RTL-SDR.
 - `esp32_serial`: normalized RainPoint frames from the receive-only ESP32
@@ -39,11 +42,12 @@ revalidates every frame instead of trusting the bridge's diagnostic fields.
 
 ### Wi-Fi radio nodes
 
-The Wi-Fi node listener is a sidecar to the selected transport. This means the
-existing RTL-SDR can remain the primary reference receiver while one or more
-ESP32 nodes send the same normalized frames over TCP port 8790. Frames carry
-their authenticated node ID, and a packet heard by two different nodes within
-250 ms is stored once. Repeated packets from the same node are preserved.
+The Wi-Fi node listener is the only receiver in `network` mode and supplements
+the local receiver in `rtl433` or `esp32_serial` mode. This lets the existing
+RTL-SDR remain a reference receiver while one or more ESP32 nodes send the same
+normalized frames over TCP port 8790. Frames carry their authenticated node ID,
+and a packet heard by two different nodes within 250 ms is stored once.
+Repeated packets from the same node are preserved.
 
 Set `node_tokens` to a JSON object containing one independent 64-hex-character
 token per stable node ID:

@@ -9,6 +9,7 @@ from .esp32 import ESP32SerialTransport
 from .esp32_network import ESP32NetworkServer, load_node_tokens
 from .gateway import Gateway
 from .http import create_server
+from .network import NetworkTransport
 from .replay import ReplayTransport
 from .rtl433 import RTL433Transport
 
@@ -19,8 +20,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument(
         "--transport",
-        choices=("replay", "rtl433", "esp32_serial"),
-        default="replay",
+        choices=("network", "replay", "rtl433", "esp32_serial"),
+        default="network",
     )
     parser.add_argument(
         "--interval",
@@ -42,13 +43,17 @@ def main() -> int:
         help="authenticated Wi-Fi node listener; 0 disables it",
     )
     parser.add_argument(
+        "--gateway-id",
+        help="stable gateway identifier; defaults to a transport-derived dev ID",
+    )
+    parser.add_argument(
         "--storage",
         help="SQLite path for persistent events and endpoint inventory",
     )
     args = parser.parse_args()
 
     gateway = Gateway(
-        gateway_id=f"rainpoint-{args.transport}",
+        gateway_id=args.gateway_id or f"rainpoint-{args.transport}",
         transport=args.transport,
         storage_path=args.storage,
         registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
@@ -67,8 +72,10 @@ def main() -> int:
             device=args.serial_device,
             baud=args.serial_baud,
         )
-    else:
+    elif args.transport == "replay":
         transport = ReplayTransport(gateway, interval=args.interval)
+    else:
+        transport = NetworkTransport()
     transport.seed()
     transport.start()
     node_server = None

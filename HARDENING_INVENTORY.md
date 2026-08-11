@@ -8,7 +8,7 @@ pairing through Home Assistant.
 
 Snapshot reviewed:
 
-- `rainpointd` add-on 0.8.0
+- `rainpointd` add-on 0.9.0
 - `rainpoint_local` integration 0.3.0
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
@@ -67,11 +67,11 @@ manual credential copying outside Supervisor installations.
 | --- | --- | --- | --- |
 | P0 | Pairing UI is generic but TX supports only factory `15a98024` and paired identity `95a98024` | Other HCS026 sensors can enter a flow that cannot pair them | Advertise a precise Sensor-B experimental capability until a parameterized profile is validated; then move profiles into a model/profile registry |
 | P0 | Live receive code contains this house's sensor, hub, valve, names, and singleton IDs | Other installations inherit incorrect names and cannot represent multiple valves correctly | Derive stable IDs from RF identities, store friendly names only in the registry, and key valve state by endpoint relationship rather than `valve-1` |
-| P0 | Development transports and raw capture controls ship in the production add-on, whose default is `replay` | A new installation can start synthetic data; broad capture and `/share` access are present in the normal image | Create explicit development and production profiles/images; do not default a published install to replay |
-| P0 | Gateway authorization is a manually copied long-lived bearer token over HTTP | Poor setup UX; telemetry and raw event reads are unauthenticated; bearer traffic is unencrypted | Add one-time gateway claim/onboarding, credential rotation, scoped operations, and a reviewed encrypted transport or HA-local authenticated channel |
+| P1 | Development replay and raw capture controls still ship in the add-on, although new installs now default to empty `network` mode | The normal image remains broader than a published production package needs | Create explicit development and production profiles/images; keep replay and broad capture out of the published image |
+| P0 | Supervisor discovery now provisions the gateway bearer credential automatically, but standalone setup is manual and HTTP remains plaintext | Add-on UX is fixed; standalone onboarding, rotation, scoped access, and transport confidentiality remain incomplete | Add one-time standalone claim, credential rotation, scoped operations, and a reviewed encrypted transport or HA-local authenticated channel |
 | P0 | Node protocol authenticates the connection but subsequent TCP messages are neither encrypted nor individually authenticated | Appropriate only for the current trusted-LAN prototype | Define a production session transport with confidentiality, integrity, replay handling, and key rotation before valve control |
 | P0 | Forget/delete semantics span SQLite, a separate pairing JSON file, in-memory devices, and HA registries | State can diverge; entity deletion can be immediately undone by RF rediscovery | Define one authoritative device/association lifecycle and transactional operations across registry and enrollment state |
-| P0 | Firmware always compiles physical serial bench commands that can arm the recovered pairing sequence | Physical serial access bypasses the HA authorization boundary | Compile bench/probe commands only in a research firmware target; production firmware should expose provisioning and authenticated capability commands only |
+| Completed | Production firmware excludes physical serial probe, tuning, and pairing-arm controls | Local TX bench controls exist only in `esp32dev_single_bench`, and CI inspects binaries for leakage | Keep the research target explicit and the authenticated network command boundary narrow |
 
 ## Runtime inventory
 
@@ -187,9 +187,10 @@ Hardening gaps:
 
 ### 1. Draw enforceable production/research boundaries
 
-- Add explicit `production`, `development`, and `research_bench` targets.
-- Remove replay, raw capture, serial probes, and fixed TX profiles from default
-  production startup/build paths.
+- Finish explicit `production` and `development` add-on images; firmware now has
+  enforced production and `research_bench` targets.
+- Remove replay, raw capture, and fixed research profiles from the eventual
+  published image; network mode and production firmware are now the defaults.
 - Reorganize docs and house dashboard examples without changing runtime logic.
 
 ### 2. Extract a generic protocol core

@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.8.0
+version: 0.9.0
 slug: rainpointd
 description: Local RainPoint telemetry and bounded sensor-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
@@ -24,7 +24,7 @@ usb: true
 map:
   - share:rw
 options:
-  transport: replay
+  transport: network
   replay_interval: 5.0
   frequency: 433700000
   sample_rate: 2000000
@@ -35,7 +35,7 @@ options:
   node_listen_port: 8790
   node_tokens: ""
 schema:
-  transport: "list(replay|rtl433|esp32_serial)"
+  transport: "list(network|rtl433|esp32_serial|replay)"
   replay_interval: "float(0.5,3600)"
   frequency: "int(433000000,435000000)"
   sample_rate: "int(250000,2400000)"

@@ -1,7 +1,7 @@
 configuration:
   transport:
     name: Transport
-    description: Use captured replay fixtures or a receive-only USB RTL-SDR
+    description: Use remote Wi-Fi radio nodes, a local USB receiver, or explicit development replay
   replay_interval:
     name: Replay interval
     description: Seconds between captured fixture observations

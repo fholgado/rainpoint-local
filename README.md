@@ -93,8 +93,8 @@ HCS026 sensors / HTV145 valve
 ```
 
 The Home Assistant integration is intentionally independent of the radio
-backend. A future hardware transport can replace replay without changing HA
-entities or automations.
+backend. New installations default to a network-only gateway fed by
+authenticated Wi-Fi radio nodes; replay remains an explicit development mode.
 
 See [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) for the complete
 migration and safety design.
@@ -109,7 +109,7 @@ There are two pieces:
    Home Assistant app.
 
 HACS can install the custom integration, but it cannot run `rainpointd`.
-The live/replay gateway is packaged as a Home Assistant app/add-on and can
+The local gateway is packaged as a Home Assistant app/add-on and can
 eventually be replaced by a service on a dedicated RF gateway.
 
 ### Home Assistant app
