@@ -53,8 +53,8 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
   `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
   its enrollment token over the network.
-- Contains a five-step Sensor B pairing reply profile with the two captured
-  frequencies, 320-symbol wake prefix, and provisional 250 ms response
+- Contains a three-step Sensor B pairing reply profile from the successful
+  repeat-enrollment capture, a 320-symbol wake prefix, and provisional 250 ms response
   deadline.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
@@ -86,17 +86,23 @@ pairing_plan_b
 pairing_probe_b 1 15a98024
 pairing_probe_b 2 15a98024
 pairing_offset_hz -2000
+pairing_power_dbm 10
 pairing_invert off
+pairing_clock_local 20260811145556
 pairing_arm_b 15a98024
 pairing_cancel
 ```
 
 `pairing_probe_b` emits one captured reply so the independent RTL-SDR can
-measure it before a sensor is involved. Steps 1 and 2 cover both captured
-reply frequencies. The offset is limited to +/-100 kHz and polarity or offset
-cannot be changed while armed. `pairing_arm_b` locks the primary receiver to
-the lower sensor channel, expires after two minutes, and responds only to the
-five validated Sensor B trigger layouts in order. Duplicate earlier triggers
+measure it before a sensor is involved. The active repeat-enrollment replies
+use 433.4715 MHz. The offset is limited to +/-100 kHz. Bench power can be set
+to 0, 5, 7, or 10 dBm. Polarity, offset, and power cannot be changed while
+armed. `pairing_clock_local` supplies the fresh target gateway-local time
+packed into the initial reply. The successful bench test used the observed
+RainPoint gateway clock, four minutes ahead of the Mac; this correction is not
+assumed universal. `pairing_arm_b` locks the primary receiver to the lower sensor
+channel, expires after two minutes, and responds only to the three validated
+Sensor B trigger layouts in order. Duplicate earlier triggers
 are ignored; timeout, an unexpected later trigger, TX failure, or loss of an
 active gateway connection fails closed. `pairing_cancel` disarms immediately.
 

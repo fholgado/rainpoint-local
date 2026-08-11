@@ -153,10 +153,35 @@ The initial replies immediately following each factory announcement were:
 | A | ~433.471 MHz | `79f4882f289bce002439840280814088050304f000adf18a0d00808000000000000000004c41` |
 | B | ~433.472 MHz | `79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8` |
 
-Subsequent gateway acknowledgements moved to a per-sensor channel: about
-434.021 MHz for Sensor A and 433.912 MHz for Sensor B. All recovered first
-enrollment and rejoin frames are retained in
+Subsequent gateway acknowledgements moved to a per-session channel: about
+434.021 MHz for Sensor A and 433.912 MHz for Sensor B in the August 10
+sessions. A second successful Sensor B enrollment on August 11 kept every
+gateway reply at about 433.4715 MHz. All recovered first enrollment, repeat
+enrollment, and rejoin frames are retained in
 `research/fixtures/hcs026_gateway_pairing_replies.json`.
+
+The second Sensor B capture also identified the principal dynamic field in
+the initial reply. Bytes 21--22 contain a little-endian FAT/DOS-style packed
+local time (five hour bits, six minute bits, and five two-second units), while
+bytes 23--24 contain a packed date whose seven-bit year is relative to 2020.
+The old reply encoded August 10 at 14:31:40; the newly accepted reply encoded
+August 11 at 14:55:56. Replaying the stale first reply was rejected even after
+its carrier, polarity, envelope, power, and response delay matched the stock
+gateway. The bench firmware now requires a fresh operator-supplied local time,
+patches these four bytes, and regenerates the known `0x4f03` trailer residual.
+Other changed initial-reply bits remain session/allocation candidates rather
+than generalized fields.
+
+The first successful ESP32/CC1101 enrollment followed on August 11. A reply
+using the Mac's current local time was ignored; using the stock RainPoint
+gateway's observed clock, four minutes ahead, was accepted immediately. Sensor
+B changed to paired identity `95a98024`, the prototype sent the two follow-up
+acknowledgements, reached `completed_steps: 3`, disarmed, and resumed receive
+scanning. The exact locally transmitted sequence is preserved as
+`sensor_b_local_enrollment_20260811` in the fixture. The four-minute correction
+is an observed clock offset for this installation, not yet a universal
+protocol constant; a publishable coordinator should obtain or configure its
+target pairing clock instead of hard-coding it.
 
 The two first-enrollment sequences had the same cadence within measurement
 error:
@@ -201,14 +226,20 @@ after the matching sensor trigger has been observed:
 | Step | Sensor trigger | Reply frequency |
 |---:|---|---:|
 | 1 | Factory message `01` | 433.4715 MHz |
-| 2 | Paired message `01` | 433.9115 MHz |
-| 3 | Paired data message `02` | 433.9115 MHz |
-| 4 | Paired short message `02` | 433.9115 MHz |
-| 5 | Paired data message `03` | 433.9115 MHz |
+| 2 | Paired message `01` | 433.4715 MHz |
+| 3 | Paired data message `02` | 433.4715 MHz |
+
+The repeat enrollment completed with these three gateway replies. The sensor
+still emitted its short message `02` and data message `03`, but the stock
+gateway did not answer either one. The earlier five-reply sequence remains
+preserved as historical evidence rather than the active bench profile.
 
 Each planned waveform has a 320-symbol alternating wake (16 ms) and a 304-bit
-frame (15.2 ms), or 31.2 ms of RF before any implementation-specific guard
-silence. The provisional reply deadline is 250 ms after the matching trigger;
+frame (15.2 ms), or 31.2 ms of RF. Comparing fixed-length IQ buffers and their
+nanosecond write times places the stock gateway reply start about 65 ms after
+the triggering sensor frame ends; the prototype therefore waits 60 ms before
+its roughly 4 ms radio transition and transmission. The provisional reply
+deadline is 250 ms after the matching trigger;
 this is a conservative engineering bound, not a measured protocol constant.
 Duplicates are ignored, while timeout, out-of-order triggers, or interruption
 fail the plan closed. Firmware 0.3.0 implements this exact profile as an

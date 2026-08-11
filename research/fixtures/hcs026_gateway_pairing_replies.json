@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-08-10",
+  "captured_at": "2026-08-10 through 2026-08-11",
   "capture_center_hz": 433700000,
   "sample_rate_sps": 2000000,
   "symbol_rate_sps": 20000,
@@ -33,6 +33,35 @@
         "79f4882f2895a980243984028082c281000080000000000000000000000000000000000003df",
         "79f4882f2895a980243984028083418100010000000000000000000000000000000000005329"
       ]
+    },
+    {
+      "name": "sensor_b_repeat_enrollment_20260811",
+      "factory_endpoint": "15a98024",
+      "paired_endpoint": "95a98024",
+      "reply_channel_hz": 433471500,
+      "initial_reply_channel_hz": 433471500,
+      "frames": [
+        "79f4882f2895a98024398402808140880503827000fc760b0d010080000000000000000030c3",
+        "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc",
+        "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
+      ],
+      "notes": "Successful stock enrollment. Reply 1 contains packed local 2026-08-11 14:55:56 in bytes 21..24. No gateway replies followed the sensor's short message 02 or message 03."
+    },
+    {
+      "name": "sensor_b_local_enrollment_20260811",
+      "factory_endpoint": "15a98024",
+      "paired_endpoint": "95a98024",
+      "reply_channel_hz": 433471500,
+      "initial_reply_channel_hz": 433471500,
+      "frequency_offset_hz": 45000,
+      "power_dbm": 10,
+      "reply_delay_ms": 60,
+      "frames": [
+        "79f4882f2895a98024398402808140880503827000b5790b0d0100800000000000000000081e",
+        "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc",
+        "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
+      ],
+      "notes": "First successful ESP32/CC1101 local enrollment. Reply 1 encoded 2026-08-11 15:13:42, matching the observed stock RainPoint gateway clock four minutes ahead of the Mac. The sensor changed to paired identity after reply 1; firmware completed and disarmed after reply 3."
     },
     {
       "name": "sensor_a_rejoin",

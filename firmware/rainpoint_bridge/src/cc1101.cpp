@@ -68,7 +68,6 @@ constexpr std::uint8_t kMainStateTx = 0x13;
 
 constexpr std::uint32_t kCrystalFrequencyHz = 26'000'000;
 constexpr std::uint16_t kSymbolMicros = 50;
-constexpr std::uint8_t kBenchPower0Dbm = 0x60;
 constexpr rmt_channel_t kTxRmtChannel = RMT_CHANNEL_0;
 
 std::int16_t decodeRssi(std::uint8_t raw) {
@@ -332,7 +331,8 @@ bool Cc1101::transmitAsync(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint32_t centerFrequencyHz,
     std::uint16_t wakeSymbols,
-    bool invert
+    bool invert,
+    std::uint8_t paTableValue
 ) {
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || centerFrequencyHz < 433'000'000 ||
@@ -352,7 +352,7 @@ bool Cc1101::transmitAsync(
     writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);
-    writeBurst(kPaTable, &kBenchPower0Dbm, 1);
+    writeBurst(kPaTable, &paTableValue, 1);
 
     const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols);
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);

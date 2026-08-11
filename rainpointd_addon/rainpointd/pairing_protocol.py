@@ -85,41 +85,27 @@ SENSOR_B_PROFILE = PairingProfile(
     model="HCS026FRF",
     factory_endpoint="15a98024",
     paired_endpoint="95a98024",
-    evidence="controlled first enrollment captured 2026-08-10",
+    evidence="controlled successful repeat enrollment captured 2026-08-11",
     steps=(
         PairingReplyStep(
             PairingTrigger.FACTORY_ANNOUNCEMENT,
             433_471_500,
             _frame(
-                "79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8"
+                "79f4882f2895a98024398402808140880503827000fc760b0d010080000000000000000030c3"
             ),
         ),
         PairingReplyStep(
             PairingTrigger.PAIRED_MESSAGE_1,
-            433_911_500,
+            433_471_500,
             _frame(
                 "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc"
             ),
         ),
         PairingReplyStep(
             PairingTrigger.PAIRED_MESSAGE_2_DATA,
-            433_911_500,
+            433_471_500,
             _frame(
                 "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
-            ),
-        ),
-        PairingReplyStep(
-            PairingTrigger.PAIRED_MESSAGE_2_SHORT,
-            433_911_500,
-            _frame(
-                "79f4882f2895a980243984028082c281000080000000000000000000000000000000000003df"
-            ),
-        ),
-        PairingReplyStep(
-            PairingTrigger.PAIRED_MESSAGE_3,
-            433_911_500,
-            _frame(
-                "79f4882f2895a980243984028083418100010000000000000000000000000000000000005329"
             ),
         ),
     ),

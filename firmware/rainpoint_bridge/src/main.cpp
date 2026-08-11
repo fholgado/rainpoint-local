@@ -46,6 +46,9 @@ rainpoint::PairingSessionState reportedPairingState =
     rainpoint::PairingSessionState::Disarmed;
 bool pairingInvert = false;
 std::int32_t pairingFrequencyOffsetHz = 0;
+std::int8_t pairingPowerDbm = 0;
+rainpoint::PairingLocalDateTime pairingLocalDateTime{};
+bool pairingLocalDateTimeSet = false;
 bool pairingRequiresNetwork = false;
 std::uint32_t lastHealthReport = 0;
 String serialCommand;
@@ -64,6 +67,49 @@ String hexString(const std::uint8_t* data, std::size_t length) {
         result += digits[data[index] & 0x0f];
     }
     return result;
+}
+
+bool parseDecimalField(
+    const String& value,
+    std::size_t offset,
+    std::size_t length,
+    std::uint16_t& result
+) {
+    result = 0;
+    for (std::size_t index = 0; index < length; ++index) {
+        const char digit = value[offset + index];
+        if (digit < '0' || digit > '9') {
+            return false;
+        }
+        result = static_cast<std::uint16_t>(result * 10 + digit - '0');
+    }
+    return true;
+}
+
+bool parsePairingLocalDateTime(
+    const String& value,
+    rainpoint::PairingLocalDateTime& result
+) {
+    if (value.length() != 14) {
+        return false;
+    }
+    std::uint16_t fields[6]{};
+    const std::size_t offsets[] = {0, 4, 6, 8, 10, 12};
+    const std::size_t lengths[] = {4, 2, 2, 2, 2, 2};
+    for (std::size_t index = 0; index < 6; ++index) {
+        if (!parseDecimalField(value, offsets[index], lengths[index], fields[index])) {
+            return false;
+        }
+    }
+    result = {
+        fields[0],
+        static_cast<std::uint8_t>(fields[1]),
+        static_cast<std::uint8_t>(fields[2]),
+        static_cast<std::uint8_t>(fields[3]),
+        static_cast<std::uint8_t>(fields[4]),
+        static_cast<std::uint8_t>(fields[5]),
+    };
+    return rainpoint::validPairingLocalDateTime(result);
 }
 
 void emitLine(const String& line) {
@@ -171,6 +217,10 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += pairingInvert ? "true" : "false";
     line += ",\"frequency_offset_hz\":";
     line += pairingFrequencyOffsetHz;
+    line += ",\"power_dbm\":";
+    line += pairingPowerDbm;
+    line += ",\"local_clock_set\":";
+    line += pairingLocalDateTimeSet ? "true" : "false";
     if (detail != nullptr) {
         line += ",\"detail\":\"";
         line += detail;
@@ -219,7 +269,8 @@ bool handlePairingProbe(const String& command) {
             step.frame,
             static_cast<std::uint32_t>(adjustedFrequency),
             step.wakeSymbols,
-            pairingInvert
+            pairingInvert,
+            rainpoint::pairingPaTableValue(pairingPowerDbm)
         );
         String line =
             "{\"type\":\"pairing_tx_probe\",\"profile\":\"sensor_b\","
@@ -272,6 +323,8 @@ void handleSerialCommand() {
                     line += step.channelCenterHz;
                     line += ",\"wake_symbols\":";
                     line += step.wakeSymbols;
+                    line += ",\"reply_delay_ms\":";
+                    line += rainpoint::kPairingReplyDelayMs;
                     line += ",\"reply_deadline_ms\":";
                     line += step.replyDeadlineMs;
                     line += ",\"transmit_enabled\":false,\"frame\":\"";
@@ -282,6 +335,14 @@ void handleSerialCommand() {
             }
             if (!handled && serialCommand == "pairing_arm_b 15a98024") {
                 handled = true;
+                if (!pairingLocalDateTimeSet) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_local_clock_required\"}"
+                    );
+                    serialCommand = "";
+                    continue;
+                }
 #if RAINPOINT_RADIO_COUNT == 1
                 scanChannels = false;
                 selectChannel(0);
@@ -319,6 +380,51 @@ void handleSerialCommand() {
                 } else {
                     pairingFrequencyOffsetHz = offset;
                     reportPairingStatus("frequency_offset_updated");
+                }
+            } else if (!handled && serialCommand.startsWith("pairing_power_dbm ")) {
+                handled = true;
+                const long requested = serialCommand.substring(18).toInt();
+                if (!rainpoint::validPairingPowerDbm(requested)) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_power_invalid\"}"
+                    );
+                } else if (
+                    pairingSession.state() ==
+                    rainpoint::PairingSessionState::Armed
+                ) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_is_armed\"}"
+                    );
+                } else {
+                    pairingPowerDbm = static_cast<std::int8_t>(requested);
+                    reportPairingStatus("power_updated");
+                }
+            } else if (!handled && serialCommand.startsWith("pairing_clock_local ")) {
+                handled = true;
+                if (
+                    pairingSession.state() ==
+                    rainpoint::PairingSessionState::Armed
+                ) {
+                    emitLine(
+                        "{\"type\":\"command_error\","
+                        "\"error\":\"pairing_is_armed\"}"
+                    );
+                } else {
+                    rainpoint::PairingLocalDateTime parsed{};
+                    if (!parsePairingLocalDateTime(
+                            serialCommand.substring(20), parsed
+                        )) {
+                        emitLine(
+                            "{\"type\":\"command_error\","
+                            "\"error\":\"pairing_clock_invalid\"}"
+                        );
+                    } else {
+                        pairingLocalDateTime = parsed;
+                        pairingLocalDateTimeSet = true;
+                        reportPairingStatus("local_clock_updated");
+                    }
                 }
             } else if (!handled && serialCommand == "pairing_invert on") {
                 handled = true;
@@ -398,11 +504,26 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz;
+            delay(rainpoint::kPairingReplyDelayMs);
+            auto replyFrame = step->frame;
+            if (
+                step->trigger == rainpoint::PairingTrigger::FactoryAnnouncement &&
+                !rainpoint::applyPairingLocalDateTime(
+                    replyFrame, pairingLocalDateTime
+                )
+            ) {
+                pairingSession.finishReply(false, millis());
+                reportPairingStatus("invalid_local_clock");
+                restoreScanningAfterPairing();
+                printPacket(name, frame, packet, radio);
+                return;
+            }
             const bool sent = radio.transmitAsync(
-                step->frame,
+                replyFrame,
                 static_cast<std::uint32_t>(adjustedFrequency),
                 step->wakeSymbols,
-                pairingInvert
+                pairingInvert,
+                rainpoint::pairingPaTableValue(pairingPowerDbm)
             );
             pairingSession.finishReply(sent, millis());
             reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");

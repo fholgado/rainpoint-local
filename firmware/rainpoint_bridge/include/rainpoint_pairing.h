@@ -22,6 +22,15 @@ enum class PairingSessionState : std::uint8_t {
     Failed,
 };
 
+struct PairingLocalDateTime {
+    std::uint16_t year;
+    std::uint8_t month;
+    std::uint8_t day;
+    std::uint8_t hour;
+    std::uint8_t minute;
+    std::uint8_t second;
+};
+
 struct PairingReplyStep {
     PairingTrigger trigger;
     std::uint32_t channelCenterHz;
@@ -32,8 +41,58 @@ struct PairingReplyStep {
 
 constexpr std::uint32_t kPairingSymbolRate = 20'000;
 constexpr std::uint16_t kPairingWakeSymbols = 320;
+constexpr std::uint16_t kPairingReplyDelayMs = 60;
 constexpr std::uint16_t kPairingReplyDeadlineMs = 250;
 constexpr std::int32_t kMaxPairingFrequencyOffsetHz = 100'000;
+constexpr std::uint16_t kCurrentPairingTrailerResidual = 0x4f03;
+
+constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
+    return value.year >= 2020 && value.year <= 2147 &&
+        value.month >= 1 && value.month <= 12 &&
+        value.day >= 1 && value.day <= 31 && value.hour <= 23 &&
+        value.minute <= 59 && value.second <= 59;
+}
+
+inline bool applyPairingLocalDateTime(
+    std::array<std::uint8_t, kFrameBytes>& frame,
+    const PairingLocalDateTime& value
+) {
+    if (!validPairingLocalDateTime(value)) {
+        return false;
+    }
+    // The initial gateway reply uses the FAT/DOS clock layout, except its
+    // seven-bit year is relative to 2020 rather than 1980. Seconds have
+    // two-second resolution. Bytes 21..24 were confirmed across successful
+    // Sensor B enrollments on consecutive days.
+    const std::uint16_t packedTime = static_cast<std::uint16_t>(
+        (static_cast<std::uint16_t>(value.hour) << 11) |
+        (static_cast<std::uint16_t>(value.minute) << 5) |
+        (value.second / 2)
+    );
+    const std::uint16_t packedDate = static_cast<std::uint16_t>(
+        (static_cast<std::uint16_t>(value.year - 2020) << 9) |
+        (static_cast<std::uint16_t>(value.month) << 5) |
+        value.day
+    );
+    frame[21] = static_cast<std::uint8_t>(packedTime & 0xff);
+    frame[22] = static_cast<std::uint8_t>(packedTime >> 8);
+    frame[23] = static_cast<std::uint8_t>(packedDate & 0xff);
+    frame[24] = static_cast<std::uint8_t>(packedDate >> 8);
+    writeTrailer(frame, kCurrentPairingTrailerResidual);
+    return true;
+}
+
+constexpr bool validPairingPowerDbm(std::int8_t powerDbm) {
+    return powerDbm == 0 || powerDbm == 5 || powerDbm == 7 || powerDbm == 10;
+}
+
+constexpr std::uint8_t pairingPaTableValue(std::int8_t powerDbm) {
+    // TI CC1101 datasheet table for 433 MHz with multi-layer inductors.
+    return powerDbm == 10 ? 0xc0
+        : powerDbm == 7 ? 0xc8
+        : powerDbm == 5 ? 0x84
+        : 0x60;
+}
 
 constexpr std::size_t rainpointSymbolCount(std::uint16_t wakeSymbols) {
     return wakeSymbols + kFrameBytes * 8;
@@ -47,7 +106,9 @@ inline std::uint8_t rainpointSymbol(
 ) {
     std::uint8_t value;
     if (index < wakeSymbols) {
-        value = 1U ^ static_cast<std::uint8_t>(index & 1U);
+        // Stock gateway captures start the alternating wake low. The frame
+        // that follows retains its ordinary, non-inverted bit polarity.
+        value = static_cast<std::uint8_t>(index & 1U);
     } else {
         const std::size_t frameIndex = index - wakeSymbols;
         value = (frame[frameIndex / 8] >> (7 - frameIndex % 8)) & 1U;
@@ -55,20 +116,20 @@ inline std::uint8_t rainpointSymbol(
     return invert ? value ^ 1U : value;
 }
 
-constexpr std::array<PairingReplyStep, 5> kSensorBPairingProfile = {{
+constexpr std::array<PairingReplyStep, 3> kSensorBPairingProfile = {{
     {
         PairingTrigger::FactoryAnnouncement,
         433'471'500,
         kPairingWakeSymbols,
         kPairingReplyDeadlineMs,
         {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x95, 0xa9, 0x80, 0x24, 0x39,
-          0x84, 0x02, 0x80, 0x81, 0x40, 0x88, 0x05, 0x03, 0x84, 0x70,
-          0x00, 0xf4, 0x73, 0x0a, 0x0d, 0x00, 0x80, 0x80, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0xa8}},
+          0x84, 0x02, 0x80, 0x81, 0x40, 0x88, 0x05, 0x03, 0x82, 0x70,
+          0x00, 0xfc, 0x76, 0x0b, 0x0d, 0x01, 0x00, 0x80, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0xc3}},
     },
     {
         PairingTrigger::PairedMessage1,
-        433'911'500,
+        433'471'500,
         kPairingWakeSymbols,
         kPairingReplyDeadlineMs,
         {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x95, 0xa9, 0x80, 0x24, 0x39,
@@ -78,33 +139,13 @@ constexpr std::array<PairingReplyStep, 5> kSensorBPairingProfile = {{
     },
     {
         PairingTrigger::PairedMessage2Data,
-        433'911'500,
+        433'471'500,
         kPairingWakeSymbols,
         kPairingReplyDeadlineMs,
         {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x95, 0xa9, 0x80, 0x24, 0x39,
           0x84, 0x02, 0x80, 0x82, 0x41, 0x81, 0x00, 0x01, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x22}},
-    },
-    {
-        PairingTrigger::PairedMessage2Short,
-        433'911'500,
-        kPairingWakeSymbols,
-        kPairingReplyDeadlineMs,
-        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x95, 0xa9, 0x80, 0x24, 0x39,
-          0x84, 0x02, 0x80, 0x82, 0xc2, 0x81, 0x00, 0x00, 0x80, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xdf}},
-    },
-    {
-        PairingTrigger::PairedMessage3,
-        433'911'500,
-        kPairingWakeSymbols,
-        kPairingReplyDeadlineMs,
-        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x95, 0xa9, 0x80, 0x24, 0x39,
-          0x84, 0x02, 0x80, 0x83, 0x41, 0x81, 0x00, 0x01, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x53, 0x29}},
     },
 }};
 

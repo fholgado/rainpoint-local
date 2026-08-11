@@ -43,12 +43,12 @@ int main() {
     wrongSync[0] ^= 0x01;
     assert(!rainpoint::prepareRadioPayload(wrongSync, payload));
     assert(rainpoint::validSensorBPairingProfile());
-    assert(rainpoint::kSensorBPairingProfile.size() == 5);
+    assert(rainpoint::kSensorBPairingProfile.size() == 3);
     assert(
         rainpoint::kSensorBPairingProfile[0].channelCenterHz == 433'471'500
     );
     assert(
-        rainpoint::kSensorBPairingProfile[1].channelCenterHz == 433'911'500
+        rainpoint::kSensorBPairingProfile[1].channelCenterHz == 433'471'500
     );
     assert(rainpoint::kMaxPairingFrequencyOffsetHz == 100'000);
     for (const auto& step : rainpoint::kSensorBPairingProfile) {
@@ -66,18 +66,10 @@ int main() {
     const auto pairedMessage2Data = fromHex(
         "79f4882f28b984028095a980240201820425c405000000000000000000000000000000002905"
     );
-    const auto pairedMessage2Short = fromHex(
-        "79f4882f28b984028095a9802402828104008000000000000000000000000000000000006d3b"
-    );
-    const auto pairedMessage3 = fromHex(
-        "79f4882f28b984028095a980240301820405c405000000000000000000000000000000002cb4"
-    );
     const std::array triggers = {
         factoryTrigger,
         pairedMessage1,
         pairedMessage2Data,
-        pairedMessage2Short,
-        pairedMessage3,
     };
     rainpoint::SensorBPairingSession session;
     session.arm(1'000);
@@ -87,18 +79,49 @@ int main() {
         assert(session.finishReply(true, 2'100 + index));
     }
     assert(session.state() == rainpoint::PairingSessionState::Completed);
-    assert(session.completedSteps() == 5);
+    assert(session.completedSteps() == 3);
+
+    auto datedReply = rainpoint::kSensorBPairingProfile[0].frame;
+    const rainpoint::PairingLocalDateTime capturedAt = {
+        2026, 8, 11, 14, 55, 56,
+    };
+    assert(rainpoint::applyPairingLocalDateTime(datedReply, capturedAt));
+    assert(datedReply == rainpoint::kSensorBPairingProfile[0].frame);
+    assert(rainpoint::trailerResidual(datedReply) == 0x4f03);
+    const rainpoint::PairingLocalDateTime nextMinute = {
+        2026, 8, 11, 14, 56, 1,
+    };
+    assert(rainpoint::applyPairingLocalDateTime(datedReply, nextMinute));
+    assert(datedReply[21] == 0x00);
+    assert(datedReply[22] == 0x77);
+    assert(datedReply[23] == 0x0b);
+    assert(datedReply[24] == 0x0d);
+    assert(rainpoint::trailerResidual(datedReply) == 0x4f03);
+    const rainpoint::PairingLocalDateTime invalidDate = {
+        2019, 8, 11, 14, 56, 0,
+    };
+    assert(!rainpoint::applyPairingLocalDateTime(datedReply, invalidDate));
 
     rainpoint::PairingTrigger trigger;
     assert(rainpoint::sensorBTrigger(pairedMessage2Data, trigger));
     assert(trigger == rainpoint::PairingTrigger::PairedMessage2Data);
     assert(rainpoint::rainpointSymbolCount(320) == 624);
+    assert(rainpoint::kPairingReplyDelayMs == 60);
+    assert(rainpoint::validPairingPowerDbm(0));
+    assert(rainpoint::validPairingPowerDbm(5));
+    assert(rainpoint::validPairingPowerDbm(7));
+    assert(rainpoint::validPairingPowerDbm(10));
+    assert(!rainpoint::validPairingPowerDbm(6));
+    assert(rainpoint::pairingPaTableValue(0) == 0x60);
+    assert(rainpoint::pairingPaTableValue(5) == 0x84);
+    assert(rainpoint::pairingPaTableValue(7) == 0xc8);
+    assert(rainpoint::pairingPaTableValue(10) == 0xc0);
     assert(rainpoint::rainpointSymbol(
         rainpoint::kSensorBPairingProfile[0].frame, 320, 0
-    ) == 1);
+    ) == 0);
     assert(rainpoint::rainpointSymbol(
         rainpoint::kSensorBPairingProfile[0].frame, 320, 1
-    ) == 0);
+    ) == 1);
     // The first frame byte is 0x79 (01111001), MSB first after the wake.
     assert(rainpoint::rainpointSymbol(
         rainpoint::kSensorBPairingProfile[0].frame, 320, 320
@@ -109,7 +132,7 @@ int main() {
     for (std::size_t index = 0; index < 320; ++index) {
         assert(rainpoint::rainpointSymbol(
             rainpoint::kSensorBPairingProfile[0].frame, 320, index
-        ) == (1U ^ static_cast<std::uint8_t>(index & 1U)));
+        ) == static_cast<std::uint8_t>(index & 1U));
     }
     for (std::size_t byteIndex = 0;
          byteIndex < rainpoint::kFrameBytes;

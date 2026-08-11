@@ -29,7 +29,8 @@ public:
         const std::array<std::uint8_t, kFrameBytes>& frame,
         std::uint32_t centerFrequencyHz,
         std::uint16_t wakeSymbols,
-        bool invert = false
+        bool invert = false,
+        std::uint8_t paTableValue = 0x60
     );
     bool poll(RadioPacket& packet);
     std::uint8_t channel() const;

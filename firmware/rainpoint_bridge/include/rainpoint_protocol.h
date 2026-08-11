@@ -54,6 +54,16 @@ inline bool hasOrdinaryTrailer(
     return residual == 0xc713 || residual == 0x4f03;
 }
 
+inline void writeTrailer(
+    std::array<std::uint8_t, kFrameBytes>& frame,
+    std::uint16_t residual
+) {
+    const auto computed = crcCcittZero(frame.data(), kFrameBytes - 2);
+    const auto trailer = static_cast<std::uint16_t>(computed ^ residual);
+    frame[kFrameBytes - 2] = static_cast<std::uint8_t>(trailer >> 8);
+    frame[kFrameBytes - 1] = static_cast<std::uint8_t>(trailer & 0xff);
+}
+
 inline std::array<std::uint8_t, kFrameBytes> reconstructFrame(
     const std::array<std::uint8_t, kRadioPayloadBytes>& payload
 ) {

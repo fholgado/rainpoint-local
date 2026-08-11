@@ -33,14 +33,14 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         captured = next(
             item
             for item in fixture["sequences"]
-            if item["name"] == "sensor_b_first_enrollment"
+            if item["name"] == "sensor_b_repeat_enrollment_20260811"
         )
         self.assertEqual(
             captured["frames"], [step.frame.hex() for step in SENSOR_B_PROFILE.steps]
         )
         self.assertEqual(433_471_500, SENSOR_B_PROFILE.steps[0].channel_center_hz)
         self.assertEqual(
-            [433_911_500] * 4,
+            [433_471_500] * 2,
             [step.channel_center_hz for step in SENSOR_B_PROFILE.steps[1:]],
         )
         self.assertFalse(SENSOR_B_PROFILE.as_dict()["transmit_enabled"])

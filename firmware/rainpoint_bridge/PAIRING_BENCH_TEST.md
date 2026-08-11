@@ -52,16 +52,17 @@ pairing_probe_b 1 15a98024
 pairing_probe_b 2 15a98024
 ```
 
-Each command makes one approximately 31.2 ms, 0 dBm transmission. Step 1 is
-near 433.4715 MHz and step 2 near 433.9115 MHz. The serial response must report
+Each command makes one approximately 31.2 ms, 0 dBm transmission. Both current
+steps are near 433.4715 MHz. The serial response must report
 `success:true`.
 
 Before involving the sensor, analyze the SDR recording and confirm:
 
 - 20,000 symbols/s and approximately +/-40 kHz deviation
-- a 320-symbol alternating wake
+- a 320-symbol alternating wake that starts low, without inverting the frame
 - the correct 38-byte frame and ordinary trailer
 - center frequency close enough to the captured stock reply
+- reply start approximately 65 ms after the triggering sensor frame ends
 
 If the decoded bits are inverted, run `pairing_invert on` and repeat both
 probes. If the carrier is offset, set a correction between -100,000 and +100,000
@@ -70,25 +71,34 @@ the same receiver used for the stock-gateway reference because module crystal
 error is hardware-specific. These settings are volatile and
 reset on reboot.
 
+If range is still suspect, select a TI-supported 433 MHz bench level with
+`pairing_power_dbm 0`, `5`, `7`, or `10`. Start at 0 dBm and increase only
+between disarmed attempts.
+
 ## 4. Attempt Sensor B enrollment
 
 Start the independent SDR capture first. Then enter:
 
 ```text
+pairing_clock_local 20260811145556
 pairing_arm_b 15a98024
 ```
 
+Replace the example with the target RainPoint gateway clock in
+`YYYYMMDDhhmmss` form. In the first successful local test that clock was four
+minutes ahead of the Mac, so the supplied value was Mac local time plus four
+minutes. This is an observed installation-specific correction, not a protocol
+constant. The first reply is rebuilt with the packed value and a regenerated
+trailer; arming fails closed unless the time has been supplied since boot.
+
 Confirm `tx_armed:true`, install Sensor B batteries, and press its pairing
 button if it does not announce automatically. The coordinator should report
-five successful replies in this order:
+three successful replies in this order:
 
 1. factory message 1
 2. paired message 1
 3. paired data message 2
-4. paired short message 2
-5. paired data message 3
-
-Success is `state: completed` with `completed_steps:5`, followed by ordinary
+Success is `state: completed` with `completed_steps:3`, followed by ordinary
 reports from paired endpoint `95a98024`. The sensor's blue indication is useful
 corroboration but the RF frames are authoritative.
 
