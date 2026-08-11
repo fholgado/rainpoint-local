@@ -270,6 +270,28 @@ class SQLiteEventStore:
             raise KeyError(device_id)
         return dict(row)
 
+    def registry_endpoint(self, endpoint: str) -> dict[str, Any]:
+        """Return one accepted endpoint or raise KeyError."""
+        row = self._connection.execute(
+            "SELECT * FROM device_registry WHERE endpoint = ?", (endpoint,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(endpoint)
+        return dict(row)
+
+    def migrate_registry_device_id(
+        self, endpoint: str, device_id: str
+    ) -> dict[str, Any]:
+        """Align a legacy registration with an established stable identity."""
+        cursor = self._connection.execute(
+            "UPDATE device_registry SET device_id = ? WHERE endpoint = ?",
+            (device_id, endpoint),
+        )
+        if not cursor.rowcount:
+            raise KeyError(endpoint)
+        self._connection.commit()
+        return self.registry_endpoint(endpoint)
+
     def update_registry_device(
         self,
         device_id: str,

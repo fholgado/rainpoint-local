@@ -36,11 +36,16 @@ class FrameIngestor:
         self, gateway: Gateway, *, catalog: DeviceCatalog | None = None
     ) -> None:
         self.gateway = gateway
-        self.catalog = catalog or gateway.catalog
+        self._catalog_override = catalog
         self._valve_states: dict[str, dict[str, Any]] = {
             valve.device_id: self._empty_valve_state()
             for valve in self.catalog.valves
         }
+
+    @property
+    def catalog(self) -> DeviceCatalog:
+        """Return the current registry-backed catalog unless explicitly fixed."""
+        return self._catalog_override or self.gateway.catalog
 
     @staticmethod
     def _empty_valve_state() -> dict[str, Any]:

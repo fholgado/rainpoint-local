@@ -9,6 +9,7 @@ user-managed registry is introduced.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Iterable, Mapping
 
 
 def _normalize_endpoint(value: str) -> str:
@@ -108,6 +109,38 @@ class DeviceCatalog:
         """Resolve a valve by either direction of its RF link."""
         return self._valves_by_link.get(
             frozenset((endpoint_a.lower(), endpoint_b.lower()))
+        )
+
+    def with_registry_sensors(
+        self, registrations: Iterable[Mapping[str, Any]]
+    ) -> DeviceCatalog:
+        """Overlay accepted sensor metadata without changing legacy IDs.
+
+        A known compatibility endpoint retains its stable device ID so an
+        upgrade cannot fork an existing Home Assistant device. Registry names
+        and models take precedence, while new endpoints use their persisted
+        registry identity.
+        """
+        sensors = {sensor.endpoint: sensor for sensor in self.sensors}
+        for registration in registrations:
+            if registration.get("model") != "HCS026FRF":
+                continue
+            endpoint = _normalize_endpoint(str(registration["endpoint"]))
+            existing = sensors.get(endpoint)
+            sensors[endpoint] = SensorDefinition(
+                endpoint=endpoint,
+                device_id=(
+                    existing.device_id
+                    if existing is not None
+                    else str(registration["device_id"])
+                ),
+                name=str(registration["name"]),
+                model=str(registration["model"]),
+            )
+        return DeviceCatalog(
+            sensors=tuple(sensors.values()),
+            valves=self.valves,
+            hcs026_pairing_peers=self.hcs026_pairing_peers,
         )
 
 

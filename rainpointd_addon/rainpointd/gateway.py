@@ -48,7 +48,9 @@ class Gateway:
         self.transport = transport
         self.read_only = read_only
         self._registry_token = registry_token or None
+        self._base_catalog = catalog
         self.catalog = catalog
+        self._registry_metadata: dict[str, dict[str, Any]] = {}
         self._devices: dict[str, dict[str, Any]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
@@ -62,6 +64,8 @@ class Gateway:
             if storage_path
             else None
         )
+        self._migrate_legacy_registry_identities()
+        self._refresh_registry_catalog()
         if self._store:
             self._events.extend(self._store.recent_events(event_limit))
         self._restore_devices()
@@ -172,17 +176,23 @@ class Gateway:
     ) -> None:
         """Register an unavailable device before its first observation."""
         with self._lock:
+            registry_metadata = self._registry_metadata.get(device_id)
+            if registry_metadata is not None:
+                name = str(registry_metadata["name"])
+            device = {
+                "device_id": device_id,
+                "name": name,
+                "model": model,
+                "available": False,
+                "last_event_id": 0,
+                "observed_at": None,
+                "state": copy.deepcopy(state or {}),
+            }
+            if registry_metadata is not None:
+                device["area"] = registry_metadata.get("area")
             self._devices.setdefault(
                 device_id,
-                {
-                    "device_id": device_id,
-                    "name": name,
-                    "model": model,
-                    "available": False,
-                    "last_event_id": 0,
-                    "observed_at": None,
-                    "state": copy.deepcopy(state or {}),
-                },
+                device,
             )
 
     def observe_decoded(
@@ -200,6 +210,9 @@ class Gateway:
         decoded = copy.deepcopy(state)
 
         with self._lock:
+            registry_metadata = self._registry_metadata.get(device_id)
+            if registry_metadata is not None:
+                name = str(registry_metadata["name"])
             event_id = self._next_event_id
             self._next_event_id += 1
             event = {
@@ -218,7 +231,7 @@ class Gateway:
             else:
                 self._update_memory_metrics(device_id, timestamp)
                 self._update_memory_reception_metrics(event)
-            self._devices[device_id] = {
+            device = {
                 "device_id": device_id,
                 "name": name,
                 "model": model,
@@ -227,6 +240,9 @@ class Gateway:
                 "observed_at": timestamp,
                 "state": decoded,
             }
+            if registry_metadata is not None:
+                device["area"] = registry_metadata.get("area")
+            self._devices[device_id] = device
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 
@@ -592,7 +608,12 @@ class Gateway:
                 raise KeyError(endpoint)
             if endpoint not in {item["endpoint"] for item in self._store.endpoints()}:
                 raise KeyError(endpoint)
-            device_id = f"hcs026-{endpoint}"
+            existing_sensor = self.catalog.sensor(endpoint)
+            device_id = (
+                existing_sensor.device_id
+                if existing_sensor is not None
+                else f"hcs026-{endpoint}"
+            )
             registered = self._store.accept_endpoint(
                 endpoint=endpoint,
                 device_id=device_id,
@@ -601,9 +622,12 @@ class Gateway:
                 area=area,
                 accepted_at=timestamp,
             )
-            if device_id in self._devices:
-                self._devices[device_id]["name"] = name
-                self._devices[device_id]["area"] = area
+            self._refresh_registry_catalog()
+            resolved = self.catalog.sensor(endpoint)
+            resolved_device_id = resolved.device_id if resolved else device_id
+            if resolved_device_id in self._devices:
+                self._devices[resolved_device_id]["name"] = name
+                self._devices[resolved_device_id]["area"] = area
             self._cancel_active_pairing_node()
             self._pairing.stop()
             return registered
@@ -691,14 +715,25 @@ class Gateway:
             known = {item["endpoint"] for item in self._store.endpoints()}
             if endpoint not in known:
                 raise KeyError(endpoint)
-            return self._store.accept_endpoint(
+            existing_sensor = (
+                self.catalog.sensor(endpoint)
+                if model == "HCS026FRF"
+                else None
+            )
+            registered = self._store.accept_endpoint(
                 endpoint=endpoint,
-                device_id=f"local-{endpoint}",
+                device_id=(
+                    existing_sensor.device_id
+                    if existing_sensor is not None
+                    else f"local-{endpoint}"
+                ),
                 name=name,
                 model=model,
                 area=area,
                 accepted_at=timestamp,
             )
+            self._refresh_registry_catalog()
+            return registered
 
     def update_registry_device(
         self,
@@ -720,12 +755,19 @@ class Gateway:
                 else _clean_optional_label(area, "area")
             )
             timestamp = (now or datetime.now(timezone.utc)).isoformat()
-            return self._store.update_registry_device(
+            updated = self._store.update_registry_device(
                 device_id,
                 name=next_name,
                 area=next_area,
                 updated_at=timestamp,
             )
+            self._refresh_registry_catalog()
+            resolved = self.catalog.sensor(str(updated["endpoint"]))
+            resolved_device_id = resolved.device_id if resolved else device_id
+            if resolved_device_id in self._devices:
+                self._devices[resolved_device_id]["name"] = updated["name"]
+                self._devices[resolved_device_id]["area"] = updated["area"]
+            return updated
 
     def forget_registry_device(self, device_id: str) -> dict[str, Any]:
         """Forget local metadata and enrollment without RF transmission."""
@@ -739,7 +781,37 @@ class Gateway:
                 and str(forgotten.get("endpoint", "")).endswith("24")
             ):
                 self._pairing.forget(str(forgotten["endpoint"]))
+            self._refresh_registry_catalog()
             return forgotten
+
+    def _refresh_registry_catalog(self) -> None:
+        """Layer persistent sensor identity metadata over compatibility data."""
+        registrations = self._store.registry() if self._store else []
+        self.catalog = self._base_catalog.with_registry_sensors(registrations)
+        metadata: dict[str, dict[str, Any]] = {}
+        for registration in registrations:
+            if registration.get("model") != "HCS026FRF":
+                continue
+            sensor = self.catalog.sensor(str(registration["endpoint"]))
+            if sensor is not None:
+                metadata[sensor.device_id] = copy.deepcopy(registration)
+        self._registry_metadata = metadata
+
+    def _migrate_legacy_registry_identities(self) -> None:
+        """Align known endpoints with IDs already exposed by the prototype."""
+        if self._store is None:
+            return
+        for registration in self._store.registry():
+            if registration.get("model") != "HCS026FRF":
+                continue
+            sensor = self._base_catalog.sensor(str(registration["endpoint"]))
+            if (
+                sensor is not None
+                and registration.get("device_id") != sensor.device_id
+            ):
+                self._store.migrate_registry_device_id(
+                    sensor.endpoint, sensor.device_id
+                )
 
     def start_learning(
         self,
@@ -825,15 +897,24 @@ class Gateway:
                 continue
             if not self._is_restorable_device(event):
                 continue
-            self._devices[event["device_id"]] = {
+            device_id = str(event["device_id"])
+            registry_metadata = self._registry_metadata.get(device_id)
+            device = {
                 "device_id": event["device_id"],
-                "name": event["name"],
+                "name": (
+                    registry_metadata["name"]
+                    if registry_metadata is not None
+                    else event["name"]
+                ),
                 "model": event["model"],
                 "available": True,
                 "last_event_id": event["event_id"],
                 "observed_at": event["observed_at"],
                 "state": copy.deepcopy(event["state"]),
             }
+            if registry_metadata is not None:
+                device["area"] = registry_metadata.get("area")
+            self._devices[event["device_id"]] = device
 
     @staticmethod
     def _add_reporting_status(

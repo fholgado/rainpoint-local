@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import json
 import math
 import sys
@@ -41,6 +42,15 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    @staticmethod
+    def _frame_with_endpoint(frame_hex: str, endpoint: str) -> str:
+        """Rewrite endpoint B and retain a supported trailer residue."""
+        frame = bytearray.fromhex(frame_hex)
+        frame[9:13] = bytes.fromhex(endpoint)
+        trailer = binascii.crc_hqx(frame[:-2], 0) ^ 0xC713
+        frame[-2:] = trailer.to_bytes(2, "big")
+        return frame.hex()
+
     def test_transport_identity_is_supplied_by_device_catalog(self) -> None:
         catalog = DeviceCatalog(
             sensors=(
@@ -133,6 +143,121 @@ class RainPointRFTest(unittest.TestCase):
         self.assertIsNone(devices["valve-a"]["state"]["is_watering"])
         self.assertTrue(devices["valve-b"]["state"]["is_watering"])
         self.assertEqual(60, devices["valve-b"]["state"]["duration_seconds"])
+
+    def test_registry_adds_dynamic_sensor_to_live_ingestion(self) -> None:
+        source = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        frame = self._frame_with_endpoint(source, "aabbcc24")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+
+            self.assertEqual(
+                1,
+                transport.consume_line(
+                    json.dumps(
+                        {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                    )
+                ),
+            )
+            self.assertEqual([], gateway.devices())
+            registration = gateway.accept_endpoint(
+                endpoint="aabbcc24",
+                name="Registry Sensor",
+                model="HCS026FRF",
+                area="Test Bed",
+            )
+            self.assertEqual("local-aabbcc24", registration["device_id"])
+
+            self.assertEqual(
+                1,
+                transport.consume_line(
+                    json.dumps(
+                        {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                    )
+                ),
+            )
+            device = gateway.devices()[0]
+            self.assertEqual("local-aabbcc24", device["device_id"])
+            self.assertEqual("Registry Sensor", device["name"])
+            self.assertEqual("Test Bed", device["area"])
+            self.assertEqual(54, device["state"]["soil_moisture_percent"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            restored_device = restored.devices()[0]
+            self.assertEqual("local-aabbcc24", restored_device["device_id"])
+            self.assertEqual("Registry Sensor", restored_device["name"])
+            self.assertEqual("Test Bed", restored_device["area"])
+            restored.close()
+
+    def test_registry_metadata_applies_before_first_decoded_report(self) -> None:
+        source = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        frame = self._frame_with_endpoint(source, "aabbcc24")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                )
+            )
+            gateway.accept_endpoint(
+                endpoint="aabbcc24",
+                name="Waiting Sensor",
+                model="HCS026FRF",
+                area="Nursery",
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            restored_transport = RTL433Transport(
+                restored, command=["unused"]
+            )
+            restored_transport.seed()
+            device = restored.devices()[0]
+            self.assertEqual("local-aabbcc24", device["device_id"])
+            self.assertEqual("Waiting Sensor", device["name"])
+            self.assertEqual("Nursery", device["area"])
+            self.assertFalse(device["available"])
+            restored.close()
+
+    def test_registry_metadata_preserves_known_home_assistant_identity(self) -> None:
+        frame = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                )
+            )
+            registration = gateway.accept_endpoint(
+                endpoint="9ce58024",
+                name="Renamed Right Bed",
+                model="HCS026FRF",
+                area="Vegetable Garden",
+            )
+            self.assertEqual("soil-right-bed", registration["device_id"])
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                )
+            )
+            device = gateway.devices()[0]
+            self.assertEqual("soil-right-bed", device["device_id"])
+            self.assertEqual("Renamed Right Bed", device["name"])
+            self.assertEqual("Vegetable Garden", device["area"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            restored_device = restored.devices()[0]
+            self.assertEqual("soil-right-bed", restored_device["device_id"])
+            self.assertEqual("Renamed Right Bed", restored_device["name"])
+            self.assertEqual("Vegetable Garden", restored_device["area"])
+            restored.close()
 
     def test_device_catalog_normalizes_and_validates_endpoints(self) -> None:
         sensor = SensorDefinition("AABBCC24", "sensor-a", "A")

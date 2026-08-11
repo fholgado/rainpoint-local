@@ -62,8 +62,8 @@ class RTL433Transport:
         catalog: DeviceCatalog | None = None,
     ) -> None:
         self.gateway = gateway
-        self.catalog = catalog or gateway.catalog
-        self._ingestor = FrameIngestor(gateway, catalog=self.catalog)
+        self._catalog_override = catalog
+        self._ingestor = FrameIngestor(gateway, catalog=catalog)
         self.command = list(command or rtl_433_command(frequency, sample_rate))
         self._capture_command = (
             rtl_433_command(
@@ -84,6 +84,11 @@ class RTL433Transport:
         self._process: subprocess.Popen[str] | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
+
+    @property
+    def catalog(self) -> DeviceCatalog:
+        """Return the current registry-backed device catalog."""
+        return self._catalog_override or self.gateway.catalog
 
     def seed(self) -> None:
         """Register known sensors before their first periodic packet arrives."""

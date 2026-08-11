@@ -363,6 +363,26 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual([], restored.registry())
             restored.close()
 
+    def test_legacy_registry_id_migrates_to_existing_device_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway._store.accept_endpoint(
+                endpoint="9ce58024",
+                device_id="local-9ce58024",
+                name="Right Bed Override",
+                model="HCS026FRF",
+                area="Garden",
+                accepted_at="2026-08-11T12:00:00+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            registration = restored.registry()[0]
+            self.assertEqual("soil-right-bed", registration["device_id"])
+            self.assertEqual("Right Bed Override", registration["name"])
+            restored.close()
+
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
