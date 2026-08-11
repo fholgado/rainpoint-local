@@ -92,6 +92,10 @@ class SQLiteEventStore:
                 accepted_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS device_suppressions (
+                endpoint TEXT PRIMARY KEY,
+                suppressed_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS learning_session (
                 singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
                 session_id TEXT NOT NULL,
@@ -258,6 +262,9 @@ class SQLiteEventStore:
                 accepted_at,
             ),
         )
+        self._connection.execute(
+            "DELETE FROM device_suppressions WHERE endpoint = ?", (endpoint,)
+        )
         self._connection.commit()
         return self.registry_device(device_id)
 
@@ -311,14 +318,28 @@ class SQLiteEventStore:
         self._connection.commit()
         return self.registry_device(device_id)
 
-    def forget_registry_device(self, device_id: str) -> dict[str, Any]:
-        """Delete local metadata without sending an RF unpair command."""
+    def forget_registry_device(
+        self, device_id: str, *, suppressed_at: str
+    ) -> dict[str, Any]:
+        """Remove local metadata and suppress automatic RF rediscovery."""
         device = self.registry_device(device_id)
         self._connection.execute(
             "DELETE FROM device_registry WHERE device_id = ?", (device_id,)
         )
+        self._connection.execute(
+            "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
+            "VALUES (?, ?)",
+            (device["endpoint"], suppressed_at),
+        )
         self._connection.commit()
         return device
+
+    def suppressed_endpoints(self) -> frozenset[str]:
+        """Return endpoints explicitly removed from local device exposure."""
+        rows = self._connection.execute(
+            "SELECT endpoint FROM device_suppressions ORDER BY endpoint"
+        ).fetchall()
+        return frozenset(str(row["endpoint"]) for row in rows)
 
     def save_learning_session(self, session: dict[str, Any]) -> None:
         """Persist the current discovery window across gateway restarts."""

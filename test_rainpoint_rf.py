@@ -259,6 +259,59 @@ class RainPointRFTest(unittest.TestCase):
             self.assertEqual("Vegetable Garden", restored_device["area"])
             restored.close()
 
+    def test_forgotten_sensor_stays_hidden_until_explicitly_accepted(self) -> None:
+        frame = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        line = json.dumps(
+            {"rows": [{"len": len(frame) * 4, "data": frame}]}
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            transport.consume_line(line)
+            gateway.accept_endpoint(
+                endpoint="9ce58024",
+                name="Right Bed",
+                model="HCS026FRF",
+            )
+            gateway.forget_registry_device("soil-right-bed")
+            self.assertEqual([], gateway.devices())
+            self.assertTrue(gateway.endpoint_suppressed("9ce58024"))
+
+            transport.consume_line(line)
+            self.assertEqual([], gateway.devices())
+            self.assertEqual("rf_frame", gateway.events()[-1]["event_type"])
+            self.assertNotIn("device_id", gateway.events()[-1])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            restored_transport = RTL433Transport(
+                restored, command=["unused"]
+            )
+            restored_transport.seed()
+            restored_transport.consume_line(line)
+            self.assertNotIn(
+                "soil-right-bed",
+                {device["device_id"] for device in restored.devices()},
+            )
+
+            registration = restored.accept_endpoint(
+                endpoint="9ce58024",
+                name="Right Bed Again",
+                model="HCS026FRF",
+            )
+            self.assertEqual("soil-right-bed", registration["device_id"])
+            self.assertFalse(restored.endpoint_suppressed("9ce58024"))
+            restored_transport.consume_line(line)
+            device = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "soil-right-bed"
+            )
+            self.assertEqual("soil-right-bed", device["device_id"])
+            self.assertEqual("Right Bed Again", device["name"])
+            restored.close()
+
     def test_device_catalog_normalizes_and_validates_endpoints(self) -> None:
         sensor = SensorDefinition("AABBCC24", "sensor-a", "A")
         valve = ValveDefinition("1111111A", "2222222B", "valve-a", "A")

@@ -361,6 +361,7 @@ class GatewayTest(unittest.TestCase):
             forgotten = restored.forget_registry_device("local-aabbcc02")
             self.assertEqual("aabbcc02", forgotten["endpoint"])
             self.assertEqual([], restored.registry())
+            self.assertTrue(restored.endpoint_suppressed("aabbcc02"))
             restored.close()
 
     def test_legacy_registry_id_migrates_to_existing_device_identity(self) -> None:

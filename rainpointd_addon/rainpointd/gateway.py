@@ -51,6 +51,7 @@ class Gateway:
         self._base_catalog = catalog
         self.catalog = catalog
         self._registry_metadata: dict[str, dict[str, Any]] = {}
+        self._suppressed_endpoints: frozenset[str] = frozenset()
         self._devices: dict[str, dict[str, Any]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
@@ -176,6 +177,9 @@ class Gateway:
     ) -> None:
         """Register an unavailable device before its first observation."""
         with self._lock:
+            endpoint = str((state or {}).get("rf_endpoint", "")).lower()
+            if endpoint in self._suppressed_endpoints:
+                return
             registry_metadata = self._registry_metadata.get(device_id)
             if registry_metadata is not None:
                 name = str(registry_metadata["name"])
@@ -429,6 +433,10 @@ class Gateway:
         """Return accepted local metadata; this is not RF pairing state."""
         with self._lock:
             return self._store.registry() if self._store else []
+
+    def endpoint_suppressed(self, endpoint: str) -> bool:
+        """Return whether local policy hides an RF endpoint as a device."""
+        return endpoint.lower() in self._suppressed_endpoints
 
     def pairing(self, *, now: datetime | None = None) -> dict[str, Any]:
         """Return HCS026 enrollment progress and available radio nodes."""
@@ -774,7 +782,14 @@ class Gateway:
         with self._lock:
             if not self._store:
                 raise RuntimeError("persistent registry is unavailable")
-            forgotten = self._store.forget_registry_device(device_id)
+            existing = self._store.registry_device(device_id)
+            endpoint = str(existing["endpoint"])
+            sensor = self.catalog.sensor(endpoint)
+            resolved_device_id = sensor.device_id if sensor else device_id
+            forgotten = self._store.forget_registry_device(
+                device_id,
+                suppressed_at=datetime.now(timezone.utc).isoformat(),
+            )
             if (
                 self._pairing is not None
                 and forgotten.get("model") == "HCS026FRF"
@@ -782,11 +797,17 @@ class Gateway:
             ):
                 self._pairing.forget(str(forgotten["endpoint"]))
             self._refresh_registry_catalog()
+            self._devices.pop(resolved_device_id, None)
             return forgotten
 
     def _refresh_registry_catalog(self) -> None:
         """Layer persistent sensor identity metadata over compatibility data."""
         registrations = self._store.registry() if self._store else []
+        self._suppressed_endpoints = (
+            self._store.suppressed_endpoints()
+            if self._store
+            else frozenset()
+        )
         self.catalog = self._base_catalog.with_registry_sensors(registrations)
         metadata: dict[str, dict[str, Any]] = {}
         for registration in registrations:
@@ -955,10 +976,12 @@ class Gateway:
             return False
         if event.get("model") != "HCS026FRF":
             return True
+        endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
+        if endpoint in self._suppressed_endpoints:
+            return False
         device_id = str(event.get("device_id", ""))
         if not device_id.startswith("hcs026-"):
             return True
-        endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
         state = event.get("state", {})
         return (
             endpoint in self.catalog.sensor_endpoints

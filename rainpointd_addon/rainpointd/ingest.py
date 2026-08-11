@@ -213,6 +213,14 @@ class FrameIngestor:
             if "rssi" in event:
                 state["rf_rssi_db"] = event["rssi"]
             state.update(bridge_metadata)
+            if self.gateway.endpoint_suppressed(endpoint):
+                self.gateway.observe_rf_frame(
+                    frame=decoded["frame_hex"],
+                    state=state,
+                    observed_at=event.get("time"),
+                )
+                published += 1
+                continue
             model = sensor.model if sensor else "HCS026FRF"
             if frame_accepted:
                 self.gateway.observe_decoded(
