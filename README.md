@@ -9,12 +9,13 @@ limits. The target system has no internet-service or vendor-app dependency.
 
 ## Current status
 
-This project has a working receive-only SDR deployment. The RF frame format,
-soil moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
-duration, and last-session water usage are confirmed. The ESP32/CC1101
-firmware now includes an explicitly armed physical TX bench path for the exact
-captured Test Sensor B enrollment sequence. Hardware validation and valve
-transmission remain protocol work.
+This project has a working receive-only SDR deployment and a physically
+validated ESP32/CC1101 enrollment prototype. The RF frame format, soil
+moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
+duration, and last-session water usage are confirmed. Test Sensor B has been
+paired entirely through the local transmitter and subsequently reported an
+independently verified 11% moisture reading with the stock RainPoint gateway
+disconnected. Valve transmission remains protocol work.
 
 Working now:
 
@@ -25,6 +26,10 @@ Working now:
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
   transition inside an explicit receive-only learning window,
+- physically enrolling Test Sensor B through a single ESP32/CC1101 radio node
+  and requiring its terminal message `03` before declaring success,
+- receiving post-enrollment moisture telemetry from that locally paired sensor
+  without the stock RainPoint gateway or cloud service,
 - discovering an HCS026 factory identity and monitoring pairing progress
   through the integration's authenticated **Configure** flow,
 - decoding HTV145FRF valve command, state, duration, and usage fields,
@@ -37,9 +42,9 @@ Working now:
 - replaying captured observations through a local `rainpointd` API,
 - running live RTL-SDR or replay transport persistently as a protected Home
   Assistant app on `aarch64` or `amd64`,
-- building a single-CC1101 firmware prototype, with an
-  optional dual-radio diagnostic build, using the measured RainPoint radio
-  profiles, serial frame diagnostics, and a Sensor-B-specific pairing TX bench,
+- building a single-CC1101 firmware prototype, with an optional dual-radio
+  diagnostic build, using the measured RainPoint radio profiles, serial frame
+  diagnostics, and a validated Sensor-B-specific pairing TX path,
 - accepting those serial frames through a receive-only `rainpointd` transport,
 - simulating fail-closed startup, bounded runs, acknowledgement timeouts,
   client loss, watchdog expiry, close retries, and persistent fault retries
@@ -52,14 +57,17 @@ Still provisional or not working yet:
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
-- validating the pairing carrier, polarity, symbol timing, and complete
-  enrollment exchange on physical ESP32/CC1101 hardware,
+- integrating physical enrollment into the generalized authenticated Home
+  Assistant and Wi-Fi setup flow,
+- implementing and validating routine post-enrollment sensor acknowledgements,
+- avoiding interference from a still-powered stock RainPoint gateway during
+  migration enrollment,
 - locally opening or closing the physical valve.
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
-local. HCS026 pairing discovery is implemented, and the first fixed pairing
-transmitter is ready for bench validation. Valve control remains absent.
+local. HCS026 pairing discovery and the first fixed physical pairing exchange
+are validated. Generalized pairing UX and valve control remain absent.
 
 ## Architecture
 

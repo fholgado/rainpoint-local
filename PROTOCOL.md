@@ -232,6 +232,46 @@ smaller than one 50-microsecond symbol. Firmware 0.3.5 is therefore the first
 probe to match both the decoded waveform and the stock envelope closely enough
 for another controlled enrollment attempt.
 
+That controlled attempt first ran while the stock RainPoint gateway was still
+powered. The local node transmitted all three expected replies and the sensor
+reached its short message `02`, but it did not emit terminal message `03`.
+Independent SDR reception found an additional gateway frame immediately after
+the short `02`:
+
+```text
+79f4882f2895a980243984028082c28082800000000000000000000000000000000000002a72
+```
+
+Its carrier and occupied bandwidth matched the stock gateway rather than the
+ESP32/CC1101 node. The stock gateway can therefore interfere with a local
+migration enrollment even after the sensor has been deleted from the vendor
+app.
+
+Repeating the experiment with the stock gateway disconnected completed the
+entire local enrollment. Firmware 0.3.5 transmitted these three replies:
+
+```text
+79f4882f2895a98024398402808140880503827000d4830b0d01008000000000000000002baf
+79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc
+79f4882f2895a980243984028082418100010000000000000000000000000000000000003622
+```
+
+Sensor B changed from factory identity `15a98024` to paired identity
+`95a98024`, emitted the expected short message `02`, terminal message `03`, and
+then messages `04`, `05`, and `06`. After the LCD was changed to 11%, the
+locally paired sensor reported:
+
+```text
+79f4882f28b984028095a980240581820205c405800000000000000000000000000000006de1
+79f4882f28b984028095a980240601820205c405800000000000000000000000000000007869
+```
+
+Both frames are trailer-valid and encode 11% as `0x05 * 2 + 1`. This verifies
+physical local enrollment and subsequent local telemetry without the stock
+gateway or cloud service. The sensor continued reporting without an observed
+stock acknowledgement during the test, but its routine acknowledgement path
+and long-term behavior still require validation.
+
 The two first-enrollment sequences had the same cadence within measurement
 error:
 
@@ -301,8 +341,10 @@ fail the plan closed. Firmware 0.3.0 implements this exact profile as an
 explicitly armed physical bench path using ESP32 RMT timing and CC1101
 asynchronous serial TX. It starts disarmed, uses approximately 0 dBm output,
 accepts no network command, and contains no valve frame path. Physical SDR
-validation remains required before its timing or polarity is considered
-confirmed.
+validation and an isolated end-to-end Sensor B enrollment now confirm its
+timing, polarity, and three-reply sequence. The path remains a deliberately
+fixed research profile rather than a generalized user-facing pairing
+implementation.
 
 ## HCS026FRF soil-moisture reports
 
@@ -330,6 +372,7 @@ Confirmed examples:
 | `9ce58024` | `... 44 20 00 ...` | 64% |
 | `9bce0024` | `... c4 00 80 ...` | 1% |
 | `95a98024` | `... c4 05 00 ...` | 10% |
+| `95a98024` | `... c4 05 80 ...` | 11% |
 
 ### Confirmed paired-layout battery flag
 

@@ -80,6 +80,27 @@
     "notes": "Firmware 0.3.2 advanced the operator-supplied clock while armed. Reply 1 encoded 2026-08-11 15:55:02, exactly four minutes after the factory announcement. Sensor message 01 and data message 02 restored byte 20 to 0x80, matching stock; byte 19 was 0x00 while the LCD read 1%, supporting a sensor-data interpretation rather than an enrollment-status interpretation. The sensor gave a visibly longer blue flash but emitted no terminal message 03. A subsequent manual report after changing the LCD from 1% to 99% produced no frame under paired endpoint 95a98024 on either the RTL-SDR or ESP32 receiver. Enrollment therefore remained incomplete."
   },
   {
+    "name": "sensor_b_local_enrollment_isolated_success_20260811",
+    "factory_endpoint": "15a98024",
+    "paired_endpoint": "95a98024",
+    "reply_channel_hz": 433471500,
+    "initial_reply_channel_hz": 433471500,
+    "frequency_offset_hz": 45000,
+    "power_dbm": 10,
+    "reply_delay_ms": 60,
+    "firmware_version": "0.3.5",
+    "stock_gateway_isolated": true,
+    "frames": [
+      "79f4882f2895a98024398402808140880503827000d4830b0d01008000000000000000002baf",
+      "79f4882f2895a980243984028081c18200009f800000000000000000000000000000000077dc",
+      "79f4882f2895a980243984028082418100010000000000000000000000000000000000003622"
+    ],
+    "terminal_frame": "79f4882f28b984028095a9802403028102008000000000000000000000000000000000000f0f",
+    "first_telemetry_frame": "79f4882f28b984028095a980240581820205c405800000000000000000000000000000006de1",
+    "first_telemetry_moisture_percent": 11,
+    "notes": "First complete ESP32/CC1101 enrollment. With the stock RainPoint gateway disconnected, Sensor B changed to paired identity, emitted terminal message 03, continued through messages 04, 05, and 06, and independently reported the LCD's 11% moisture value. This verifies end-to-end local enrollment and telemetry; routine post-enrollment acknowledgements remain to be characterized."
+  },
+  {
       "name": "sensor_a_rejoin",
       "factory_endpoint": "1bce0024",
       "paired_endpoint": "9bce0024",

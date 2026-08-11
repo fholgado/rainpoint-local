@@ -53,6 +53,41 @@ class RainPointRFTest(unittest.TestCase):
                     )
                     self.assertEqual("39840280", decoded["endpoint_b"])
 
+    def test_successful_local_pairing_fixture_records_terminal_and_telemetry(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research/fixtures/hcs026_gateway_pairing_replies.json"
+            ).read_text()
+        )
+        sequence = next(
+            item
+            for item in fixture["sequences"]
+            if item["name"] == "sensor_b_local_enrollment_isolated_success_20260811"
+        )
+        terminal = normalize_row(
+            {
+                "len": len(sequence["terminal_frame"]) * 4,
+                "data": sequence["terminal_frame"],
+            }
+        )
+        telemetry = normalize_row(
+            {
+                "len": len(sequence["first_telemetry_frame"]) * 4,
+                "data": sequence["first_telemetry_frame"],
+            }
+        )
+        self.assertTrue(sequence["stock_gateway_isolated"])
+        self.assertTrue(terminal["trailer_valid"])
+        self.assertEqual("95a98024", terminal["endpoint_b"])
+        self.assertEqual(3, terminal["message_type"])
+        self.assertTrue(telemetry["trailer_valid"])
+        self.assertEqual("95a98024", telemetry["endpoint_b"])
+        self.assertEqual(5, telemetry["message_type"])
+        body = bytes.fromhex(telemetry["message_body"])
+        moisture = body[6] * 2 + bool(body[7] & 0x80)
+        self.assertEqual(sequence["first_telemetry_moisture_percent"], moisture)
+
     def test_demodulates_short_gateway_pairing_reply_offline(self) -> None:
         frame = bytes.fromhex(
             "79f4882f2895a98024398402808140880503847000f4730a0d008080000000000000000060a8"
