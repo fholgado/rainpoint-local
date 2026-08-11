@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -213,12 +214,14 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="pairing_timeout")
         errors: dict[str, str] = {}
         if user_input is not None:
+            name = str(user_input["name"])
+            area = str(user_input.get("area", "")).strip() or None
             try:
-                await self._client().complete_pairing(
+                result = await self._client().complete_pairing(
                     self._token,
                     endpoint=self._paired_endpoint,
-                    name=str(user_input["name"]),
-                    area=str(user_input.get("area", "")).strip() or None,
+                    name=name,
+                    area=area,
                 )
             except RainPointLocalUnauthorized:
                 errors["base"] = "invalid_auth"
@@ -232,6 +235,19 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 )
                 if coordinator is not None:
                     await coordinator.async_request_refresh()
+                device = result.get("device", {})
+                device_id = device.get("device_id")
+                if isinstance(device_id, str):
+                    device_registry = dr.async_get(self.hass)
+                    device_entry = device_registry.async_get_device(
+                        identifiers={(DOMAIN, device_id)}
+                    )
+                    if device_entry is not None:
+                        device_registry.async_update_device(
+                            device_entry.id,
+                            name=name,
+                            suggested_area=area,
+                        )
                 return self.async_create_entry(title="Sensor paired", data={})
 
         return self.async_show_form(
