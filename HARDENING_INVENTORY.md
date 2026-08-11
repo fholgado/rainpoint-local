@@ -6,13 +6,15 @@ This document inventories prototype, research, diagnostic, house-specific, and
 production-facing code after the first successful end-to-end local HCS026
 pairing through Home Assistant.
 
-Snapshot reviewed:
+Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.9.0
-- `rainpoint_local` integration 0.3.1
+- `rainpointd` add-on 0.10.0
+- `rainpoint_local` integration 0.3.2
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
+- persistent registry-backed HCS026 identity and removal policy
+- integration-owned entity disabling for gateway-removed devices
 
 The objective is not to discard the research record. Captures, recovered
 fixtures, and safety tests are evidence that should remain reproducible. The
