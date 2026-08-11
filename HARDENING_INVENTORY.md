@@ -8,12 +8,13 @@ pairing through Home Assistant.
 
 Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.10.0
+- `rainpointd` add-on 0.11.0
 - `rainpoint_local` integration 0.3.2
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
 - persistent registry-backed HCS026 identity and removal policy
+- SQLite-backed enrollment state with one-time legacy JSON migration
 - integration-owned entity disabling for gateway-removed devices
 
 The objective is not to discard the research record. Captures, recovered
