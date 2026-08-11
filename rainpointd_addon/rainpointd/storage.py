@@ -96,6 +96,12 @@ class SQLiteEventStore:
                 endpoint TEXT PRIMARY KEY,
                 suppressed_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS hcs026_enrollments (
+                factory_endpoint TEXT PRIMARY KEY,
+                paired_endpoint TEXT NOT NULL UNIQUE,
+                enrolled_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS learning_session (
                 singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
                 session_id TEXT NOT NULL,
@@ -319,7 +325,11 @@ class SQLiteEventStore:
         return self.registry_device(device_id)
 
     def forget_registry_device(
-        self, device_id: str, *, suppressed_at: str
+        self,
+        device_id: str,
+        *,
+        suppressed_at: str,
+        enrollment_factory_endpoint: str | None = None,
     ) -> dict[str, Any]:
         """Remove local metadata and suppress automatic RF rediscovery."""
         device = self.registry_device(device_id)
@@ -331,6 +341,11 @@ class SQLiteEventStore:
             "VALUES (?, ?)",
             (device["endpoint"], suppressed_at),
         )
+        if enrollment_factory_endpoint is not None:
+            self._connection.execute(
+                "DELETE FROM hcs026_enrollments WHERE factory_endpoint = ?",
+                (enrollment_factory_endpoint,),
+            )
         self._connection.commit()
         return device
 
@@ -340,6 +355,65 @@ class SQLiteEventStore:
             "SELECT endpoint FROM device_suppressions ORDER BY endpoint"
         ).fetchall()
         return frozenset(str(row["endpoint"]) for row in rows)
+
+    def enrollment_records(self) -> list[dict[str, Any]]:
+        """Return persisted HCS026 physical enrollment mappings."""
+        rows = self._connection.execute(
+            "SELECT * FROM hcs026_enrollments ORDER BY factory_endpoint"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_enrollment_record(self, record: dict[str, Any]) -> None:
+        """Persist one enrollment observation."""
+        self._connection.execute(
+            """
+            INSERT INTO hcs026_enrollments(
+                factory_endpoint, paired_endpoint, enrolled_at, last_seen_at
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(factory_endpoint) DO UPDATE SET
+                paired_endpoint=excluded.paired_endpoint,
+                enrolled_at=excluded.enrolled_at,
+                last_seen_at=excluded.last_seen_at
+            """,
+            (
+                record["factory_endpoint"],
+                record["paired_endpoint"],
+                record["enrolled_at"],
+                record["last_seen_at"],
+            ),
+        )
+        self._connection.commit()
+
+    def delete_enrollment_record(self, factory_endpoint: str) -> bool:
+        """Delete one physical enrollment mapping."""
+        cursor = self._connection.execute(
+            "DELETE FROM hcs026_enrollments WHERE factory_endpoint = ?",
+            (factory_endpoint,),
+        )
+        self._connection.commit()
+        return bool(cursor.rowcount)
+
+    def import_enrollment_records(
+        self, records: list[dict[str, Any]]
+    ) -> None:
+        """Import validated legacy mappings in one transaction."""
+        with self._connection:
+            self._connection.executemany(
+                """
+                INSERT INTO hcs026_enrollments(
+                    factory_endpoint, paired_endpoint, enrolled_at, last_seen_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (
+                        record["factory_endpoint"],
+                        record["paired_endpoint"],
+                        record["enrolled_at"],
+                        record["last_seen_at"],
+                    )
+                    for record in records
+                ],
+            )
 
     def save_learning_session(self, session: dict[str, Any]) -> None:
         """Persist the current discovery window across gateway restarts."""

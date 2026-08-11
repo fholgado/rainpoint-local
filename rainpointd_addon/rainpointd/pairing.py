@@ -11,7 +11,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 
 STATE_VERSION = 1
@@ -68,11 +68,37 @@ class EnrollmentRecord:
     last_seen_at: str
 
 
+class EnrollmentRepository(Protocol):
+    """Persistence operations required by the enrollment state machine."""
+
+    def enrollment_records(self) -> list[dict[str, Any]]: ...
+
+    def upsert_enrollment_record(self, record: dict[str, Any]) -> None: ...
+
+    def delete_enrollment_record(self, factory_endpoint: str) -> bool: ...
+
+    def import_enrollment_records(
+        self, records: list[dict[str, Any]]
+    ) -> None: ...
+
+
 class HCS026EnrollmentManager:
     """Track explicit receive-only enrollment windows and persistent mappings."""
 
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        *,
+        repository: EnrollmentRepository | None = None,
+        legacy_path: str | Path | None = None,
+    ) -> None:
+        if path is None and repository is None:
+            raise ValueError("enrollment persistence is required")
+        if path is not None and repository is not None:
+            raise ValueError("select file or repository persistence, not both")
+        self.path = Path(path) if path is not None else None
+        self.repository = repository
+        self.legacy_path = Path(legacy_path) if legacy_path is not None else None
         self._records: dict[str, EnrollmentRecord] = {}
         self._candidates: dict[str, str] = {}
         self._session_enrolled: list[str] = []
@@ -177,17 +203,20 @@ class HCS026EnrollmentManager:
         self._records[factory] = record
         self._session_enrolled.append(factory)
         self._candidates.pop(factory, None)
-        self._save()
+        self._persist_record(record)
         return {"action": "enrolled", "record": asdict(record)}
 
-    def forget(self, endpoint: str) -> bool:
+    def forget(self, endpoint: str, *, persist: bool = True) -> bool:
         """Forget local association state without transmitting an RF reset."""
         value = _validate_endpoint(endpoint)
         factory = factory_endpoint(endpoint) if value[0] & 0x80 else endpoint
         removed = self._records.pop(factory, None) is not None
         self._candidates.pop(factory, None)
-        if removed:
-            self._save()
+        if removed and persist:
+            if self.repository is not None:
+                self.repository.delete_enrollment_record(factory)
+            else:
+                self._save_file()
         return removed
 
     def records(self) -> list[EnrollmentRecord]:
@@ -206,21 +235,57 @@ class HCS026EnrollmentManager:
             enrolled_at=record.enrolled_at,
             last_seen_at=_timestamp(now),
         )
-        self._save()
+        self._persist_record(self._records[factory])
 
     def _load(self) -> None:
-        if not self.path.exists():
+        if self.repository is not None:
+            records = self.repository.enrollment_records()
+            if self.legacy_path is not None and self.legacy_path.exists():
+                legacy_records = self._read_file(self.legacy_path)
+                if records and records != [asdict(item) for item in legacy_records]:
+                    raise ValueError("legacy and SQLite enrollment state conflict")
+                if not records:
+                    records = [asdict(item) for item in legacy_records]
+                    self.repository.import_enrollment_records(records)
+                migrated = self.legacy_path.with_suffix(
+                    self.legacy_path.suffix + ".migrated"
+                )
+                self.legacy_path.replace(migrated)
+            self._load_records(records)
             return
-        payload = json.loads(self.path.read_text())
+        if self.path is None or not self.path.exists():
+            return
+        self._load_records([asdict(item) for item in self._read_file(self.path)])
+
+    @staticmethod
+    def _read_file(path: Path) -> list[EnrollmentRecord]:
+        payload = json.loads(path.read_text())
         if payload.get("version") != STATE_VERSION:
             raise ValueError("unsupported HCS026 enrollment state version")
+        records = []
         for item in payload.get("records", []):
+            record = EnrollmentRecord(**item)
+            if paired_endpoint(record.factory_endpoint) != record.paired_endpoint:
+                raise ValueError("stored HCS026 identity mapping is invalid")
+            records.append(record)
+        return records
+
+    def _load_records(self, records: list[dict[str, Any]]) -> None:
+        for item in records:
             record = EnrollmentRecord(**item)
             if paired_endpoint(record.factory_endpoint) != record.paired_endpoint:
                 raise ValueError("stored HCS026 identity mapping is invalid")
             self._records[record.factory_endpoint] = record
 
-    def _save(self) -> None:
+    def _persist_record(self, record: EnrollmentRecord) -> None:
+        if self.repository is not None:
+            self.repository.upsert_enrollment_record(asdict(record))
+        else:
+            self._save_file()
+
+    def _save_file(self) -> None:
+        if self.path is None:
+            raise RuntimeError("file enrollment persistence is unavailable")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(

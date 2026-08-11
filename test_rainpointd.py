@@ -7,7 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -17,10 +17,54 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
+from rainpointd.pairing import HCS026EnrollmentManager
 from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_legacy_pairing_json_migrates_once_into_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            legacy = storage.with_suffix(".hcs026-pairing.json")
+            now = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
+            manager = HCS026EnrollmentManager(legacy)
+            manager.start(now=now)
+            manager.observe(
+                {
+                    "hcs026_pairing_state": "factory",
+                    "hcs026_factory_endpoint": "15a98024",
+                    "message_type": 1,
+                },
+                now=now,
+            )
+            manager.observe(
+                {
+                    "hcs026_pairing_state": "paired",
+                    "hcs026_factory_endpoint": "15a98024",
+                    "hcs026_paired_endpoint": "95a98024",
+                    "message_type": 3,
+                },
+                now=now + timedelta(seconds=3),
+            )
+            self.assertTrue(legacy.exists())
+
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            records = gateway.pairing(now=now)["records"]
+            self.assertEqual("95a98024", records[0]["paired_endpoint"])
+            self.assertEqual(1, len(gateway._store.enrollment_records()))
+            self.assertFalse(legacy.exists())
+            self.assertTrue(
+                legacy.with_suffix(legacy.suffix + ".migrated").exists()
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            self.assertEqual(
+                "95a98024",
+                restored.pairing(now=now)["records"][0]["paired_endpoint"],
+            )
+            restored.close()
+
     def test_replay_seeds_five_devices(self) -> None:
         gateway = Gateway()
         ReplayTransport(gateway, fixtures=load_fixtures()).seed()
@@ -603,6 +647,8 @@ class RegistryHTTPAPITest(unittest.TestCase):
             "/api/v1/registry/hcs026-95a98024/forget", {}
         )
         self.assertFalse(forgotten["rf_unpaired"])
+        self.assertEqual([], gateway._store.enrollment_records())
+        self.assertTrue(gateway.endpoint_suppressed("95a98024"))
         with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
             reset_progress = json.load(response)
         self.assertEqual([], reset_progress["records"])

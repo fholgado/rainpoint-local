@@ -15,7 +15,7 @@ from typing import Any, Callable
 from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
-from .pairing import HCS026EnrollmentManager
+from .pairing import HCS026EnrollmentManager, factory_endpoint
 from .pairing_protocol import pairing_profile
 from .storage import SQLiteEventStore, frame_accepted
 
@@ -60,7 +60,10 @@ class Gateway:
         self._store = SQLiteEventStore(storage_path) if storage_path else None
         self._pairing = (
             HCS026EnrollmentManager(
-                Path(storage_path).with_suffix(".hcs026-pairing.json")
+                repository=self._store,
+                legacy_path=Path(storage_path).with_suffix(
+                    ".hcs026-pairing.json"
+                ),
             )
             if storage_path
             else None
@@ -786,16 +789,25 @@ class Gateway:
             endpoint = str(existing["endpoint"])
             sensor = self.catalog.sensor(endpoint)
             resolved_device_id = sensor.device_id if sensor else device_id
+            enrollment_factory = None
+            if existing.get("model") == "HCS026FRF" and endpoint.endswith("24"):
+                try:
+                    enrollment_factory = factory_endpoint(endpoint)
+                except ValueError:
+                    enrollment_factory = endpoint
             forgotten = self._store.forget_registry_device(
                 device_id,
                 suppressed_at=datetime.now(timezone.utc).isoformat(),
+                enrollment_factory_endpoint=enrollment_factory,
             )
             if (
                 self._pairing is not None
                 and forgotten.get("model") == "HCS026FRF"
                 and str(forgotten.get("endpoint", "")).endswith("24")
             ):
-                self._pairing.forget(str(forgotten["endpoint"]))
+                self._pairing.forget(
+                    str(forgotten["endpoint"]), persist=False
+                )
             self._refresh_registry_catalog()
             self._devices.pop(resolved_device_id, None)
             return forgotten
