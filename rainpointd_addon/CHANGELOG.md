@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+- Store HCS026 physical enrollment mappings in the gateway SQLite database.
+- Migrate the legacy pairing JSON once, reject conflicting state, and archive
+  the imported file with a `.migrated` suffix.
+- Make registry forget remove the enrollment mapping and add persistent
+  rediscovery suppression in the same SQLite transaction.
+
 ## 0.10.0
 
 - Separate installation identities and transport-neutral RF ingestion from the

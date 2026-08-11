@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.10.0 supports authenticated network radio nodes, captured replay,
+Version 0.11.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -16,6 +16,9 @@ Accepted HCS026 endpoints now provide the live decoder identity, friendly name,
 and area. Known endpoints retain their established Home Assistant device IDs
 during migration. Forgetting a registered sensor persistently suppresses its
 automatic rediscovery; accepting or pairing that endpoint again restores it.
+Physical HCS026 enrollment mappings are stored in the same SQLite database as
+the registry and removal policy. Existing pairing JSON is validated, imported
+once, and retained with a `.migrated` suffix for rollback inspection.
 
 Installing this app does not make the physical irrigation system work offline.
 Replay remains the default after upgrade. Select `rtl433` only after attaching
