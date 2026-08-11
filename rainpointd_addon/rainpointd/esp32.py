@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from .gateway import Gateway
 from .rf import FRAME_BYTES, SYNC
-from .rtl433 import RTL433Transport
+from .ingest import FrameIngestor
 
 
 class ESP32SerialTransport:
@@ -26,9 +26,7 @@ class ESP32SerialTransport:
         self.device = device
         self.baud = baud
         self.serial_factory = serial_factory
-        # Reuse the established decoded-event publisher so RTL-SDR and ESP32
-        # input produce identical device state and endpoint inventory.
-        self._publisher = RTL433Transport(gateway, command=["unused"])
+        self._publisher = FrameIngestor(gateway)
         self._serial: Any | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -163,7 +161,7 @@ class ESP32SerialTransport:
         rssi = message.get("rssi_dbm")
         if isinstance(rssi, (int, float)) and not isinstance(rssi, bool):
             event["rssi"] = rssi
-        return self._publisher.consume_line(json.dumps(event))
+        return self._publisher.consume_event(event)
 
     def _run(self) -> None:
         try:
