@@ -244,8 +244,8 @@ Prepare or run a bounded receive-only RF capture:
 ./tools/capture_rainpoint_rf.sh --duration 15m
 ```
 
-See [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md) for the receive and validation
-procedure.
+See [research/RF_CAPTURE_PLAN.md](research/RF_CAPTURE_PLAN.md) for the receive
+and validation procedure.
 
 ## Project documents
 
@@ -253,7 +253,8 @@ procedure.
 - [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md): direct local bridge
   and safety architecture
 - [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md): replay gateway and HA setup
-- [RF_CAPTURE_PLAN.md](RF_CAPTURE_PLAN.md): RF capture and validation procedure
+- [research/RF_CAPTURE_PLAN.md](research/RF_CAPTURE_PLAN.md): RF capture and
+  validation procedure
 - [research/RF_CAPTURE_NOTES.md](research/RF_CAPTURE_NOTES.md): concise dated
   evidence behind the protocol conclusions
 - [research/cloud/README.md](research/cloud/README.md): archived cloud-side

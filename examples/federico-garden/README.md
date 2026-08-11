@@ -1,4 +1,7 @@
-# Home Assistant dashboards
+# Federico garden Home Assistant example
+
+This directory is an installation-specific example, not a default dashboard
+or a source of canonical device identities.
 
 `garden-local-dashboard.yaml` is a read-only reliability dashboard for the
 `rainpoint_local` integration. It mirrors the production Garden dashboard but

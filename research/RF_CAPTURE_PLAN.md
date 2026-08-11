@@ -1,4 +1,4 @@
-# RainPoint RF capture and validation guide
+# RainPoint RF research capture and validation guide
 
 ## Minimum hardware
 

@@ -14,6 +14,11 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
+from rainpointd.device_catalog import (  # noqa: E402
+    DeviceCatalog,
+    SensorDefinition,
+    ValveDefinition,
+)
 from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
@@ -36,6 +41,129 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    def test_transport_identity_is_supplied_by_device_catalog(self) -> None:
+        catalog = DeviceCatalog(
+            sensors=(
+                SensorDefinition(
+                    "9ce58024", "sensor-custom", "Custom Sensor"
+                ),
+            ),
+            valves=(
+                ValveDefinition(
+                    "b42d008f",
+                    "b9840280",
+                    "valve-custom",
+                    "Custom Valve",
+                ),
+            ),
+            hcs026_pairing_peers=frozenset(("B9840280",)),
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+
+        self.assertEqual(
+            {"sensor-custom", "valve-custom"},
+            {device["device_id"] for device in gateway.devices()},
+        )
+        frame = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        self.assertEqual(
+            1,
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(frame) * 4, "data": frame}]}
+                )
+            ),
+        )
+        sensor = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "sensor-custom"
+        )
+        self.assertEqual("Custom Sensor", sensor["name"])
+        self.assertEqual(54, sensor["state"]["soil_moisture_percent"])
+
+    def test_device_catalog_rejects_duplicate_rf_identities(self) -> None:
+        with self.assertRaisesRegex(ValueError, "sensor endpoints"):
+            DeviceCatalog(
+                sensors=(
+                    SensorDefinition("aabbcc24", "sensor-a", "A"),
+                    SensorDefinition("AABBCC24", "sensor-b", "B"),
+                )
+            )
+
+    def test_catalogued_valves_keep_independent_receive_state(self) -> None:
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "b42d008f", "b9840280", "valve-a", "Valve A"
+                ),
+                ValveDefinition(
+                    "11223344", "55667788", "valve-b", "Valve B"
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        valve_b_open = bytearray.fromhex(
+            "79f4882f28b42d008fb98402808110828081009e0000"
+            "000000000000000000000000000000003824"
+        )
+        valve_b_open[5:9] = bytes.fromhex("11223344")
+        valve_b_open[9:13] = bytes.fromhex("55667788")
+        self.assertEqual(
+            1,
+            transport.consume_line(
+                json.dumps(
+                    {
+                        "rows": [
+                            {
+                                "len": len(valve_b_open) * 8,
+                                "data": valve_b_open.hex(),
+                            }
+                        ]
+                    }
+                )
+            ),
+        )
+
+        devices = {device["device_id"]: device for device in gateway.devices()}
+        self.assertFalse(devices["valve-a"]["available"])
+        self.assertIsNone(devices["valve-a"]["state"]["is_watering"])
+        self.assertTrue(devices["valve-b"]["state"]["is_watering"])
+        self.assertEqual(60, devices["valve-b"]["state"]["duration_seconds"])
+
+    def test_device_catalog_normalizes_and_validates_endpoints(self) -> None:
+        sensor = SensorDefinition("AABBCC24", "sensor-a", "A")
+        valve = ValveDefinition("1111111A", "2222222B", "valve-a", "A")
+        self.assertEqual("aabbcc24", sensor.endpoint)
+        self.assertEqual("1111111a", valve.controller_endpoint)
+        catalog = DeviceCatalog(
+            hcs026_pairing_peers=frozenset(("AABBCCDD",))
+        )
+        self.assertEqual(
+            frozenset(("aabbccdd",)), catalog.hcs026_pairing_peers
+        )
+        with self.assertRaisesRegex(ValueError, "four bytes"):
+            SensorDefinition("abcd", "sensor-b", "B")
+        with self.assertRaisesRegex(ValueError, "hexadecimal"):
+            SensorDefinition("not-hex!", "sensor-b", "B")
+        with self.assertRaisesRegex(ValueError, "device IDs"):
+            DeviceCatalog(
+                sensors=(SensorDefinition("aabbcc24", "same", "A"),),
+                valves=(
+                    ValveDefinition("11111111", "22222222", "same", "B"),
+                ),
+            )
+        with self.assertRaisesRegex(ValueError, "valve endpoint links"):
+            DeviceCatalog(
+                valves=(
+                    ValveDefinition("11111111", "22222222", "a", "A"),
+                    ValveDefinition("22222222", "11111111", "b", "B"),
+                )
+            )
+
     def test_gateway_pairing_reply_fixture_has_valid_trailers(self) -> None:
         fixture = json.loads(
             (

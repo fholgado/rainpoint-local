@@ -65,8 +65,8 @@ manual credential copying outside Supervisor installations.
 
 | Priority | Finding | Current impact | Required direction |
 | --- | --- | --- | --- |
-| P0 | Pairing UI is generic but TX supports only factory `15a98024` and paired identity `95a98024` | Other HCS026 sensors can enter a flow that cannot pair them | Advertise a precise Sensor-B experimental capability until a parameterized profile is validated; then move profiles into a model/profile registry |
-| P0 | Live receive code contains this house's sensor, hub, valve, names, and singleton IDs | Other installations inherit incorrect names and cannot represent multiple valves correctly | Derive stable IDs from RF identities, store friendly names only in the registry, and key valve state by endpoint relationship rather than `valve-1` |
+| In progress | TX supports only factory `15a98024` and paired identity `95a98024` | The UI now describes this as a validated HCS026 test-sensor profile rather than generic pairing, but broader sensors remain unsupported | Move profiles into a model/profile registry after a second identity is physically validated |
+| In progress | Live receive code previously owned this house's sensor names and singleton valve state | A device-catalog boundary now separates RF decoding from installation identity and supports independent per-valve state while preserving legacy HA IDs | Replace the explicit legacy compatibility catalog with persistent user-managed identities before publication |
 | P1 | Development replay and raw capture controls still ship in the add-on, although new installs now default to empty `network` mode | The normal image remains broader than a published production package needs | Create explicit development and production profiles/images; keep replay and broad capture out of the published image |
 | P0 | Supervisor discovery now provisions the gateway bearer credential automatically, but standalone setup is manual and HTTP remains plaintext | Add-on UX is fixed; standalone onboarding, rotation, scoped access, and transport confidentiality remain incomplete | Add one-time standalone claim, credential rotation, scoped operations, and a reviewed encrypted transport or HA-local authenticated channel |
 | P0 | Node protocol authenticates the connection but subsequent TCP messages are neither encrypted nor individually authenticated | Appropriate only for the current trusted-LAN prototype | Define a production session transport with confidentiality, integrity, replay handling, and key rotation before valve control |
@@ -81,7 +81,7 @@ manual credential copying outside Supervisor installations.
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
 | `rainpointd_addon/rainpoint_protocol.py` | Production candidate | Core decoder is stored at the add-on root and imported through container path layout | Move to an installable, transport-neutral `rainpoint_protocol` package with typed decoded models and explicit compatibility tests |
-| `rainpointd_addon/rainpointd/rf.py` | Mixed | Contains confirmed normalization plus `HUB_ENDPOINT`, `VALVE_ENDPOINT`, four known house sensors, provisional fields, and capture commentary | Split generic frame normalization from installation identity; move provisional decoders behind evidence/status metadata rather than global constants |
+| `rainpointd_addon/rainpointd/rf.py` | Mixed | Confirmed normalization now receives a device catalog instead of owning house endpoint constants; provisional fields and evidence commentary remain | Move provisional decoders behind evidence/status metadata and continue extracting typed protocol observations |
 | `rainpointd_addon/rainpointd/valve_protocol.py` | Experimental runtime | Offline builders use this house's hub and valve endpoints | Parameterize endpoint identities and move builders into an explicitly experimental control package until physical TX is validated |
 | `rainpointd_addon/rainpointd/pairing_protocol.py` | Experimental runtime/evidence | Embeds Sensor B's exact identities and three recovered reply frames | Preserve captured frames as fixtures; make runtime pairing profiles data-driven and capability-labelled, with no generic HCS026 claim yet |
 | `research/fixtures/*.json` | Research evidence | Captures are used by regression tests and prove recovered behavior | Keep tracked, immutable, documented, and separated from mutable runtime state |
@@ -91,7 +91,7 @@ manual credential copying outside Supervisor installations.
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
 | `rainpointd_addon/rainpointd/gateway.py` | Production candidate with prototype coupling | A roughly 900-line object owns devices, events, registry, pairing, nodes, learning, health, and command dispatch; it hard-codes the Sensor B profile and RF calibration | Split into protocol ingestion, device registry, association service, node manager, and capability/command service with explicit interfaces |
-| `rainpointd_addon/rainpointd/rtl433.py` | Mixed | `KNOWN_HCS026` assigns this house's IDs/names; all valve state is merged into one `valve-1`; `seed()` creates local devices before RF is heard | Remove seeding from live production mode, derive generic IDs, and maintain per-valve state keyed by endpoint pair |
+| `rainpointd_addon/rainpointd/rtl433.py` | Mixed | Uses an injected device catalog and maintains per-valve state, but the default compatibility catalog and `seed()` still create this installation's devices before RF is heard | Load identities from the persistent registry and remove compatibility seeding from publishable production mode |
 | `rainpointd_addon/rainpointd/replay.py` | Development | Maps fixtures to this house's device IDs and names | Retain for tests/development, but exclude from a normal production process and add-on default |
 | `rainpointd_addon/rainpointd/esp32.py` | Production candidate with adapter debt | Network telemetry reuses a class named `ESP32SerialTransport`, which in turn reuses `RTL433Transport` as a publisher | Introduce a transport-neutral `FramePublisher`/ingestion interface; keep serial, network, and RTL-SDR adapters thin |
 | `rainpointd_addon/rainpointd/esp32_network.py` | Prototype production candidate | Mutual HMAC handshake and bounded commands are strong prototype boundaries; protocol v1 and bench capability vocabulary remain accepted; socket/thread code has only coarse message validation | Retire protocol v1 on a schedule, define typed message schemas, bound connection/thread resources, and replace trusted-LAN TCP before control |
@@ -110,7 +110,7 @@ manual credential copying outside Supervisor installations.
 
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
-| `rainpointd_addon/config.yaml` | Mixed | Defaults to replay, exposes research capture, accepts node credentials as a JSON string, always requests USB and `/share:rw`, and exposes both ports on the host | Separate production and developer options, narrow permissions, provide structured node onboarding, and avoid host port exposure where HA-local ingress works |
+| `rainpointd_addon/config.yaml` | Mixed | New installs default to empty network mode, but the package still exposes replay/research capture, accepts node credentials as a JSON string, always requests USB and `/share:rw`, and exposes both ports on the host | Separate production and developer options, narrow permissions, provide structured node onboarding, and avoid host port exposure where HA-local ingress works |
 | `rainpointd_addon/run.sh` | Mixed | Production startup branches directly into replay, broad capture, RTL-SDR, or serial research modes | Move development branches to an explicit dev entry point/profile and validate incompatible options before launch |
 | `rainpointd_addon/Dockerfile` | Prototype packaging | Uses `base:latest` and unpinned Alpine packages; always copies replay fixtures | Pin/reproduce build inputs, add image validation/SBOM policy, and omit fixtures from the production image |
 | `rainpointd_addon/DOCS.md` | Documentation | Version text is already stale and mixes end-user setup with research controls | Generate/review release docs with each version; split operator docs from developer/research docs |
@@ -144,9 +144,9 @@ manual credential copying outside Supervisor installations.
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
 | `tools/` | Research tooling | Useful IQ and event analysis, but several tools contain this house's endpoint/name maps and HA assumptions | Move under `research/tools` or a separate developer package; accept endpoints/config as arguments; add fixture-based smoke tests |
-| `RF_CAPTURE_PLAN.md` | Research procedure | Operational capture instructions are useful but not end-user docs | Move under `research/` and retain safety warnings |
+| `research/RF_CAPTURE_PLAN.md` | Research procedure | Operational capture instructions are isolated from end-user docs and retain safety warnings | Keep under `research/` |
 | `research/PAIRING_BENCH_TEST.md` | Research procedure | Describes explicit bench-only serial probe/TX controls and requires the original RainPoint gateway off during enrollment | Keep linked to the bench firmware target and update only from controlled evidence |
-| `dashboards/garden-local-dashboard.yaml` | House-specific example | Contains this home's beds, schedules, valves, and entity IDs | Move to `examples/federico-garden/` or keep outside the publishable package; provide a minimal generic example separately |
+| `examples/federico-garden/garden-local-dashboard.yaml` | House-specific example | This home's beds, schedules, valves, and entity IDs are now explicitly isolated as an example | Add a minimal generic dashboard only when the public entity model stabilizes |
 | `PROTOCOL.md` | Protocol evidence | Valuable, but mixes stable protocol claims, unresolved candidates, dated experiments, and exact house identities | Split a normative supported-protocol document from an evidence notebook; retain confidence/evidence labels |
 | `FULL_STACK_ARCHITECTURE.md` | Architecture | Useful target design, but some phase/status language predates the completed pairing prototype | Reconcile with the product brief and this inventory, then make it the technical architecture source of truth |
 | `INTEGRATION_EVOLUTION_BACKLOG.md` | Stale planning | Says not to build pairing/registry UI even though that work is now complete | Rewrite around the verified milestone and current valve-control gate |
@@ -240,12 +240,13 @@ Hardening gaps:
 The safest first implementation pass is intentionally nonfunctional:
 
 1. Tag the current working prototype.
-2. Move house dashboard and capture/bench documents into `examples/` and
-   `research/`.
+2. ~~Move house dashboard and capture/bench documents into `examples/` and
+   `research/`.~~ Completed.
 3. Add explicit module-level stability labels (`production`, `experimental`,
    `research`) and remove stale planning statements.
-4. Introduce configuration-driven device identity and friendly-name mapping,
-   while preserving current defaults for this installation during migration.
+4. ~~Introduce a device identity/friendly-name boundary while preserving
+   current defaults for this installation during migration.~~ Completed with
+   an injected catalog; persistent registry-backed configuration remains.
 5. Split the HA gateway-authentication step from sensor pairing so stored
    credentials disappear from the pairing UI.
 6. Add HA config-flow and entity lifecycle tests before deeper refactors.

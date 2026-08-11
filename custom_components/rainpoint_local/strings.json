@@ -32,7 +32,7 @@
       "init": {
         "title": "Manage RainPoint Local",
         "menu_options": {
-          "pair_sensor": "Pair a sensor locally",
+          "pair_sensor": "Pair a validated HCS026 test sensor",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
       },
@@ -44,8 +44,8 @@
         }
       },
       "pair_sensor": {
-        "title": "Pair a sensor locally",
-        "description": "Temporarily unplug the original RainPoint gateway before continuing. Select the custom local radio node nearest the sensor; it will perform the validated local RF enrollment exchange.",
+        "title": "Pair a validated HCS026 test sensor",
+        "description": "This prototype currently supports only the evidence-backed HCS026 test-sensor profile. Temporarily unplug the original RainPoint gateway, then select the custom local radio node nearest the sensor.",
         "data": {
           "node_id": "Local radio node",
           "duration_seconds": "Pairing window (seconds)"

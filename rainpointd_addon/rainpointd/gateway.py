@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from rainpoint_protocol import decode
 
-from .rf import HCS026_ENDPOINTS
+from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .pairing import HCS026EnrollmentManager
 from .pairing_protocol import pairing_profile
 from .storage import SQLiteEventStore, frame_accepted
@@ -42,11 +42,13 @@ class Gateway:
         event_limit: int = 1_000,
         storage_path: str | None = None,
         registry_token: str | None = None,
+        catalog: DeviceCatalog = LEGACY_HOME_CATALOG,
     ) -> None:
         self.gateway_id = gateway_id
         self.transport = transport
         self.read_only = read_only
         self._registry_token = registry_token or None
+        self.catalog = catalog
         self._devices: dict[str, dict[str, Any]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
@@ -866,8 +868,7 @@ class Gateway:
         device["reporting_timeout_seconds"] = threshold
         device["reporting"] = age is not None and age <= threshold
 
-    @staticmethod
-    def _is_restorable_device(event: dict[str, Any]) -> bool:
+    def _is_restorable_device(self, event: dict[str, Any]) -> bool:
         """Reject obsolete auto-discoveries that predate endpoint validation."""
         if frame_accepted(event) is False:
             return False
@@ -879,7 +880,7 @@ class Gateway:
         endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
         state = event.get("state", {})
         return (
-            endpoint in HCS026_ENDPOINTS
+            endpoint in self.catalog.sensor_endpoints
             or state.get("rf_pairing_state") == "paired"
         )
 

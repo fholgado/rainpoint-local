@@ -5,19 +5,12 @@ from __future__ import annotations
 import binascii
 from typing import Any
 
+from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .valve_protocol import decode_duration
 
 
 SYNC = bytes.fromhex("79f4882f28")
 FRAME_BYTES = 38
-HUB_ENDPOINT = "b42d008f"
-VALVE_ENDPOINT = "b9840280"
-HCS026_ENDPOINTS = {
-    "9ce58024",
-    "c4e50024",
-    "ce628024",
-    "d1e28024",
-}
 # HCS026 extended reports replace the normal 0x24 family suffix with the
 # catalog product code 0x48. Canonicalize only identities already established
 # by ordinary telemetry so a marker-like payload cannot create a new device.
@@ -43,15 +36,21 @@ def _row_bits(row: dict[str, Any]) -> str:
     return bits[:bit_count]
 
 
-def _canonical_hcs026_endpoint(endpoint: bytes) -> str | None:
+def _canonical_hcs026_endpoint(
+    endpoint: bytes, catalog: DeviceCatalog
+) -> str | None:
     """Return the established endpoint for normal or product-code reports."""
     endpoint_hex = endpoint.hex()
-    if endpoint_hex in HCS026_ENDPOINTS:
+    if endpoint_hex in catalog.sensor_endpoints:
         return endpoint_hex
     if endpoint[-1] != HCS026_PRODUCT_CODE:
         return None
     ordinary_endpoint = (endpoint[:-1] + bytes([HCS026_PRODUCT_CODE >> 1])).hex()
-    return ordinary_endpoint if ordinary_endpoint in HCS026_ENDPOINTS else None
+    return (
+        ordinary_endpoint
+        if ordinary_endpoint in catalog.sensor_endpoints
+        else None
+    )
 
 
 def _compact_status_fields(frame: bytes) -> dict[str, Any]:
@@ -95,7 +94,9 @@ def _trailer_fields(frame: bytes) -> dict[str, Any]:
     }
 
 
-def _hcs026_battery_candidate(frame: bytes) -> dict[str, Any]:
+def _hcs026_battery_candidate(
+    frame: bytes, catalog: DeviceCatalog
+) -> dict[str, Any]:
     """Retain the provisional HCS026 heartbeat battery field.
 
     All 358 companion heartbeats in the retained capture used status 1 while
@@ -106,7 +107,7 @@ def _hcs026_battery_candidate(frame: bytes) -> dict[str, Any]:
     if len(frame) != FRAME_BYTES:
         return {}
     endpoint = frame[5:9].hex()
-    if endpoint not in HCS026_ENDPOINTS:
+    if endpoint not in catalog.sensor_endpoints:
         return {}
     if frame[9:13].hex() != HCS026_COMPANION_ENDPOINT:
         return {}
@@ -127,7 +128,9 @@ def _hcs026_battery_candidate(frame: bytes) -> dict[str, Any]:
     }
 
 
-def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
+def _hcs026_pairing_fields(
+    frame: bytes, catalog: DeviceCatalog
+) -> dict[str, Any]:
     """Decode the validated HCS026 factory/paired enrollment layout.
 
     Two controlled sensors showed a four-byte factory identity whose first
@@ -153,7 +156,7 @@ def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
         }
 
     if (
-        endpoint_a != VALVE_ENDPOINT
+        endpoint_a not in catalog.hcs026_pairing_peers
         or not endpoint_b[0] & 0x80
         or message_type not in {1, 2, 3, 4, 5, 6}
     ):
@@ -184,11 +187,11 @@ def _hcs026_pairing_fields(frame: bytes) -> dict[str, Any]:
     return result
 
 
-def _soil_moisture(frame: bytes) -> int | None:
+def _soil_moisture(frame: bytes, catalog: DeviceCatalog) -> int | None:
     """Decode either field position confirmed in HCS026FRF reports."""
     if len(frame) != FRAME_BYTES:
         return None
-    canonical_endpoint = _canonical_hcs026_endpoint(frame[9:13])
+    canonical_endpoint = _canonical_hcs026_endpoint(frame[9:13], catalog)
     if canonical_endpoint is None:
         return None
     # A retained Front Yard Sensor 2 report used the full HCS02x product code
@@ -208,14 +211,23 @@ def _soil_moisture(frame: bytes) -> int | None:
     return None
 
 
-def _valve_fields(frame: bytes) -> dict[str, Any]:
+def _valve_fields(
+    frame: bytes, catalog: DeviceCatalog
+) -> dict[str, Any]:
     """Decode confirmed receive-only HTV145 command and usage fields."""
     if len(frame) != FRAME_BYTES:
         return {}
     endpoint_a = frame[5:9].hex()
     endpoint_b = frame[9:13].hex()
 
-    if endpoint_a == HUB_ENDPOINT and endpoint_b == VALVE_ENDPOINT:
+    valve = catalog.valve_link(endpoint_a, endpoint_b)
+    if valve is None:
+        return {}
+
+    if (
+        endpoint_a == valve.controller_endpoint
+        and endpoint_b == valve.valve_endpoint
+    ):
         # The open/close flag is the high bit of byte 14. Open commands carry
         # a whole-minute duration at bytes 19-20. The low duration byte has
         # bit 7 forced on, so decode it with the confirmed minute constraint.
@@ -235,7 +247,10 @@ def _valve_fields(frame: bytes) -> dict[str, Any]:
                 result["duration_seconds"] = duration_seconds
         return result
 
-    if endpoint_a == VALVE_ENDPOINT and endpoint_b == HUB_ENDPOINT:
+    if (
+        endpoint_a == valve.valve_endpoint
+        and endpoint_b == valve.controller_endpoint
+    ):
         # 0x4f/0xcf marks last-session usage. The following bytes hold a
         # packed half-value plus an odd-value flag, in tenths of a liter.
         if frame[20] & 0x7F != 0x4F:
@@ -247,7 +262,9 @@ def _valve_fields(frame: bytes) -> dict[str, Any]:
     return {}
 
 
-def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+def normalize_row(
+    row: dict[str, Any], *, catalog: DeviceCatalog = LEGACY_HOME_CATALOG
+) -> dict[str, Any]:
     """Locate sync and normalize any observed wake/prefix length."""
     bits = _row_bits(row)
     sync_bits = "".join(f"{byte:08b}" for byte in SYNC)
@@ -288,17 +305,17 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "trailer": frame[-2:].hex(),
     }
     result.update(_trailer_fields(frame))
-    canonical_endpoint_b = _canonical_hcs026_endpoint(frame[9:13])
+    canonical_endpoint_b = _canonical_hcs026_endpoint(frame[9:13], catalog)
     if canonical_endpoint_b and canonical_endpoint_b != result["endpoint_b"]:
         result["canonical_endpoint_b"] = canonical_endpoint_b
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
-    result.update(_hcs026_battery_candidate(frame))
-    result.update(_hcs026_pairing_fields(frame))
+    result.update(_hcs026_battery_candidate(frame, catalog))
+    result.update(_hcs026_pairing_fields(frame, catalog))
     moisture = result.get("soil_moisture_percent")
     if moisture is None:
-        moisture = _soil_moisture(frame)
+        moisture = _soil_moisture(frame, catalog)
     if moisture is not None:
         result["soil_moisture_percent"] = moisture
-    result.update(_valve_fields(frame))
+    result.update(_valve_fields(frame, catalog))
     return result

@@ -8,17 +8,9 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .rf import FLEX_DECODER, normalize_row
-
-
-KNOWN_HCS026 = {
-    "c4e50024": ("soil-left-bed", "Left Bed"),
-    "ce628024": ("soil-front-1", "Front Yard Sensor 1"),
-    "d1e28024": ("soil-front-2", "Front Yard Sensor 2"),
-    "9ce58024": ("soil-right-bed", "Right Bed"),
-}
-VALVE_LINK_ENDPOINTS = frozenset(("b42d008f", "b9840280"))
 
 
 def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
@@ -86,8 +78,10 @@ class RTL433Transport:
         signal_directory: str | None = None,
         command: Sequence[str] | None = None,
         process_factory: Callable[..., subprocess.Popen[str]] = subprocess.Popen,
+        catalog: DeviceCatalog | None = None,
     ) -> None:
         self.gateway = gateway
+        self.catalog = catalog or gateway.catalog
         self.command = list(command or rtl_433_command(frequency, sample_rate))
         self._capture_command = (
             rtl_433_command(
@@ -108,7 +102,14 @@ class RTL433Transport:
         self._process: subprocess.Popen[str] | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
-        self._valve_state: dict[str, Any] = {
+        self._valve_states: dict[str, dict[str, Any]] = {
+            valve.device_id: self._empty_valve_state()
+            for valve in self.catalog.valves
+        }
+
+    @staticmethod
+    def _empty_valve_state() -> dict[str, Any]:
+        return {
             "valve_state": None,
             "is_watering": None,
             "duration_seconds": None,
@@ -117,18 +118,22 @@ class RTL433Transport:
 
     def seed(self) -> None:
         """Register known sensors before their first periodic packet arrives."""
-        self.gateway.register(
-            device_id="valve-1",
-            name="Garden Valve",
-            model="HTV145FRF",
-            state=self._valve_state,
-        )
-        for endpoint, (device_id, name) in KNOWN_HCS026.items():
+        for valve in self.catalog.valves:
             self.gateway.register(
-                device_id=device_id,
-                name=name,
-                model="HCS026FRF",
-                state={"rf_endpoint": endpoint, "soil_moisture_percent": None},
+                device_id=valve.device_id,
+                name=valve.name,
+                model=valve.model,
+                state=self._valve_states[valve.device_id],
+            )
+        for sensor in self.catalog.sensors:
+            self.gateway.register(
+                device_id=sensor.device_id,
+                name=sensor.name,
+                model=sensor.model,
+                state={
+                    "rf_endpoint": sensor.endpoint,
+                    "soil_moisture_percent": None,
+                },
             )
 
     def start(self) -> None:
@@ -190,13 +195,13 @@ class RTL433Transport:
         bridge_metadata = _bridge_metadata(event)
         for row in event.get("rows", []):
             try:
-                decoded = normalize_row(row)
+                decoded = normalize_row(row, catalog=self.catalog)
             except (KeyError, TypeError, ValueError):
                 continue
             moisture = decoded.get("soil_moisture_percent")
-            valve_link = frozenset(
-                (decoded["endpoint_a"], decoded["endpoint_b"])
-            ) == VALVE_LINK_ENDPOINTS
+            valve = self.catalog.valve_link(
+                decoded["endpoint_a"], decoded["endpoint_b"]
+            )
             valve_update = {
                 key: decoded[key]
                 for key in (
@@ -208,6 +213,11 @@ class RTL433Transport:
                 if key in decoded
             }
             if valve_update:
+                if valve is None:
+                    continue
+                valve_state = self._valve_states.setdefault(
+                    valve.device_id, self._empty_valve_state()
+                )
                 frame_accepted = True
                 state = {
                     "model": "HTV145FRF",
@@ -217,17 +227,17 @@ class RTL433Transport:
                     "rf_trailer_residual": decoded["trailer_residual"],
                     "rf_trailer_valid": decoded["trailer_valid"],
                     "rf_frame_accepted": frame_accepted,
-                    **self._valve_state,
+                    **valve_state,
                     **valve_update,
                 }
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
                 state.update(bridge_metadata)
-                self._valve_state.update(valve_update)
+                valve_state.update(valve_update)
                 self.gateway.observe_decoded(
-                    device_id="valve-1",
-                    name="Garden Valve",
-                    model="HTV145FRF",
+                    device_id=valve.device_id,
+                    name=valve.name,
+                    model=valve.model,
                     frame=decoded["frame_hex"],
                     state=state,
                     observed_at=event.get("time"),
@@ -264,16 +274,15 @@ class RTL433Transport:
                     frame=decoded["frame_hex"],
                     state=state,
                     observed_at=event.get("time"),
-                    device_id="valve-1" if valve_link else None,
+                    device_id=valve.device_id if valve else None,
                 )
                 published += 1
                 continue
 
             endpoint = decoded.get("canonical_endpoint_b", decoded["endpoint_b"])
-            device_id, name = KNOWN_HCS026.get(
-                endpoint,
-                (f"hcs026-{endpoint}", f"RainPoint HCS026 {endpoint}"),
-            )
+            sensor = self.catalog.sensor(endpoint)
+            device_id = sensor.device_id if sensor else f"hcs026-{endpoint}"
+            name = sensor.name if sensor else f"RainPoint HCS026 {endpoint}"
             frame_accepted = bool(
                 decoded["trailer_valid"] or "product_code" in decoded
             )

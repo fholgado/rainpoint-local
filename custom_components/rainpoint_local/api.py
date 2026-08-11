@@ -50,7 +50,7 @@ class RainPointLocalClient:
         return devices
 
     async def pairing(self) -> dict[str, Any]:
-        """Return receive-only sensor-pairing progress."""
+        """Return sensor-pairing progress."""
         return await self._get("pairing")
 
     async def authenticate(self, token: str) -> None:
@@ -68,7 +68,7 @@ class RainPointLocalClient:
         )
 
     async def stop_pairing(self, token: str) -> dict[str, Any]:
-        """Close the current receive-only pairing window."""
+        """Close the current pairing window."""
         return await self._post("pairing/stop", {}, token)
 
     async def complete_pairing(

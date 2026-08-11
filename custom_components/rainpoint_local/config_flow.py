@@ -178,7 +178,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
-    """Manage receive-only sensor pairing for an existing gateway."""
+    """Manage validated local sensor pairing for an existing gateway."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
