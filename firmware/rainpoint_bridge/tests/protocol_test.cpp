@@ -50,6 +50,7 @@ int main() {
     assert(
         rainpoint::kSensorBPairingProfile[1].channelCenterHz == 433'911'500
     );
+    assert(rainpoint::kMaxPairingFrequencyOffsetHz == 100'000);
     for (const auto& step : rainpoint::kSensorBPairingProfile) {
         assert(step.wakeSymbols == 320);
         assert(step.replyDeadlineMs == 250);

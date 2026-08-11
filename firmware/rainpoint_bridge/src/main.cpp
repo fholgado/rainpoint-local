@@ -300,7 +300,10 @@ void handleSerialCommand() {
             } else if (!handled && serialCommand.startsWith("pairing_offset_hz ")) {
                 handled = true;
                 const long offset = serialCommand.substring(18).toInt();
-                if (offset < -20'000 || offset > 20'000) {
+                if (
+                    offset < -rainpoint::kMaxPairingFrequencyOffsetHz ||
+                    offset > rainpoint::kMaxPairingFrequencyOffsetHz
+                ) {
                     emitLine(
                         "{\"type\":\"command_error\","
                         "\"error\":\"pairing_offset_out_of_range\"}"

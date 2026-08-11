@@ -93,7 +93,7 @@ pairing_cancel
 
 `pairing_probe_b` emits one captured reply so the independent RTL-SDR can
 measure it before a sensor is involved. Steps 1 and 2 cover both captured
-reply frequencies. The offset is limited to +/-20 kHz and polarity or offset
+reply frequencies. The offset is limited to +/-100 kHz and polarity or offset
 cannot be changed while armed. `pairing_arm_b` locks the primary receiver to
 the lower sensor channel, expires after two minutes, and responds only to the
 five validated Sensor B trigger layouts in order. Duplicate earlier triggers

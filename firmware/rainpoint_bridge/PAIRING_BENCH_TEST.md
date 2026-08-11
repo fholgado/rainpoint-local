@@ -64,8 +64,10 @@ Before involving the sensor, analyze the SDR recording and confirm:
 - center frequency close enough to the captured stock reply
 
 If the decoded bits are inverted, run `pairing_invert on` and repeat both
-probes. If the carrier is offset, set a correction between -20,000 and +20,000
-Hz with `pairing_offset_hz N`, then repeat. These settings are volatile and
+probes. If the carrier is offset, set a correction between -100,000 and +100,000
+Hz with `pairing_offset_hz N`, then repeat. Calibrate each radio node against
+the same receiver used for the stock-gateway reference because module crystal
+error is hardware-specific. These settings are volatile and
 reset on reboot.
 
 ## 4. Attempt Sensor B enrollment

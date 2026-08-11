@@ -33,6 +33,7 @@ struct PairingReplyStep {
 constexpr std::uint32_t kPairingSymbolRate = 20'000;
 constexpr std::uint16_t kPairingWakeSymbols = 320;
 constexpr std::uint16_t kPairingReplyDeadlineMs = 250;
+constexpr std::int32_t kMaxPairingFrequencyOffsetHz = 100'000;
 
 constexpr std::size_t rainpointSymbolCount(std::uint16_t wakeSymbols) {
     return wakeSymbols + kFrameBytes * 8;
