@@ -25,6 +25,12 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+LEGACY_DEFAULT_TITLES = {
+    "RainPoint Local (rainpoint-replay)",
+    "RainPoint Local (rainpoint-rtl433)",
+    "RainPoint Local (rainpoint-esp32_serial)",
+}
+
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Import a temporary YAML bootstrap through the supported Config Flow."""
@@ -41,6 +47,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up RainPoint Local from a config entry."""
+    if entry.unique_id and entry.title in LEGACY_DEFAULT_TITLES:
+        hass.config_entries.async_update_entry(
+            entry, title=f"RainPoint Local ({entry.unique_id})"
+        )
     client = RainPointLocalClient(
         entry.data[CONF_HOST],
         entry.data[CONF_PORT],

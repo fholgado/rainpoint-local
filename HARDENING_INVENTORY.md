@@ -9,7 +9,7 @@ pairing through Home Assistant.
 Snapshot reviewed:
 
 - `rainpointd` add-on 0.9.0
-- `rainpoint_local` integration 0.3.0
+- `rainpoint_local` integration 0.3.1
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
