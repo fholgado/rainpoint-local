@@ -42,8 +42,14 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
-      - name: Build single- and dual-radio firmware
+      - name: Build production and research firmware targets
         run: >-
           pio run --project-dir firmware/rainpoint_bridge
           --environment esp32dev_single
           --environment esp32dev_dual
+          --environment esp32dev_single_bench
+      - name: Verify production firmware excludes local TX bench controls
+        run: >-
+          python tools/check_firmware_boundaries.py
+          firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin
+          firmware/rainpoint_bridge/.pio/build/esp32dev_single_bench/firmware.bin

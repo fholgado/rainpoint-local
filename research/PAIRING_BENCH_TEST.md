@@ -21,18 +21,20 @@ GDO0, and requires the MCU bit timing to remain within one eighth of the
 configured bit period.
 
 Keep Sensor B batteries removed until the receive path and two probe signals
-have been checked. Leave the working irrigation valves alone. The stock
-RainPoint gateway may stay online, but do not put it into app pairing mode.
+have been checked. Leave the working irrigation valves alone. Keep the original
+RainPoint gateway powered off for the enrollment attempt so it cannot race the
+custom node's replies. It may remain online for receive-only probe
+characterization before the sensor is involved.
 
 ## 1. Build, flash, and inspect boot
 
 ```sh
 python3 -m platformio run --project-dir firmware/rainpoint_bridge \
-  --environment esp32dev_single --target upload
+  --environment esp32dev_single_bench --target upload
 python3 -m platformio device monitor --baud 115200
 ```
 
-Expect a `boot` record with `mode` set to `pairing_tx_bench`, followed by
+Expect a `boot` record with `mode` set to `research_bench`, followed by
 `radio_ready` and healthy configuration records. Run `pairing_status`; it must
 say `state: disarmed` and `tx_armed: false`.
 

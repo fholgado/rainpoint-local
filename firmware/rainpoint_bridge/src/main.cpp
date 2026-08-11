@@ -14,6 +14,10 @@
 #error "RAINPOINT_RADIO_COUNT must be 1 or 2"
 #endif
 
+#if RAINPOINT_RESEARCH_BENCH != 0 && RAINPOINT_RESEARCH_BENCH != 1
+#error "RAINPOINT_RESEARCH_BENCH must be 0 or 1"
+#endif
+
 namespace {
 
 constexpr int kSpiSckPin = 18;
@@ -354,6 +358,7 @@ void cancelPairing(const char* detail) {
     reportPairingStatus(detail);
 }
 
+#if RAINPOINT_RESEARCH_BENCH == 1
 bool handlePairingProbe(const String& command) {
     for (std::size_t index = 0;
          index < rainpoint::kSensorBPairingProfile.size();
@@ -395,6 +400,7 @@ bool handlePairingProbe(const String& command) {
     }
     return false;
 }
+#endif
 
 #if RAINPOINT_RADIO_COUNT == 1
 void selectChannel(std::uint8_t channel) {
@@ -508,6 +514,7 @@ void handleSerialCommand() {
                 continue;
             }
             bool handled = false;
+#if RAINPOINT_RESEARCH_BENCH == 1
             if (serialCommand == "pairing_plan_b") {
                 handled = true;
                 for (std::size_t index = 0;
@@ -671,6 +678,7 @@ void handleSerialCommand() {
                 lastChannelChange = millis();
             }
 #endif
+#endif
             if (
                 !handled &&
                 !wifiTransport.handleProvisioningCommand(serialCommand)
@@ -775,7 +783,12 @@ void setup() {
     wifiTransport.begin();
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
-        wifiTransport.nodeId() + "\",\"mode\":\"pairing_tx_bench\","
+        wifiTransport.nodeId() +
+#if RAINPOINT_RESEARCH_BENCH == 1
+        "\",\"mode\":\"research_bench\",\"local_tx_controls\":true,"
+#else
+        "\",\"mode\":\"radio_node\",\"local_tx_controls\":false,"
+#endif
         "\"pairing_tx_available\":true,\"tx_armed\":false,"
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +

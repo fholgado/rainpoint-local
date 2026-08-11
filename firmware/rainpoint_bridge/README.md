@@ -1,6 +1,6 @@
 # RainPoint ESP32/CC1101 bridge firmware
 
-This is the receive firmware and sensor-pairing TX bench prototype for the
+This is the receive firmware and bounded sensor-pairing node for the
 ELEGOO ESP-WROOM-32 USB-C development board and one **433 MHz** CC1101
 transceiver. A second module is supported only as an optional dual-channel
 receive diagnostic. The firmware contains no valve commands. Its only TX path
@@ -59,9 +59,9 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
   before declaring enrollment complete.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
-- Starts disarmed after every boot. An exact local serial command or an
-  authenticated protocol-v2 gateway command for factory endpoint `15a98024`
-  enables the time-limited automatic reply sequence.
+- Starts disarmed after every boot. In production builds, only an authenticated
+  protocol-v2 gateway command for factory endpoint `15a98024` enables the
+  time-limited automatic reply sequence.
 - Transmits the validated sequence at the configured 10 dBm prototype setting and returns to the
   receive configuration after every 31.2 ms reply.
 - Reports pairing state, command ID, completed steps, and armed state over
@@ -75,13 +75,17 @@ offset uses the CC1101 `FREQEST` status register and a 26 MHz crystal. These
 diagnostics follow the register definitions in the
 [TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
-The production single-radio build alternates channels every 500 ms. Send `0`
-followed by Enter over serial to lock channel 0, `1` to lock channel 11, or `s`
-to resume scanning. The optional dual-radio diagnostic build fixes the primary radio to
-channel 0 and the second radio to channel 11 so both can be evaluated
-continuously against the existing RTL-SDR.
+The production single-radio build alternates channels every 500 ms. The
+optional dual-radio diagnostic build fixes the primary radio to channel 0 and
+the second radio to channel 11 so both can be evaluated continuously against
+the existing RTL-SDR.
 
-The pairing bench commands are:
+Local RF probe, tuning, channel-lock, and pairing-arm commands are compiled
+only into `esp32dev_single_bench`. They are absent from production binaries; CI
+inspects both images to enforce that boundary. The bench procedure lives in
+[`research/PAIRING_BENCH_TEST.md`](../../research/PAIRING_BENCH_TEST.md).
+
+The research-bench-only commands are:
 
 ```text
 pairing_status
@@ -138,8 +142,16 @@ The default and production environment is `esp32dev_single`. Use
 pio run --environment esp32dev_dual --target upload
 ```
 
-GitHub CI explicitly compiles both configurations from a clean environment on
-every push and pull request so the diagnostic build cannot silently regress.
+Build `esp32dev_single_bench` only for controlled RF research where local
+serial TX controls are explicitly required:
+
+```sh
+pio run --environment esp32dev_single_bench --target upload
+```
+
+GitHub CI explicitly compiles all three configurations from a clean environment
+and verifies that production images contain none of the local TX bench command
+strings.
 
 The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and
