@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except RainPointLocalError as exc:
         raise ConfigEntryNotReady(f"Unable to connect to rainpointd: {exc}") from exc
 
-    coordinator = RainPointLocalCoordinator(hass, client)
+    coordinator = RainPointLocalCoordinator(hass, client, entry.entry_id)
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
