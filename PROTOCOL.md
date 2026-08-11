@@ -189,14 +189,26 @@ protocol constant; a publishable coordinator should obtain or configure its
 target pairing clock instead of hard-coding it.
 
 The paired sensor's stock message `01` and data message `02` set byte 20 to
-`0x80`; the corresponding local exchange set it to `0x00`. Their other payload
-bytes matched, and their subsequent short message `02` was identical. This is
-therefore an acceptance/session flag candidate and may explain the missing
-terminal message. The local reply encoded 15:13:42 for a factory announcement
-at 15:10:12—only 3 minutes 30 seconds ahead—because the bench firmware froze
-the operator-supplied time while the stock reply was exactly four minutes
-ahead. Firmware 0.3.2 advances the supplied gateway clock with elapsed time so
-the next test can isolate this candidate without operator-delay drift.
+`0x80`; the first local exchange set it to `0x00`. The first local reply encoded
+15:13:42 for a factory announcement at 15:10:12—only 3 minutes 30 seconds
+ahead—because the bench firmware froze the operator-supplied time while the
+stock reply was exactly four minutes ahead. Firmware 0.3.2 advances the
+supplied gateway clock with elapsed time.
+
+A second local exchange encoded 15:55:02 exactly four minutes after its
+15:51:02 factory announcement. The sensor then restored byte 20 to `0x80`,
+matching stock, and gave a visibly longer blue flash. It nevertheless omitted
+terminal message `03`. After its LCD was changed from 1% to 99%, a manual
+button report produced no paired-endpoint frame on either the RTL-SDR or the
+ESP32 receiver. Byte 19 was `0x00` in the second exchange while the LCD read
+1%, compared with `0x05` in the stock exchange when the sensor read 5%; byte
+19 is therefore more plausibly sensor data than an enrollment-status flag.
+The first gateway reply is otherwise structurally identical to the successful
+stock reply after accounting for its packed time and regenerated trailer.
+Offline spectral comparison also placed its carrier within 600 Hz of stock
+and matched deviation and occupied bandwidth. The remaining failure is not
+explained by the previously suspected status byte or an obvious decoded RF
+parameter.
 
 The two first-enrollment sequences had the same cadence within measurement
 error:
