@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
+SCHEMA_VERSION = 2
+
+
 def frame_accepted(event: dict[str, Any]) -> bool | None:
     """Return the integrity decision while preserving legacy event meaning."""
     state = event.get("state", {})
@@ -40,8 +43,16 @@ class SQLiteEventStore:
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA synchronous=NORMAL")
-        self._connection.executescript(
+        version = self.schema_version()
+        if version > SCHEMA_VERSION:
+            self._connection.close()
+            raise RuntimeError(
+                f"database schema {version} is newer than supported "
+                f"version {SCHEMA_VERSION}"
+            )
+        schema_v1 = (
             """
+            BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS events (
                 event_id INTEGER PRIMARY KEY,
                 observed_at TEXT NOT NULL,
@@ -109,8 +120,15 @@ class SQLiteEventStore:
                 expires_at TEXT NOT NULL,
                 baseline_endpoints TEXT NOT NULL
             );
+            PRAGMA user_version = 1;
+            COMMIT;
             """
         )
+        if version == 0:
+            self._connection.executescript(schema_v1)
+            version = 1
+        if version == 1:
+            self._migrate_v1_to_v2()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -119,6 +137,44 @@ class SQLiteEventStore:
     def close(self) -> None:
         """Close the database connection."""
         self._connection.close()
+
+    def schema_version(self) -> int:
+        """Return the explicit SQLite schema version."""
+        row = self._connection.execute("PRAGMA user_version").fetchone()
+        return int(row[0])
+
+    def _migrate_v1_to_v2(self) -> None:
+        """Add durable latest-device snapshots and event query indexes."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS device_snapshots (
+                    device_id TEXT PRIMARY KEY,
+                    event_id INTEGER NOT NULL,
+                    payload TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_type_id "
+                "ON events(event_type, event_id)"
+            )
+            rows = self._connection.execute(
+                "SELECT payload FROM events "
+                "WHERE event_type = 'device_observation' ORDER BY event_id"
+            ).fetchall()
+            for row in rows:
+                event = json.loads(row["payload"])
+                if frame_accepted(event) is False:
+                    continue
+                device_id = event.get("device_id")
+                if isinstance(device_id, str):
+                    self._connection.execute(
+                        "INSERT OR REPLACE INTO device_snapshots("
+                        "device_id, event_id, payload) VALUES (?, ?, ?)",
+                        (device_id, event["event_id"], row["payload"]),
+                    )
+            self._connection.execute("PRAGMA user_version = 2")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -135,6 +191,20 @@ class SQLiteEventStore:
         self._update_endpoints(event)
         self._update_device_metrics(event)
         self._update_reception_metrics(event)
+        if (
+            event.get("event_type") == "device_observation"
+            and isinstance(event.get("device_id"), str)
+            and frame_accepted(event) is not False
+        ):
+            self._connection.execute(
+                "INSERT OR REPLACE INTO device_snapshots("
+                "device_id, event_id, payload) VALUES (?, ?, ?)",
+                (
+                    event["device_id"],
+                    event["event_id"],
+                    json.dumps(event, separators=(",", ":"), sort_keys=True),
+                ),
+            )
         self._connection.commit()
 
     def recent_events(self, limit: int) -> list[dict[str, Any]]:
@@ -147,16 +217,9 @@ class SQLiteEventStore:
     def latest_device_events(self) -> list[dict[str, Any]]:
         """Return the newest accepted decoded observation for every device."""
         rows = self._connection.execute(
-            "SELECT payload FROM events WHERE event_type = 'device_observation' "
-            "ORDER BY event_id"
+            "SELECT payload FROM device_snapshots ORDER BY event_id"
         ).fetchall()
-        latest: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            event = json.loads(row["payload"])
-            device_id = event.get("device_id")
-            if isinstance(device_id, str) and frame_accepted(event) is not False:
-                latest[device_id] = event
-        return list(latest.values())
+        return [json.loads(row["payload"]) for row in rows]
 
     def events(self, since: int = 0, limit: int = 1_000) -> list[dict[str, Any]]:
         """Return one chronological page newer than an event ID."""

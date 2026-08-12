@@ -96,6 +96,9 @@ class Gateway:
                 "transport_healthy": self._transport_healthy,
                 "transport_error": self._transport_error,
                 "persistent_storage": self._store is not None,
+                "storage_schema_version": (
+                    self._store.schema_version() if self._store else None
+                ),
                 "stored_event_count": (
                     self._store.event_count() if self._store else len(self._events)
                 ),

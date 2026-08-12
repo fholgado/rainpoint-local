@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -22,6 +23,48 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_storage_schema_migrates_latest_device_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="soil-test",
+                name="Test Soil",
+                model="HCS026FRF",
+                frame="accepted",
+                state={
+                    "soil_moisture_percent": 44,
+                    "rf_frame_accepted": True,
+                },
+            )
+            self.assertEqual(2, gateway.info()["storage_schema_version"])
+            gateway.close()
+
+            # Recreate the last released schema while retaining its event log.
+            connection = sqlite3.connect(path)
+            connection.execute("DROP TABLE device_snapshots")
+            connection.execute("PRAGMA user_version = 1")
+            connection.commit()
+            connection.close()
+
+            migrated = Gateway(transport="rtl433", storage_path=str(path))
+            self.assertEqual(2, migrated.info()["storage_schema_version"])
+            self.assertEqual(
+                44,
+                migrated.devices()[0]["state"]["soil_moisture_percent"],
+            )
+            migrated.close()
+
+    def test_storage_rejects_newer_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            connection = sqlite3.connect(path)
+            connection.execute("PRAGMA user_version = 999")
+            connection.close()
+
+            with self.assertRaisesRegex(RuntimeError, "newer than supported"):
+                Gateway(transport="rtl433", storage_path=str(path))
+
     def test_legacy_pairing_json_migrates_once_into_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             storage = Path(temporary_directory) / "rainpoint.sqlite3"
