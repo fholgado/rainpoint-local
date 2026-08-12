@@ -39,21 +39,26 @@ Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
 
 The production wiring uses only the primary radio. If the optional diagnostic
 radio is fitted, the modules share SPI clock and data but must have independent
-chip-select pins; never connect the two CSN pins together.
+chip-select pins; never connect the two CSN pins together. The module pin
+numbers and labels below follow the pin table supplied with the tested 8-pin
+CC1101 module. Pin 7 may be labelled either `MISO` or `MISO/GDO1`; this firmware
+uses it as SPI MISO.
 
-| Signal | Primary radio | Optional diagnostic radio | ESP32 |
-|---|---|---|---:|
-| VCC | VCC | VCC | 3V3 |
-| GND | GND | GND | GND |
-| SCK | SCK | SCK | GPIO18 |
-| MISO | MISO | MISO | GPIO19 |
-| MOSI | MOSI | MOSI | GPIO23 |
-| CSN | CSN | — | GPIO27 |
-| CSN | — | CSN | GPIO14 |
-| GDO0 | GDO0 | — | GPIO26, required for pairing TX data |
-| GDO0 | — | GDO0 | GPIO33, receive diagnostic only |
-| GDO2 | GDO2 | — | GPIO25, optional/reserved |
-| GDO2 | — | GDO2 | GPIO32, optional/reserved |
+| Module pin | Module label | Primary ESP32 connection | Optional diagnostic ESP32 connection | Use |
+|---:|---|---:|---:|---|
+| 1 | GND | GND | GND | Power-reference ground |
+| 2 | VCC | 3V3 | 3V3 | 3.3 V power; never connect to 5 V |
+| 3 | GDO0 | GPIO26 | GPIO33 | Primary pairing TX data; diagnostic receive data |
+| 4 | CSN | GPIO27 | GPIO14 | Independent SPI chip select |
+| 5 | SCK | GPIO18 | GPIO18 | Shared SPI clock |
+| 6 | MOSI | GPIO23 | GPIO23 | Shared SPI controller-to-radio data |
+| 7 | MISO/GDO1 | GPIO19 | GPIO19 | Shared SPI radio-to-controller data; used as MISO |
+| 8 | GDO2 | GPIO25 | GPIO32 | Optional/reserved |
+
+Use the module's pin-1 marking and printed labels to orient its connector; do
+not infer the physical 2-by-4 header orientation from this numerical table.
+CC1101 carrier boards can use different connector orientations even when their
+signal names are identical.
 
 Keep the module close to the ESP32, add a 100 nF ceramic capacitor directly
 across its VCC/GND pair, and connect the correct 433 MHz antenna before testing.
