@@ -1,5 +1,11 @@
 # Changelog
 
+## Integration 0.8.1
+
+- Reconcile existing Home Assistant device-registry model labels with the
+  gateway's current evidence-based identity instead of retaining a stale
+  pre-inference model name.
+
 ## 0.18.1
 
 - Report explicit family-level device kind and exact-model confidence after a

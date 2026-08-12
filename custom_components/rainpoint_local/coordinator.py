@@ -49,6 +49,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
             if isinstance(node.get("node_id"), str)
         }
         self.receivers = receivers
+        self._async_reconcile_device_metadata(result)
         active_ids = set(result) | {
             f"radio-node:{node_id}" for node_id in self.nodes
         }
@@ -63,6 +64,23 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
             )
             self._logged_inventory = True
         return result
+
+    def _async_reconcile_device_metadata(
+        self, devices: dict[str, dict]
+    ) -> None:
+        """Keep HA model metadata aligned with gateway identification evidence."""
+        device_registry = dr.async_get(self.hass)
+        for local_id, device in devices.items():
+            entry = device_registry.async_get_device(
+                identifiers={(DOMAIN, local_id)}
+            )
+            model = device.get("model")
+            if (
+                entry is not None
+                and isinstance(model, str)
+                and entry.model != model
+            ):
+                device_registry.async_update_device(entry.id, model=model)
 
     def _async_reconcile_entity_registry(
         self, active_device_ids: set[str]
