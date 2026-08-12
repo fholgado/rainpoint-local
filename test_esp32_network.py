@@ -244,6 +244,7 @@ class ESP32NetworkTest(unittest.TestCase):
                     "node_id": NODE_A,
                     "state": "armed",
                     "completed_steps": 1,
+                    "assigned_channel": 5,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -256,6 +257,9 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("armed", self.gateway.nodes()[0]["pairing_state"])
         self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
+        self.assertEqual(
+            5, self.gateway.nodes()[0]["pairing_assigned_channel"]
+        )
         stream.close()
         connection.close()
 

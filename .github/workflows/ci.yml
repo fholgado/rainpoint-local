@@ -53,6 +53,7 @@ jobs:
           --environment esp32dev_dual
           --environment esp32dev_single_bench
           --environment esp32dev_sensor_a_candidate
+          --environment esp32dev_pairing_generalization
       - name: Verify production firmware excludes local TX bench controls
         run: >-
           python tools/check_firmware_boundaries.py

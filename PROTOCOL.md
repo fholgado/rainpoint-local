@@ -160,6 +160,25 @@ gateway reply at about 433.4715 MHz. All recovered first enrollment, repeat
 enrollment, and rejoin frames are retained in
 `research/fixtures/hcs026_gateway_pairing_replies.json`.
 
+The channel is explicitly assigned during enrollment. Reply 1 encodes a
+selector in bytes 18–19, and the sensor echoes it in bytes 16–17 of its next
+message `01`. The observed channel plan is:
+
+```text
+frequency_hz = 433031500 + selector * 110000
+```
+
+Controlled local-gateway tests on August 12 assigned selector 4 (433.4715 MHz)
+to Sensor B and selector 5 (433.5815 MHz) to Sensor A. Each sensor echoed the
+requested selector, completed its full enrollment exchange, produced the long
+blue success indication, and resumed telemetry with the stock gateway
+unplugged. Sensor B had previously paired on selector 8, proving that selectors
+are association parameters rather than fixed properties of device identity.
+The apparent usable range 4–11 contains eight selectors, matching the stock
+gateway's documented limit of eight paired devices. A local coordinator should
+therefore allocate and persist a unique selector for every paired device and
+release it when that association is forgotten.
+
 The second Sensor B capture also identified the principal dynamic field in
 the initial reply. Bytes 21--22 contain a little-endian FAT/DOS-style packed
 local time (five hour bits, six minute bits, and five two-second units), while

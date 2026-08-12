@@ -50,8 +50,14 @@ correspond to 433.4715, 433.9115, and 434.0215 MHz respectively, fitting a
 110 kHz channel plan beginning at 433.0315 MHz within 50 Hz across four
 captured exchanges. Sensor B has successfully used selectors 8 and 4, proving
 that this frequency is negotiated during enrollment rather than permanently
-tied to its identity. The next controlled experiment should assign selector 4
-to Sensor A and verify that its echo and remaining replies move to that channel.
+tied to its identity. A controlled local-gateway test on August 12 then paired
+Sensor B on selector 4 and Sensor A on selector 5. Both sensors echoed their
+assigned selector, emitted terminal message `03`, resumed telemetry, and gave
+the long blue success indication while the stock RainPoint gateway remained
+unplugged. Selectors 4–11 provide exactly eight channels, matching the
+documented eight-device gateway limit. This strongly supports one unique
+selector per association; allocation persistence and selector reuse after a
+device is forgotten remain implementation work.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py

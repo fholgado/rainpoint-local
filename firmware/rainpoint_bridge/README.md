@@ -13,6 +13,15 @@ four-reply mixed-state sequence on its measured channels and requires terminal
 message `03`. It remains separate from `esp32dev_single` while the profiles are
 generalized beyond the two test identities.
 
+The `esp32dev_pairing_generalization` environment is the validated two-identity
+test build. It accepts either captured test identity, assigns pairing selector 4
+to Sensor B and selector 5 to Sensor A, and rewrites reply 1 plus all follow-up
+frequencies from the inferred 110 kHz channel plan. Both physical sensors
+completed terminal confirmation and telemetry on their assigned channels on
+August 12, 2026. Keep this environment separate from the normal production
+target until the gateway owns persistent selector allocation and the firmware
+accepts a bounded assigned selector instead of mapping the two test identities.
+
 ## Wiring
 
 Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
@@ -158,7 +167,7 @@ serial TX controls are explicitly required:
 pio run --environment esp32dev_single_bench --target upload
 ```
 
-GitHub CI explicitly compiles all four configurations from a clean environment
+GitHub CI explicitly compiles all five configurations from a clean environment
 and verifies that production images contain none of the local TX bench command
 strings.
 

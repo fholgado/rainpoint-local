@@ -270,6 +270,9 @@ class ESP32NetworkServer:
                         pairing_detail=message.get("detail"),
                         pairing_command_id=message.get("command_id"),
                         pairing_failure_reason=message.get("failure_reason"),
+                        pairing_assigned_channel=message.get(
+                            "assigned_channel"
+                        ),
                     )
                 if message.get("type") == "identify_status":
                     self.gateway.update_node(

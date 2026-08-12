@@ -71,6 +71,25 @@ int main() {
     assert(sensorA.factoryEndpoint[0] == 0x1b);
     assert(sensorA.pairedEndpoint[0] == 0x9b);
 
+    auto generalizedSensorA = sensorA;
+    assert(rainpoint::assignPairingChannel(generalizedSensorA, 5));
+    assert(rainpoint::pairingChannelFromReply(
+        generalizedSensorA.steps[0].frame
+    ) == 5);
+    assert(generalizedSensorA.steps[0].frame[18] == 0x02);
+    assert(generalizedSensorA.steps[0].frame[19] == 0xf0);
+    assert(rainpoint::hasOrdinaryTrailer(generalizedSensorA.steps[0].frame));
+    assert(
+        generalizedSensorA.steps[0].channelCenterHz == 433'471'500
+    );
+    for (std::size_t index = 1; index < generalizedSensorA.stepCount; ++index) {
+        assert(
+            generalizedSensorA.steps[index].channelCenterHz == 433'581'500
+        );
+    }
+    assert(!rainpoint::assignPairingChannel(generalizedSensorA, 3));
+    assert(!rainpoint::assignPairingChannel(generalizedSensorA, 12));
+
     const auto factoryTrigger = fromHex(
         "79f4882f288000000015a98024010083827fa41e8080848000000000000000000000000022f1"
     );

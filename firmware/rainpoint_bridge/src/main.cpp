@@ -23,6 +23,14 @@
 #error "RAINPOINT_SENSOR_A_CANDIDATE must be 0 or 1"
 #endif
 
+#if RAINPOINT_PAIRING_GENERALIZATION != 0 && RAINPOINT_PAIRING_GENERALIZATION != 1
+#error "RAINPOINT_PAIRING_GENERALIZATION must be 0 or 1"
+#endif
+
+#if RAINPOINT_SENSOR_A_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION == 1
+#error "Select only one experimental pairing firmware mode"
+#endif
+
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
 #endif
@@ -56,14 +64,16 @@ rainpoint::Cc1101 diagnosticRadio(
     kDiagnosticDataPin
 );
 #endif
+rainpoint::PairingProfile activePairingProfile =
 #if RAINPOINT_SENSOR_A_CANDIDATE == 1
-constexpr const rainpoint::PairingProfile& kPairingProfile =
     rainpoint::kSensorAHcs026CandidateProfile;
 #else
-constexpr const rainpoint::PairingProfile& kPairingProfile =
     rainpoint::kValidatedHcs026Profile;
 #endif
-rainpoint::PairingSession pairingSession(kPairingProfile);
+rainpoint::PairingSession pairingSession(activePairingProfile);
+std::uint8_t pairingAssignedChannel = rainpoint::pairingChannelFromReply(
+    activePairingProfile.steps[0].frame
+);
 rainpoint::PairingSessionState reportedPairingState =
     rainpoint::PairingSessionState::Disarmed;
 bool pairingInvert = false;
@@ -381,16 +391,16 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();
     line += "\",\"profile\":\"";
-    line += kPairingProfile.id;
+    line += activePairingProfile.id;
     line += "\",\"factory_endpoint\":\"";
     line += hexString(
-        kPairingProfile.factoryEndpoint.data(),
-        kPairingProfile.factoryEndpoint.size()
+        activePairingProfile.factoryEndpoint.data(),
+        activePairingProfile.factoryEndpoint.size()
     );
     line += "\",\"paired_endpoint\":\"";
     line += hexString(
-        kPairingProfile.pairedEndpoint.data(),
-        kPairingProfile.pairedEndpoint.size()
+        activePairingProfile.pairedEndpoint.data(),
+        activePairingProfile.pairedEndpoint.size()
     );
     line += '"';
     if (!pairingCommandId.isEmpty()) {
@@ -403,7 +413,9 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "\",\"completed_steps\":";
     line += pairingSession.completedSteps();
     line += ",\"step_count\":";
-    line += kPairingProfile.stepCount;
+    line += activePairingProfile.stepCount;
+    line += ",\"assigned_channel\":";
+    line += pairingAssignedChannel;
     line += ",\"awaiting_terminal_confirmation\":";
     line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
     line += ",\"terminal_trigger\":\"paired_message_3\"";
@@ -449,7 +461,7 @@ void cancelPairing(const char* detail) {
 #if RAINPOINT_RESEARCH_BENCH == 1
 bool handlePairingProbe(const String& command) {
     for (std::size_t index = 0;
-         index < kPairingProfile.stepCount;
+         index < activePairingProfile.stepCount;
          ++index) {
         const String expected = String("pairing_probe_b ") + (index + 1) +
             " 15a98024";
@@ -463,7 +475,7 @@ bool handlePairingProbe(const String& command) {
             );
             return true;
         }
-        const auto& step = kPairingProfile.steps[index];
+        const auto& step = activePairingProfile.steps[index];
         const std::int64_t adjustedFrequency =
             static_cast<std::int64_t>(step.channelCenterHz) +
             pairingFrequencyOffsetHz;
@@ -476,7 +488,7 @@ bool handlePairingProbe(const String& command) {
         );
         String line =
             "{\"type\":\"pairing_tx_probe\",\"profile\":\"";
-        line += kPairingProfile.id;
+        line += activePairingProfile.id;
         line += "\","
             "\"step\":";
         line += index + 1;
@@ -600,11 +612,33 @@ void handleNetworkCommand() {
     long powerDbm = 0;
     bool invert = false;
     rainpoint::PairingLocalDateTime parsedClock{};
-    const String expectedFactory = hexString(
-        kPairingProfile.factoryEndpoint.data(),
-        kPairingProfile.factoryEndpoint.size()
+    const rainpoint::PairingProfile* requestedProfile = nullptr;
+#if RAINPOINT_PAIRING_GENERALIZATION == 1
+    const String sensorAFactory = hexString(
+        rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.data(),
+        rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.size()
     );
-    if (profile != kPairingProfile.id || factory != expectedFactory) {
+    const String sensorBFactory = hexString(
+        rainpoint::kValidatedHcs026Profile.factoryEndpoint.data(),
+        rainpoint::kValidatedHcs026Profile.factoryEndpoint.size()
+    );
+    if (profile == rainpoint::kSensorAHcs026CandidateProfile.id &&
+        factory == sensorAFactory) {
+        requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
+    } else if (profile == rainpoint::kValidatedHcs026Profile.id &&
+        factory == sensorBFactory) {
+        requestedProfile = &rainpoint::kValidatedHcs026Profile;
+    }
+#else
+    const String expectedFactory = hexString(
+        activePairingProfile.factoryEndpoint.data(),
+        activePairingProfile.factoryEndpoint.size()
+    );
+    if (profile == activePairingProfile.id && factory == expectedFactory) {
+        requestedProfile = &activePairingProfile;
+    }
+#endif
+    if (requestedProfile == nullptr) {
         reportNetworkCommandError(commandId, "unsupported_pairing_profile");
         return;
     }
@@ -631,6 +665,25 @@ void handleNetworkCommand() {
         return;
     }
 
+    activePairingProfile = *requestedProfile;
+#if RAINPOINT_PAIRING_GENERALIZATION == 1
+    // Controlled-test allocation: keep the two known associations on unique
+    // selectors while proving that neither identity is tied to its captured
+    // stock selector. Sensor B uses the known-good first selector; Sensor A
+    // exercises the next free selector.
+    pairingAssignedChannel =
+        profile == rainpoint::kSensorAHcs026CandidateProfile.id ? 5 : 4;
+    if (!rainpoint::assignPairingChannel(
+        activePairingProfile, pairingAssignedChannel
+    )) {
+        reportNetworkCommandError(commandId, "pairing_channel_invalid");
+        return;
+    }
+#else
+    pairingAssignedChannel = rainpoint::pairingChannelFromReply(
+        activePairingProfile.steps[0].frame
+    );
+#endif
     pairingCommandId = commandId;
     pairingFrequencyOffsetHz = static_cast<std::int32_t>(frequencyOffsetHz);
     pairingPowerDbm = static_cast<std::int8_t>(powerDbm);
@@ -661,9 +714,9 @@ void handleSerialCommand() {
             if (serialCommand == "pairing_plan_b") {
                 handled = true;
                 for (std::size_t index = 0;
-                     index < kPairingProfile.stepCount;
+                     index < activePairingProfile.stepCount;
                      ++index) {
-                    const auto& step = kPairingProfile.steps[index];
+                    const auto& step = activePairingProfile.steps[index];
                     String line;
                     line.reserve(360);
                     line += "{\"type\":\"pairing_dry_run\",\"step\":";
@@ -675,7 +728,7 @@ void handleSerialCommand() {
                     line += ",\"wake_symbols\":";
                     line += step.wakeSymbols;
                     line += ",\"reply_delay_ms\":";
-                    line += kPairingProfile.replyDelayMs;
+                    line += activePairingProfile.replyDelayMs;
                     line += ",\"reply_deadline_ms\":";
                     line += step.replyDeadlineMs;
                     line += ",\"transmit_enabled\":false,\"frame\":\"";
@@ -858,7 +911,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz;
-            delay(kPairingProfile.replyDelayMs);
+            delay(activePairingProfile.replyDelayMs);
             auto replyFrame = step->frame;
             auto replyDateTime = pairingLocalDateTime;
             const bool pairingClockValid =

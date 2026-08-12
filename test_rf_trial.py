@@ -52,6 +52,39 @@ class RFTrialTests(unittest.TestCase):
             report["checks"]["known_stock_gateway_endpoint_silent"]
         )
 
+    def test_authorized_local_reply_is_not_stock_gateway_traffic(self) -> None:
+        manifest = self.manifest()
+        manifest["rf_transmit_authorized"] = True
+        events = [
+            {"raw": frame("80000000", "1bce0024", 1)},
+            {"raw": frame("9bce0024", "39840280", 0x81)},
+            {"raw": frame("b9840280", "9bce0024", 3)},
+        ]
+        report = MODULE.analyze_trial(manifest, events)
+        self.assertTrue(report["passed"])
+        self.assertEqual(1, report["companion_reply_frame_count"])
+        self.assertEqual(0, report["stock_gateway_frame_count"])
+
+    def test_assigned_channel_must_be_echoed(self) -> None:
+        manifest = self.manifest()
+        manifest["assigned_channel"] = 5
+        paired_message = bytearray.fromhex(frame("b9840280", "9bce0024", 1))
+        paired_message[16] = 2
+        paired_message[17] = 0xE5
+        events = [
+            {"raw": frame("80000000", "1bce0024", 1)},
+            {"raw": paired_message.hex()},
+            {"raw": frame("b9840280", "9bce0024", 3)},
+        ]
+        report = MODULE.analyze_trial(manifest, events)
+        self.assertTrue(report["checks"]["assigned_channel_echoed"])
+        self.assertEqual({"5": 1}, report["echoed_channel_counts"])
+
+        manifest["assigned_channel"] = 4
+        report = MODULE.analyze_trial(manifest, events)
+        self.assertFalse(report["checks"]["assigned_channel_echoed"])
+        self.assertFalse(report["passed"])
+
     def test_installed_valve_endpoint_is_not_stock_gateway_evidence(self) -> None:
         events = [
             {"raw": frame("80000000", "1bce0024", 1)},

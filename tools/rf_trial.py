@@ -16,9 +16,10 @@ from urllib.request import urlopen
 
 FRAME_BYTES = 38
 SYNC = bytes.fromhex("79f4882f28")
-# Stock pairing replies use this companion endpoint.  ``b42d008f`` is the
-# installed valve endpoint and must not be treated as evidence that the stock
-# RainPoint gateway transmitted during an isolated trial.
+# Pairing replies use this companion endpoint.  The frame direction is the
+# paired sensor identity to this endpoint even though the gateway (stock or
+# local) physically transmits it.  Therefore these frames are only attributable
+# to the stock gateway when the local transmitter was not authorized.
 STOCK_PAIRING_COMPANION_ENDPOINT = bytes.fromhex("39840280")
 TRIAL_ID = re.compile(r"[a-z0-9][a-z0-9_-]{2,63}\Z")
 
@@ -109,11 +110,15 @@ def analyze_trial(
     factory_count = 0
     paired_count = 0
     terminal_count = 0
+    companion_reply_count = 0
     stock_gateway_count = 0
     factory = manifest.get("expected_factory_endpoint")
     paired = manifest.get("expected_paired_endpoint")
     factory_bytes = bytes.fromhex(factory) if factory else None
     paired_bytes = bytes.fromhex(paired) if paired else None
+    assigned_channel = manifest.get("assigned_channel")
+    echoed_channels: Counter[int] = Counter()
+    local_tx_authorized = manifest.get("rf_transmit_authorized") is True
 
     normalized = 0
     for event in events:
@@ -126,12 +131,16 @@ def analyze_trial(
         message = frame[13] & 0x7F
         routes[f"{source.hex()}->{destination.hex()}"] += 1
         messages[f"0x{message:02x}"] += 1
-        if STOCK_PAIRING_COMPANION_ENDPOINT in (source, destination):
-            stock_gateway_count += 1
+        if destination == STOCK_PAIRING_COMPANION_ENDPOINT:
+            companion_reply_count += 1
+            if not local_tx_authorized:
+                stock_gateway_count += 1
         if factory_bytes is not None and factory_bytes in (source, destination):
             factory_count += 1
         if paired_bytes is not None and paired_bytes in (source, destination):
             paired_count += 1
+            if destination == paired_bytes and message == 1:
+                echoed_channels[2 * frame[16] + (1 if frame[17] & 0x80 else 0)] += 1
             if destination == paired_bytes and message == 3:
                 terminal_count += 1
 
@@ -144,6 +153,10 @@ def analyze_trial(
         "known_stock_gateway_endpoint_silent": (
             not stock_expected_silent or stock_gateway_count == 0
         ),
+        "assigned_channel_echoed": (
+            assigned_channel is None
+            or echoed_channels[int(assigned_channel)] > 0
+        ),
     }
     return {
         "event_count": len(events),
@@ -153,7 +166,12 @@ def analyze_trial(
         "factory_identity_frame_count": factory_count,
         "paired_identity_frame_count": paired_count,
         "terminal_message_03_count": terminal_count,
+        "companion_reply_frame_count": companion_reply_count,
         "stock_gateway_frame_count": stock_gateway_count,
+        "assigned_channel": assigned_channel,
+        "echoed_channel_counts": {
+            str(channel): count for channel, count in sorted(echoed_channels.items())
+        },
         "checks": checks,
         "passed": all(checks.values()),
     }

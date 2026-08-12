@@ -69,6 +69,9 @@ constexpr std::uint16_t kPairingReplyDelayMs = 60;
 constexpr std::uint16_t kPairingReplyDeadlineMs = 250;
 constexpr std::int32_t kMaxPairingFrequencyOffsetHz = 100'000;
 constexpr std::uint16_t kCurrentPairingTrailerResidual = 0x4f03;
+constexpr std::uint32_t kPairingChannelBaseHz = 433'031'500;
+constexpr std::uint32_t kPairingChannelSpacingHz = 110'000;
+constexpr std::uint8_t kInitialPairingChannel = 4;
 constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
     return value.year >= 2020 && value.year <= 2147 &&
         value.month >= 1 && value.month <= 12 &&
@@ -337,6 +340,52 @@ inline bool validPairingProfile(const PairingProfile& profile) {
         }
     }
     return true;
+}
+
+constexpr std::uint32_t pairingChannelCenterHz(std::uint8_t channel) {
+    return kPairingChannelBaseHz +
+        static_cast<std::uint32_t>(channel) * kPairingChannelSpacingHz;
+}
+
+constexpr std::uint8_t pairingChannelFromReply(
+    const std::array<std::uint8_t, kFrameBytes>& frame
+) {
+    return static_cast<std::uint8_t>(
+        2 * (frame[18] & 0x7fU) + ((frame[19] & 0x80U) ? 1 : 0)
+    );
+}
+
+constexpr std::uint8_t pairingChannelFromSensor(
+    const std::array<std::uint8_t, kFrameBytes>& frame
+) {
+    return static_cast<std::uint8_t>(
+        2 * frame[16] + ((frame[17] & 0x80U) ? 1 : 0)
+    );
+}
+
+inline bool assignPairingChannel(
+    PairingProfile& profile,
+    std::uint8_t channel
+) {
+    // Four controlled exchanges show reply 1 assigning this selector and the
+    // sensor echoing it in its following message 01. Keep the experiment
+    // inside the eight-channel range implied by the product limit.
+    if (channel < 4 || channel > 11 || profile.stepCount == 0) {
+        return false;
+    }
+    auto& initial = profile.steps[0];
+    initial.channelCenterHz = pairingChannelCenterHz(kInitialPairingChannel);
+    initial.frame[18] = static_cast<std::uint8_t>(
+        channel / 2U | ((channel & 1U) == 0 ? 0x80U : 0x00U)
+    );
+    initial.frame[19] = static_cast<std::uint8_t>(
+        0x70U | ((channel & 1U) != 0 ? 0x80U : 0x00U)
+    );
+    writeTrailer(initial.frame, kCurrentPairingTrailerResidual);
+    for (std::size_t index = 1; index < profile.stepCount; ++index) {
+        profile.steps[index].channelCenterHz = pairingChannelCenterHz(channel);
+    }
+    return validPairingProfile(profile);
 }
 
 inline bool endpointEquals(
