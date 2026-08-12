@@ -136,8 +136,8 @@ def _hcs026_pairing_fields(
     Two controlled sensors showed a four-byte factory identity whose first
     byte gains bit 7 after enrollment. Factory announcements use 80000000 as
     the other endpoint. Paired reports use the established b9840280 RainPoint
-    gateway and a distinct 0x82/0x04 body layout. The latter also provided a
-    controlled full/low/full battery transition at byte 17, bit 0x04.
+    gateway. Moisture and battery fields are decoded separately from their
+    marker-relative report layout.
     """
     if len(frame) != FRAME_BYTES or frame[12] != 0x24:
         return {}
@@ -163,43 +163,41 @@ def _hcs026_pairing_fields(
         return {}
 
     factory = bytes([endpoint_b[0] & 0x7F]) + endpoint_b[1:]
-    result: dict[str, Any] = {
+    return {
         "hcs026_factory_endpoint": factory.hex(),
         "hcs026_paired_endpoint": endpoint_b.hex(),
         "hcs026_pairing_state": "paired",
     }
-    if (
-        frame[15] == 0x82
-        and frame[16] in {0x02, 0x04}
-        and frame[18] & 0x7F == 0x44
-    ):
-        moisture = frame[19] * 2 + int(bool(frame[20] & 0x80))
-        if 0 <= moisture <= 100:
-            battery_normal = bool(frame[17] & 0x04)
-            result.update(
-                {
-                    "soil_moisture_percent": moisture,
-                    "battery_low": not battery_normal,
-                    "battery_status": 1 if battery_normal else 2,
-                    "battery_percent": 100 if battery_normal else 10,
-                }
-            )
-    return result
 
 
-def _soil_moisture(frame: bytes, catalog: DeviceCatalog) -> int | None:
-    """Decode either field position confirmed in HCS026FRF reports."""
+def _hcs026_report_fields(
+    frame: bytes, catalog: DeviceCatalog
+) -> dict[str, Any]:
+    """Decode marker-relative moisture and categorical battery fields."""
     if len(frame) != FRAME_BYTES:
-        return None
+        return {}
     canonical_endpoint = _canonical_hcs026_endpoint(frame[9:13], catalog)
-    if canonical_endpoint is None:
-        return None
+    paired_endpoint = bool(
+        frame[12] == 0x24
+        and frame[5:9].hex() in catalog.hcs026_pairing_peers
+        and frame[9] & 0x80
+        and (frame[13] & 0x7F) in {1, 2, 3, 4, 5, 6}
+    )
+    if canonical_endpoint is None and not paired_endpoint:
+        return {}
     # A retained Front Yard Sensor 2 report used the full HCS02x product code
     # in its endpoint suffix and carried a HomGar-style one-byte type-10 TLV:
     # 0x88 0x4f -> STA_RH/soil moisture, 79 percent. Its normal-endpoint
     # acknowledgement followed 180 ms later.
     if frame[12] == HCS026_PRODUCT_CODE:
-        return _compact_status_fields(frame).get("status_soil_moisture_percent")
+        moisture = _compact_status_fields(frame).get(
+            "status_soil_moisture_percent"
+        )
+        return (
+            {"soil_moisture_percent": moisture}
+            if moisture is not None
+            else {}
+        )
     for marker_index in (20, 18):
         if frame[marker_index] & 0x7F != 0x44:
             continue
@@ -207,8 +205,22 @@ def _soil_moisture(frame: bytes, catalog: DeviceCatalog) -> int | None:
             1 if frame[marker_index + 2] & 0x80 else 0
         )
         if 0 <= percent <= 100:
-            return percent
-    return None
+            result: dict[str, Any] = {"soil_moisture_percent": percent}
+            # The controlled full/low/full transition established bit 0x04 in
+            # the byte immediately before the moisture marker. Its absolute
+            # position shifts with the two observed HCS026 report layouts.
+            # Only trailer-valid reports may update supported battery state.
+            if _trailer_fields(frame).get("trailer_valid") is True:
+                battery_normal = bool(frame[marker_index - 1] & 0x04)
+                result.update(
+                    {
+                        "battery_low": not battery_normal,
+                        "battery_status": 1 if battery_normal else 2,
+                        "battery_percent": 100 if battery_normal else 10,
+                    }
+                )
+            return result
+    return {}
 
 
 def _valve_fields(
@@ -312,10 +324,6 @@ def normalize_row(
     result.update(_compact_status_fields(frame))
     result.update(_hcs026_battery_candidate(frame, catalog))
     result.update(_hcs026_pairing_fields(frame, catalog))
-    moisture = result.get("soil_moisture_percent")
-    if moisture is None:
-        moisture = _soil_moisture(frame, catalog)
-    if moisture is not None:
-        result["soil_moisture_percent"] = moisture
+    result.update(_hcs026_report_fields(frame, catalog))
     result.update(_valve_fields(frame, catalog))
     return result

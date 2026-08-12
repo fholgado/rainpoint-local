@@ -509,6 +509,59 @@ class RainPointRFTest(unittest.TestCase):
                         )
                         self.assertEqual(observation[key], decoded[decoded_key])
 
+    def test_decodes_marker_relative_battery_for_every_sensor_layout(self) -> None:
+        reports = {
+            "Front Yard Sensor 1": (
+                "79f4882f28b9840280ce6280241301820305c41b8000000000000000000000000000000064cc"
+            ),
+            "Front Yard Sensor 2": (
+                "79f4882f28b9840280d1e280241b01820785c42680000000000000000000000000000000437b"
+            ),
+            "Left Bed": (
+                "79f4882f28b9840280c4e500241081820385c41c000000000000000000000000000000003169"
+            ),
+            "Right Bed": (
+                "79f4882f28b42d008f9ce5802410848307018005441c800000000000000000000000000013fb"
+            ),
+            "Test Sensor A": (
+                "79f4882f28b98402809bce00240681820485c400800000000000000000000000000000000a18"
+            ),
+        }
+        for name, frame in reports.items():
+            with self.subTest(sensor=name):
+                decoded = normalize_row(
+                    {"len": len(frame) * 4, "data": frame}
+                )
+                self.assertTrue(decoded["trailer_valid"])
+                self.assertEqual(100, decoded["battery_percent"])
+                self.assertFalse(decoded["battery_low"])
+
+        test_b = (
+            "79f4882f28b984028095a98024098182020544008000000000000000000000000000000045a2"
+        )
+        test_b_catalog = DeviceCatalog(
+            sensors=(
+                SensorDefinition(
+                    "95a98024", "hcs026-95a98024", "Test Sensor B"
+                ),
+            ),
+            hcs026_pairing_peers=frozenset(("b9840280",)),
+        )
+        decoded = normalize_row(
+            {"len": len(test_b) * 4, "data": test_b},
+            catalog=test_b_catalog,
+        )
+        self.assertEqual(100, decoded["battery_percent"])
+
+    def test_invalid_report_cannot_update_supported_battery(self) -> None:
+        frame = (
+            "79f4882f28b9840280ce6280240281820301441c000000000000000000000000000000000000"
+        )
+        decoded = normalize_row({"len": len(frame) * 4, "data": frame})
+        self.assertFalse(decoded["trailer_valid"])
+        self.assertEqual(56, decoded["soil_moisture_percent"])
+        self.assertNotIn("battery_percent", decoded)
+
     def test_dynamic_paired_hcs026_becomes_a_device_and_restores(self) -> None:
         full_frame = (
             "79f4882f28b98402809bce00240301820485c40080000000000000000000000000000000518b"

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.2
+
+- Decode the controlled marker-relative HCS026 battery flag across both known
+  moisture-report layouts so all locally received sensors expose categorical
+  normal/low battery status.
+- Require a validated ordinary trailer before battery state can update, while
+  continuing to retain moisture from corrupt reports only as rejected evidence.
+
 ## 0.16.1
 
 - Add an authenticated local-forget operation for any currently known HCS026
