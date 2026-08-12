@@ -6,9 +6,12 @@ import asyncio
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components import network
+from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
@@ -17,6 +20,7 @@ from .api import (
     RainPointLocalCannotConnect,
     RainPointLocalClient,
     RainPointLocalInvalidResponse,
+    RainPointNodeCommissioningClient,
     RainPointLocalUnauthorized,
 )
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
@@ -36,6 +40,13 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._hassio_discovery: dict[str, Any] | None = None
+        self._discovered_node_id: str | None = None
+        self._discovered_node_host: str | None = None
+        self._adoption_gateway_entry: config_entries.ConfigEntry | None = None
+        self._adoption_name: str | None = None
+        self._adoption_area: str | None = None
+        self._adoption_task: asyncio.Task[None] | None = None
+        self._adoption_error: str | None = None
 
     @staticmethod
     @callback
@@ -70,6 +81,242 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=schema, errors=errors
         )
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> FlowResult:
+        """Discover one factory node without creating another hub entry."""
+        node_id = str(discovery_info.properties.get("id", "")).lower()
+        node_host = str(discovery_info.ip_address)
+        if not node_id.startswith("rp-") or not node_host:
+            return self.async_abort(reason="invalid_response")
+        entries = self._async_current_entries()
+        if not entries:
+            return self.async_abort(reason="gateway_required")
+        client = RainPointNodeCommissioningClient(
+            node_host, async_get_clientsession(self.hass)
+        )
+        try:
+            info = await client.info()
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except RainPointLocalInvalidResponse:
+            return self.async_abort(reason="invalid_response")
+        if info.get("node_id") != node_id or info.get("state") != "adoptable":
+            return self.async_abort(reason="invalid_response")
+        entry = entries[0]
+        try:
+            managed_nodes = await RainPointLocalClient(
+                entry.data[CONF_HOST],
+                entry.data[CONF_PORT],
+                async_get_clientsession(self.hass),
+            ).nodes()
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except RainPointLocalInvalidResponse:
+            return self.async_abort(reason="invalid_response")
+        if node_id in {
+            str(node.get("node_id")) for node in managed_nodes
+        }:
+            return self.async_abort(reason="already_configured")
+        await self.async_set_unique_id(f"radio-node:{node_id}")
+        self._discovered_node_id = node_id
+        self._discovered_node_host = node_host
+        self._adoption_gateway_entry = entry
+        self.context["title_placeholders"] = {"name": node_id}
+        return await self.async_step_adopt_node()
+
+    async def async_step_adopt_node(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Collect only friendly metadata, then identify automatically."""
+        if self._discovered_node_id is None or self._discovered_node_host is None:
+            return self.async_abort(reason="invalid_response")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._adoption_name = str(user_input["name"]).strip()
+            self._adoption_area = str(user_input.get("area", "")).strip() or None
+            try:
+                await RainPointNodeCommissioningClient(
+                    self._discovered_node_host,
+                    async_get_clientsession(self.hass),
+                ).identify()
+            except RainPointLocalCannotConnect:
+                errors["base"] = "cannot_connect"
+            except RainPointLocalInvalidResponse:
+                errors["base"] = "invalid_response"
+            else:
+                self._adoption_task = self.hass.async_create_task(
+                    self._async_wait_for_physical_confirmation()
+                )
+                return await self.async_step_node_confirmation_progress()
+        return self.async_show_form(
+            step_id="adopt_node",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name", default="RainPoint radio node"): str,
+                    vol.Optional("area", default=""): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"node_id": self._discovered_node_id},
+        )
+
+    async def _async_wait_for_physical_confirmation(self) -> None:
+        """Poll the temporary node service until BOOT is pressed."""
+        assert self._discovered_node_host is not None
+        client = RainPointNodeCommissioningClient(
+            self._discovered_node_host, async_get_clientsession(self.hass)
+        )
+        for _ in range(60):
+            try:
+                info = await client.info()
+            except RainPointLocalCannotConnect:
+                self._adoption_error = "cannot_connect"
+                return
+            except RainPointLocalInvalidResponse:
+                self._adoption_error = "invalid_response"
+                return
+            if info.get("physically_confirmed") is True:
+                return
+            await asyncio.sleep(1)
+        self._adoption_error = "confirmation_timeout"
+
+    async def async_step_node_confirmation_progress(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Auto-advance after the selected node's BOOT button is pressed."""
+        if self._adoption_task is None:
+            return self.async_abort(reason="confirmation_timeout")
+        if self._adoption_task.done():
+            return self.async_show_progress_done(
+                next_step_id="node_confirmation_complete"
+            )
+        return self.async_show_progress(
+            step_id="node_confirmation_progress",
+            progress_action="confirm_radio_node",
+            progress_task=self._adoption_task,
+        )
+
+    async def async_step_node_confirmation_complete(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Deliver the gateway credential after physical confirmation."""
+        if self._adoption_error is not None:
+            return self.async_abort(reason=self._adoption_error)
+        if (
+            self._adoption_gateway_entry is None
+            or self._discovered_node_id is None
+            or self._discovered_node_host is None
+            or self._adoption_name is None
+        ):
+            return self.async_abort(reason="invalid_response")
+        entry = self._adoption_gateway_entry
+        token = str(entry.data.get(CONF_TOKEN, ""))
+        gateway = RainPointLocalClient(
+            entry.data[CONF_HOST],
+            entry.data[CONF_PORT],
+            async_get_clientsession(self.hass),
+        )
+        try:
+            adoption = await gateway.start_radio_node_adoption(
+                token,
+                node_id=self._discovered_node_id,
+                name=self._adoption_name,
+                area=self._adoption_area,
+            )
+        except RainPointLocalUnauthorized:
+            return self.async_abort(reason="invalid_auth")
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except (KeyError, RainPointLocalInvalidResponse):
+            return self.async_abort(reason="invalid_response")
+        try:
+            gateway_host = await network.async_get_source_ip(
+                self.hass, target_ip=self._discovered_node_host
+            )
+            await RainPointNodeCommissioningClient(
+                self._discovered_node_host,
+                async_get_clientsession(self.hass),
+            ).adopt(
+                gateway_host=str(gateway_host),
+                gateway_port=8790,
+                token=str(adoption["node_token"]),
+            )
+        except (
+            KeyError,
+            HomeAssistantError,
+            RainPointLocalCannotConnect,
+            RainPointLocalInvalidResponse,
+        ):
+            try:
+                await gateway.cancel_radio_node_adoption(
+                    token, self._discovered_node_id
+                )
+            except (
+                RainPointLocalCannotConnect,
+                RainPointLocalInvalidResponse,
+                RainPointLocalUnauthorized,
+            ):
+                pass
+            return self.async_abort(reason="cannot_connect")
+        self._adoption_task = self.hass.async_create_task(
+            self._async_wait_for_adoption(gateway, token)
+        )
+        return await self.async_step_node_adoption_progress()
+
+    async def _async_wait_for_adoption(
+        self, gateway: RainPointLocalClient, token: str
+    ) -> None:
+        """Wait for the restarted node's first authenticated connection."""
+        assert self._discovered_node_id is not None
+        for _ in range(60):
+            try:
+                status = await gateway.radio_node_adoption(
+                    token, self._discovered_node_id
+                )
+            except RainPointLocalCannotConnect:
+                await asyncio.sleep(1)
+                continue
+            except (RainPointLocalInvalidResponse, RainPointLocalUnauthorized):
+                self._adoption_error = "invalid_response"
+                return
+            if status.get("state") == "adopted":
+                coordinator = self.hass.data.get(DOMAIN, {}).get(
+                    self._adoption_gateway_entry.entry_id
+                    if self._adoption_gateway_entry
+                    else ""
+                )
+                if coordinator is not None:
+                    await coordinator.async_request_refresh()
+                return
+            if status.get("state") in {"expired", "not_found"}:
+                self._adoption_error = "adoption_timeout"
+                return
+            await asyncio.sleep(1)
+        self._adoption_error = "adoption_timeout"
+
+    async def async_step_node_adoption_progress(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Auto-advance when the new node authenticates to the gateway."""
+        if self._adoption_task is None:
+            return self.async_abort(reason="adoption_timeout")
+        if self._adoption_task.done():
+            return self.async_show_progress_done(next_step_id="node_adopted")
+        return self.async_show_progress(
+            step_id="node_adoption_progress",
+            progress_action="adopt_radio_node",
+            progress_task=self._adoption_task,
+        )
+
+    async def async_step_node_adopted(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Finish a subordinate-device flow without creating another entry."""
+        if self._adoption_error is not None:
+            return self.async_abort(reason=self._adoption_error)
+        return self.async_abort(reason="node_adopted")
 
     async def async_step_import(self, user_input: dict[str, Any]) -> FlowResult:
         """Import a temporary YAML bootstrap as a normal config entry."""

@@ -113,7 +113,8 @@ void WifiTransport::begin() {
     nodeId_ = stableNodeId();
     loadConfiguration();
     ensureSetupToken();
-    if (configured_) {
+    commissioningPortal_.begin(nodeId_, wifiConfigured_, configured_);
+    if (wifiConfigured_) {
         startWifi();
     } else {
         reportNetworkState("unconfigured");
@@ -147,6 +148,7 @@ void WifiTransport::loadConfiguration() {
     gatewayPort_ = preferences_.getUShort("port", 8790);
     token_ = preferences_.getString("token", "");
     preferences_.end();
+    wifiConfigured_ = !ssid_.isEmpty();
     configured_ = !ssid_.isEmpty() && validHost(gatewayHost_) &&
                   gatewayPort_ > 0 && validHexToken(token_);
 }
@@ -158,21 +160,37 @@ void WifiTransport::startWifi() {
     WiFi.setHostname(nodeId_.c_str());
     WiFi.begin(ssid_.c_str(), password_.c_str());
     lastReconnectAttempt_ = millis();
+    wifiStartedAtMs_ = millis();
     reportNetworkState("connecting_wifi");
 }
 
 void WifiTransport::poll() {
-    if (!configured_) {
+    commissioningPortal_.poll();
+    if (!wifiConfigured_) {
         return;
     }
     if (WiFi.status() != WL_CONNECTED) {
         clearConnection();
+        if (!configured_ && !wifiSetupFallbackStarted_ &&
+            millis() - wifiStartedAtMs_ >= 120'000) {
+            wifiSetupFallbackStarted_ = true;
+            commissioningPortal_.onWifiUnavailable();
+            reportNetworkState("wifi_setup_fallback");
+            return;
+        }
+        if (wifiSetupFallbackStarted_) {
+            return;
+        }
         if (millis() - lastReconnectAttempt_ >= kReconnectIntervalMs) {
             WiFi.reconnect();
             ++wifiReconnects_;
             lastReconnectAttempt_ = millis();
             reportNetworkState("reconnecting_wifi");
         }
+        return;
+    }
+    commissioningPortal_.onWifiConnected();
+    if (!configured_) {
         return;
     }
     if (!client_.connected()) {

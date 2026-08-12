@@ -8,11 +8,10 @@ migrate once into the same private SQLite registry. Registered nodes remain
 visible while offline and expose connection, firmware, RF, memory, network,
 temperature, and watchdog-oriented diagnostics as HA devices.
 
-Commissioning still begins over USB in firmware 0.5: factory firmware generates
-a private setup token, `show_node` displays it only while unconfigured, and the
-user enters the stable ID/token before sending `configure_wifi`. This remains a
-recovery and development path while the zero-copy flow below is implemented;
-it is not the target product experience.
+The deployed firmware 0.5 still begins commissioning over USB. Firmware 0.6,
+integration 0.6, and gateway 0.16 source implement the zero-copy flow below and
+are awaiting an end-to-end test on a factory-reset board. The ID/token USB flow
+remains an advanced recovery path, not the target product experience.
 
 ## Product goal
 
@@ -30,7 +29,7 @@ There are two deliberately separate flows:
 The RainPoint gateway and our custom local radio node must always be named
 explicitly so users do not confuse the vendor hardware with this project.
 
-## Prototype flow available now
+## Deployed recovery flow
 
 The current firmware derives a stable `rp-xxxxxxxxxxxx` node ID from the ESP32
 and accepts Wi-Fi configuration over its USB serial connection. The user:
@@ -78,9 +77,13 @@ never expose it. The gateway accepts that credential only for the named node
 and persists it in the managed registry only after the first successful mutual
 authentication. Cancellation or expiry invalidates an uncommitted credential.
 
-The temporary setup portal, LAN advertisement, BOOT-button confirmation, and
-HA discovery UI remain the next implementation slice. Until those pieces are
-verified together, the manual USB flow remains available and visible.
+Firmware 0.6 source now implements the temporary setup portal, adoptable mDNS
+advertisement, bounded LED identification, BOOT-button confirmation, and
+one-time credential receipt. Integration 0.6 source implements the matching
+zeroconf flow and automatically selects HA's LAN-reachable source address.
+These pieces compile and their gateway contract is covered by automated tests,
+but still require an end-to-end factory-reset board test before deployment.
+Until then, the manual USB flow remains available and visible.
 
 Adding another node repeats the same flow; it does not create another HA
 integration entry or another logical device network.

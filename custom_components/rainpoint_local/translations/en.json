@@ -1,5 +1,9 @@
 {
   "config": {
+    "progress": {
+      "confirm_radio_node": "The selected radio node is blinking. Press its BOOT button once; Home Assistant will continue automatically.",
+      "adopt_radio_node": "The radio node is restarting and connecting to the custom local gateway. Home Assistant will continue automatically."
+    },
     "step": {
       "user": {
         "title": "Connect to rainpointd",
@@ -12,6 +16,22 @@
       "hassio_confirm": {
         "title": "Set up RainPoint Local Gateway",
         "description": "Connect Home Assistant to the RainPoint Local Gateway add-on. Authorization will be configured automatically."
+      },
+      "adopt_node": {
+        "title": "Adopt RainPoint radio node",
+        "description": "Home Assistant discovered {node_id}. Choose its name and area; the next screen will blink the selected node for physical confirmation.",
+        "data": {
+          "name": "Name",
+          "area": "Area"
+        }
+      },
+      "node_confirmation_progress": {
+        "title": "Identify the radio node",
+        "description": "Press the BOOT button once on the blinking radio node. No ID or setup token is required."
+      },
+      "node_adoption_progress": {
+        "title": "Adopting radio node",
+        "description": "Waiting for the node to authenticate with the custom local gateway."
       }
     },
     "error": {
@@ -20,6 +40,11 @@
     },
     "abort": {
       "already_configured": "This local gateway is already configured",
+      "gateway_required": "Set up the RainPoint Local Gateway before adopting radio nodes",
+      "node_adopted": "The radio node was adopted successfully",
+      "confirmation_timeout": "The BOOT button was not pressed before identification expired",
+      "adoption_timeout": "The radio node did not connect to the custom local gateway before adoption expired",
+      "invalid_auth": "The local gateway rejected the adoption request",
       "cannot_connect": "Unable to connect to the local gateway",
       "invalid_response": "The gateway returned an incompatible response"
     }
@@ -33,7 +58,7 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "pair_sensor": "Pair a validated HCS026 test sensor",
-          "add_radio_node": "Add a custom local radio node",
+          "add_radio_node": "Add with setup code (advanced)",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
       },

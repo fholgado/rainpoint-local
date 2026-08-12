@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.0
+
+- Add gateway-managed adoption sessions: temporary per-node credentials are
+  issued through the authenticated API, remain absent from public status, can
+  be cancelled, and persist only after the node's first successful mutual-
+  authentication handshake.
+- Support the firmware 0.6 captive-portal, zeroconf, physical-confirmation, and
+  zero-copy Home Assistant adoption contract.
+
 ## 0.15.0
 
 - Add a bounded, authenticated Identify command that can blink a capable
@@ -8,10 +17,6 @@
   compatibility with firmware 0.5 nodes.
 - Expose node identification through the authenticated management API for the
   Home Assistant device button and future discovery/adoption flow.
-- Add the gateway-managed adoption-session core: temporary per-node
-  credentials are issued through the authenticated API, remain absent from
-  public status, can be cancelled, and persist only after the node's first
-  successful mutual-authentication handshake.
 
 ## 0.14.0
 

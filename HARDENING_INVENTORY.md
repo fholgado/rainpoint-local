@@ -8,8 +8,8 @@ pairing through Home Assistant.
 
 Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.15.0
-- `rainpoint_local` integration 0.5.0
+- deployed `rainpointd` add-on 0.15.0; zero-copy adoption is 0.16.0 source
+- deployed `rainpoint_local` integration 0.5.0; zeroconf adoption is 0.6.0 source
 - ESP32 bridge firmware 0.6.0 source; firmware 0.5.0 remains on the deployed
   node until the next physical flash
 - authenticated Wi-Fi node protocol v2

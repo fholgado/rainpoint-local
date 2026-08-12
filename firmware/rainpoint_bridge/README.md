@@ -160,7 +160,28 @@ The generic `esp32dev` board profile matches the ESP-WROOM-32 development
 board. If upload auto-reset does not work, hold **BOOT**, start upload, and
 release it when PlatformIO begins connecting.
 
-## Wi-Fi provisioning for prototype testing
+## First-boot Wi-Fi and Home Assistant adoption
+
+Firmware 0.6 removes IDs and tokens from the normal setup path. A board without
+saved Wi-Fi starts an open, temporary access point named **RainPoint Local
+Setup xxxxxx** and redirects clients to a small captive portal. The user enters
+only the home Wi-Fi name and password. If those credentials cannot connect for
+two minutes, the setup access point returns automatically.
+
+After joining the LAN, an unadopted node advertises
+`_rainpoint-node._tcp.local.` and exposes only a temporary commissioning API.
+Home Assistant discovers it, asks for a friendly name and area, blinks GPIO2,
+and waits for a press of the ESP32 BOOT button on GPIO0. Physical confirmation
+is valid for 60 seconds. HA then delivers the custom local gateway address and
+its one-time gateway-issued node credential; the node restarts and the gateway
+persists that credential only after mutual authentication succeeds.
+
+An adopted node stops advertising and does not run the commissioning HTTP
+service. Holding BOOT for ten seconds while firmware is running clears Wi-Fi
+and adoption state and returns the node to its setup access point. The manual
+USB path remains an additional recovery mechanism.
+
+### Manual USB recovery path
 
 Wi-Fi is optional. An unconfigured node continues to work over USB exactly as
 before. Each board derives a stable ID such as `rp-001122334455` from its ESP32
@@ -213,8 +234,9 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 1. Flash firmware 0.6.0 and validate its bounded Identify LED action while RF
    transmission remains disarmed.
-2. Implement the temporary Wi-Fi setup portal, adoptable LAN advertisement,
-   physical BOOT-button confirmation, and one-click HA adoption contract.
+2. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
+   physical BOOT-button confirmation, and one-click HA adoption contract on a
+   second board.
 3. Start the fixed Sensor B workflow from Home Assistant with the original
    RainPoint gateway powered off.
 4. Confirm terminal message `03`, registry creation, and ordinary moisture

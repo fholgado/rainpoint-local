@@ -213,3 +213,55 @@ class RainPointLocalClient:
         if not isinstance(result, dict):
             raise RainPointLocalInvalidResponse("response is not an object")
         return result
+
+
+class RainPointNodeCommissioningClient:
+    """Client for a factory node's temporary LAN adoption service."""
+
+    def __init__(self, host: str, session: aiohttp.ClientSession) -> None:
+        self._base_url = f"http://{host}/api/v1"
+        self._session = session
+
+    async def info(self) -> dict[str, Any]:
+        """Return public adoption state."""
+        return await self._request("GET", "info")
+
+    async def identify(self) -> dict[str, Any]:
+        """Start a bounded LED-identification window."""
+        return await self._request("POST", "identify")
+
+    async def adopt(
+        self, *, gateway_host: str, gateway_port: int, token: str
+    ) -> dict[str, Any]:
+        """Deliver a gateway-issued credential after physical confirmation."""
+        return await self._request(
+            "POST",
+            "adopt",
+            data={
+                "host": gateway_host,
+                "port": str(gateway_port),
+                "token": token,
+            },
+        )
+
+    async def _request(
+        self, method: str, path: str, *, data: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        try:
+            async with self._session.request(
+                method,
+                f"{self._base_url}/{path}",
+                data=data,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                response.raise_for_status()
+                payload = await response.json()
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            raise RainPointLocalCannotConnect(str(exc)) from exc
+        except (ValueError, TypeError) as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
+        if not isinstance(payload, dict):
+            raise RainPointLocalInvalidResponse(
+                "node commissioning response is not an object"
+            )
+        return payload

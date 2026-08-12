@@ -6,6 +6,8 @@
 
 #include <cstdint>
 
+#include "commissioning_portal.h"
+
 namespace rainpoint {
 
 class WifiTransport {
@@ -46,6 +48,7 @@ private:
     void clearConnection();
 
     Preferences preferences_;
+    CommissioningPortal commissioningPortal_;
     WiFiClient client_;
     String nodeId_;
     String ssid_;
@@ -57,12 +60,15 @@ private:
     String challengeNonce_;
     std::uint16_t gatewayPort_ = 8790;
     std::uint32_t lastReconnectAttempt_ = 0;
+    std::uint32_t wifiStartedAtMs_ = 0;
     std::uint64_t networkBytesSent_ = 0;
     std::uint64_t networkBytesReceived_ = 0;
     std::uint32_t wifiReconnects_ = 0;
     std::uint32_t gatewayConnectAttempts_ = 0;
     std::uint32_t gatewayAuthentications_ = 0;
     bool configured_ = false;
+    bool wifiConfigured_ = false;
+    bool wifiSetupFallbackStarted_ = false;
     bool authenticated_ = false;
 };
 
