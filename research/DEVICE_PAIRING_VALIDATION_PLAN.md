@@ -270,6 +270,37 @@ testing begins later with the separate close-first/watchdog plan.
 
 ## Evidence record for every trial
 
+Use `tools/rf_trial.py` to snapshot the gateway, establish an exact event
+cursor, timestamp actions, retain only the trial's new gateway events, and
+produce automatic route, message, known-stock-endpoint, and terminal-message
+checks. The endpoint check supplements the required physical power-off and RF
+baseline; it cannot independently prove that the stock RainPoint gateway is
+silent. Preparation is always receive-only and writes
+`rf_transmit_authorized: false` into the manifest.
+
+Sensor A example (prepare only after the independent raw-IQ capture is active):
+
+```bash
+python3 tools/rf_trial.py prepare \
+  --trial-id sensor-a-local-01 \
+  --kind sensor_pairing \
+  --gateway-url http://homeassistant.local:8787 \
+  --selected-node rp-001122aabbcc \
+  --stock-gateway-state off_verified \
+  --factory-endpoint 1bce0024 \
+  --paired-endpoint 9bce0024
+
+python3 tools/rf_trial.py mark captures/trials/sensor-a-local-01 \
+  sensor_button_held --detail "red flash followed by blue flash"
+
+python3 tools/rf_trial.py finish captures/trials/sensor-a-local-01
+```
+
+For a new valve, omit the unknown endpoint arguments during V0/V1. Fill them
+only after the captured exchange establishes the identities. Raw IQ, serial
+logs, photos, and the HA recorder output remain required alongside this trial
+bundle.
+
 Record at minimum:
 
 | Field | Required value |
