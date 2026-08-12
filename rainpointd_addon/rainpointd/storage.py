@@ -615,6 +615,37 @@ class SQLiteEventStore:
         self._connection.commit()
         return device
 
+    def forget_sensor_endpoint(
+        self,
+        endpoint: str,
+        *,
+        suppressed_at: str,
+        enrollment_factory_endpoint: str,
+    ) -> dict[str, Any] | None:
+        """Forget any observed HCS026 endpoint in one transaction.
+
+        Automatically discovered paired sensors may not yet have a registry
+        row. They still need the same suppression and enrollment cleanup as a
+        named sensor so Home Assistant can offer one consistent operation.
+        """
+        row = self._connection.execute(
+            "SELECT * FROM device_registry WHERE endpoint = ?", (endpoint,)
+        ).fetchone()
+        with self._connection:
+            self._connection.execute(
+                "DELETE FROM device_registry WHERE endpoint = ?", (endpoint,)
+            )
+            self._connection.execute(
+                "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
+                "VALUES (?, ?)",
+                (endpoint, suppressed_at),
+            )
+            self._connection.execute(
+                "DELETE FROM hcs026_enrollments WHERE factory_endpoint = ?",
+                (enrollment_factory_endpoint,),
+            )
+        return dict(row) if row is not None else None
+
     def suppressed_endpoints(self) -> frozenset[str]:
         """Return endpoints explicitly removed from local device exposure."""
         rows = self._connection.execute(

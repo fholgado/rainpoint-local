@@ -166,6 +166,12 @@ class RainPointLocalClient:
         """Close the current pairing window."""
         return await self._post("pairing/stop", {}, token)
 
+    async def forget_sensor(
+        self, token: str, device_id: str
+    ) -> dict[str, Any]:
+        """Forget one local sensor association without sending RF."""
+        return await self._post(f"devices/{device_id}/forget", {}, token)
+
     async def complete_pairing(
         self,
         token: str,

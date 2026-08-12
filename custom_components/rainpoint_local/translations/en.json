@@ -58,6 +58,7 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "pair_sensor": "Pair a validated HCS026 test sensor",
+          "forget_sensor": "Forget a local sensor",
           "add_radio_node": "Add with setup code (advanced)",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
@@ -87,6 +88,20 @@
           "duration_seconds": "Pairing window (seconds)"
         }
       },
+      "forget_sensor": {
+        "title": "Forget a local sensor",
+        "description": "Select the sensor to remove from RainPoint Local. Its entities will be hidden while its Home Assistant identity and history are retained for reassociation.",
+        "data": {
+          "device_id": "Sensor"
+        }
+      },
+      "confirm_forget_sensor": {
+        "title": "Confirm local sensor removal",
+        "description": "Forget {name} ({endpoint})? This removes its local enrollment and suppresses rediscovery. It sends no RF unpair or factory-reset command, so the physical sensor may still need to be reset before pairing again.",
+        "data": {
+          "confirm": "I understand that this does not reset the physical sensor"
+        }
+      },
       "pairing_progress": {
         "title": "Waiting for sensor",
         "description": "With the original RainPoint gateway unplugged, hold the sensor button until the LED flashes. Home Assistant will continue automatically after terminal confirmation."
@@ -104,11 +119,15 @@
       "cannot_connect": "Unable to connect to the local gateway",
       "invalid_auth": "The gateway registry token is incorrect",
       "invalid_response": "The gateway returned an incompatible response",
-      "no_pairing_node": "No authenticated pairing-capable local radio node is connected"
+      "no_pairing_node": "No authenticated pairing-capable local radio node is connected",
+      "sensor_not_found": "The selected sensor is no longer available",
+      "confirmation_required": "Confirm that the physical sensor is not reset by this action"
     },
     "abort": {
       "pairing_timeout": "The pairing window expired before a sensor completed enrollment",
-      "pairing_failed": "The local radio node could not complete the sensor enrollment exchange"
+      "pairing_failed": "The local radio node could not complete the sensor enrollment exchange",
+      "no_sensors": "No local HCS026 sensors are available to forget",
+      "sensor_not_found": "The selected sensor is no longer available"
     }
   },
   "entity": {

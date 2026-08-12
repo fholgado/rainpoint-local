@@ -713,6 +713,28 @@ class RegistryHTTPAPITest(unittest.TestCase):
         )
         self.assertFalse(forgotten["rf_unpaired"])
 
+    def test_authenticated_forget_covers_unregistered_paired_sensor(self) -> None:
+        self.server.gateway.observe_decoded(
+            device_id="hcs026-9bce0024",
+            name="RainPoint HCS026 9bce0024",
+            model="HCS026FRF",
+            frame="paired",
+            state={
+                "rf_endpoint": "9bce0024",
+                "rf_factory_endpoint": "1bce0024",
+                "rf_paired_endpoint": "9bce0024",
+                "rf_frame_accepted": True,
+                "soil_moisture_percent": 12,
+            },
+        )
+        forgotten = self.post_json(
+            "/api/v1/devices/hcs026-9bce0024/forget", {}
+        )
+        self.assertFalse(forgotten["rf_unpaired"])
+        self.assertEqual("9bce0024", forgotten["forgotten"]["endpoint"])
+        self.assertEqual([], self.server.gateway.devices())
+        self.assertTrue(self.server.gateway.endpoint_suppressed("9bce0024"))
+
     def test_auth_check_validates_without_mutating_gateway(self) -> None:
         before = self.server.gateway.info()["stored_event_count"]
         self.assertEqual(

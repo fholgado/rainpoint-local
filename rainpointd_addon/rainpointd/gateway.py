@@ -1173,6 +1173,40 @@ class Gateway:
             self._devices.pop(resolved_device_id, None)
             return forgotten
 
+    def forget_sensor(self, device_id: str) -> dict[str, Any]:
+        """Hide and dissociate one known HCS026 sensor without RF TX."""
+        with self._lock:
+            if not self._store or self._pairing is None:
+                raise RuntimeError("persistent sensor registry is unavailable")
+            device = self._devices.get(device_id)
+            if device is None:
+                raise KeyError(device_id)
+            if device.get("model") != "HCS026FRF":
+                raise ValueError("only HCS026 sensors can be forgotten")
+            state = device.get("state", {})
+            endpoint = str(
+                state.get("rf_endpoint") or state.get("rf_paired_endpoint") or ""
+            ).lower()
+            if not re.fullmatch(r"[0-9a-f]{8}", endpoint):
+                raise ValueError("sensor has no valid paired RF endpoint")
+            factory = factory_endpoint(endpoint)
+            registered = self._store.forget_sensor_endpoint(
+                endpoint,
+                suppressed_at=datetime.now(timezone.utc).isoformat(),
+                enrollment_factory_endpoint=factory,
+            )
+            self._pairing.forget(endpoint, persist=False)
+            self._refresh_registry_catalog()
+            self._devices.pop(device_id, None)
+            return {
+                "device_id": device_id,
+                "endpoint": endpoint,
+                "factory_endpoint": factory,
+                "name": device.get("name", device_id),
+                "model": "HCS026FRF",
+                "registry_record_removed": registered is not None,
+            }
+
     def _refresh_registry_catalog(self) -> None:
         """Layer persistent sensor identity metadata over compatibility data."""
         registrations = self._store.registry() if self._store else []

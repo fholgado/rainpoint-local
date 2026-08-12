@@ -82,11 +82,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._json(200, {"authorized": True})
             return
         registry_path = parsed.path.startswith(f"{base}/registry/")
+        device_path = parsed.path.startswith(f"{base}/devices/")
+        device_forget_path = device_path and parsed.path.endswith("/forget")
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
         node_path = parsed.path.startswith(f"{base}/nodes/")
         if (
             parsed.path == f"{base}/learning"
             or registry_path
+            or device_forget_path
             or pairing_path
             or node_path
         ):
@@ -200,6 +203,28 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "device": result,
                             "rf_paired": False,
                             "detail": "local metadata accepted; no RF pairing sent",
+                        },
+                    )
+                    return
+                if device_forget_path:
+                    device_prefix = f"{base}/devices/"
+                    device_suffix = parsed.path[len(device_prefix) :]
+                    sensor_id, device_separator, device_action = (
+                        device_suffix.rpartition("/")
+                    )
+                else:
+                    sensor_id, device_separator, device_action = "", "", ""
+                if device_separator and device_action == "forget":
+                    result = self.server.gateway.forget_sensor(sensor_id)
+                    self._json(
+                        200,
+                        {
+                            "forgotten": result,
+                            "rf_unpaired": False,
+                            "detail": (
+                                "local sensor association removed; "
+                                "no RF unpair sent"
+                            ),
                         },
                     )
                     return

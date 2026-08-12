@@ -35,6 +35,9 @@ Working now:
   without the stock RainPoint gateway or cloud service,
 - naming and assigning the terminal-confirmed sensor through the integration's
   authenticated **Configure** flow,
+- forgetting any known local HCS026 sensor through a confirmed **Configure**
+  flow without sending an RF reset, while retaining its HA identity for later
+  reassociation,
 - decoding HTV145FRF valve command, state, duration, and usage fields,
 - receiving live RainPoint 2-FSK packets through `rtl_433`,
 - reporting confirmed HCS026FRF soil moisture through the local `rainpointd`

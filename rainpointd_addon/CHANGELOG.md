@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.1
+
+- Add an authenticated local-forget operation for any currently known HCS026
+  sensor, including automatically discovered paired sensors without a registry
+  row.
+- Remove enrollment state and suppress automatic rediscovery atomically while
+  explicitly transmitting no RF unpair or reset command.
+
 ## 0.16.0
 
 - Replace Sensor-B-specific pairing orchestration with an evidence-labelled

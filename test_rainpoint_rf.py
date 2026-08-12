@@ -344,6 +344,34 @@ class RainPointRFTest(unittest.TestCase):
             self.assertEqual("Right Bed Again", device["name"])
             restored.close()
 
+    def test_automatically_discovered_sensor_can_be_forgotten(self) -> None:
+        frame = (
+            "79f4882f28b984028095a980240581820205c405800000000000000000000000000000006de1"
+        )
+        line = json.dumps(
+            {"rows": [{"len": len(frame) * 4, "data": frame}]}
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            transport.consume_line(line)
+            self.assertIn(
+                "hcs026-95a98024",
+                {item["device_id"] for item in gateway.devices()},
+            )
+
+            forgotten = gateway.forget_sensor("hcs026-95a98024")
+            self.assertEqual("95a98024", forgotten["endpoint"])
+            self.assertEqual("15a98024", forgotten["factory_endpoint"])
+            self.assertFalse(forgotten["registry_record_removed"])
+            self.assertEqual([], gateway.devices())
+            self.assertTrue(gateway.endpoint_suppressed("95a98024"))
+
+            transport.consume_line(line)
+            self.assertEqual([], gateway.devices())
+            gateway.close()
+
     def test_device_catalog_normalizes_and_validates_endpoints(self) -> None:
         sensor = SensorDefinition("AABBCC24", "sensor-a", "A")
         valve = ValveDefinition("1111111A", "2222222B", "valve-a", "A")
