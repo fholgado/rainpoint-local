@@ -33,6 +33,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         self.config_entry_id = config_entry_id
         self.nodes: dict[str, dict] = {}
         self.receivers: list[dict] = []
+        self._logged_inventory = False
 
     async def _async_update_data(self) -> dict[str, dict]:
         try:
@@ -48,7 +49,19 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
             if isinstance(node.get("node_id"), str)
         }
         self.receivers = receivers
-        self._async_reconcile_entity_registry(set(result))
+        active_ids = set(result) | {
+            f"radio-node:{node_id}" for node_id in self.nodes
+        }
+        self._async_reconcile_entity_registry(active_ids)
+        if not self._logged_inventory:
+            _LOGGER.debug(
+                "Loaded %d RainPoint devices, %d custom local radio nodes, and "
+                "%d receiver coverage records",
+                len(result),
+                len(self.nodes),
+                len(self.receivers),
+            )
+            self._logged_inventory = True
         return result
 
     def _async_reconcile_entity_registry(
@@ -75,7 +88,12 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         for entity_entry in er.async_entries_for_config_entry(
             entity_registry, self.config_entry_id
         ):
-            local_id = local_ids_by_registry_id.get(entity_entry.device_id or "")
+            if entity_entry.unique_id.startswith("radio-node:"):
+                local_id = entity_entry.unique_id.partition("_")[0]
+            else:
+                local_id = local_ids_by_registry_id.get(
+                    entity_entry.device_id or ""
+                )
             if local_id is None:
                 continue
             if local_id not in active_device_ids and entity_entry.disabled_by is None:
