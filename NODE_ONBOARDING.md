@@ -1,5 +1,24 @@
 # Local radio-node onboarding
 
+## Acceptance check
+
+After adoption or relocation, run the read-only acceptance checker against the
+gateway. It verifies authentication, heartbeat freshness, Wi-Fi and radio
+diagnostics, available heap, a disarmed transmitter, accepted RF traffic, and
+at least one device also heard by another receiver (the deduplication path).
+
+```bash
+python3 tools/check_radio_node.py \
+  --gateway-url http://homeassistant.local:8787 \
+  --node-id rp-001122aabbcc \
+  --save captures/node-acceptance/rp-001122aabbcc.json
+```
+
+The check is deliberately read-only and does not invoke Identify, adoption, or
+any RF command. Run Identify separately from the Home Assistant device page to
+confirm the physical unit. A newly placed node can initially fail only the
+traffic/overlap checks; repeat after a normal sensor reporting interval.
+
 ## Implementation status
 
 Home Assistant can now register a provisioned ESP32/CC1101 radio node beneath
