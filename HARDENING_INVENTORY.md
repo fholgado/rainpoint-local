@@ -8,14 +8,15 @@ pairing through Home Assistant.
 
 Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.12.0
+- `rainpointd` add-on 0.13.0
 - `rainpoint_local` integration 0.3.2
 - ESP32 bridge firmware 0.4.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
 - persistent registry-backed HCS026 identity and removal policy
 - SQLite-backed enrollment state with one-time legacy JSON migration
-- versioned SQLite schema, durable device snapshots, and bounded event retention
+- versioned SQLite schema, durable device snapshots, bounded event retention,
+  and receiver-specific coverage metrics
 - integration-owned entity disabling for gateway-removed devices
 
 The objective is not to discard the research record. Captures, recovered
@@ -107,7 +108,7 @@ manual credential copying outside Supervisor installations.
 
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
-| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v2 adds transactional migration, indexed event queries, durable latest-device snapshots, and configurable bounded retention while preserving derived metrics, inventory, registry, suppression, and enrollment state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
+| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v3 adds transactional migration, indexed event queries, durable latest-device snapshots, configurable bounded retention, and per-receiver coverage while preserving inventory, registry, suppression, and enrollment state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
 | `rainpointd_addon/rainpointd/pairing.py` | Production candidate | The state machine uses an enrollment repository; legacy JSON mappings are conflict-checked, imported once into SQLite, and archived as `.migrated` | Add schema-versioned migration coverage and keep transient pairing windows deliberately in memory |
 | Gateway `_devices` memory | Prototype with removal policy | Accepted and compatibility devices remain observable; a persisted removed endpoint is retained as raw RF only and cannot recreate a device until accepted again | Expand this into explicit observed, paired, accepted, ignored, and removed states, then make HA exposure/reconciliation consume that policy |
 

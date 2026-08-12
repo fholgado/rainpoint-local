@@ -9,7 +9,6 @@ import re
 import secrets
 import socket
 import threading
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -61,13 +60,13 @@ class ESP32NetworkServer:
         self.host = host
         self.port = port
         self.node_tokens = dict(node_tokens or {})
+        # Retained for constructor compatibility. Deduplication now belongs to
+        # the gateway so SDR, serial, and every network node share one boundary.
         self.deduplication_window_seconds = deduplication_window_seconds
         self._publisher = ESP32SerialTransport(gateway, device="network")
         self._socket: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
-        self._deduplication_lock = threading.Lock()
-        self._recent_frames: dict[str, tuple[str, float]] = {}
         self._sessions_lock = threading.Lock()
         self._active_nodes: set[str] = set()
         self._sessions: dict[str, dict[str, Any]] = {}
@@ -229,7 +228,6 @@ class ESP32NetworkServer:
                 invalid_messages=0,
             )
             received_frames = 0
-            duplicate_frames = 0
             invalid_messages = 0
             while not self._stop.is_set():
                 message = self._receive(stream)
@@ -244,13 +242,6 @@ class ESP32NetworkServer:
                     )
                     continue
                 if message.get("type") == "rainpoint_rf":
-                    frame = message.get("frame")
-                    if isinstance(frame, str) and self._duplicate(frame, node_id):
-                        duplicate_frames += 1
-                        self.gateway.update_node(
-                            node_id, duplicate_frames=duplicate_frames
-                        )
-                        continue
                     received_frames += 1
                     self.gateway.update_node(
                         node_id, received_frames=received_frames
@@ -333,27 +324,6 @@ class ESP32NetworkServer:
             if hmac.compare_digest(proof, expected)
             else None
         )
-
-    def _duplicate(self, frame: str, node_id: str) -> bool:
-        """Suppress only the same RF frame heard by a different receiver."""
-        now = time.monotonic()
-        with self._deduplication_lock:
-            previous = self._recent_frames.get(frame)
-            duplicate = bool(
-                previous
-                and previous[0] != node_id
-                and now - previous[1] <= self.deduplication_window_seconds
-            )
-            if not duplicate:
-                self._recent_frames[frame] = (node_id, now)
-            if len(self._recent_frames) > 512:
-                cutoff = now - max(self.deduplication_window_seconds, 1)
-                self._recent_frames = {
-                    key: value
-                    for key, value in self._recent_frames.items()
-                    if value[1] >= cutoff
-                }
-            return duplicate
 
     @staticmethod
     def _send(stream: Any, message: dict[str, Any]) -> None:

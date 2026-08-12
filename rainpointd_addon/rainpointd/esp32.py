@@ -26,7 +26,9 @@ class ESP32SerialTransport:
         self.device = device
         self.baud = baud
         self.serial_factory = serial_factory
-        self._publisher = FrameIngestor(gateway)
+        self._publisher = FrameIngestor(
+            gateway, receiver_id="local-esp32-serial"
+        )
         self._serial: Any | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()

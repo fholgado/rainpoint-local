@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0
+
+- Assign a stable identity to the local SDR and every serial or Wi-Fi receiver.
+- Deduplicate the same air transmission across receivers before it can inflate
+  logical device report counts or Home Assistant activity.
+- Persist per-receiver and per-device frame, integrity, duplicate, and RSSI
+  coverage metrics and expose them at `/api/v1/receivers`.
+
 ## 0.12.0
 
 - Version the SQLite schema and migrate existing databases transactionally.

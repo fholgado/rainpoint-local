@@ -92,6 +92,7 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertEqual("Custom Sensor", sensor["name"])
         self.assertEqual(54, sensor["state"]["soil_moisture_percent"])
+        self.assertEqual("local-sdr", sensor["state"]["rf_receiver_id"])
 
     def test_device_catalog_rejects_duplicate_rf_identities(self) -> None:
         with self.assertRaisesRegex(ValueError, "sensor endpoints"):

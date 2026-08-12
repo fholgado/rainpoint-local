@@ -6,6 +6,7 @@ import copy
 import hmac
 import re
 import threading
+import time
 import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,7 @@ REPORTING_TIMEOUTS = {
     "HTV145FRF": 6 * 60 * 60,
 }
 DEFAULT_REPORTING_TIMEOUT = 60 * 60
+RECEIVER_DEDUPLICATION_SECONDS = 0.25
 REGISTRY_MODELS = {"HCS026FRF", "HTV145FRF"}
 _UNSET = object()
 
@@ -61,6 +63,7 @@ class Gateway:
         self._nodes: dict[str, dict[str, Any]] = {}
         self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
+        self._recent_receiver_frames: dict[str, tuple[str, float]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = (
             SQLiteEventStore(
@@ -167,6 +170,11 @@ class Gateway:
                 key=lambda item: item["node_id"],
             )
 
+    def receivers(self) -> list[dict[str, Any]]:
+        """Return physical receiver coverage independently of device cadence."""
+        with self._lock:
+            return self._store.receiver_metrics() if self._store else []
+
     def health(self) -> dict[str, Any]:
         """Return health separately from capability metadata."""
         with self._lock:
@@ -242,6 +250,14 @@ class Gateway:
         decoded = copy.deepcopy(state)
 
         with self._lock:
+            duplicate = self._receiver_duplicate_locked(
+                frame=frame,
+                state=decoded,
+                observed_at=timestamp,
+                device_id=device_id,
+            )
+            if duplicate is not None:
+                return duplicate
             registry_metadata = self._registry_metadata.get(device_id)
             if registry_metadata is not None:
                 name = str(registry_metadata["name"])
@@ -288,7 +304,16 @@ class Gateway:
     ) -> dict[str, Any]:
         """Retain a normalized RF frame without creating a HA device."""
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        decoded = copy.deepcopy(state)
         with self._lock:
+            duplicate = self._receiver_duplicate_locked(
+                frame=frame,
+                state=decoded,
+                observed_at=timestamp,
+                device_id=device_id,
+            )
+            if duplicate is not None:
+                return duplicate
             event_id = self._next_event_id
             self._next_event_id += 1
             event = {
@@ -296,7 +321,7 @@ class Gateway:
                 "event_type": "rf_frame",
                 "observed_at": timestamp,
                 "raw": frame,
-                "state": copy.deepcopy(state),
+                "state": decoded,
             }
             if device_id is not None:
                 event["device_id"] = device_id
@@ -307,6 +332,52 @@ class Gateway:
                 self._update_memory_reception_metrics(event)
             self._observe_pairing(state, timestamp)
             return copy.deepcopy(event)
+
+    def _receiver_duplicate_locked(
+        self,
+        *,
+        frame: str,
+        state: dict[str, Any],
+        observed_at: str,
+        device_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Deduplicate one air transmission while retaining receiver evidence."""
+        receiver_id = state.get("rf_receiver_id")
+        if not isinstance(receiver_id, str):
+            return None
+        now = time.monotonic()
+        previous = self._recent_receiver_frames.get(frame)
+        duplicate = bool(
+            previous
+            and previous[0] != receiver_id
+            and now - previous[1] <= RECEIVER_DEDUPLICATION_SECONDS
+        )
+        if not duplicate:
+            self._recent_receiver_frames[frame] = (receiver_id, now)
+        if len(self._recent_receiver_frames) > 512:
+            cutoff = now - max(RECEIVER_DEDUPLICATION_SECONDS, 1)
+            self._recent_receiver_frames = {
+                key: value
+                for key, value in self._recent_receiver_frames.items()
+                if value[1] >= cutoff
+            }
+        if not duplicate:
+            return None
+        evidence = {
+            "event_type": "receiver_duplicate",
+            "observed_at": observed_at,
+            "raw": frame,
+            "state": copy.deepcopy(state),
+            "deduplicated": True,
+        }
+        if device_id is not None:
+            evidence["device_id"] = device_id
+        if self._store:
+            self._store.record_receiver_duplicate(evidence)
+        node = self._nodes.get(receiver_id)
+        if node is not None:
+            node["duplicate_frames"] = int(node.get("duplicate_frames", 0)) + 1
+        return copy.deepcopy(evidence)
 
     def devices(
         self, now: datetime | None = None

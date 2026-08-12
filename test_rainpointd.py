@@ -37,7 +37,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(2, gateway.info()["storage_schema_version"])
+            self.assertEqual(3, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -48,7 +48,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(2, migrated.info()["storage_schema_version"])
+            self.assertEqual(3, migrated.info()["storage_schema_version"])
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],
@@ -64,6 +64,64 @@ class GatewayTest(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "newer than supported"):
                 Gateway(transport="rtl433", storage_path=str(path))
+
+    def test_cross_receiver_duplicate_preserves_coverage_not_device_cadence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            common = {
+                "device_id": "soil-test",
+                "name": "Test Soil",
+                "model": "HCS026FRF",
+                "frame": "same-air-transmission",
+                "observed_at": "2026-08-12T00:00:00+00:00",
+            }
+            first = gateway.observe_decoded(
+                **common,
+                state={
+                    "rf_receiver_id": "local-sdr",
+                    "rf_frame_accepted": True,
+                    "soil_moisture_percent": 44,
+                    "rf_rssi_db": -40.0,
+                },
+            )
+            duplicate = gateway.observe_decoded(
+                **common,
+                state={
+                    "rf_receiver_id": "rp-001122334455",
+                    "rf_node_id": "rp-001122334455",
+                    "rf_frame_accepted": True,
+                    "soil_moisture_percent": 44,
+                    "rf_rssi_db": -70.0,
+                },
+            )
+
+            self.assertEqual(1, first["event_id"])
+            self.assertTrue(duplicate["deduplicated"])
+            self.assertEqual(1, gateway.info()["stored_event_count"])
+            self.assertEqual(1, gateway.devices()[0]["report_count"])
+            metrics = {
+                (item["receiver_id"], item["device_id"]): item
+                for item in gateway.receivers()
+            }
+            self.assertEqual(
+                1, metrics[("local-sdr", "soil-test")]["frame_count"]
+            )
+            self.assertEqual(
+                1,
+                metrics[("rp-001122334455", "soil-test")][
+                    "duplicate_frame_count"
+                ],
+            )
+            self.assertEqual(
+                -70.0,
+                metrics[("rp-001122334455", "soil-test")][
+                    "average_rssi_db"
+                ],
+            )
+            gateway.close()
 
     def test_legacy_pairing_json_migrates_once_into_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -552,6 +610,7 @@ class HTTPAPITest(unittest.TestCase):
         self.assertEqual([], self.get_json("/api/v1/endpoints")["endpoints"])
         self.assertEqual(0, info["node_count"])
         self.assertEqual([], self.get_json("/api/v1/nodes")["nodes"])
+        self.assertEqual([], self.get_json("/api/v1/receivers")["receivers"])
 
     def test_event_cursor(self) -> None:
         result = self.get_json("/api/v1/events?since=5")

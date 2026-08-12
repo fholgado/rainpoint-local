@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.12.0 supports authenticated network radio nodes, captured replay,
+Version 0.13.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -56,6 +56,13 @@ RTL-SDR remain a reference receiver while one or more ESP32 nodes send the same
 normalized frames over TCP port 8790. Frames carry their authenticated node ID,
 and a packet heard by two different nodes within 250 ms is stored once.
 Repeated packets from the same node are preserved.
+
+Every receiver now has a stable source identity. The local USB SDR is
+`local-sdr`; Wi-Fi receivers use their authenticated node ID. If two different
+receivers hear the same frame within 250 ms, the gateway retains coverage for
+both while publishing only one logical device report. Persistent per-receiver
+and per-device counts, integrity decisions, duplicates, RSSI averages, and last
+reception times are available from `/api/v1/receivers`.
 
 Set `node_tokens` to a JSON object containing one independent 64-hex-character
 token per stable node ID:

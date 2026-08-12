@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -138,6 +138,9 @@ class SQLiteEventStore:
             version = 1
         if version == 1:
             self._migrate_v1_to_v2()
+            version = 2
+        if version == 2:
+            self._migrate_v2_to_v3()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -186,6 +189,40 @@ class SQLiteEventStore:
                     )
             self._connection.execute("PRAGMA user_version = 2")
 
+    def _migrate_v2_to_v3(self) -> None:
+        """Add persistent per-receiver coverage metrics."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS receiver_metrics (
+                    receiver_id TEXT NOT NULL,
+                    device_id TEXT NOT NULL DEFAULT '',
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    frame_count INTEGER NOT NULL DEFAULT 0,
+                    accepted_frame_count INTEGER NOT NULL DEFAULT 0,
+                    rejected_frame_count INTEGER NOT NULL DEFAULT 0,
+                    duplicate_frame_count INTEGER NOT NULL DEFAULT 0,
+                    rssi_total REAL NOT NULL DEFAULT 0,
+                    rssi_count INTEGER NOT NULL DEFAULT 0,
+                    last_rssi REAL,
+                    PRIMARY KEY(receiver_id, device_id)
+                )
+                """
+            )
+            rows = self._connection.execute(
+                "SELECT payload FROM events ORDER BY event_id"
+            ).fetchall()
+            for row in rows:
+                event = json.loads(row["payload"])
+                state = event.setdefault("state", {})
+                if not isinstance(state.get("rf_receiver_id"), str):
+                    state["rf_receiver_id"] = state.get(
+                        "rf_node_id", "legacy-unknown"
+                    )
+                self._update_receiver_metrics(event)
+            self._connection.execute("PRAGMA user_version = 3")
+
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
         self._connection.execute(
@@ -201,6 +238,7 @@ class SQLiteEventStore:
         self._update_endpoints(event)
         self._update_device_metrics(event)
         self._update_reception_metrics(event)
+        self._update_receiver_metrics(event)
         if (
             event.get("event_type") == "device_observation"
             and isinstance(event.get("device_id"), str)
@@ -216,6 +254,11 @@ class SQLiteEventStore:
                 ),
             )
         self._prune_events()
+        self._connection.commit()
+
+    def record_receiver_duplicate(self, event: dict[str, Any]) -> None:
+        """Retain receiver coverage for a deduplicated air transmission."""
+        self._update_receiver_metrics(event, duplicate=True)
         self._connection.commit()
 
     def _prune_events(self) -> None:
@@ -316,6 +359,23 @@ class SQLiteEventStore:
                 }
             )
             result[str(item.pop("device_id"))] = item
+        return result
+
+    def receiver_metrics(self) -> list[dict[str, Any]]:
+        """Return persistent coverage metrics by receiver and logical device."""
+        rows = self._connection.execute(
+            "SELECT * FROM receiver_metrics ORDER BY receiver_id, device_id"
+        ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            rssi_count = int(item.pop("rssi_count"))
+            rssi_total = float(item.pop("rssi_total"))
+            item["device_id"] = item["device_id"] or None
+            item["average_rssi_db"] = (
+                round(rssi_total / rssi_count, 2) if rssi_count else None
+            )
+            result.append(item)
         return result
 
     def registry(self) -> list[dict[str, Any]]:
@@ -643,6 +703,61 @@ class SQLiteEventStore:
                 observed_at if not valid else None,
                 event_id,
                 event_id if valid else None,
+            ),
+        )
+
+    def _update_receiver_metrics(
+        self, event: dict[str, Any], *, duplicate: bool = False
+    ) -> None:
+        """Track physical reception independently from logical event cadence."""
+        state = event.get("state", {})
+        receiver_id = state.get("rf_receiver_id")
+        observed_at = event.get("observed_at")
+        if not isinstance(receiver_id, str) or not isinstance(observed_at, str):
+            return
+        device_id = event.get("device_id")
+        if not isinstance(device_id, str):
+            device_id = ""
+        accepted = frame_accepted(event)
+        rssi = state.get("rf_rssi_db")
+        has_rssi = isinstance(rssi, (int, float)) and not isinstance(rssi, bool)
+        self._connection.execute(
+            """
+            INSERT INTO receiver_metrics(
+                receiver_id, device_id, first_seen, last_seen, frame_count,
+                accepted_frame_count, rejected_frame_count,
+                duplicate_frame_count, rssi_total, rssi_count, last_rssi
+            ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(receiver_id, device_id) DO UPDATE SET
+                last_seen=excluded.last_seen,
+                frame_count=receiver_metrics.frame_count + 1,
+                accepted_frame_count=(
+                    receiver_metrics.accepted_frame_count +
+                    excluded.accepted_frame_count
+                ),
+                rejected_frame_count=(
+                    receiver_metrics.rejected_frame_count +
+                    excluded.rejected_frame_count
+                ),
+                duplicate_frame_count=(
+                    receiver_metrics.duplicate_frame_count +
+                    excluded.duplicate_frame_count
+                ),
+                rssi_total=receiver_metrics.rssi_total + excluded.rssi_total,
+                rssi_count=receiver_metrics.rssi_count + excluded.rssi_count,
+                last_rssi=COALESCE(excluded.last_rssi, receiver_metrics.last_rssi)
+            """,
+            (
+                receiver_id,
+                device_id,
+                observed_at,
+                observed_at,
+                int(accepted is True),
+                int(accepted is False),
+                int(duplicate),
+                float(rssi) if has_rssi else 0.0,
+                int(has_rssi),
+                float(rssi) if has_rssi else None,
             ),
         )
 

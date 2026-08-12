@@ -63,7 +63,11 @@ class RTL433Transport:
     ) -> None:
         self.gateway = gateway
         self._catalog_override = catalog
-        self._ingestor = FrameIngestor(gateway, catalog=catalog)
+        self._ingestor = FrameIngestor(
+            gateway,
+            catalog=catalog,
+            receiver_id="local-sdr",
+        )
         self.command = list(command or rtl_433_command(frequency, sample_rate))
         self._capture_command = (
             rtl_433_command(

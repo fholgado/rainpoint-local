@@ -26,6 +26,9 @@ def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
         value = metadata.get(source)
         if isinstance(value, expected_type) and not isinstance(value, bool):
             result[destination] = value
+    node_id = metadata.get("node_id")
+    if isinstance(node_id, str):
+        result["rf_receiver_id"] = node_id
     return result
 
 
@@ -33,10 +36,15 @@ class FrameIngestor:
     """Map normalized RF rows into gateway devices and events."""
 
     def __init__(
-        self, gateway: Gateway, *, catalog: DeviceCatalog | None = None
+        self,
+        gateway: Gateway,
+        *,
+        catalog: DeviceCatalog | None = None,
+        receiver_id: str | None = None,
     ) -> None:
         self.gateway = gateway
         self._catalog_override = catalog
+        self.receiver_id = receiver_id
         self._valve_states: dict[str, dict[str, Any]] = {
             valve.device_id: self._empty_valve_state()
             for valve in self.catalog.valves
@@ -93,6 +101,8 @@ class FrameIngestor:
             return 0
         published = 0
         bridge_metadata = _bridge_metadata(event)
+        if self.receiver_id is not None:
+            bridge_metadata.setdefault("rf_receiver_id", self.receiver_id)
         for row in rows:
             try:
                 decoded = normalize_row(row, catalog=self.catalog)
