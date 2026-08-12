@@ -69,7 +69,7 @@ unattended observation of delivery cadence and collisions.
 advertises up to 39 paired timers/devices, invalidating the earlier eight-device
 inference.
 
-Firmware `0.7.0-test.3` and gateway app `0.18.0` contain the
+Firmware `0.7.0-test.3` and gateway app `0.18.1` contain the
 `hcs026_auto_v1` workflow. Home Assistant supplies neither a factory identity
 nor an identity-specific transcript. The selected node adopts the first strict
 HCS026 factory announcement, derives its paired identity, and generates the

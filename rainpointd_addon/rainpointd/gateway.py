@@ -689,6 +689,11 @@ class Gateway:
                     model=device.get("model"),
                     protocol=device.get("state", {}).get("rf_protocol_family"),
                 ):
+                    state = device.setdefault("state", {})
+                    state["device_kind"] = "soil_sensor"
+                    state["product_model_exact"] = (
+                        product_for_model(device.get("model")) is not None
+                    )
                     device["capabilities"] = ["forget", "soil_moisture"]
                 device.update(
                     {
@@ -1536,6 +1541,10 @@ class Gateway:
                     registration.get("protocol") or HCS02X_PROTOCOL
                 ),
                 "product_model_source": registration.get("model_source"),
+                "product_model_exact": (
+                    product_for_model(registration.get("model")) is not None
+                ),
+                "device_kind": "soil_sensor",
             }
             if registration.get("product_code") is not None:
                 state["rf_product_code"] = registration["product_code"]

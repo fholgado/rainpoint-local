@@ -1164,6 +1164,7 @@ class RainPointRFTest(unittest.TestCase):
                 if item["device_id"] == "soil-front-2"
             )
             self.assertEqual("HCS026FRF", device["model"])
+            self.assertTrue(device["state"]["product_model_exact"])
             self.assertIn("forget", device["capabilities"])
             restored.close()
 

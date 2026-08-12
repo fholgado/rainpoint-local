@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.1
+
+- Report explicit family-level device kind and exact-model confidence after a
+  legacy registry row migrates to provisional identity metadata.
+
 ## 0.18.0
 
 - Centralize RainPoint product codes, model codes, device kinds, and protocol

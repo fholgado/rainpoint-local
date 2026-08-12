@@ -110,6 +110,14 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(
                 "legacy_model_unverified", provisional["model_source"]
             )
+            provisional_device = next(
+                item
+                for item in migrated.devices()
+                if item["device_id"] == "hcs026-9bce0024"
+            )
+            self.assertFalse(
+                provisional_device["state"]["product_model_exact"]
+            )
             migrated.close()
 
     def test_storage_schema_migrates_latest_device_snapshots(self) -> None:
