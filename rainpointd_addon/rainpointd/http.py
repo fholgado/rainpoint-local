@@ -160,6 +160,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                             if body.get("node_id") is not None
                             else None
                         ),
+                        profile_id=str(
+                            body.get("profile_id", "hcs026_15a98024_v1")
+                        ),
                     )
                     self._json(201, result)
                     return

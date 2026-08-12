@@ -135,17 +135,20 @@ The registry separates three concepts deliberately:
 
 Accepting or forgetting an ordinary registry record is not physical pairing or
 unpairing. The separate authenticated `/api/v1/pairing` workflow can select a
-protocol-v2 radio node and arm the fixed Test Sensor B profile. The original
+protocol-v2 radio node and arm the validated HCS026 protocol profile. The original
 RainPoint gateway must be powered off during this exchange because it was
 observed sending a competing reply even after the sensor was removed from the
 vendor app. The workflow requires the selected node's matching command ID and
 terminal sensor message `03` before Home Assistant may name the device.
 
-Only factory identity `15a98024` / paired identity `95a98024` is currently
-supported for physical TX. The command applies the capture-derived 240-second
+Only profile `hcs026_15a98024_v1` (factory identity `15a98024`, paired identity
+`95a98024`) is currently supported for physical TX. Users are not asked to
+identify RF endpoints; the integration selects the profile internally. The
+command applies the capture-derived 240-second
 pairing clock lead, 45 kHz radio correction, 10 dBm power, three replies, and a
 strict timeout. Additional sensors require evidence-backed profiles rather
-than guessing these fields.
+than guessing these fields. A second identity must be physically validated
+before the implementation can claim model-wide enrollment support.
 
 ## Home Assistant integration
 

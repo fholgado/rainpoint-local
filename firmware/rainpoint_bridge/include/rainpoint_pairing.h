@@ -48,15 +48,24 @@ struct PairingReplyStep {
     std::array<std::uint8_t, kFrameBytes> frame;
 };
 
+struct PairingProfile {
+    const char* id;
+    const char* model;
+    const char* evidence;
+    std::array<std::uint8_t, 4> factoryEndpoint;
+    std::array<std::uint8_t, 4> pairedEndpoint;
+    std::array<std::uint8_t, 4> sensorRoute;
+    std::array<std::uint8_t, 4> companionEndpoint;
+    std::array<PairingReplyStep, 3> steps;
+    PairingTrigger completionTrigger;
+};
+
 constexpr std::uint32_t kPairingSymbolRate = 20'000;
 constexpr std::uint16_t kPairingWakeSymbols = 320;
 constexpr std::uint16_t kPairingReplyDelayMs = 60;
 constexpr std::uint16_t kPairingReplyDeadlineMs = 250;
 constexpr std::int32_t kMaxPairingFrequencyOffsetHz = 100'000;
 constexpr std::uint16_t kCurrentPairingTrailerResidual = 0x4f03;
-constexpr PairingTrigger kPairingCompletionTrigger =
-    PairingTrigger::PairedMessage3;
-
 constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
     return value.year >= 2020 && value.year <= 2147 &&
         value.month >= 1 && value.month <= 12 &&
@@ -176,7 +185,15 @@ inline std::uint8_t rainpointSymbol(
     return invert ? value ^ 1U : value;
 }
 
-constexpr std::array<PairingReplyStep, 3> kSensorBPairingProfile = {{
+constexpr PairingProfile kValidatedHcs026Profile = {
+    "hcs026_15a98024_v1",
+    "HCS026FRF",
+    "isolated local enrollment confirmed 2026-08-11",
+    {{0x15, 0xa9, 0x80, 0x24}},
+    {{0x95, 0xa9, 0x80, 0x24}},
+    {{0xb9, 0x84, 0x02, 0x80}},
+    {{0x39, 0x84, 0x02, 0x80}},
+    {{
     {
         PairingTrigger::FactoryAnnouncement,
         433'471'500,
@@ -207,7 +224,9 @@ constexpr std::array<PairingReplyStep, 3> kSensorBPairingProfile = {{
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x22}},
     },
-}};
+    }},
+    PairingTrigger::PairedMessage3,
+};
 
 inline const char* pairingTriggerName(PairingTrigger trigger) {
     switch (trigger) {
@@ -225,18 +244,16 @@ inline const char* pairingTriggerName(PairingTrigger trigger) {
     return "unknown";
 }
 
-inline bool validSensorBPairingProfile() {
-    constexpr std::array<std::uint8_t, 4> paired = {0x95, 0xa9, 0x80, 0x24};
-    constexpr std::array<std::uint8_t, 4> companion = {0x39, 0x84, 0x02, 0x80};
-    for (const auto& step : kSensorBPairingProfile) {
+inline bool validPairingProfile(const PairingProfile& profile) {
+    for (const auto& step : profile.steps) {
         if (!hasSync(step.frame) || !hasOrdinaryTrailer(step.frame) ||
             step.wakeSymbols != kPairingWakeSymbols ||
             step.replyDeadlineMs != kPairingReplyDeadlineMs) {
             return false;
         }
-        for (std::size_t index = 0; index < paired.size(); ++index) {
-            if (step.frame[index + 5] != paired[index] ||
-                step.frame[index + 9] != companion[index]) {
+        for (std::size_t index = 0; index < profile.pairedEndpoint.size(); ++index) {
+            if (step.frame[index + 5] != profile.pairedEndpoint[index] ||
+                step.frame[index + 9] != profile.companionEndpoint[index]) {
                 return false;
             }
         }
@@ -257,33 +274,25 @@ inline bool endpointEquals(
     return true;
 }
 
-inline bool sensorBTrigger(
+inline bool pairingTrigger(
     const std::array<std::uint8_t, kFrameBytes>& frame,
+    const PairingProfile& profile,
     PairingTrigger& trigger
 ) {
     constexpr std::array<std::uint8_t, 4> factoryRoute = {
         0x80, 0x00, 0x00, 0x00,
-    };
-    constexpr std::array<std::uint8_t, 4> factory = {
-        0x15, 0xa9, 0x80, 0x24,
-    };
-    constexpr std::array<std::uint8_t, 4> gateway = {
-        0xb9, 0x84, 0x02, 0x80,
-    };
-    constexpr std::array<std::uint8_t, 4> paired = {
-        0x95, 0xa9, 0x80, 0x24,
     };
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
         return false;
     }
     const std::uint8_t message = frame[13] & 0x7f;
     if (endpointEquals(frame, 5, factoryRoute) &&
-        endpointEquals(frame, 9, factory) && message == 1) {
+        endpointEquals(frame, 9, profile.factoryEndpoint) && message == 1) {
         trigger = PairingTrigger::FactoryAnnouncement;
         return true;
     }
-    if (!endpointEquals(frame, 5, gateway) ||
-        !endpointEquals(frame, 9, paired)) {
+    if (!endpointEquals(frame, 5, profile.sensorRoute) ||
+        !endpointEquals(frame, 9, profile.pairedEndpoint)) {
         return false;
     }
     if (message == 1) {
@@ -305,8 +314,10 @@ inline bool sensorBTrigger(
     return false;
 }
 
-class SensorBPairingSession {
+class PairingSession {
 public:
+    explicit PairingSession(const PairingProfile& profile) : profile_(profile) {}
+
     void arm(std::uint32_t nowMs, std::uint32_t durationMs = 120'000) {
         state_ = PairingSessionState::Armed;
         step_ = 0;
@@ -326,7 +337,7 @@ public:
         if (state_ == PairingSessionState::Armed &&
             static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0) {
             fail(
-                step_ == kSensorBPairingProfile.size()
+                step_ == profile_.steps.size()
                     ? PairingFailureReason::TerminalConfirmationTimeout
                     : PairingFailureReason::SessionTimeout
             );
@@ -342,11 +353,11 @@ public:
             return nullptr;
         }
         PairingTrigger observed;
-        if (!sensorBTrigger(frame, observed)) {
+        if (!pairingTrigger(frame, profile_, observed)) {
             return nullptr;
         }
-        if (step_ == kSensorBPairingProfile.size()) {
-            if (observed == kPairingCompletionTrigger) {
+        if (step_ == profile_.steps.size()) {
+            if (observed == profile_.completionTrigger) {
                 state_ = PairingSessionState::Completed;
                 return nullptr;
             }
@@ -355,7 +366,7 @@ public:
             if (observed == PairingTrigger::PairedMessage2Short) {
                 return nullptr;
             }
-            for (const auto& step : kSensorBPairingProfile) {
+            for (const auto& step : profile_.steps) {
                 if (step.trigger == observed) {
                     return nullptr;
                 }
@@ -363,14 +374,14 @@ public:
             fail(PairingFailureReason::UnexpectedTrigger);
             return nullptr;
         }
-        const PairingTrigger expected = kSensorBPairingProfile[step_].trigger;
+        const PairingTrigger expected = profile_.steps[step_].trigger;
         if (observed == expected) {
             pending_ = true;
             claimedAtMs_ = nowMs;
-            return &kSensorBPairingProfile[step_];
+            return &profile_.steps[step_];
         }
         for (std::size_t index = 0; index < step_; ++index) {
-            if (kSensorBPairingProfile[index].trigger == observed) {
+            if (profile_.steps[index].trigger == observed) {
                 return nullptr;
             }
         }
@@ -384,7 +395,7 @@ public:
             return false;
         }
         if (nowMs - claimedAtMs_ >
-            kSensorBPairingProfile[step_].replyDeadlineMs) {
+            profile_.steps[step_].replyDeadlineMs) {
             fail(PairingFailureReason::ReplyDeadlineMissed);
             return false;
         }
@@ -398,7 +409,7 @@ public:
     bool pending() const { return pending_; }
     bool awaitingTerminalConfirmation() const {
         return state_ == PairingSessionState::Armed &&
-            step_ == kSensorBPairingProfile.size();
+            step_ == profile_.steps.size();
     }
     PairingFailureReason failureReason() const { return failureReason_; }
     std::uint32_t expiresAtMs() const { return expiresAtMs_; }
@@ -416,6 +427,7 @@ private:
     std::uint32_t claimedAtMs_ = 0;
     bool pending_ = false;
     PairingFailureReason failureReason_ = PairingFailureReason::None;
+    const PairingProfile& profile_;
 };
 
 }  // namespace rainpoint

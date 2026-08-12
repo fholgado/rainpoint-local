@@ -52,7 +52,9 @@ rainpoint::Cc1101 diagnosticRadio(
     kDiagnosticDataPin
 );
 #endif
-rainpoint::SensorBPairingSession pairingSession;
+constexpr const rainpoint::PairingProfile& kPairingProfile =
+    rainpoint::kValidatedHcs026Profile;
+rainpoint::PairingSession pairingSession(kPairingProfile);
 rainpoint::PairingSessionState reportedPairingState =
     rainpoint::PairingSessionState::Disarmed;
 bool pairingInvert = false;
@@ -369,8 +371,19 @@ void reportPairingStatus(const char* detail = nullptr) {
     line.reserve(320);
     line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();
-    line += "\",\"profile\":\"sensor_b\",\"factory_endpoint\":"
-            "\"15a98024\",\"paired_endpoint\":\"95a98024\"";
+    line += "\",\"profile\":\"";
+    line += kPairingProfile.id;
+    line += "\",\"factory_endpoint\":\"";
+    line += hexString(
+        kPairingProfile.factoryEndpoint.data(),
+        kPairingProfile.factoryEndpoint.size()
+    );
+    line += "\",\"paired_endpoint\":\"";
+    line += hexString(
+        kPairingProfile.pairedEndpoint.data(),
+        kPairingProfile.pairedEndpoint.size()
+    );
+    line += '"';
     if (!pairingCommandId.isEmpty()) {
         line += ",\"command_id\":\"";
         line += pairingCommandId;
@@ -381,7 +394,7 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "\",\"completed_steps\":";
     line += pairingSession.completedSteps();
     line += ",\"step_count\":";
-    line += rainpoint::kSensorBPairingProfile.size();
+    line += kPairingProfile.steps.size();
     line += ",\"awaiting_terminal_confirmation\":";
     line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
     line += ",\"terminal_trigger\":\"paired_message_3\"";
@@ -427,7 +440,7 @@ void cancelPairing(const char* detail) {
 #if RAINPOINT_RESEARCH_BENCH == 1
 bool handlePairingProbe(const String& command) {
     for (std::size_t index = 0;
-         index < rainpoint::kSensorBPairingProfile.size();
+         index < kPairingProfile.steps.size();
          ++index) {
         const String expected = String("pairing_probe_b ") + (index + 1) +
             " 15a98024";
@@ -441,7 +454,7 @@ bool handlePairingProbe(const String& command) {
             );
             return true;
         }
-        const auto& step = rainpoint::kSensorBPairingProfile[index];
+        const auto& step = kPairingProfile.steps[index];
         const std::int64_t adjustedFrequency =
             static_cast<std::int64_t>(step.channelCenterHz) +
             pairingFrequencyOffsetHz;
@@ -453,7 +466,9 @@ bool handlePairingProbe(const String& command) {
             rainpoint::pairingPaTableValue(pairingPowerDbm)
         );
         String line =
-            "{\"type\":\"pairing_tx_probe\",\"profile\":\"sensor_b\","
+            "{\"type\":\"pairing_tx_probe\",\"profile\":\"";
+        line += kPairingProfile.id;
+        line += "\","
             "\"step\":";
         line += index + 1;
         line += ",\"channel_center_hz\":";
@@ -576,7 +591,11 @@ void handleNetworkCommand() {
     long powerDbm = 0;
     bool invert = false;
     rainpoint::PairingLocalDateTime parsedClock{};
-    if (profile != "sensor_b" || factory != "15a98024") {
+    const String expectedFactory = hexString(
+        kPairingProfile.factoryEndpoint.data(),
+        kPairingProfile.factoryEndpoint.size()
+    );
+    if (profile != kPairingProfile.id || factory != expectedFactory) {
         reportNetworkCommandError(commandId, "unsupported_pairing_profile");
         return;
     }
@@ -633,9 +652,9 @@ void handleSerialCommand() {
             if (serialCommand == "pairing_plan_b") {
                 handled = true;
                 for (std::size_t index = 0;
-                     index < rainpoint::kSensorBPairingProfile.size();
+                     index < kPairingProfile.steps.size();
                      ++index) {
-                    const auto& step = rainpoint::kSensorBPairingProfile[index];
+                    const auto& step = kPairingProfile.steps[index];
                     String line;
                     line.reserve(360);
                     line += "{\"type\":\"pairing_dry_run\",\"step\":";

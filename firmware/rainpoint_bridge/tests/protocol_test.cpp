@@ -42,16 +42,17 @@ int main() {
     auto wrongSync = heartbeat;
     wrongSync[0] ^= 0x01;
     assert(!rainpoint::prepareRadioPayload(wrongSync, payload));
-    assert(rainpoint::validSensorBPairingProfile());
-    assert(rainpoint::kSensorBPairingProfile.size() == 3);
+    const auto& profile = rainpoint::kValidatedHcs026Profile;
+    assert(rainpoint::validPairingProfile(profile));
+    assert(profile.steps.size() == 3);
     assert(
-        rainpoint::kSensorBPairingProfile[0].channelCenterHz == 433'471'500
+        profile.steps[0].channelCenterHz == 433'471'500
     );
     assert(
-        rainpoint::kSensorBPairingProfile[1].channelCenterHz == 433'471'500
+        profile.steps[1].channelCenterHz == 433'471'500
     );
     assert(rainpoint::kMaxPairingFrequencyOffsetHz == 100'000);
-    for (const auto& step : rainpoint::kSensorBPairingProfile) {
+    for (const auto& step : profile.steps) {
         assert(step.wakeSymbols == 320);
         assert(step.replyDeadlineMs == 250);
         assert(rainpoint::hasOrdinaryTrailer(step.frame));
@@ -77,11 +78,11 @@ int main() {
         pairedMessage1,
         pairedMessage2Data,
     };
-    rainpoint::SensorBPairingSession session;
+    rainpoint::PairingSession session(profile);
     session.arm(1'000);
     for (std::size_t index = 0; index < triggers.size(); ++index) {
         const auto* reply = session.claimReply(triggers[index], 2'000 + index);
-        assert(reply == &rainpoint::kSensorBPairingProfile[index]);
+        assert(reply == &profile.steps[index]);
         assert(session.finishReply(true, 2'100 + index));
     }
     assert(session.state() == rainpoint::PairingSessionState::Armed);
@@ -96,12 +97,12 @@ int main() {
         session.failureReason() == rainpoint::PairingFailureReason::None
     );
 
-    auto datedReply = rainpoint::kSensorBPairingProfile[0].frame;
+    auto datedReply = profile.steps[0].frame;
     const rainpoint::PairingLocalDateTime capturedAt = {
         2026, 8, 11, 14, 55, 56,
     };
     assert(rainpoint::applyPairingLocalDateTime(datedReply, capturedAt));
-    assert(datedReply == rainpoint::kSensorBPairingProfile[0].frame);
+    assert(datedReply == profile.steps[0].frame);
     assert(rainpoint::trailerResidual(datedReply) == 0x4f03);
     const rainpoint::PairingLocalDateTime nextMinute = {
         2026, 8, 11, 14, 56, 1,
@@ -134,7 +135,7 @@ int main() {
     );
 
     rainpoint::PairingTrigger trigger;
-    assert(rainpoint::sensorBTrigger(pairedMessage2Data, trigger));
+    assert(rainpoint::pairingTrigger(pairedMessage2Data, profile, trigger));
     assert(trigger == rainpoint::PairingTrigger::PairedMessage2Data);
     assert(rainpoint::rainpointSymbolCount(320) == 624);
     assert(rainpoint::kPairingReplyDelayMs == 60);
@@ -148,21 +149,21 @@ int main() {
     assert(rainpoint::pairingPaTableValue(7) == 0xc8);
     assert(rainpoint::pairingPaTableValue(10) == 0xc0);
     assert(rainpoint::rainpointSymbol(
-        rainpoint::kSensorBPairingProfile[0].frame, 320, 0
+        profile.steps[0].frame, 320, 0
     ) == 0);
     assert(rainpoint::rainpointSymbol(
-        rainpoint::kSensorBPairingProfile[0].frame, 320, 1
+        profile.steps[0].frame, 320, 1
     ) == 1);
     // The first frame byte is 0x79 (01111001), MSB first after the wake.
     assert(rainpoint::rainpointSymbol(
-        rainpoint::kSensorBPairingProfile[0].frame, 320, 320
+        profile.steps[0].frame, 320, 320
     ) == 0);
     assert(rainpoint::rainpointSymbol(
-        rainpoint::kSensorBPairingProfile[0].frame, 320, 321
+        profile.steps[0].frame, 320, 321
     ) == 1);
     for (std::size_t index = 0; index < 320; ++index) {
         assert(rainpoint::rainpointSymbol(
-            rainpoint::kSensorBPairingProfile[0].frame, 320, index
+            profile.steps[0].frame, 320, index
         ) == static_cast<std::uint8_t>(index & 1U));
     }
     for (std::size_t byteIndex = 0;
@@ -173,7 +174,7 @@ int main() {
             reconstructed = static_cast<std::uint8_t>(
                 (reconstructed << 1) |
                 rainpoint::rainpointSymbol(
-                    rainpoint::kSensorBPairingProfile[0].frame,
+                    profile.steps[0].frame,
                     320,
                     320 + byteIndex * 8 + bit
                 )
@@ -181,16 +182,16 @@ int main() {
         }
         assert(
             reconstructed ==
-            rainpoint::kSensorBPairingProfile[0].frame[byteIndex]
+            profile.steps[0].frame[byteIndex]
         );
     }
 
-    rainpoint::SensorBPairingSession outOfOrder;
+    rainpoint::PairingSession outOfOrder(profile);
     outOfOrder.arm(0);
     assert(outOfOrder.claimReply(pairedMessage1, 1) == nullptr);
     assert(outOfOrder.state() == rainpoint::PairingSessionState::Failed);
 
-    rainpoint::SensorBPairingSession expired;
+    rainpoint::PairingSession expired(profile);
     expired.arm(0, 100);
     expired.tick(100);
     assert(expired.state() == rainpoint::PairingSessionState::Failed);
@@ -199,7 +200,7 @@ int main() {
         rainpoint::PairingFailureReason::SessionTimeout
     );
 
-    rainpoint::SensorBPairingSession incomplete;
+    rainpoint::PairingSession incomplete(profile);
     incomplete.arm(0, 10'000);
     for (std::size_t index = 0; index < triggers.size(); ++index) {
         assert(incomplete.claimReply(triggers[index], index * 1'000) != nullptr);

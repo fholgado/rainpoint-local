@@ -13,10 +13,11 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.pairing_protocol import (  # noqa: E402
-    SENSOR_B_PROFILE,
+    VALIDATED_HCS026_PROFILE,
     PairingPlanController,
     PairingTrigger,
     pairing_profile,
+    pairing_profile_for_factory,
 )
 from tools.demod_rainpoint_reply_iq import demodulate  # noqa: E402
 from tools.generate_rainpoint_iq import generate_command  # noqa: E402
@@ -36,22 +37,40 @@ class HCS026PairingProtocolTest(unittest.TestCase):
             if item["name"] == "sensor_b_repeat_enrollment_20260811"
         )
         self.assertEqual(
-            captured["frames"], [step.frame.hex() for step in SENSOR_B_PROFILE.steps]
+            captured["frames"],
+            [step.frame.hex() for step in VALIDATED_HCS026_PROFILE.steps],
         )
-        self.assertEqual(433_471_500, SENSOR_B_PROFILE.steps[0].channel_center_hz)
+        self.assertEqual(
+            433_471_500,
+            VALIDATED_HCS026_PROFILE.steps[0].channel_center_hz,
+        )
         self.assertEqual(
             [433_471_500] * 2,
-            [step.channel_center_hz for step in SENSOR_B_PROFILE.steps[1:]],
+            [
+                step.channel_center_hz
+                for step in VALIDATED_HCS026_PROFILE.steps[1:]
+            ],
         )
-        self.assertFalse(SENSOR_B_PROFILE.as_dict()["transmit_enabled"])
+        self.assertFalse(
+            VALIDATED_HCS026_PROFILE.as_dict()["transmit_enabled"]
+        )
 
     def test_rejects_uncaptured_sensor_profile(self) -> None:
-        self.assertIs(SENSOR_B_PROFILE, pairing_profile("15A98024"))
+        self.assertIs(
+            VALIDATED_HCS026_PROFILE,
+            pairing_profile("hcs026_15a98024_v1"),
+        )
+        self.assertIs(
+            VALIDATED_HCS026_PROFILE,
+            pairing_profile_for_factory("15A98024"),
+        )
         with self.assertRaises(KeyError):
-            pairing_profile("1bce0024")
+            pairing_profile("hcs026_unknown")
+        with self.assertRaises(KeyError):
+            pairing_profile_for_factory("1bce0024")
 
     def test_all_replies_round_trip_through_offline_waveform(self) -> None:
-        for step in SENSOR_B_PROFILE.steps:
+        for step in VALIDATED_HCS026_PROFILE.steps:
             with self.subTest(trigger=step.trigger.value):
                 data, metadata = generate_command(
                     step.frame,
@@ -74,8 +93,8 @@ class HCS026PairingProtocolTest(unittest.TestCase):
                 )
 
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:
-        controller = PairingPlanController(SENSOR_B_PROFILE)
-        for index, step in enumerate(SENSOR_B_PROFILE.steps):
+        controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
+        for index, step in enumerate(VALIDATED_HCS026_PROFILE.steps):
             action = controller.observe(step.trigger, now_ms=index * 1_000)
             self.assertEqual(step, action)
             self.assertEqual(step.trigger.value, controller.status()["pending_trigger"])
@@ -100,28 +119,28 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(controller.status()["terminal_confirmed"])
 
     def test_duplicate_timeout_out_of_order_and_interruption_fail_safe(self) -> None:
-        controller = PairingPlanController(SENSOR_B_PROFILE)
+        controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
         first = PairingTrigger.FACTORY_ANNOUNCEMENT
         self.assertIsNotNone(controller.observe(first, now_ms=0))
         self.assertIsNone(controller.observe(first, now_ms=10))
         controller.tick(now_ms=251)
         self.assertTrue(controller.failed)
 
-        out_of_order = PairingPlanController(SENSOR_B_PROFILE)
+        out_of_order = PairingPlanController(VALIDATED_HCS026_PROFILE)
         self.assertIsNone(
             out_of_order.observe(PairingTrigger.PAIRED_MESSAGE_1, now_ms=0)
         )
         self.assertTrue(out_of_order.failed)
 
-        interrupted = PairingPlanController(SENSOR_B_PROFILE)
+        interrupted = PairingPlanController(VALIDATED_HCS026_PROFILE)
         interrupted.interrupt()
         self.assertTrue(interrupted.failed)
         self.assertEqual("interrupted", interrupted.status()["failure_reason"])
         self.assertIsNone(interrupted.observe(first, now_ms=0))
 
     def test_all_replies_without_terminal_message_are_not_complete(self) -> None:
-        controller = PairingPlanController(SENSOR_B_PROFILE)
-        for index, step in enumerate(SENSOR_B_PROFILE.steps):
+        controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
+        for index, step in enumerate(VALIDATED_HCS026_PROFILE.steps):
             self.assertIsNotNone(controller.observe(step.trigger, now_ms=index * 100))
             self.assertTrue(
                 controller.mark_dispatched(step.trigger, now_ms=index * 100 + 50)

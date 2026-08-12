@@ -52,6 +52,7 @@ class PairingReplyStep:
 
 @dataclass(frozen=True)
 class PairingProfile:
+    profile_id: str
     model: str
     factory_endpoint: str
     paired_endpoint: str
@@ -62,6 +63,7 @@ class PairingProfile:
 
     def as_dict(self) -> dict[str, Any]:
         return {
+            "profile_id": self.profile_id,
             "model": self.model,
             "factory_endpoint": self.factory_endpoint,
             "paired_endpoint": self.paired_endpoint,
@@ -85,7 +87,8 @@ def _frame(value: str) -> bytes:
     return frame
 
 
-SENSOR_B_PROFILE = PairingProfile(
+VALIDATED_HCS026_PROFILE = PairingProfile(
+    profile_id="hcs026_15a98024_v1",
     model="HCS026FRF",
     factory_endpoint="15a98024",
     paired_endpoint="95a98024",
@@ -116,11 +119,26 @@ SENSOR_B_PROFILE = PairingProfile(
 )
 
 
-def pairing_profile(factory_endpoint: str) -> PairingProfile:
-    """Return an evidence-backed profile or reject unsupported identities."""
-    if factory_endpoint.lower() != SENSOR_B_PROFILE.factory_endpoint:
-        raise KeyError(factory_endpoint)
-    return SENSOR_B_PROFILE
+PAIRING_PROFILES = {
+    VALIDATED_HCS026_PROFILE.profile_id: VALIDATED_HCS026_PROFILE,
+}
+
+
+def pairing_profile(profile_id: str) -> PairingProfile:
+    """Return an evidence-backed profile by stable protocol-profile ID."""
+    try:
+        return PAIRING_PROFILES[profile_id.lower()]
+    except KeyError:
+        raise KeyError(profile_id) from None
+
+
+def pairing_profile_for_factory(factory_endpoint: str) -> PairingProfile:
+    """Resolve an observed factory identity without treating it as a model."""
+    normalized = factory_endpoint.lower()
+    for profile in PAIRING_PROFILES.values():
+        if profile.factory_endpoint == normalized:
+            return profile
+    raise KeyError(factory_endpoint)
 
 
 class PairingPlanController:

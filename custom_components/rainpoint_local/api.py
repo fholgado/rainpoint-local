@@ -144,12 +144,21 @@ class RainPointLocalClient:
         )
 
     async def start_pairing(
-        self, token: str, duration_seconds: int = 120, *, node_id: str
+        self,
+        token: str,
+        duration_seconds: int = 120,
+        *,
+        node_id: str,
+        profile_id: str = "hcs026_15a98024_v1",
     ) -> dict[str, Any]:
         """Open pairing and arm one authenticated local radio node."""
         return await self._post(
             "pairing/start",
-            {"duration_seconds": duration_seconds, "node_id": node_id},
+            {
+                "duration_seconds": duration_seconds,
+                "node_id": node_id,
+                "profile_id": profile_id,
+            },
             token,
         )
 

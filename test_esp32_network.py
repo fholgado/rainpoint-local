@@ -272,9 +272,13 @@ class ESP32NetworkTest(unittest.TestCase):
         )
         self.assertTrue(started["transmitter_available"])
         self.assertEqual(NODE_A, started["selected_node_id"])
+        self.assertEqual(
+            ["hcs026_15a98024_v1"],
+            [item["profile_id"] for item in started["supported_profiles"]],
+        )
         command = json.loads(stream.readline())
         self.assertEqual("pairing_start", command["type"])
-        self.assertEqual("sensor_b", command["profile"])
+        self.assertEqual("hcs026_15a98024_v1", command["profile"])
         self.assertEqual("15a98024", command["factory_endpoint"])
         encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
         expected_clock = (
@@ -333,6 +337,20 @@ class ESP32NetworkTest(unittest.TestCase):
         cancel = json.loads(stream.readline())
         self.assertEqual("pairing_cancel", cancel["type"])
         self.assertEqual(command["command_id"], cancel["command_id"])
+        stream.close()
+        connection.close()
+
+    def test_pairing_rejects_unknown_protocol_profile(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported pairing profile"):
+            self.gateway.start_pairing(
+                120,
+                node_id=NODE_A,
+                profile_id="uncaptured_profile",
+            )
+        self.assertFalse(self.gateway.pairing()["active"])
         stream.close()
         connection.close()
 

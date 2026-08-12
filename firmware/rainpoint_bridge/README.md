@@ -53,15 +53,15 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
   `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
   its enrollment token over the network.
-- Contains a three-reply Sensor B pairing profile from the successful stock
+- Contains a three-reply, evidence-labelled HCS026 pairing profile from the successful stock
   repeat-enrollment capture, a 320-symbol wake prefix, and provisional 250 ms
   response deadline. It requires the sensor's later terminal message `03`
   before declaring enrollment complete.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
 - Starts disarmed after every boot. In production builds, only an authenticated
-  protocol-v2 gateway command for factory endpoint `15a98024` enables the
-  time-limited automatic reply sequence.
+  protocol-v2 gateway command for profile `hcs026_15a98024_v1` and factory
+  endpoint `15a98024` enables the time-limited automatic reply sequence.
 - Transmits the validated sequence at the configured 10 dBm prototype setting and returns to the
   receive configuration after every 31.2 ms reply.
 - Reports pairing state, command ID, completed steps, and armed state over
