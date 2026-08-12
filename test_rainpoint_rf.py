@@ -241,6 +241,11 @@ class RainPointRFTest(unittest.TestCase):
                 model="HCS026FRF",
                 area="Nursery",
             )
+            immediate = gateway.devices()[0]
+            self.assertEqual("local-aabbcc24", immediate["device_id"])
+            self.assertEqual("Waiting Sensor", immediate["name"])
+            self.assertEqual("Nursery", immediate["area"])
+            self.assertFalse(immediate["available"])
             gateway.close()
 
             restored = Gateway(transport="rtl433", storage_path=str(storage))

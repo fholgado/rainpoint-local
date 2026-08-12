@@ -95,6 +95,7 @@ class Gateway:
         if self._store:
             self._events.extend(self._store.recent_events(event_limit))
         self._restore_devices()
+        self._ensure_registered_sensor_devices()
         self._next_event_id = self.latest_event_id() + 1
         self._lock = threading.Lock()
         self._transport_healthy = True
@@ -993,6 +994,7 @@ class Gateway:
                 accepted_at=timestamp,
             )
             self._refresh_registry_catalog()
+            self._ensure_registered_sensor_devices()
             resolved = self.catalog.sensor(endpoint)
             resolved_device_id = resolved.device_id if resolved else device_id
             if resolved_device_id in self._devices:
@@ -1103,6 +1105,7 @@ class Gateway:
                 accepted_at=timestamp,
             )
             self._refresh_registry_catalog()
+            self._ensure_registered_sensor_devices()
             return registered
 
     def update_registry_device(
@@ -1352,6 +1355,47 @@ class Gateway:
             if registry_metadata is not None:
                 device["area"] = registry_metadata.get("area")
             self._devices[event["device_id"]] = device
+
+    def _ensure_registered_sensor_devices(self) -> None:
+        """Expose named sensors even when suppression hid their last report."""
+        if self._store is None:
+            return
+        for registration in self._store.registry():
+            if registration.get("model") != "HCS026FRF":
+                continue
+            endpoint = str(registration["endpoint"]).lower()
+            if endpoint in self._suppressed_endpoints:
+                continue
+            device_id = str(registration["device_id"])
+            state: dict[str, Any] = {
+                "model": "HCS026FRF",
+                "rf_endpoint": endpoint,
+            }
+            try:
+                factory = factory_endpoint(endpoint)
+            except ValueError:
+                pass
+            else:
+                state.update(
+                    {
+                        "rf_factory_endpoint": factory,
+                        "rf_paired_endpoint": endpoint,
+                        "rf_pairing_state": "paired",
+                    }
+                )
+            self._devices.setdefault(
+                device_id,
+                {
+                    "device_id": device_id,
+                    "name": registration["name"],
+                    "model": "HCS026FRF",
+                    "available": False,
+                    "last_event_id": 0,
+                    "observed_at": None,
+                    "state": state,
+                    "area": registration.get("area"),
+                },
+            )
 
     @staticmethod
     def _add_reporting_status(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.1
+
+- Expose a newly named HCS026 sensor immediately after pairing even when its
+  final telemetry arrived while a prior forget suppression was still active.
+- Restore registered sensors as unavailable placeholders after gateway restart
+  until their next accepted RF report populates live entities.
+
 ## 0.17.0
 
 - Add model-level `hcs026_auto_v1` pairing orchestration: the selected radio
