@@ -56,8 +56,11 @@ struct PairingProfile {
     std::array<std::uint8_t, 4> pairedEndpoint;
     std::array<std::uint8_t, 4> sensorRoute;
     std::array<std::uint8_t, 4> companionEndpoint;
-    std::array<PairingReplyStep, 3> steps;
+    std::uint16_t replyDelayMs;
+    std::array<PairingReplyStep, 5> steps;
+    std::uint8_t stepCount;
     PairingTrigger completionTrigger;
+    bool completeAfterFinalReply;
 };
 
 constexpr std::uint32_t kPairingSymbolRate = 20'000;
@@ -193,6 +196,7 @@ constexpr PairingProfile kValidatedHcs026Profile = {
     {{0x95, 0xa9, 0x80, 0x24}},
     {{0xb9, 0x84, 0x02, 0x80}},
     {{0x39, 0x84, 0x02, 0x80}},
+    kPairingReplyDelayMs,
     {{
     {
         PairingTrigger::FactoryAnnouncement,
@@ -225,7 +229,72 @@ constexpr PairingProfile kValidatedHcs026Profile = {
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x22}},
     },
     }},
+    3,
     PairingTrigger::PairedMessage3,
+    false,
+};
+
+// Identity-specific Sensor A mixed-state profile. Every transmitted byte and
+// channel below comes from controlled stock enrollment captures. The profile
+// emits the
+// first-enrollment request sequence through the data message, followed by the
+// rejoin short-message form. Replies 1..3 therefore come from the captured
+// first enrollment and reply 4 from the captured rejoin. Terminal message 03
+// is required afterward; no uncaptured response is synthesized.
+constexpr PairingProfile kSensorAHcs026CandidateProfile = {
+    "hcs026_1bce0024_candidate_v1",
+    "HCS026FRF",
+    "controlled successful local enrollment captured 2026-08-12",
+    {{0x1b, 0xce, 0x00, 0x24}},
+    {{0x9b, 0xce, 0x00, 0x24}},
+    {{0xb9, 0x84, 0x02, 0x80}},
+    {{0x39, 0x84, 0x02, 0x80}},
+    10,
+    {{
+    {
+        PairingTrigger::FactoryAnnouncement,
+        433'471'484,
+        kPairingWakeSymbols,
+        kPairingReplyDeadlineMs,
+        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
+          0x84, 0x02, 0x80, 0x81, 0x40, 0x88, 0x05, 0x03, 0x04, 0xf0,
+          0x00, 0xad, 0xf1, 0x8a, 0x0d, 0x00, 0x80, 0x80, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4c, 0x41}},
+    },
+    {
+        PairingTrigger::PairedMessage1,
+        434'021'457,
+        kPairingWakeSymbols,
+        kPairingReplyDeadlineMs,
+        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
+          0x84, 0x02, 0x80, 0x81, 0xc1, 0x82, 0x00, 0x00, 0x9f, 0x80,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3d, 0x14}},
+    },
+    {
+        PairingTrigger::PairedMessage2Data,
+        434'021'457,
+        kPairingWakeSymbols,
+        kPairingReplyDeadlineMs,
+        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
+          0x84, 0x02, 0x80, 0x82, 0x41, 0x81, 0x00, 0x01, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0xea}},
+    },
+    {
+        PairingTrigger::PairedMessage2Short,
+        434'021'457,
+        kPairingWakeSymbols,
+        kPairingReplyDeadlineMs,
+        {{0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
+          0x84, 0x02, 0x80, 0x82, 0xc1, 0x81, 0x00, 0x01, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x6f}},
+    },
+    }},
+    4,
+    PairingTrigger::PairedMessage3,
+    false,
 };
 
 inline const char* pairingTriggerName(PairingTrigger trigger) {
@@ -245,7 +314,16 @@ inline const char* pairingTriggerName(PairingTrigger trigger) {
 }
 
 inline bool validPairingProfile(const PairingProfile& profile) {
-    for (const auto& step : profile.steps) {
+    if (profile.stepCount == 0 || profile.stepCount > profile.steps.size()) {
+        return false;
+    }
+    if (profile.replyDelayMs > profile.steps[0].replyDeadlineMs) {
+        return false;
+    }
+    for (std::size_t stepIndex = 0;
+         stepIndex < profile.stepCount;
+         ++stepIndex) {
+        const auto& step = profile.steps[stepIndex];
         if (!hasSync(step.frame) || !hasOrdinaryTrailer(step.frame) ||
             step.wakeSymbols != kPairingWakeSymbols ||
             step.replyDeadlineMs != kPairingReplyDeadlineMs) {
@@ -303,7 +381,10 @@ inline bool pairingTrigger(
         trigger = PairingTrigger::PairedMessage2Data;
         return true;
     }
-    if (message == 2 && frame[14] == 0x82) {
+    // Controlled captures show two HCS026 short-message encodings here:
+    // Sensor A uses 0x81 while Sensor B uses 0x82. Both occur after the data
+    // form (0x01) and represent the same pairing trigger.
+    if (message == 2 && (frame[14] == 0x81 || frame[14] == 0x82)) {
         trigger = PairingTrigger::PairedMessage2Short;
         return true;
     }
@@ -337,7 +418,7 @@ public:
         if (state_ == PairingSessionState::Armed &&
             static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0) {
             fail(
-                step_ == profile_.steps.size()
+                step_ == profile_.stepCount
                     ? PairingFailureReason::TerminalConfirmationTimeout
                     : PairingFailureReason::SessionTimeout
             );
@@ -356,7 +437,7 @@ public:
         if (!pairingTrigger(frame, profile_, observed)) {
             return nullptr;
         }
-        if (step_ == profile_.steps.size()) {
+        if (step_ == profile_.stepCount) {
             if (observed == profile_.completionTrigger) {
                 state_ = PairingSessionState::Completed;
                 return nullptr;
@@ -366,7 +447,10 @@ public:
             if (observed == PairingTrigger::PairedMessage2Short) {
                 return nullptr;
             }
-            for (const auto& step : profile_.steps) {
+            for (std::size_t index = 0;
+                 index < profile_.stepCount;
+                 ++index) {
+                const auto& step = profile_.steps[index];
                 if (step.trigger == observed) {
                     return nullptr;
                 }
@@ -401,6 +485,10 @@ public:
         }
         pending_ = false;
         ++step_;
+        if (step_ == profile_.stepCount &&
+            profile_.completeAfterFinalReply) {
+            state_ = PairingSessionState::Completed;
+        }
         return true;
     }
 
@@ -409,7 +497,8 @@ public:
     bool pending() const { return pending_; }
     bool awaitingTerminalConfirmation() const {
         return state_ == PairingSessionState::Armed &&
-            step_ == profile_.steps.size();
+            step_ == profile_.stepCount &&
+            !profile_.completeAfterFinalReply;
     }
     PairingFailureReason failureReason() const { return failureReason_; }
     std::uint32_t expiresAtMs() const { return expiresAtMs_; }

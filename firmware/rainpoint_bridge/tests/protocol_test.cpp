@@ -44,7 +44,7 @@ int main() {
     assert(!rainpoint::prepareRadioPayload(wrongSync, payload));
     const auto& profile = rainpoint::kValidatedHcs026Profile;
     assert(rainpoint::validPairingProfile(profile));
-    assert(profile.steps.size() == 3);
+    assert(profile.stepCount == 3);
     assert(
         profile.steps[0].channelCenterHz == 433'471'500
     );
@@ -52,11 +52,24 @@ int main() {
         profile.steps[1].channelCenterHz == 433'471'500
     );
     assert(rainpoint::kMaxPairingFrequencyOffsetHz == 100'000);
-    for (const auto& step : profile.steps) {
+    for (std::size_t index = 0; index < profile.stepCount; ++index) {
+        const auto& step = profile.steps[index];
         assert(step.wakeSymbols == 320);
         assert(step.replyDeadlineMs == 250);
         assert(rainpoint::hasOrdinaryTrailer(step.frame));
     }
+
+    const auto& sensorA = rainpoint::kSensorAHcs026CandidateProfile;
+    assert(rainpoint::validPairingProfile(sensorA));
+    assert(sensorA.stepCount == 4);
+    assert(sensorA.replyDelayMs == 10);
+    assert(sensorA.steps[0].channelCenterHz == 433'471'484);
+    assert(sensorA.steps[1].channelCenterHz == 434'021'457);
+    assert(sensorA.steps[2].channelCenterHz == 434'021'457);
+    assert(sensorA.steps[3].trigger == rainpoint::PairingTrigger::PairedMessage2Short);
+    assert(!sensorA.completeAfterFinalReply);
+    assert(sensorA.factoryEndpoint[0] == 0x1b);
+    assert(sensorA.pairedEndpoint[0] == 0x9b);
 
     const auto factoryTrigger = fromHex(
         "79f4882f288000000015a98024010083827fa41e8080848000000000000000000000000022f1"
@@ -96,6 +109,45 @@ int main() {
     assert(
         session.failureReason() == rainpoint::PairingFailureReason::None
     );
+
+    const auto sensorAFactoryTrigger = fromHex(
+        "79f4882f28800000001bce0024010083827fa41e8080b20000000000000000000000000073e3"
+    );
+    const auto sensorAPairedMessage1 = fromHex(
+        "79f4882f28b98402809bce002401818204e5c4008000000000000000000000000000000008d6"
+    );
+    const auto sensorAPairedMessage2Data = fromHex(
+        "79f4882f28b98402809bce002402018204e5c400800000000000000000000000000000001d5e"
+    );
+    const auto sensorAPairedMessage2Short = fromHex(
+        "79f4882f28b98402809bce002402818204e5c400800000000000000000000000000000002fdb"
+    );
+    const auto sensorAPairedMessage3 = fromHex(
+        "79f4882f28b98402809bce00240301820485c40080000000000000000000000000000000518b"
+    );
+    const std::array sensorATriggers = {
+        sensorAFactoryTrigger,
+        sensorAPairedMessage1,
+        sensorAPairedMessage2Data,
+        sensorAPairedMessage2Short,
+    };
+    rainpoint::PairingSession sensorASession(sensorA);
+    sensorASession.arm(10'000);
+    for (std::size_t index = 0; index < sensorATriggers.size(); ++index) {
+        const auto* reply = sensorASession.claimReply(
+            sensorATriggers[index], 11'000 + index
+        );
+        assert(reply == &sensorA.steps[index]);
+        assert(sensorASession.finishReply(true, 11'100 + index));
+        if (index + 1 < sensorATriggers.size()) {
+            assert(sensorASession.state() == rainpoint::PairingSessionState::Armed);
+        }
+    }
+    assert(sensorASession.state() == rainpoint::PairingSessionState::Armed);
+    assert(sensorASession.completedSteps() == 4);
+    assert(sensorASession.awaitingTerminalConfirmation());
+    assert(sensorASession.claimReply(sensorAPairedMessage3, 12'000) == nullptr);
+    assert(sensorASession.state() == rainpoint::PairingSessionState::Completed);
 
     auto datedReply = profile.steps[0].frame;
     const rainpoint::PairingLocalDateTime capturedAt = {

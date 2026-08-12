@@ -16,7 +16,10 @@ from urllib.request import urlopen
 
 FRAME_BYTES = 38
 SYNC = bytes.fromhex("79f4882f28")
-STOCK_GATEWAY_ENDPOINT = bytes.fromhex("b42d008f")
+# Stock pairing replies use this companion endpoint.  ``b42d008f`` is the
+# installed valve endpoint and must not be treated as evidence that the stock
+# RainPoint gateway transmitted during an isolated trial.
+STOCK_PAIRING_COMPANION_ENDPOINT = bytes.fromhex("39840280")
 TRIAL_ID = re.compile(r"[a-z0-9][a-z0-9_-]{2,63}\Z")
 
 
@@ -123,7 +126,7 @@ def analyze_trial(
         message = frame[13] & 0x7F
         routes[f"{source.hex()}->{destination.hex()}"] += 1
         messages[f"0x{message:02x}"] += 1
-        if STOCK_GATEWAY_ENDPOINT in (source, destination):
+        if STOCK_PAIRING_COMPANION_ENDPOINT in (source, destination):
             stock_gateway_count += 1
         if factory_bytes is not None and factory_bytes in (source, destination):
             factory_count += 1

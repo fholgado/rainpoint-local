@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RainPointLocalClient, RainPointLocalError
-from .const import CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN, PLATFORMS
+from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN, PLATFORMS
 from .coordinator import RainPointLocalCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -85,3 +90,38 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unloaded
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    """Forget one HCS026 sensor selected from its HA device menu."""
+    local_id = next(
+        (
+            identifier[1]
+            for identifier in device_entry.identifiers
+            if identifier[0] == DOMAIN
+        ),
+        None,
+    )
+    if local_id is None or device_entry.model != "HCS026FRF":
+        return False
+    token = str(
+        config_entry.data.get(
+            CONF_TOKEN, config_entry.options.get(CONF_TOKEN, "")
+        )
+    )
+    if not token:
+        return False
+    coordinator = hass.data.get(DOMAIN, {}).get(config_entry.entry_id)
+    if not isinstance(coordinator, RainPointLocalCoordinator):
+        return False
+    try:
+        await coordinator.client.forget_sensor(token, local_id)
+        await coordinator.async_request_refresh()
+    except RainPointLocalError as exc:
+        _LOGGER.warning("Unable to forget RainPoint sensor %s: %s", local_id, exc)
+        return False
+    return True

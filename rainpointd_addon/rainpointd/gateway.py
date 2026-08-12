@@ -1180,6 +1180,17 @@ class Gateway:
                 raise RuntimeError("persistent sensor registry is unavailable")
             device = self._devices.get(device_id)
             if device is None:
+                match = re.fullmatch(r"hcs026-([0-9a-f]{8})", device_id)
+                if match and match.group(1) in self._suppressed_endpoints:
+                    endpoint = match.group(1)
+                    return {
+                        "device_id": device_id,
+                        "endpoint": endpoint,
+                        "factory_endpoint": factory_endpoint(endpoint),
+                        "model": "HCS026FRF",
+                        "already_forgotten": True,
+                        "registry_record_removed": False,
+                    }
                 raise KeyError(device_id)
             if device.get("model") != "HCS026FRF":
                 raise ValueError("only HCS026 sensors can be forgotten")

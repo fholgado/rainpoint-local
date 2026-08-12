@@ -436,8 +436,6 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._pairing_nodes: dict[str, str] = {}
         self._pairing_task: asyncio.Task[None] | None = None
         self._pairing_error: str | None = None
-        self._removable_sensors: dict[str, dict[str, Any]] = {}
-        self._sensor_to_forget: str | None = None
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -463,113 +461,11 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 },
             )
         menu_options = (
-            ["pair_sensor", "forget_sensor", "add_radio_node"]
+            ["pair_sensor", "add_radio_node"]
             if self._token
             else ["authenticate_gateway"]
         )
         return self.async_show_menu(step_id="init", menu_options=menu_options)
-
-    async def async_step_forget_sensor(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Select one known HCS026 sensor for local removal."""
-        if not self._token:
-            return await self.async_step_authenticate_gateway()
-        errors: dict[str, str] = {}
-        try:
-            devices = await self._client().devices()
-        except RainPointLocalCannotConnect:
-            errors["base"] = "cannot_connect"
-            devices = []
-        except RainPointLocalInvalidResponse:
-            errors["base"] = "invalid_response"
-            devices = []
-        self._removable_sensors = {
-            str(device["device_id"]): device
-            for device in devices
-            if device.get("model") == "HCS026FRF"
-            and isinstance(device.get("device_id"), str)
-        }
-        if not errors and not self._removable_sensors:
-            return self.async_abort(reason="no_sensors")
-        if user_input is not None:
-            device_id = str(user_input.get("device_id", ""))
-            if device_id not in self._removable_sensors:
-                errors["base"] = "sensor_not_found"
-            else:
-                self._sensor_to_forget = device_id
-                return await self.async_step_confirm_forget_sensor()
-        choices = {
-            device_id: self._sensor_label(device)
-            for device_id, device in self._removable_sensors.items()
-        }
-        return self.async_show_form(
-            step_id="forget_sensor",
-            data_schema=vol.Schema(
-                {vol.Required("device_id"): vol.In(choices)}
-            ),
-            errors=errors,
-        )
-
-    async def async_step_confirm_forget_sensor(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Require explicit confirmation before suppressing local exposure."""
-        device_id = self._sensor_to_forget
-        device = self._removable_sensors.get(device_id or "")
-        if device_id is None or device is None:
-            return self.async_abort(reason="sensor_not_found")
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            if user_input.get("confirm") is not True:
-                errors["base"] = "confirmation_required"
-            else:
-                try:
-                    await self._client().forget_sensor(self._token, device_id)
-                except RainPointLocalUnauthorized:
-                    errors["base"] = "invalid_auth"
-                except RainPointLocalCannotConnect:
-                    errors["base"] = "cannot_connect"
-                except RainPointLocalInvalidResponse:
-                    errors["base"] = "invalid_response"
-                else:
-                    coordinator = self.hass.data.get(DOMAIN, {}).get(
-                        self._entry.entry_id
-                    )
-                    if coordinator is not None:
-                        await coordinator.async_request_refresh()
-                    return self.async_create_entry(
-                        title="Local sensor forgotten", data={}
-                    )
-        return self.async_show_form(
-            step_id="confirm_forget_sensor",
-            data_schema=vol.Schema(
-                {vol.Required("confirm", default=False): bool}
-            ),
-            errors=errors,
-            description_placeholders={
-                "name": str(device.get("name", device_id)),
-                "endpoint": self._sensor_endpoint(device),
-            },
-        )
-
-    @staticmethod
-    def _sensor_endpoint(device: dict[str, Any]) -> str:
-        """Return the best paired endpoint for one sensor snapshot."""
-        state = device.get("state", {})
-        return str(
-            state.get("rf_endpoint")
-            or state.get("rf_paired_endpoint")
-            or "unknown"
-        )
-
-    @classmethod
-    def _sensor_label(cls, device: dict[str, Any]) -> str:
-        """Build an unambiguous sensor choice label."""
-        return (
-            f"{device.get('name', device.get('device_id', 'RainPoint sensor'))} "
-            f"({cls._sensor_endpoint(device)})"
-        )
 
     async def async_step_add_radio_node(
         self, user_input: dict[str, Any] | None = None

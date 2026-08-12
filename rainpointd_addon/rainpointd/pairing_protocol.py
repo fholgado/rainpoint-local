@@ -58,7 +58,9 @@ class PairingProfile:
     paired_endpoint: str
     evidence: str
     steps: tuple[PairingReplyStep, ...]
+    reply_delay_ms: int = 60
     completion_trigger: PairingTrigger = PairingTrigger.PAIRED_MESSAGE_3
+    complete_after_final_reply: bool = False
     clock_lead_seconds: int = 240
 
     def as_dict(self) -> dict[str, Any]:
@@ -70,6 +72,8 @@ class PairingProfile:
             "evidence": self.evidence,
             "transmit_enabled": False,
             "completion_trigger": self.completion_trigger.value,
+            "complete_after_final_reply": self.complete_after_final_reply,
+            "reply_delay_ms": self.reply_delay_ms,
             "clock_lead_seconds": self.clock_lead_seconds,
             "steps": [step.as_dict() for step in self.steps],
         }
@@ -119,8 +123,49 @@ VALIDATED_HCS026_PROFILE = PairingProfile(
 )
 
 
+SENSOR_A_CANDIDATE_PROFILE = PairingProfile(
+    profile_id="hcs026_1bce0024_candidate_v1",
+    model="HCS026FRF",
+    factory_endpoint="1bce0024",
+    paired_endpoint="9bce0024",
+    evidence="controlled successful local enrollment captured 2026-08-12",
+    steps=(
+        PairingReplyStep(
+            PairingTrigger.FACTORY_ANNOUNCEMENT,
+            433_471_484,
+            _frame(
+                "79f4882f289bce002439840280814088050304f000adf18a0d00808000000000000000004c41"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_1,
+            434_021_457,
+            _frame(
+                "79f4882f289bce00243984028081c18200009f80000000000000000000000000000000003d14"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_2_DATA,
+            434_021_457,
+            _frame(
+                "79f4882f289bce00243984028082418100010000000000000000000000000000000000007cea"
+            ),
+        ),
+        PairingReplyStep(
+            PairingTrigger.PAIRED_MESSAGE_2_SHORT,
+            434_021_457,
+            _frame(
+                "79f4882f289bce00243984028082c18100010000000000000000000000000000000000004e6f"
+            ),
+        ),
+    ),
+    reply_delay_ms=10,
+)
+
+
 PAIRING_PROFILES = {
     VALIDATED_HCS026_PROFILE.profile_id: VALIDATED_HCS026_PROFILE,
+    SENSOR_A_CANDIDATE_PROFILE.profile_id: SENSOR_A_CANDIDATE_PROFILE,
 }
 
 
@@ -206,6 +251,11 @@ class PairingPlanController:
         self.next_step += 1
         self.pending = None
         self.pending_deadline_ms = None
+        if (
+            self.replies_complete
+            and self.profile.complete_after_final_reply
+        ):
+            self.terminal_confirmed = True
         return True
 
     def tick(self, *, now_ms: int) -> None:

@@ -273,7 +273,10 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertTrue(started["transmitter_available"])
         self.assertEqual(NODE_A, started["selected_node_id"])
         self.assertEqual(
-            ["hcs026_15a98024_v1"],
+            [
+                "hcs026_15a98024_v1",
+                "hcs026_1bce0024_candidate_v1",
+            ],
             [item["profile_id"] for item in started["supported_profiles"]],
         )
         command = json.loads(stream.readline())

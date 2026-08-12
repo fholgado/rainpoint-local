@@ -17,6 +17,9 @@ again:
   and terminal `03` progression and nearly identical cadence;
 - the custom ESP32/CC1101 completed one isolated enrollment of `15a98024` and
   received subsequent moisture telemetry with the stock RainPoint gateway off;
+- the custom ESP32/CC1101 completed an isolated enrollment of `1bce0024` using
+  four captured replies, received terminal message `03`, and received routine
+  telemetry under paired identity `9bce0024` with the stock gateway off;
 - the stock gateway can race a custom pairing attempt even after a sensor is
   removed from the vendor app;
 - app deletion produced no RF unpair command, and a subsequent sensor power
@@ -26,29 +29,28 @@ again:
 
 ## HCS026 sensor: remaining physical tests
 
-### Sensor A offline candidate status
+### Sensor A local enrollment result
 
-`tools/analyze_pairing_profiles.py` now turns the two captured Sensor A stock
-sequences into a repeatable, explicitly non-runnable candidate report. The
-comparison proves that changing Sensor B's endpoint is insufficient: the first
-gateway reply also differs at frame offsets 18 and 19, and Sensor A's two stock
-captures consistently use 433.4715 MHz for the initial reply followed by
-approximately 434.0215 MHz. Later aligned reply payloads otherwise match after
-masking endpoint and trailer bytes.
+The 2026-08-12 isolated trial established that Sensor A requires a mixed
+four-reply sequence for its observed request state: replies 1–3 from its first
+stock enrollment followed by reply 4 from its captured rejoin. The first reply
+used 433.4715 MHz, the remaining replies used approximately 434.0215 MHz, and
+the successful response delay was 10 ms. The sensor then emitted terminal
+message `03`, message `04`, and normal telemetry under identity `9bce0024`.
+The stock RainPoint gateway remained unplugged.
 
-The candidate is intentionally absent from the gateway profile registry and
-ESP32 firmware. Tomorrow's controlled capture must determine whether Sensor A
-requires three, four, or five replies and must confirm terminal message `03`
-plus routine telemetry before any Sensor A transmit profile can be enabled.
+The result validates this identity-specific profile but does not prove that
+the differing branch is universal across every HCS026 revision. The profile
+therefore remains evidence-labelled and endpoint-bounded.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py
 ```
 
-### S1 — second-identity local enrollment (release blocker)
+### S1 — second-identity local enrollment (passed 2026-08-12)
 
-Purpose: determine whether the reply exchange is model-wide or whether each
-identity/revision needs a distinct protocol profile.
+The controlled Sensor A run passed every criterion below. Retain this procedure
+as the regression sequence for future identities and hardware revisions.
 
 1. Use the test sensor whose factory endpoint is not `15a98024`.
 2. Record its label, hardware markings, LCD state, battery state, and factory
@@ -135,6 +137,18 @@ factory-unpaired or have a documented, recoverable rejoin state.
    and power-cycle tests.
 4. Re-pair it and verify that the intended HA identity/history policy is
    preserved.
+
+### S7 — soil profile (`P1`) encoding
+
+The HCS026 LCD's `P1` indicator is the user-selectable soil type/profile shown
+by the stock app; it is not a pairing-step or device-slot indicator. With a
+test sensor paired to the stock gateway, capture one manual report at each
+available profile while holding moisture and battery state constant. Determine
+whether the selected profile is transmitted by the sensor, changes only the
+display-side moisture calibration, or is stored solely in the stock app/cloud.
+If it is an RF field, expose the raw and decoded value locally before adding a
+writable HA setting. Record the available profile range and app labels as
+product metadata rather than assuming `P1` is universal.
 
 ### Sensor completion criteria
 

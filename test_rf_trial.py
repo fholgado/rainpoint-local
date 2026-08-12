@@ -44,13 +44,23 @@ class RFTrialTests(unittest.TestCase):
     def test_stock_gateway_traffic_fails_isolation(self) -> None:
         events = [
             {"raw": frame("80000000", "1bce0024", 1)},
-            {"raw": frame("b42d008f", "9bce0024", 3)},
+            {"raw": frame("9bce0024", "39840280", 0x81)},
         ]
         report = MODULE.analyze_trial(self.manifest(), events)
         self.assertFalse(report["passed"])
         self.assertFalse(
             report["checks"]["known_stock_gateway_endpoint_silent"]
         )
+
+    def test_installed_valve_endpoint_is_not_stock_gateway_evidence(self) -> None:
+        events = [
+            {"raw": frame("80000000", "1bce0024", 1)},
+            {"raw": frame("b9840280", "9bce0024", 3)},
+            {"raw": frame("b9840280", "b42d008f", 0x15)},
+        ]
+        report = MODULE.analyze_trial(self.manifest(), events)
+        self.assertTrue(report["passed"])
+        self.assertEqual(0, report["stock_gateway_frame_count"])
 
     def test_valve_baseline_does_not_require_unknown_identities(self) -> None:
         manifest = {

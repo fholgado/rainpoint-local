@@ -19,6 +19,10 @@
 #error "RAINPOINT_RESEARCH_BENCH must be 0 or 1"
 #endif
 
+#if RAINPOINT_SENSOR_A_CANDIDATE != 0 && RAINPOINT_SENSOR_A_CANDIDATE != 1
+#error "RAINPOINT_SENSOR_A_CANDIDATE must be 0 or 1"
+#endif
+
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
 #endif
@@ -52,8 +56,13 @@ rainpoint::Cc1101 diagnosticRadio(
     kDiagnosticDataPin
 );
 #endif
+#if RAINPOINT_SENSOR_A_CANDIDATE == 1
+constexpr const rainpoint::PairingProfile& kPairingProfile =
+    rainpoint::kSensorAHcs026CandidateProfile;
+#else
 constexpr const rainpoint::PairingProfile& kPairingProfile =
     rainpoint::kValidatedHcs026Profile;
+#endif
 rainpoint::PairingSession pairingSession(kPairingProfile);
 rainpoint::PairingSessionState reportedPairingState =
     rainpoint::PairingSessionState::Disarmed;
@@ -394,7 +403,7 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "\",\"completed_steps\":";
     line += pairingSession.completedSteps();
     line += ",\"step_count\":";
-    line += kPairingProfile.steps.size();
+    line += kPairingProfile.stepCount;
     line += ",\"awaiting_terminal_confirmation\":";
     line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
     line += ",\"terminal_trigger\":\"paired_message_3\"";
@@ -440,7 +449,7 @@ void cancelPairing(const char* detail) {
 #if RAINPOINT_RESEARCH_BENCH == 1
 bool handlePairingProbe(const String& command) {
     for (std::size_t index = 0;
-         index < kPairingProfile.steps.size();
+         index < kPairingProfile.stepCount;
          ++index) {
         const String expected = String("pairing_probe_b ") + (index + 1) +
             " 15a98024";
@@ -652,7 +661,7 @@ void handleSerialCommand() {
             if (serialCommand == "pairing_plan_b") {
                 handled = true;
                 for (std::size_t index = 0;
-                     index < kPairingProfile.steps.size();
+                     index < kPairingProfile.stepCount;
                      ++index) {
                     const auto& step = kPairingProfile.steps[index];
                     String line;
@@ -666,7 +675,7 @@ void handleSerialCommand() {
                     line += ",\"wake_symbols\":";
                     line += step.wakeSymbols;
                     line += ",\"reply_delay_ms\":";
-                    line += rainpoint::kPairingReplyDelayMs;
+                    line += kPairingProfile.replyDelayMs;
                     line += ",\"reply_deadline_ms\":";
                     line += step.replyDeadlineMs;
                     line += ",\"transmit_enabled\":false,\"frame\":\"";
@@ -849,7 +858,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz;
-            delay(rainpoint::kPairingReplyDelayMs);
+            delay(kPairingProfile.replyDelayMs);
             auto replyFrame = step->frame;
             auto replyDateTime = pairingLocalDateTime;
             const bool pairingClockValid =

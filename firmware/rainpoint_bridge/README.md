@@ -7,6 +7,12 @@ receive diagnostic. The firmware contains no valve commands. Its only TX path
 is the explicit Test Sensor B pairing profile recovered from controlled stock
 gateway captures.
 
+The `esp32dev_sensor_a_candidate` environment is an endpoint-bounded build for
+the physically validated Sensor A identity `1bce0024`. It sends the successful
+four-reply mixed-state sequence on its measured channels and requires terminal
+message `03`. It remains separate from `esp32dev_single` while the profiles are
+generalized beyond the two test identities.
+
 ## Wiring
 
 Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
@@ -152,7 +158,7 @@ serial TX controls are explicitly required:
 pio run --environment esp32dev_single_bench --target upload
 ```
 
-GitHub CI explicitly compiles all three configurations from a clean environment
+GitHub CI explicitly compiles all four configurations from a clean environment
 and verifies that production images contain none of the local TX bench command
 strings.
 

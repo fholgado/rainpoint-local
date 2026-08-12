@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.4
+
+- Add the physically validated four-reply Sensor A pairing profile while
+  retaining endpoint and firmware-target boundaries.
+- Accept both observed HCS026 short-message pairing subtypes and require the
+  terminal message before completing enrollment.
+- Make sensor removal idempotent and move it to the Home Assistant device menu.
+- Correct RF trial isolation analysis so installed valve traffic is not
+  misidentified as stock RainPoint gateway traffic.
+
 ## 0.16.2
 
 - Decode the controlled marker-relative HCS026 battery flag across both known
