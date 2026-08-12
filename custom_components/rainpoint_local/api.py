@@ -149,7 +149,7 @@ class RainPointLocalClient:
         duration_seconds: int = 120,
         *,
         node_id: str,
-        profile_id: str = "hcs026_15a98024_v1",
+        profile_id: str = "hcs026_auto_v1",
     ) -> dict[str, Any]:
         """Open pairing and arm one authenticated local radio node."""
         return await self._post(

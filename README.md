@@ -9,8 +9,9 @@ limits. The target system has no internet-service or vendor-app dependency.
 
 ## Current status
 
-This project has a working receive-only SDR deployment and a physically
-validated ESP32/CC1101 enrollment prototype. The RF frame format, soil
+This project has a working receive-only SDR deployment, a physically validated
+two-identity ESP32/CC1101 enrollment prototype, and an offline-tested automatic
+HCS026 pairing candidate. The RF frame format, soil
 moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
 duration, and last-session water usage are confirmed. Test Sensor B has been
 paired entirely through the local transmitter and subsequently reported an
@@ -26,9 +27,11 @@ Working now:
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
   transition inside an explicit pairing window,
-- physically enrolling Test Sensor B through evidence-backed profile
-  `hcs026_15a98024_v1` on a single ESP32/CC1101 radio node and requiring its
-  terminal message `03` before declaring success,
+- physically enrolling both test sensors through evidence-backed reply
+  sequences on a single ESP32/CC1101 radio node and requiring terminal message
+  `03` before declaring success,
+- deriving a newly announced HCS026 sensor's paired identity locally through
+  the model-level `hcs026_auto_v1` candidate, without user-supplied RF IDs,
 - starting that bounded pairing exchange from Home Assistant through an
   authenticated, explicitly selected Wi-Fi radio node,
 - receiving post-enrollment moisture telemetry from that locally paired sensor
@@ -63,7 +66,8 @@ Still provisional or not working yet:
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
-- validating a second identity before claiming model-wide HCS026 enrollment,
+- physically validating the automatic model-level pairing candidate before
+  claiming arbitrary-identity HCS026 enrollment,
 - implementing and validating routine post-enrollment sensor acknowledgements,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
@@ -71,9 +75,10 @@ Still provisional or not working yet:
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
-local. The first fixed physical pairing exchange is wired through the
-authenticated Home Assistant flow. Additional pairing profiles and valve
-control remain absent.
+local. Home Assistant now starts one automatic HCS026 workflow; the selected
+node adopts the first strict factory announcement and locks the pairing window
+to that identity. Physical validation of this new automatic path and valve
+control remain outstanding.
 
 ## Architecture
 
@@ -85,7 +90,7 @@ HCS026 sensors / HTV145 valve
       local radio transport
    - replay fixtures (implemented)
    - receive-only SDR (implemented in the HA app)
-   - ESP32 + CC1101 node (receive plus bounded Sensor B pairing TX)
+   - ESP32 + CC1101 node (receive plus bounded HCS026 pairing TX)
              |
          rainpointd
    protocol + registry + safety
@@ -143,7 +148,7 @@ An authenticated local registry can accept, rename, assign, or forget observed
 endpoints. The Home Assistant app provisions its management credential through
 Supervisor discovery, so it never appears in the normal pairing UI. The
 pairing workflow can arm one authenticated
-protocol-v2 node for validated profile `hcs026_15a98024_v1` and persists the identity only
+protocol-v2 node for automatic HCS026 discovery and persists the identity only
 after terminal RF confirmation. Valve-control POST requests remain unavailable.
 
 ### Development installation
@@ -167,9 +172,8 @@ matching the confirmed RainPoint sync word.
 
 The ESP32/CC1101 firmware, wiring, and build instructions are under
 [`firmware/rainpoint_bridge`](firmware/rainpoint_bridge/README.md). It is
-receive-capable and exposes only the physically validated Sensor B pairing TX
-operation over its authenticated network protocol. It contains no valve TX
-path.
+receive-capable and exposes only bounded HCS026 pairing TX over its
+authenticated network protocol. It contains no valve TX path.
 
 The passive socketed carrier-PCB design is under
 [`hardware/rainpoint_carrier`](hardware/rainpoint_carrier/README.md). Revision

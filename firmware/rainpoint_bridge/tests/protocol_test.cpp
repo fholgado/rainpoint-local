@@ -133,6 +133,93 @@ int main() {
     const auto sensorAFactoryTrigger = fromHex(
         "79f4882f28800000001bce0024010083827fa41e8080b20000000000000000000000000073e3"
     );
+    std::array<std::uint8_t, 4> detectedFactory{};
+    assert(rainpoint::hcs026FactoryAnnouncement(
+        factoryTrigger, detectedFactory
+    ));
+    assert(detectedFactory == profile.factoryEndpoint);
+    assert(rainpoint::hcs026FactoryAnnouncement(
+        sensorAFactoryTrigger, detectedFactory
+    ));
+    assert(detectedFactory == sensorA.factoryEndpoint);
+    assert(!rainpoint::hcs026FactoryAnnouncement(heartbeat, detectedFactory));
+    auto wrongFactorySignature = factoryTrigger;
+    wrongFactorySignature[18] ^= 0x01;
+    rainpoint::writeTrailer(
+        wrongFactorySignature, rainpoint::kCurrentPairingTrailerResidual
+    );
+    assert(!rainpoint::hcs026FactoryAnnouncement(
+        wrongFactorySignature, detectedFactory
+    ));
+
+    auto unknownFactoryTrigger = factoryTrigger;
+    unknownFactoryTrigger[9] = 0x12;
+    unknownFactoryTrigger[10] = 0x34;
+    unknownFactoryTrigger[11] = 0x00;
+    rainpoint::writeTrailer(
+        unknownFactoryTrigger, rainpoint::kCurrentPairingTrailerResidual
+    );
+    assert(rainpoint::hcs026FactoryAnnouncement(
+        unknownFactoryTrigger, detectedFactory
+    ));
+    assert((detectedFactory == std::array<std::uint8_t, 4>{{
+        0x12, 0x34, 0x00, 0x24,
+    }}));
+    rainpoint::PairingProfile automatic{};
+    assert(!rainpoint::buildAutomaticHcs026Profile(
+        {{0x92, 0x34, 0x00, 0x24}}, 4, automatic
+    ));
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        detectedFactory, 4, automatic
+    ));
+    assert(std::string(automatic.id) == "hcs026_auto_v1");
+    assert(automatic.factoryEndpoint == detectedFactory);
+    assert((automatic.pairedEndpoint == std::array<std::uint8_t, 4>{{
+        0x92, 0x34, 0x00, 0x24,
+    }}));
+    assert(automatic.stepCount == 4);
+    assert(automatic.replyDelayMs == 10);
+    for (std::size_t index = 0; index < automatic.stepCount; ++index) {
+        assert(rainpoint::hasOrdinaryTrailer(automatic.steps[index].frame));
+        assert(automatic.steps[index].channelCenterHz == 433'471'500);
+        for (std::size_t endpointIndex = 0; endpointIndex < 4; ++endpointIndex) {
+            assert(
+                automatic.steps[index].frame[5 + endpointIndex] ==
+                automatic.pairedEndpoint[endpointIndex]
+            );
+        }
+    }
+    assert(
+        automatic.steps[3].trigger ==
+        rainpoint::PairingTrigger::PairedMessage2Short
+    );
+    rainpoint::PairingProfile automaticSensorB{};
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        profile.factoryEndpoint, 4, automaticSensorB
+    ));
+    rainpoint::PairingSession automaticSensorBSession(automaticSensorB);
+    automaticSensorBSession.arm(20'000);
+    const std::array automaticSensorBTriggers = {
+        factoryTrigger,
+        pairedMessage1,
+        pairedMessage2Data,
+        pairedMessage2Short,
+    };
+    for (std::size_t index = 0; index < automaticSensorBTriggers.size(); ++index) {
+        const auto* reply = automaticSensorBSession.claimReply(
+            automaticSensorBTriggers[index], 21'000 + index
+        );
+        assert(reply == &automaticSensorB.steps[index]);
+        assert(automaticSensorBSession.finishReply(true, 21'100 + index));
+    }
+    assert(automaticSensorBSession.awaitingTerminalConfirmation());
+    assert(
+        automaticSensorBSession.claimReply(pairedMessage3, 22'000) == nullptr
+    );
+    assert(
+        automaticSensorBSession.state() ==
+        rainpoint::PairingSessionState::Completed
+    );
     const auto sensorAPairedMessage1 = fromHex(
         "79f4882f28b98402809bce002401818204e5c4008000000000000000000000000000000008d6"
     );

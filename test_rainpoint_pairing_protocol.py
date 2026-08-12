@@ -13,10 +13,12 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.pairing_protocol import (  # noqa: E402
+    AUTOMATIC_HCS026_PROFILE_ID,
     SENSOR_A_CANDIDATE_PROFILE,
     VALIDATED_HCS026_PROFILE,
     PairingPlanController,
     PairingTrigger,
+    automatic_hcs026_profile_metadata,
     pairing_profile,
     pairing_profile_for_factory,
 )
@@ -25,6 +27,15 @@ from tools.generate_rainpoint_iq import generate_command  # noqa: E402
 
 
 class HCS026PairingProtocolTest(unittest.TestCase):
+    def test_automatic_profile_is_model_level_public_contract(self) -> None:
+        profile = automatic_hcs026_profile_metadata()
+        self.assertEqual(AUTOMATIC_HCS026_PROFILE_ID, profile["profile_id"])
+        self.assertEqual("HCS026FRF", profile["model"])
+        self.assertIsNone(profile["factory_endpoint"])
+        self.assertIsNone(profile["paired_endpoint"])
+        self.assertTrue(profile["automatic_discovery"])
+        self.assertTrue(profile["transmit_enabled"])
+
     def test_sensor_b_profile_matches_recovered_fixture(self) -> None:
         fixture = json.loads(
             (

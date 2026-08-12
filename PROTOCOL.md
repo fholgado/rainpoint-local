@@ -188,6 +188,30 @@ Current [HWG023-family product literature](https://manuals.plus/asin/B0DS2FDP62.
 advertises support for up to 39 timers or irrigation devices, so the earlier
 eight-device inference from selectors 4–11 was incorrect.
 
+### Automatic HCS026 identity adoption candidate
+
+The two stock first-enrollment transcripts have the same four reply payloads
+after normalizing only the paired endpoint in bytes 5–8, the clock in bytes
+21–24 of reply 1, the reply-1 channel selector, and the two-byte trailer. Their
+factory announcements also share this strict body signature:
+
+```text
+message 01 00 83 82 7f a4 1e 80; endpoint association bit clear; suffix 24
+```
+
+Firmware `0.7.0-test.3` therefore adds the experimental model-level profile
+`hcs026_auto_v1`. The gateway supplies no RF identity. During an explicitly
+armed window, the selected node accepts the first trailer-valid announcement
+matching the signature above, derives the paired endpoint by setting the high
+bit of the first endpoint byte, substitutes it into the common reply template,
+assigns shared selector 4, rewrites the trailer, and locks the session to that
+identity. Unrelated frames cannot select a target, and terminal message `03`
+remains mandatory.
+
+This is a byte-supported generalization, not yet a physical result. Both test
+sensors must complete this automatic path before it replaces the captured
+identity profiles outside the experimental firmware target.
+
 ### Related rtl_433 work
 
 [`rtl_433_ESP`](https://github.com/NorthernMan54/rtl_433_ESP) ports the upstream

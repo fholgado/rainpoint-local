@@ -855,7 +855,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual(
             "95a98024", candidate["dry_run_profile"]["paired_endpoint"]
         )
-        self.assertFalse(candidate["dry_run_profile"]["transmit_enabled"])
+        self.assertTrue(candidate["dry_run_profile"]["transmit_enabled"])
         gateway.observe_decoded(
             device_id="hcs026-95a98024",
             name="RainPoint HCS026 95a98024",

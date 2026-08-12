@@ -49,14 +49,16 @@ second node can exercise it without another HA-side upgrade.
 
 ## Sensor-pairing boundary
 
-Local HCS026 pairing is real but intentionally narrow. Protocol profile
-`hcs026_15a98024_v1` represents the one factory/paired identity and reply
-sequence physically proven on 2026-08-11. The orchestration is profile-driven;
-the captured bytes are not presented as a generic HCS026 formula.
+Local HCS026 pairing is real but remains experimental. Two independent
+identities established the common reply payload, deterministic paired identity,
+shared selector, and terminal-confirmation behavior. `hcs026_auto_v1` now
+encodes that model-wide candidate without exposing RF identities or transcript
+selection to Home Assistant. It remains outside the production firmware target
+until the automatic path passes physically on both sensors.
 
-The next test sensor should be paired in isolation and compared field by field.
-Only evidence common to multiple identities may become model-wide behavior.
-Differences become validated profile parameters, never household conditionals.
+Only evidence common to multiple identities becomes model-wide behavior.
+Revision-specific differences become validated protocol parameters, never
+household conditionals.
 The complete remaining sensor matrix and the staged stock-to-local valve
 association procedure are maintained in
 [`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md).

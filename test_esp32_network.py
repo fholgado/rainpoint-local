@@ -277,16 +277,14 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertTrue(started["transmitter_available"])
         self.assertEqual(NODE_A, started["selected_node_id"])
         self.assertEqual(
-            [
-                "hcs026_15a98024_v1",
-                "hcs026_1bce0024_candidate_v1",
-            ],
+            ["hcs026_auto_v1"],
             [item["profile_id"] for item in started["supported_profiles"]],
         )
+        self.assertTrue(started["supported_profiles"][0]["automatic_discovery"])
         command = json.loads(stream.readline())
         self.assertEqual("pairing_start", command["type"])
-        self.assertEqual("hcs026_15a98024_v1", command["profile"])
-        self.assertEqual("15a98024", command["factory_endpoint"])
+        self.assertEqual("hcs026_auto_v1", command["profile"])
+        self.assertNotIn("factory_endpoint", command)
         encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
         expected_clock = (
             pairing_started_at + timedelta(seconds=240)

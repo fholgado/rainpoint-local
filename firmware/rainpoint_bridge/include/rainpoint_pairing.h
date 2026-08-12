@@ -72,6 +72,7 @@ constexpr std::uint16_t kCurrentPairingTrailerResidual = 0x4f03;
 constexpr std::uint32_t kPairingChannelBaseHz = 433'031'500;
 constexpr std::uint32_t kPairingChannelSpacingHz = 110'000;
 constexpr std::uint8_t kInitialPairingChannel = 4;
+constexpr const char* kAutomaticHcs026ProfileId = "hcs026_auto_v1";
 constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
     return value.year >= 2020 && value.year <= 2147 &&
         value.month >= 1 && value.month <= 12 &&
@@ -387,6 +388,81 @@ inline bool assignPairingChannel(
         profile.steps[index].channelCenterHz = pairingChannelCenterHz(channel);
     }
     return validPairingProfile(profile);
+}
+
+inline bool hcs026FactoryAnnouncement(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    std::array<std::uint8_t, 4>& factoryEndpoint
+) {
+    constexpr std::array<std::uint8_t, 4> factoryRoute = {
+        0x80, 0x00, 0x00, 0x00,
+    };
+    // Both independently captured HCS026 identities share this factory
+    // announcement signature. Keep the automatic adopter model-bounded so a
+    // different RainPoint product cannot be enrolled merely because it uses
+    // the same factory route and message number.
+    constexpr std::array<std::uint8_t, 8> hcs026Signature = {
+        0x01, 0x00, 0x83, 0x82, 0x7f, 0xa4, 0x1e, 0x80,
+    };
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
+        return false;
+    }
+    for (std::size_t index = 0; index < factoryRoute.size(); ++index) {
+        if (frame[5 + index] != factoryRoute[index]) {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < hcs026Signature.size(); ++index) {
+        if (frame[13 + index] != hcs026Signature[index]) {
+            return false;
+        }
+    }
+    // Captured unpaired HCS026 endpoints have a clear association bit and the
+    // product suffix 0x24. These checks are deliberately narrower than the
+    // ordinary receive decoder because this path authorizes transmission.
+    if ((frame[9] & 0x80U) != 0 || frame[12] != 0x24) {
+        return false;
+    }
+    for (std::size_t index = 0; index < factoryEndpoint.size(); ++index) {
+        factoryEndpoint[index] = frame[9 + index];
+    }
+    return true;
+}
+
+inline bool buildAutomaticHcs026Profile(
+    const std::array<std::uint8_t, 4>& factoryEndpoint,
+    std::uint8_t channel,
+    PairingProfile& profile
+) {
+    if ((factoryEndpoint[0] & 0x80U) != 0 || factoryEndpoint[3] != 0x24) {
+        return false;
+    }
+    // The common first-enrollment branch is byte-identical across the two
+    // stock captures after identity, clock, selector, and trailer substitution.
+    // Start with the physically validated Sensor A profile and replace its
+    // rejoin-only fourth reply with the common first-enrollment short reply.
+    profile = kSensorAHcs026CandidateProfile;
+    profile.id = kAutomaticHcs026ProfileId;
+    profile.evidence =
+        "two-identity common HCS026 first-enrollment template; physical auto-adoption pending";
+    profile.replyDelayMs = 10;
+    profile.factoryEndpoint = factoryEndpoint;
+    profile.pairedEndpoint = factoryEndpoint;
+    profile.pairedEndpoint[0] |= 0x80U;
+    profile.steps[3].frame = {{
+        0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
+        0x84, 0x02, 0x80, 0x82, 0xc2, 0x81, 0x00, 0x00, 0x80, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x49, 0x17,
+    }};
+    for (std::size_t stepIndex = 0; stepIndex < profile.stepCount; ++stepIndex) {
+        auto& frame = profile.steps[stepIndex].frame;
+        for (std::size_t index = 0; index < profile.pairedEndpoint.size(); ++index) {
+            frame[5 + index] = profile.pairedEndpoint[index];
+        }
+        writeTrailer(frame, kCurrentPairingTrailerResidual);
+    }
+    return assignPairingChannel(profile, channel);
 }
 
 inline bool endpointEquals(

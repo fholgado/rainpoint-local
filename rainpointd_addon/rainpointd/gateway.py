@@ -17,12 +17,11 @@ from typing import Any, Callable
 from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
-from .pairing import HCS026EnrollmentManager, factory_endpoint
+from .pairing import HCS026EnrollmentManager, factory_endpoint, paired_endpoint
 from .pairing_protocol import (
-    PAIRING_PROFILES,
-    VALIDATED_HCS026_PROFILE,
+    AUTOMATIC_HCS026_PROFILE_ID,
+    automatic_hcs026_profile_metadata,
     pairing_profile,
-    pairing_profile_for_factory,
 )
 from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
@@ -812,7 +811,7 @@ class Gateway:
         duration_seconds: int = 120,
         *,
         node_id: str | None = None,
-        profile_id: str = VALIDATED_HCS026_PROFILE.profile_id,
+        profile_id: str = AUTOMATIC_HCS026_PROFILE_ID,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Open enrollment and optionally arm one authenticated radio node."""
@@ -832,31 +831,35 @@ class Gateway:
                 if self._node_command_sender is None:
                     self._pairing.stop()
                     raise RuntimeError("radio-node command transport is unavailable")
-                try:
-                    profile = pairing_profile(profile_id)
-                except KeyError:
-                    self._pairing.stop()
-                    raise ValueError("unsupported pairing profile") from None
+                automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
+                if automatic:
+                    clock_lead_seconds = 240
+                else:
+                    try:
+                        profile = pairing_profile(profile_id)
+                    except KeyError:
+                        self._pairing.stop()
+                        raise ValueError("unsupported pairing profile") from None
+                    clock_lead_seconds = profile.clock_lead_seconds
                 local_clock = (
                     (now or datetime.now().astimezone())
-                    + timedelta(seconds=profile.clock_lead_seconds)
+                    + timedelta(seconds=clock_lead_seconds)
                 ).strftime("%Y%m%d%H%M%S")
                 command_id = uuid.uuid4().hex
+                command = {
+                    "type": "pairing_start",
+                    "command_id": command_id,
+                    "profile": profile_id,
+                    "duration_seconds": duration_seconds,
+                    "local_clock": local_clock,
+                    "frequency_offset_hz": 45_000,
+                    "power_dbm": 10,
+                    "invert": False,
+                }
+                if not automatic:
+                    command["factory_endpoint"] = profile.factory_endpoint
                 try:
-                    self._node_command_sender(
-                        node_id,
-                        {
-                            "type": "pairing_start",
-                            "command_id": command_id,
-                            "profile": profile.profile_id,
-                            "factory_endpoint": profile.factory_endpoint,
-                            "duration_seconds": duration_seconds,
-                            "local_clock": local_clock,
-                            "frequency_offset_hz": 45_000,
-                            "power_dbm": 10,
-                            "invert": False,
-                        },
-                    )
+                    self._node_command_sender(node_id, command)
                 except (ConnectionError, KeyError, RuntimeError, ValueError):
                     self._pairing.stop()
                     raise
@@ -886,12 +889,9 @@ class Gateway:
             stage = "paired_identity_observed"
         elif candidates:
             stage = "factory_detected_transmitter_required"
-            try:
-                profile = pairing_profile_for_factory(
-                    str(candidates[0])
-                ).as_dict()
-            except KeyError:
-                stage = "factory_detected_unsupported_profile"
+            profile = automatic_hcs026_profile_metadata()
+            profile["factory_endpoint"] = str(candidates[0])
+            profile["paired_endpoint"] = paired_endpoint(str(candidates[0]))
         elif snapshot.get("active"):
             stage = "waiting_for_factory_announcement"
         else:
@@ -920,9 +920,7 @@ class Gateway:
                 stage = "transmitter_armed"
         return {
             "available": True,
-            "supported_profiles": [
-                item.as_dict() for item in PAIRING_PROFILES.values()
-            ],
+            "supported_profiles": [automatic_hcs026_profile_metadata()],
             "transmitter_available": bool(pairing_nodes),
             "transmitter_required": True,
             "pairing_nodes": pairing_nodes,

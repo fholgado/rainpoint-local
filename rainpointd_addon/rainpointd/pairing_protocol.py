@@ -79,6 +79,28 @@ class PairingProfile:
         }
 
 
+AUTOMATIC_HCS026_PROFILE_ID = "hcs026_auto_v1"
+
+
+def automatic_hcs026_profile_metadata() -> dict[str, Any]:
+    """Describe model-level pairing without claiming a fixed RF transcript."""
+    return {
+        "profile_id": AUTOMATIC_HCS026_PROFILE_ID,
+        "model": "HCS026FRF",
+        "factory_endpoint": None,
+        "paired_endpoint": None,
+        "evidence": (
+            "common first-enrollment reply template across two independently "
+            "validated HCS026 identities"
+        ),
+        "transmit_enabled": True,
+        "automatic_discovery": True,
+        "completion_trigger": PairingTrigger.PAIRED_MESSAGE_3.value,
+        "reply_delay_ms": 10,
+        "clock_lead_seconds": 240,
+    }
+
+
 def _frame(value: str) -> bytes:
     frame = bytes.fromhex(value)
     if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):

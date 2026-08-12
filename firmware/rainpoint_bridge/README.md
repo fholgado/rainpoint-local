@@ -4,8 +4,8 @@ This is the receive firmware and bounded sensor-pairing node for the
 ELEGOO ESP-WROOM-32 USB-C development board and one **433 MHz** CC1101
 transceiver. A second module is supported only as an optional dual-channel
 receive diagnostic. The firmware contains no valve commands. Its only TX path
-is the explicit Test Sensor B pairing profile recovered from controlled stock
-gateway captures.
+is bounded HCS026 sensor pairing recovered from controlled stock-gateway
+captures.
 
 The `esp32dev_sensor_a_candidate` environment is an endpoint-bounded build for
 the physically validated Sensor A identity `1bce0024`. It sends the successful
@@ -14,15 +14,24 @@ message `03`. It remains separate from `esp32dev_single` while the profiles are
 generalized beyond the two test identities.
 
 The `esp32dev_pairing_generalization` environment is the validated two-identity
-test build. It accepts either captured test identity and rewrites reply 1 plus
-all follow-up frequencies from the inferred 110 kHz channel plan. Version
+test build. It can retain either captured identity-specific profile and also
+contains an automatic model-level candidate. Version
 `0.7.0-test.1` validated Sensor B on selector 4 and Sensor A on selector 5.
 Version `0.7.0-test.2` deliberately assigns selector 4 to both identities for
 the controlled same-selector coexistence test. Both sensors subsequently
 reported as distinct identities on selector 4, proving that the selector can be
 shared and must not be allocated as a unique device slot. Keep this environment
-separate from the normal production target because its accepted identities and
-reply profiles remain explicitly bounded to the two captured test sensors.
+separate from the normal production target while its automatic identity
+adoption is physically validated.
+
+Version `0.7.0-test.3` adds `hcs026_auto_v1`. Once armed, the node accepts only
+the strict factory-announcement structure shared by both captured HCS026
+sensors, adopts the first matching four-byte identity, derives its high-bit
+paired identity, and locks the session to it. Its common four-reply template is
+identical across the two stock first-enrollment captures after substituting the
+identity, clock, shared selector, and trailer. The builder and command contract
+are regression-tested offline; do not treat automatic adoption as physically
+validated until both test sensors complete the new path.
 
 ## Wiring
 
@@ -70,20 +79,20 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
 - Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
   `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
   its enrollment token over the network.
-- Contains a three-reply, evidence-labelled HCS026 pairing profile from the successful stock
-  repeat-enrollment capture, a 320-symbol wake prefix, and provisional 250 ms
-  response deadline. It requires the sensor's later terminal message `03`
-  before declaring enrollment complete.
+- Contains captured identity-specific HCS026 regression profiles plus a
+  model-level automatic candidate with a 320-symbol wake prefix and provisional
+  250 ms response deadline. Every path requires terminal message `03` before
+  declaring enrollment complete.
 - Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
   the complete 20 ksymbol/s wake, sync, and frame on GDO0.
-- Starts disarmed after every boot. In production builds, only an authenticated
-  protocol-v2 gateway command for profile `hcs026_15a98024_v1` and factory
-  endpoint `15a98024` enables the time-limited automatic reply sequence.
+- Starts disarmed after every boot. In the generalization build, only an
+  authenticated protocol-v2 `hcs026_auto_v1` command enables the time-limited
+  reply sequence; no factory endpoint is supplied by the gateway or user.
 - Transmits the validated sequence at the configured 10 dBm prototype setting and returns to the
   receive configuration after every 31.2 ms reply.
 - Reports pairing state, command ID, completed steps, and armed state over
   serial and the authenticated Wi-Fi connection. The only accepted network
-  RF commands start or cancel the fixed sensor-pairing profile.
+  RF commands start or cancel bounded HCS026 sensor pairing.
 - Firmware 0.6 adds a separate bounded `identify_start` command that blinks the
   onboard GPIO2 status LED for 3 to 60 seconds. Identify never changes radio
   configuration or enables the CC1101 transmitter.

@@ -164,7 +164,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             else None
                         ),
                         profile_id=str(
-                            body.get("profile_id", "hcs026_15a98024_v1")
+                            body.get("profile_id", "hcs026_auto_v1")
                         ),
                     )
                     self._json(201, result)

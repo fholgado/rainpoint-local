@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+- Add model-level `hcs026_auto_v1` pairing orchestration: the selected radio
+  node adopts the first strict HCS026 factory announcement and derives its
+  paired identity without the user or Home Assistant supplying an RF ID.
+- Replace public identity-specific profile selection with one automatic HCS026
+  workflow while retaining captured profiles as offline regression evidence.
+- Use the common four-reply first-enrollment branch and shared selector 4;
+  physical validation of automatic adoption remains required before release.
+
 ## 0.16.4
 
 - Add the physically validated four-reply Sensor A pairing profile while

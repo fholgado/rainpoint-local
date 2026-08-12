@@ -83,6 +83,8 @@ rainpoint::PairingLocalDateTime pairingLocalDateTime{};
 bool pairingLocalDateTimeSet = false;
 std::uint32_t pairingLocalDateTimeSetAtMs = 0;
 bool pairingRequiresNetwork = false;
+bool pairingAutomaticDiscovery = false;
+bool pairingFactoryAdopted = false;
 String pairingCommandId;
 std::uint32_t lastHealthReport = 0;
 std::uint32_t lastLoopAt = 0;
@@ -393,15 +395,19 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "\",\"profile\":\"";
     line += activePairingProfile.id;
     line += "\",\"factory_endpoint\":\"";
-    line += hexString(
-        activePairingProfile.factoryEndpoint.data(),
-        activePairingProfile.factoryEndpoint.size()
-    );
+    if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
+        line += hexString(
+            activePairingProfile.factoryEndpoint.data(),
+            activePairingProfile.factoryEndpoint.size()
+        );
+    }
     line += "\",\"paired_endpoint\":\"";
-    line += hexString(
-        activePairingProfile.pairedEndpoint.data(),
-        activePairingProfile.pairedEndpoint.size()
-    );
+    if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
+        line += hexString(
+            activePairingProfile.pairedEndpoint.data(),
+            activePairingProfile.pairedEndpoint.size()
+        );
+    }
     line += '"';
     if (!pairingCommandId.isEmpty()) {
         line += ",\"command_id\":\"";
@@ -416,6 +422,10 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += activePairingProfile.stepCount;
     line += ",\"assigned_channel\":";
     line += pairingAssignedChannel;
+    line += ",\"automatic_discovery\":";
+    line += pairingAutomaticDiscovery ? "true" : "false";
+    line += ",\"factory_adopted\":";
+    line += pairingFactoryAdopted ? "true" : "false";
     line += ",\"awaiting_terminal_confirmation\":";
     line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
     line += ",\"terminal_trigger\":\"paired_message_3\"";
@@ -613,6 +623,7 @@ void handleNetworkCommand() {
     bool invert = false;
     rainpoint::PairingLocalDateTime parsedClock{};
     const rainpoint::PairingProfile* requestedProfile = nullptr;
+    bool requestedAutomaticDiscovery = false;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
     const String sensorAFactory = hexString(
         rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.data(),
@@ -622,7 +633,10 @@ void handleNetworkCommand() {
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.data(),
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.size()
     );
-    if (profile == rainpoint::kSensorAHcs026CandidateProfile.id &&
+    if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
+        requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
+        requestedAutomaticDiscovery = true;
+    } else if (profile == rainpoint::kSensorAHcs026CandidateProfile.id &&
         factory == sensorAFactory) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
     } else if (profile == rainpoint::kValidatedHcs026Profile.id &&
@@ -666,13 +680,22 @@ void handleNetworkCommand() {
     }
 
     activePairingProfile = *requestedProfile;
+    pairingAutomaticDiscovery = requestedAutomaticDiscovery;
+    pairingFactoryAdopted = !requestedAutomaticDiscovery;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
     // Same-selector coexistence is physically validated: addressed sensors can
     // share one RF channel, so selector allocation must not imply uniqueness.
     pairingAssignedChannel = 4;
-    if (!rainpoint::assignPairingChannel(
-        activePairingProfile, pairingAssignedChannel
-    )) {
+    const bool channelAssigned = requestedAutomaticDiscovery
+        ? rainpoint::buildAutomaticHcs026Profile(
+            rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint,
+            pairingAssignedChannel,
+            activePairingProfile
+        )
+        : rainpoint::assignPairingChannel(
+            activePairingProfile, pairingAssignedChannel
+        );
+    if (!channelAssigned) {
         reportNetworkCommandError(commandId, "pairing_channel_invalid");
         return;
     }
@@ -902,6 +925,24 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     const auto frame = rainpoint::reconstructFrame(packet.payload);
     if (&radio == &primaryRadio &&
         pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+        if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
+            std::array<std::uint8_t, 4> factoryEndpoint{};
+            if (!rainpoint::hcs026FactoryAnnouncement(
+                frame, factoryEndpoint
+            )) {
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            if (!rainpoint::buildAutomaticHcs026Profile(
+                factoryEndpoint, pairingAssignedChannel, activePairingProfile
+            )) {
+                cancelPairing("automatic_profile_build_failed");
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            pairingFactoryAdopted = true;
+            reportPairingStatus("factory_identity_adopted");
+        }
         const rainpoint::PairingReplyStep* step =
             pairingSession.claimReply(frame, millis());
         if (step != nullptr) {

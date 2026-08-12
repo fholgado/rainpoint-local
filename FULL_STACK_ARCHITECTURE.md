@@ -142,9 +142,10 @@ frame reconstruction, integrity diagnostics, startup register verification,
 packet/overflow/recovery counters, frequency-offset estimates, and serial JSON
 output. A dual-radio receive build remains available for diagnostics. The
 `rainpointd` serial transport consumes the same output without changing Home
-Assistant entities. A locally armed bench path can transmit only the exact
-captured Sensor B pairing sequence. The distinct long valve-command wake and
-all valve TX commands remain unimplemented.
+Assistant entities. The experimental generalization build can transmit only a
+bounded HCS026 pairing sequence derived from two captured identities and locks
+each window to the first strict factory announcement. The distinct long
+valve-command wake and all valve TX commands remain unimplemented.
 
 ### Home Assistant integration (`rainpoint_local`)
 
