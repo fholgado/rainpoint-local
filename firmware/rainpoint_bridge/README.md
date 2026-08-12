@@ -18,9 +18,10 @@ test build. It accepts either captured test identity, assigns pairing selector 4
 to Sensor B and selector 5 to Sensor A, and rewrites reply 1 plus all follow-up
 frequencies from the inferred 110 kHz channel plan. Both physical sensors
 completed terminal confirmation and telemetry on their assigned channels on
-August 12, 2026. Keep this environment separate from the normal production
-target until the gateway owns persistent selector allocation and the firmware
-accepts a bounded assigned selector instead of mapping the two test identities.
+August 12, 2026. This proves reassignment but not that selectors must be unique.
+Keep this environment separate from the normal production target until a
+same-selector coexistence test establishes whether the gateway should allocate
+selectors uniquely or may safely reuse them.
 
 ## Wiring
 

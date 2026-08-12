@@ -54,10 +54,11 @@ tied to its identity. A controlled local-gateway test on August 12 then paired
 Sensor B on selector 4 and Sensor A on selector 5. Both sensors echoed their
 assigned selector, emitted terminal message `03`, resumed telemetry, and gave
 the long blue success indication while the stock RainPoint gateway remained
-unplugged. Selectors 4–11 provide exactly eight channels, matching the
-documented eight-device gateway limit. This strongly supports one unique
-selector per association; allocation persistence and selector reuse after a
-device is forgotten remain implementation work.
+unplugged. This proves that the selector is negotiated, but not that it must be
+unique per association. [HWG023-family documentation](https://manuals.plus/asin/B0DS2FDP62.pdf)
+advertises up to 39 paired timers/devices, invalidating the earlier eight-device inference. The next
+controlled test should pair both sensors on selector 4, leave both powered, and
+measure whether their identity-addressed telemetry coexists without loss.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py

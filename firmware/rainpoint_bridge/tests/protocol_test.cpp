@@ -88,6 +88,7 @@ int main() {
         );
     }
     assert(!rainpoint::assignPairingChannel(generalizedSensorA, 3));
+    assert(!rainpoint::assignPairingChannel(generalizedSensorA, 8));
     assert(!rainpoint::assignPairingChannel(generalizedSensorA, 12));
 
     const auto factoryTrigger = fromHex(

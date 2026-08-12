@@ -368,9 +368,10 @@ inline bool assignPairingChannel(
     std::uint8_t channel
 ) {
     // Four controlled exchanges show reply 1 assigning this selector and the
-    // sensor echoing it in its following message 01. Keep the experiment
-    // inside the eight-channel range implied by the product limit.
-    if (channel < 4 || channel > 11 || profile.stepCount == 0) {
+    // sensor echoing it in its following message 01. This experimental writer
+    // is intentionally restricted to selectors physically validated for local
+    // reassignment; the full selector domain and reuse rules are still unknown.
+    if ((channel != 4 && channel != 5) || profile.stepCount == 0) {
         return false;
     }
     auto& initial = profile.steps[0];

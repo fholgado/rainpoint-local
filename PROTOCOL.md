@@ -174,10 +174,32 @@ requested selector, completed its full enrollment exchange, produced the long
 blue success indication, and resumed telemetry with the stock gateway
 unplugged. Sensor B had previously paired on selector 8, proving that selectors
 are association parameters rather than fixed properties of device identity.
-The apparent usable range 4–11 contains eight selectors, matching the stock
-gateway's documented limit of eight paired devices. A local coordinator should
-therefore allocate and persist a unique selector for every paired device and
-release it when that association is forgotten.
+These tests do **not** prove that simultaneous associations require unique
+selectors. Current [HWG023-family product literature](https://manuals.plus/asin/B0DS2FDP62.pdf)
+advertises support for up to 39 timers or irrigation devices, so the earlier
+eight-device inference from selectors 4–11 was incorrect. Before designing allocation persistence, pair
+both test sensors on selector 4 and verify that their identities still separate
+their reports and that each continues reporting reliably.
+
+### Related rtl_433 work
+
+[`rtl_433_ESP`](https://github.com/NorthernMan54/rtl_433_ESP) ports the upstream
+`rtl_433` demodulators and device decoders to
+ESP32 radios. Its release-25.02 snapshot includes two older RainPoint OOK
+decoders, but neither matches the HCS026FRF/HTV145FRF/HWG023WBRF-V2 generation
+documented here. Current upstream `rtl_433` added a separate
+[`bresser_garden.c`](https://github.com/merbanan/rtl_433/blob/master/src/devices/bresser_garden.c)
+decoder in July 2026 for an older Fujian Baldr/HomGar/RainPoint FSK garden
+family. It is not yet present in the reviewed `rtl_433_ESP` snapshot.
+
+That related family independently confirms several useful architectural
+patterns: 20 kbit/s FSK PCM, fixed-size addressed frames, request/reply message
+types, bidirectional pairing, autonomous valve schedules, measured water usage,
+run-duration reporting, and configurable RF channels. Its sync word, device
+models, channel plan, payload layouts, and pairing data differ from our tested
+generation, so its byte offsets cannot be imported as HCS026/HTV145 facts.
+The upstream code is GPL-licensed while this project is MIT-licensed; use it as
+a research reference or separate process, not copied implementation code.
 
 The second Sensor B capture also identified the principal dynamic field in
 the initial reply. Bytes 21--22 contain a little-endian FAT/DOS-style packed
