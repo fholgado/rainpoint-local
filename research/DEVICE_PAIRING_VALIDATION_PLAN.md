@@ -43,6 +43,16 @@ The result validates this identity-specific profile but does not prove that
 the differing branch is universal across every HCS026 revision. The profile
 therefore remains evidence-labelled and endpoint-bounded.
 
+Offline comparison also identifies a provisional pairing-subchannel encoding.
+Reply 1 assigns a channel number in bytes 18–19; the sensor echoes the same
+number in bytes 16–17 of its following message `01`. Selectors 4, 8, and 9
+correspond to 433.4715, 433.9115, and 434.0215 MHz respectively, fitting a
+110 kHz channel plan beginning at 433.0315 MHz within 50 Hz across four
+captured exchanges. Sensor B has successfully used selectors 8 and 4, proving
+that this frequency is negotiated during enrollment rather than permanently
+tied to its identity. The next controlled experiment should assign selector 4
+to Sensor A and verify that its echo and remaining replies move to that channel.
+
 ```bash
 python3 tools/analyze_pairing_profiles.py
 ```

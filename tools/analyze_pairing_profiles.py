@@ -14,6 +14,8 @@ FRAME_BYTES = 38
 IDENTITY_BYTES = frozenset(range(5, 9))
 TRAILER_BYTES = frozenset((36, 37))
 CLOCK_BYTES = frozenset(range(21, 25))
+PAIRING_CHANNEL_BASE_HZ = 433_031_500
+PAIRING_CHANNEL_SPACING_HZ = 110_000
 
 
 def residual(frame: bytes) -> int:
@@ -32,6 +34,44 @@ def _frames(sequence: dict[str, Any]) -> list[bytes]:
     if not result or any(len(frame) != FRAME_BYTES for frame in result):
         raise ValueError(f"invalid frames in {sequence.get('name')}")
     return result
+
+
+def pairing_channel_from_reply(frame: bytes) -> int:
+    """Decode the provisional subchannel selector in initial gateway reply."""
+    return 2 * (frame[18] & 0x7F) + (1 if frame[19] & 0x80 else 0)
+
+
+def pairing_channel_from_sensor(frame: bytes) -> int:
+    """Decode the subchannel echoed by the sensor's paired message 01."""
+    return 2 * frame[16] + (1 if frame[17] & 0x80 else 0)
+
+
+def expected_pairing_channel_hz(channel: int) -> int:
+    """Return the provisional 110 kHz pairing-channel center."""
+    return PAIRING_CHANNEL_BASE_HZ + channel * PAIRING_CHANNEL_SPACING_HZ
+
+
+def channel_assignment(sequence: dict[str, Any]) -> dict[str, Any]:
+    """Compare a reply-1 assignment with the sensor's subsequent echo."""
+    replies = _frames(sequence)
+    requests = [
+        bytes.fromhex(value) for value in sequence.get("request_frames", [])
+    ]
+    if len(requests) < 2 or any(len(frame) != FRAME_BYTES for frame in requests):
+        raise ValueError(f"missing request frames in {sequence.get('name')}")
+    assigned = pairing_channel_from_reply(replies[0])
+    echoed = pairing_channel_from_sensor(requests[1])
+    measured_hz = int(sequence["reply_channel_hz"])
+    expected_hz = expected_pairing_channel_hz(assigned)
+    return {
+        "sequence": sequence["name"],
+        "assigned_channel": assigned,
+        "echoed_channel": echoed,
+        "assignment_echo_matches": assigned == echoed,
+        "measured_followup_hz": measured_hz,
+        "expected_followup_hz": expected_hz,
+        "frequency_error_hz": measured_hz - expected_hz,
+    }
 
 
 def compare_sequences(
@@ -79,19 +119,23 @@ def compare_sequences(
 
 
 def sensor_a_candidate(payload: dict[str, Any]) -> dict[str, Any]:
-    """Build a non-runnable evidence record for tomorrow's Sensor A test."""
+    """Build the evidence record for the validated Sensor A profile."""
     first = _sequence(payload, "sensor_a_first_enrollment")
     rejoin = _sequence(payload, "sensor_a_rejoin")
     first_frames = _frames(first)
     rejoin_frames = _frames(rejoin)
     return {
-        "candidate_id": "research_hcs026_1bce0024_v0",
+        "candidate_id": "hcs026_1bce0024_candidate_v1",
         "factory_endpoint": first["factory_endpoint"],
         "paired_endpoint": first["paired_endpoint"],
-        "transmit_enabled": False,
-        "gateway_selectable": False,
-        "firmware_compiled": False,
-        "evidence": [first["name"], rejoin["name"]],
+        "transmit_enabled": True,
+        "gateway_selectable": True,
+        "firmware_compiled": True,
+        "evidence": [
+            first["name"],
+            rejoin["name"],
+            "sensor_a_local_enrollment_isolated_success_20260812",
+        ],
         "first_enrollment_reply_count": len(first_frames),
         "rejoin_reply_count": len(rejoin_frames),
         "initial_channel_hz": first["initial_reply_channel_hz"],
@@ -105,10 +149,10 @@ def sensor_a_candidate(payload: dict[str, Any]) -> dict[str, Any]:
             {f"0x{residual(frame):04x}" for frame in first_frames + rejoin_frames}
         ),
         "captured_frames": [frame.hex() for frame in first_frames],
-        "blocking_questions": [
-            "Does a first enrollment require all five replies or only the first three?",
-            "Must follow-up replies switch from 433.4715 MHz to 434.021457 MHz?",
-            "Will the sensor emit terminal message 03 and routine telemetry while the stock RainPoint gateway is isolated?",
+        "remaining_questions": [
+            "Can Sensor A be assigned the known-good channel 4 used by Sensor B?",
+            "Can reply payloads be generated from state instead of selected by endpoint?",
+            "Does the same branch repeat after factory reset and ordinary power loss?",
         ],
     }
 
@@ -126,6 +170,15 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
             for item in step["semantic_differences"]
         }
     )
+    assignments = [
+        channel_assignment(_sequence(payload, name))
+        for name in (
+            "sensor_a_first_enrollment",
+            "sensor_b_first_enrollment",
+            "sensor_b_local_enrollment_isolated_success_20260811",
+            "sensor_a_local_enrollment_isolated_success_20260812",
+        )
+    ]
     return {
         "comparison": first_comparison,
         "sensor_a_candidate": sensor_a_candidate(payload),
@@ -136,6 +189,13 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
                 not step["semantic_differences"]
                 for step in first_comparison["steps"][1:]
             ),
+            "channel_assignments": assignments,
+            "channel_assignment_echoes_match": all(
+                item["assignment_echo_matches"] for item in assignments
+            ),
+            "channel_frequency_formula_matches": all(
+                abs(item["frequency_error_hz"]) <= 50 for item in assignments
+            ),
         },
     }
 
@@ -143,7 +203,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
 def _print_text(report: dict[str, Any]) -> None:
     candidate = report["sensor_a_candidate"]
     findings = report["findings"]
-    print(f"Candidate: {candidate['candidate_id']} (TX disabled)")
+    print(f"Profile: {candidate['candidate_id']} (physically validated)")
     print(
         "Channels: "
         f"{candidate['initial_channel_hz']} Hz initial -> "
@@ -162,7 +222,14 @@ def _print_text(report: dict[str, Any]) -> None:
         "Identity substitution alone: "
         + ("safe" if findings["identity_substitution_alone_is_safe"] else "unsafe")
     )
-    for question in candidate["blocking_questions"]:
+    print("Provisional pairing-channel assignments:")
+    for assignment in findings["channel_assignments"]:
+        print(
+            f"  - {assignment['sequence']}: selector "
+            f"{assignment['assigned_channel']} echoed by sensor, "
+            f"{assignment['measured_followup_hz']} Hz measured"
+        )
+    for question in candidate["remaining_questions"]:
         print(f"  - {question}")
 
 
