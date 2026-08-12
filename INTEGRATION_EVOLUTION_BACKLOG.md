@@ -25,9 +25,9 @@ tests:
 - an evidence-backed pairing-profile registry shared by gateway and firmware;
 - production firmware boundaries that exclude research serial TX controls.
 
-The deployed reference remains add-on 0.15.0, integration 0.5.0, and firmware
-0.5.0. Add-on 0.16.0, integration 0.6.0, and firmware 0.6.0 are source
-candidates awaiting physical commissioning validation.
+The deployed gateway/UI reference is add-on 0.16.1 and integration 0.6.2. The
+existing radio node remains on firmware 0.5.0. Firmware 0.6.0 and the dormant
+zero-copy commissioning path await physical validation with the second node.
 
 ## Next physical milestone: second radio node
 
@@ -42,8 +42,10 @@ The second node should validate the distributed-node assumptions end to end:
 6. Retain receiver-specific packet and coverage metrics for placement choices.
 7. Reconnect after power loss without repeating commissioning.
 
-Do not deploy the 0.16/0.6/0.6 candidate to the live installation until these
-checks pass or a narrow fix is prepared and physically retested.
+Do not promote firmware 0.6.0 or describe zero-copy commissioning as validated
+until these checks pass or a narrow fix is physically retested. The deployed
+gateway and integration contain the inactive commissioning contract so the
+second node can exercise it without another HA-side upgrade.
 
 ## Sensor-pairing boundary
 
@@ -108,3 +110,9 @@ vendor cloud.
 Before freezing a public provider contract, coordinate identity fields,
 unique-ID migration, capability names, and API versioning with the existing
 integration maintainers.
+
+The proposed authority handoff, identity aliasing, verification period,
+rollback limits, and upstream coordination schedule are specified in
+[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md). Provider and
+identity review can begin before the RF gates pass; the active migration wizard
+must wait for repeatable sensor/valve association and bounded valve control.

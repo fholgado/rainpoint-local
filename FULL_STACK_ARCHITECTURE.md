@@ -304,3 +304,8 @@ services or a vendor app:
 - safely open and close a valve for bounded durations,
 - recover safely across service, network, and power failures, and
 - restore the setup from documented local backups.
+
+For existing cloud users, the transition to this architecture is an
+authority-preserving migration inside the existing RainPoint/HomGar
+integration, not a delete-and-recreate installation. See
+[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md).

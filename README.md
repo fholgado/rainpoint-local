@@ -107,6 +107,12 @@ Physical validation procedures are tracked in
 including the remaining multi-identity sensor tests and the staged test-valve
 stock capture, offline reconstruction, and isolated local enrollment sequence.
 
+The future handoff for existing cloud-connected users is designed in
+[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md). It preserves HA
+identity and history while switching each supported device to exactly one
+authoritative provider; active migration remains gated on sensor/valve pairing
+and bounded valve-control proof.
+
 ## Home Assistant installation
 
 There are two pieces:
