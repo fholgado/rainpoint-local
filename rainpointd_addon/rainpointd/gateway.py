@@ -17,7 +17,11 @@ from rainpoint_protocol import decode
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .pairing import HCS026EnrollmentManager, factory_endpoint
 from .pairing_protocol import pairing_profile
-from .storage import SQLiteEventStore, frame_accepted
+from .storage import (
+    DEFAULT_EVENT_RETENTION_LIMIT,
+    SQLiteEventStore,
+    frame_accepted,
+)
 
 
 API_VERSION = "v1"
@@ -41,6 +45,7 @@ class Gateway:
         read_only: bool = True,
         event_limit: int = 1_000,
         storage_path: str | None = None,
+        event_retention_limit: int = DEFAULT_EVENT_RETENTION_LIMIT,
         registry_token: str | None = None,
         catalog: DeviceCatalog = LEGACY_HOME_CATALOG,
     ) -> None:
@@ -57,7 +62,14 @@ class Gateway:
         self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
-        self._store = SQLiteEventStore(storage_path) if storage_path else None
+        self._store = (
+            SQLiteEventStore(
+                storage_path,
+                event_retention_limit=event_retention_limit,
+            )
+            if storage_path
+            else None
+        )
         self._pairing = (
             HCS026EnrollmentManager(
                 repository=self._store,
@@ -101,6 +113,16 @@ class Gateway:
                 ),
                 "stored_event_count": (
                     self._store.event_count() if self._store else len(self._events)
+                ),
+                "oldest_retained_event_id": (
+                    self._store.oldest_event_id()
+                    if self._store
+                    else (self._events[0]["event_id"] if self._events else 0)
+                ),
+                "event_retention_limit": (
+                    self._store.event_retention_limit
+                    if self._store
+                    else self._events.maxlen
                 ),
                 "registry_available": self._store is not None,
                 "registry_writes_enabled": self._registry_token is not None,

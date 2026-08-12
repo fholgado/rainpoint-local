@@ -10,6 +10,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 2
+DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
 def frame_accepted(event: dict[str, Any]) -> bool | None:
@@ -36,8 +37,16 @@ def frame_accepted(event: dict[str, Any]) -> bool | None:
 class SQLiteEventStore:
     """Persist normalized events and summarize observed RF endpoints."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        event_retention_limit: int = DEFAULT_EVENT_RETENTION_LIMIT,
+    ) -> None:
+        if event_retention_limit < 1:
+            raise ValueError("event retention limit must be at least 1")
         self.path = Path(path)
+        self.event_retention_limit = event_retention_limit
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
@@ -132,6 +141,7 @@ class SQLiteEventStore:
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
+        self._prune_events()
         self._connection.commit()
 
     def close(self) -> None:
@@ -205,7 +215,17 @@ class SQLiteEventStore:
                     json.dumps(event, separators=(",", ":"), sort_keys=True),
                 ),
             )
+        self._prune_events()
         self._connection.commit()
+
+    def _prune_events(self) -> None:
+        """Bound the journal without touching durable derived state."""
+        self._connection.execute(
+            "DELETE FROM events WHERE event_id <= ("
+            "SELECT event_id FROM events ORDER BY event_id DESC LIMIT 1 OFFSET ?"
+            ")",
+            (self.event_retention_limit,),
+        )
 
     def recent_events(self, limit: int) -> list[dict[str, Any]]:
         """Return the newest events in chronological order."""
@@ -234,6 +254,13 @@ class SQLiteEventStore:
         """Return the newest persistent event ID."""
         row = self._connection.execute(
             "SELECT COALESCE(MAX(event_id), 0) AS event_id FROM events"
+        ).fetchone()
+        return int(row["event_id"])
+
+    def oldest_event_id(self) -> int:
+        """Return the oldest retained event ID, or zero for an empty journal."""
+        row = self._connection.execute(
+            "SELECT COALESCE(MIN(event_id), 0) AS event_id FROM events"
         ).fetchone()
         return int(row["event_id"])
 

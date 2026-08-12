@@ -12,6 +12,7 @@ from .http import create_server
 from .network import NetworkTransport
 from .replay import ReplayTransport
 from .rtl433 import RTL433Transport
+from .storage import DEFAULT_EVENT_RETENTION_LIMIT
 
 
 def main() -> int:
@@ -50,12 +51,19 @@ def main() -> int:
         "--storage",
         help="SQLite path for persistent events and endpoint inventory",
     )
+    parser.add_argument(
+        "--event-retention-limit",
+        type=int,
+        default=DEFAULT_EVENT_RETENTION_LIMIT,
+        help="maximum number of journal events retained in SQLite",
+    )
     args = parser.parse_args()
 
     gateway = Gateway(
         gateway_id=args.gateway_id or f"rainpoint-{args.transport}",
         transport=args.transport,
         storage_path=args.storage,
+        event_retention_limit=args.event_retention_limit,
         registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
     )
     if args.transport == "rtl433":

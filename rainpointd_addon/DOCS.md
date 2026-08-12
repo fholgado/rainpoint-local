@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.11.0 supports authenticated network radio nodes, captured replay,
+Version 0.12.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -87,6 +87,14 @@ Raw I/Q files are written beneath `/share/rainpoint-captures`; they may include
 unrelated nearby 433 MHz transmissions and must remain local. Reset the option
 to `0` after starting a one-time capture so a future app restart does not begin
 another capture.
+
+### Event retention
+
+`event_retention_limit` bounds the raw SQLite event journal and defaults to
+100,000 events. Latest accepted device state, endpoint inventory, lifetime
+report and reception metrics, registry records, suppressions, and physical
+enrollments are stored separately and survive journal pruning. The gateway API
+reports the active limit and oldest retained event ID for cursor consumers.
 
 ### Gateway authorization
 

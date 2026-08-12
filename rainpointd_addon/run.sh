@@ -11,6 +11,7 @@ research_capture_minutes="$(bashio::config 'research_capture_minutes')"
 registry_write_token="$(bashio::config 'registry_write_token')"
 node_listen_port="$(bashio::config 'node_listen_port')"
 node_tokens="$(bashio::config 'node_tokens')"
+event_retention_limit="$(bashio::config 'event_retention_limit')"
 if [[ "${research_capture_minutes}" == "null" ]]; then
   research_capture_minutes=0
 fi
@@ -34,6 +35,9 @@ if [[ "${node_listen_port}" == "null" ]]; then
 fi
 if [[ "${node_tokens}" == "null" ]]; then
   node_tokens=""
+fi
+if [[ "${event_retention_limit}" == "null" ]]; then
+  event_retention_limit=100000
 fi
 export RAINPOINT_REGISTRY_TOKEN="${registry_write_token}"
 export RAINPOINT_NODE_TOKENS="${node_tokens}"
@@ -71,6 +75,7 @@ node_args=(
 )
 gateway_args=(
   --gateway-id "${gateway_id}"
+  --event-retention-limit "${event_retention_limit}"
 )
 
 bashio::log.info "API listening on TCP 8787"

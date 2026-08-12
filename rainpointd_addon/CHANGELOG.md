@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- Version the SQLite schema and migrate existing databases transactionally.
+- Persist the latest accepted observation for every device independently of the
+  event journal.
+- Bound retained event history without discarding device state, endpoint
+  inventory, lifetime reporting metrics, registry records, or enrollments.
+
 ## 0.11.0
 
 - Store HCS026 physical enrollment mappings in the gateway SQLite database.

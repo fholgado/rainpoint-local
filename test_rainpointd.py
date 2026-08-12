@@ -231,6 +231,59 @@ class GatewayTest(unittest.TestCase):
             self.assertFalse(stale["reporting"])
             restored.close()
 
+    def test_retention_preserves_quiet_devices_and_derived_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(path),
+                event_retention_limit=3,
+            )
+            gateway.observe_decoded(
+                device_id="quiet-soil",
+                name="Quiet Soil",
+                model="HCS026FRF",
+                frame="quiet",
+                observed_at="2026-08-08T12:00:00",
+                state={
+                    "soil_moisture_percent": 21,
+                    "rf_endpoint": "quiet001",
+                    "rf_frame_accepted": True,
+                },
+            )
+            for minute in range(1, 5):
+                gateway.observe_decoded(
+                    device_id="active-soil",
+                    name="Active Soil",
+                    model="HCS026FRF",
+                    frame=f"active-{minute}",
+                    observed_at=f"2026-08-08T12:0{minute}:00",
+                    state={
+                        "soil_moisture_percent": 40 + minute,
+                        "rf_endpoint": "active01",
+                        "rf_frame_accepted": True,
+                    },
+                )
+
+            self.assertEqual([3, 4, 5], [item["event_id"] for item in gateway.events()])
+            self.assertEqual(3, gateway.info()["stored_event_count"])
+            self.assertEqual(3, gateway.info()["oldest_retained_event_id"])
+            gateway.close()
+
+            restored = Gateway(
+                transport="rtl433",
+                storage_path=str(path),
+                event_retention_limit=3,
+            )
+            devices = {item["device_id"]: item for item in restored.devices()}
+            self.assertEqual(21, devices["quiet-soil"]["state"]["soil_moisture_percent"])
+            self.assertEqual(1, devices["quiet-soil"]["report_count"])
+            self.assertEqual(4, devices["active-soil"]["report_count"])
+            inventory = {item["endpoint"]: item for item in restored.endpoints()}
+            self.assertEqual(1, inventory["quiet001"]["frame_count"])
+            self.assertEqual(4, inventory["active01"]["frame_count"])
+            restored.close()
+
     def test_reception_quality_persists_and_invalid_endpoint_is_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "rainpoint.sqlite3"

@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.11.0
+version: 0.12.0
 slug: rainpointd
 description: Local RainPoint telemetry and bounded sensor-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
@@ -34,6 +34,7 @@ options:
   registry_write_token: ""
   node_listen_port: 8790
   node_tokens: ""
+  event_retention_limit: 100000
 schema:
   transport: "list(network|rtl433|esp32_serial|replay)"
   replay_interval: "float(0.5,3600)"
@@ -45,3 +46,4 @@ schema:
   registry_write_token: str?
   node_listen_port: "list(0|8790)"
   node_tokens: str?
+  event_retention_limit: "int(1000,1000000)"
