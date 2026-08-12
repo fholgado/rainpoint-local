@@ -99,6 +99,11 @@ authenticated Wi-Fi radio nodes; replay remains an explicit development mode.
 See [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) for the complete
 migration and safety design.
 
+Physical validation procedures are tracked in
+[`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md),
+including the remaining multi-identity sensor tests and the staged test-valve
+stock capture, offline reconstruction, and isolated local enrollment sequence.
+
 ## Home Assistant installation
 
 There are two pieces:

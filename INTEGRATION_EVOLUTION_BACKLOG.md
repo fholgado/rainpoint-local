@@ -55,6 +55,9 @@ the captured bytes are not presented as a generic HCS026 formula.
 The next test sensor should be paired in isolation and compared field by field.
 Only evidence common to multiple identities may become model-wide behavior.
 Differences become validated profile parameters, never household conditionals.
+The complete remaining sensor matrix and the staged stock-to-local valve
+association procedure are maintained in
+[`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md).
 
 ## Valve-control gate
 
