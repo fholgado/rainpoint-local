@@ -93,6 +93,12 @@ proven. Multiple single-radio nodes can later be placed near different garden
 areas for coverage; this is preferable to treating a multi-radio bench build
 as the normal deployment architecture.
 
+The carrier is passive: USB-C power, the status LED, BOOT/pairing confirmation,
+and reset remain functions of the socketed ESP32 development board. The carrier
+only routes 3.3 V, ground, SPI, and the two CC1101 GDO lines and provides local
+radio-supply decoupling. This keeps the prototype serviceable and avoids a
+second power or user-interface implementation.
+
 ### Distributed radio nodes
 
 Every node must have a stable identity and report it with each frame, together

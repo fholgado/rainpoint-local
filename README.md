@@ -171,6 +171,11 @@ receive-capable and exposes only the physically validated Sensor B pairing TX
 operation over its authenticated network protocol. It contains no valve TX
 path.
 
+The passive socketed carrier-PCB design is under
+[`hardware/rainpoint_carrier`](hardware/rainpoint_carrier/README.md). Revision
+A deliberately reuses the ESP32's USB-C power, onboard GPIO2 status LED, and
+GPIO0 BOOT button; the carrier adds no duplicate user-interface hardware.
+
 Copy `custom_components/rainpoint_local` into the Home Assistant configuration
 directory, restart Home Assistant, and add **RainPoint Local** from
 **Settings → Devices & services**.
@@ -267,6 +272,8 @@ and validation procedure.
 - [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md): direct local bridge
   and safety architecture
 - [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md): replay gateway and HA setup
+- [hardware/rainpoint_carrier/README.md](hardware/rainpoint_carrier/README.md):
+  passive ESP32/CC1101 carrier-PCB design
 - [research/RF_CAPTURE_PLAN.md](research/RF_CAPTURE_PLAN.md): RF capture and
   validation procedure
 - [research/RF_CAPTURE_NOTES.md](research/RF_CAPTURE_NOTES.md): concise dated

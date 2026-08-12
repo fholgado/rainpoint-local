@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="90mm" height="80mm"
+     viewBox="0 0 90 80">
+  <style>
+    .board { fill: #f4f7f2; stroke: #111; stroke-width: 0.35; }
+    .module { fill: #dbeafe; stroke: #1e3a8a; stroke-width: 0.25; }
+    .radio { fill: #dcfce7; stroke: #166534; stroke-width: 0.25; }
+    .keepout { fill: #fee2e2; fill-opacity: 0.65; stroke: #b91c1c;
+               stroke-width: 0.2; stroke-dasharray: 1 0.7; }
+    .pad { fill: #d9a521; stroke: #6b4f00; stroke-width: 0.12; }
+    .hole { fill: white; stroke: #444; stroke-width: 0.2; }
+    .dim { fill: none; stroke: #555; stroke-width: 0.18; }
+    .label { font-family: sans-serif; font-size: 2px; fill: #111; }
+    .small { font-family: sans-serif; font-size: 1.45px; fill: #111; }
+    .tiny { font-family: sans-serif; font-size: 1.15px; fill: #111; }
+    .warning { font-family: sans-serif; font-size: 1.65px; font-weight: bold;
+               fill: #b91c1c; }
+  </style>
+
+  <!-- Page title. All geometry is in millimetres. -->
+  <text x="5" y="3" class="label">RainPoint radio-node carrier Rev A — 1:1 top placement</text>
+
+  <!-- 68 x 66 mm carrier outline, offset 5 mm from the page origin. -->
+  <rect x="5" y="5" width="68" height="66" rx="0.8" class="board"/>
+
+  <!-- Four 3.2 mm NPTH mounting holes. -->
+  <g>
+    <circle cx="8.5" cy="8.5" r="1.6" class="hole"/>
+    <circle cx="69.5" cy="8.5" r="1.6" class="hole"/>
+    <circle cx="8.5" cy="67.5" r="1.6" class="hole"/>
+    <circle cx="69.5" cy="67.5" r="1.6" class="hole"/>
+  </g>
+
+  <!-- ESP32 board: 51.74 x 29 mm. USB is at the bottom. -->
+  <rect x="13" y="12" width="29" height="51.74" rx="0.5" class="module"/>
+  <text x="16" y="37" class="label" transform="rotate(90 16 37)">ELEGOO EL-SM-012 ESP32</text>
+  <text x="19" y="62.3" class="small">USB-C</text>
+  <path d="M26 63.2 L26 69" class="dim"/>
+
+  <!-- Wi-Fi PCB antenna keepout extends beyond the module end. -->
+  <rect x="12" y="5.5" width="31" height="18" class="keepout"/>
+  <text x="16" y="9.8" class="warning">NO COPPER — Wi-Fi ANTENNA</text>
+
+  <!-- ESP32 socket pad centers: 25.64 mm row spacing, 2.54 mm pitch. -->
+  <g id="esp32-left-header">
+    <circle cx="14.68" cy="15.01" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="17.55" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="20.09" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="22.63" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="25.17" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="27.71" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="30.25" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="32.79" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="35.33" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="37.87" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="40.41" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="42.95" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="45.49" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="48.03" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="50.57" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="53.11" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="55.65" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="58.19" r="0.95" class="pad"/>
+    <circle cx="14.68" cy="60.73" r="0.95" class="pad"/>
+  </g>
+  <g id="esp32-right-header">
+    <circle cx="40.32" cy="15.01" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="17.55" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="20.09" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="22.63" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="25.17" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="27.71" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="30.25" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="32.79" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="35.33" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="37.87" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="40.41" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="42.95" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="45.49" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="48.03" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="50.57" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="53.11" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="55.65" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="58.19" r="0.95" class="pad"/>
+    <circle cx="40.32" cy="60.73" r="0.95" class="pad"/>
+  </g>
+
+  <!-- Relevant ESP32 pin labels. -->
+  <text x="15.9" y="15.5" class="tiny">3V3</text>
+  <text x="15.9" y="35.8" class="tiny">25</text>
+  <text x="15.9" y="38.3" class="tiny">26</text>
+  <text x="15.9" y="40.9" class="tiny">27</text>
+  <text x="15.9" y="48.5" class="tiny">GND</text>
+  <text x="36.9" y="18.0" class="tiny">23</text>
+  <text x="36.9" y="33.2" class="tiny">19</text>
+  <text x="36.9" y="35.8" class="tiny">18</text>
+
+  <!-- Common 28 x 15 mm CC1101 board; antenna connector faces right. -->
+  <rect x="44" y="30.5" width="28" height="15" rx="0.4" class="radio"/>
+  <text x="52" y="38.7" class="label">CC1101</text>
+  <path d="M72 38 L78 38" class="dim"/>
+  <text x="67.2" y="48" class="small">433 MHz antenna</text>
+
+  <!-- CC1101 2x4 socket, viewed from top. -->
+  <g>
+    <circle cx="46" cy="34.19" r="1.05" class="pad"/>
+    <circle cx="48.54" cy="34.19" r="1.05" class="pad"/>
+    <circle cx="46" cy="36.73" r="1.05" class="pad"/>
+    <circle cx="48.54" cy="36.73" r="1.05" class="pad"/>
+    <circle cx="46" cy="39.27" r="1.05" class="pad"/>
+    <circle cx="48.54" cy="39.27" r="1.05" class="pad"/>
+    <circle cx="46" cy="41.81" r="1.05" class="pad"/>
+    <circle cx="48.54" cy="41.81" r="1.05" class="pad"/>
+  </g>
+  <text x="44.0" y="33.0" class="tiny">1 GND</text>
+  <text x="48.2" y="33.0" class="tiny">2 3V3</text>
+  <text x="43.2" y="36.9" class="tiny">3</text>
+  <text x="49.4" y="36.9" class="tiny">4</text>
+  <text x="43.2" y="39.5" class="tiny">5</text>
+  <text x="49.4" y="39.5" class="tiny">6</text>
+  <text x="43.2" y="42.0" class="tiny">7</text>
+  <text x="49.4" y="42.0" class="tiny">8</text>
+  <text x="45" y="29.1" class="warning">3V3 ONLY</text>
+
+  <!-- Key dimensions. -->
+  <path d="M5 73 L73 73 M5 71.8 L5 74.2 M73 71.8 L73 74.2" class="dim"/>
+  <text x="35.5" y="76" class="label">68 mm</text>
+  <path d="M2.5 5 L2.5 71 M1.3 5 L3.7 5 M1.3 71 L3.7 71" class="dim"/>
+  <text x="1.5" y="41" class="label" transform="rotate(-90 1.5 41)">66 mm</text>
+
+  <!-- Print-scale verification bar. -->
+  <path d="M28 78 L78 78 M28 76.8 L28 79.2 M78 76.8 L78 79.2" class="dim"/>
+  <text x="48" y="77.2" class="small">50 mm calibration</text>
+</svg>
