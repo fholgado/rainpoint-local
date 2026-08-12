@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import threading
 from typing import Any, Callable
 
@@ -133,6 +134,55 @@ class ESP32SerialTransport:
                     authenticated_node_id,
                     radio_health=node_health,
                 )
+            return 0
+        if message_type == "node_health":
+            if authenticated_node_id is None:
+                return 0
+            diagnostics: dict[str, Any] = {}
+            for key in (
+                "uptime_seconds",
+                "free_heap_bytes",
+                "minimum_free_heap_bytes",
+                "largest_free_block_bytes",
+                "cpu_frequency_mhz",
+                "maximum_loop_gap_ms",
+                "reset_reason_code",
+                "network_bytes_sent",
+                "network_bytes_received",
+                "wifi_reconnects",
+                "gateway_connect_attempts",
+                "gateway_authentications",
+            ):
+                value = message.get(key)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    diagnostics[key] = value
+            temperature = message.get("device_temperature_c")
+            if (
+                isinstance(temperature, (int, float))
+                and not isinstance(temperature, bool)
+                and -50 <= temperature <= 150
+            ):
+                diagnostics["device_temperature_c"] = float(temperature)
+            wifi_rssi = message.get("wifi_rssi_dbm")
+            if (
+                isinstance(wifi_rssi, int)
+                and not isinstance(wifi_rssi, bool)
+                and -150 <= wifi_rssi <= 0
+            ):
+                diagnostics["wifi_rssi_dbm"] = wifi_rssi
+            ip_address = message.get("ip_address")
+            if isinstance(ip_address, str):
+                try:
+                    diagnostics["ip_address"] = str(
+                        ipaddress.ip_address(ip_address)
+                    )
+                except ValueError:
+                    pass
+            self.gateway.update_node(authenticated_node_id, **diagnostics)
             return 0
         if message_type != "rainpoint_rf":
             return 0

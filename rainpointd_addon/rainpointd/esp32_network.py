@@ -60,6 +60,7 @@ class ESP32NetworkServer:
         self.host = host
         self.port = port
         self.node_tokens = dict(node_tokens or {})
+        self.gateway.import_node_credentials(self.node_tokens)
         # Retained for constructor compatibility. Deduplication now belongs to
         # the gateway so SDR, serial, and every network node share one boundary.
         self.deduplication_window_seconds = deduplication_window_seconds
@@ -202,7 +203,9 @@ class ESP32NetworkServer:
                 "node_id": node_id,
             }
             if protocol_version == 2:
-                token = self.node_tokens[node_id]
+                token = self._credential(node_id)
+                if token is None:
+                    return
                 server_payload = (
                     f"rainpoint-gateway-v2\n{nonce}\n{node_id}".encode()
                 )
@@ -312,7 +315,7 @@ class ESP32NetworkServer:
             or set(capabilities) != {"rx", "sensor_pairing_tx"}
         ):
             return None
-        token = self.node_tokens.get(node_id)
+        token = self._credential(node_id)
         if token is None:
             return None
         payload = (
@@ -323,6 +326,12 @@ class ESP32NetworkServer:
             (node_id, protocol_version)
             if hmac.compare_digest(proof, expected)
             else None
+        )
+
+    def _credential(self, node_id: str) -> str | None:
+        """Resolve a managed credential with an ephemeral-test fallback."""
+        return self.gateway.radio_node_credential(node_id) or self.node_tokens.get(
+            node_id
         )
 
     @staticmethod

@@ -37,7 +37,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(3, gateway.info()["storage_schema_version"])
+            self.assertEqual(4, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -48,7 +48,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(3, migrated.info()["storage_schema_version"])
+            self.assertEqual(4, migrated.info()["storage_schema_version"])
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],
@@ -722,6 +722,28 @@ class RegistryHTTPAPITest(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             self.post_json("/api/v1/auth/check", {}, token="wrong")
         self.assertEqual(401, raised.exception.code)
+
+    def test_authenticated_radio_node_registration_hides_credential(self) -> None:
+        token = "ab" * 32
+        registered = self.post_json(
+            "/api/v1/nodes/register",
+            {
+                "node_id": "rp-001122334455",
+                "token": token,
+                "name": "Back Garden Radio",
+                "area": "Garden",
+            },
+        )["node"]
+        self.assertEqual("Back Garden Radio", registered["name"])
+        self.assertNotIn("token", registered)
+        self.assertEqual(
+            token,
+            self.server.gateway.radio_node_credential("rp-001122334455"),
+        )
+        node = self.server.gateway.nodes()[0]
+        self.assertFalse(node["connected"])
+        self.assertTrue(node["managed"])
+        self.assertEqual("Garden", node["area"])
 
     def test_learning_api_is_receive_only(self) -> None:
         result = self.post_json(

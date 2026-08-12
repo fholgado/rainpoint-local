@@ -18,6 +18,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfTime,
     UnitOfVolume,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -26,6 +27,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
+from .node_entity import RainPointRadioNodeEntity
 
 
 def _report_summary(device: dict[str, Any]) -> str:
@@ -182,6 +184,154 @@ DESCRIPTIONS = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class RainPointNodeSensorDescription(SensorEntityDescription):
+    """Describe one radio-node diagnostic field."""
+
+    path: tuple[str, ...]
+
+
+NODE_DESCRIPTIONS = (
+    RainPointNodeSensorDescription(
+        key="node_last_seen",
+        translation_key="node_last_seen",
+        path=("last_seen",),
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="ip_address",
+        translation_key="ip_address",
+        path=("ip_address",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="wifi_signal_strength",
+        translation_key="wifi_signal_strength",
+        path=("wifi_rssi_dbm",),
+        native_unit_of_measurement="dBm",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="device_temperature",
+        translation_key="device_temperature",
+        path=("device_temperature_c",),
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="uptime",
+        translation_key="uptime",
+        path=("uptime_seconds",),
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="free_heap",
+        translation_key="free_heap",
+        path=("free_heap_bytes",),
+        native_unit_of_measurement="B",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="minimum_free_heap",
+        translation_key="minimum_free_heap",
+        path=("minimum_free_heap_bytes",),
+        native_unit_of_measurement="B",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="largest_free_block",
+        translation_key="largest_free_block",
+        path=("largest_free_block_bytes",),
+        native_unit_of_measurement="B",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="maximum_loop_gap",
+        translation_key="maximum_loop_gap",
+        path=("maximum_loop_gap_ms",),
+        native_unit_of_measurement="ms",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="network_bytes_sent",
+        translation_key="network_bytes_sent",
+        path=("network_bytes_sent",),
+        native_unit_of_measurement="B",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="network_bytes_received",
+        translation_key="network_bytes_received",
+        path=("network_bytes_received",),
+        native_unit_of_measurement="B",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="received_frames",
+        translation_key="received_frames",
+        path=("received_frames",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="duplicate_frames",
+        translation_key="duplicate_frames",
+        path=("duplicate_frames",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="invalid_messages",
+        translation_key="invalid_messages",
+        path=("invalid_messages",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="radio_packets",
+        translation_key="radio_packets",
+        path=("radio_health", "primary", "packets"),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="radio_overflows",
+        translation_key="radio_overflows",
+        path=("radio_health", "primary", "overflows"),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="wifi_reconnects",
+        translation_key="wifi_reconnects",
+        path=("wifi_reconnects",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="gateway_authentications",
+        translation_key="gateway_authentications",
+        path=("gateway_authentications",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+
+def _path_value(value: dict[str, Any], path: tuple[str, ...]) -> Any:
+    """Read one nested diagnostic path."""
+    current: Any = value
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    return current
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -204,6 +354,20 @@ async def async_setup_entry(
                 known.add(identity)
                 entities.append(
                     RainPointLocalSensor(coordinator, device_id, description)
+                )
+        for node_id, node in coordinator.nodes.items():
+            for description in NODE_DESCRIPTIONS:
+                identity = (f"radio-node:{node_id}", description.key)
+                if (
+                    _path_value(node, description.path) is None
+                    or identity in known
+                ):
+                    continue
+                known.add(identity)
+                entities.append(
+                    RainPointRadioNodeSensor(
+                        coordinator, node_id, description
+                    )
                 )
         if entities:
             async_add_entities(entities)
@@ -273,5 +437,34 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
         # rtl_433 timestamps use the add-on's local clock but omit its offset.
         # Timestamp sensors require a timezone-aware value.
         if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        return parsed
+
+
+class RainPointRadioNodeSensor(RainPointRadioNodeEntity, SensorEntity):
+    """Expose one custom local radio-node diagnostic."""
+
+    entity_description: RainPointNodeSensorDescription
+
+    def __init__(
+        self,
+        coordinator: RainPointLocalCoordinator,
+        node_id: str,
+        description: RainPointNodeSensorDescription,
+    ) -> None:
+        super().__init__(coordinator, node_id)
+        self.entity_description = description
+        self._attr_unique_id = f"radio-node:{node_id}_{description.key}"
+
+    @property
+    def native_value(self) -> Any:
+        """Return the current node diagnostic."""
+        value = _path_value(self.node, self.entity_description.path)
+        if self.entity_description.device_class != SensorDeviceClass.TIMESTAMP:
+            return value
+        if not isinstance(value, str):
+            return None
+        parsed = dt_util.parse_datetime(value)
+        if parsed is not None and parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         return parsed

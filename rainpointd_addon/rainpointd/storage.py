@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -141,6 +141,9 @@ class SQLiteEventStore:
             version = 2
         if version == 2:
             self._migrate_v2_to_v3()
+            version = 3
+        if version == 3:
+            self._migrate_v3_to_v4()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -222,6 +225,23 @@ class SQLiteEventStore:
                     )
                 self._update_receiver_metrics(event)
             self._connection.execute("PRAGMA user_version = 3")
+
+    def _migrate_v3_to_v4(self) -> None:
+        """Add the persistent custom local radio-node registry."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS radio_nodes (
+                    node_id TEXT PRIMARY KEY,
+                    token TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    area TEXT,
+                    registered_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute("PRAGMA user_version = 4")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -377,6 +397,102 @@ class SQLiteEventStore:
             )
             result.append(item)
         return result
+
+    def radio_nodes(self) -> list[dict[str, Any]]:
+        """Return managed radio nodes without exposing their credentials."""
+        rows = self._connection.execute(
+            "SELECT node_id, name, area, registered_at, updated_at "
+            "FROM radio_nodes ORDER BY name, node_id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def radio_node_credentials(self) -> dict[str, str]:
+        """Return private credentials for the authenticated node listener."""
+        rows = self._connection.execute(
+            "SELECT node_id, token FROM radio_nodes ORDER BY node_id"
+        ).fetchall()
+        return {str(row["node_id"]): str(row["token"]) for row in rows}
+
+    def upsert_radio_node(
+        self,
+        *,
+        node_id: str,
+        token: str,
+        name: str,
+        area: str | None,
+        updated_at: str,
+        replace_existing: bool = True,
+    ) -> dict[str, Any]:
+        """Register one node or migrate its existing option credential."""
+        self._connection.execute(
+            """
+            INSERT INTO radio_nodes(
+                node_id, token, name, area, registered_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(node_id) DO UPDATE SET
+                token=CASE
+                    WHEN ? THEN excluded.token
+                    ELSE radio_nodes.token
+                END,
+                name=CASE
+                    WHEN ? THEN excluded.name
+                    ELSE radio_nodes.name
+                END,
+                area=CASE
+                    WHEN ? THEN excluded.area
+                    ELSE radio_nodes.area
+                END,
+                updated_at=CASE
+                    WHEN ? THEN excluded.updated_at
+                    ELSE radio_nodes.updated_at
+                END
+            """,
+            (
+                node_id,
+                token,
+                name,
+                area,
+                updated_at,
+                updated_at,
+                replace_existing,
+                replace_existing,
+                replace_existing,
+                replace_existing,
+            ),
+        )
+        self._connection.commit()
+        return next(
+            item for item in self.radio_nodes() if item["node_id"] == node_id
+        )
+
+    def update_radio_node(
+        self,
+        node_id: str,
+        *,
+        name: str,
+        area: str | None,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """Update managed radio-node metadata without rotating credentials."""
+        cursor = self._connection.execute(
+            "UPDATE radio_nodes SET name = ?, area = ?, updated_at = ? "
+            "WHERE node_id = ?",
+            (name, area, updated_at, node_id),
+        )
+        if not cursor.rowcount:
+            raise KeyError(node_id)
+        self._connection.commit()
+        return next(
+            item for item in self.radio_nodes() if item["node_id"] == node_id
+        )
+
+    def delete_radio_node(self, node_id: str) -> bool:
+        """Revoke one node credential while retaining RainPoint devices."""
+        cursor = self._connection.execute(
+            "DELETE FROM radio_nodes WHERE node_id = ?", (node_id,)
+        )
+        self._connection.commit()
+        return bool(cursor.rowcount)
 
     def registry(self) -> list[dict[str, Any]]:
         """Return accepted local device registrations."""

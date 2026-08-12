@@ -31,13 +31,23 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         )
         self.client = client
         self.config_entry_id = config_entry_id
+        self.nodes: dict[str, dict] = {}
+        self.receivers: list[dict] = []
 
     async def _async_update_data(self) -> dict[str, dict]:
         try:
             devices = await self.client.devices()
+            nodes = await self.client.nodes()
+            receivers = await self.client.receivers()
         except RainPointLocalError as exc:
             raise UpdateFailed(f"Unable to update from rainpointd: {exc}") from exc
         result = {device["device_id"]: device for device in devices}
+        self.nodes = {
+            node["node_id"]: node
+            for node in nodes
+            if isinstance(node.get("node_id"), str)
+        }
+        self.receivers = receivers
         self._async_reconcile_entity_registry(set(result))
         return result
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0
+
+- Migrate legacy node-option credentials into a private persistent radio-node
+  registry without overwriting later managed credentials or metadata.
+- Keep registered nodes visible while offline and accept authenticated node
+  registration through the management API.
+- Validate node health heartbeats for Wi-Fi, memory, temperature, uptime,
+  network, loop-latency, reset, and reconnect diagnostics.
+
 ## 0.13.0
 
 - Assign a stable identity to the local SDR and every serial or Wi-Fi receiver.

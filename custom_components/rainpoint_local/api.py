@@ -49,6 +49,24 @@ class RainPointLocalClient:
             raise RainPointLocalInvalidResponse("devices response is not a list")
         return devices
 
+    async def nodes(self) -> list[dict[str, Any]]:
+        """Return custom local radio-node snapshots."""
+        data = await self._get("nodes")
+        nodes = data.get("nodes")
+        if not isinstance(nodes, list):
+            raise RainPointLocalInvalidResponse("nodes response is not a list")
+        return nodes
+
+    async def receivers(self) -> list[dict[str, Any]]:
+        """Return persistent physical-receiver coverage metrics."""
+        data = await self._get("receivers")
+        receivers = data.get("receivers")
+        if not isinstance(receivers, list):
+            raise RainPointLocalInvalidResponse(
+                "receivers response is not a list"
+            )
+        return receivers
+
     async def pairing(self) -> dict[str, Any]:
         """Return sensor-pairing progress."""
         return await self._get("pairing")
@@ -56,6 +74,27 @@ class RainPointLocalClient:
     async def authenticate(self, token: str) -> None:
         """Verify a gateway management credential without changing state."""
         await self._post("auth/check", {}, token)
+
+    async def register_radio_node(
+        self,
+        token: str,
+        *,
+        node_id: str,
+        node_token: str,
+        name: str,
+        area: str | None,
+    ) -> dict[str, Any]:
+        """Register a provisioned custom local radio node."""
+        return await self._post(
+            "nodes/register",
+            {
+                "node_id": node_id,
+                "token": node_token,
+                "name": name,
+                "area": area,
+            },
+            token,
+        )
 
     async def start_pairing(
         self, token: str, duration_seconds: int = 120, *, node_id: str

@@ -2,17 +2,18 @@
 
 ## Implementation status
 
-Radio-node commissioning is **not wired into Home Assistant yet**. The native
-**Add entry/device** control currently starts the integration's gateway config
-flow; it does not enroll an ESP32/CC1101 radio node. The integration's working
-Configure action currently pairs a supported RainPoint sensor through an
-already-authenticated node.
+Home Assistant can now register a provisioned ESP32/CC1101 radio node beneath
+the existing custom local RF gateway. Legacy add-on `node_tokens` entries
+migrate once into the same private SQLite registry. Registered nodes remain
+visible while offline and expose connection, firmware, RF, memory, network,
+temperature, and watchdog-oriented diagnostics as HA devices.
 
-The deployed prototype still provisions nodes manually through `show_node`, the
-add-on's `node_tokens` option, and `configure_wifi`. Connected nodes authenticate
-to the custom local RF gateway and can be selected during sensor pairing, but
-they are not yet represented as managed HA devices and cannot be added,
-renamed, rotated, or revoked from HA.
+Commissioning still begins over USB: factory firmware generates a private
+setup token, `show_node` displays it only while unconfigured, and the user
+enters the stable ID/token in **Add custom local radio node** before sending the
+`configure_wifi` command. A temporary setup access point or BLE exchange has
+not replaced this physical provisioning step yet. Rotation, revocation, and
+friendly metadata editing also remain follow-up management actions.
 
 ## Product goal
 
@@ -37,12 +38,13 @@ and accepts Wi-Fi configuration over its USB serial connection. The user:
 
 1. Flashes the radio-node firmware and runs `show_node` over USB. Pairing TX
    remains disarmed after boot.
-2. Generates a unique 32-byte enrollment token.
-3. Adds the node-ID/token pair to the `rainpointd` app configuration.
+2. Reads the firmware-generated 32-byte setup token.
+3. Registers the node ID/token, name, and area from the HA Configure flow.
 4. Sends the tab-separated `configure_wifi` command over USB and restarts.
 5. Confirms that `/api/v1/nodes` shows the node authenticated and receiving.
 
-This is intentionally a test harness, not the final consumer experience.
+This is a functional, physically bounded commissioning path, but not the final
+wireless consumer experience.
 
 ## Target Home Assistant experience
 

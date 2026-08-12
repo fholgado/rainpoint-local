@@ -167,9 +167,10 @@ hardware identifier. Open the serial monitor at 115200 baud and enter:
 show_node
 ```
 
-Generate a separate 32-byte token for this node (`openssl rand -hex 32` is one
-option), add the node-ID/token pair to `rainpointd`, then provision the board
-with one tab-separated line:
+On a factory-unconfigured board, `show_node` returns a randomly generated
+32-byte setup token stored in ESP32 NVS. Add the node ID and setup token through
+Home Assistant's **Add custom local radio node** flow, then use the same token
+to provision the board with one tab-separated line:
 
 ```text
 configure_wifi<TAB>SSID<TAB>PASSWORD<TAB>HA_HOST<TAB>8790<TAB>64_HEX_TOKEN
@@ -178,8 +179,9 @@ configure_wifi<TAB>SSID<TAB>PASSWORD<TAB>HA_HOST<TAB>8790<TAB>64_HEX_TOKEN
 Use literal Tab characters and press Enter. Restart the ESP32 after it reports
 `configuration_saved`. The board stores the values in ESP32 NVS, connects as a
 Wi-Fi station, and makes an outbound connection to the configured Home
-Assistant host. `show_node` reports only non-secret configuration. `clear_wifi`
-erases the saved Wi-Fi and token values.
+Assistant host. Configured boards do not print the credential. `clear_wifi`
+erases the saved network configuration, rotates the setup token, and returns
+the node to commissioning state.
 
 This is a trusted-LAN prototype transport. Separate nonce/HMAC proofs
 authenticate both the node and `rainpointd` and keep the token itself off the
@@ -187,6 +189,12 @@ network, but TCP telemetry is not encrypted or individually signed. Before a
 published setup or any valve control, the transport will need further review.
 Protocol v2 accepts only the bounded `pairing_start` and `pairing_cancel`
 messages after authentication. It contains no generic RF or valve command.
+
+Firmware 0.5 emits a `node_health` heartbeat every 30 seconds with uptime,
+heap metrics, internal temperature, CPU frequency, maximum loop gap, reset
+reason, local IP, Wi-Fi RSSI, network byte counts, reconnects, gateway
+connection attempts, and successful authentications. There is no OTA updater;
+firmware must still be flashed over USB.
 
 The hardware-independent protocol test can run without PlatformIO:
 
@@ -199,7 +207,7 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ## Next firmware increments
 
-1. Flash firmware 0.4.0 and verify the node authenticates to `rainpointd` as
+1. Flash firmware 0.5.0 and verify the node authenticates to `rainpointd` as
    protocol v2 while disarmed.
 2. Start the fixed Sensor B workflow from Home Assistant with the original
    RainPoint gateway powered off.

@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <SPI.h>
+#include <esp_system.h>
 
 #include <array>
 #include <cctype>
@@ -58,6 +59,8 @@ std::uint32_t pairingLocalDateTimeSetAtMs = 0;
 bool pairingRequiresNetwork = false;
 String pairingCommandId;
 std::uint32_t lastHealthReport = 0;
+std::uint32_t lastLoopAt = 0;
+std::uint32_t maximumLoopGapMs = 0;
 String serialCommand;
 
 #if RAINPOINT_RADIO_COUNT == 1
@@ -257,6 +260,59 @@ void printRadioHealth(const char* name, const rainpoint::Cc1101& radio) {
     emitLine(output);
 }
 
+void printNodeHealth() {
+    char counter[32];
+    String line;
+    line.reserve(640);
+    line += "{\"type\":\"node_health\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"uptime_seconds\":";
+    line += millis() / 1'000;
+    line += ",\"free_heap_bytes\":";
+    line += ESP.getFreeHeap();
+    line += ",\"minimum_free_heap_bytes\":";
+    line += ESP.getMinFreeHeap();
+    line += ",\"largest_free_block_bytes\":";
+    line += ESP.getMaxAllocHeap();
+    line += ",\"cpu_frequency_mhz\":";
+    line += ESP.getCpuFreqMHz();
+    line += ",\"device_temperature_c\":";
+    line += String(temperatureRead(), 1);
+    line += ",\"maximum_loop_gap_ms\":";
+    line += maximumLoopGapMs;
+    line += ",\"reset_reason_code\":";
+    line += static_cast<int>(esp_reset_reason());
+    line += ",\"ip_address\":\"";
+    line += wifiTransport.localIp();
+    line += "\",\"wifi_rssi_dbm\":";
+    line += wifiTransport.wifiRssiDbm();
+    line += ",\"network_bytes_sent\":";
+    std::snprintf(
+        counter,
+        sizeof(counter),
+        "%llu",
+        static_cast<unsigned long long>(wifiTransport.networkBytesSent())
+    );
+    line += counter;
+    line += ",\"network_bytes_received\":";
+    std::snprintf(
+        counter,
+        sizeof(counter),
+        "%llu",
+        static_cast<unsigned long long>(wifiTransport.networkBytesReceived())
+    );
+    line += counter;
+    line += ",\"wifi_reconnects\":";
+    line += wifiTransport.wifiReconnects();
+    line += ",\"gateway_connect_attempts\":";
+    line += wifiTransport.gatewayConnectAttempts();
+    line += ",\"gateway_authentications\":";
+    line += wifiTransport.gatewayAuthentications();
+    line += "}";
+    emitLine(line);
+    maximumLoopGapMs = 0;
+}
+
 void reportHealth() {
 #if RAINPOINT_RADIO_COUNT == 1
     printRadioHealth("primary", primaryRadio);
@@ -264,6 +320,7 @@ void reportHealth() {
     printRadioHealth("primary", primaryRadio);
     printRadioHealth("diagnostic", diagnosticRadio);
 #endif
+    printNodeHealth();
 }
 
 const char* pairingStateName(rainpoint::PairingSessionState state) {
@@ -826,6 +883,11 @@ void setup() {
 }
 
 void loop() {
+    const std::uint32_t loopAt = millis();
+    if (lastLoopAt != 0) {
+        maximumLoopGapMs = max(maximumLoopGapMs, loopAt - lastLoopAt);
+    }
+    lastLoopAt = loopAt;
     wifiTransport.poll();
     if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
         cancelPairing("gateway_connection_lost");

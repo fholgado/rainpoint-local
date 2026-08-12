@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.13.0 supports authenticated network radio nodes, captured replay,
+Version 0.14.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -64,8 +64,11 @@ both while publishing only one logical device report. Persistent per-receiver
 and per-device counts, integrity decisions, duplicates, RSSI averages, and last
 reception times are available from `/api/v1/receivers`.
 
-Set `node_tokens` to a JSON object containing one independent 64-hex-character
-token per stable node ID:
+Existing `node_tokens` entries are imported once into the private persistent
+radio-node registry. New provisioned nodes can be registered from Home
+Assistant with one independent 64-hex-character setup token per stable node ID.
+The legacy option remains a migration fallback and does not overwrite a token,
+name, or area subsequently managed through Home Assistant:
 
 ```json
 {"rp-001122334455":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
@@ -76,6 +79,12 @@ Leave `node_tokens` empty to reject every connection. Set `node_listen_port` to
 token for another node and do not post real tokens in issues or logs. Current
 node state and receive counters are available from the read-only
 `/api/v1/nodes` endpoint.
+
+Firmware 0.5 adds a bounded 30-second diagnostic heartbeat with uptime, reset
+reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
+and signal, reconnect/authentication counters, and network byte counters. The
+integration exposes supported fields beneath the custom local radio-node HA
+device. Firmware remains USB-flashed; OTA updates are not implemented.
 
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway

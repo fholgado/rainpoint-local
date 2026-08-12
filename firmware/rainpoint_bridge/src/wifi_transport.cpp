@@ -1,6 +1,7 @@
 #include "wifi_transport.h"
 
 #include <Esp.h>
+#include <esp_system.h>
 #include <mbedtls/md.h>
 
 #include <array>
@@ -111,11 +112,31 @@ bool constantTimeEqual(const String& left, const String& right) {
 void WifiTransport::begin() {
     nodeId_ = stableNodeId();
     loadConfiguration();
+    ensureSetupToken();
     if (configured_) {
         startWifi();
     } else {
         reportNetworkState("unconfigured");
     }
+}
+
+void WifiTransport::ensureSetupToken() {
+    if (validHexToken(token_)) {
+        return;
+    }
+    std::array<unsigned char, 32> random{};
+    esp_fill_random(random.data(), random.size());
+    constexpr char digits[] = "0123456789abcdef";
+    token_.clear();
+    token_.reserve(random.size() * 2);
+    for (const unsigned char value : random) {
+        token_ += digits[value >> 4];
+        token_ += digits[value & 0x0f];
+    }
+    preferences_.begin("rainpoint", false);
+    preferences_.putString("token", token_);
+    preferences_.end();
+    loadConfiguration();
 }
 
 void WifiTransport::loadConfiguration() {
@@ -148,6 +169,7 @@ void WifiTransport::poll() {
         clearConnection();
         if (millis() - lastReconnectAttempt_ >= kReconnectIntervalMs) {
             WiFi.reconnect();
+            ++wifiReconnects_;
             lastReconnectAttempt_ = millis();
             reportNetworkState("reconnecting_wifi");
         }
@@ -163,6 +185,7 @@ void WifiTransport::poll() {
     }
     while (client_.available()) {
         const char value = static_cast<char>(client_.read());
+        ++networkBytesReceived_;
         if (value == '\n') {
             handleGatewayLine(inputLine_);
             inputLine_.clear();
@@ -178,6 +201,7 @@ void WifiTransport::poll() {
 }
 
 void WifiTransport::connectGateway() {
+    ++gatewayConnectAttempts_;
     reportNetworkState("connecting_gateway");
     if (!client_.connect(gatewayHost_.c_str(), gatewayPort_)) {
         reportNetworkState("gateway_unreachable");
@@ -215,6 +239,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
         }
         challengeNonce_.clear();
         authenticated_ = true;
+        ++gatewayAuthentications_;
         reportNetworkState("authenticated");
         return;
     }
@@ -242,7 +267,7 @@ void WifiTransport::authenticate(const String& nonce) {
         clearConnection();
         return;
     }
-    client_.printf(
+    const int bytesSent = client_.printf(
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
@@ -253,6 +278,9 @@ void WifiTransport::authenticate(const String& nonce) {
         RAINPOINT_FIRMWARE_VERSION,
         proof.c_str()
     );
+    if (bytesSent > 0) {
+        networkBytesSent_ += static_cast<std::uint64_t>(bytesSent);
+    }
 }
 
 bool WifiTransport::takeCommand(String& command) {
@@ -268,21 +296,24 @@ void WifiTransport::sendLine(const String& line) {
     if (!authenticated_ || !client_.connected()) {
         return;
     }
-    client_.print(line);
-    client_.print('\n');
+    networkBytesSent_ += client_.print(line);
+    networkBytesSent_ += client_.print('\n');
 }
 
 bool WifiTransport::handleProvisioningCommand(const String& command) {
     if (command == "show_node") {
-        Serial.printf(
-            "{\"type\":\"node_configuration\",\"node_id\":\"%s\","
-            "\"wifi_configured\":%s,\"gateway_host\":\"%s\","
-            "\"gateway_port\":%u}\n",
-            nodeId_.c_str(),
-            configured_ ? "true" : "false",
-            configured_ ? gatewayHost_.c_str() : "",
-            gatewayPort_
-        );
+        String response =
+            String("{\"type\":\"node_configuration\",\"node_id\":\"") +
+            nodeId_ + "\",\"wifi_configured\":" +
+            (configured_ ? "true" : "false") +
+            ",\"gateway_host\":\"" +
+            (configured_ ? gatewayHost_ : "") +
+            "\",\"gateway_port\":" + gatewayPort_;
+        if (!configured_) {
+            response += ",\"setup_token\":\"" + token_ + "\"";
+        }
+        response += "}";
+        Serial.println(response);
         return true;
     }
     if (command == "clear_wifi") {
@@ -290,6 +321,8 @@ bool WifiTransport::handleProvisioningCommand(const String& command) {
         preferences_.clear();
         preferences_.end();
         configured_ = false;
+        token_.clear();
+        ensureSetupToken();
         clearConnection();
         WiFi.disconnect(true, true);
         reportNetworkState("configuration_cleared");

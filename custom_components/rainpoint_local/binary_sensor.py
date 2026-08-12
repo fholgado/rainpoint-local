@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
+from .node_entity import RainPointRadioNodeEntity
 
 
 async def async_setup_entry(
@@ -37,6 +38,19 @@ async def async_setup_entry(
                     continue
                 known.add(identity)
                 entities.append(entity)
+        for node_id in coordinator.nodes:
+            identity = (f"radio-node:{node_id}", "connected")
+            if identity not in known:
+                known.add(identity)
+                entities.append(
+                    RainPointRadioNodeConnectivity(coordinator, node_id)
+                )
+            armed_identity = (f"radio-node:{node_id}", "tx_armed")
+            if armed_identity not in known:
+                known.add(armed_identity)
+                entities.append(
+                    RainPointRadioNodeTxArmed(coordinator, node_id)
+                )
         if entities:
             async_add_entities(entities)
 
@@ -110,3 +124,49 @@ class RainPointReportingBinarySensor(RainPointLocalEntity, BinarySensorEntity):
                 "reporting_timeout_seconds"
             ),
         }
+
+
+class RainPointRadioNodeConnectivity(
+    RainPointRadioNodeEntity, BinarySensorEntity
+):
+    """Report whether a custom local radio node is authenticated."""
+
+    _attr_translation_key = "radio_node_connected"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, coordinator: RainPointLocalCoordinator, node_id: str
+    ) -> None:
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"radio-node:{node_id}_connected"
+
+    @property
+    def is_on(self) -> bool:
+        """Return authenticated connection state."""
+        return bool(
+            self.node.get("connected") and self.node.get("authenticated")
+        )
+
+    @property
+    def available(self) -> bool:
+        """Keep connectivity state visible while the node is offline."""
+        return True
+
+
+class RainPointRadioNodeTxArmed(RainPointRadioNodeEntity, BinarySensorEntity):
+    """Expose the fail-closed RF transmitter state."""
+
+    _attr_translation_key = "radio_node_tx_armed"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, coordinator: RainPointLocalCoordinator, node_id: str
+    ) -> None:
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"radio-node:{node_id}_tx_armed"
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether bounded pairing transmission is armed."""
+        return self.node.get("tx_armed") is True

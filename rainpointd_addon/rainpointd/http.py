@@ -83,7 +83,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         registry_path = parsed.path.startswith(f"{base}/registry/")
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
-        if parsed.path == f"{base}/learning" or registry_path or pairing_path:
+        node_path = parsed.path.startswith(f"{base}/nodes/")
+        if (
+            parsed.path == f"{base}/learning"
+            or registry_path
+            or pairing_path
+            or node_path
+        ):
             if not self._authorize_registry_write():
                 return
             try:
@@ -93,6 +99,19 @@ class RequestHandler(BaseHTTPRequestHandler):
                         int(body.get("duration_seconds", 300))
                     )
                     self._json(201, result)
+                    return
+                if parsed.path == f"{base}/nodes/register":
+                    result = self.server.gateway.register_radio_node(
+                        node_id=str(body.get("node_id", "")),
+                        token=str(body.get("token", "")),
+                        name=str(body.get("name", "")),
+                        area=(
+                            str(body["area"])
+                            if body.get("area") is not None
+                            else None
+                        ),
+                    )
+                    self._json(201, {"node": result})
                     return
                 if parsed.path == f"{base}/pairing/start":
                     result = self.server.gateway.start_pairing(

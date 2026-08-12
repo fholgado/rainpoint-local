@@ -33,6 +33,7 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "pair_sensor": "Pair a validated HCS026 test sensor",
+          "add_radio_node": "Add a custom local radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
       },
@@ -41,6 +42,16 @@
         "description": "This is only needed for a gateway running outside Home Assistant. Add-on credentials are configured automatically during discovery.",
         "data": {
           "registry_write_token": "Gateway management token"
+        }
+      },
+      "add_radio_node": {
+        "title": "Add custom local radio node",
+        "description": "Register the stable node ID and 64-character setup token shown by the provisioned ESP32 firmware. The credential is stored privately by the custom local gateway.",
+        "data": {
+          "node_id": "Radio node ID",
+          "node_token": "Node setup token",
+          "name": "Name",
+          "area": "Area"
         }
       },
       "pair_sensor": {
@@ -87,11 +98,31 @@
       "report_count": { "name": "Reports received" },
       "average_report_interval": { "name": "Average report interval" },
       "longest_report_gap": { "name": "Longest report gap" },
-      "reception_success": { "name": "RF reception success" }
+      "reception_success": { "name": "RF reception success" },
+      "node_last_seen": { "name": "Last heartbeat" },
+      "ip_address": { "name": "IP address" },
+      "wifi_signal_strength": { "name": "Wi-Fi signal strength" },
+      "device_temperature": { "name": "Device temperature" },
+      "uptime": { "name": "Uptime" },
+      "free_heap": { "name": "Free memory" },
+      "minimum_free_heap": { "name": "Minimum free memory" },
+      "largest_free_block": { "name": "Largest free memory block" },
+      "maximum_loop_gap": { "name": "Maximum loop gap" },
+      "network_bytes_sent": { "name": "Network data sent" },
+      "network_bytes_received": { "name": "Network data received" },
+      "received_frames": { "name": "RF frames received" },
+      "duplicate_frames": { "name": "Duplicate RF frames" },
+      "invalid_messages": { "name": "Invalid network messages" },
+      "radio_packets": { "name": "Radio packets" },
+      "radio_overflows": { "name": "Radio buffer overflows" },
+      "wifi_reconnects": { "name": "Wi-Fi reconnects" },
+      "gateway_authentications": { "name": "Gateway authentications" }
     },
     "binary_sensor": {
       "watering": { "name": "Watering" },
-      "reporting": { "name": "Reporting" }
+      "reporting": { "name": "Reporting" },
+      "radio_node_connected": { "name": "Connected" },
+      "radio_node_tx_armed": { "name": "Pairing transmitter armed" }
     }
   }
 }

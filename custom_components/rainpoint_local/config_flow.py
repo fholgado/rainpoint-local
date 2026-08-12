@@ -213,8 +213,57 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     if key != CONF_TOKEN
                 },
             )
-        menu_options = ["pair_sensor"] if self._token else ["authenticate_gateway"]
+        menu_options = (
+            ["pair_sensor", "add_radio_node"]
+            if self._token
+            else ["authenticate_gateway"]
+        )
         return self.async_show_menu(step_id="init", menu_options=menu_options)
+
+    async def async_step_add_radio_node(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Register a provisioned ESP32/CC1101 node with the local gateway."""
+        if not self._token:
+            return await self.async_step_authenticate_gateway()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            area = str(user_input.get("area", "")).strip() or None
+            try:
+                await self._client().register_radio_node(
+                    self._token,
+                    node_id=str(user_input["node_id"]).strip(),
+                    node_token=str(user_input["node_token"]).strip(),
+                    name=str(user_input["name"]).strip(),
+                    area=area,
+                )
+            except RainPointLocalUnauthorized:
+                errors["base"] = "invalid_auth"
+            except RainPointLocalCannotConnect:
+                errors["base"] = "cannot_connect"
+            except RainPointLocalInvalidResponse:
+                errors["base"] = "invalid_response"
+            else:
+                coordinator = self.hass.data.get(DOMAIN, {}).get(
+                    self._entry.entry_id
+                )
+                if coordinator is not None:
+                    await coordinator.async_request_refresh()
+                return self.async_create_entry(
+                    title="Radio node registered", data={}
+                )
+        return self.async_show_form(
+            step_id="add_radio_node",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("node_id"): str,
+                    vol.Required("node_token"): str,
+                    vol.Required("name"): str,
+                    vol.Optional("area", default=""): str,
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_authenticate_gateway(
         self, user_input: dict[str, Any] | None = None

@@ -33,6 +33,8 @@ REPORTING_TIMEOUTS = {
 DEFAULT_REPORTING_TIMEOUT = 60 * 60
 RECEIVER_DEDUPLICATION_SECONDS = 0.25
 REGISTRY_MODELS = {"HCS026FRF", "HTV145FRF"}
+RADIO_NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
+RADIO_NODE_TOKEN = re.compile(r"[0-9a-fA-F]{64}\Z")
 _UNSET = object()
 
 
@@ -101,13 +103,23 @@ class Gateway:
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
         with self._lock:
+            managed_node_ids = {
+                str(item["node_id"])
+                for item in (self._store.radio_nodes() if self._store else [])
+            }
+            all_node_ids = managed_node_ids | set(self._nodes)
             return {
                 "api_version": API_VERSION,
                 "gateway_id": self.gateway_id,
                 "transport": self.transport,
                 "read_only": self.read_only,
                 "device_count": len(self._devices),
-                "node_count": len(self._nodes),
+                "node_count": len(all_node_ids),
+                "connected_node_count": sum(
+                    self._nodes.get(node_id, {}).get("connected") is True
+                    for node_id in all_node_ids
+                ),
+                "managed_node_count": len(managed_node_ids),
                 "transport_healthy": self._transport_healthy,
                 "transport_error": self._transport_error,
                 "persistent_storage": self._store is not None,
@@ -165,9 +177,99 @@ class Gateway:
     def nodes(self) -> list[dict[str, Any]]:
         """Return radio-node connection and receiver diagnostics."""
         with self._lock:
+            nodes = copy.deepcopy(self._nodes)
+            for registration in (
+                self._store.radio_nodes() if self._store else []
+            ):
+                node_id = str(registration["node_id"])
+                node = nodes.setdefault(
+                    node_id,
+                    {
+                        "node_id": node_id,
+                        "connected": False,
+                        "authenticated": False,
+                        "tx_armed": False,
+                    },
+                )
+                node.update(
+                    {
+                        "name": registration["name"],
+                        "area": registration["area"],
+                        "managed": True,
+                        "registered_at": registration["registered_at"],
+                        "updated_at": registration["updated_at"],
+                    }
+                )
             return sorted(
-                copy.deepcopy(list(self._nodes.values())),
+                list(nodes.values()),
                 key=lambda item: item["node_id"],
+            )
+
+    def import_node_credentials(self, credentials: dict[str, str]) -> None:
+        """Migrate legacy add-on option credentials into managed storage."""
+        if not self._store:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            for node_id, token in credentials.items():
+                self._validate_radio_node_identity(node_id, token)
+                self._store.upsert_radio_node(
+                    node_id=node_id,
+                    token=token.lower(),
+                    name=node_id,
+                    area=None,
+                    updated_at=now,
+                    replace_existing=False,
+                )
+
+    def radio_node_credential(self, node_id: str) -> str | None:
+        """Return one private node credential to the listener only."""
+        if not self._store:
+            return None
+        with self._lock:
+            return self._store.radio_node_credentials().get(node_id)
+
+    def register_radio_node(
+        self,
+        *,
+        node_id: str,
+        token: str,
+        name: str,
+        area: str | None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Register an independently authenticated custom local radio node."""
+        if not self._store:
+            raise RuntimeError("persistent radio-node registry is unavailable")
+        node_id = node_id.strip().lower()
+        token = token.strip().lower()
+        name = name.strip()
+        if not name or len(name) > 100:
+            raise ValueError("radio-node name must be 1 to 100 characters")
+        if area is not None:
+            area = area.strip() or None
+            if area is not None and len(area) > 100:
+                raise ValueError("radio-node area must be at most 100 characters")
+        self._validate_radio_node_identity(node_id, token)
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            return self._store.upsert_radio_node(
+                node_id=node_id,
+                token=token,
+                name=name,
+                area=area,
+                updated_at=timestamp,
+                replace_existing=True,
+            )
+
+    @staticmethod
+    def _validate_radio_node_identity(node_id: str, token: str) -> None:
+        """Validate the stable ESP32 identity and 256-bit node credential."""
+        if not RADIO_NODE_ID.fullmatch(node_id):
+            raise ValueError("invalid radio-node ID")
+        if not RADIO_NODE_TOKEN.fullmatch(token):
+            raise ValueError(
+                "radio-node token must contain 64 hexadecimal characters"
             )
 
     def receivers(self) -> list[dict[str, Any]]:

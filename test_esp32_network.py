@@ -155,6 +155,63 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_authenticated_node_health_is_validated(self) -> None:
+        connection, stream, _ = self._connect(NODE_A, TOKEN_A)
+        stream.write(
+            json.dumps(
+                {
+                    "type": "node_health",
+                    "node_id": NODE_A,
+                    "uptime_seconds": 60,
+                    "free_heap_bytes": 210000,
+                    "minimum_free_heap_bytes": 190000,
+                    "largest_free_block_bytes": 150000,
+                    "cpu_frequency_mhz": 240,
+                    "device_temperature_c": 43.5,
+                    "maximum_loop_gap_ms": 4,
+                    "reset_reason_code": 1,
+                    "ip_address": "192.168.9.210",
+                    "wifi_rssi_dbm": -61,
+                    "network_bytes_sent": 1234,
+                    "network_bytes_received": 567,
+                    "wifi_reconnects": 1,
+                    "gateway_connect_attempts": 2,
+                    "gateway_authentications": 1,
+                }
+            ).encode()
+            + b"\n"
+        )
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("uptime_seconds") == 60:
+                break
+            time.sleep(0.01)
+        self.assertEqual("192.168.9.210", node["ip_address"])
+        self.assertEqual(-61, node["wifi_rssi_dbm"])
+        self.assertEqual(43.5, node["device_temperature_c"])
+        self.assertEqual(1234, node["network_bytes_sent"])
+        self.assertEqual(1, node["gateway_authentications"])
+
+        stream.write(
+            json.dumps(
+                {
+                    "type": "node_health",
+                    "node_id": NODE_A,
+                    "ip_address": "not-an-address",
+                    "wifi_rssi_dbm": 40,
+                    "device_temperature_c": 500,
+                }
+            ).encode()
+            + b"\n"
+        )
+        time.sleep(0.02)
+        node = self.gateway.nodes()[0]
+        self.assertEqual("192.168.9.210", node["ip_address"])
+        self.assertEqual(-61, node["wifi_rssi_dbm"])
+        self.assertEqual(43.5, node["device_temperature_c"])
+        stream.close()
+        connection.close()
+
     def test_v1_node_cannot_claim_transmit_capability_or_armed_state(self) -> None:
         for capabilities, tx_armed in ((["rx", "tx"], False), (["rx"], True)):
             with self.subTest(capabilities=capabilities, tx_armed=tx_armed):
@@ -338,6 +395,23 @@ class ESP32NetworkTest(unittest.TestCase):
         for value in ("[]", '{"bad":"' + TOKEN_A + '"}', "not-json"):
             with self.assertRaises(ValueError):
                 load_node_tokens(value)
+
+    def test_option_credentials_migrate_once_to_managed_registry(self) -> None:
+        managed = {item["node_id"]: item for item in self.gateway.nodes()}
+        self.assertTrue(managed[NODE_A]["managed"])
+        self.assertTrue(managed[NODE_B]["managed"])
+        self.assertEqual(TOKEN_A, self.gateway.radio_node_credential(NODE_A))
+
+        self.gateway.register_radio_node(
+            node_id=NODE_A,
+            token="cd" * 32,
+            name="Renamed Node",
+            area="Garden",
+        )
+        self.gateway.import_node_credentials({NODE_A: TOKEN_A})
+        self.assertEqual("cd" * 32, self.gateway.radio_node_credential(NODE_A))
+        managed = {item["node_id"]: item for item in self.gateway.nodes()}
+        self.assertEqual("Renamed Node", managed[NODE_A]["name"])
 
 
 if __name__ == "__main__":

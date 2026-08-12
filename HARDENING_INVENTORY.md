@@ -8,9 +8,9 @@ pairing through Home Assistant.
 
 Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.13.0
-- `rainpoint_local` integration 0.3.2
-- ESP32 bridge firmware 0.4.0
+- `rainpointd` add-on 0.14.0
+- `rainpoint_local` integration 0.4.0
+- ESP32 bridge firmware 0.5.0
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
 - persistent registry-backed HCS026 identity and removal policy
@@ -18,6 +18,7 @@ Snapshot reviewed and deployed on 2026-08-11:
 - versioned SQLite schema, durable device snapshots, bounded event retention,
   and receiver-specific coverage metrics
 - integration-owned entity disabling for gateway-removed devices
+- persistent managed radio-node identities and HA diagnostic devices
 
 The objective is not to discard the research record. Captures, recovered
 fixtures, and safety tests are evidence that should remain reproducible. The
@@ -108,7 +109,7 @@ manual credential copying outside Supervisor installations.
 
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
-| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v3 adds transactional migration, indexed event queries, durable latest-device snapshots, configurable bounded retention, and per-receiver coverage while preserving inventory, registry, suppression, and enrollment state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
+| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v4 adds transactional migration, durable snapshots, bounded retention, per-receiver coverage, and managed radio nodes while preserving device registry, suppression, and enrollment state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
 | `rainpointd_addon/rainpointd/pairing.py` | Production candidate | The state machine uses an enrollment repository; legacy JSON mappings are conflict-checked, imported once into SQLite, and archived as `.migrated` | Add schema-versioned migration coverage and keep transient pairing windows deliberately in memory |
 | Gateway `_devices` memory | Prototype with removal policy | Accepted and compatibility devices remain observable; a persisted removed endpoint is retained as raw RF only and cannot recreate a device until accepted again | Expand this into explicit observed, paired, accepted, ignored, and removed states, then make HA exposure/reconciliation consume that policy |
 
@@ -128,10 +129,10 @@ manual credential copying outside Supervisor installations.
 | `firmware/rainpoint_bridge/src/main.cpp` | Mixed monolith | RF scanning, frame output, pairing state, TX timing, serial CLI, and network command handling share one large file | Split radio receive, pairing engine, command policy, diagnostics, and application orchestration into testable units |
 | `firmware/rainpoint_bridge/include/rainpoint_pairing.h` | Experimental runtime | Strong bounded state machine, but compiled around a fixed recovered Sensor B sequence | Keep the state machine; inject validated profile data and endpoint identities through a constrained profile interface |
 | Serial commands in `main.cpp` | Isolated research tooling | `pairing_probe_b`, `pairing_arm_b`, clock, polarity, frequency, power, and channel controls compile only in `esp32dev_single_bench`; CI checks the binary boundary | Keep the research target explicit and never ship it as the default image |
-| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Provisioning is a tab-delimited serial command; credentials/token are stored in NVS; JSON parsing is manual string scanning; transport is plain TCP | Add user-facing commissioning, robust serialization, secure credential storage where supported, credential rotation, and OTA/rollback design |
+| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Factory firmware now creates a physical-serial setup token and reports bounded node health, but Wi-Fi provisioning remains tab-delimited, JSON parsing is manual, and transport is plain TCP | Replace serial commissioning with a temporary AP or BLE exchange, robust serialization, credential rotation, and OTA/rollback design |
 | Channel diagnostics | Debug behavior | The single-radio build emits frequent `radio_channel` records while scanning, producing high serial/network volume | Rate-limit or aggregate channel state; expose diagnostics on demand rather than per dwell change |
 | `esp32dev_dual` environment | Diagnostic build | Optional second radio is not the target distributed-node architecture | Keep only as an explicitly diagnostic CI build or move to a research PlatformIO environment |
-| Firmware update path | Missing production function | No signed OTA, compatibility negotiation, rollback, or fleet version management exists | Define this before distributed nodes are treated as appliances |
+| Firmware update path | Missing production function | Firmware 0.5 remains USB-flashed; no signed OTA, compatibility negotiation, rollback, or fleet version management exists | Define this before distributed nodes are treated as appliances |
 
 ## Home Assistant integration inventory
 
