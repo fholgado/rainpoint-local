@@ -766,6 +766,39 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("identify_start", commands[0][1]["type"])
         self.assertNotIn("valve", json.dumps(commands[0][1]))
 
+    def test_adoption_api_issues_temporary_secret_without_public_exposure(self) -> None:
+        started = self.post_json(
+            "/api/v1/nodes/adoptions/start",
+            {
+                "node_id": "rp-102030405060",
+                "name": "Side Garden Radio",
+                "area": "Side Garden",
+                "duration_seconds": 300,
+            },
+        )
+        self.assertEqual(64, len(started["node_token"]))
+        status = self.post_json(
+            "/api/v1/nodes/adoptions/status",
+            {"node_id": "rp-102030405060"},
+        )
+        self.assertEqual("waiting_for_node", status["state"])
+        self.assertNotIn("token", json.dumps(status))
+        with urlopen(f"{self.base}/api/v1/nodes", timeout=2) as response:
+            public_nodes = json.load(response)
+        self.assertNotIn(started["node_token"], json.dumps(public_nodes))
+        cancelled = self.post_json(
+            "/api/v1/nodes/adoptions/cancel",
+            {"node_id": "rp-102030405060"},
+        )
+        self.assertTrue(cancelled["cancelled"])
+        self.assertEqual(
+            "not_found",
+            self.post_json(
+                "/api/v1/nodes/adoptions/status",
+                {"node_id": "rp-102030405060"},
+            )["state"],
+        )
+
     def test_learning_api_is_receive_only(self) -> None:
         result = self.post_json(
             "/api/v1/learning", {"duration_seconds": 60}

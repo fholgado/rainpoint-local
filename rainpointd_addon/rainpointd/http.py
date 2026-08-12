@@ -113,6 +113,35 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     self._json(201, {"node": result})
                     return
+                if parsed.path == f"{base}/nodes/adoptions/start":
+                    result = self.server.gateway.start_radio_node_adoption(
+                        node_id=str(body.get("node_id", "")),
+                        name=str(body.get("name", "")),
+                        area=(
+                            str(body["area"])
+                            if body.get("area") is not None
+                            else None
+                        ),
+                        duration_seconds=int(body.get("duration_seconds", 300)),
+                    )
+                    self._json(201, result)
+                    return
+                if parsed.path == f"{base}/nodes/adoptions/status":
+                    self._json(
+                        200,
+                        self.server.gateway.radio_node_adoption(
+                            str(body.get("node_id", ""))
+                        ),
+                    )
+                    return
+                if parsed.path == f"{base}/nodes/adoptions/cancel":
+                    self._json(
+                        200,
+                        self.server.gateway.cancel_radio_node_adoption(
+                            str(body.get("node_id", ""))
+                        ),
+                    )
+                    return
                 node_prefix = f"{base}/nodes/"
                 node_suffix = parsed.path[len(node_prefix) :]
                 node_id, separator, node_action = node_suffix.rpartition("/")

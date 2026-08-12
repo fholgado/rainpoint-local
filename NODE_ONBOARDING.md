@@ -68,6 +68,20 @@ commissioning window, much like permitting joins on a Zigbee network.
 The manual USB setup-code path remains available only as an advanced recovery
 path when captive-portal or LAN discovery fails.
 
+### Implemented adoption contract
+
+The custom local gateway now owns the credential boundary required by this
+flow. An authenticated HA request can create a five-minute adoption session
+for one discovered ESP32 identity. The response gives HA a one-time credential
+to deliver to the physically confirmed node; public node and adoption status
+never expose it. The gateway accepts that credential only for the named node
+and persists it in the managed registry only after the first successful mutual
+authentication. Cancellation or expiry invalidates an uncommitted credential.
+
+The temporary setup portal, LAN advertisement, BOOT-button confirmation, and
+HA discovery UI remain the next implementation slice. Until those pieces are
+verified together, the manual USB flow remains available and visible.
+
 Adding another node repeats the same flow; it does not create another HA
 integration entry or another logical device network.
 

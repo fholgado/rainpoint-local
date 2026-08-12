@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hmac
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -99,6 +100,7 @@ class Gateway:
         ) = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_command_id: str | None = None
+        self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -228,6 +230,116 @@ class Gateway:
             return None
         with self._lock:
             return self._store.radio_node_credentials().get(node_id)
+
+    def pending_radio_node_credential(self, node_id: str) -> str | None:
+        """Return one unexpired adoption credential to the node listener."""
+        with self._lock:
+            adoption = self._pending_node_adoptions.get(node_id)
+            if adoption is None:
+                return None
+            if time.monotonic() >= adoption["expires_monotonic"]:
+                self._pending_node_adoptions.pop(node_id, None)
+                return None
+            return str(adoption["token"])
+
+    def start_radio_node_adoption(
+        self,
+        *,
+        node_id: str,
+        name: str,
+        area: str | None,
+        duration_seconds: int = 300,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Issue a temporary credential for one physically confirmed node."""
+        if not self._store:
+            raise RuntimeError("persistent radio-node registry is unavailable")
+        node_id = node_id.strip().lower()
+        name = name.strip()
+        if not RADIO_NODE_ID.fullmatch(node_id):
+            raise ValueError("invalid radio-node ID")
+        if not name or len(name) > 100:
+            raise ValueError("radio-node name must be 1 to 100 characters")
+        if area is not None:
+            area = area.strip() or None
+            if area is not None and len(area) > 100:
+                raise ValueError("radio-node area must be at most 100 characters")
+        if not 60 <= duration_seconds <= 600:
+            raise ValueError("duration_seconds must be between 60 and 600")
+        if self.radio_node_credential(node_id) is not None:
+            raise ValueError("radio node is already adopted")
+        issued_at = now or datetime.now(timezone.utc)
+        token = secrets.token_hex(32)
+        adoption = {
+            "adoption_id": uuid.uuid4().hex,
+            "node_id": node_id,
+            "token": token,
+            "name": name,
+            "area": area,
+            "issued_at": issued_at.isoformat(),
+            "expires_at": (
+                issued_at + timedelta(seconds=duration_seconds)
+            ).isoformat(),
+            "expires_monotonic": time.monotonic() + duration_seconds,
+        }
+        with self._lock:
+            self._pending_node_adoptions[node_id] = adoption
+        return {
+            "adoption_id": adoption["adoption_id"],
+            "node_id": node_id,
+            "node_token": token,
+            "expires_at": adoption["expires_at"],
+        }
+
+    def radio_node_adoption(self, node_id: str) -> dict[str, Any]:
+        """Return public progress for one pending or completed adoption."""
+        node_id = node_id.strip().lower()
+        with self._lock:
+            adoption = self._pending_node_adoptions.get(node_id)
+            if adoption is not None:
+                if time.monotonic() >= adoption["expires_monotonic"]:
+                    self._pending_node_adoptions.pop(node_id, None)
+                    return {"node_id": node_id, "state": "expired"}
+                return {
+                    "adoption_id": adoption["adoption_id"],
+                    "node_id": node_id,
+                    "state": "waiting_for_node",
+                    "expires_at": adoption["expires_at"],
+                }
+            managed = self._store.radio_node_credentials() if self._store else {}
+            return {
+                "node_id": node_id,
+                "state": "adopted" if node_id in managed else "not_found",
+            }
+
+    def complete_radio_node_adoption(self, node_id: str) -> dict[str, Any] | None:
+        """Persist a pending credential after its first authenticated session."""
+        if not self._store:
+            return None
+        with self._lock:
+            adoption = self._pending_node_adoptions.get(node_id)
+            if adoption is None:
+                return None
+            if time.monotonic() >= adoption["expires_monotonic"]:
+                self._pending_node_adoptions.pop(node_id, None)
+                return None
+            registered = self._store.upsert_radio_node(
+                node_id=node_id,
+                token=adoption["token"],
+                name=adoption["name"],
+                area=adoption["area"],
+                updated_at=datetime.now(timezone.utc).isoformat(),
+                replace_existing=False,
+            )
+            self._pending_node_adoptions.pop(node_id, None)
+            return registered
+
+    def cancel_radio_node_adoption(self, node_id: str) -> dict[str, Any]:
+        """Invalidate one uncommitted adoption credential."""
+        node_id = node_id.strip().lower()
+        with self._lock:
+            cancelled = self._pending_node_adoptions.pop(node_id, None) is not None
+        return {"node_id": node_id, "state": "cancelled", "cancelled": cancelled}
 
     def identify_radio_node(
         self, node_id: str, duration_seconds: int = 15

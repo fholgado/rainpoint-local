@@ -106,6 +106,43 @@ class RainPointLocalClient:
             token,
         )
 
+    async def start_radio_node_adoption(
+        self,
+        token: str,
+        *,
+        node_id: str,
+        name: str,
+        area: str | None,
+        duration_seconds: int = 300,
+    ) -> dict[str, Any]:
+        """Create a temporary gateway credential for an adoptable node."""
+        return await self._post(
+            "nodes/adoptions/start",
+            {
+                "node_id": node_id,
+                "name": name,
+                "area": area,
+                "duration_seconds": duration_seconds,
+            },
+            token,
+        )
+
+    async def radio_node_adoption(
+        self, token: str, node_id: str
+    ) -> dict[str, Any]:
+        """Return adoption progress without exposing its credential."""
+        return await self._post(
+            "nodes/adoptions/status", {"node_id": node_id}, token
+        )
+
+    async def cancel_radio_node_adoption(
+        self, token: str, node_id: str
+    ) -> dict[str, Any]:
+        """Invalidate an unfinished node adoption."""
+        return await self._post(
+            "nodes/adoptions/cancel", {"node_id": node_id}, token
+        )
+
     async def start_pairing(
         self, token: str, duration_seconds: int = 120, *, node_id: str
     ) -> dict[str, Any]:

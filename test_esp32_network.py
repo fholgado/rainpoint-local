@@ -27,6 +27,7 @@ FRAME = (
 )
 NODE_A = "rp-001122334455"
 NODE_B = "rp-aabbccddeeff"
+NODE_C = "rp-102030405060"
 TOKEN_A = "01" * 32
 TOKEN_B = "ab" * 32
 
@@ -375,6 +376,36 @@ class ESP32NetworkTest(unittest.TestCase):
             self.gateway.identify_radio_node(NODE_A)
         legacy_stream.close()
         legacy_connection.close()
+
+    def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
+        adoption = self.gateway.start_radio_node_adoption(
+            node_id=NODE_C,
+            name="Front Garden Radio",
+            area="Front Garden",
+        )
+        self.assertEqual(
+            adoption["node_token"],
+            self.gateway.pending_radio_node_credential(NODE_C),
+        )
+        connection, stream, response = self._connect(
+            NODE_C,
+            adoption["node_token"],
+            protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "identify"],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        self.assertEqual("adopted", self.gateway.radio_node_adoption(NODE_C)["state"])
+        self.assertEqual(
+            adoption["node_token"], self.gateway.radio_node_credential(NODE_C)
+        )
+        self.assertIsNone(self.gateway.pending_radio_node_credential(NODE_C))
+        managed = next(
+            node for node in self.gateway.nodes() if node["node_id"] == NODE_C
+        )
+        self.assertEqual("Front Garden Radio", managed["name"])
+        self.assertNotIn("token", managed)
+        stream.close()
+        connection.close()
 
     def test_command_boundary_rejects_unbounded_rf_actions(self) -> None:
         connection, stream, _ = self._connect(

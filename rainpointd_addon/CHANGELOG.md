@@ -8,6 +8,10 @@
   compatibility with firmware 0.5 nodes.
 - Expose node identification through the authenticated management API for the
   Home Assistant device button and future discovery/adoption flow.
+- Add the gateway-managed adoption-session core: temporary per-node
+  credentials are issued through the authenticated API, remain absent from
+  public status, can be cancelled, and persist only after the node's first
+  successful mutual-authentication handshake.
 
 ## 0.14.0
 

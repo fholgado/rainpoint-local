@@ -224,6 +224,7 @@ class ESP32NetworkServer:
                     token.encode(), server_payload, hashlib.sha256
                 ).hexdigest()
             self._send(stream, authenticated_message)
+            self.gateway.complete_radio_node_adoption(node_id)
             now = _timestamp()
             self.gateway.update_node(
                 node_id,
@@ -369,8 +370,10 @@ class ESP32NetworkServer:
 
     def _credential(self, node_id: str) -> str | None:
         """Resolve a managed credential with an ephemeral-test fallback."""
-        return self.gateway.radio_node_credential(node_id) or self.node_tokens.get(
-            node_id
+        return (
+            self.gateway.radio_node_credential(node_id)
+            or self.gateway.pending_radio_node_credential(node_id)
+            or self.node_tokens.get(node_id)
         )
 
     @staticmethod
