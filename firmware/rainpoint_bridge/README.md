@@ -14,14 +14,15 @@ message `03`. It remains separate from `esp32dev_single` while the profiles are
 generalized beyond the two test identities.
 
 The `esp32dev_pairing_generalization` environment is the validated two-identity
-test build. It accepts either captured test identity, assigns pairing selector 4
-to Sensor B and selector 5 to Sensor A, and rewrites reply 1 plus all follow-up
-frequencies from the inferred 110 kHz channel plan. Both physical sensors
-completed terminal confirmation and telemetry on their assigned channels on
-August 12, 2026. This proves reassignment but not that selectors must be unique.
-Keep this environment separate from the normal production target until a
-same-selector coexistence test establishes whether the gateway should allocate
-selectors uniquely or may safely reuse them.
+test build. It accepts either captured test identity and rewrites reply 1 plus
+all follow-up frequencies from the inferred 110 kHz channel plan. Version
+`0.7.0-test.1` validated Sensor B on selector 4 and Sensor A on selector 5.
+Version `0.7.0-test.2` deliberately assigns selector 4 to both identities for
+the controlled same-selector coexistence test. Both sensors subsequently
+reported as distinct identities on selector 4, proving that the selector can be
+shared and must not be allocated as a unique device slot. Keep this environment
+separate from the normal production target because its accepted identities and
+reply profiles remain explicitly bounded to the two captured test sensors.
 
 ## Wiring
 

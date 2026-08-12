@@ -55,10 +55,19 @@ Sensor B on selector 4 and Sensor A on selector 5. Both sensors echoed their
 assigned selector, emitted terminal message `03`, resumed telemetry, and gave
 the long blue success indication while the stock RainPoint gateway remained
 unplugged. This proves that the selector is negotiated, but not that it must be
-unique per association. [HWG023-family documentation](https://manuals.plus/asin/B0DS2FDP62.pdf)
-advertises up to 39 paired timers/devices, invalidating the earlier eight-device inference. The next
-controlled test should pair both sensors on selector 4, leave both powered, and
-measure whether their identity-addressed telemetry coexists without loss.
+unique per association.
+
+The follow-up same-selector test passed on August 12. Sensor A successfully
+enrolled on selector 4 while Sensor B remained paired and powered on selector
+4. Sensor B then reported 5% moisture and Sensor A reported 85%; the local
+gateway decoded both under their distinct identities and both frames echoed
+selector 4. Selector reuse is therefore supported and pairing logic must not
+reserve a unique selector per device. Leave both sensors powered for longer
+unattended observation of delivery cadence and collisions.
+
+[HWG023-family documentation](https://manuals.plus/asin/B0DS2FDP62.pdf)
+advertises up to 39 paired timers/devices, invalidating the earlier eight-device
+inference.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py

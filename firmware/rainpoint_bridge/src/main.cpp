@@ -667,12 +667,9 @@ void handleNetworkCommand() {
 
     activePairingProfile = *requestedProfile;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
-    // Controlled-test allocation: keep the two known associations on unique
-    // selectors while proving that neither identity is tied to its captured
-    // stock selector. Sensor B uses the known-good first selector; Sensor A
-    // exercises the next free selector.
-    pairingAssignedChannel =
-        profile == rainpoint::kSensorAHcs026CandidateProfile.id ? 5 : 4;
+    // Same-selector coexistence is physically validated: addressed sensors can
+    // share one RF channel, so selector allocation must not imply uniqueness.
+    pairingAssignedChannel = 4;
     if (!rainpoint::assignPairingChannel(
         activePairingProfile, pairingAssignedChannel
     )) {

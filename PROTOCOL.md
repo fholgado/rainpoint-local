@@ -174,12 +174,19 @@ requested selector, completed its full enrollment exchange, produced the long
 blue success indication, and resumed telemetry with the stock gateway
 unplugged. Sensor B had previously paired on selector 8, proving that selectors
 are association parameters rather than fixed properties of device identity.
-These tests do **not** prove that simultaneous associations require unique
-selectors. Current [HWG023-family product literature](https://manuals.plus/asin/B0DS2FDP62.pdf)
+
+A subsequent controlled test paired Sensor A on selector 4 while Sensor B was
+already paired and powered on selector 4. With the stock RainPoint gateway
+unplugged, Sensor B reported 5% moisture and Sensor A immediately followed with
+an 85% report. The local gateway decoded both as their distinct addressed
+identities, and both frames echoed selector 4. This proves that selectors may
+be shared by multiple associations and are not unique device slots. Longer
+unattended observation remains useful for measuring collision and delivery
+reliability, but local pairing must not enforce selector uniqueness.
+
+Current [HWG023-family product literature](https://manuals.plus/asin/B0DS2FDP62.pdf)
 advertises support for up to 39 timers or irrigation devices, so the earlier
-eight-device inference from selectors 4–11 was incorrect. Before designing allocation persistence, pair
-both test sensors on selector 4 and verify that their identities still separate
-their reports and that each continues reporting reliably.
+eight-device inference from selectors 4–11 was incorrect.
 
 ### Related rtl_433 work
 
