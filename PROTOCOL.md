@@ -428,6 +428,18 @@ receive-only.
 
 ## HCS026FRF soil-moisture reports
 
+### Product identity confidence
+
+The moisture layout and enrollment signature establish compatibility with the
+HCS02x RF protocol family, but do not alone establish an exact retail model.
+New local enrollments are therefore stored as `HCS02x-compatible soil sensor`
+until packet evidence identifies a catalogued product. Product code `0x48`
+maps to `HCS026FRF`; model code `0x013d` will map to the same product if it is
+observed in a future frame. The gateway persists the code and evidence source
+and rejects contradictory product/model identifiers. Trusted cloud-migration
+metadata may also supply a model, but remains distinguishable from RF-derived
+identification.
+
 Data-rich HCS026FRF frames carry a packed moisture value at one of two body
 positions. The decoder looks for a marker whose low seven bits equal `0x44`.
 The following byte contains half the percentage and the high bit of the next

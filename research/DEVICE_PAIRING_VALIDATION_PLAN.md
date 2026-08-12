@@ -69,14 +69,14 @@ unattended observation of delivery cadence and collisions.
 advertises up to 39 paired timers/devices, invalidating the earlier eight-device
 inference.
 
-Firmware `0.7.0-test.3` and gateway app `0.17.0` now contain the offline-tested
-`hcs026_auto_v1` candidate. Home Assistant supplies neither a factory identity
+Firmware `0.7.0-test.3` and gateway app `0.18.0` contain the
+`hcs026_auto_v1` workflow. Home Assistant supplies neither a factory identity
 nor an identity-specific transcript. The selected node adopts the first strict
 HCS026 factory announcement, derives its paired identity, and generates the
-common four-reply first-enrollment branch on shared selector 4. Before S2, run
-this path once with each test sensor from factory state and retain the same RF
-evidence required by S1. Passing the earlier identity-specific profiles does
-not count as physical validation of automatic adoption.
+common four-reply first-enrollment branch on shared selector 4. Sensor A passed
+this automatic path end to end on August 12, including HA naming and entity
+creation. Repeat it with Sensor B before S2 and retain the same RF evidence
+required by S1.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py

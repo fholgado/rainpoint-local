@@ -10,8 +10,8 @@ limits. The target system has no internet-service or vendor-app dependency.
 ## Current status
 
 This project has a working receive-only SDR deployment, a physically validated
-two-identity ESP32/CC1101 enrollment prototype, and an offline-tested automatic
-HCS026 pairing candidate. The RF frame format, soil
+two-identity ESP32/CC1101 enrollment prototype, and a physically validated
+automatic HCS026 pairing path. The RF frame format, soil
 moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
 duration, and last-session water usage are confirmed. Test Sensor B has been
 paired entirely through the local transmitter and subsequently reported an
@@ -23,6 +23,9 @@ Working now:
 - decoding live and captured HCS026FRF soil-moisture RF frames,
 - discovering HCS026FRF sensors from validated paired telemetry rather than a
   household-specific endpoint list,
+- identifying newly paired soil sensors first by their HCS02x RF protocol
+  family, then promoting the exact `HCS026FRF` model only when a validated
+  packet supplies product code `0x48` or model code `0x013d`,
 - reporting the confirmed full/low battery flag used by newly tested HCS026
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
@@ -66,8 +69,8 @@ Still provisional or not working yet:
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
-- physically validating the automatic model-level pairing candidate before
-  claiming arbitrary-identity HCS026 enrollment,
+- repeating the physically validated automatic model-level pairing workflow
+  on a second independent identity before claiming broad HCS026 support,
 - implementing and validating routine post-enrollment sensor acknowledgements,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,

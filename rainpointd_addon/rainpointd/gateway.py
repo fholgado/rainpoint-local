@@ -23,6 +23,17 @@ from .pairing_protocol import (
     automatic_hcs026_profile_metadata,
     pairing_profile,
 )
+from .product_identity import (
+    GENERIC_HCS02X_MODEL,
+    HCS026_MODEL,
+    HCS02X_PROTOCOL,
+    HTV145_MODEL,
+    PRODUCT_MODELS,
+    ProductIdentity,
+    hcs02x_identity,
+    is_hcs02x_sensor,
+    product_for_model,
+)
 from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
     SQLiteEventStore,
@@ -32,12 +43,16 @@ from .storage import (
 
 API_VERSION = "v1"
 REPORTING_TIMEOUTS = {
-    "HCS026FRF": 15 * 60,
-    "HTV145FRF": 6 * 60 * 60,
+    HCS026_MODEL: 15 * 60,
+    HTV145_MODEL: 6 * 60 * 60,
 }
+PROTOCOL_REPORTING_TIMEOUTS = {HCS02X_PROTOCOL: 15 * 60}
 DEFAULT_REPORTING_TIMEOUT = 60 * 60
 RECEIVER_DEDUPLICATION_SECONDS = 0.25
-REGISTRY_MODELS = {"HCS026FRF", "HTV145FRF"}
+REGISTRY_MODELS = {
+    GENERIC_HCS02X_MODEL,
+    *(product.model for product in PRODUCT_MODELS),
+}
 RADIO_NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 RADIO_NODE_TOKEN = re.compile(r"[0-9a-fA-F]{64}\Z")
 _UNSET = object()
@@ -658,6 +673,23 @@ class Gateway:
                 if registered := registry.get(device_id):
                     device["name"] = registered["name"]
                     device["area"] = registered["area"]
+                    device["model"] = registered["model"]
+                    state = device.setdefault("state", {})
+                    if registered.get("protocol"):
+                        state["rf_protocol_family"] = registered["protocol"]
+                    if registered.get("model_source"):
+                        state["product_model_source"] = registered[
+                            "model_source"
+                        ]
+                    if registered.get("product_code") is not None:
+                        state["rf_product_code"] = registered["product_code"]
+                    if registered.get("model_code") is not None:
+                        state["rf_model_code"] = registered["model_code"]
+                if is_hcs02x_sensor(
+                    model=device.get("model"),
+                    protocol=device.get("state", {}).get("rf_protocol_family"),
+                ):
+                    device["capabilities"] = ["forget", "soil_moisture"]
                 device.update(
                     {
                         key: value
@@ -985,13 +1017,50 @@ class Gateway:
                 if existing_sensor is not None
                 else f"hcs026-{endpoint}"
             )
+            identity = hcs02x_identity(
+                {},
+                trusted_model=(
+                    existing_sensor.model if existing_sensor is not None else None
+                ),
+            )
+            try:
+                existing_registration = self._store.registry_endpoint(endpoint)
+            except KeyError:
+                existing_registration = None
+            if (
+                existing_registration is not None
+                and str(existing_registration.get("model_source", "")).startswith(
+                    "rf_"
+                )
+            ):
+                registration_model = str(existing_registration["model"])
+                registration_protocol = str(
+                    existing_registration.get("protocol") or identity.protocol
+                )
+                registration_source = str(
+                    existing_registration["model_source"]
+                )
+                registration_product_code = existing_registration.get(
+                    "product_code"
+                )
+                registration_model_code = existing_registration.get("model_code")
+            else:
+                registration_model = identity.model
+                registration_protocol = identity.protocol
+                registration_source = identity.source
+                registration_product_code = identity.product_code
+                registration_model_code = identity.model_code
             registered = self._store.accept_endpoint(
                 endpoint=endpoint,
                 device_id=device_id,
                 name=name,
-                model="HCS026FRF",
+                model=registration_model,
                 area=area,
                 accepted_at=timestamp,
+                protocol=registration_protocol,
+                model_source=registration_source,
+                product_code=registration_product_code,
+                model_code=registration_model_code,
             )
             self._refresh_registry_catalog()
             self._ensure_registered_sensor_devices()
@@ -1003,6 +1072,45 @@ class Gateway:
             self._cancel_active_pairing_node()
             self._pairing.stop()
             return registered
+
+    def confirm_product_identity(
+        self,
+        *,
+        endpoint: str,
+        identity: ProductIdentity,
+        observed_at: str | None = None,
+    ) -> None:
+        """Persist an exact product identity inferred from RF evidence."""
+        if not identity.exact_model or not identity.source.startswith("rf_"):
+            return
+        with self._lock:
+            if self._store is None:
+                return
+            try:
+                existing = self._store.registry_endpoint(endpoint)
+            except KeyError:
+                return
+            if (
+                existing.get("model") == identity.model
+                and existing.get("model_source") == identity.source
+                and existing.get("product_code") == identity.product_code
+                and existing.get("model_code") == identity.model_code
+            ):
+                return
+            timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+            self._store.update_registry_product_identity(
+                endpoint,
+                model=identity.model,
+                protocol=identity.protocol,
+                model_source=identity.source,
+                product_code=identity.product_code,
+                model_code=identity.model_code,
+                updated_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            device_id = str(existing["device_id"])
+            if device_id in self._devices:
+                self._devices[device_id]["model"] = identity.model
 
     def _observe_pairing(self, state: dict[str, Any], timestamp: str) -> None:
         """Feed accepted normalized enrollment fields to the state machine."""
@@ -1089,9 +1197,41 @@ class Gateway:
                 raise KeyError(endpoint)
             existing_sensor = (
                 self.catalog.sensor(endpoint)
-                if model == "HCS026FRF"
+                if is_hcs02x_sensor(model=model)
                 else None
             )
+            product = product_for_model(model)
+            protocol = (
+                HCS02X_PROTOCOL
+                if is_hcs02x_sensor(model=model)
+                else product.protocol if product is not None else None
+            )
+            try:
+                existing_registration = self._store.registry_endpoint(endpoint)
+            except KeyError:
+                existing_registration = None
+            if (
+                existing_registration is not None
+                and str(existing_registration.get("model_source", "")).startswith(
+                    "rf_"
+                )
+            ):
+                if model not in {
+                    GENERIC_HCS02X_MODEL,
+                    existing_registration["model"],
+                }:
+                    raise ValueError(
+                        "requested model conflicts with packet-derived identity"
+                    )
+                model = str(existing_registration["model"])
+                protocol = existing_registration.get("protocol")
+                model_source = str(existing_registration["model_source"])
+                product_code = existing_registration.get("product_code")
+                model_code = existing_registration.get("model_code")
+            else:
+                model_source = "user_or_catalog"
+                product_code = None
+                model_code = None
             registered = self._store.accept_endpoint(
                 endpoint=endpoint,
                 device_id=(
@@ -1103,6 +1243,10 @@ class Gateway:
                 model=model,
                 area=area,
                 accepted_at=timestamp,
+                protocol=protocol,
+                model_source=model_source,
+                product_code=product_code,
+                model_code=model_code,
             )
             self._refresh_registry_catalog()
             self._ensure_registered_sensor_devices()
@@ -1152,7 +1296,10 @@ class Gateway:
             sensor = self.catalog.sensor(endpoint)
             resolved_device_id = sensor.device_id if sensor else device_id
             enrollment_factory = None
-            if existing.get("model") == "HCS026FRF" and endpoint.endswith("24"):
+            if is_hcs02x_sensor(
+                model=existing.get("model"),
+                protocol=existing.get("protocol"),
+            ) and endpoint.endswith("24"):
                 try:
                     enrollment_factory = factory_endpoint(endpoint)
                 except ValueError:
@@ -1164,7 +1311,10 @@ class Gateway:
             )
             if (
                 self._pairing is not None
-                and forgotten.get("model") == "HCS026FRF"
+                and is_hcs02x_sensor(
+                    model=forgotten.get("model"),
+                    protocol=forgotten.get("protocol"),
+                )
                 and str(forgotten.get("endpoint", "")).endswith("24")
             ):
                 self._pairing.forget(
@@ -1188,13 +1338,16 @@ class Gateway:
                         "device_id": device_id,
                         "endpoint": endpoint,
                         "factory_endpoint": factory_endpoint(endpoint),
-                        "model": "HCS026FRF",
+                        "model": GENERIC_HCS02X_MODEL,
                         "already_forgotten": True,
                         "registry_record_removed": False,
                     }
                 raise KeyError(device_id)
-            if device.get("model") != "HCS026FRF":
-                raise ValueError("only HCS026 sensors can be forgotten")
+            if not is_hcs02x_sensor(
+                model=device.get("model"),
+                protocol=device.get("state", {}).get("rf_protocol_family"),
+            ):
+                raise ValueError("device does not use the HCS02x sensor protocol")
             state = device.get("state", {})
             endpoint = str(
                 state.get("rf_endpoint") or state.get("rf_paired_endpoint") or ""
@@ -1215,7 +1368,7 @@ class Gateway:
                 "endpoint": endpoint,
                 "factory_endpoint": factory,
                 "name": device.get("name", device_id),
-                "model": "HCS026FRF",
+                "model": device.get("model", GENERIC_HCS02X_MODEL),
                 "registry_record_removed": registered is not None,
             }
 
@@ -1230,7 +1383,10 @@ class Gateway:
         self.catalog = self._base_catalog.with_registry_sensors(registrations)
         metadata: dict[str, dict[str, Any]] = {}
         for registration in registrations:
-            if registration.get("model") != "HCS026FRF":
+            if not is_hcs02x_sensor(
+                model=registration.get("model"),
+                protocol=registration.get("protocol"),
+            ):
                 continue
             sensor = self.catalog.sensor(str(registration["endpoint"]))
             if sensor is not None:
@@ -1242,7 +1398,10 @@ class Gateway:
         if self._store is None:
             return
         for registration in self._store.registry():
-            if registration.get("model") != "HCS026FRF":
+            if not is_hcs02x_sensor(
+                model=registration.get("model"),
+                protocol=registration.get("protocol"),
+            ):
                 continue
             sensor = self._base_catalog.sensor(str(registration["endpoint"]))
             if (
@@ -1361,16 +1520,27 @@ class Gateway:
         if self._store is None:
             return
         for registration in self._store.registry():
-            if registration.get("model") != "HCS026FRF":
+            if not is_hcs02x_sensor(
+                model=registration.get("model"),
+                protocol=registration.get("protocol"),
+            ):
                 continue
             endpoint = str(registration["endpoint"]).lower()
             if endpoint in self._suppressed_endpoints:
                 continue
             device_id = str(registration["device_id"])
             state: dict[str, Any] = {
-                "model": "HCS026FRF",
+                "model": registration["model"],
                 "rf_endpoint": endpoint,
+                "rf_protocol_family": (
+                    registration.get("protocol") or HCS02X_PROTOCOL
+                ),
+                "product_model_source": registration.get("model_source"),
             }
+            if registration.get("product_code") is not None:
+                state["rf_product_code"] = registration["product_code"]
+            if registration.get("model_code") is not None:
+                state["rf_model_code"] = registration["model_code"]
             try:
                 factory = factory_endpoint(endpoint)
             except ValueError:
@@ -1388,7 +1558,7 @@ class Gateway:
                 {
                     "device_id": device_id,
                     "name": registration["name"],
-                    "model": "HCS026FRF",
+                    "model": registration["model"],
                     "available": False,
                     "last_event_id": 0,
                     "observed_at": None,
@@ -1403,7 +1573,11 @@ class Gateway:
     ) -> None:
         """Attach current receive status without changing device availability."""
         threshold = REPORTING_TIMEOUTS.get(
-            device.get("model"), DEFAULT_REPORTING_TIMEOUT
+            device.get("model"),
+            PROTOCOL_REPORTING_TIMEOUTS.get(
+                device.get("state", {}).get("rf_protocol_family"),
+                DEFAULT_REPORTING_TIMEOUT,
+            ),
         )
         observed_at = device.get("observed_at")
         age: float | None = None
@@ -1434,7 +1608,10 @@ class Gateway:
         """Reject obsolete auto-discoveries that predate endpoint validation."""
         if frame_accepted(event) is False:
             return False
-        if event.get("model") != "HCS026FRF":
+        if not is_hcs02x_sensor(
+            model=event.get("model"),
+            protocol=event.get("state", {}).get("rf_protocol_family"),
+        ):
             return True
         endpoint = str(event.get("state", {}).get("rf_endpoint", "")).lower()
         if endpoint in self._suppressed_endpoints:

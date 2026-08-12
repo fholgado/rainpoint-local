@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.18.0
+
+- Centralize RainPoint product codes, model codes, device kinds, and protocol
+  families in an evidence-based product identity catalog.
+- Register newly paired sensors provisionally as HCS02x-compatible instead of
+  asserting an exact retail model from frame shape alone.
+- Promote and persist `HCS026FRF` only after a validated RF product-code or
+  model-code observation, while rejecting contradictory identifiers.
+- Persist protocol, model-source, product-code, and model-code provenance in
+  additive storage schema version 5.
+- Reclassify exact HCS026 names written by older hardcoded pairing releases as
+  provisional during migration unless retained RF evidence confirms them.
+- Advertise lifecycle capabilities independently of retail model labels so
+  provisional devices can be managed safely from Home Assistant.
+- Include product-identity provenance in Home Assistant report diagnostics.
+
 ## 0.17.1
 
 - Expose a newly named HCS026 sensor immediately after pairing even when its

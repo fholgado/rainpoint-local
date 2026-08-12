@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
+from .product_identity import HCS026_MODEL
+
 
 SYNC = bytes.fromhex("79f4882f28")
 COMPANION_ENDPOINT = bytes.fromhex("39840280")
@@ -86,7 +88,7 @@ def automatic_hcs026_profile_metadata() -> dict[str, Any]:
     """Describe model-level pairing without claiming a fixed RF transcript."""
     return {
         "profile_id": AUTOMATIC_HCS026_PROFILE_ID,
-        "model": "HCS026FRF",
+        "model": HCS026_MODEL,
         "factory_endpoint": None,
         "paired_endpoint": None,
         "evidence": (
@@ -115,7 +117,7 @@ def _frame(value: str) -> bytes:
 
 VALIDATED_HCS026_PROFILE = PairingProfile(
     profile_id="hcs026_15a98024_v1",
-    model="HCS026FRF",
+    model=HCS026_MODEL,
     factory_endpoint="15a98024",
     paired_endpoint="95a98024",
     evidence="controlled successful repeat enrollment captured 2026-08-11",
@@ -147,7 +149,7 @@ VALIDATED_HCS026_PROFILE = PairingProfile(
 
 SENSOR_A_CANDIDATE_PROFILE = PairingProfile(
     profile_id="hcs026_1bce0024_candidate_v1",
-    model="HCS026FRF",
+    model=HCS026_MODEL,
     factory_endpoint="1bce0024",
     paired_endpoint="9bce0024",
     evidence="controlled successful local enrollment captured 2026-08-12",

@@ -22,6 +22,12 @@ from rainpointd.device_catalog import (  # noqa: E402
     load_catalog,
 )
 from rainpointd.gateway import Gateway  # noqa: E402
+from rainpointd.product_identity import (  # noqa: E402
+    GENERIC_HCS02X_MODEL,
+    HCS02X_PROTOCOL,
+    hcs02x_identity,
+    product_from_codes,
+)
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
@@ -51,6 +57,25 @@ class RainPointRFTest(unittest.TestCase):
         trailer = binascii.crc_hqx(frame[:-2], 0) ^ 0xC713
         frame[-2:] = trailer.to_bytes(2, "big")
         return frame.hex()
+
+    def test_product_identity_requires_catalogued_packet_evidence(self) -> None:
+        provisional = hcs02x_identity({})
+        self.assertEqual(GENERIC_HCS02X_MODEL, provisional.model)
+        self.assertFalse(provisional.exact_model)
+
+        by_product = hcs02x_identity({"product_code": 0x48})
+        self.assertEqual("HCS026FRF", by_product.model)
+        self.assertEqual("rf_product_code", by_product.source)
+
+        by_model = hcs02x_identity({"model_code": 0x013D})
+        self.assertEqual("HCS026FRF", by_model.model)
+        self.assertEqual("rf_model_code", by_model.source)
+
+        self.assertIsNone(
+            product_from_codes(
+                "soil_sensor", product_code=0x48, model_code=0x012E
+            )
+        )
 
     def test_transport_identity_is_supplied_by_device_catalog(self) -> None:
         catalog = DeviceCatalog(
@@ -1080,6 +1105,67 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("d1e28024", device["state"]["rf_endpoint"])
         self.assertEqual("d1e28048", device["state"]["rf_endpoint_b"])
         self.assertEqual(72, device["state"]["rf_product_code"])
+        self.assertEqual("HCS026FRF", device["model"])
+        self.assertEqual(
+            "rf_product_code", device["state"]["product_model_source"]
+        )
+        self.assertEqual(
+            HCS02X_PROTOCOL, device["state"]["rf_protocol_family"]
+        )
+
+    def test_product_code_promotes_provisional_sensor_model_persistently(
+        self,
+    ) -> None:
+        ordinary = "79f4882f28b9840280d1e280241e8182078544268000000000000000000000000000000077e7"
+        product = (
+            "79f4882f28b9840280d1e280482c03040f0a884f"
+            "000000000000000000000000000000001b77"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(storage))
+            transport = RTL433Transport(gateway, command=["unused"])
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(ordinary) * 4, "data": ordinary}]}
+                )
+            )
+            registration = gateway.accept_endpoint(
+                endpoint="d1e28024",
+                name="Provisional Sensor",
+                model=GENERIC_HCS02X_MODEL,
+            )
+            self.assertEqual(GENERIC_HCS02X_MODEL, registration["model"])
+            self.assertEqual(HCS02X_PROTOCOL, registration["protocol"])
+
+            transport.consume_line(
+                json.dumps(
+                    {"rows": [{"len": len(product) * 4, "data": product}]}
+                )
+            )
+            promoted = gateway.registry()[0]
+            self.assertEqual("HCS026FRF", promoted["model"])
+            self.assertEqual("rf_product_code", promoted["model_source"])
+            self.assertEqual(0x48, promoted["product_code"])
+            reaccepted = gateway.accept_endpoint(
+                endpoint="d1e28024",
+                name="Still Confirmed",
+                model=GENERIC_HCS02X_MODEL,
+            )
+            self.assertEqual("HCS026FRF", reaccepted["model"])
+            self.assertEqual("rf_product_code", reaccepted["model_source"])
+            self.assertEqual(0x48, reaccepted["product_code"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(storage))
+            device = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "soil-front-2"
+            )
+            self.assertEqual("HCS026FRF", device["model"])
+            self.assertIn("forget", device["capabilities"])
+            restored.close()
 
     def test_live_transport_merges_valve_duration_and_usage(self) -> None:
         gateway = Gateway(transport="rtl433")

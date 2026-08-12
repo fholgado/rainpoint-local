@@ -19,10 +19,99 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
 from rainpointd.pairing import HCS026EnrollmentManager
+from rainpointd.product_identity import (
+    GENERIC_HCS02X_MODEL,
+    HCS02X_PROTOCOL,
+)
 from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_storage_v4_registry_migrates_identity_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.close()
+
+            connection = sqlite3.connect(path)
+            connection.execute("DROP TABLE device_registry")
+            connection.execute(
+                """
+                CREATE TABLE device_registry (
+                    endpoint TEXT PRIMARY KEY,
+                    device_id TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    area TEXT,
+                    accepted_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                "INSERT INTO device_registry VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "95a98024",
+                    "hcs026-95a98024",
+                    "Test Sensor B",
+                    "HCS026FRF",
+                    "Garden",
+                    "2026-08-12T12:00:00+00:00",
+                    "2026-08-12T12:00:00+00:00",
+                ),
+            )
+            connection.execute(
+                "INSERT INTO device_registry VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "9bce0024",
+                    "hcs026-9bce0024",
+                    "Test Sensor A",
+                    "HCS026FRF",
+                    "Garden",
+                    "2026-08-12T12:00:00+00:00",
+                    "2026-08-12T12:00:00+00:00",
+                ),
+            )
+            evidence = {
+                "event_id": 1,
+                "event_type": "device_observation",
+                "observed_at": "2026-08-12T12:01:00+00:00",
+                "device_id": "hcs026-95a98024",
+                "model": "HCS026FRF",
+                "state": {
+                    "rf_endpoint": "95a98024",
+                    "rf_product_code": 0x48,
+                },
+            }
+            connection.execute(
+                "INSERT INTO events VALUES (?, ?, ?, ?)",
+                (
+                    evidence["event_id"],
+                    evidence["observed_at"],
+                    evidence["event_type"],
+                    json.dumps(evidence),
+                ),
+            )
+            connection.execute("PRAGMA user_version = 4")
+            connection.commit()
+            connection.close()
+
+            migrated = Gateway(transport="rtl433", storage_path=str(path))
+            registrations = {
+                item["endpoint"]: item for item in migrated.registry()
+            }
+            inferred = registrations["95a98024"]
+            self.assertEqual(HCS02X_PROTOCOL, inferred["protocol"])
+            self.assertEqual("rf_product_code", inferred["model_source"])
+            self.assertEqual(0x48, inferred["product_code"])
+            self.assertIsNone(inferred["model_code"])
+            provisional = registrations["9bce0024"]
+            self.assertEqual(GENERIC_HCS02X_MODEL, provisional["model"])
+            self.assertEqual(
+                "legacy_model_unverified", provisional["model_source"]
+            )
+            migrated.close()
+
     def test_storage_schema_migrates_latest_device_snapshots(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "rainpoint.sqlite3"
@@ -37,7 +126,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(4, gateway.info()["storage_schema_version"])
+            self.assertEqual(5, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -48,7 +137,19 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(4, migrated.info()["storage_schema_version"])
+            self.assertEqual(5, migrated.info()["storage_schema_version"])
+            connection = sqlite3.connect(path)
+            registration_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(device_registry)"
+                )
+            }
+            connection.close()
+            self.assertTrue(
+                {"protocol", "model_source", "product_code", "model_code"}
+                <= registration_columns
+            )
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],
@@ -895,6 +996,11 @@ class RegistryHTTPAPITest(unittest.TestCase):
         )
         self.assertEqual("Test Sensor B", device["name"])
         self.assertEqual("Garden", device["area"])
+        self.assertEqual(GENERIC_HCS02X_MODEL, device["model"])
+        self.assertEqual(
+            HCS02X_PROTOCOL, device["state"]["rf_protocol_family"]
+        )
+        self.assertIn("forget", device["capabilities"])
 
         forgotten = self.post_json(
             "/api/v1/registry/hcs026-95a98024/forget", {}

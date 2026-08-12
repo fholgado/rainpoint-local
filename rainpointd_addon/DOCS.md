@@ -5,13 +5,13 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.17.0 supports authenticated network radio nodes, captured replay,
+Version 0.18.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
-`hcs026_auto_v1`; its model-level identity adoption is offline-tested and still
-awaits physical validation. Valve-control POST requests remain rejected.
+`hcs026_auto_v1`; its automatic identity adoption has completed one physical
+end-to-end validation. Valve-control POST requests remain rejected.
 
 An identity-specific Sensor A profile completed isolated local enrollment on
 2026-08-12 using four captured replies, terminal confirmation, and subsequent
@@ -25,6 +25,12 @@ automatic rediscovery; accepting or pairing that endpoint again restores it.
 Physical HCS026 enrollment mappings are stored in the same SQLite database as
 the registry and removal policy. Existing pairing JSON is validated, imported
 once, and retained with a `.migrated` suffix for rollback inspection.
+
+Exact product names are evidence-based. A newly paired device begins as an
+`HCS02x-compatible soil sensor`; a validated RF product code `0x48` or model
+code `0x013d` promotes it persistently to `HCS026FRF`. The registry retains the
+protocol family and identification source so lifecycle operations do not
+depend on a display-model string.
 
 Installing this app does not make the physical irrigation system work offline.
 New installations default to `network` mode. Select `rtl433` only after

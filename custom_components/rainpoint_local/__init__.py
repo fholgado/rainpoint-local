@@ -106,7 +106,7 @@ async def async_remove_config_entry_device(
         ),
         None,
     )
-    if local_id is None or device_entry.model != "HCS026FRF":
+    if local_id is None:
         return False
     token = str(
         config_entry.data.get(
@@ -117,6 +117,9 @@ async def async_remove_config_entry_device(
         return False
     coordinator = hass.data.get(DOMAIN, {}).get(config_entry.entry_id)
     if not isinstance(coordinator, RainPointLocalCoordinator):
+        return False
+    device = coordinator.data.get(local_id, {})
+    if "forget" not in device.get("capabilities", []):
         return False
     try:
         await coordinator.client.forget_sensor(token, local_id)

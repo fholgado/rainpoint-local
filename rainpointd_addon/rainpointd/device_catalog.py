@@ -13,6 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .product_identity import (
+    HCS026_MODEL,
+    HCS02X_PROTOCOL,
+    HTV145_MODEL,
+    is_hcs02x_sensor,
+)
+
 
 def _normalize_endpoint(value: str) -> str:
     """Return one normalized four-byte RF endpoint."""
@@ -33,7 +40,8 @@ class SensorDefinition:
     endpoint: str
     device_id: str
     name: str
-    model: str = "HCS026FRF"
+    model: str = HCS026_MODEL
+    protocol: str = HCS02X_PROTOCOL
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "endpoint", _normalize_endpoint(self.endpoint))
@@ -47,7 +55,7 @@ class ValveDefinition:
     valve_endpoint: str
     device_id: str
     name: str
-    model: str = "HTV145FRF"
+    model: str = HTV145_MODEL
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -125,7 +133,10 @@ class DeviceCatalog:
         """
         sensors = {sensor.endpoint: sensor for sensor in self.sensors}
         for registration in registrations:
-            if registration.get("model") != "HCS026FRF":
+            if not is_hcs02x_sensor(
+                model=str(registration.get("model", "")),
+                protocol=registration.get("protocol"),
+            ):
                 continue
             endpoint = _normalize_endpoint(str(registration["endpoint"]))
             existing = sensors.get(endpoint)
@@ -138,6 +149,9 @@ class DeviceCatalog:
                 ),
                 name=str(registration["name"]),
                 model=str(registration["model"]),
+                protocol=str(
+                    registration.get("protocol") or HCS02X_PROTOCOL
+                ),
             )
         return DeviceCatalog(
             sensors=tuple(sensors.values()),
@@ -153,7 +167,8 @@ class DeviceCatalog:
                 endpoint=str(item["endpoint"]),
                 device_id=str(item["device_id"]),
                 name=str(item["name"]),
-                model=str(item.get("model", "HCS026FRF")),
+                model=str(item.get("model", HCS026_MODEL)),
+                protocol=str(item.get("protocol", HCS02X_PROTOCOL)),
             )
             for item in value.get("sensors", ())
         )
@@ -163,7 +178,7 @@ class DeviceCatalog:
                 valve_endpoint=str(item["valve_endpoint"]),
                 device_id=str(item["device_id"]),
                 name=str(item["name"]),
-                model=str(item.get("model", "HTV145FRF")),
+                model=str(item.get("model", HTV145_MODEL)),
             )
             for item in value.get("valves", ())
         )

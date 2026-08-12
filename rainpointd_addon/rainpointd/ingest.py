@@ -7,6 +7,7 @@ from typing import Any
 
 from .device_catalog import DeviceCatalog
 from .gateway import Gateway
+from .product_identity import hcs02x_identity
 from .rf import normalize_row
 
 
@@ -175,6 +176,14 @@ class FrameIngestor:
                 ):
                     if key in decoded:
                         state[key] = decoded[key]
+                if any(
+                    key in decoded
+                    for key in (
+                        "hcs026_factory_endpoint",
+                        "hcs026_paired_endpoint",
+                    )
+                ):
+                    state.update(hcs02x_identity(decoded).state_fields())
                 if "rssi" in event:
                     state["rf_rssi_db"] = event["rssi"]
                 state.update(bridge_metadata)
@@ -190,12 +199,16 @@ class FrameIngestor:
             endpoint = decoded.get("canonical_endpoint_b", decoded["endpoint_b"])
             sensor = self.catalog.sensor(endpoint)
             device_id = sensor.device_id if sensor else f"hcs026-{endpoint}"
-            name = sensor.name if sensor else f"RainPoint HCS026 {endpoint}"
+            name = sensor.name if sensor else f"RainPoint soil sensor {endpoint}"
+            identity = hcs02x_identity(
+                decoded,
+                trusted_model=sensor.model if sensor is not None else None,
+            )
             frame_accepted = bool(
                 decoded["trailer_valid"] or "product_code" in decoded
             )
             state = {
-                "model": sensor.model if sensor else "HCS026FRF",
+                "model": identity.model,
                 "raw": decoded["frame_hex"],
                 "rf_endpoint": endpoint,
                 "rf_endpoint_a": decoded["endpoint_a"],
@@ -205,6 +218,7 @@ class FrameIngestor:
                 "rf_trailer_valid": decoded["trailer_valid"],
                 "rf_frame_accepted": frame_accepted,
                 "soil_moisture_percent": moisture,
+                **identity.state_fields(),
             }
             for key, state_key in (
                 ("hcs026_factory_endpoint", "rf_factory_endpoint"),
@@ -216,8 +230,6 @@ class FrameIngestor:
             ):
                 if key in decoded:
                     state[state_key] = decoded[key]
-            if "product_code" in decoded:
-                state["rf_product_code"] = decoded["product_code"]
             if "hub_rssi_db" in decoded:
                 state["hub_rssi_db"] = decoded["hub_rssi_db"]
             if "rssi" in event:
@@ -231,8 +243,13 @@ class FrameIngestor:
                 )
                 published += 1
                 continue
-            model = sensor.model if sensor else "HCS026FRF"
+            model = identity.model
             if frame_accepted:
+                self.gateway.confirm_product_identity(
+                    endpoint=endpoint,
+                    identity=identity,
+                    observed_at=event.get("time"),
+                )
                 self.gateway.observe_decoded(
                     device_id=device_id,
                     name=name,

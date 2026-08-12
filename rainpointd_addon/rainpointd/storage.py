@@ -8,8 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .product_identity import (
+    GENERIC_HCS02X_MODEL,
+    HCS02X_PROTOCOL,
+    HTV145_MODEL,
+    hcs02x_identity,
+)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -28,7 +34,7 @@ def frame_accepted(event: dict[str, Any]) -> bool | None:
         return True
     if (
         event.get("event_type") == "device_observation"
-        and event.get("model") == "HTV145FRF"
+        and event.get("model") == HTV145_MODEL
     ):
         return True
     return trailer_valid if isinstance(trailer_valid, bool) else None
@@ -144,6 +150,9 @@ class SQLiteEventStore:
             version = 3
         if version == 3:
             self._migrate_v3_to_v4()
+            version = 4
+        if version == 4:
+            self._migrate_v4_to_v5()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -242,6 +251,69 @@ class SQLiteEventStore:
                 """
             )
             self._connection.execute("PRAGMA user_version = 4")
+
+    def _migrate_v4_to_v5(self) -> None:
+        """Persist protocol and model-identification evidence."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(device_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("protocol", "TEXT"),
+                ("model_source", "TEXT"),
+                ("product_code", "INTEGER"),
+                ("model_code", "INTEGER"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE device_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute(
+                "UPDATE device_registry SET model = ?, protocol = ?, "
+                "model_source = 'legacy_model_unverified' "
+                "WHERE model = 'HCS026FRF'",
+                (GENERIC_HCS02X_MODEL, HCS02X_PROTOCOL),
+            )
+            self._connection.execute(
+                "UPDATE device_registry SET protocol = 'rainpoint_htv', "
+                "model_source = 'legacy_registry' WHERE model = 'HTV145FRF'"
+            )
+            rows = self._connection.execute(
+                "SELECT payload FROM events ORDER BY event_id"
+            ).fetchall()
+            for row in rows:
+                event = json.loads(row["payload"])
+                state = event.get("state", {})
+                endpoint = state.get("rf_endpoint")
+                if not isinstance(endpoint, str):
+                    continue
+                identity = hcs02x_identity(
+                    {
+                        "product_code": state.get("rf_product_code"),
+                        "model_code": state.get("rf_model_code"),
+                    }
+                )
+                if not identity.exact_model or not identity.source.startswith(
+                    "rf_"
+                ):
+                    continue
+                self._connection.execute(
+                    "UPDATE device_registry SET model = ?, protocol = ?, "
+                    "model_source = ?, product_code = ?, model_code = ? "
+                    "WHERE endpoint = ?",
+                    (
+                        identity.model,
+                        identity.protocol,
+                        identity.source,
+                        identity.product_code,
+                        identity.model_code,
+                        endpoint,
+                    ),
+                )
+            self._connection.execute("PRAGMA user_version = 5")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -510,18 +582,27 @@ class SQLiteEventStore:
         model: str,
         area: str | None,
         accepted_at: str,
+        protocol: str | None = None,
+        model_source: str | None = None,
+        product_code: int | None = None,
+        model_code: int | None = None,
     ) -> dict[str, Any]:
         """Accept or update one observed endpoint in the local registry."""
         self._connection.execute(
             """
             INSERT INTO device_registry(
                 endpoint, device_id, name, model, area,
-                accepted_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                accepted_at, updated_at, protocol, model_source, product_code,
+                model_code
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(endpoint) DO UPDATE SET
                 name=excluded.name,
                 model=excluded.model,
                 area=excluded.area,
+                protocol=excluded.protocol,
+                model_source=excluded.model_source,
+                product_code=excluded.product_code,
+                model_code=excluded.model_code,
                 updated_at=excluded.updated_at
             """,
             (
@@ -532,6 +613,10 @@ class SQLiteEventStore:
                 area,
                 accepted_at,
                 accepted_at,
+                protocol,
+                model_source,
+                product_code,
+                model_code,
             ),
         )
         self._connection.execute(
@@ -539,6 +624,37 @@ class SQLiteEventStore:
         )
         self._connection.commit()
         return self.registry_device(device_id)
+
+    def update_registry_product_identity(
+        self,
+        endpoint: str,
+        *,
+        model: str,
+        protocol: str,
+        model_source: str,
+        product_code: int | None,
+        model_code: int | None,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """Persist a stronger packet-derived product identification."""
+        cursor = self._connection.execute(
+            "UPDATE device_registry SET model = ?, protocol = ?, "
+            "model_source = ?, product_code = ?, model_code = ?, updated_at = ? "
+            "WHERE endpoint = ?",
+            (
+                model,
+                protocol,
+                model_source,
+                product_code,
+                model_code,
+                updated_at,
+                endpoint,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError(endpoint)
+        self._connection.commit()
+        return self.registry_endpoint(endpoint)
 
     def registry_device(self, device_id: str) -> dict[str, Any]:
         """Return one accepted device or raise KeyError."""
