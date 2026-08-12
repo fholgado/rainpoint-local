@@ -26,6 +26,25 @@ again:
 
 ## HCS026 sensor: remaining physical tests
 
+### Sensor A offline candidate status
+
+`tools/analyze_pairing_profiles.py` now turns the two captured Sensor A stock
+sequences into a repeatable, explicitly non-runnable candidate report. The
+comparison proves that changing Sensor B's endpoint is insufficient: the first
+gateway reply also differs at frame offsets 18 and 19, and Sensor A's two stock
+captures consistently use 433.4715 MHz for the initial reply followed by
+approximately 434.0215 MHz. Later aligned reply payloads otherwise match after
+masking endpoint and trailer bytes.
+
+The candidate is intentionally absent from the gateway profile registry and
+ESP32 firmware. Tomorrow's controlled capture must determine whether Sensor A
+requires three, four, or five replies and must confirm terminal message `03`
+plus routine telemetry before any Sensor A transmit profile can be enabled.
+
+```bash
+python3 tools/analyze_pairing_profiles.py
+```
+
 ### S1 — second-identity local enrollment (release blocker)
 
 Purpose: determine whether the reply exchange is model-wide or whether each
