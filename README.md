@@ -24,8 +24,9 @@ Working now:
 - discovering HCS026FRF sensors from validated paired telemetry rather than a
   household-specific endpoint list,
 - identifying newly paired soil sensors first by their HCS02x RF protocol
-  family, then promoting the exact `HCS026FRF` model only when a validated
-  packet supplies product code `0x48` or model code `0x013d`,
+  family, using product code `0x48` to select the shared HCS02x capability
+  family, and promoting the exact `HCS026FRF` model only when model code
+  `0x013d` or trusted migration metadata supplies variant-level evidence,
 - reporting the confirmed full/low battery flag used by newly tested HCS026
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete

@@ -29,6 +29,43 @@ class ProductModel:
     product_code: int
 
 
+@dataclass(frozen=True)
+class ProductFamily:
+    """A shared functional family represented by one product code."""
+
+    product_code: int
+    device_kind: str
+    protocol: str
+    generic_model: str
+    catalog_capabilities: tuple[str, ...]
+
+
+PRODUCT_FAMILIES = (
+    ProductFamily(
+        product_code=0x48,
+        device_kind="soil_sensor",
+        protocol=HCS02X_PROTOCOL,
+        generic_model=GENERIC_HCS02X_MODEL,
+        catalog_capabilities=("soil_moisture", "battery", "signal_strength"),
+    ),
+    ProductFamily(
+        product_code=0x1F,
+        device_kind="irrigation_valve",
+        protocol=HTV_PROTOCOL,
+        generic_model="RainPoint-compatible irrigation valve",
+        catalog_capabilities=(
+            "water_control",
+            "battery",
+            "signal_strength",
+            "work_state",
+            "alarm",
+            "duration",
+            "last_water_usage",
+        ),
+    ),
+)
+
+
 PRODUCT_MODELS = (
     ProductModel(
         model=HCS026_MODEL,
@@ -46,13 +83,13 @@ PRODUCT_MODELS = (
     ),
 )
 
-_BY_PRODUCT_CODE = {
-    (item.device_kind, item.product_code): item for item in PRODUCT_MODELS
+_FAMILY_BY_PRODUCT_CODE = {
+    (item.device_kind, item.product_code): item for item in PRODUCT_FAMILIES
 }
 _BY_MODEL_CODE = {
     (item.device_kind, item.model_code): item for item in PRODUCT_MODELS
 }
-_KNOWN_PRODUCT_CODES = {item.product_code for item in PRODUCT_MODELS}
+_KNOWN_PRODUCT_CODES = {item.product_code for item in PRODUCT_FAMILIES}
 _KNOWN_MODEL_CODES = {item.model_code for item in PRODUCT_MODELS}
 _BY_MODEL = {item.model: item for item in PRODUCT_MODELS}
 
@@ -67,6 +104,7 @@ class ProductIdentity:
     source: str
     product_code: int | None = None
     model_code: int | None = None
+    catalog_capabilities: tuple[str, ...] = ()
 
     @property
     def exact_model(self) -> bool:
@@ -85,12 +123,25 @@ class ProductIdentity:
             result["rf_product_code"] = self.product_code
         if self.model_code is not None:
             result["rf_model_code"] = self.model_code
+        if self.catalog_capabilities:
+            result["product_family_capabilities"] = list(
+                self.catalog_capabilities
+            )
         return result
 
 
 def product_for_model(model: str | None) -> ProductModel | None:
     """Return catalog metadata for an exact retail model name."""
     return _BY_MODEL.get(model or "")
+
+
+def family_from_product_code(
+    device_kind: str, product_code: int | None
+) -> ProductFamily | None:
+    """Resolve shared functionality without claiming an exact model."""
+    if product_code is None:
+        return None
+    return _FAMILY_BY_PRODUCT_CODE.get((device_kind, product_code))
 
 
 def product_from_codes(
@@ -100,26 +151,17 @@ def product_from_codes(
     model_code: int | None = None,
 ) -> tuple[ProductModel, str] | None:
     """Resolve compatible RF identifiers and reject contradictory codes."""
-    candidates: list[tuple[ProductModel, str]] = []
-    if product_code is not None:
-        product = _BY_PRODUCT_CODE.get((device_kind, product_code))
-        if product is not None:
-            candidates.append((product, "rf_product_code"))
-        elif product_code in _KNOWN_PRODUCT_CODES:
-            return None
-    if model_code is not None:
-        product = _BY_MODEL_CODE.get((device_kind, model_code))
-        if product is not None:
-            candidates.append((product, "rf_model_code"))
-        elif model_code in _KNOWN_MODEL_CODES:
-            return None
-    if not candidates or len({item.model for item, _ in candidates}) != 1:
+    if model_code is None:
         return None
-    product = candidates[0][0]
+    product = _BY_MODEL_CODE.get((device_kind, model_code))
+    if product is None:
+        return None
+    if product_code is not None and product.product_code != product_code:
+        return None
     source = (
         "rf_product_and_model_codes"
-        if len(candidates) == 2
-        else candidates[0][1]
+        if product_code is not None
+        else "rf_model_code"
     )
     return product, source
 
@@ -130,31 +172,84 @@ def hcs02x_identity(
     """Identify an HCS02x-family sensor without overstating packet evidence."""
     product_code = decoded.get("product_code")
     model_code = decoded.get("model_code")
+    product_code = product_code if isinstance(product_code, int) else None
+    model_code = model_code if isinstance(model_code, int) else None
     identified = product_from_codes(
         "soil_sensor",
-        product_code=product_code if isinstance(product_code, int) else None,
-        model_code=model_code if isinstance(model_code, int) else None,
+        product_code=product_code,
+        model_code=model_code,
     )
     if identified is not None:
         product, source = identified
+        family = family_from_product_code(
+            product.device_kind, product.product_code
+        )
         return ProductIdentity(
             model=product.model,
             device_kind=product.device_kind,
             protocol=product.protocol,
             source=source,
-            product_code=(
-                product_code if isinstance(product_code, int) else None
+            product_code=product_code,
+            model_code=model_code,
+            catalog_capabilities=(
+                family.catalog_capabilities if family is not None else ()
             ),
-            model_code=model_code if isinstance(model_code, int) else None,
+        )
+
+    model_for_kind = (
+        _BY_MODEL_CODE.get(("soil_sensor", model_code))
+        if model_code is not None
+        else None
+    )
+    if (
+        (model_code in _KNOWN_MODEL_CODES and model_for_kind is None)
+        or (
+            model_for_kind is not None
+            and product_code is not None
+            and model_for_kind.product_code != product_code
+        )
+        or (
+            product_code in _KNOWN_PRODUCT_CODES
+            and family_from_product_code("soil_sensor", product_code) is None
+        )
+    ):
+        return ProductIdentity(
+            model=GENERIC_HCS02X_MODEL,
+            device_kind="soil_sensor",
+            protocol=HCS02X_PROTOCOL,
+            source="rf_identifier_conflict",
+            product_code=product_code,
+            model_code=model_code,
         )
 
     trusted = product_for_model(trusted_model)
-    if trusted is not None and trusted.protocol == HCS02X_PROTOCOL:
+    family = family_from_product_code("soil_sensor", product_code)
+    if (
+        trusted is not None
+        and trusted.protocol == HCS02X_PROTOCOL
+        and (family is None or trusted.product_code == family.product_code)
+        and model_code is None
+    ):
         return ProductIdentity(
             model=trusted.model,
             device_kind=trusted.device_kind,
             protocol=trusted.protocol,
             source="trusted_metadata",
+            product_code=product_code,
+            catalog_capabilities=(
+                family.catalog_capabilities if family is not None else ()
+            ),
+        )
+
+    if family is not None:
+        return ProductIdentity(
+            model=family.generic_model,
+            device_kind=family.device_kind,
+            protocol=family.protocol,
+            source="rf_product_code_family",
+            product_code=product_code,
+            model_code=model_code,
+            catalog_capabilities=family.catalog_capabilities,
         )
 
     return ProductIdentity(

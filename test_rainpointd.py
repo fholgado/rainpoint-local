@@ -101,8 +101,11 @@ class GatewayTest(unittest.TestCase):
                 item["endpoint"]: item for item in migrated.registry()
             }
             inferred = registrations["95a98024"]
+            self.assertEqual(GENERIC_HCS02X_MODEL, inferred["model"])
             self.assertEqual(HCS02X_PROTOCOL, inferred["protocol"])
-            self.assertEqual("rf_product_code", inferred["model_source"])
+            self.assertEqual(
+                "rf_product_code_family", inferred["model_source"]
+            )
             self.assertEqual(0x48, inferred["product_code"])
             self.assertIsNone(inferred["model_code"])
             provisional = registrations["9bce0024"]

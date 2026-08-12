@@ -296,9 +296,7 @@ class SQLiteEventStore:
                         "model_code": state.get("rf_model_code"),
                     }
                 )
-                if not identity.exact_model or not identity.source.startswith(
-                    "rf_"
-                ):
+                if not identity.source.startswith("rf_"):
                     continue
                 self._connection.execute(
                     "UPDATE device_registry SET model = ?, protocol = ?, "

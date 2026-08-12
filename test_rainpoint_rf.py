@@ -64,12 +64,23 @@ class RainPointRFTest(unittest.TestCase):
         self.assertFalse(provisional.exact_model)
 
         by_product = hcs02x_identity({"product_code": 0x48})
-        self.assertEqual("HCS026FRF", by_product.model)
-        self.assertEqual("rf_product_code", by_product.source)
+        self.assertEqual(GENERIC_HCS02X_MODEL, by_product.model)
+        self.assertEqual("rf_product_code_family", by_product.source)
+        self.assertFalse(by_product.exact_model)
+        self.assertEqual(
+            ("soil_moisture", "battery", "signal_strength"),
+            by_product.catalog_capabilities,
+        )
 
         by_model = hcs02x_identity({"model_code": 0x013D})
         self.assertEqual("HCS026FRF", by_model.model)
         self.assertEqual("rf_model_code", by_model.source)
+
+        by_both = hcs02x_identity(
+            {"product_code": 0x48, "model_code": 0x013D}
+        )
+        self.assertEqual("HCS026FRF", by_both.model)
+        self.assertEqual("rf_product_and_model_codes", by_both.source)
 
         self.assertIsNone(
             product_from_codes(
@@ -1107,13 +1118,17 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(72, device["state"]["rf_product_code"])
         self.assertEqual("HCS026FRF", device["model"])
         self.assertEqual(
-            "rf_product_code", device["state"]["product_model_source"]
+            "trusted_metadata", device["state"]["product_model_source"]
+        )
+        self.assertEqual(
+            ["soil_moisture", "battery", "signal_strength"],
+            device["state"]["product_family_capabilities"],
         )
         self.assertEqual(
             HCS02X_PROTOCOL, device["state"]["rf_protocol_family"]
         )
 
-    def test_product_code_promotes_provisional_sensor_model_persistently(
+    def test_product_code_persists_functional_family_without_exact_model(
         self,
     ) -> None:
         ordinary = "79f4882f28b9840280d1e280241e8182078544268000000000000000000000000000000077e7"
@@ -1143,17 +1158,21 @@ class RainPointRFTest(unittest.TestCase):
                     {"rows": [{"len": len(product) * 4, "data": product}]}
                 )
             )
-            promoted = gateway.registry()[0]
-            self.assertEqual("HCS026FRF", promoted["model"])
-            self.assertEqual("rf_product_code", promoted["model_source"])
-            self.assertEqual(0x48, promoted["product_code"])
+            identified = gateway.registry()[0]
+            self.assertEqual(GENERIC_HCS02X_MODEL, identified["model"])
+            self.assertEqual(
+                "rf_product_code_family", identified["model_source"]
+            )
+            self.assertEqual(0x48, identified["product_code"])
             reaccepted = gateway.accept_endpoint(
                 endpoint="d1e28024",
                 name="Still Confirmed",
                 model=GENERIC_HCS02X_MODEL,
             )
-            self.assertEqual("HCS026FRF", reaccepted["model"])
-            self.assertEqual("rf_product_code", reaccepted["model_source"])
+            self.assertEqual(GENERIC_HCS02X_MODEL, reaccepted["model"])
+            self.assertEqual(
+                "rf_product_code_family", reaccepted["model_source"]
+            )
             self.assertEqual(0x48, reaccepted["product_code"])
             gateway.close()
 
@@ -1163,9 +1182,21 @@ class RainPointRFTest(unittest.TestCase):
                 for item in restored.devices()
                 if item["device_id"] == "soil-front-2"
             )
-            self.assertEqual("HCS026FRF", device["model"])
-            self.assertTrue(device["state"]["product_model_exact"])
+            self.assertEqual(GENERIC_HCS02X_MODEL, device["model"])
+            self.assertFalse(device["state"]["product_model_exact"])
             self.assertIn("forget", device["capabilities"])
+
+            restored.confirm_product_identity(
+                endpoint="d1e28024",
+                identity=hcs02x_identity(
+                    {"product_code": 0x48, "model_code": 0x013D}
+                ),
+            )
+            exact = restored.registry()[0]
+            self.assertEqual("HCS026FRF", exact["model"])
+            self.assertEqual(
+                "rf_product_and_model_codes", exact["model_source"]
+            )
             restored.close()
 
     def test_live_transport_merges_valve_duration_and_usage(self) -> None:

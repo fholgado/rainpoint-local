@@ -84,6 +84,7 @@ def _report_attributes(device: dict[str, Any]) -> dict[str, Any]:
         "product_model_exact",
         "rf_product_code",
         "rf_model_code",
+        "product_family_capabilities",
     ):
         if key in state:
             attributes[key] = state[key]

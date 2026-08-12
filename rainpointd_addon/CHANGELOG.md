@@ -1,5 +1,16 @@
 # Changelog
 
+## Integration 0.8.2
+
+- Include catalog-derived product-family capabilities in report diagnostics.
+
+## 0.18.2
+
+- Treat shared RF product codes as functional capability families rather than
+  exact retail-model identifiers.
+- Require variant-level model-code evidence or trusted migration metadata to
+  identify an exact product such as HCS026FRF.
+
 ## Integration 0.8.1
 
 - Reconcile existing Home Assistant device-registry model labels with the

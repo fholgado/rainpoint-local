@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.18.1 supports authenticated network radio nodes, captured replay,
+Version 0.18.2 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -27,10 +27,11 @@ the registry and removal policy. Existing pairing JSON is validated, imported
 once, and retained with a `.migrated` suffix for rollback inspection.
 
 Exact product names are evidence-based. A newly paired device begins as an
-`HCS02x-compatible soil sensor`; a validated RF product code `0x48` or model
-code `0x013d` promotes it persistently to `HCS026FRF`. The registry retains the
-protocol family and identification source so lifecycle operations do not
-depend on a display-model string.
+`HCS02x-compatible soil sensor`; RF product code `0x48` confirms the shared
+HCS02x soil-sensor capability family, while model code `0x013d` or trusted
+migration metadata identifies the exact `HCS026FRF` variant. The registry
+retains the protocol family and identification source so lifecycle operations
+do not depend on a display-model string.
 
 Installing this app does not make the physical irrigation system work offline.
 New installations default to `network` mode. Select `rtl433` only after

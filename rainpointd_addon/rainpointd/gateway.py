@@ -30,6 +30,7 @@ from .product_identity import (
     HTV145_MODEL,
     PRODUCT_MODELS,
     ProductIdentity,
+    family_from_product_code,
     hcs02x_identity,
     is_hcs02x_sensor,
     product_for_model,
@@ -683,6 +684,13 @@ class Gateway:
                         ]
                     if registered.get("product_code") is not None:
                         state["rf_product_code"] = registered["product_code"]
+                        family = family_from_product_code(
+                            "soil_sensor", registered["product_code"]
+                        )
+                        if family is not None:
+                            state["product_family_capabilities"] = list(
+                                family.catalog_capabilities
+                            )
                     if registered.get("model_code") is not None:
                         state["rf_model_code"] = registered["model_code"]
                 if is_hcs02x_sensor(
@@ -1085,8 +1093,8 @@ class Gateway:
         identity: ProductIdentity,
         observed_at: str | None = None,
     ) -> None:
-        """Persist an exact product identity inferred from RF evidence."""
-        if not identity.exact_model or not identity.source.startswith("rf_"):
+        """Persist stronger family or model identity inferred from RF evidence."""
+        if not identity.source.startswith("rf_"):
             return
         with self._lock:
             if self._store is None:
@@ -1094,6 +1102,11 @@ class Gateway:
             try:
                 existing = self._store.registry_endpoint(endpoint)
             except KeyError:
+                return
+            if (
+                product_for_model(existing.get("model")) is not None
+                and not identity.exact_model
+            ):
                 return
             if (
                 existing.get("model") == identity.model

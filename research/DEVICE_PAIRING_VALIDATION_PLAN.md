@@ -69,7 +69,7 @@ unattended observation of delivery cadence and collisions.
 advertises up to 39 paired timers/devices, invalidating the earlier eight-device
 inference.
 
-Firmware `0.7.0-test.3` and gateway app `0.18.1` contain the
+Firmware `0.7.0-test.3` and gateway app `0.18.2` contain the
 `hcs026_auto_v1` workflow. Home Assistant supplies neither a factory identity
 nor an identity-specific transcript. The selected node adopts the first strict
 HCS026 factory announcement, derives its paired identity, and generates the
@@ -184,6 +184,21 @@ display-side moisture calibration, or is stored solely in the stock app/cloud.
 If it is an RF field, expose the raw and decoded value locally before adding a
 writable HA setting. Record the available profile range and app labels as
 product metadata rather than assuming `P1` is universal.
+
+The physical HCS026FRF label (lot `202503`) documents these six profiles:
+
+| Display | Label |
+| --- | --- |
+| P1 | Mixed soil |
+| P2 | Peat soil |
+| P3 | Black earth soil |
+| P4 | Sandy loam |
+| P5 | Laterite soil |
+| P6 | Other soil |
+
+The same label prints common moisture ranges of 1–30% dry, 30–70% moist, and
+70–99% wet. These overlapping endpoints are transcribed as printed and should
+not yet be treated as protocol thresholds.
 
 ### Sensor completion criteria
 
