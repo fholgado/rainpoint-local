@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 
+from .device_catalog import LEGACY_HOME_CATALOG, load_catalog
 from .esp32 import ESP32SerialTransport
 from .esp32_network import ESP32NetworkServer, load_node_tokens
 from .gateway import Gateway
@@ -57,7 +58,20 @@ def main() -> int:
         default=DEFAULT_EVENT_RETENTION_LIMIT,
         help="maximum number of journal events retained in SQLite",
     )
+    parser.add_argument(
+        "--device-catalog",
+        help=(
+            "installation catalog JSON; omitted only for legacy prototype "
+            "identity compatibility"
+        ),
+    )
     args = parser.parse_args()
+
+    catalog = (
+        load_catalog(args.device_catalog)
+        if args.device_catalog
+        else LEGACY_HOME_CATALOG
+    )
 
     gateway = Gateway(
         gateway_id=args.gateway_id or f"rainpoint-{args.transport}",
@@ -65,6 +79,7 @@ def main() -> int:
         storage_path=args.storage,
         event_retention_limit=args.event_retention_limit,
         registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
+        catalog=catalog,
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(

@@ -34,6 +34,7 @@ options:
   registry_write_token: ""
   node_listen_port: 8790
   node_tokens: ""
+  device_catalog_path: ""
   event_retention_limit: 100000
 schema:
   transport: "list(network|rtl433|esp32_serial|replay)"
@@ -46,4 +47,5 @@ schema:
   registry_write_token: str?
   node_listen_port: "list(0|8790)"
   node_tokens: str?
+  device_catalog_path: str?
   event_retention_limit: "int(1000,1000000)"

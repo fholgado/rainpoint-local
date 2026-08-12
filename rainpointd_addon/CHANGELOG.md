@@ -2,6 +2,10 @@
 
 ## 0.16.0
 
+- Replace Sensor-B-specific pairing orchestration with an evidence-labelled
+  protocol-profile registry shared by the gateway and firmware.
+- Support arbitrary installation catalogs from JSON while retaining the old
+  prototype catalog only as an explicit identity-compatibility fallback.
 - Add gateway-managed adoption sessions: temporary per-node credentials are
   issued through the authenticated API, remain absent from public status, can
   be cancelled, and persist only after the node's first successful mutual-

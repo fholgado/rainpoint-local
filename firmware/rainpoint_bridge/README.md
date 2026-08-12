@@ -192,9 +192,10 @@ show_node
 ```
 
 On a factory-unconfigured board, `show_node` returns a randomly generated
-32-byte setup token stored in ESP32 NVS. Add the node ID and setup token through
-Home Assistant's **Add custom local radio node** flow, then use the same token
-to provision the board with one tab-separated line:
+32-byte setup token stored in ESP32 NVS. This recovery route deliberately does
+not appear in the normal Home Assistant flow. An operator may pre-register the
+node ID and token through the add-on's legacy advanced `node_tokens` option,
+then use the same token to provision the board with one tab-separated line:
 
 ```text
 configure_wifi<TAB>SSID<TAB>PASSWORD<TAB>HA_HOST<TAB>8790<TAB>64_HEX_TOKEN

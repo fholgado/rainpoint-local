@@ -1,0 +1,22 @@
+{
+  "sensors": [
+    {
+      "endpoint": "aabbcc24",
+      "device_id": "soil-greenhouse",
+      "name": "Greenhouse Soil",
+      "model": "HCS026FRF"
+    }
+  ],
+  "valves": [
+    {
+      "controller_endpoint": "11223344",
+      "valve_endpoint": "55667788",
+      "device_id": "valve-orchard",
+      "name": "Orchard Valve",
+      "model": "HTV145FRF"
+    }
+  ],
+  "hcs026_pairing_peers": [
+    "55667788"
+  ]
+}

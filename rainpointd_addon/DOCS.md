@@ -10,7 +10,8 @@ receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform the one physically validated, bounded
-Sensor B enrollment exchange. Valve-control POST requests remain rejected.
+HCS026 profile `hcs026_15a98024_v1`. Valve-control POST requests remain
+rejected.
 
 Accepted HCS026 endpoints now provide the live decoder identity, friendly name,
 and area. Known endpoints retain their established Home Assistant device IDs
@@ -21,8 +22,9 @@ the registry and removal policy. Existing pairing JSON is validated, imported
 once, and retained with a `.migrated` suffix for rollback inspection.
 
 Installing this app does not make the physical irrigation system work offline.
-Replay remains the default after upgrade. Select `rtl433` only after attaching
-a supported RTL-SDR receiver to the Home Assistant host.
+New installations default to `network` mode. Select `rtl433` only after
+attaching a supported RTL-SDR receiver to the Home Assistant host; select
+`replay` only for explicit development work.
 
 ## Configuration
 
@@ -42,6 +44,20 @@ Number of seconds between fixture observations. The default is 5 seconds.
 The live defaults are 433,700,000 Hz center frequency and 2,000,000 samples per
 second. This window covers both the lower data-rich sensor channel near
 433.08 MHz and the previously observed RainPoint traffic above 434 MHz.
+
+### Installation device catalog
+
+The old prototype installation retains a compatibility catalog so upgrades do
+not fork its established Home Assistant device IDs. Other installations can
+set `device_catalog_path` to a JSON file available inside the app, such as a
+file beneath `/share`. The schema is demonstrated by
+`examples/device-catalog.example.json` and supports arbitrary sensor endpoints,
+valve endpoint pairs, stable device IDs, names, models, and pairing peers.
+
+This file is an interim valve-identity boundary. Newly paired sensors are
+already persisted in the managed registry. Valve links will move into that
+registry through a versioned migration before the legacy compatibility catalog
+is removed.
 
 For `esp32_serial`, set `serial_device` to the ESP32 USB serial path and leave
 `serial_baud` at `115200`. The stable `/dev/serial/by-id/...` path is preferable
@@ -194,8 +210,9 @@ semantics. Older companion-heartbeat battery fields remain research metadata.
 ## Safety
 
 This release has no cloud transport, valve control entity, valve command API,
-or valve frame in its network vocabulary. Its sole RF mutation is the fixed,
-time-limited Sensor B enrollment profile on a user-selected authenticated node.
+or valve frame in its network vocabulary. Its sole RF mutation is the
+evidence-backed, time-limited `hcs026_15a98024_v1` enrollment profile on a
+user-selected authenticated node.
 It starts disarmed, cancels on coordinator loss, and requires terminal RF
 confirmation. USB access is used only by `rtl_433` for receiving. Share access
 is used only for explicitly enabled raw captures.

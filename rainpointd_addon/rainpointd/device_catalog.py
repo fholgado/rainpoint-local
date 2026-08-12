@@ -8,7 +8,9 @@ user-managed registry is introduced.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
@@ -142,6 +144,45 @@ class DeviceCatalog:
             valves=self.valves,
             hcs026_pairing_peers=self.hcs026_pairing_peers,
         )
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> DeviceCatalog:
+        """Build an installation catalog from a transport-neutral mapping."""
+        sensors = tuple(
+            SensorDefinition(
+                endpoint=str(item["endpoint"]),
+                device_id=str(item["device_id"]),
+                name=str(item["name"]),
+                model=str(item.get("model", "HCS026FRF")),
+            )
+            for item in value.get("sensors", ())
+        )
+        valves = tuple(
+            ValveDefinition(
+                controller_endpoint=str(item["controller_endpoint"]),
+                valve_endpoint=str(item["valve_endpoint"]),
+                device_id=str(item["device_id"]),
+                name=str(item["name"]),
+                model=str(item.get("model", "HTV145FRF")),
+            )
+            for item in value.get("valves", ())
+        )
+        peers = frozenset(
+            str(item) for item in value.get("hcs026_pairing_peers", ())
+        )
+        return cls(
+            sensors=sensors,
+            valves=valves,
+            hcs026_pairing_peers=peers,
+        )
+
+
+def load_catalog(path: str | Path) -> DeviceCatalog:
+    """Load one installation catalog without importing household code."""
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("device catalog must be a JSON object")
+    return DeviceCatalog.from_mapping(value)
 
 
 # This is a compatibility profile, not a protocol truth.  It intentionally

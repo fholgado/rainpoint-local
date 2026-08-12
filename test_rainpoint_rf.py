@@ -19,6 +19,7 @@ from rainpointd.device_catalog import (  # noqa: E402
     DeviceCatalog,
     SensorDefinition,
     ValveDefinition,
+    load_catalog,
 )
 from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
@@ -102,6 +103,36 @@ class RainPointRFTest(unittest.TestCase):
                     SensorDefinition("AABBCC24", "sensor-b", "B"),
                 )
             )
+
+    def test_device_catalog_loads_arbitrary_installation_json(self) -> None:
+        value = {
+            "sensors": [
+                {
+                    "endpoint": "aabbcc24",
+                    "device_id": "soil-greenhouse",
+                    "name": "Greenhouse",
+                }
+            ],
+            "valves": [
+                {
+                    "controller_endpoint": "11223344",
+                    "valve_endpoint": "55667788",
+                    "device_id": "valve-orchard",
+                    "name": "Orchard",
+                }
+            ],
+            "hcs026_pairing_peers": ["55667788"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog.json"
+            path.write_text(json.dumps(value))
+            catalog = load_catalog(path)
+        self.assertEqual("soil-greenhouse", catalog.sensor("aabbcc24").device_id)
+        self.assertEqual(
+            "valve-orchard",
+            catalog.valve_link("55667788", "11223344").device_id,
+        )
+        self.assertEqual(frozenset(("55667788",)), catalog.hcs026_pairing_peers)
 
     def test_catalogued_valves_keep_independent_receive_state(self) -> None:
         catalog = DeviceCatalog(

@@ -26,8 +26,9 @@ Working now:
   sensors,
 - persisting an HCS026 factory-to-paired identity only after a complete
   transition inside an explicit pairing window,
-- physically enrolling Test Sensor B through a single ESP32/CC1101 radio node
-  and requiring its terminal message `03` before declaring success,
+- physically enrolling Test Sensor B through evidence-backed profile
+  `hcs026_15a98024_v1` on a single ESP32/CC1101 radio node and requiring its
+  terminal message `03` before declaring success,
 - starting that bounded pairing exchange from Home Assistant through an
   authenticated, explicitly selected Wi-Fi radio node,
 - receiving post-enrollment moisture telemetry from that locally paired sensor
@@ -46,7 +47,7 @@ Working now:
   Assistant app on `aarch64` or `amd64`,
 - building a single-CC1101 firmware prototype, with an optional dual-radio
   diagnostic build, using the measured RainPoint radio profiles, serial frame
-  diagnostics, and a validated Sensor-B-specific pairing TX path,
+  diagnostics, and a validated profile-driven pairing TX path,
 - accepting radio-node frames through serial or authenticated Wi-Fi transport,
 - simulating fail-closed startup, bounded runs, acknowledgement timeouts,
   client loss, watchdog expiry, close retries, and persistent fault retries
@@ -59,8 +60,7 @@ Still provisional or not working yet:
 - decoding the older installed sensors' separate companion-heartbeat battery
   status, whose meaning remains provisional,
 - guaranteeing reliable reception at the final antenna location,
-- generalizing physical enrollment beyond the currently validated Sensor B
-  profile,
+- validating a second identity before claiming model-wide HCS026 enrollment,
 - implementing and validating routine post-enrollment sensor acknowledgements,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
@@ -129,7 +129,7 @@ An authenticated local registry can accept, rename, assign, or forget observed
 endpoints. The Home Assistant app provisions its management credential through
 Supervisor discovery, so it never appears in the normal pairing UI. The
 pairing workflow can arm one authenticated
-protocol-v2 node for the fixed Sensor B profile and persists the identity only
+protocol-v2 node for validated profile `hcs026_15a98024_v1` and persists the identity only
 after terminal RF confirmation. Valve-control POST requests remain unavailable.
 
 ### Development installation
