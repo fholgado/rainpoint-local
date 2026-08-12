@@ -66,7 +66,10 @@ two RF ports onto one antenna requires a proper RF combiner or switch.
   receive configuration after every 31.2 ms reply.
 - Reports pairing state, command ID, completed steps, and armed state over
   serial and the authenticated Wi-Fi connection. The only accepted network
-  commands start or cancel the fixed sensor-pairing profile.
+  RF commands start or cancel the fixed sensor-pairing profile.
+- Firmware 0.6 adds a separate bounded `identify_start` command that blinks the
+  onboard GPIO2 status LED for 3 to 60 seconds. Identify never changes radio
+  configuration or enables the CC1101 transmitter.
 
 `recoveries` includes the intentional FIFO reset after a successfully consumed
 fixed-length packet as well as overflow recovery; compare it with `packets` and
@@ -187,10 +190,11 @@ This is a trusted-LAN prototype transport. Separate nonce/HMAC proofs
 authenticate both the node and `rainpointd` and keep the token itself off the
 network, but TCP telemetry is not encrypted or individually signed. Before a
 published setup or any valve control, the transport will need further review.
-Protocol v2 accepts only the bounded `pairing_start` and `pairing_cancel`
-messages after authentication. It contains no generic RF or valve command.
+Protocol v2 accepts only the bounded `pairing_start`, `pairing_cancel`, and
+non-RF `identify_start` messages after authentication. It contains no generic
+RF or valve command.
 
-Firmware 0.5 emits a `node_health` heartbeat every 30 seconds with uptime,
+Firmware 0.5 and later emit a `node_health` heartbeat every 30 seconds with uptime,
 heap metrics, internal temperature, CPU frequency, maximum loop gap, reset
 reason, local IP, Wi-Fi RSSI, network byte counts, reconnects, gateway
 connection attempts, and successful authentications. There is no OTA updater;
@@ -207,14 +211,16 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ## Next firmware increments
 
-1. Flash firmware 0.5.0 and verify the node authenticates to `rainpointd` as
-   protocol v2 while disarmed.
-2. Start the fixed Sensor B workflow from Home Assistant with the original
+1. Flash firmware 0.6.0 and validate its bounded Identify LED action while RF
+   transmission remains disarmed.
+2. Implement the temporary Wi-Fi setup portal, adoptable LAN advertisement,
+   physical BOOT-button confirmation, and one-click HA adoption contract.
+3. Start the fixed Sensor B workflow from Home Assistant with the original
    RainPoint gateway powered off.
-3. Confirm terminal message `03`, registry creation, and ordinary moisture
+4. Confirm terminal message `03`, registry creation, and ordinary moisture
    entities end to end.
-4. Characterize routine post-enrollment acknowledgements and long-term report
+5. Characterize routine post-enrollment acknowledgements and long-term report
    behavior.
-5. Generalize pairing only from additional controlled device captures.
-6. Implement and validate the distinct valve wake and close command before any
+6. Generalize pairing only from additional controlled device captures.
+7. Implement and validate the distinct valve wake and close command before any
    bounded open test.

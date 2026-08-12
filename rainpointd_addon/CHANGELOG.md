@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.0
+
+- Add a bounded, authenticated Identify command that can blink a capable
+  custom local radio node without enabling or configuring its RF transmitter.
+- Accept the optional protocol-v2 `identify` capability while preserving
+  compatibility with firmware 0.5 nodes.
+- Expose node identification through the authenticated management API for the
+  Home Assistant device button and future discovery/adoption flow.
+
 ## 0.14.0
 
 - Migrate legacy node-option credentials into a private persistent radio-node

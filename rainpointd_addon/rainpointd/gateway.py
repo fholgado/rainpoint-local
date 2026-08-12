@@ -229,6 +229,42 @@ class Gateway:
         with self._lock:
             return self._store.radio_node_credentials().get(node_id)
 
+    def identify_radio_node(
+        self, node_id: str, duration_seconds: int = 15
+    ) -> dict[str, Any]:
+        """Blink one authenticated node without enabling its RF transmitter."""
+        if not 3 <= duration_seconds <= 60:
+            raise ValueError("duration_seconds must be between 3 and 60")
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if (
+                node is None
+                or node.get("connected") is not True
+                or node.get("authenticated") is not True
+            ):
+                raise ValueError("radio node is not connected")
+            if "identify" not in node.get("capabilities", []):
+                raise ValueError("radio node does not support identification")
+            if self._node_command_sender is None:
+                raise RuntimeError("radio-node command transport is unavailable")
+            command_id = uuid.uuid4().hex
+            self._node_command_sender(
+                node_id,
+                {
+                    "type": "identify_start",
+                    "command_id": command_id,
+                    "duration_seconds": duration_seconds,
+                },
+            )
+            node["identify_active"] = True
+            node["identify_command_id"] = command_id
+            return {
+                "node_id": node_id,
+                "identify_active": True,
+                "duration_seconds": duration_seconds,
+                "command_id": command_id,
+            }
+
     def register_radio_node(
         self,
         *,

@@ -126,7 +126,11 @@ class ESP32NetworkServer:
 
     def send_command(self, node_id: str, message: dict[str, Any]) -> None:
         """Send one bounded command to an authenticated protocol-v2 node."""
-        if message.get("type") not in {"pairing_start", "pairing_cancel"}:
+        if message.get("type") not in {
+            "pairing_start",
+            "pairing_cancel",
+            "identify_start",
+        }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
             session = self._sessions.get(node_id)
@@ -134,8 +138,15 @@ class ESP32NetworkServer:
             raise ConnectionError(f"radio node is not connected: {node_id}")
         if session["protocol_version"] != 2:
             raise ValueError("radio node protocol does not permit commands")
-        if "sensor_pairing_tx" not in session["capabilities"]:
-            raise ValueError("radio node lacks sensor pairing capability")
+        required_capability = (
+            "identify"
+            if message.get("type") == "identify_start"
+            else "sensor_pairing_tx"
+        )
+        if required_capability not in session["capabilities"]:
+            raise ValueError(
+                f"radio node lacks {required_capability} capability"
+            )
         with session["write_lock"]:
             self._send(session["stream"], message)
 
@@ -259,14 +270,37 @@ class ESP32NetworkServer:
                         pairing_command_id=message.get("command_id"),
                         pairing_failure_reason=message.get("failure_reason"),
                     )
-                if message.get("type") == "command_error":
+                if message.get("type") == "identify_status":
                     self.gateway.update_node(
                         node_id,
-                        tx_armed=False,
-                        pairing_state="failed",
-                        pairing_command_id=message.get("command_id"),
-                        pairing_detail=message.get("error"),
+                        identify_active=message.get("active") is True,
+                        identify_command_id=message.get("command_id"),
                     )
+                if message.get("type") == "command_error":
+                    current_node = next(
+                        (
+                            item
+                            for item in self.gateway.nodes()
+                            if item.get("node_id") == node_id
+                        ),
+                        {},
+                    )
+                    if message.get("command_id") == current_node.get(
+                        "identify_command_id"
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            identify_active=False,
+                            identify_detail=message.get("error"),
+                        )
+                    else:
+                        self.gateway.update_node(
+                            node_id,
+                            tx_armed=False,
+                            pairing_state="failed",
+                            pairing_command_id=message.get("command_id"),
+                            pairing_detail=message.get("error"),
+                        )
                 self._publisher.consume_line(
                     json.dumps(message), authenticated_node_id=node_id
                 )
@@ -310,11 +344,16 @@ class ESP32NetworkServer:
                 for capability in capabilities
             ):
                 return None
-        elif (
-            hello.get("mode") != "local_radio_node"
-            or set(capabilities) != {"rx", "sensor_pairing_tx"}
-        ):
-            return None
+        else:
+            capability_set = set(capabilities)
+            if (
+                hello.get("mode") != "local_radio_node"
+                or not {"rx", "sensor_pairing_tx"}.issubset(capability_set)
+                or not capability_set.issubset(
+                    {"rx", "sensor_pairing_tx", "identify"}
+                )
+            ):
+                return None
         token = self._credential(node_id)
         if token is None:
             return None

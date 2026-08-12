@@ -113,6 +113,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     self._json(201, {"node": result})
                     return
+                node_prefix = f"{base}/nodes/"
+                node_suffix = parsed.path[len(node_prefix) :]
+                node_id, separator, node_action = node_suffix.rpartition("/")
+                if separator and node_action == "identify":
+                    result = self.server.gateway.identify_radio_node(
+                        node_id,
+                        int(body.get("duration_seconds", 15)),
+                    )
+                    self._json(200, result)
+                    return
                 if parsed.path == f"{base}/pairing/start":
                     result = self.server.gateway.start_pairing(
                         int(body.get("duration_seconds", 120)),

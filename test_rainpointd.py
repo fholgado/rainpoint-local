@@ -745,6 +745,27 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertTrue(node["managed"])
         self.assertEqual("Garden", node["area"])
 
+    def test_identify_api_uses_bounded_non_rf_node_command(self) -> None:
+        commands: list[tuple[str, dict]] = []
+        self.server.gateway.update_node(
+            "rp-001122334455",
+            connected=True,
+            authenticated=True,
+            capabilities=["rx", "sensor_pairing_tx", "identify"],
+        )
+        self.server.gateway.set_node_command_sender(
+            lambda node_id, message: commands.append((node_id, message))
+        )
+        identified = self.post_json(
+            "/api/v1/nodes/rp-001122334455/identify",
+            {"duration_seconds": 12},
+        )
+        self.assertTrue(identified["identify_active"])
+        self.assertEqual(12, identified["duration_seconds"])
+        self.assertEqual("rp-001122334455", commands[0][0])
+        self.assertEqual("identify_start", commands[0][1]["type"])
+        self.assertNotIn("valve", json.dumps(commands[0][1]))
+
     def test_learning_api_is_receive_only(self) -> None:
         result = self.post_json(
             "/api/v1/learning", {"duration_seconds": 60}

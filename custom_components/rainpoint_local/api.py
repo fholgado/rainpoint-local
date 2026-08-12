@@ -96,6 +96,16 @@ class RainPointLocalClient:
             token,
         )
 
+    async def identify_radio_node(
+        self, token: str, node_id: str, duration_seconds: int = 15
+    ) -> dict[str, Any]:
+        """Request a bounded status-LED blink on one adopted node."""
+        return await self._post(
+            f"nodes/{node_id}/identify",
+            {"duration_seconds": duration_seconds},
+            token,
+        )
+
     async def start_pairing(
         self, token: str, duration_seconds: int = 120, *, node_id: str
     ) -> dict[str, Any]:

@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.14.0 supports authenticated network radio nodes, captured replay,
+Version 0.15.0 supports authenticated network radio nodes, captured replay,
 receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
@@ -88,8 +88,10 @@ device. Firmware remains USB-flashed; OTA updates are not implemented.
 
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway
-before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2 firmware advertises only `rx` and
-`sensor_pairing_tx`; no generic or valve TX capability exists. The app sends a
+before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2
+firmware advertises `rx`, `sensor_pairing_tx`, and, beginning with firmware
+0.6, the non-RF `identify` capability; no generic or valve TX capability
+exists. The app sends a
 time-limited pairing command only after an authenticated Home Assistant request
 selects that node. Its state, command ID, completed reply count, and armed state
 appear in `/api/v1/nodes`.

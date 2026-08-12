@@ -8,9 +8,10 @@ pairing through Home Assistant.
 
 Snapshot reviewed and deployed on 2026-08-11:
 
-- `rainpointd` add-on 0.14.0
-- `rainpoint_local` integration 0.4.0
-- ESP32 bridge firmware 0.5.0
+- `rainpointd` add-on 0.15.0
+- `rainpoint_local` integration 0.5.0
+- ESP32 bridge firmware 0.6.0 source; firmware 0.5.0 remains on the deployed
+  node until the next physical flash
 - authenticated Wi-Fi node protocol v2
 - successful local enrollment of factory endpoint `15a98024`
 - persistent registry-backed HCS026 identity and removal policy
@@ -129,7 +130,7 @@ manual credential copying outside Supervisor installations.
 | `firmware/rainpoint_bridge/src/main.cpp` | Mixed monolith | RF scanning, frame output, pairing state, TX timing, serial CLI, and network command handling share one large file | Split radio receive, pairing engine, command policy, diagnostics, and application orchestration into testable units |
 | `firmware/rainpoint_bridge/include/rainpoint_pairing.h` | Experimental runtime | Strong bounded state machine, but compiled around a fixed recovered Sensor B sequence | Keep the state machine; inject validated profile data and endpoint identities through a constrained profile interface |
 | Serial commands in `main.cpp` | Isolated research tooling | `pairing_probe_b`, `pairing_arm_b`, clock, polarity, frequency, power, and channel controls compile only in `esp32dev_single_bench`; CI checks the binary boundary | Keep the research target explicit and never ship it as the default image |
-| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Factory firmware now creates a physical-serial setup token and reports bounded node health, but Wi-Fi provisioning remains tab-delimited, JSON parsing is manual, and transport is plain TCP | Replace serial commissioning with a temporary AP or BLE exchange, robust serialization, credential rotation, and OTA/rollback design |
+| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Factory firmware creates a physical-serial setup token, reports bounded node health, and firmware 0.6 advertises non-RF identification, but Wi-Fi provisioning remains tab-delimited, JSON parsing is manual, and transport is plain TCP | Replace serial commissioning with the documented temporary AP plus LAN adoption flow, robust serialization, credential rotation, and OTA/rollback design |
 | Channel diagnostics | Debug behavior | The single-radio build emits frequent `radio_channel` records while scanning, producing high serial/network volume | Rate-limit or aggregate channel state; expose diagnostics on demand rather than per dwell change |
 | `esp32dev_dual` environment | Diagnostic build | Optional second radio is not the target distributed-node architecture | Keep only as an explicitly diagnostic CI build or move to a research PlatformIO environment |
 | Firmware update path | Missing production function | Firmware 0.5 remains USB-flashed; no signed OTA, compatibility negotiation, rollback, or fleet version management exists | Define this before distributed nodes are treated as appliances |

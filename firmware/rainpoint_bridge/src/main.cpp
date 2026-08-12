@@ -19,6 +19,10 @@
 #error "RAINPOINT_RESEARCH_BENCH must be 0 or 1"
 #endif
 
+#ifndef RAINPOINT_STATUS_LED_PIN
+#error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
+#endif
+
 namespace {
 
 constexpr int kSpiSckPin = 18;
@@ -30,6 +34,7 @@ constexpr int kPrimaryDataPin = 26;
 constexpr int kDiagnosticDataPin = 33;
 constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
+constexpr std::uint32_t kIdentifyToggleMs = 250;
 
 SPIClass radioSpi(VSPI);
 rainpoint::Cc1101 primaryRadio(
@@ -62,6 +67,10 @@ std::uint32_t lastHealthReport = 0;
 std::uint32_t lastLoopAt = 0;
 std::uint32_t maximumLoopGapMs = 0;
 String serialCommand;
+String identifyCommandId;
+std::uint32_t identifyUntilMs = 0;
+std::uint32_t lastIdentifyToggleMs = 0;
+bool identifyLedOn = false;
 
 #if RAINPOINT_RADIO_COUNT == 1
 bool scanChannels = true;
@@ -482,6 +491,40 @@ void reportNetworkCommandError(const String& commandId, const char* error) {
     emitLine(line);
 }
 
+void setIdentifyLed(bool on) {
+    identifyLedOn = on;
+    digitalWrite(RAINPOINT_STATUS_LED_PIN, on ? HIGH : LOW);
+}
+
+void reportIdentifyStatus(bool active) {
+    String line = "{\"type\":\"identify_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"command_id\":\"";
+    line += identifyCommandId;
+    line += "\",\"active\":";
+    line += active ? "true" : "false";
+    line += "}";
+    emitLine(line);
+}
+
+void pollIdentify() {
+    if (identifyUntilMs == 0) {
+        return;
+    }
+    const std::uint32_t now = millis();
+    if (static_cast<std::int32_t>(now - identifyUntilMs) >= 0) {
+        identifyUntilMs = 0;
+        setIdentifyLed(false);
+        reportIdentifyStatus(false);
+        identifyCommandId.clear();
+        return;
+    }
+    if (now - lastIdentifyToggleMs >= kIdentifyToggleMs) {
+        lastIdentifyToggleMs = now;
+        setIdentifyLed(!identifyLedOn);
+    }
+}
+
 void handleNetworkCommand() {
     String command;
     if (!wifiTransport.takeCommand(command)) {
@@ -491,6 +534,21 @@ void handleNetworkCommand() {
     const String commandId = jsonStringField(command, "command_id");
     if (!validCommandId(commandId)) {
         reportNetworkCommandError("invalid", "invalid_command_id");
+        return;
+    }
+    if (type == "identify_start") {
+        long durationSeconds = 0;
+        if (!jsonLongField(command, "duration_seconds", durationSeconds) ||
+            durationSeconds < 3 || durationSeconds > 60) {
+            reportNetworkCommandError(commandId, "invalid_identify_duration");
+            return;
+        }
+        identifyCommandId = commandId;
+        identifyUntilMs = millis() +
+            static_cast<std::uint32_t>(durationSeconds) * 1'000U;
+        lastIdentifyToggleMs = millis();
+        setIdentifyLed(true);
+        reportIdentifyStatus(true);
         return;
     }
     if (type == "pairing_cancel") {
@@ -837,6 +895,8 @@ bool beginRadio(
 void setup() {
     Serial.begin(115200);
     delay(250);
+    pinMode(RAINPOINT_STATUS_LED_PIN, OUTPUT);
+    setIdentifyLed(false);
     wifiTransport.begin();
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
@@ -893,6 +953,7 @@ void loop() {
         cancelPairing("gateway_connection_lost");
     }
     handleNetworkCommand();
+    pollIdentify();
     handleSerialCommand();
 #if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);

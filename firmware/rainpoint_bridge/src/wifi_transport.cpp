@@ -249,7 +249,8 @@ void WifiTransport::handleGatewayLine(const String& line) {
         return;
     }
     if (authenticated_ &&
-        (type == "pairing_start" || type == "pairing_cancel")) {
+        (type == "pairing_start" || type == "pairing_cancel" ||
+         type == "identify_start")) {
         if (!pendingCommand_.isEmpty()) {
             reportNetworkState("protocol_error", "command_queue_full");
             return;
@@ -271,7 +272,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
-        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\"],"
+        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\"],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,
         nodeId_.c_str(),

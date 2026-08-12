@@ -123,6 +123,9 @@
       "reporting": { "name": "Reporting" },
       "radio_node_connected": { "name": "Connected" },
       "radio_node_tx_armed": { "name": "Pairing transmitter armed" }
+    },
+    "button": {
+      "identify_radio_node": { "name": "Identify" }
     }
   }
 }

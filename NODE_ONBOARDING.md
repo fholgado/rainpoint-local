@@ -8,12 +8,11 @@ migrate once into the same private SQLite registry. Registered nodes remain
 visible while offline and expose connection, firmware, RF, memory, network,
 temperature, and watchdog-oriented diagnostics as HA devices.
 
-Commissioning still begins over USB: factory firmware generates a private
-setup token, `show_node` displays it only while unconfigured, and the user
-enters the stable ID/token in **Add custom local radio node** before sending the
-`configure_wifi` command. A temporary setup access point or BLE exchange has
-not replaced this physical provisioning step yet. Rotation, revocation, and
-friendly metadata editing also remain follow-up management actions.
+Commissioning still begins over USB in firmware 0.5: factory firmware generates
+a private setup token, `show_node` displays it only while unconfigured, and the
+user enters the stable ID/token before sending `configure_wifi`. This remains a
+recovery and development path while the zero-copy flow below is implemented;
+it is not the target product experience.
 
 ## Product goal
 
@@ -52,14 +51,22 @@ The integration exposes **Add local radio node**. Starting it opens a short
 commissioning window, much like permitting joins on a Zigbee network.
 
 1. The user powers a factory-new node near Home Assistant.
-2. HA discovers it through Bluetooth or a temporary setup access point. A
-   manual setup-code path remains available when discovery fails.
-3. The user scans the QR code on the node or enters its short setup code.
-4. HA securely supplies Wi-Fi credentials and issues a unique long-term node
-   credential. The bootstrap setup code cannot be reused after commissioning.
-5. The UI shows the stable node identity, firmware, connection quality, radios,
-   and last report time, then asks for a friendly name such as “Back Garden.”
-6. The node appears as a device beneath the single custom local RF gateway.
+2. The node exposes a temporary captive portal named **RainPoint Local Setup**.
+   The user supplies only the home Wi-Fi credentials; ESP32 IDs, gateway
+   addresses, ports, and tokens never appear in the normal UI.
+3. Once on the LAN, the node advertises an adoptable service. HA discovers it
+   and offers **Adopt radio node** beneath the existing custom local RF gateway.
+4. HA requests identification. The selected node blinks its status LED and the
+   user presses its physical BOOT button to confirm possession.
+5. The custom local gateway creates a unique long-term node credential and HA
+   delivers it to the physically confirmed node through the one-time adoption
+   session. The secret is never shown to the user or exposed as entity state.
+6. The UI asks only for a friendly name such as “Back Garden” and an optional
+   area, then waits for the node's first authenticated connection.
+7. The node appears as a device beneath the single custom local RF gateway.
+
+The manual USB setup-code path remains available only as an advanced recovery
+path when captive-portal or LAN discovery fails.
 
 Adding another node repeats the same flow; it does not create another HA
 integration entry or another logical device network.
@@ -72,13 +79,14 @@ end to end:
 1. `rainpointd` owns a persistent node registry instead of parsing the
    `node_tokens` JSON app option.
 2. Its authenticated management API can open and cancel a time-limited
-   commissioning session, issue one node credential, and revoke or rotate an
-   existing node independently.
+   commissioning session, issue one node credential, track physical
+   confirmation, and revoke or rotate an existing node independently.
 3. Factory firmware exposes a bounded commissioning transport—temporary setup
    access point, Bluetooth, or USB—with a one-time setup code and physical
    reset path.
-4. The HA options flow starts commissioning, auto-advances only after the node
-   authenticates, and then asks for its friendly name and area.
+4. The HA options flow starts commissioning, identifies the selected node,
+   waits for its physical confirmation, and auto-advances after authentication
+   before asking for its friendly name and area.
 5. The connected node is registered beneath the existing custom local RF
    gateway as an HA device with firmware, connection, radio health, and last
    report diagnostics.
@@ -86,9 +94,9 @@ end to end:
    valves assigned to it become unavailable until explicitly reassigned and
    validated.
 
-The first publishable commissioning path may use a temporary setup access point
-and printed setup code. BLE discovery can improve convenience later without
-changing the gateway registry or HA flow contract.
+The first publishable commissioning path uses a temporary setup access point
+for Wi-Fi and LAN discovery for adoption. BLE provisioning may later replace
+the captive portal without changing the gateway registry or HA flow contract.
 
 The separate **Add RainPoint device** action then:
 

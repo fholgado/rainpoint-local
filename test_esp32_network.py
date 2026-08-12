@@ -335,7 +335,48 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
-    def test_command_boundary_rejects_every_non_pairing_action(self) -> None:
+    def test_v2_identify_is_bounded_and_requires_capability(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "identify"],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        result = self.gateway.identify_radio_node(NODE_A, 15)
+        command = json.loads(stream.readline())
+        self.assertEqual("identify_start", command["type"])
+        self.assertEqual(15, command["duration_seconds"])
+        self.assertEqual(result["command_id"], command["command_id"])
+        self.assertNotIn("pairing", json.dumps(command))
+        self.assertNotIn("valve", json.dumps(command))
+        stream.write(
+            json.dumps(
+                {
+                    "type": "identify_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "active": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("identify_active") is not False:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        stream.close()
+        connection.close()
+
+        legacy_connection, legacy_stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(ValueError, "identification"):
+            self.gateway.identify_radio_node(NODE_A)
+        legacy_stream.close()
+        legacy_connection.close()
+
+    def test_command_boundary_rejects_unbounded_rf_actions(self) -> None:
         connection, stream, _ = self._connect(
             NODE_A, TOKEN_A, protocol_version=2
         )
