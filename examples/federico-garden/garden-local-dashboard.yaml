@@ -258,9 +258,9 @@ views:
                 name: Left Bed
               - entity: sensor.right_bed_last_report_interval
                 name: Right Bed
-              - entity: sensor.rainpoint_hcs026_9bce0024_last_report_interval
+              - entity: sensor.test_sensor_a_last_report_interval
                 name: Test Sensor A
-              - entity: sensor.rainpoint_hcs026_95a98024_last_report_interval
+              - entity: sensor.test_sensor_b_last_report_interval
                 name: Test Sensor B
   - title: Front Yard
     path: front-yard
