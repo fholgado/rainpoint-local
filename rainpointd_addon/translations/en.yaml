@@ -1,19 +1,13 @@
 configuration:
   transport:
     name: Transport
-    description: Use remote Wi-Fi radio nodes, a local USB receiver, or explicit development replay
-  replay_interval:
-    name: Replay interval
-    description: Seconds between captured fixture observations
+    description: Use remote Wi-Fi radio nodes or a supported local receiver
   frequency:
     name: Center frequency
     description: RTL-SDR center frequency in hertz
   sample_rate:
     name: Sample rate
     description: RTL-SDR sample rate in samples per second
-  research_capture_minutes:
-    name: Broad capture duration
-    description: Minutes to save all detected raw RF signals before returning to normal decoding
   registry_write_token:
     name: Legacy gateway token override
     description: Advanced migration override; leave empty to generate and manage the gateway credential automatically

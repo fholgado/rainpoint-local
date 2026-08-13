@@ -5,8 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.18.2 supports authenticated network radio nodes, captured replay,
-receive-only USB RTL-SDR,
+Version 0.18.2 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -35,20 +34,15 @@ do not depend on a display-model string.
 
 Installing this app does not make the physical irrigation system work offline.
 New installations default to `network` mode. Select `rtl433` only after
-attaching a supported RTL-SDR receiver to the Home Assistant host; select
-`replay` only for explicit development work.
+attaching a supported RTL-SDR receiver to the Home Assistant host. Replay and
+raw-capture tooling remain available through the development CLI, not this app.
 
 ## Configuration
-
-### Replay interval
-
-Number of seconds between fixture observations. The default is 5 seconds.
 
 ### Transport
 
 - `network`: production mode for one or more authenticated Wi-Fi radio nodes;
   no local receiver or synthetic devices.
-- `replay`: captured development fixtures; does not use USB hardware.
 - `rtl433`: live receive-only RainPoint packets from the USB RTL-SDR.
 - `esp32_serial`: normalized RainPoint frames from the receive-only ESP32
   bridge connected by USB.
@@ -124,16 +118,6 @@ time-limited pairing command only after an authenticated Home Assistant request
 selects that node. Its state, command ID, completed reply count, and armed state
 appear in `/api/v1/nodes`.
 
-### Broad capture duration
-
-Set `research_capture_minutes` to a nonzero value to save every detected raw RF
-signal for that many minutes while the normal RainPoint event decoder and API
-remain active. The app then returns automatically to ordinary live decoding.
-Raw I/Q files are written beneath `/share/rainpoint-captures`; they may include
-unrelated nearby 433 MHz transmissions and must remain local. Reset the option
-to `0` after starting a one-time capture so a future app restart does not begin
-another capture.
-
 ### Event retention
 
 `event_retention_limit` bounds the raw SQLite event journal and defaults to
@@ -186,7 +170,7 @@ The app exposes its local device and pairing API on TCP port 8787. Configure the
 - Host: the IP address of the Home Assistant host
 - Port: `8787`
 
-Replay mode creates simulated entities. Live mode currently creates confirmed
+The supported transports currently create confirmed
 HCS026FRF soil-moisture entities and a receive-only HTV145 valve device with
 confirmed watering state, requested duration, and last-session water usage.
 Valid RainPoint frames that do not match the confirmed layouts are retained as
@@ -226,5 +210,6 @@ or valve frame in its network vocabulary. Its sole RF mutation is the
 evidence-backed, time-limited `hcs026_auto_v1` enrollment operation on a
 user-selected authenticated node.
 It starts disarmed, cancels on coordinator loss, and requires terminal RF
-confirmation. USB access is used only by `rtl_433` for receiving. Share access
-is used only for explicitly enabled raw captures.
+confirmation. USB access is used only by `rtl_433` or the serial bridge. The
+read-only share mapping supports an optional external device catalog and cannot
+be used to write raw captures.

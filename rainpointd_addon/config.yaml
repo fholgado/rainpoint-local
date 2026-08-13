@@ -22,28 +22,24 @@ ports_description:
 watchdog: http://[HOST]:[PORT:8787]/health
 usb: true
 map:
-  - share:rw
+  - share:ro
 options:
   transport: network
-  replay_interval: 5.0
   frequency: 433700000
   sample_rate: 2000000
   serial_device: /dev/ttyUSB0
   serial_baud: 115200
-  research_capture_minutes: 0
   registry_write_token: ""
   node_listen_port: 8790
   node_tokens: ""
   device_catalog_path: ""
   event_retention_limit: 100000
 schema:
-  transport: "list(network|rtl433|esp32_serial|replay)"
-  replay_interval: "float(0.5,3600)"
+  transport: "list(network|rtl433|esp32_serial)"
   frequency: "int(433000000,435000000)"
   sample_rate: "int(250000,2400000)"
   serial_device: str
   serial_baud: "int(9600,921600)"
-  research_capture_minutes: "int(0,240)"
   registry_write_token: str?
   node_listen_port: "list(0|8790)"
   node_tokens: str?
