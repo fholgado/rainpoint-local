@@ -46,7 +46,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
     def async_start_event_listener(self) -> None:
         """Start push-like event delivery after the initial snapshot."""
         if self._event_long_poll and self._event_task is None:
-            self._event_task = self.hass.async_create_task(
+            self._event_task = self.hass.async_create_background_task(
                 self._async_event_listener(),
                 f"{DOMAIN} event listener",
             )
