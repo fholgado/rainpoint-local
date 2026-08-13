@@ -82,6 +82,23 @@ Still provisional or not working yet:
   restart, and device-registry retention, and
 - locally opening or closing the physical valve.
 
+### High-priority remaining work: radio-node OTA
+
+Radio nodes still require a physical USB connection for every firmware update.
+Before treating distributed nodes as a maintainable installation, implement
+the complete OTA path: signed artifact verification, gateway delivery,
+alternate-partition installation, persistent boot-attempt tracking, health
+confirmation, automatic rollback, update progress, and Home Assistant update
+entities. The existing manifest generator and three-boot rollback model are
+contracts and tests only; they are not yet connected to ESP32 flash, boot
+selection, or gateway commands.
+
+OTA is complete only when a production node can install a signed update over
+Wi-Fi, authenticate back to the local gateway with healthy Wi-Fi and radio
+diagnostics, confirm the new partition, and automatically restore the previous
+image after three unconfirmed boots. Experimental firmware must remain on a
+separate, explicitly selected release channel.
+
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
 local. Home Assistant now starts one automatic HCS026 workflow; the selected

@@ -295,17 +295,15 @@ pio run --project-dir firmware/rainpoint_bridge \
 
 ## Next firmware increments
 
-1. Flash firmware 0.6.0 and validate its bounded Identify LED action while RF
-   transmission remains disarmed.
-2. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
+1. Flash `0.8.0-test.1` over USB and physically validate the isolated routine
+   acknowledgement candidate and 72-hour report behavior before considering
+   persistent authorization.
+2. Implement and hardware-validate signed, rollback-safe OTA so deployed radio
+   nodes no longer require retrieval for routine firmware updates. Until then,
+   every firmware target remains USB-flashed.
+3. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
    physical BOOT-button confirmation, and one-click HA adoption contract on a
    second board.
-3. Start the fixed Sensor B workflow from Home Assistant with the original
-   RainPoint gateway powered off.
-4. Confirm terminal message `03`, registry creation, and ordinary moisture
-   entities end to end.
-5. Physically validate the isolated routine-acknowledgement candidate and
-   72-hour report behavior before considering persistent authorization.
-6. Generalize pairing only from additional controlled device captures.
-7. Implement and validate the distinct valve wake and close command before any
+4. Generalize pairing only from additional controlled device captures.
+5. Implement and validate the distinct valve wake and close command before any
    bounded open test.
