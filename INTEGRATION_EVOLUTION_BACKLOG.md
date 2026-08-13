@@ -1,120 +1,183 @@
 # Integration evolution backlog
 
-## Current sequencing decision
+## Current milestone
 
-Finish physical validation of the custom radio node and bounded valve control
-before merging this prototype into the broader HomGar/RainPoint integration.
-The local gateway API and Home Assistant UI may be hardened in the meantime,
-but they must not imply that unverified valve control or model-wide sensor
-pairing is supported.
+RainPoint Local has crossed the receive-only proof-of-concept boundary. It now
+has a persistent logical gateway, multiple receiver support, authenticated
+Wi-Fi radio nodes, Home Assistant-managed node adoption and diagnostics, and a
+physically proven local HCS026 pairing exchange. The current source versions
+are:
 
-## Completed foundation
+- `rainpointd` add-on 0.18.2;
+- `rainpoint_local` integration 0.8.2;
+- ESP32 production firmware 0.6.0; and
+- ESP32 pairing-generalization test firmware 0.7.0-test.3.
 
-The following architecture work is implemented and covered by regression
-tests:
+The next product milestone is not more carrier-board optimization. It is an
+end-to-end local software stack whose sensor lifecycle is reliable enough for
+unattended use, followed by a physically validated and fail-closed valve path.
+
+## Working functionality
+
+The following behavior is implemented and regression-tested unless a physical
+qualification is explicitly noted:
 
 - transport-neutral RF ingestion shared by RTL-SDR, serial, and Wi-Fi nodes;
-- stable per-node identity, authenticated node sessions, receiver attribution,
-  cross-receiver deduplication, and per-receiver coverage metrics;
-- managed node registry, Home Assistant diagnostic devices, bounded Identify,
-  and gateway-controlled adoption sessions;
-- a first-boot commissioning candidate with temporary AP provisioning, mDNS
-  discovery, physical confirmation, and Home Assistant adoption;
-- persistent device/enrollment state, transactional forget behavior, and
-  Home Assistant entity reconciliation;
-- an evidence-backed pairing-profile registry shared by gateway and firmware;
-- production firmware boundaries that exclude research serial TX controls.
+- stable gateway and radio-node identities, authenticated node sessions,
+  receiver attribution, cross-receiver deduplication, and coverage metrics;
+- persistent managed-node records, Home Assistant diagnostic devices, bounded
+  **Identify**, zeroconf discovery, and gateway-controlled adoption sessions;
+- persistent device, observation, enrollment, suppression, event, and
+  receiver state in a versioned SQLite store;
+- transactional local forget behavior that transmits no RF reset and prevents
+  an ignored endpoint from silently recreating an HA device;
+- evidence-based product-family and capability inference without claiming an
+  exact retail model from frame shape alone;
+- physically proven local HCS026 pairing for both test identities using an
+  explicitly selected ESP32/CC1101 node and terminal RF confirmation;
+- a model-level `hcs026_auto_v1` workflow that passed end to end on Sensor A
+  without a user-supplied RF identity or transcript;
+- dynamic Home Assistant entities, report activity, last-report time, battery
+  state where decoded, and radio-node diagnostics; and
+- production firmware boundaries that exclude research tuning and unrestricted
+  transmit commands.
 
-The deployed gateway/UI reference is add-on 0.16.1 and integration 0.6.2. The
-existing radio node remains on firmware 0.5.0. Firmware 0.6.0 and the dormant
-zero-copy commissioning path await physical validation with the second node.
+Valve telemetry decoding and offline frame generation exist. Physical valve
+pairing and control do not.
 
-## Next physical milestone: second radio node
+## Software work that can proceed without RF hardware
 
-The second node should validate the distributed-node assumptions end to end:
+These items improve real functionality and publication readiness without
+requiring a sensor, valve, SDR, or attached ESP32 during implementation.
 
-1. Boot without a serial tether and advertise itself for adoption.
-2. Appear automatically in Home Assistant without copying a node ID or token.
-3. Require physical confirmation before receiving its managed credential.
-4. Blink through **Identify** so the user can distinguish nearby nodes.
-5. Receive the same RF frame as the existing node/RTL-SDR without duplicating
-   device cadence or Home Assistant activity.
-6. Retain receiver-specific packet and coverage metrics for placement choices.
-7. Reconnect after power loss without repeating commissioning.
+### P0 — Home Assistant lifecycle correctness
 
-Do not promote firmware 0.6.0 or describe zero-copy commissioning as validated
-until these checks pass or a narrow fix is physically retested. The deployed
-gateway and integration contain the inactive commissioning contract so the
-second node can exercise it without another HA-side upgrade.
+- Add HA-native config-flow and entity/device-registry tests for discovery,
+  adoption, pairing, rename, forget, re-pair, reload, and restart.
+- Preserve user-disabled entities while allowing integration-owned disabled
+  entities to return after intentional reassociation.
+- Define when a forgotten device remains in the HA device registry and when it
+  may be removed, without conflating HA removal with an RF reset.
+- Replace one-off setup-time entity repairs with versioned config-entry and
+  entity migrations.
 
-## Sensor-pairing boundary
+### P0 — gateway and node credential lifecycle
 
-Local HCS026 pairing is real but remains experimental. Two independent
-identities established the common reply payload, deterministic paired identity,
-shared selector, and terminal-confirmation behavior. `hcs026_auto_v1` now
-encodes that model-wide candidate without exposing RF identities or transcript
-selection to Home Assistant. It remains outside the production firmware target
-until the automatic path passes physically on both sensors.
+- Add a one-time claim flow for standalone gateways that cannot use Supervisor
+  discovery.
+- Implement gateway and per-node credential rotation, revocation, expiry, and
+  repair flows.
+- Make node removal and reprovisioning explicit operations in Home Assistant.
+- Keep node credentials private and independently revocable.
 
-Only evidence common to multiple identities becomes model-wide behavior.
-Revision-specific differences become validated protocol parameters, never
-household conditionals.
-The complete remaining sensor matrix and the staged stock-to-local valve
-association procedure are maintained in
-[`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md).
+### P0 — versioned, typed local API
 
-## Valve-control gate
+- Introduce typed identities, observations, capabilities, commands,
+  acknowledgements, and structured errors at the gateway boundary.
+- Add explicit capability and protocol-version negotiation between HA,
+  `rainpointd`, and radio nodes.
+- Bound request sizes, connections, threads, event cursors, and malformed
+  message handling.
+- Preserve the current API while migrating clients through an additive version
+  boundary.
 
-The RTL-SDR remains an independent reference receiver while the first bounded
-valve prototype is validated:
+### P1 — push-driven Home Assistant updates
 
-1. Compare ESP32/CC1101 receive timing and frames with the RTL-SDR.
-2. Verify wake sequence, carrier, deviation, symbol timing, frame bits, and
-   output power with the SDR before addressing a valve.
-3. Parameterize controller and valve identities outside the protocol core.
-4. Transmit an idempotent close first and require a correlated idle response.
-5. Run a maximum 60-second open trial with the node-local watchdog armed before
+- Replace unconditional five-second full polling with an event cursor or push
+  subscription.
+- Retain a low-frequency reconciliation poll for restart and missed-event
+  recovery.
+- Trigger immediate refresh after management commands and expose connection
+  health separately from device report cadence.
+
+### P1 — production/development packaging split
+
+- Publish a production add-on path containing network radio-node operation and
+  supported local functionality only.
+- Keep replay, broad IQ capture, fixed research profiles, USB permissions, and
+  writable share access in an explicit developer/research profile.
+- Pin base images and dependencies and add add-on schema/build validation.
+
+### P1 — transport-neutral protocol package
+
+- Extract the decoder and identity/capability catalog into an installable
+  package that neither imports Home Assistant nor owns installation names.
+- Make replay, SDR, serial, and Wi-Fi adapters emit the same typed observation.
+- Keep captured RF evidence and provisional decoders clearly separated from
+  the supported public contract.
+
+### P1 — OTA and fleet management
+
+- Define signed firmware metadata, compatibility checks, staged rollout,
+  rollback, and recovery behavior.
+- Expose available/current firmware and update health through HA without
+  allowing an incompatible gateway/node combination.
+- Keep USB recovery documented even after OTA exists.
+
+OTA can be designed and tested largely offline, but it is not complete until a
+real node passes update, rollback, power-loss, and recovery tests.
+
+## Physical evidence gates
+
+The following work must not be declared complete from simulated or offline
+tests alone.
+
+### Sensor release qualification
+
+- Repeat `hcs026_auto_v1` on Sensor B.
+- Complete power-cycle/rejoin, gateway restart, and radio-node restart tests
+  without creating a second HA device.
+- Complete the unattended reporting, overlapping-receiver, interruption, and
+  forget/reassociation matrix in
+  [`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md).
+- Determine whether the P1–P6 soil profile is transmitted, display-local, or
+  cloud-only before exposing it as writable functionality.
+
+### Valve association and bounded control
+
+Use only the dedicated test valve. The required order is:
+
+1. Capture stock pairing and identify association-specific fields.
+2. Reconstruct and compare the association exchange offline.
+3. Pair the test valve locally without connecting it to pressurized water.
+4. Parameterize valve and controller identity outside the protocol core.
+5. Join the hardware-independent safety controller to an experimental command
+   transport.
+6. Transmit an idempotent close first and require an idle response.
+7. Run a maximum 60-second open trial with the node-local watchdog armed before
    transmission.
-6. Audit request, frame, response, timeout, retry, watchdog, and final state.
-7. Repeat until every success and failure returns to confirmed idle without
-   cloud data.
+8. Audit request, RF frame, response, timeout, retry, watchdog, and final state.
 
-Until that gate passes, valve TX stays out of the Home Assistant UI and general
-network API. Opens are never retried after ambiguous results; only close may be
-retried. A valve has exactly one user-selected preferred transmitter node, and
-an unavailable preferred node fails closed rather than broadcasting through
-several nodes.
+Until this passes repeatedly, valve TX remains absent from the normal Home
+Assistant UI and production node command vocabulary. Open is never retried
+after an ambiguous result; close may be retried. Each valve has exactly one
+user-selected preferred transmitter node and fails closed when that node is
+unavailable.
 
-## Production boundaries still to finish
+## Deferred until the valve gate
 
-- Split published add-on operation from replay, broad capture, and other
-  research-only startup modes.
-- Replace trusted-LAN plaintext node/API transport before enabling valve
-  control outside controlled testing.
-- Add credential rotation, revocation, OTA compatibility checks, and rollback.
-- Move remaining installation compatibility identities into a versioned
-  registry migration; keep this house's dashboard under `examples/` only.
-- Extract typed protocol identities, observations, capabilities, commands, and
-  acknowledgements into an installable transport-neutral package.
-- Add Home Assistant-native config-flow/entity lifecycle tests and add-on
-  schema/build validation.
+- The active cloud-to-local migration wizard.
+- Local watering schedules intended to replace vendor automation.
+- General claims of cloud-independent irrigation control.
+- Enabling valve commands in the public gateway API or production firmware.
 
-## Integration direction after the valve gate
+Architecture and identity coordination with the existing HomGar/RainPoint
+integration can continue now. Migration code should wait until repeatable
+sensor/valve association and bounded valve control establish the physical
+identity and authority contract.
 
-The existing integration can expose cloud and custom-local providers while
-assigning every physical device exactly one state/control authority. Migrating
-users should retain their Home Assistant devices, entities, history, and
-customization. Cloud observations may remain available for verification, or
-for models not supported locally, but must not overwrite locally authoritative
-state. Fresh local setup remains supported so the system survives loss of the
-vendor cloud.
+## Recommended implementation order
 
-Before freezing a public provider contract, coordinate identity fields,
-unique-ID migration, capability names, and API versioning with the existing
-integration maintainers.
+1. HA-native lifecycle tests and formal migrations.
+2. Standalone claim plus credential rotation/revocation.
+3. Typed API models, capability negotiation, and structured errors.
+4. Push-driven HA updates with reconciliation fallback.
+5. Production/development add-on separation.
+6. Transport-neutral protocol-package extraction.
+7. OTA design and offline compatibility tooling.
+8. Finish sensor physical qualification.
+9. Pair and safely control the dedicated test valve.
+10. Coordinate and implement cloud-to-local migration upstream.
 
-The proposed authority handoff, identity aliasing, verification period,
-rollback limits, and upstream coordination schedule are specified in
-[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md). Provider and
-identity review can begin before the RF gates pass; the active migration wizard
-must wait for repeatable sensor/valve association and bounded valve control.
+This order lets unattended software hardening continue without turning
+unverified RF behavior into a public promise.

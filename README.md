@@ -75,14 +75,20 @@ Still provisional or not working yet:
 - implementing and validating routine post-enrollment sensor acknowledgements,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
+- standalone gateway claiming, credential rotation/revocation, signed OTA and
+  rollback, and push-driven Home Assistant updates,
+- HA-native lifecycle/migration coverage for rename, forget, re-pair, reload,
+  restart, and device-registry retention, and
 - locally opening or closing the physical valve.
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully
 local. Home Assistant now starts one automatic HCS026 workflow; the selected
 node adopts the first strict factory announcement and locks the pairing window
-to that identity. Physical validation of this new automatic path and valve
-control remain outstanding.
+to that identity. This automatic path passed end to end on Sensor A. Repeating
+it on Sensor B and completing restart, interruption, unattended-reporting, and
+reassociation tests remain the sensor release gates. Valve pairing and control
+remain outstanding.
 
 ## Architecture
 
@@ -110,6 +116,9 @@ authenticated Wi-Fi radio nodes; replay remains an explicit development mode.
 
 See [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) for the complete
 migration and safety design.
+
+The prioritized split between software-only work and physical RF gates is in
+[INTEGRATION_EVOLUTION_BACKLOG.md](INTEGRATION_EVOLUTION_BACKLOG.md).
 
 Physical validation procedures are tracked in
 [`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md),

@@ -6,14 +6,15 @@ This document inventories prototype, research, diagnostic, house-specific, and
 production-facing code after the first successful end-to-end local HCS026
 pairing through Home Assistant.
 
-Snapshot reviewed and deployed on 2026-08-11:
+Source snapshot reviewed on 2026-08-12:
 
-- deployed `rainpointd` add-on 0.15.0; zero-copy adoption is 0.16.0 source
-- deployed `rainpoint_local` integration 0.5.0; zeroconf adoption is 0.6.0 source
-- ESP32 bridge firmware 0.6.0 source; firmware 0.5.0 remains on the deployed
-  node until the next physical flash
+- `rainpointd` add-on 0.18.2;
+- `rainpoint_local` integration 0.8.2;
+- ESP32 production firmware 0.6.0 and pairing-generalization test firmware
+  0.7.0-test.3;
 - authenticated Wi-Fi node protocol v2
-- successful local enrollment of factory endpoint `15a98024`
+- successful local enrollment of both controlled HCS026 identities;
+- successful end-to-end automatic identity adoption for Sensor A;
 - persistent registry-backed HCS026 identity and removal policy
 - SQLite-backed enrollment state with one-time legacy JSON migration
 - versioned SQLite schema, durable device snapshots, bounded event retention,
@@ -74,7 +75,7 @@ manual credential copying outside Supervisor installations.
 | --- | --- | --- | --- |
 | In progress | Automatic HCS026 identity adoption has passed end-to-end on Sensor A | Gateway, HA, and firmware use `hcs026_auto_v1`; newly paired devices remain family-level until packet product evidence promotes the exact model | Repeat the automatic path on Sensor B, then complete persistence, interruption, and unattended-reporting tests |
 | In progress | Live receive code previously owned this house's sensor names and singleton valve state | Persistent HCS026 registry entries drive sensor decoding; independent valve state and arbitrary JSON installation catalogs are supported, while the explicit legacy catalog preserves established HA IDs | Represent valve endpoint links in the registry, migrate the compatibility catalog transactionally, then remove its default fallback |
-| P1 | Development replay and raw capture controls still ship in the add-on, although new installs now default to empty `network` mode | The normal image remains broader than a published production package needs | Create explicit development and production profiles/images; keep replay and broad capture out of the published image |
+| P1 | Development replay and raw capture controls still ship in the add-on, although new installs now default to `network` mode | The normal image remains broader than a published production package needs | Create explicit development and production profiles/images; keep replay and broad capture out of the published image |
 | P0 | Supervisor discovery now provisions the gateway bearer credential automatically, but standalone setup is manual and HTTP remains plaintext | Add-on UX is fixed; standalone onboarding, rotation, scoped access, and transport confidentiality remain incomplete | Add one-time standalone claim, credential rotation, scoped operations, and a reviewed encrypted transport or HA-local authenticated channel |
 | P0 | Node protocol authenticates the connection but subsequent TCP messages are neither encrypted nor individually authenticated | Appropriate only for the current trusted-LAN prototype | Define a production session transport with confidentiality, integrity, replay handling, and key rotation before valve control |
 | In progress | Forget/delete semantics previously spanned SQLite, pairing JSON, memory, and HA registries | Enrollment mappings now migrate once into SQLite; gateway forget atomically removes registry and enrollment rows, persists suppression, removes current state, and HA integration-disables owned entities | Add HA-native lifecycle tests and define eventual device-registry cleanup/retention policy |
@@ -90,7 +91,7 @@ manual credential copying outside Supervisor installations.
 | `rainpointd_addon/rainpoint_protocol.py` | Production candidate | Core decoder is stored at the add-on root and imported through container path layout | Move to an installable, transport-neutral `rainpoint_protocol` package with typed decoded models and explicit compatibility tests |
 | `rainpointd_addon/rainpointd/rf.py` | Mixed | Confirmed normalization receives an injected device catalog instead of owning house endpoint constants; provisional fields and evidence commentary remain | Move provisional decoders behind evidence/status metadata and continue extracting typed protocol observations |
 | `rainpointd_addon/rainpointd/valve_protocol.py` | Experimental runtime | Offline builders use this house's hub and valve endpoints | Parameterize endpoint identities and move builders into an explicitly experimental control package until physical TX is validated |
-| `rainpointd_addon/rainpointd/pairing_protocol.py` | Experimental runtime/evidence | Holds a registry containing one evidence-labelled identity and three recovered reply frames | Preserve captured frames as fixtures and keep the stable profile boundary; add identities only after physical validation, with no generic HCS026 claim yet |
+| `rainpointd_addon/rainpointd/pairing_protocol.py` | Experimental runtime/evidence | Implements the evidence-backed common four-reply HCS026 first-enrollment branch plus captured regression profiles | Preserve captured frames as fixtures; keep `hcs026_auto_v1` family-scoped and experimental until Sensor B and the interruption/restart matrix pass |
 | `research/fixtures/*.json` | Research evidence | Captures are used by regression tests and prove recovered behavior | Keep tracked, immutable, documented, and separated from mutable runtime state |
 
 ### Gateway service
@@ -110,7 +111,7 @@ manual credential copying outside Supervisor installations.
 
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
-| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v4 adds transactional migration, durable snapshots, bounded retention, per-receiver coverage, and managed radio nodes while preserving device registry, suppression, and enrollment state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
+| `rainpointd_addon/rainpointd/storage.py` | Production candidate | SQLite schema v5 adds evidence-based identity provenance to the existing transactional registry, enrollment, snapshot, retention, receiver, and managed-node state | Keep future migrations additive and validate them against anonymized production-scale database fixtures in CI |
 | `rainpointd_addon/rainpointd/pairing.py` | Production candidate | The state machine uses an enrollment repository; legacy JSON mappings are conflict-checked, imported once into SQLite, and archived as `.migrated` | Add schema-versioned migration coverage and keep transient pairing windows deliberately in memory |
 | Gateway `_devices` memory | Prototype with removal policy | Accepted and compatibility devices remain observable; a persisted removed endpoint is retained as raw RF only and cannot recreate a device until accepted again | Expand this into explicit observed, paired, accepted, ignored, and removed states, then make HA exposure/reconciliation consume that policy |
 
@@ -128,18 +129,18 @@ manual credential copying outside Supervisor installations.
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
 | `firmware/rainpoint_bridge/src/main.cpp` | Mixed monolith | RF scanning, frame output, pairing state, TX timing, serial CLI, and network command handling share one large file | Split radio receive, pairing engine, command policy, diagnostics, and application orchestration into testable units |
-| `firmware/rainpoint_bridge/include/rainpoint_pairing.h` | Experimental runtime | The bounded state machine consumes a constrained profile interface; only one recovered sequence is validated | Keep orchestration profile-agnostic and add compiled profiles only from controlled evidence |
+| `firmware/rainpoint_bridge/include/rainpoint_pairing.h` | Experimental runtime | The bounded state machine consumes a constrained family-level profile; two identities support the common branch and Sensor A passed automatic adoption | Keep orchestration profile-agnostic and require the remaining physical matrix before promoting the workflow to production firmware |
 | Serial commands in `main.cpp` | Isolated research tooling | `pairing_probe_b`, `pairing_arm_b`, clock, polarity, frequency, power, and channel controls compile only in `esp32dev_single_bench`; CI checks the binary boundary | Keep the research target explicit and never ship it as the default image |
-| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Firmware 0.6 source adds temporary-AP provisioning, mDNS discovery, physical-confirmation adoption, and bounded Identify; JSON parsing remains manual and node transport is plain TCP | Physically validate zero-copy commissioning, then add robust serialization, credential rotation, and OTA/rollback design |
+| `firmware/rainpoint_bridge/src/wifi_transport.cpp` | Prototype production candidate | Firmware 0.6 adds temporary-AP provisioning, mDNS discovery, physical-confirmation adoption, and bounded Identify; JSON parsing remains manual and node transport is plain TCP | Add robust serialization, credential rotation/revocation, and signed OTA/rollback; retain physical commissioning regression tests |
 | Channel diagnostics | Debug behavior | The single-radio build emits frequent `radio_channel` records while scanning, producing high serial/network volume | Rate-limit or aggregate channel state; expose diagnostics on demand rather than per dwell change |
 | `esp32dev_dual` environment | Diagnostic build | Optional second radio is not the target distributed-node architecture | Keep only as an explicitly diagnostic CI build or move to a research PlatformIO environment |
-| Firmware update path | Missing production function | Firmware 0.5 remains USB-flashed; no signed OTA, compatibility negotiation, rollback, or fleet version management exists | Define this before distributed nodes are treated as appliances |
+| Firmware update path | Missing production function | Nodes remain USB-flashed; no signed OTA, compatibility negotiation, rollback, or fleet version management exists | Define this before distributed nodes are treated as appliances |
 
 ## Home Assistant integration inventory
 
 | Path | Classification | Finding | Disposition |
 | --- | --- | --- | --- |
-| `custom_components/rainpoint_local/config_flow.py` | Production candidate | Supervisor credentials are discovered and stored secrets stay out of pairing; firmware 0.6 source adds zeroconf node adoption, while area remains free text and only one evidence-backed pairing profile exists | Physically validate node commissioning, add standalone claim/reauth, use HA selectors, and render additional model/profile choices only when supported |
+| `custom_components/rainpoint_local/config_flow.py` | Production candidate | Supervisor credentials are discovered, stored secrets stay out of pairing, zeroconf node adoption is implemented, and HA exposes one family-level HCS026 pairing workflow | Add standalone claim/reauth, credential rotation/revocation, HA selectors, and HA-native config-flow tests |
 | `custom_components/rainpoint_local/api.py` | Prototype client | Plain HTTP, dictionary responses, repeated request code, and minimal compatibility validation | Add typed response models, explicit capability negotiation, structured errors, and an authenticated production transport |
 | `custom_components/rainpoint_local/sensor.py` and `binary_sensor.py` | Production candidate | Dynamic discovery adds entities; coordinator reconciliation now integration-disables entities for gateway-removed devices and re-enables only those it disabled when a device returns | Add HA-native tests for forget, user-disabled preservation, rename, reload, and device-registry cleanup policy |
 | `custom_components/rainpoint_local/__init__.py` | Prototype migration | Removes one obsolete entity suffix on every setup rather than using a formal migration path | Add config-entry/entity migrations and version tests |
@@ -191,10 +192,26 @@ Hardening gaps:
 
 - Tag the known-good end-to-end pairing prototype before structural changes.
 - Save the exact firmware/add-on/integration version compatibility tuple.
-- Keep Sensor B fixtures and the successful terminal-confirmation sequence as
-  immutable regression evidence.
+- Keep both sensors' fixtures and successful terminal-confirmation sequences
+  as immutable regression evidence.
 
-### 1. Draw enforceable production/research boundaries
+### 1. Prove Home Assistant lifecycle behavior
+
+- Add HA-native coverage for discovery, adoption, pairing, rename, forget,
+  re-pair, reload, restart, and device-registry retention.
+- Replace one-off registry repairs with versioned config-entry/entity
+  migrations.
+- Preserve user-owned disabled states independently of integration lifecycle
+  reconciliation.
+
+### 2. Complete credential and node lifecycle
+
+- Add standalone gateway claim, reauthentication, credential rotation, and
+  revocation.
+- Add explicit radio-node removal and reprovisioning.
+- Keep every node credential private and independently revocable.
+
+### 3. Draw enforceable production/research boundaries
 
 - Finish explicit `production` and `development` add-on images; firmware now has
   enforced production and `research_bench` targets.
@@ -202,62 +219,42 @@ Hardening gaps:
   published image; network mode and production firmware are now the defaults.
 - Reorganize docs and house dashboard examples without changing runtime logic.
 
-### 2. Extract a generic protocol core
+### 4. Extract a generic protocol core and API
 
 - Create typed frame, device identity, telemetry, association, capability, and
-  pairing-profile models.
+  pairing-profile models plus structured API errors.
 - Parameterize endpoint identities and remove house names from runtime code.
 - Make all transports publish the same typed observations.
+- Add protocol/capability negotiation and migrate clients additively.
 
-### 3. Define one device and association authority
+### 5. Define one device and association authority
 
 - Consolidate enrollment and registry persistence.
 - Specify observed/paired/accepted/ignored/removed states.
 - Implement transactional forget, rename, migration, and HA reconciliation.
 - Support multiple valves and multiple radio nodes without singleton IDs.
 
-### 4. Replace manual credentials with onboarding
+### 6. Improve update delivery and release surfaces
 
-- Add gateway claim, secret rotation, and repair flows.
-- Remove the token from ordinary pairing forms.
-- Replace the `node_tokens` JSON option with a persistent node registry and
-  managed commissioning sessions.
-- Wire **Add local radio node** only after HA can provision, auto-detect,
-  represent, rotate, and revoke a node end to end; the current generic Add
-  control adds a gateway entry and must not be described as node pairing.
-- Review transport encryption and replay protection before valve control.
+- Replace five-second full polling with push/event updates and a reconciliation
+  fallback.
+- Add add-on validation, lint/type/security checks, retention, diagnostics, and
+  compatibility testing.
+- Pin build inputs and define signed OTA/release artifacts with compatibility
+  checks and rollback.
 
-### 5. Harden release surfaces
+### 7. Generalize only from evidence
 
-- Add HA-native tests, add-on validation, lint/type/security checks, schema
-  migrations, retention, diagnostics, and compatibility testing.
-- Pin build inputs and define signed firmware/release artifacts.
-
-### 6. Generalize only from evidence
-
-- Pair the second test sensor and compare its required reply fields with Sensor
-  B before claiming model-wide HCS026 enrollment.
+- Repeat automatic adoption on Sensor B and complete restart, interruption,
+  unattended-reporting, and reassociation tests before claiming model-wide
+  HCS026 enrollment.
 - Convert validated differences into profile parameters, not installation
   conditionals.
 - Keep valve TX disabled until endpoint parameterization, counters/replay
   semantics, physical waveform validation, and the safety controller are joined
   in one bounded end-to-end path.
 
-## Proposed first cleanup pass
-
-The safest first implementation pass is intentionally nonfunctional:
-
-1. Tag the current working prototype.
-2. ~~Move house dashboard and capture/bench documents into `examples/` and
-   `research/`.~~ Completed.
-3. Add explicit module-level stability labels (`production`, `experimental`,
-   `research`) and remove stale planning statements.
-4. ~~Introduce a device identity/friendly-name boundary while preserving
-   current defaults for this installation during migration.~~ Completed with
-   an injected catalog; persistent registry-backed configuration remains.
-5. ~~Split the HA gateway-authentication step from sensor pairing so stored
-   credentials disappear from the pairing UI.~~ Completed for Supervisor
-   discovery; standalone claim remains.
-6. Add HA config-flow and entity lifecycle tests before deeper refactors.
-
-This creates clear boundaries and test coverage before changing RF behavior.
+The active prioritized implementation sequence is maintained in
+[`INTEGRATION_EVOLUTION_BACKLOG.md`](INTEGRATION_EVOLUTION_BACKLOG.md). This
+inventory explains why each boundary exists; the backlog determines what to
+build next.
