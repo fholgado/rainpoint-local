@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
 from rainpointd.device_catalog import (  # noqa: E402
     DeviceCatalog,
+    LEGACY_HOME_CATALOG,
     SensorDefinition,
     ValveDefinition,
     load_catalog,
@@ -28,6 +29,7 @@ from rainpointd.product_identity import (  # noqa: E402
     hcs02x_identity,
     product_from_codes,
 )
+from rainpointd.protocol import decode_receiver_event  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
@@ -57,6 +59,28 @@ class RainPointRFTest(unittest.TestCase):
         trailer = binascii.crc_hqx(frame[:-2], 0) ^ 0xC713
         frame[-2:] = trailer.to_bytes(2, "big")
         return frame.hex()
+
+    def test_protocol_boundary_normalizes_transport_envelope(self) -> None:
+        frame = "79f4882f28b42d008f9ce5802419048307018005c41b00000000000000000000000000007bd6"
+        observations = decode_receiver_event(
+            {
+                "time": "2026-08-12T20:00:00+00:00",
+                "rssi": -47.5,
+                "rows": [{"len": len(frame) * 4, "data": frame}],
+                "bridge_metadata": {
+                    "node_id": "rp-001122334455",
+                    "channel": 1,
+                },
+            },
+            catalog=LEGACY_HOME_CATALOG,
+        )
+        self.assertEqual(1, len(observations))
+        observation = observations[0]
+        self.assertEqual(frame, observation.decoded["frame_hex"])
+        self.assertEqual(-47.5, observation.metadata["rf_rssi_db"])
+        self.assertEqual(
+            "rp-001122334455", observation.metadata["rf_receiver_id"]
+        )
 
     def test_product_identity_requires_catalogued_packet_evidence(self) -> None:
         provisional = hcs02x_identity({})

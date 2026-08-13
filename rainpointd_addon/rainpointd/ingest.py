@@ -2,35 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
-from .rf import normalize_row
-
-
-def _bridge_metadata(event: dict[str, Any]) -> dict[str, Any]:
-    """Return optional receiver metadata supplied by a radio adapter."""
-    metadata = event.get("bridge_metadata")
-    if not isinstance(metadata, dict):
-        return {}
-    result = {}
-    for source, destination, expected_type in (
-        ("radio", "rf_radio", str),
-        ("channel", "rf_channel", int),
-        ("lqi", "rf_lqi", int),
-        ("frequency_offset_hz", "rf_frequency_offset_hz", int),
-        ("node_id", "rf_node_id", str),
-    ):
-        value = metadata.get(source)
-        if isinstance(value, expected_type) and not isinstance(value, bool):
-            result[destination] = value
-    node_id = metadata.get("node_id")
-    if isinstance(node_id, str):
-        result["rf_receiver_id"] = node_id
-    return result
+from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
 
 
 class FrameIngestor:
@@ -87,28 +64,29 @@ class FrameIngestor:
 
     def consume_line(self, line: str) -> int:
         """Consume one JSON event line from any compatible radio adapter."""
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            return 0
-        if not isinstance(event, dict):
-            return 0
-        return self.consume_event(event)
+        return self._consume_observations(
+            decode_receiver_line(
+                line, catalog=self.catalog, receiver_id=self.receiver_id
+            )
+        )
 
     def consume_event(self, event: dict[str, Any]) -> int:
         """Consume one normalized receiver event."""
-        rows = event.get("rows", [])
-        if not isinstance(rows, list):
-            return 0
+        return self._consume_observations(
+            decode_receiver_event(
+                event, catalog=self.catalog, receiver_id=self.receiver_id
+            )
+        )
+
+    def _consume_observations(
+        self, observations: list[RFObservation]
+    ) -> int:
+        """Publish protocol observations into gateway state."""
         published = 0
-        bridge_metadata = _bridge_metadata(event)
-        if self.receiver_id is not None:
-            bridge_metadata.setdefault("rf_receiver_id", self.receiver_id)
-        for row in rows:
-            try:
-                decoded = normalize_row(row, catalog=self.catalog)
-            except (KeyError, TypeError, ValueError):
-                continue
+        for observation in observations:
+            decoded = observation.decoded
+            observed_at = observation.observed_at
+            receiver_metadata = observation.metadata
             moisture = decoded.get("soil_moisture_percent")
             valve = self.catalog.valve_link(
                 decoded["endpoint_a"], decoded["endpoint_b"]
@@ -140,9 +118,7 @@ class FrameIngestor:
                     **valve_state,
                     **valve_update,
                 }
-                if "rssi" in event:
-                    state["rf_rssi_db"] = event["rssi"]
-                state.update(bridge_metadata)
+                state.update(receiver_metadata)
                 valve_state.update(valve_update)
                 self.gateway.observe_decoded(
                     device_id=valve.device_id,
@@ -150,7 +126,7 @@ class FrameIngestor:
                     model=valve.model,
                     frame=decoded["frame_hex"],
                     state=state,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                 )
                 published += 1
                 continue
@@ -184,13 +160,11 @@ class FrameIngestor:
                     )
                 ):
                     state.update(hcs02x_identity(decoded).state_fields())
-                if "rssi" in event:
-                    state["rf_rssi_db"] = event["rssi"]
-                state.update(bridge_metadata)
+                state.update(receiver_metadata)
                 self.gateway.observe_rf_frame(
                     frame=decoded["frame_hex"],
                     state=state,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                     device_id=valve.device_id if valve else None,
                 )
                 published += 1
@@ -232,14 +206,12 @@ class FrameIngestor:
                     state[state_key] = decoded[key]
             if "hub_rssi_db" in decoded:
                 state["hub_rssi_db"] = decoded["hub_rssi_db"]
-            if "rssi" in event:
-                state["rf_rssi_db"] = event["rssi"]
-            state.update(bridge_metadata)
+            state.update(receiver_metadata)
             if self.gateway.endpoint_suppressed(endpoint):
                 self.gateway.observe_rf_frame(
                     frame=decoded["frame_hex"],
                     state=state,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                 )
                 published += 1
                 continue
@@ -248,7 +220,7 @@ class FrameIngestor:
                 self.gateway.confirm_product_identity(
                     endpoint=endpoint,
                     identity=identity,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                 )
                 self.gateway.observe_decoded(
                     device_id=device_id,
@@ -256,13 +228,13 @@ class FrameIngestor:
                     model=model,
                     frame=decoded["frame_hex"],
                     state=state,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                 )
             else:
                 self.gateway.observe_rf_frame(
                     frame=decoded["frame_hex"],
                     state=state,
-                    observed_at=event.get("time"),
+                    observed_at=observed_at,
                     device_id=device_id,
                 )
             published += 1
