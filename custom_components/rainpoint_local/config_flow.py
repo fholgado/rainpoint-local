@@ -23,6 +23,7 @@ from .api import (
     RainPointNodeCommissioningClient,
     RainPointLocalUnauthorized,
 )
+from .api_models import GatewayMetadata
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
 
 
@@ -403,7 +404,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_validate(
         self, user_input: dict[str, Any]
-    ) -> dict[str, Any]:
+    ) -> GatewayMetadata:
         """Connect to rainpointd and return compatible gateway metadata."""
         client = RainPointLocalClient(
             user_input[CONF_HOST],
@@ -413,13 +414,13 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await client.info()
 
     async def _async_create_gateway_entry(
-        self, user_input: dict[str, Any], info: dict[str, Any]
+        self, user_input: dict[str, Any], info: GatewayMetadata
     ) -> FlowResult:
         """Create one unique entry for a validated gateway."""
-        await self.async_set_unique_id(info["gateway_id"])
+        await self.async_set_unique_id(info.gateway_id)
         self._abort_if_unique_id_configured()
         return self.async_create_entry(
-            title=f"RainPoint Local ({info['gateway_id']})",
+            title=f"RainPoint Local ({info.gateway_id})",
             data=user_input,
         )
 

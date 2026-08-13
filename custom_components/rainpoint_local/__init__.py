@@ -71,7 +71,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         client,
         entry.entry_id,
-        event_cursor=int(info.get("latest_event_id", 0)),
+        event_cursor=info.latest_event_id,
+        event_long_poll="event_long_poll" in info.capabilities,
     )
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

@@ -7,6 +7,7 @@ from typing import Any
 import aiohttp
 
 from .const import API_VERSION
+from .api_models import APIModelError, GatewayMetadata, validate_object_list
 
 
 class RainPointLocalError(Exception):
@@ -34,28 +35,32 @@ class RainPointLocalClient:
         self._base_url = f"http://{host}:{port}/api/{API_VERSION}"
         self._session = session
 
-    async def info(self) -> dict[str, Any]:
+    async def info(self) -> GatewayMetadata:
         """Return gateway metadata and verify API compatibility."""
         data = await self._get("info")
-        if data.get("api_version") != API_VERSION or not data.get("gateway_id"):
+        try:
+            info = GatewayMetadata.from_payload(data)
+        except APIModelError as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
+        if info.api_version != API_VERSION:
             raise RainPointLocalInvalidResponse("incompatible rainpointd API")
-        return data
+        return info
 
     async def devices(self) -> list[dict[str, Any]]:
         """Return current device snapshots."""
         data = await self._get("devices")
-        devices = data.get("devices")
-        if not isinstance(devices, list):
-            raise RainPointLocalInvalidResponse("devices response is not a list")
-        return devices
+        try:
+            return validate_object_list(data, "devices", "device_id")
+        except APIModelError as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
 
     async def nodes(self) -> list[dict[str, Any]]:
         """Return custom local radio-node snapshots."""
         data = await self._get("nodes")
-        nodes = data.get("nodes")
-        if not isinstance(nodes, list):
-            raise RainPointLocalInvalidResponse("nodes response is not a list")
-        return nodes
+        try:
+            return validate_object_list(data, "nodes", "node_id")
+        except APIModelError as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
 
     async def receivers(self) -> list[dict[str, Any]]:
         """Return persistent physical-receiver coverage metrics."""

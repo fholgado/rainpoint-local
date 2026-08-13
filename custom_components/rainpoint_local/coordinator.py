@@ -10,7 +10,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import RainPointLocalClient, RainPointLocalError
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LEGACY_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,12 +24,15 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         client: RainPointLocalClient,
         config_entry_id: str,
         event_cursor: int = 0,
+        event_long_poll: bool = False,
     ) -> None:
         super().__init__(
             hass,
             logger=_LOGGER,
             name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=(
+                DEFAULT_SCAN_INTERVAL if event_long_poll else LEGACY_SCAN_INTERVAL
+            ),
         )
         self.client = client
         self.config_entry_id = config_entry_id
@@ -37,11 +40,12 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         self.receivers: list[dict] = []
         self._logged_inventory = False
         self._event_cursor = event_cursor
+        self._event_long_poll = event_long_poll
         self._event_task: asyncio.Task[None] | None = None
 
     def async_start_event_listener(self) -> None:
         """Start push-like event delivery after the initial snapshot."""
-        if self._event_task is None:
+        if self._event_long_poll and self._event_task is None:
             self._event_task = self.hass.async_create_task(
                 self._async_event_listener(),
                 f"{DOMAIN} event listener",
