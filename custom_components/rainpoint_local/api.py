@@ -67,6 +67,20 @@ class RainPointLocalClient:
             )
         return receivers
 
+    async def events(
+        self, since: int, *, wait_seconds: int = 25
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Wait for gateway events and return the next durable cursor."""
+        data = await self._get(
+            f"events?since={since}&wait={max(0, min(wait_seconds, 30))}",
+            timeout_seconds=wait_seconds + 10,
+        )
+        events = data.get("events")
+        next_since = data.get("next_since")
+        if not isinstance(events, list) or not isinstance(next_since, int):
+            raise RainPointLocalInvalidResponse("invalid events response")
+        return events, next_since
+
     async def pairing(self) -> dict[str, Any]:
         """Return sensor-pairing progress."""
         return await self._get("pairing")
@@ -187,11 +201,13 @@ class RainPointLocalClient:
             token,
         )
 
-    async def _get(self, path: str) -> dict[str, Any]:
+    async def _get(
+        self, path: str, *, timeout_seconds: int = 10
+    ) -> dict[str, Any]:
         try:
             async with self._session.get(
                 f"{self._base_url}/{path}",
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=timeout_seconds),
             ) as response:
                 response.raise_for_status()
                 payload = await response.json()

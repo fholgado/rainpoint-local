@@ -114,6 +114,7 @@ class Gateway:
         self._ensure_registered_sensor_devices()
         self._next_event_id = self.latest_event_id() + 1
         self._lock = threading.Lock()
+        self._event_condition = threading.Condition(self._lock)
         self._transport_healthy = True
         self._transport_error: str | None = None
         self._node_command_sender: (
@@ -133,6 +134,7 @@ class Gateway:
             all_node_ids = managed_node_ids | set(self._nodes)
             return {
                 "api_version": API_VERSION,
+                "api_versions": [API_VERSION],
                 "gateway_id": self.gateway_id,
                 "transport": self.transport,
                 "read_only": self.read_only,
@@ -167,6 +169,17 @@ class Gateway:
                 "rf_pairing_available": bool(self._pairing_nodes()),
                 "rf_pairing_monitor_available": self._pairing is not None,
                 "rf_pairing_transmitter_required": True,
+                "latest_event_id": self.latest_event_id(),
+                "capabilities": [
+                    "device_snapshots",
+                    "event_long_poll",
+                    "radio_node_adoption",
+                    "sensor_pairing",
+                ],
+                "event_delivery": {
+                    "mode": "long_poll",
+                    "max_wait_seconds": 30,
+                },
             }
 
     def close(self) -> None:
@@ -545,6 +558,7 @@ class Gateway:
                 "state": decoded,
             }
             self._events.append(event)
+            self._event_condition.notify_all()
             if self._store:
                 self._store.append(event)
             else:
@@ -597,6 +611,7 @@ class Gateway:
             if device_id is not None:
                 event["device_id"] = device_id
             self._events.append(event)
+            self._event_condition.notify_all()
             if self._store:
                 self._store.append(event)
             else:
@@ -799,14 +814,30 @@ class Gateway:
         else:
             metric["last_invalid_frame_at"] = observed_at
 
-    def events(self, since: int = 0) -> list[dict[str, Any]]:
-        """Return retained events newer than an event ID."""
-        with self._lock:
-            if self._store:
-                return self._store.events(since)
-            return copy.deepcopy(
-                [event for event in self._events if event["event_id"] > since]
-            )
+    def events(
+        self, since: int = 0, wait_seconds: float = 0
+    ) -> list[dict[str, Any]]:
+        """Return retained events, optionally waiting for the next event."""
+        wait_seconds = max(0.0, min(float(wait_seconds), 30.0))
+        deadline = time.monotonic() + wait_seconds
+        with self._event_condition:
+            while True:
+                if self._store:
+                    events = self._store.events(since)
+                else:
+                    events = copy.deepcopy(
+                        [
+                            event
+                            for event in self._events
+                            if event["event_id"] > since
+                        ]
+                    )
+                if events or wait_seconds == 0:
+                    return events
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return []
+                self._event_condition.wait(timeout=remaining)
 
     def latest_event_id(self) -> int:
         """Return the newest event ID."""

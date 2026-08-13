@@ -61,14 +61,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             try:
                 since = int(query.get("since", ["0"])[0])
+                wait_seconds = float(query.get("wait", ["0"])[0])
             except ValueError:
-                self._json(400, {"error": "since must be an integer"})
+                self._json(400, {"error": "since and wait must be numeric"})
                 return
+            events = self.server.gateway.events(since, wait_seconds)
             self._json(
                 200,
                 {
-                    "events": self.server.gateway.events(since),
-                    "next_since": self._page_cursor(since),
+                    "events": events,
+                    "next_since": events[-1]["event_id"] if events else since,
                 },
             )
             return
@@ -307,10 +309,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         """Keep command-line output concise."""
-
-    def _page_cursor(self, since: int) -> int:
-        events = self.server.gateway.events(since)
-        return events[-1]["event_id"] if events else since
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()

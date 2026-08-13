@@ -62,13 +62,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async_get_clientsession(hass),
     )
     try:
-        await client.info()
+        info = await client.info()
     except RainPointLocalError as exc:
         raise ConfigEntryNotReady(f"Unable to connect to rainpointd: {exc}") from exc
 
-    coordinator = RainPointLocalCoordinator(hass, client, entry.entry_id)
+    coordinator = RainPointLocalCoordinator(
+        hass,
+        client,
+        entry.entry_id,
+        event_cursor=int(info.get("latest_event_id", 0)),
+    )
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    coordinator.async_start_event_listener()
 
     # Version 0.1.2 briefly exposed a second event entity for each report.
     # The enriched report-time sensor now provides the same activity without
@@ -86,6 +92,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload RainPoint Local."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if isinstance(coordinator, RainPointLocalCoordinator):
+        await coordinator.async_stop_event_listener()
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)

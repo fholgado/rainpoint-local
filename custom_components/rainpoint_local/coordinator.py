@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -22,6 +23,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         hass: HomeAssistant,
         client: RainPointLocalClient,
         config_entry_id: str,
+        event_cursor: int = 0,
     ) -> None:
         super().__init__(
             hass,
@@ -34,6 +36,40 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         self.nodes: dict[str, dict] = {}
         self.receivers: list[dict] = []
         self._logged_inventory = False
+        self._event_cursor = event_cursor
+        self._event_task: asyncio.Task[None] | None = None
+
+    def async_start_event_listener(self) -> None:
+        """Start push-like event delivery after the initial snapshot."""
+        if self._event_task is None:
+            self._event_task = self.hass.async_create_task(
+                self._async_event_listener(),
+                f"{DOMAIN} event listener",
+            )
+
+    async def async_stop_event_listener(self) -> None:
+        """Stop event delivery before unloading the entry."""
+        if self._event_task is None:
+            return
+        self._event_task.cancel()
+        try:
+            await self._event_task
+        except asyncio.CancelledError:
+            pass
+        self._event_task = None
+
+    async def _async_event_listener(self) -> None:
+        """Long-poll the durable event cursor and refresh on change."""
+        while True:
+            try:
+                events, self._event_cursor = await self.client.events(
+                    self._event_cursor
+                )
+                if events:
+                    await self.async_request_refresh()
+            except RainPointLocalError as exc:
+                _LOGGER.debug("Gateway event listener retrying after: %s", exc)
+                await asyncio.sleep(5)
 
     async def _async_update_data(self) -> dict[str, dict]:
         try:

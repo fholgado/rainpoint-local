@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -716,6 +717,9 @@ class HTTPAPITest(unittest.TestCase):
     def test_info_and_devices(self) -> None:
         info = self.get_json("/api/v1/info")
         self.assertEqual("v1", info["api_version"])
+        self.assertEqual(["v1"], info["api_versions"])
+        self.assertIn("event_long_poll", info["capabilities"])
+        self.assertEqual("long_poll", info["event_delivery"]["mode"])
         self.assertTrue(info["read_only"])
         self.assertEqual(5, info["device_count"])
         self.assertEqual(5, len(self.get_json("/api/v1/devices")["devices"]))
@@ -727,6 +731,13 @@ class HTTPAPITest(unittest.TestCase):
     def test_event_cursor(self) -> None:
         result = self.get_json("/api/v1/events?since=5")
         self.assertEqual([6], [event["event_id"] for event in result["events"]])
+        self.assertEqual(6, result["next_since"])
+
+    def test_event_long_poll_times_out_with_stable_cursor(self) -> None:
+        started = time.monotonic()
+        result = self.get_json("/api/v1/events?since=6&wait=0.05")
+        self.assertGreaterEqual(time.monotonic() - started, 0.04)
+        self.assertEqual([], result["events"])
         self.assertEqual(6, result["next_since"])
 
     def test_post_is_rejected(self) -> None:
