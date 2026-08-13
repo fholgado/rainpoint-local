@@ -1,5 +1,5 @@
 Reference,Quantity,Description,Package,Notes
-J1 J2,2,19-position female socket,1x19 2.54mm through-hole,For ELEGOO EL-SM-012; use two separate socket strips
+J1 J2,2,15-position female socket,1x15 2.54mm through-hole,For physically verified 30-pin ELEGOO ESP-WROOM-32 board; use two separate socket strips
 J3,1,8-position female socket,2x4 2.54mm through-hole,For common 28x15mm CC1101 module
 C1,1,100nF ceramic capacitor,0805,Place immediately beside J3 pins 1 and 2
 C2,1,10uF X7R ceramic capacitor,0805,Rated at least 6.3V

@@ -1,8 +1,9 @@
 # Revision A layout specification
 
-All coordinates below are in millimetres, measured from the upper-left corner
-of the finished PCB in the top assembly view. This document is the source of
-truth for the first KiCad layout.
+All coordinates below are in millimetres, measured from the lower-left corner
+of the finished PCB in the top assembly view. This matches the fit-check PDF's
+USB-at-bottom orientation. This document is the source of truth for the first
+KiCad layout.
 
 ## Board and stackup
 
@@ -23,23 +24,27 @@ at `(3.5, 3.5)`, `(64.5, 3.5)`, `(3.5, 62.5)`, and `(64.5, 62.5)`.
 
 ## ESP32 placement
 
-The ELEGOO board body is 29 x 51.74 mm. Place its upper-left corner at
+The ELEGOO board body is 29 x 51.74 mm. Place its lower-left corner at
 `(8, 7)`, with the Wi-Fi antenna toward the top edge and USB-C toward the bottom
 edge.
 
-The two 1x19 socket centerlines are:
+The two 1x15 socket centerlines are:
 
-- left: X = 9.68 mm
-- right: X = 35.32 mm
+- J1, left: X = 9.68 mm
+- J2, right: X = 35.32 mm
 - first pin: Y = 10.01 mm
 - pitch: 2.54 mm
-- last pin: Y = 55.73 mm
+- last pin: Y = 45.57 mm
+
+The first pin is at the USB end. The four positions formerly shown toward the
+Wi-Fi antenna were based on a 38-pin footprint and are intentionally absent.
 
 The 25.64 mm socket-row separation intentionally follows the exact ELEGOO
 product drawing rather than assuming the more common 25.4 mm value. The printed
-fit check must resolve this 0.24 mm difference before routing is frozen.
+fit check confirms this spacing against the physical board before routing is
+frozen.
 
-Reserve `(7, 0.5)` through `(38, 18.5)` as a keepout on both copper layers. Do
+Reserve `(7, 47.5)` through `(38, 65.5)` as a keepout on both copper layers. Do
 not route traces, pour copper, or place the CC1101 inside that region. The
 carrier may remain beneath the antenna mechanically; electrically it must be
 empty.

@@ -18,6 +18,7 @@ ESP_WIDTH_MM = 29.0
 ESP_HEIGHT_MM = 51.74
 ESP_ROW_SPACING_MM = 25.64
 HEADER_PITCH_MM = 2.54
+ESP_HEADER_PINS = 15
 
 
 def _circle(canvas: Canvas, x_mm: float, y_mm: float, radius_mm: float) -> None:
@@ -54,9 +55,10 @@ def _draw_carrier(canvas: Canvas, origin_x_mm: float, origin_y_mm: float) -> Non
     canvas.rect(7 * mm, 47.5 * mm, 31 * mm, 18 * mm, fill=1)
     canvas.setDash()
 
-    # Two 1x19 socket rows. Coordinates match LAYOUT.md.
+    # Two 1x15 socket rows, anchored at the USB end. Coordinates match
+    # LAYOUT.md and the physically verified 30-pin development board.
     canvas.setStrokeColor(HexColor("#6b4f00"))
-    for index in range(19):
+    for index in range(ESP_HEADER_PINS):
         y_mm = 10.01 + index * HEADER_PITCH_MM
         _circle(canvas, 9.68, y_mm, 0.95)
         _circle(canvas, 35.32, y_mm, 0.95)
@@ -158,7 +160,7 @@ def generate(output: Path) -> None:
 
     canvas.setFont("Helvetica", 7.5)
     canvas.drawString(16 * mm, 44 * mm, "Nominal carrier outline: 68 x 66 mm")
-    canvas.drawString(16 * mm, 39 * mm, "ESP32 outline: 29 x 51.74 mm; 2 x 19 pins at 2.54 mm pitch")
+    canvas.drawString(16 * mm, 39 * mm, "ESP32 outline: 29 x 51.74 mm; 2 x 15 pins at 2.54 mm pitch")
     canvas.drawString(16 * mm, 34 * mm, "ESP32 header-row center spacing: 25.64 mm (verify against the physical board)")
     canvas.drawString(16 * mm, 29 * mm, "CC1101 connector: 2 x 4 pins at 2.54 mm pitch")
     canvas.setFont("Helvetica-Bold", 7.5)

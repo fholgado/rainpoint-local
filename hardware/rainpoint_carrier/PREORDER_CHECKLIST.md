@@ -12,9 +12,10 @@ the same physical modules that will be installed.
 - [ ] Confirm the 1-inch calibration square measures exactly 25.4 x 25.4 mm.
 - [ ] If either calibration mark is wrong, correct printer scaling before
       judging module fit.
-- [ ] Confirm the ELEGOO board has 19 pins on each side.
+- [ ] Confirm the ELEGOO board has 15 pins on each side (30 pins total).
 - [ ] Confirm the ELEGOO header-row center spacing matches the drawing.
-- [ ] Confirm all 19 pins on both sides fall on the printed pad centers.
+- [ ] Confirm all 15 pins on both sides fall on the printed pad centers, with
+      no carrier socket positions extending into the Wi-Fi antenna end.
 - [ ] Confirm the USB-C receptacle faces and clears the bottom carrier edge.
 - [ ] Confirm the CC1101 module is approximately 28 x 15 mm.
 - [ ] Confirm its connector is 2x4 at 2.54 mm pitch.

@@ -41,12 +41,8 @@
   <rect x="12" y="5.5" width="31" height="18" class="keepout"/>
   <text x="16" y="9.8" class="warning">NO COPPER — Wi-Fi ANTENNA</text>
 
-  <!-- ESP32 socket pad centers: 25.64 mm row spacing, 2.54 mm pitch. -->
+  <!-- ESP32 2x15 socket pad centers, anchored at the USB end. -->
   <g id="esp32-left-header">
-    <circle cx="14.68" cy="15.01" r="0.95" class="pad"/>
-    <circle cx="14.68" cy="17.55" r="0.95" class="pad"/>
-    <circle cx="14.68" cy="20.09" r="0.95" class="pad"/>
-    <circle cx="14.68" cy="22.63" r="0.95" class="pad"/>
     <circle cx="14.68" cy="25.17" r="0.95" class="pad"/>
     <circle cx="14.68" cy="27.71" r="0.95" class="pad"/>
     <circle cx="14.68" cy="30.25" r="0.95" class="pad"/>
@@ -64,10 +60,6 @@
     <circle cx="14.68" cy="60.73" r="0.95" class="pad"/>
   </g>
   <g id="esp32-right-header">
-    <circle cx="40.32" cy="15.01" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="17.55" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="20.09" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="22.63" r="0.95" class="pad"/>
     <circle cx="40.32" cy="25.17" r="0.95" class="pad"/>
     <circle cx="40.32" cy="27.71" r="0.95" class="pad"/>
     <circle cx="40.32" cy="30.25" r="0.95" class="pad"/>
@@ -86,14 +78,14 @@
   </g>
 
   <!-- Relevant ESP32 pin labels. -->
-  <text x="15.9" y="15.5" class="tiny">3V3</text>
-  <text x="15.9" y="35.8" class="tiny">25</text>
-  <text x="15.9" y="38.3" class="tiny">26</text>
-  <text x="15.9" y="40.9" class="tiny">27</text>
-  <text x="15.9" y="48.5" class="tiny">GND</text>
-  <text x="36.9" y="18.0" class="tiny">23</text>
-  <text x="36.9" y="33.2" class="tiny">19</text>
-  <text x="36.9" y="35.8" class="tiny">18</text>
+  <text x="15.9" y="43.4" class="tiny">25</text>
+  <text x="15.9" y="45.9" class="tiny">26</text>
+  <text x="15.9" y="48.5" class="tiny">27</text>
+  <text x="15.9" y="58.6" class="tiny">GND</text>
+  <text x="36.9" y="25.7" class="tiny">23</text>
+  <text x="36.9" y="38.3" class="tiny">19</text>
+  <text x="36.9" y="40.9" class="tiny">18</text>
+  <text x="36.0" y="61.2" class="tiny">3V3</text>
 
   <!-- Common 28 x 15 mm CC1101 board; antenna connector faces right. -->
   <rect x="44" y="30.5" width="28" height="15" rx="0.4" class="radio"/>

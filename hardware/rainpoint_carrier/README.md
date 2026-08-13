@@ -7,11 +7,12 @@ a socketed assembly without replacing either module.
 ## Design status
 
 **Revision A is an engineering prototype.** Its electrical mapping follows the
-working bridge exactly. The ESP32 mechanical dimensions are taken from the
-ELEGOO EL-SM-012 drawing. Before ordering, print the generated Letter-size fit
-check PDF at **Actual Size / 100%**, place the actual ESP32 and CC1101 modules
-over it, and complete the checklist in `PREORDER_CHECKLIST.md`. That physical
-fit check is deliberately required
+working bridge exactly. The carrier footprint follows the physically verified
+30-pin ELEGOO ESP-WROOM-32 USB-C board: two 15-pin rows at 2.54 mm pitch,
+anchored toward the USB end. Before ordering, print the generated Letter-size
+fit check PDF at **Actual Size / 100%**, place the actual ESP32 and CC1101
+modules over it, and complete the checklist in `PREORDER_CHECKLIST.md`. That
+physical fit check is deliberately required
 because inexpensive CC1101 modules are sold under several mechanically
 different board revisions.
 
@@ -92,6 +93,8 @@ the labels on the actual module have been compared with this diagram.
   antenna.
 - Four M3 mounting holes support an enclosure or standoffs.
 - Female sockets on the carrier accept the modules' male 2.54 mm headers.
+- The ESP32 uses two 1x15 sockets; its antenna end intentionally has no socket
+  positions beyond the board's populated headers.
 
 The orthogonal antenna placement is intentional: it separates the CC1101
 module and antenna feed from the ESP32's 2.4 GHz PCB antenna while keeping both
