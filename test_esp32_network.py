@@ -430,6 +430,24 @@ class ESP32NetworkTest(unittest.TestCase):
         legacy_stream.close()
         legacy_connection.close()
 
+    def test_v2_routine_ack_candidate_capability_authenticates(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "identify",
+                "routine_sensor_ack_tx",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        node = self.gateway.nodes()[0]
+        self.assertIn("routine_sensor_ack_tx", node["capabilities"])
+        stream.close()
+        connection.close()
+
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,

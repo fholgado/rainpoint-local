@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.19.3
+
+- Permit the isolated routine acknowledgement firmware capability during
+  authenticated protocol-v2 node setup.
+
 ## Integration 0.9.3
 
 - Expose bounded routine sensor-acknowledgement counts as radio-node

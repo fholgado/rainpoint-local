@@ -354,7 +354,12 @@ class ESP32NetworkServer:
                 hello.get("mode") != "local_radio_node"
                 or not {"rx", "sensor_pairing_tx"}.issubset(capability_set)
                 or not capability_set.issubset(
-                    {"rx", "sensor_pairing_tx", "identify"}
+                    {
+                        "rx",
+                        "sensor_pairing_tx",
+                        "identify",
+                        "routine_sensor_ack_tx",
+                    }
                 )
             ):
                 return None
