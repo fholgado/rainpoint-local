@@ -182,6 +182,27 @@ For firmware `0.8.0-test.1`, repeat S3 as follows:
 6. Repeat with the second sensor before designing persistent authorization,
    reassignment, or forget synchronization.
 
+First `0.8.0-test.1` trial started 2026-08-13 with the stock RainPoint gateway
+unplugged. Sensor A (`9bce0024`) completed the four-step local enrollment on
+selector 4 and became authorized until reboot. Its immediate routine message
+`04` and a manual message `05` each caused the node to report a completed
+transmission at 433.5165 MHz, for two sends and zero driver failures. Serial
+output preserved the second generated reply:
+
+```text
+report: 79f4882f28b98402809bce00240581820205c400800000000000000000000000000000000276
+reply:  79f4882f289bce00243984028085c1810001000000000000000000000000000000000000657f
+```
+
+The broad RTL-SDR path decoded both triggering reports but did not decode the
+short replies, and the manual press did not produce a blue LED indication.
+Neither observation proves RF failure: blue is validated as pairing feedback,
+not routine-ack feedback, while the broad decoder can miss short replies.
+Treat sensor receipt as unconfirmed until focused IQ captures show the emitted
+carrier/timing or the isolated 72-hour cadence test demonstrates sustained
+reporting. Do not reboot the node during that test because authorization is
+intentionally RAM-only.
+
 ### S4 — selected-node and overlapping-receiver behavior
 
 With two custom radio nodes and the RTL-SDR online:
