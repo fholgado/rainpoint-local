@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 
 from .device_catalog import LEGACY_HOME_CATALOG, load_catalog
 from .esp32 import ESP32SerialTransport
@@ -77,14 +78,19 @@ def main() -> int:
         else LEGACY_HOME_CATALOG
     )
 
+    registry_token = os.environ.get("RAINPOINT_REGISTRY_TOKEN")
+    claim_code = os.environ.get("RAINPOINT_CLAIM_CODE")
+    if not registry_token and not claim_code:
+        claim_code = f"{secrets.randbelow(1_000_000):06d}"
+
     gateway = Gateway(
         gateway_id=args.gateway_id or f"rainpoint-{args.transport}",
         transport=args.transport,
         storage_path=args.storage,
         event_retention_limit=args.event_retention_limit,
-        registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
+        registry_token=registry_token,
         registry_token_path=args.registry_token_file,
-        claim_code=os.environ.get("RAINPOINT_CLAIM_CODE"),
+        claim_code=claim_code,
         catalog=catalog,
     )
     if args.transport == "rtl433":
@@ -125,6 +131,11 @@ def main() -> int:
         f"rainpointd {args.transport} API listening on "
         f"http://{args.host}:{server.server_port}/api/v1"
     )
+    if claim_code:
+        print(
+            "Standalone gateway setup code: "
+            f"{claim_code} (valid for one successful claim)"
+        )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

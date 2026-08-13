@@ -133,7 +133,8 @@ passes it to the RainPoint Local integration through supported Supervisor
 discovery. Users do not copy or paste this credential during sensor pairing.
 The legacy `registry_write_token` option is retained temporarily as an advanced
 migration override; leave it empty for normal managed setup. Standalone
-gateways can still be authenticated once from the integration's Configure flow.
+gateways print a one-time six-digit setup code when started without an existing
+management token; enter it once in the integration's Configure flow.
 Telemetry and registry reads remain available without authentication on the
 local API during this prototype phase.
 
