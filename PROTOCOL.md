@@ -797,3 +797,11 @@ observations used only as a comparison oracle are isolated in
   <https://github.com/user-attachments/files/26152016/rainpoint_decoding.txt>
 - `rtl_433`: <https://github.com/merbanan/rtl_433>
 - TI CC1101: <https://www.ti.com/product/CC1101>
+
+The [HCS026FRF manual](https://images.thdstatic.com/catalog/pdfImages/c4/c475eb70-03af-4afe-80ee-59718a4c47b6.pdf)
+distinguishes measurement from reporting: automatic moisture detection occurs
+every 3 minutes, while the app reading refreshes every 8 minutes, after a
+manual detection, or when an automatic reading changes by more than 5%.
+Therefore an unchanged sensor should still produce approximately eight-minute
+gateway-visible updates; stable moisture is not expected to suppress all RF
+traffic.

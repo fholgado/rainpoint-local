@@ -150,6 +150,10 @@ Leave the locally paired sensor operating for at least 72 hours with the stock
 gateway off. Preserve all frames and check:
 
 - expected periodic and manual reports continue;
+- unchanged moisture still produces approximately eight-minute updates, as
+  specified by the HCS026FRF manual (the device measures every three minutes
+  but refreshes the app every eight minutes, after manual detection, or after
+  an automatic change greater than 5%);
 - report cadence does not decay after a fixed number of unanswered messages;
 - moisture changes propagate correctly;
 - no unrecognized gateway acknowledgement is required;
