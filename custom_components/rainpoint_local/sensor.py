@@ -171,6 +171,16 @@ DESCRIPTIONS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     RainPointSensorDescription(
+        key="last_report_interval",
+        translation_key="last_report_interval",
+        state_key="last_report_interval_seconds",
+        device_field=True,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointSensorDescription(
         key="longest_report_gap",
         translation_key="longest_report_gap",
         state_key="longest_report_gap_seconds",

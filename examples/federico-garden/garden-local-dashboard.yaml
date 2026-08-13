@@ -38,6 +38,26 @@ views:
               red: 0
               yellow: 35
               green: 45
+          - type: gauge
+            name: Test Sensor A
+            entity: sensor.rainpoint_hcs026_9bce0024_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
+          - type: gauge
+            name: Test Sensor B
+            entity: sensor.rainpoint_hcs026_95a98024_soil_moisture
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              red: 0
+              yellow: 35
+              green: 45
           - type: statistics-graph
             title: Moisture Trend
             chart_type: line
@@ -48,6 +68,8 @@ views:
             entities:
               - sensor.left_bed_soil_moisture
               - sensor.right_bed_soil_moisture
+              - sensor.rainpoint_hcs026_9bce0024_soil_moisture
+              - sensor.rainpoint_hcs026_95a98024_soil_moisture
       - type: grid
         cards:
           - type: heading
@@ -176,16 +198,28 @@ views:
                 name: Left Sensor Battery
               - entity: sensor.right_bed_battery
                 name: Right Sensor Battery
+              - entity: sensor.rainpoint_hcs026_9bce0024_battery
+                name: Test Sensor A Battery
+              - entity: sensor.rainpoint_hcs026_95a98024_battery
+                name: Test Sensor B Battery
               - entity: sensor.garden_valve_signal_strength
                 name: Valve Signal
               - entity: sensor.left_bed_signal_strength
                 name: Left Sensor Signal
               - entity: sensor.right_bed_signal_strength
                 name: Right Sensor Signal
+              - entity: sensor.rainpoint_hcs026_9bce0024_signal_strength
+                name: Test Sensor A Signal
+              - entity: sensor.rainpoint_hcs026_95a98024_signal_strength
+                name: Test Sensor B Signal
               - entity: sensor.left_bed_device_report_time
                 name: Left Sensor Last Report
               - entity: sensor.right_bed_device_report_time
                 name: Right Sensor Last Report
+              - entity: sensor.rainpoint_hcs026_9bce0024_device_report_time
+                name: Test Sensor A Last Report
+              - entity: sensor.rainpoint_hcs026_95a98024_device_report_time
+                name: Test Sensor B Last Report
           - type: entities
             title: Receive Reliability
             show_header_toggle: false
@@ -196,6 +230,10 @@ views:
                 name: Left Sensor Reporting
               - entity: binary_sensor.right_bed_reporting
                 name: Right Sensor Reporting
+              - entity: binary_sensor.rainpoint_hcs026_9bce0024_reporting
+                name: Test Sensor A Reporting
+              - entity: binary_sensor.rainpoint_hcs026_95a98024_reporting
+                name: Test Sensor B Reporting
               - entity: sensor.garden_valve_average_report_interval
                 name: Valve Average Interval
               - entity: sensor.left_bed_average_report_interval
@@ -208,6 +246,22 @@ views:
                 name: Left Reports Received
               - entity: sensor.right_bed_reports_received
                 name: Right Reports Received
+              - entity: sensor.rainpoint_hcs026_9bce0024_reports_received
+                name: Test Sensor A Reports Received
+              - entity: sensor.rainpoint_hcs026_95a98024_reports_received
+                name: Test Sensor B Reports Received
+          - type: history-graph
+            title: Report Cadence
+            hours_to_show: 24
+            entities:
+              - entity: sensor.left_bed_last_report_interval
+                name: Left Bed
+              - entity: sensor.right_bed_last_report_interval
+                name: Right Bed
+              - entity: sensor.rainpoint_hcs026_9bce0024_last_report_interval
+                name: Test Sensor A
+              - entity: sensor.rainpoint_hcs026_95a98024_last_report_interval
+                name: Test Sensor B
   - title: Front Yard
     path: front-yard
     icon: mdi:flower-tulip
@@ -409,3 +463,11 @@ views:
                 name: Sensor 1 Reports Received
               - entity: sensor.front_yard_sensor_2_reports_received
                 name: Sensor 2 Reports Received
+          - type: history-graph
+            title: Report Cadence
+            hours_to_show: 24
+            entities:
+              - entity: sensor.front_yard_sensor_1_last_report_interval
+                name: Sensor 1
+              - entity: sensor.front_yard_sensor_2_last_report_interval
+                name: Sensor 2

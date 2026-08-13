@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -93,6 +93,7 @@ class SQLiteEventStore:
                 report_count INTEGER NOT NULL DEFAULT 0,
                 interval_count INTEGER NOT NULL DEFAULT 0,
                 total_interval_seconds REAL NOT NULL DEFAULT 0,
+                last_report_interval_seconds REAL,
                 longest_report_gap_seconds REAL NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS device_reception_metrics (
@@ -153,6 +154,9 @@ class SQLiteEventStore:
             version = 4
         if version == 4:
             self._migrate_v4_to_v5()
+            version = 5
+        if version == 5:
+            self._migrate_v5_to_v6()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -312,6 +316,26 @@ class SQLiteEventStore:
                     ),
                 )
             self._connection.execute("PRAGMA user_version = 5")
+
+    def _migrate_v5_to_v6(self) -> None:
+        """Persist the most recent distinct report interval for charting."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(device_metrics)"
+                )
+            }
+            if "last_report_interval_seconds" not in columns:
+                self._connection.execute(
+                    "ALTER TABLE device_metrics ADD COLUMN "
+                    "last_report_interval_seconds REAL"
+                )
+            self._connection.execute(
+                "DELETE FROM storage_metadata WHERE key = ?",
+                ("device_metrics_version",),
+            )
+            self._connection.execute("PRAGMA user_version = 6")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -1056,14 +1080,18 @@ class SQLiteEventStore:
             INSERT INTO device_metrics(
                 device_id, first_observed_at, last_observed_at, report_count,
                 interval_count, total_interval_seconds,
-                longest_report_gap_seconds
-            ) VALUES (?, ?, ?, 1, 0, 0, 0)
+                last_report_interval_seconds, longest_report_gap_seconds
+            ) VALUES (?, ?, ?, 1, 0, 0, NULL, 0)
             ON CONFLICT(device_id) DO UPDATE SET
                 last_observed_at=excluded.last_observed_at,
                 report_count=device_metrics.report_count + 1,
                 interval_count=device_metrics.interval_count + ?,
                 total_interval_seconds=(
                     device_metrics.total_interval_seconds + ?
+                ),
+                last_report_interval_seconds=(
+                    CASE WHEN ? = 1 THEN ?
+                    ELSE device_metrics.last_report_interval_seconds END
                 ),
                 longest_report_gap_seconds=MAX(
                     device_metrics.longest_report_gap_seconds, ?
@@ -1073,6 +1101,8 @@ class SQLiteEventStore:
                 device_id,
                 observed_at,
                 observed_at,
+                interval_increment,
+                gap,
                 interval_increment,
                 gap,
                 gap,
@@ -1089,7 +1119,7 @@ class SQLiteEventStore:
             ("device_metrics_version",),
         ).fetchone()
         if int(count_row["count"]) and (
-            version_row is not None and version_row["value"] == "2"
+            version_row is not None and version_row["value"] == "3"
         ):
             return
         self._connection.execute("DELETE FROM device_metrics")
@@ -1101,7 +1131,7 @@ class SQLiteEventStore:
             self._update_device_metrics(json.loads(event_row["payload"]))
         self._connection.execute(
             "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
-            ("device_metrics_version", "2"),
+            ("device_metrics_version", "3"),
         )
 
     def _backfill_reception_metrics(self) -> None:

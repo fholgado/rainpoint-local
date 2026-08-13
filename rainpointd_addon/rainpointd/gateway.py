@@ -771,6 +771,7 @@ class Gateway:
                 "last_observed_at": observed_at,
                 "report_count": 1,
                 "average_report_interval_seconds": None,
+                "last_report_interval_seconds": None,
                 "longest_report_gap_seconds": 0.0,
                 "_interval_count": 0,
                 "_total_interval_seconds": 0.0,
@@ -791,6 +792,7 @@ class Gateway:
         metric["average_report_interval_seconds"] = round(
             metric["_total_interval_seconds"] / metric["_interval_count"], 3
         )
+        metric["last_report_interval_seconds"] = round(gap, 3)
         metric["longest_report_gap_seconds"] = max(
             metric["longest_report_gap_seconds"], gap
         )

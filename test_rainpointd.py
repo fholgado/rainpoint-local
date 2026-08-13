@@ -159,7 +159,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(5, gateway.info()["storage_schema_version"])
+            self.assertEqual(6, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -170,7 +170,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(5, migrated.info()["storage_schema_version"])
+            self.assertEqual(6, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -411,6 +411,7 @@ class GatewayTest(unittest.TestCase):
             device = gateway.devices(now=datetime(2026, 8, 8, 12, 20))[0]
             self.assertEqual(3, device["report_count"])
             self.assertEqual(210, device["average_report_interval_seconds"])
+            self.assertEqual(300, device["last_report_interval_seconds"])
             self.assertEqual(300, device["longest_report_gap_seconds"])
             self.assertEqual(780, device["report_age_seconds"])
             self.assertEqual(900, device["reporting_timeout_seconds"])
@@ -622,6 +623,7 @@ class GatewayTest(unittest.TestCase):
             device = restored.devices(now=datetime(2026, 8, 8, 7, 0))[0]
             self.assertEqual(2, device["report_count"])
             self.assertEqual(3600, device["average_report_interval_seconds"])
+            self.assertEqual(3600, device["last_report_interval_seconds"])
             self.assertEqual(21600, device["reporting_timeout_seconds"])
             self.assertTrue(device["reporting"])
             restored.close()

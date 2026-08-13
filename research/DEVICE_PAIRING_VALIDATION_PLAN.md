@@ -29,6 +29,27 @@ again:
 
 ## HCS026 sensor: remaining physical tests
 
+### Pending telemetry-channel assignment experiment
+
+Use test Sensors A and B to determine whether any enrollment field controls
+their long-term telemetry channel. Existing evidence shows that changing the
+known pairing selector (Sensor B: 8 to 4; Sensor A: 5 to 4) did not move their
+routine reports away from telemetry channel 0, so the selector must not be
+treated as the telemetry-channel setting.
+
+1. Confirm both sensors are heard from the Vegetable Garden radio node and
+   record receiver RSSI after its August 13 relocation.
+2. Re-enroll one test sensor at a time while changing only one candidate reply
+   field.
+3. Require terminal pairing message `03`, then record the first three routine
+   reports and their CC1101 channels.
+4. Repeat after battery removal and after an ordinary manual report.
+5. Only declare telemetry-channel control when the same field moves a sensor
+   reproducibly between channel 0 and channel 11.
+
+If no controlling field is found, learn each device's telemetry channel from
+valid post-pairing reports and use it for per-node receive scheduling.
+
 ### Sensor A local enrollment result
 
 The 2026-08-12 isolated trial established that Sensor A requires a mixed

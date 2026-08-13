@@ -1,5 +1,16 @@
 # Changelog
 
+## Integration 0.9.1
+
+- Add a chartable last-report interval diagnostic for each local device.
+
+## 0.19.1
+
+- Persist the interval between the latest two accepted, deduplicated device
+  reports and backfill it from retained history during schema migration.
+- Add test sensors and report-cadence charts to the example local garden
+  dashboard.
+
 ## Integration 0.9.0
 
 - Migrate legacy config entries to a versioned credential layout and remove
