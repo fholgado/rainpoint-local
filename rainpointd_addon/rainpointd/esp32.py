@@ -152,6 +152,9 @@ class ESP32SerialTransport:
                 "wifi_reconnects",
                 "gateway_connect_attempts",
                 "gateway_authentications",
+                "routine_ack_authorized_sensors",
+                "routine_ack_transmissions",
+                "routine_ack_failures",
             ):
                 value = message.get(key)
                 if (
@@ -182,6 +185,40 @@ class ESP32SerialTransport:
                     )
                 except ValueError:
                     pass
+            self.gateway.update_node(authenticated_node_id, **diagnostics)
+            return 0
+        if message_type == "routine_ack_status":
+            if authenticated_node_id is None:
+                return 0
+            endpoint = message.get("paired_endpoint")
+            state = message.get("state")
+            if (
+                not isinstance(endpoint, str)
+                or len(endpoint) != 8
+                or not all(
+                    character in "0123456789abcdef" for character in endpoint
+                )
+                or not isinstance(state, str)
+            ):
+                return 0
+            diagnostics = {
+                "routine_ack_state": state,
+                "routine_ack_endpoint": endpoint,
+            }
+            for source, target in (
+                ("authorized_sensor_count", "routine_ack_authorized_sensors"),
+                ("transmissions", "routine_ack_transmissions"),
+                ("failures", "routine_ack_failures"),
+                ("assigned_channel", "routine_ack_assigned_channel"),
+                ("channel_center_hz", "routine_ack_channel_center_hz"),
+            ):
+                value = message.get(source)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    diagnostics[target] = value
             self.gateway.update_node(authenticated_node_id, **diagnostics)
             return 0
         if message_type != "rainpoint_rf":

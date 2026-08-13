@@ -171,7 +171,10 @@
       "radio_packets": { "name": "Radio packets" },
       "radio_overflows": { "name": "Radio buffer overflows" },
       "wifi_reconnects": { "name": "Wi-Fi reconnects" },
-      "gateway_authentications": { "name": "Gateway authentications" }
+      "gateway_authentications": { "name": "Gateway authentications" },
+      "routine_ack_authorized_sensors": { "name": "Acknowledged sensors" },
+      "routine_ack_transmissions": { "name": "Sensor acknowledgements sent" },
+      "routine_ack_failures": { "name": "Sensor acknowledgement failures" }
     },
     "binary_sensor": {
       "watering": { "name": "Watering" },

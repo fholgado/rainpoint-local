@@ -176,12 +176,11 @@ possibilities to omitted transmitter state, a nonlinear rule, or two checksum
 states accepted without an exposed selector.
 
 No retained HCS026 RF frame contained the catalog-implied `dc 01` one-byte
-battery TLV signature. However, all 358 companion heartbeats in the analyzed
-window used `... 41 81 00 01 00 ...`, with normalized offset 17 fixed at
-`0x01`. During the same period, all 5,485 cloud-reference reports contained
-`dc 01` and every stock battery entity reported normal/100%. Offset 17 is now
-the leading RF battery-status candidate, but a controlled normal-to-low
-transition remains necessary before promotion to a supported field.
+battery TLV signature. All 358 formerly labeled companion heartbeats used
+`... 41 81 00 01 00 ...`, but later same-file IQ analysis established these as
+stock-gateway acknowledgements 177--188 ms after sensor reports. Offset 17 is
+therefore not a battery candidate. Supported battery state comes from the
+marker-relative field validated in controlled Sensor A/B tests.
 
 ## Current capture guidance
 

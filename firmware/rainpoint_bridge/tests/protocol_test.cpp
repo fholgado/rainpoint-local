@@ -5,6 +5,7 @@
 
 #include "rainpoint_protocol.h"
 #include "rainpoint_pairing.h"
+#include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
 
 namespace {
@@ -44,6 +45,61 @@ int main() {
     std::array<std::uint8_t, rainpoint::kRadioPayloadBytes> payload{};
     assert(rainpoint::prepareRadioPayload(heartbeat, payload));
     assert(rainpoint::reconstructFrame(payload) == heartbeat);
+
+    const auto routineReport = fromHex(
+        "79f4882f28b9840280ce6280241701820305c41a800000000000000000000000000000007833"
+    );
+    const auto capturedRoutineAck = fromHex(
+        "79f4882f28ce6280243984028097418100010000000000000000000000000000000000005242"
+    );
+    rainpoint::RoutineAckAuthorization routineAuthorization{
+        {{0xce, 0x62, 0x80, 0x24}}, 8, 45'000, 10, false, true,
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> generatedRoutineAck{};
+    assert(rainpoint::isAuthorizedRoutineHcs026Report(
+        routineReport, routineAuthorization
+    ));
+    assert(rainpoint::buildRoutineHcs026Acknowledgement(
+        routineReport, routineAuthorization, generatedRoutineAck
+    ));
+    assert(generatedRoutineAck == capturedRoutineAck);
+    assert(
+        rainpoint::trailerResidual(generatedRoutineAck) ==
+        rainpoint::trailerResidual(routineReport)
+    );
+    assert(rainpoint::routineAckCenterHz(routineAuthorization) == 433'956'500);
+    assert(rainpoint::kRoutineAckDelayMs == 150);
+    assert(rainpoint::kRoutineAckWakeSymbols == 320);
+    assert(rainpoint::kRoutineAckDeadlineMs == 250);
+    rainpoint::RoutineAckAuthorizations routineAuthorizations;
+    auto locallyAssignedAuthorization = routineAuthorization;
+    locallyAssignedAuthorization.pairingChannel = 4;
+    assert(routineAuthorizations.activeCount() == 0);
+    assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
+    assert(routineAuthorizations.activeCount() == 1);
+    assert(routineAuthorizations.match(routineReport) != nullptr);
+
+    auto wrongRoutineEndpoint = routineReport;
+    wrongRoutineEndpoint[9] ^= 0x01;
+    rainpoint::writeTrailer(
+        wrongRoutineEndpoint, rainpoint::trailerResidual(routineReport)
+    );
+    assert(!rainpoint::isAuthorizedRoutineHcs026Report(
+        wrongRoutineEndpoint, routineAuthorization
+    ));
+    auto pairingControlMessage = routineReport;
+    pairingControlMessage[13] = 0x03;
+    rainpoint::writeTrailer(
+        pairingControlMessage, rainpoint::trailerResidual(routineReport)
+    );
+    assert(!rainpoint::isAuthorizedRoutineHcs026Report(
+        pairingControlMessage, routineAuthorization
+    ));
+    routineAuthorization.active = false;
+    assert(!rainpoint::buildRoutineHcs026Acknowledgement(
+        routineReport, routineAuthorization, generatedRoutineAck
+    ));
+    assert(!routineAuthorizations.authorize(routineAuthorization));
 
     auto corrupt = heartbeat;
     corrupt[20] ^= 0x01;

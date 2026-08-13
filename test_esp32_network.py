@@ -178,6 +178,9 @@ class ESP32NetworkTest(unittest.TestCase):
                     "wifi_reconnects": 1,
                     "gateway_connect_attempts": 2,
                     "gateway_authentications": 1,
+                    "routine_ack_authorized_sensors": 1,
+                    "routine_ack_transmissions": 12,
+                    "routine_ack_failures": 0,
                 }
             ).encode()
             + b"\n"
@@ -192,6 +195,33 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(43.5, node["device_temperature_c"])
         self.assertEqual(1234, node["network_bytes_sent"])
         self.assertEqual(1, node["gateway_authentications"])
+        self.assertEqual(1, node["routine_ack_authorized_sensors"])
+        self.assertEqual(12, node["routine_ack_transmissions"])
+
+        stream.write(
+            json.dumps(
+                {
+                    "type": "routine_ack_status",
+                    "node_id": NODE_A,
+                    "state": "transmitted",
+                    "paired_endpoint": "95a98024",
+                    "assigned_channel": 4,
+                    "channel_center_hz": 433516500,
+                    "authorized_sensor_count": 1,
+                    "transmissions": 13,
+                    "failures": 0,
+                }
+            ).encode()
+            + b"\n"
+        )
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("routine_ack_transmissions") == 13:
+                break
+            time.sleep(0.01)
+        self.assertEqual("transmitted", node["routine_ack_state"])
+        self.assertEqual("95a98024", node["routine_ack_endpoint"])
+        self.assertEqual(4, node["routine_ack_assigned_channel"])
 
         stream.write(
             json.dumps(

@@ -202,7 +202,15 @@ Validated HCS026 factory and paired report layouts also expose the factory and
 paired RF identities. A newly paired sensor using this layout is discovered
 without an installation-specific endpoint allowlist. Its categorical battery
 field reports `100%` for normal and `10%` for low, matching the stock app's
-semantics. Older companion-heartbeat battery fields remain research metadata.
+semantics. The former companion-heartbeat battery candidate has been withdrawn:
+same-file IQ identifies those reversed frames as stock-gateway acknowledgements.
+
+The isolated `0.8.0-test.1` firmware target can acknowledge routine reports
+only for HCS026 endpoints explicitly enrolled through that node since its most
+recent boot. Home Assistant exposes its authorized-sensor, successful-send,
+and failed-send counters as diagnostic entities. Production firmware keeps
+this transmitter disabled; the candidate authorization is deliberately not
+persistent while timing and long-term sensor behavior are physically tested.
 
 ## Safety
 

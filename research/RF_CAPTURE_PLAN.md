@@ -151,10 +151,10 @@ transmitted packet.
 8. Repeat the transition at least twice before assigning a battery field, then
    add positive and negative decoder fixtures.
 
-The decoder currently retains `battery_status_candidate` and
-`battery_percent_candidate` on raw heartbeat events. These names are
-deliberately provisional and must not be promoted to Home Assistant entities
-until the controlled transition succeeds.
+This hypothesis was superseded by same-file IQ analysis: the reversed frames
+are stock-gateway acknowledgements, not sensor heartbeats. The decoder now
+retains acknowledgement identity/message metadata and does not derive battery
+state from byte 17.
 
 ## Pairing discovery signatures
 

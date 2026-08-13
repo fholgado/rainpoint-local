@@ -273,6 +273,26 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 /tmp/rainpoint-protocol-test
 ```
 
+### Isolated routine-acknowledgement candidate
+
+`esp32dev_routine_ack_candidate` is the only target that enables experimental
+post-enrollment sensor acknowledgements. It reproduces the reversed endpoint
+layout, transformed message bytes, CRC residual, selector frequency, and
+177--188 ms response envelope measured in stock-gateway captures.
+
+The target can respond only to exact HCS026 routine reports from endpoints
+successfully enrolled through that node during the current boot. It holds at
+most eight such endpoint authorizations in RAM; rebooting clears all of them.
+Normal `esp32dev_single` and `esp32dev_pairing_generalization` builds cannot
+transmit these acknowledgements.
+
+Build it for a controlled test without uploading it:
+
+```sh
+pio run --project-dir firmware/rainpoint_bridge \
+  --environment esp32dev_routine_ack_candidate
+```
+
 ## Next firmware increments
 
 1. Flash firmware 0.6.0 and validate its bounded Identify LED action while RF
@@ -284,8 +304,8 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
    RainPoint gateway powered off.
 4. Confirm terminal message `03`, registry creation, and ordinary moisture
    entities end to end.
-5. Characterize routine post-enrollment acknowledgements and long-term report
-   behavior.
+5. Physically validate the isolated routine-acknowledgement candidate and
+   72-hour report behavior before considering persistent authorization.
 6. Generalize pairing only from additional controlled device captures.
 7. Implement and validate the distinct valve wake and close command before any
    bounded open test.

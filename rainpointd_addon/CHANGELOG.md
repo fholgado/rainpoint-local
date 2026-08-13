@@ -1,5 +1,15 @@
 # Changelog
 
+## Integration 0.9.3
+
+- Expose bounded routine sensor-acknowledgement counts as radio-node
+  diagnostics for the controlled firmware trial.
+
+## 0.19.2
+
+- Accept routine acknowledgement status and health counters from the isolated
+  candidate firmware without enabling RF transmission in production builds.
+
 ## Integration 0.9.1
 
 - Add a chartable last-report interval diagnostic for each local device.

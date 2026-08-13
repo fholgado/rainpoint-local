@@ -67,12 +67,13 @@ Working now:
 
 Still provisional or not working yet:
 
-- decoding the older installed sensors' separate companion-heartbeat battery
-  status, whose meaning remains provisional,
+- verifying the marker-relative sensor battery field across additional device
+  revisions and a controlled low-battery transition,
 - guaranteeing reliable reception at the final antenna location,
 - repeating the physically validated automatic model-level pairing workflow
   on a second independent identity before claiming broad HCS026 support,
-- implementing and validating routine post-enrollment sensor acknowledgements,
+- physically validating the isolated routine post-enrollment sensor
+  acknowledgement candidate,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
 - standalone gateway claiming, credential rotation/revocation, signed OTA and

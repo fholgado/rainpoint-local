@@ -16,15 +16,34 @@ BENCH_COMMANDS = (
     b"pairing_invert",
 )
 
+CANDIDATE_MARKERS = (
+    b"routine_sensor_ack_tx",
+    b"authorized_until_reboot",
+)
+
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: check_firmware_boundaries.py PRODUCTION_BIN BENCH_BIN")
+    if len(sys.argv) not in (3, 4):
+        print(
+            "usage: check_firmware_boundaries.py "
+            "PRODUCTION_BIN BENCH_BIN [ROUTINE_ACK_CANDIDATE_BIN]"
+        )
         return 2
     production = Path(sys.argv[1]).read_bytes()
     bench = Path(sys.argv[2]).read_bytes()
-    leaked = [value.decode() for value in BENCH_COMMANDS if value in production]
+    leaked = [
+        value.decode()
+        for value in (*BENCH_COMMANDS, *CANDIDATE_MARKERS)
+        if value in production
+    ]
     missing = [value.decode() for value in BENCH_COMMANDS if value not in bench]
+    if len(sys.argv) == 4:
+        candidate = Path(sys.argv[3]).read_bytes()
+        missing.extend(
+            value.decode()
+            for value in CANDIDATE_MARKERS
+            if value not in candidate
+        )
     if leaked:
         print(f"production firmware contains bench commands: {', '.join(leaked)}")
     if missing:

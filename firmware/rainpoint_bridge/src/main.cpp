@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "cc1101.h"
+#include "rainpoint_ack.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
 #include "wifi_transport.h"
@@ -25,6 +26,14 @@
 
 #if RAINPOINT_PAIRING_GENERALIZATION != 0 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "RAINPOINT_PAIRING_GENERALIZATION must be 0 or 1"
+#endif
+
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE != 0 && RAINPOINT_ROUTINE_ACK_CANDIDATE != 1
+#error "RAINPOINT_ROUTINE_ACK_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
+#error "Routine acknowledgement trials require generalized pairing"
 #endif
 
 #if RAINPOINT_SENSOR_A_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION == 1
@@ -86,6 +95,11 @@ bool pairingRequiresNetwork = false;
 bool pairingAutomaticDiscovery = false;
 bool pairingFactoryAdopted = false;
 String pairingCommandId;
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
+std::uint32_t routineAckTransmissions = 0;
+std::uint32_t routineAckFailures = 0;
+#endif
 std::uint32_t lastHealthReport = 0;
 std::uint32_t lastLoopAt = 0;
 std::uint32_t maximumLoopGapMs = 0;
@@ -340,6 +354,14 @@ void printNodeHealth() {
     line += wifiTransport.gatewayConnectAttempts();
     line += ",\"gateway_authentications\":";
     line += wifiTransport.gatewayAuthentications();
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+    line += ",\"routine_ack_authorized_sensors\":";
+    line += static_cast<unsigned int>(routineAckAuthorizations.activeCount());
+    line += ",\"routine_ack_transmissions\":";
+    line += routineAckTransmissions;
+    line += ",\"routine_ack_failures\":";
+    line += routineAckFailures;
+#endif
     line += "}";
     emitLine(line);
     maximumLoopGapMs = 0;
@@ -917,6 +939,59 @@ void handleSerialCommand() {
     }
 }
 
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+void reportRoutineAckStatus(
+    const char* state,
+    const rainpoint::RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+) {
+    String line = "{\"type\":\"routine_ack_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"state\":\"";
+    line += state;
+    line += "\",\"paired_endpoint\":\"";
+    line += hexString(
+        authorization.pairedEndpoint.data(),
+        authorization.pairedEndpoint.size()
+    );
+    line += "\",\"assigned_channel\":";
+    line += authorization.pairingChannel;
+    line += ",\"channel_center_hz\":";
+    line += static_cast<unsigned long>(
+        rainpoint::routineAckCenterHz(authorization)
+    );
+    line += ",\"authorized_sensor_count\":";
+    line += static_cast<unsigned int>(routineAckAuthorizations.activeCount());
+    line += ",\"transmissions\":";
+    line += routineAckTransmissions;
+    line += ",\"failures\":";
+    line += routineAckFailures;
+    if (frame != nullptr) {
+        line += ",\"frame\":\"";
+        line += hexString(frame->data(), frame->size());
+        line += '"';
+    }
+    line += '}';
+    emitLine(line);
+}
+
+void authorizeRoutineAckFromCompletedPairing() {
+    rainpoint::RoutineAckAuthorization authorization{
+        activePairingProfile.pairedEndpoint,
+        pairingAssignedChannel,
+        pairingFrequencyOffsetHz,
+        pairingPowerDbm,
+        pairingInvert,
+        true,
+    };
+    const bool authorized = routineAckAuthorizations.authorize(authorization);
+    reportRoutineAckStatus(
+        authorized ? "authorized_until_reboot" : "authorization_failed",
+        authorization
+    );
+}
+#endif
+
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
     if (!radio.poll(packet)) {
@@ -925,6 +1000,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     const auto frame = rainpoint::reconstructFrame(packet.payload);
     if (&radio == &primaryRadio &&
         pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+        const auto pairingStateBeforeFrame = pairingSession.state();
         if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
             std::array<std::uint8_t, 4> factoryEndpoint{};
             if (!rainpoint::hcs026FactoryAnnouncement(
@@ -982,7 +1058,50 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 restoreScanningAfterPairing();
             }
         }
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        if (pairingStateBeforeFrame == rainpoint::PairingSessionState::Armed &&
+            pairingSession.state() ==
+                rainpoint::PairingSessionState::Completed) {
+            authorizeRoutineAckFromCompletedPairing();
+        }
+#endif
     }
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+    if (&radio == &primaryRadio &&
+        pairingSession.state() != rainpoint::PairingSessionState::Armed) {
+        const auto* authorization = routineAckAuthorizations.match(frame);
+        if (authorization != nullptr) {
+            std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
+            const std::uint32_t receivedAtMs = millis();
+            const bool built = rainpoint::buildRoutineHcs026Acknowledgement(
+                frame, *authorization, reply
+            );
+            if (built) {
+                delay(rainpoint::kRoutineAckDelayMs);
+                const bool beforeDeadline =
+                    millis() - receivedAtMs < rainpoint::kRoutineAckDeadlineMs;
+                const bool sent = beforeDeadline && radio.transmitAsync(
+                    reply,
+                    rainpoint::routineAckCenterHz(*authorization),
+                    rainpoint::kRoutineAckWakeSymbols,
+                    authorization->invert,
+                    rainpoint::pairingPaTableValue(authorization->powerDbm)
+                );
+                if (sent) {
+                    ++routineAckTransmissions;
+                } else {
+                    ++routineAckFailures;
+                }
+                reportRoutineAckStatus(
+                    sent ? "transmitted" :
+                        (beforeDeadline ? "transmit_failed" : "deadline_missed"),
+                    *authorization,
+                    &reply
+                );
+            }
+        }
+    }
+#endif
     printPacket(name, frame, packet, radio);
 }
 
@@ -1026,6 +1145,12 @@ void setup() {
         "\",\"mode\":\"radio_node\",\"local_tx_controls\":false,"
 #endif
         "\"pairing_tx_available\":true,\"tx_armed\":false,"
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        "\"routine_ack_candidate\":true,"
+        "\"routine_ack_authorization_persistent\":false,"
+#else
+        "\"routine_ack_candidate\":false,"
+#endif
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +
         ",\"radio_count\":" + RAINPOINT_RADIO_COUNT + "}"

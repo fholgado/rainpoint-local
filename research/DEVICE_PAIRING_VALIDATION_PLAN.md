@@ -159,6 +159,29 @@ gateway off. Preserve all frames and check:
 This test establishes local data reliability; it does not require deliberately
 draining a battery.
 
+The first run failed on 2026-08-13: Sensor B stopped at 00:58 and Sensor A at
+04:59 after initially reporting successfully. Manual button presses later that
+day produced no RF frame, while the SDR and both custom nodes continued to
+receive established sensors. Reanalysis identified deterministic reversed
+frames 177--188 ms after established sensor reports; A and B never received
+them. Treat routine acknowledgement support as required unless the controlled
+trial below disproves that interpretation.
+
+For firmware `0.8.0-test.1`, repeat S3 as follows:
+
+1. Flash only the selected test node with the routine-ack candidate target.
+2. Keep the stock RainPoint gateway off and re-enroll one test sensor through
+   that node. Confirm `authorized_until_reboot` for the paired endpoint.
+3. Confirm the first routine report produces a byte-for-byte expected reply,
+   `routine_ack_transmissions` increments, and the SDR sees the reply on the
+   negotiated enrollment selector frequency.
+4. Leave the node powered for 72 hours and verify periodic reports do not
+   decay. Do not reboot it; authorization is intentionally boot-scoped.
+5. Reboot the node and verify acknowledgements stop until an explicit rejoin
+   completes. This is the fail-safe behavior for the candidate build.
+6. Repeat with the second sensor before designing persistent authorization,
+   reassignment, or forget synchronization.
+
 ### S4 — selected-node and overlapping-receiver behavior
 
 With two custom radio nodes and the RTL-SDR online:

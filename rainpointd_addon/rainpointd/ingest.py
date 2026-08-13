@@ -143,9 +143,9 @@ class FrameIngestor:
                 for key in (
                     "status_soil_moisture_percent",
                     "hub_rssi_db",
-                    "battery_endpoint",
-                    "battery_status_candidate",
-                    "battery_percent_candidate",
+                    "routine_ack_endpoint",
+                    "routine_ack_message",
+                    "routine_ack_body_code",
                     "hcs026_factory_endpoint",
                     "hcs026_paired_endpoint",
                     "hcs026_pairing_state",

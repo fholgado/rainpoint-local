@@ -903,17 +903,15 @@ class RainPointRFTest(unittest.TestCase):
         self.assertNotIn("canonical_endpoint_b", decoded_unknown)
         self.assertNotIn("soil_moisture_percent", decoded_unknown)
 
-    def test_retains_provisional_battery_status_from_companion_heartbeat(self) -> None:
-        # Every one of 358 retained companion heartbeats used status 1 while
-        # the stock battery entities independently remained normal/100%.
+    def test_identifies_stock_gateway_routine_acknowledgement(self) -> None:
         frame = bytes.fromhex(
             "79f4882f28c4e500243984028088c181000100000000"
             "000000000000000000000000000022e3"
         )
         decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
-        self.assertEqual("c4e50024", decoded["battery_endpoint"])
-        self.assertEqual(1, decoded["battery_status_candidate"])
-        self.assertEqual(100, decoded["battery_percent_candidate"])
+        self.assertEqual("c4e50024", decoded["routine_ack_endpoint"])
+        self.assertEqual(8, decoded["routine_ack_message"])
+        self.assertEqual(1, decoded["routine_ack_body_code"])
         self.assertEqual("c713", decoded["trailer_residual"])
         self.assertTrue(decoded["trailer_valid"])
 
@@ -1271,7 +1269,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertIn("rf_trailer_residual", raw_event["state"])
         self.assertIn("rf_trailer_valid", raw_event["state"])
 
-    def test_live_transport_retains_battery_candidate_as_raw_research_data(self) -> None:
+    def test_live_transport_retains_gateway_ack_as_raw_research_data(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
         frame = (
@@ -1282,8 +1280,9 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(1, transport.consume_line(json.dumps(event)))
         raw_event = gateway.events()[0]
         self.assertEqual("rf_frame", raw_event["event_type"])
-        self.assertEqual(1, raw_event["state"]["battery_status_candidate"])
-        self.assertEqual(100, raw_event["state"]["battery_percent_candidate"])
+        self.assertEqual("c4e50024", raw_event["state"]["routine_ack_endpoint"])
+        self.assertEqual(8, raw_event["state"]["routine_ack_message"])
+        self.assertEqual(1, raw_event["state"]["routine_ack_body_code"])
         self.assertTrue(raw_event["state"]["rf_trailer_valid"])
         self.assertEqual([], gateway.devices())
 

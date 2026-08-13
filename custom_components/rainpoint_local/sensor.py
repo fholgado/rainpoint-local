@@ -336,6 +336,27 @@ NODE_DESCRIPTIONS = (
         path=("gateway_authentications",),
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    RainPointNodeSensorDescription(
+        key="routine_ack_authorized_sensors",
+        translation_key="routine_ack_authorized_sensors",
+        path=("routine_ack_authorized_sensors",),
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="routine_ack_transmissions",
+        translation_key="routine_ack_transmissions",
+        path=("routine_ack_transmissions",),
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
+        key="routine_ack_failures",
+        translation_key="routine_ack_failures",
+        path=("routine_ack_failures",),
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 

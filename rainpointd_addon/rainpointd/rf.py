@@ -94,15 +94,14 @@ def _trailer_fields(frame: bytes) -> dict[str, Any]:
     }
 
 
-def _hcs026_battery_candidate(
+def _hcs026_routine_ack_candidate(
     frame: bytes, catalog: DeviceCatalog
 ) -> dict[str, Any]:
-    """Retain the provisional HCS026 heartbeat battery field.
+    """Identify the observed stock-gateway routine acknowledgement shape.
 
-    All 358 companion heartbeats in the retained capture used status 1 while
-    the independently observed stock entities reported normal/100%. A
-    controlled low-battery transition is still required before this can be a
-    supported device field.
+    Same-file IQ establishes that these reversed endpoint frames originate at
+    the gateway after sensor reports. Byte 17 remains an unknown constant, not
+    a sensor battery field.
     """
     if len(frame) != FRAME_BYTES:
         return {}
@@ -122,9 +121,9 @@ def _hcs026_battery_candidate(
     if status > 4:
         return {}
     return {
-        "battery_endpoint": endpoint,
-        "battery_status_candidate": status,
-        "battery_percent_candidate": 100 if status in (0, 1) else 10,
+        "routine_ack_endpoint": endpoint,
+        "routine_ack_message": frame[13] & 0x7F,
+        "routine_ack_body_code": status,
     }
 
 
@@ -322,7 +321,7 @@ def normalize_row(
         result["canonical_endpoint_b"] = canonical_endpoint_b
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
-    result.update(_hcs026_battery_candidate(frame, catalog))
+    result.update(_hcs026_routine_ack_candidate(frame, catalog))
     result.update(_hcs026_pairing_fields(frame, catalog))
     result.update(_hcs026_report_fields(frame, catalog))
     result.update(_valve_fields(frame, catalog))

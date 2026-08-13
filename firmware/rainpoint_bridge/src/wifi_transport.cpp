@@ -290,7 +290,11 @@ void WifiTransport::authenticate(const String& nonce) {
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
-        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\"],"
+        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        ",\"routine_sensor_ack_tx\""
+#endif
+        "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,
         nodeId_.c_str(),
