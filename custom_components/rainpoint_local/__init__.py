@@ -15,6 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import RainPointLocalClient, RainPointLocalError
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN, PLATFORMS
 from .coordinator import RainPointLocalCoordinator
+from .migration import migrate_entry_payload
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,17 +77,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     coordinator.async_start_event_listener()
 
-    # Version 0.1.2 briefly exposed a second event entity for each report.
-    # The enriched report-time sensor now provides the same activity without
-    # duplicating every packet in the device logbook.
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """Migrate persistent configuration and obsolete integration entities."""
+    version, data, options = migrate_entry_payload(
+        entry.version, dict(entry.data), dict(entry.options)
+    )
+    if version != entry.version or data != entry.data or options != entry.options:
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=version,
+        )
+
+    # Version 0.1.2 briefly exposed a duplicate event entity per report.
     entity_registry = er.async_get(hass)
     for entity_entry in er.async_entries_for_config_entry(
         entity_registry, entry.entry_id
     ):
         if entity_entry.unique_id.endswith("_report_received"):
             entity_registry.async_remove(entity_entry.entity_id)
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 

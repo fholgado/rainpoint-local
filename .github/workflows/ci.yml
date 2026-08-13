@@ -23,6 +23,7 @@ jobs:
             test_rainpoint_pairing_protocol.py \
             test_esp32_network.py \
             test_rainpoint_network_transport.py \
+            test_integration_migration.py \
             test_rainpointd.py \
             test_rainpoint_rf.py \
             test_rainpoint_analysis.py \

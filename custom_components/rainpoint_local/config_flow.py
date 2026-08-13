@@ -36,7 +36,7 @@ LEGACY_TRANSPORT_GATEWAY_IDS = {
 class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a local rainpointd gateway."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._hassio_discovery: dict[str, Any] | None = None
