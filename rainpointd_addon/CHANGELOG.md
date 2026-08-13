@@ -1,5 +1,25 @@
 # Changelog
 
+## Integration 0.9.0
+
+- Migrate legacy config entries to a versioned credential layout and remove
+  obsolete report entities during migration instead of every startup.
+- Negotiate typed gateway capabilities and use durable long-poll events for
+  immediate state refresh, with compatible polling fallback.
+- Add one-time standalone gateway claiming and radio-node revocation flows.
+
+## 0.19.0
+
+- Advertise explicit versioned API capabilities and durable event cursors.
+- Add long-poll event delivery, standalone claim codes, atomic management-token
+  rotation, and radio-node credential revocation.
+- Separate the installable production add-on from replay and raw-capture
+  controls while retaining those tools in the development CLI.
+- Extract transport-neutral RF observations shared by network, RTL-SDR, and
+  serial ingestion.
+- Add production firmware artifact manifests, integrity verification, and the
+  firmware-side rollback-state contract; OTA delivery remains disabled.
+
 ## Integration 0.8.2
 
 - Include catalog-derived product-family capabilities in report diagnostics.
