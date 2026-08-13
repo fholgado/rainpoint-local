@@ -26,6 +26,7 @@ jobs:
             test_integration_migration.py \
             test_api_models.py \
             test_addon_boundaries.py \
+            test_firmware_manifest.py \
             test_rainpointd.py \
             test_rainpoint_rf.py \
             test_rainpoint_analysis.py \
@@ -62,3 +63,12 @@ jobs:
           python tools/check_firmware_boundaries.py
           firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin
           firmware/rainpoint_bridge/.pio/build/esp32dev_single_bench/firmware.bin
+      - name: Build and verify production OTA artifact manifest
+        run: |
+          python tools/firmware_manifest.py \
+            firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin \
+            /tmp/rainpoint-firmware-manifest.json \
+            --version 0.6.0 --environment esp32dev_single
+          python tools/firmware_manifest.py \
+            firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin \
+            /tmp/rainpoint-firmware-manifest.json --verify

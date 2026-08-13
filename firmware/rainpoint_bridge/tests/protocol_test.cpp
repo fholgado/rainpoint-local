@@ -5,6 +5,7 @@
 
 #include "rainpoint_protocol.h"
 #include "rainpoint_pairing.h"
+#include "rainpoint_ota.h"
 
 namespace {
 
@@ -23,6 +24,16 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> fromHex(
 }  // namespace
 
 int main() {
+    rainpoint::OtaBootState otaState{};
+    rainpoint::beginOtaCandidate(otaState);
+    rainpoint::recordCandidateBoot(otaState);
+    rainpoint::recordCandidateBoot(otaState);
+    assert(!rainpoint::shouldRollback(otaState));
+    rainpoint::recordCandidateBoot(otaState);
+    assert(rainpoint::shouldRollback(otaState));
+    rainpoint::confirmCandidate(otaState);
+    assert(!rainpoint::shouldRollback(otaState));
+
     const auto heartbeat = fromHex(
         "79f4882f28c4e500243984028088c181000100000000000000000000000000000000000022e3"
     );

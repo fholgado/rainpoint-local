@@ -250,8 +250,19 @@ RF or valve command.
 Firmware 0.5 and later emit a `node_health` heartbeat every 30 seconds with uptime,
 heap metrics, internal temperature, CPU frequency, maximum loop gap, reset
 reason, local IP, Wi-Fi RSSI, network byte counts, reconnects, gateway
-connection attempts, and successful authentications. There is no OTA updater;
-firmware must still be flashed over USB.
+connection attempts, and successful authentications. Firmware must still be
+flashed over USB. The repository now produces a hash-bound, production-target
+OTA manifest and defines a three-boot rollback contract. Network delivery,
+signature verification, flash partition switching, and gateway confirmation
+are intentionally not enabled until they have hardware validation.
+
+Build and verify a release manifest after PlatformIO produces `firmware.bin`:
+
+```sh
+python tools/firmware_manifest.py firmware.bin manifest.json \
+  --version 0.6.0 --environment esp32dev_single
+python tools/firmware_manifest.py firmware.bin manifest.json --verify
+```
 
 The hardware-independent protocol test can run without PlatformIO:
 
