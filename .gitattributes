@@ -2,6 +2,7 @@
 *.gbl binary
 *.gbo binary
 *.gbs binary
+*.gbp binary
 *.gm1 binary
 *.gtl binary
 *.gto binary

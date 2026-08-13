@@ -1,0 +1,5 @@
+Line,Quantity per PCB,Reference,Description,Package,Type,Manufacturer,Manufacturer Part Number,Distributor,Distributor Part Number,Substitution
+1,2,"J1,J2",15-position female socket; 1 row; 2.54mm pitch; vertical; accepts 0.64mm square posts,1x15 2.54mm THT,Through-hole,Sullins Connector Solutions,PPTC151LFBN-RC,DigiKey,S7013-ND,"Equivalent permitted only if 1x15; 2.54mm pitch; 8.5mm nominal body; vertical THT; female socket; 1.0mm PCB holes"
+2,1,J3,8-position female socket; 2 rows x 4; 2.54mm pitch and row spacing; vertical; accepts 0.64mm square posts,2x4 2.54mm THT,Through-hole,Sullins Connector Solutions,PPTC042LFBN-RC,DigiKey,S7072-ND,"Equivalent permitted only if 2x4; 2.54mm pitch and row spacing; 8.5mm nominal body; vertical THT; female socket; 1.0mm PCB holes"
+3,1,C1,0.1uF 50V 10% X7R ceramic capacitor,0805 (2012 metric),SMT,KEMET,C0805C104K5RACTU,DigiKey,399-C0805C104K5RACTUCT-ND,"Equivalent 100nF; at least 10V; X7R or X5R; 0805"
+4,1,C2,10uF 10V 10% X5R ceramic capacitor,0805 (2012 metric),SMT,Murata Electronics,GRM21BR61A106KE19L,DigiKey,490-1709-1-ND,"Equivalent 10uF; at least 6.3V; X5R or X7R; 0805"

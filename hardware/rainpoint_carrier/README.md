@@ -114,11 +114,15 @@ external interfaces reachable after the carrier is installed in a case.
 - `kicad/`: KiCad 10 schematic, PCB, local libraries, ERC/DRC reports, and
   schematic preview.
 - `fabrication/`: Gerbers, drill files and manufacturing validation reports.
+- `assembly/`: PCBWay turnkey assembly BOM, SMT centroid, paste layer and
+  assembly instructions.
 - `preview/`: rendered top and mirrored-bottom board views.
 - `FABRICATION.md`: validated order settings, package contents, and assembly
   orientation.
 - `../../output/manufacturing/rainpoint_carrier_rev_a_gerbers.zip`: compact
   bare-PCB upload archive for PCBWay, JLCPCB, or an equivalent fabricator.
+- `../../output/manufacturing/rainpoint_carrier_rev_a_pcba_gerbers.zip`:
+  Gerber upload archive for a PCBWay mixed-assembly quote.
 - `LAYOUT.md`: placement coordinates, stackup, routing, and enclosure rules.
 - `PREORDER_CHECKLIST.md`: physical, electrical, and manufacturing gates.
 
