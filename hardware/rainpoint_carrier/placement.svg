@@ -41,7 +41,7 @@
   <rect x="12" y="5.5" width="31" height="18" class="keepout"/>
   <text x="16" y="9.8" class="warning">NO COPPER — Wi-Fi ANTENNA</text>
 
-  <!-- ESP32 2x15 socket pad centers, anchored at the USB end. -->
+  <!-- ESP32 2x15 socket pad centers, 25.40 mm apart, anchored at USB. -->
   <g id="esp32-left-header">
     <circle cx="14.68" cy="25.17" r="0.95" class="pad"/>
     <circle cx="14.68" cy="27.71" r="0.95" class="pad"/>
@@ -60,21 +60,21 @@
     <circle cx="14.68" cy="60.73" r="0.95" class="pad"/>
   </g>
   <g id="esp32-right-header">
-    <circle cx="40.32" cy="25.17" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="27.71" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="30.25" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="32.79" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="35.33" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="37.87" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="40.41" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="42.95" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="45.49" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="48.03" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="50.57" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="53.11" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="55.65" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="58.19" r="0.95" class="pad"/>
-    <circle cx="40.32" cy="60.73" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="25.17" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="27.71" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="30.25" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="32.79" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="35.33" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="37.87" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="40.41" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="42.95" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="45.49" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="48.03" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="50.57" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="53.11" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="55.65" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="58.19" r="0.95" class="pad"/>
+    <circle cx="40.08" cy="60.73" r="0.95" class="pad"/>
   </g>
 
   <!-- Relevant ESP32 pin labels. -->

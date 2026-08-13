@@ -31,7 +31,7 @@ edge.
 The two 1x15 socket centerlines are:
 
 - J1, left: X = 9.68 mm
-- J2, right: X = 35.32 mm
+- J2, right: X = 35.08 mm
 - first pin: Y = 10.01 mm
 - pitch: 2.54 mm
 - last pin: Y = 45.57 mm
@@ -39,10 +39,10 @@ The two 1x15 socket centerlines are:
 The first pin is at the USB end. The four positions formerly shown toward the
 Wi-Fi antenna were based on a 38-pin footprint and are intentionally absent.
 
-The 25.64 mm socket-row separation intentionally follows the exact ELEGOO
-product drawing rather than assuming the more common 25.4 mm value. The printed
-fit check confirms this spacing against the physical board before routing is
-frozen.
+The 25.40 mm socket-row separation follows the narrower standard spacing seen
+on the physical board. A 25.64 mm trial print placed the opposite socket row
+slightly outside the pins when one row was aligned. Reconfirm the revised fit
+check before routing is frozen.
 
 Reserve `(7, 47.5)` through `(38, 65.5)` as a keepout on both copper layers. Do
 not route traces, pour copper, or place the CC1101 inside that region. The

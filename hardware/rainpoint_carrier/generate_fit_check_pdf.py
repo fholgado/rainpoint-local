@@ -16,7 +16,9 @@ BOARD_WIDTH_MM = 68.0
 BOARD_HEIGHT_MM = 66.0
 ESP_WIDTH_MM = 29.0
 ESP_HEIGHT_MM = 51.74
-ESP_ROW_SPACING_MM = 25.64
+ESP_ROW_SPACING_MM = 25.40
+ESP_LEFT_ROW_X_MM = 9.68
+ESP_RIGHT_ROW_X_MM = ESP_LEFT_ROW_X_MM + ESP_ROW_SPACING_MM
 HEADER_PITCH_MM = 2.54
 ESP_HEADER_PINS = 15
 
@@ -60,8 +62,8 @@ def _draw_carrier(canvas: Canvas, origin_x_mm: float, origin_y_mm: float) -> Non
     canvas.setStrokeColor(HexColor("#6b4f00"))
     for index in range(ESP_HEADER_PINS):
         y_mm = 10.01 + index * HEADER_PITCH_MM
-        _circle(canvas, 9.68, y_mm, 0.95)
-        _circle(canvas, 35.32, y_mm, 0.95)
+        _circle(canvas, ESP_LEFT_ROW_X_MM, y_mm, 0.95)
+        _circle(canvas, ESP_RIGHT_ROW_X_MM, y_mm, 0.95)
 
     # CC1101 body and its 2x4 socket.
     canvas.setFillColor(HexColor("#dcfce7"))
@@ -90,12 +92,16 @@ def _draw_carrier(canvas: Canvas, origin_x_mm: float, origin_y_mm: float) -> Non
     # Explicit row-spacing dimension.
     dim_y = 4.3
     canvas.setStrokeColor(HexColor("#2563eb"))
-    canvas.line(9.68 * mm, dim_y * mm, 35.32 * mm, dim_y * mm)
-    for x_mm in (9.68, 35.32):
+    canvas.line(ESP_LEFT_ROW_X_MM * mm, dim_y * mm, ESP_RIGHT_ROW_X_MM * mm, dim_y * mm)
+    for x_mm in (ESP_LEFT_ROW_X_MM, ESP_RIGHT_ROW_X_MM):
         canvas.line(x_mm * mm, 3.3 * mm, x_mm * mm, 5.3 * mm)
     canvas.setFillColor(HexColor("#1d4ed8"))
     canvas.setFont("Helvetica-Bold", 6.5)
-    canvas.drawCentredString(22.5 * mm, 1.6 * mm, "25.64 mm header-row centers")
+    canvas.drawCentredString(
+        (ESP_LEFT_ROW_X_MM + ESP_ROW_SPACING_MM / 2) * mm,
+        1.6 * mm,
+        "25.40 mm header-row centers",
+    )
     canvas.restoreState()
 
 
@@ -161,7 +167,7 @@ def generate(output: Path) -> None:
     canvas.setFont("Helvetica", 7.5)
     canvas.drawString(16 * mm, 44 * mm, "Nominal carrier outline: 68 x 66 mm")
     canvas.drawString(16 * mm, 39 * mm, "ESP32 outline: 29 x 51.74 mm; 2 x 15 pins at 2.54 mm pitch")
-    canvas.drawString(16 * mm, 34 * mm, "ESP32 header-row center spacing: 25.64 mm (verify against the physical board)")
+    canvas.drawString(16 * mm, 34 * mm, "ESP32 header-row center spacing: 25.40 mm (verify against the physical board)")
     canvas.drawString(16 * mm, 29 * mm, "CC1101 connector: 2 x 4 pins at 2.54 mm pitch")
     canvas.setFont("Helvetica-Bold", 7.5)
     canvas.drawString(16 * mm, 20 * mm, "Do not fabricate from this fit sheet until both modules physically align.")
