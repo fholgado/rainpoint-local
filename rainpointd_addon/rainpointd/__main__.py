@@ -59,6 +59,10 @@ def main() -> int:
         help="maximum number of journal events retained in SQLite",
     )
     parser.add_argument(
+        "--registry-token-file",
+        help="path used to persist management credential rotation",
+    )
+    parser.add_argument(
         "--device-catalog",
         help=(
             "installation catalog JSON; omitted only for legacy prototype "
@@ -79,6 +83,8 @@ def main() -> int:
         storage_path=args.storage,
         event_retention_limit=args.event_retention_limit,
         registry_token=os.environ.get("RAINPOINT_REGISTRY_TOKEN"),
+        registry_token_path=args.registry_token_file,
+        claim_code=os.environ.get("RAINPOINT_CLAIM_CODE"),
         catalog=catalog,
     )
     if args.transport == "rtl433":

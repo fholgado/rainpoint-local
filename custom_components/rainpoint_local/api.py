@@ -89,6 +89,22 @@ class RainPointLocalClient:
         """Verify a gateway management credential without changing state."""
         await self._post("auth/check", {}, token)
 
+    async def claim(self, setup_code: str) -> str:
+        """Exchange a standalone gateway's one-time setup code."""
+        result = await self._post("auth/claim", {"setup_code": setup_code})
+        token = result.get("registry_write_token")
+        if not isinstance(token, str) or not token:
+            raise RainPointLocalInvalidResponse("claim response has no token")
+        return token
+
+    async def rotate_management_token(self, token: str) -> str:
+        """Rotate and return the gateway management credential once."""
+        result = await self._post("auth/rotate", {}, token)
+        replacement = result.get("registry_write_token")
+        if not isinstance(replacement, str) or not replacement:
+            raise RainPointLocalInvalidResponse("rotation response has no token")
+        return replacement
+
     async def register_radio_node(
         self,
         token: str,
@@ -119,6 +135,12 @@ class RainPointLocalClient:
             {"duration_seconds": duration_seconds},
             token,
         )
+
+    async def revoke_radio_node(
+        self, token: str, node_id: str
+    ) -> dict[str, Any]:
+        """Revoke one node credential from the custom local gateway."""
+        return await self._post(f"nodes/{node_id}/revoke", {}, token)
 
     async def start_radio_node_adoption(
         self,
@@ -220,13 +242,15 @@ class RainPointLocalClient:
         return payload
 
     async def _post(
-        self, path: str, payload: dict[str, Any], token: str
+        self, path: str, payload: dict[str, Any], token: str | None = None
     ) -> dict[str, Any]:
         try:
             async with self._session.post(
                 f"{self._base_url}/{path}",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=(
+                    {"Authorization": f"Bearer {token}"} if token else {}
+                ),
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status in {401, 403}:

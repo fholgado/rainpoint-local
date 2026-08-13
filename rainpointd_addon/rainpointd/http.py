@@ -79,9 +79,34 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         parsed = urlparse(self.path)
         base = f"/api/{API_VERSION}"
+        if parsed.path == f"{base}/auth/claim":
+            try:
+                token = self.server.gateway.claim_registry(
+                    str(self._request_json().get("setup_code", ""))
+                )
+            except PermissionError:
+                self._json(401, {"error": "invalid or expired setup code"})
+                return
+            except ValueError as error:
+                self._json(400, {"error": str(error)})
+                return
+            self._json(200, {"registry_write_token": token})
+            return
         if parsed.path == f"{base}/auth/check":
             if self._authorize_registry_write():
                 self._json(200, {"authorized": True})
+            return
+        if parsed.path == f"{base}/auth/rotate":
+            if not self._authorize_registry_write():
+                return
+            self._json(
+                200,
+                {
+                    "registry_write_token": (
+                        self.server.gateway.rotate_registry_token()
+                    )
+                },
+            )
             return
         registry_path = parsed.path.startswith(f"{base}/registry/")
         device_path = parsed.path.startswith(f"{base}/devices/")
@@ -156,6 +181,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                         int(body.get("duration_seconds", 15)),
                     )
                     self._json(200, result)
+                    return
+                if separator and node_action == "revoke":
+                    self._json(
+                        200,
+                        self.server.gateway.revoke_radio_node(node_id),
+                    )
                     return
                 if parsed.path == f"{base}/pairing/start":
                     result = self.server.gateway.start_pairing(

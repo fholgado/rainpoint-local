@@ -60,13 +60,15 @@
           "pair_sensor": "Pair a validated HCS026 test sensor",
           "forget_sensor": "Forget a local sensor",
           "add_radio_node": "Add with setup code (advanced)",
+          "remove_radio_node": "Remove a radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
       },
       "authenticate_gateway": {
         "title": "Authenticate standalone gateway",
-        "description": "This is only needed for a gateway running outside Home Assistant. Add-on credentials are configured automatically during discovery.",
+        "description": "Enter the one-time setup code printed by a standalone gateway. An existing management token remains available for recovery. Add-on credentials are configured automatically.",
         "data": {
+          "setup_code": "One-time setup code",
           "registry_write_token": "Gateway management token"
         }
       },
@@ -78,6 +80,13 @@
           "node_token": "Node setup token",
           "name": "Name",
           "area": "Area"
+        }
+      },
+      "remove_radio_node": {
+        "title": "Remove custom local radio node",
+        "description": "This immediately revokes the selected node's credential. RainPoint sensors and valves are retained.",
+        "data": {
+          "node_id": "Radio node"
         }
       },
       "pair_sensor": {
@@ -126,6 +135,7 @@
     "abort": {
       "pairing_timeout": "The pairing window expired before a sensor completed enrollment",
       "pairing_failed": "The local radio node could not complete the sensor enrollment exchange",
+      "no_radio_nodes": "No adopted radio nodes are available to remove",
       "no_sensors": "No local HCS026 sensors are available to forget",
       "sensor_not_found": "The selected sensor is no longer available"
     }

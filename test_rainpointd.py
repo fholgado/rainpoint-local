@@ -28,6 +28,27 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_claim_and_rotation_persist_and_revoke_old_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            token_path = Path(temporary_directory) / "management-token"
+            gateway = Gateway(
+                claim_code="123456",
+                registry_token_path=str(token_path),
+            )
+            self.assertTrue(gateway.info()["claim_available"])
+            with self.assertRaises(PermissionError):
+                gateway.claim_registry("wrong")
+            claimed = gateway.claim_registry("123456")
+            self.assertTrue(gateway.registry_authorized(claimed))
+            self.assertFalse(gateway.info()["claim_available"])
+            self.assertEqual(claimed, token_path.read_text(encoding="utf-8"))
+
+            rotated = gateway.rotate_registry_token()
+            self.assertFalse(gateway.registry_authorized(claimed))
+            self.assertTrue(gateway.registry_authorized(rotated))
+            self.assertEqual(rotated, token_path.read_text(encoding="utf-8"))
+            self.assertEqual(0o600, token_path.stat().st_mode & 0o777)
+
     def test_storage_v4_registry_migrates_identity_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "rainpoint.sqlite3"
@@ -698,7 +719,7 @@ class GatewayTest(unittest.TestCase):
 
 class HTTPAPITest(unittest.TestCase):
     def setUp(self) -> None:
-        gateway = Gateway()
+        gateway = Gateway(claim_code="123456")
         ReplayTransport(gateway).seed()
         self.server = create_server(gateway, port=0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -766,6 +787,20 @@ class HTTPAPITest(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen(request, timeout=2)
         self.assertEqual(403, raised.exception.code)
+
+    def test_one_time_setup_code_claims_gateway(self) -> None:
+        request = Request(
+            f"{self.base}/api/v1/auth/claim",
+            data=b'{"setup_code":"123456"}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=2) as response:
+            token = json.load(response)["registry_write_token"]
+        self.assertTrue(self.server.gateway.registry_authorized(token))
+        with self.assertRaises(HTTPError) as raised:
+            urlopen(request, timeout=2)
+        self.assertEqual(401, raised.exception.code)
 
 
 class RegistryHTTPAPITest(unittest.TestCase):
@@ -835,6 +870,30 @@ class RegistryHTTPAPITest(unittest.TestCase):
             f"/api/v1/registry/{device_id}/forget", {}
         )
         self.assertFalse(forgotten["rf_unpaired"])
+
+    def test_management_token_rotation_revokes_previous_token(self) -> None:
+        result = self.post_json("/api/v1/auth/rotate", {})
+        replacement = result["registry_write_token"]
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json("/api/v1/auth/check", {})
+        self.assertEqual(401, raised.exception.code)
+        authorized = self.post_json(
+            "/api/v1/auth/check", {}, token=replacement
+        )
+        self.assertTrue(authorized["authorized"])
+
+    def test_radio_node_revocation_retains_device_registry(self) -> None:
+        node_id = "rp-001122334455"
+        self.server.gateway.register_radio_node(
+            node_id=node_id,
+            token="ab" * 32,
+            name="Bench node",
+            area="Garden",
+        )
+        result = self.post_json(f"/api/v1/nodes/{node_id}/revoke", {})
+        self.assertTrue(result["revoked"])
+        self.assertIsNone(self.server.gateway.radio_node_credential(node_id))
+        self.assertEqual(1, len(self.server.gateway.endpoints()))
 
     def test_authenticated_forget_covers_unregistered_paired_sensor(self) -> None:
         self.server.gateway.observe_decoded(

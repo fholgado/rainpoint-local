@@ -461,7 +461,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 },
             )
         menu_options = (
-            ["pair_sensor", "add_radio_node"]
+            ["pair_sensor", "add_radio_node", "remove_radio_node"]
             if self._token
             else ["authenticate_gateway"]
         )
@@ -512,15 +512,66 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
+    async def async_step_remove_radio_node(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Revoke an adopted radio node selected by friendly name."""
+        if not self._token:
+            return await self.async_step_authenticate_gateway()
+        errors: dict[str, str] = {}
+        try:
+            nodes = await self._client().nodes()
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except RainPointLocalInvalidResponse:
+            return self.async_abort(reason="invalid_response")
+        choices = {
+            str(node["node_id"]): str(node.get("name") or node["node_id"])
+            for node in nodes
+            if node.get("managed") is True and node.get("node_id")
+        }
+        if not choices:
+            return self.async_abort(reason="no_radio_nodes")
+        if user_input is not None:
+            node_id = str(user_input["node_id"])
+            try:
+                await self._client().revoke_radio_node(self._token, node_id)
+            except RainPointLocalUnauthorized:
+                errors["base"] = "invalid_auth"
+            except RainPointLocalCannotConnect:
+                errors["base"] = "cannot_connect"
+            except RainPointLocalInvalidResponse:
+                errors["base"] = "invalid_response"
+            else:
+                coordinator = self.hass.data.get(DOMAIN, {}).get(
+                    self._entry.entry_id
+                )
+                if coordinator is not None:
+                    await coordinator.async_request_refresh()
+                return self.async_create_entry(
+                    title="Radio node removed", data={}
+                )
+        return self.async_show_form(
+            step_id="remove_radio_node",
+            data_schema=vol.Schema({vol.Required("node_id"): vol.In(choices)}),
+            errors=errors,
+        )
+
     async def async_step_authenticate_gateway(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Authenticate a manually configured standalone gateway once."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            token = str(user_input[CONF_TOKEN]).strip()
+            token = str(user_input.get(CONF_TOKEN, "")).strip()
+            setup_code = str(user_input.get("setup_code", "")).strip()
             try:
-                await self._client().authenticate(token)
+                if setup_code:
+                    token = await self._client().claim(setup_code)
+                elif token:
+                    await self._client().authenticate(token)
+                else:
+                    raise RainPointLocalUnauthorized("credential required")
             except RainPointLocalUnauthorized:
                 errors["base"] = "invalid_auth"
             except RainPointLocalCannotConnect:
@@ -536,7 +587,12 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_pair_sensor()
         return self.async_show_form(
             step_id="authenticate_gateway",
-            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("setup_code", default=""): str,
+                    vol.Optional(CONF_TOKEN, default=""): str,
+                }
+            ),
             errors=errors,
         )
 

@@ -80,6 +80,7 @@ node_args=(
 gateway_args=(
   --gateway-id "${gateway_id}"
   --event-retention-limit "${event_retention_limit}"
+  --registry-token-file "${registry_token_path}"
 )
 if [[ -n "${device_catalog_path}" ]]; then
   gateway_args+=(--device-catalog "${device_catalog_path}")

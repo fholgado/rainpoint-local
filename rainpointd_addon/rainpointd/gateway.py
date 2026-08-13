@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hmac
+import os
 import re
 import secrets
 import threading
@@ -72,12 +73,18 @@ class Gateway:
         storage_path: str | None = None,
         event_retention_limit: int = DEFAULT_EVENT_RETENTION_LIMIT,
         registry_token: str | None = None,
+        registry_token_path: str | None = None,
+        claim_code: str | None = None,
         catalog: DeviceCatalog = LEGACY_HOME_CATALOG,
     ) -> None:
         self.gateway_id = gateway_id
         self.transport = transport
         self.read_only = read_only
         self._registry_token = registry_token or None
+        self._registry_token_path = (
+            Path(registry_token_path) if registry_token_path else None
+        )
+        self._claim_code = claim_code or None
         self._base_catalog = catalog
         self.catalog = catalog
         self._registry_metadata: dict[str, dict[str, Any]] = {}
@@ -166,6 +173,7 @@ class Gateway:
                 ),
                 "registry_available": self._store is not None,
                 "registry_writes_enabled": self._registry_token is not None,
+                "claim_available": self._claim_code is not None,
                 "rf_pairing_available": bool(self._pairing_nodes()),
                 "rf_pairing_monitor_available": self._pairing is not None,
                 "rf_pairing_transmitter_required": True,
@@ -374,6 +382,20 @@ class Gateway:
         with self._lock:
             cancelled = self._pending_node_adoptions.pop(node_id, None) is not None
         return {"node_id": node_id, "state": "cancelled", "cancelled": cancelled}
+
+    def revoke_radio_node(self, node_id: str) -> dict[str, Any]:
+        """Revoke one adopted node credential without deleting RF devices."""
+        node_id = node_id.strip().lower()
+        if not self._store:
+            raise RuntimeError("persistent radio-node registry is unavailable")
+        with self._lock:
+            revoked = self._store.delete_radio_node(node_id)
+            self._pending_node_adoptions.pop(node_id, None)
+            node = self._nodes.get(node_id)
+            if node is not None:
+                node["managed"] = False
+                node["authenticated"] = False
+        return {"node_id": node_id, "revoked": revoked}
 
     def identify_radio_node(
         self, node_id: str, duration_seconds: int = 15
@@ -858,6 +880,38 @@ class Gateway:
             and token is not None
             and hmac.compare_digest(token, expected)
         )
+
+    def claim_registry(self, claim_code: str) -> str:
+        """Exchange a one-time standalone setup code for a management token."""
+        with self._lock:
+            if self._claim_code is None or not hmac.compare_digest(
+                claim_code, self._claim_code
+            ):
+                raise PermissionError("invalid or expired setup code")
+            token = secrets.token_urlsafe(32)
+            self._persist_registry_token_locked(token)
+            self._registry_token = token
+            self._claim_code = None
+            return token
+
+    def rotate_registry_token(self) -> str:
+        """Replace the gateway credential and immediately revoke the old one."""
+        with self._lock:
+            token = secrets.token_urlsafe(32)
+            self._persist_registry_token_locked(token)
+            self._registry_token = token
+            return token
+
+    def _persist_registry_token_locked(self, token: str) -> None:
+        """Atomically persist a rotated token when a credential path is set."""
+        if self._registry_token_path is None:
+            return
+        path = self._registry_token_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.tmp")
+        temporary.write_text(token, encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(path)
 
     def registry(self) -> list[dict[str, Any]]:
         """Return accepted local metadata; this is not RF pairing state."""
