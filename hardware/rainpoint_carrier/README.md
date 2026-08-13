@@ -6,9 +6,10 @@ a socketed assembly without replacing either module.
 
 ## Design status
 
-**Revision A is an engineering prototype.** Its electrical mapping follows the
-working bridge exactly. The carrier footprint follows the physically verified
-30-pin ELEGOO ESP-WROOM-32 USB-C board: two 15-pin rows at 2.54 mm pitch,
+**Revision A is a fabrication-ready engineering prototype.** Its electrical
+mapping follows the working bridge exactly. The carrier footprint follows the
+physically verified 30-pin ELEGOO ESP-WROOM-32 USB-C board: two 15-pin rows at
+2.54 mm pitch,
 anchored toward the USB end. Before ordering, print the generated Letter-size
 fit check PDF at **Actual Size / 100%**, place the actual ESP32 and CC1101
 modules over it, and complete the checklist in `PREORDER_CHECKLIST.md`. That
@@ -106,8 +107,18 @@ external interfaces reachable after the carrier is installed in a case.
 - `pinout.csv`: machine-readable net mapping.
 - `placement.svg`: 1:1 top-view assembly and fit-check drawing.
 - `generate_fit_check_pdf.py`: generator for the print-calibrated Letter PDF.
+- `generate_kicad.py`: deterministic KiCad project and board generator; run
+  with KiCad's bundled Python interpreter.
 - `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf`: preferred printable
   fit-check sheet, including independent metric and inch calibration marks.
+- `kicad/`: KiCad 10 schematic, PCB, local libraries, ERC/DRC reports, and
+  schematic preview.
+- `fabrication/`: Gerbers, drill files and manufacturing validation reports.
+- `preview/`: rendered top and mirrored-bottom board views.
+- `FABRICATION.md`: validated order settings, package contents, and assembly
+  orientation.
+- `../../output/manufacturing/rainpoint_carrier_rev_a_gerbers.zip`: compact
+  bare-PCB upload archive for PCBWay, JLCPCB, or an equivalent fabricator.
 - `LAYOUT.md`: placement coordinates, stackup, routing, and enclosure rules.
 - `PREORDER_CHECKLIST.md`: physical, electrical, and manufacturing gates.
 

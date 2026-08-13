@@ -10,6 +10,9 @@ __pycache__/
 .venv/
 .pio/
 captures/rf/
+*.kicad_prl
+*.lck
+*-backups/
 
 # Local-only research material and machine-specific capture helper.
 homgar-installed/

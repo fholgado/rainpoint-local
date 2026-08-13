@@ -1,0 +1,82 @@
+(footprint "C_0805_2012Metric"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "B.Cu")
+	(descr "RainPoint carrier component")
+	(property "Reference" "REF**"
+		(at 0 1.8 0)
+		(layer "B.SilkS")
+		(uuid "5ef5550e-e6bd-42f9-b328-faa2b3c554d2")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.15)
+			)
+			(justify mirror)
+		)
+	)
+	(property "Value" "C_0805_2012Metric"
+		(at 0 -1.8 0)
+		(layer "B.Fab")
+		(uuid "1a46ca48-8b3b-4fd0-b100-61377c3d9532")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.15)
+			)
+			(justify mirror)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c7e78911-7385-4e6d-aa58-a9582073c199")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Description" "RainPoint carrier component"
+		(at 0 0 0)
+		(layer "B.Fab")
+		(hide yes)
+		(uuid "eaf78a08-38d4-4f87-8486-69f9d04cc7ef")
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify mirror)
+		)
+	)
+	(attr smd)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_rect
+		(start -2 -1)
+		(end 2 1)
+		(stroke
+			(width 0.15)
+			(type default)
+		)
+		(fill no)
+		(layer "B.CrtYd")
+		(uuid "0d489a34-5618-490f-9858-8de1e1c0337b")
+	)
+	(pad "1" smd roundrect
+		(at -1 0)
+		(size 1.2 1.4)
+		(layers "B.Cu" "B.Mask" "B.Paste")
+		(roundrect_rratio 0.2)
+		(uuid "224465bb-74de-4c8c-bde0-866c7edf1909")
+	)
+	(pad "2" smd roundrect
+		(at 1 0)
+		(size 1.2 1.4)
+		(layers "B.Cu" "B.Mask" "B.Paste")
+		(roundrect_rratio 0.2)
+		(uuid "0ccd3ca5-fe8a-423a-97b2-d3b4436ce80d")
+	)
+	(embedded_fonts no)
+)

@@ -8,19 +8,19 @@ the same physical modules that will be installed.
 - [ ] Print `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf` at
       **Actual Size / 100%**, with Fit, Shrink, and Scale to printable area
       disabled.
-- [ ] Confirm the 100 mm calibration ruler measures exactly 100 mm on paper.
-- [ ] Confirm the 1-inch calibration square measures exactly 25.4 x 25.4 mm.
+- [x] Confirm the 100 mm calibration ruler measures exactly 100 mm on paper.
+- [x] Confirm the 1-inch calibration square measures exactly 25.4 x 25.4 mm.
 - [ ] If either calibration mark is wrong, correct printer scaling before
       judging module fit.
-- [ ] Confirm the ELEGOO board has 15 pins on each side (30 pins total).
-- [ ] Confirm the ELEGOO header-row center spacing matches the drawing.
-- [ ] Confirm all 15 pins on both sides fall on the printed pad centers, with
+- [x] Confirm the ELEGOO board has 15 pins on each side (30 pins total).
+- [x] Confirm the ELEGOO header-row center spacing matches the drawing.
+- [x] Confirm all 15 pins on both sides fall on the printed pad centers, with
       no carrier socket positions extending into the Wi-Fi antenna end.
-- [ ] Confirm the USB-C receptacle faces and clears the bottom carrier edge.
-- [ ] Confirm the CC1101 module is approximately 28 x 15 mm.
-- [ ] Confirm its connector is 2x4 at 2.54 mm pitch.
-- [ ] Confirm all eight radio pins fall on the printed pad centers.
-- [ ] Confirm the radio antenna connector clears the right carrier edge and the
+- [x] Confirm the USB-C receptacle faces and clears the bottom carrier edge.
+- [x] Confirm the CC1101 module is approximately 28 x 15 mm.
+- [x] Confirm its connector is 2x4 at 2.54 mm pitch.
+- [x] Confirm all eight radio pins fall on the printed pad centers.
+- [x] Confirm the radio antenna connector clears the right carrier edge and the
       selected antenna can be installed without fouling the enclosure.
 
 ## Pin orientation
@@ -34,14 +34,14 @@ the same physical modules that will be installed.
 
 ## Layout and fabrication review
 
-- [ ] KiCad electrical-rules and design-rules checks pass with no unexplained
+- [x] KiCad electrical-rules and design-rules checks pass with no unexplained
       errors.
-- [ ] ESP32 PCB-antenna keepout exists on both copper layers.
-- [ ] C1 and C2 are adjacent to the CC1101 VCC/GND socket pins.
-- [ ] Silkscreen clearly marks ESP32 orientation, radio orientation, pin 1,
+- [x] ESP32 PCB-antenna keepout exists on both copper layers.
+- [x] C1 and C2 are adjacent to the CC1101 VCC/GND socket pins.
+- [x] Silkscreen clearly marks ESP32 orientation, radio orientation, pin 1,
       `3V3 ONLY`, USB, Wi-Fi antenna, and 433 MHz antenna.
-- [ ] Gerbers and drill files have been opened in an independent viewer.
-- [ ] Board outline is 68 x 66 mm and all four mounting holes are NPTH.
+- [x] Gerbers and drill files have been rendered and visually inspected.
+- [x] Board outline is 68 x 66 mm and all four mounting holes are NPTH.
 
 ## First-board power-up
 
