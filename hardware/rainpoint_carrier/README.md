@@ -8,9 +8,10 @@ a socketed assembly without replacing either module.
 
 **Revision A is an engineering prototype.** Its electrical mapping follows the
 working bridge exactly. The ESP32 mechanical dimensions are taken from the
-ELEGOO EL-SM-012 drawing. Before ordering, print `placement.svg` at 100%, place
-the actual ESP32 and CC1101 modules over it, and complete the checklist in
-`PREORDER_CHECKLIST.md`. That physical fit check is deliberately required
+ELEGOO EL-SM-012 drawing. Before ordering, print the generated Letter-size fit
+check PDF at **Actual Size / 100%**, place the actual ESP32 and CC1101 modules
+over it, and complete the checklist in `PREORDER_CHECKLIST.md`. That physical
+fit check is deliberately required
 because inexpensive CC1101 modules are sold under several mechanically
 different board revisions.
 
@@ -101,6 +102,9 @@ external interfaces reachable after the carrier is installed in a case.
 - `bom.csv`: prototype bill of materials.
 - `pinout.csv`: machine-readable net mapping.
 - `placement.svg`: 1:1 top-view assembly and fit-check drawing.
+- `generate_fit_check_pdf.py`: generator for the print-calibrated Letter PDF.
+- `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf`: preferred printable
+  fit-check sheet, including independent metric and inch calibration marks.
 - `LAYOUT.md`: placement coordinates, stackup, routing, and enclosure rules.
 - `PREORDER_CHECKLIST.md`: physical, electrical, and manufacturing gates.
 

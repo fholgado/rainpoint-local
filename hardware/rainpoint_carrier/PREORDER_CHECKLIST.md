@@ -5,9 +5,13 @@ the same physical modules that will be installed.
 
 ## Mechanical fit
 
-- [ ] Print `placement.svg` at **actual size / 100%**, with browser or printer
-      scaling disabled.
-- [ ] Confirm the 50 mm calibration bar measures exactly 50 mm on paper.
+- [ ] Print `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf` at
+      **Actual Size / 100%**, with Fit, Shrink, and Scale to printable area
+      disabled.
+- [ ] Confirm the 100 mm calibration ruler measures exactly 100 mm on paper.
+- [ ] Confirm the 1-inch calibration square measures exactly 25.4 x 25.4 mm.
+- [ ] If either calibration mark is wrong, correct printer scaling before
+      judging module fit.
 - [ ] Confirm the ELEGOO board has 19 pins on each side.
 - [ ] Confirm the ELEGOO header-row center spacing matches the drawing.
 - [ ] Confirm all 19 pins on both sides fall on the printed pad centers.
