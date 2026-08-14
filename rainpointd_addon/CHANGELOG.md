@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.22.0
+
+- Persist one radio-node owner for each HCS026 routine acknowledgement route.
+- Restore bounded ACK authorizations after reconnect and OTA reboot, and revoke
+  the old owner before reassignment or sensor removal.
+- Consolidate generalized pairing, routine acknowledgements, and OTA into one
+  universal experimental firmware track.
+- Allow a universal release to declare the older firmware variants from which
+  it may be installed without weakening hardware/channel compatibility checks.
+
 ## 0.21.0
 
 - Add a strict local firmware catalog and verify exact size plus SHA-256 before

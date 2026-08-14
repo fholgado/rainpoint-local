@@ -79,6 +79,17 @@ public:
         return nullptr;
     }
 
+    bool revoke(const std::array<std::uint8_t, 4>& pairedEndpoint) {
+        for (auto& authorization : authorizations_) {
+            if (authorization.active &&
+                authorization.pairedEndpoint == pairedEndpoint) {
+                authorization = RoutineAckAuthorization{};
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::size_t activeCount() const {
         std::size_t count = 0;
         for (const auto& authorization : authorizations_) {

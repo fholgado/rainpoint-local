@@ -278,14 +278,16 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 
 ### Isolated routine-acknowledgement candidate
 
-`esp32dev_routine_ack_candidate` is the only target that enables experimental
-post-enrollment sensor acknowledgements. It reproduces the reversed endpoint
+`esp32dev_routine_ack_candidate` is the isolated research target for
+post-enrollment sensor acknowledgements. The deployment candidate now uses the
+unified target described below. Both reproduce the reversed endpoint
 layout, transformed message bytes, CRC residual, selector frequency, and
 177--188 ms response envelope measured in stock-gateway captures.
 
-The target can respond only to exact HCS026 routine reports from endpoints
-successfully enrolled through that node during the current boot. It holds at
-most eight such endpoint authorizations in RAM; rebooting clears all of them.
+The target can respond only to exact HCS026 routine reports from explicitly
+authorized endpoints. It holds at most eight authorizations in RAM. In the
+unified target, the custom local gateway owns those assignments and restores
+them after every reconnect or OTA reboot.
 Normal `esp32dev_single` and `esp32dev_pairing_generalization` builds cannot
 transmit these acknowledgements.
 
@@ -296,10 +298,11 @@ pio run --project-dir firmware/rainpoint_bridge \
   --environment esp32dev_routine_ack_candidate
 ```
 
-### Isolated OTA candidate
+### Unified OTA candidate
 
-`esp32dev_ota_candidate` and `esp32dev_routine_ack_ota_candidate` accept
-`firmware_update_start`. The command must arrive over an authenticated
+`esp32dev_unified_candidate` combines generalized pairing, bounded routine
+sensor acknowledgements, and OTA. It accepts `firmware_update_start` only over
+an authenticated
 protocol-v2 gateway session, and its URL must point to the node's configured
 gateway host. The node rejects unexpected sizes, streams the image into the
 inactive OTA partition, calculates SHA-256 while writing, and changes the boot
@@ -312,17 +315,17 @@ This remains a hardware-trial boundary: the mutually authenticated gateway and
 manifest hash protect this test path, but asymmetric release signatures are not
 implemented yet.
 
-The generic OTA target also includes the validated pairing-generalization
-behavior. The routine-ack OTA target additionally preserves experimental
-post-enrollment sensor acknowledgements. Each reports a distinct firmware
-variant, preventing the gateway catalog from offering one track to a node on
-the other track.
+The same authenticated boundary accepts only bounded ACK configure/revoke
+commands. The gateway persists a unique `sensor endpoint -> radio node` owner,
+restores assignments after reconnect, and revokes them when sensors are removed
+or reassigned. Merely installing the universal image does not authorize RF
+acknowledgements.
 
 Build it without uploading it:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge \
-  --environment esp32dev_ota_candidate
+  --environment esp32dev_unified_candidate
 ```
 
 After a node has received an OTA-capable image once over USB, future compatible

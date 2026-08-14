@@ -72,8 +72,8 @@ Still provisional or not working yet:
 - guaranteeing reliable reception at the final antenna location,
 - repeating the physically validated automatic model-level pairing workflow
   on a second independent identity before claiming broad HCS026 support,
-- physically validating the isolated routine post-enrollment sensor
-  acknowledgement candidate,
+- completing fault-injection and reassignment tests for gateway-owned routine
+  sensor acknowledgement routes,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
 - asymmetric OTA release signatures and destructive rollback fault injection,
@@ -94,8 +94,10 @@ The experimental OTA builds now receive managed releases from the custom local
 gateway and expose native firmware Update entities in Home Assistant. The
 gateway selects releases by hardware profile, channel, and firmware variant,
 then verifies exact size and SHA-256 before serving or installing an artifact.
-The initial USB migration deliberately has separate pairing/OTA and
-routine-ack/OTA images so an upgrade cannot remove an active experiment.
+The next candidate consolidates pairing, bounded routine acknowledgements, and
+OTA into one image. The gateway remains the authority for which single node may
+acknowledge each sensor and restores that assignment after reboot, avoiding
+duplicate RF replies in multi-node installations.
 
 Normal production firmware still requires USB updates. Before treating OTA as
 a publishable production facility, add asymmetric release signatures and

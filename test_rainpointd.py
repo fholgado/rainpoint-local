@@ -28,6 +28,97 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_ack_assignment_is_single_owner_and_survives_gateway_restart(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            assert gateway._store is not None
+            gateway._store.upsert_enrollment_record(
+                {
+                    "factory_endpoint": "1bce0024",
+                    "paired_endpoint": "9bce0024",
+                    "enrolled_at": "2026-08-14T00:00:00+00:00",
+                    "last_seen_at": "2026-08-14T00:00:00+00:00",
+                }
+            )
+            for node_id in ("rp-001122334455", "rp-aabbccddeeff"):
+                gateway.register_radio_node(
+                    node_id=node_id,
+                    token="ab" * 32,
+                    name=node_id,
+                    area=None,
+                )
+            commands: list[tuple[str, dict]] = []
+            gateway.set_node_command_sender(
+                lambda node_id, command: commands.append((node_id, command))
+            )
+            gateway.update_node(
+                "rp-001122334455",
+                connected=True,
+                capabilities=["rx", "routine_sensor_ack_tx"],
+            )
+            assignment = gateway.assign_radio_node_ack(
+                node_id="rp-001122334455",
+                paired_endpoint="9bce0024",
+                assigned_channel=4,
+            )
+            self.assertEqual("rp-001122334455", assignment["node_id"])
+            self.assertEqual("routine_ack_configure", commands[-1][1]["type"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            restored_commands: list[tuple[str, dict]] = []
+            restored.set_node_command_sender(
+                lambda node_id, command: restored_commands.append(
+                    (node_id, command)
+                )
+            )
+            restored.update_node(
+                "rp-001122334455",
+                connected=True,
+                capabilities=["rx", "routine_sensor_ack_tx"],
+            )
+            self.assertEqual(
+                1,
+                restored.restore_radio_node_ack_assignments(
+                    "rp-001122334455"
+                ),
+            )
+            self.assertEqual(
+                "9bce0024", restored_commands[-1][1]["paired_endpoint"]
+            )
+            restored.assign_radio_node_ack(
+                node_id="rp-aabbccddeeff",
+                paired_endpoint="9bce0024",
+                assigned_channel=5,
+            )
+            self.assertEqual(1, len(restored.ack_assignments()))
+            self.assertEqual(
+                "rp-aabbccddeeff", restored.ack_assignments()[0]["node_id"]
+            )
+            self.assertEqual("routine_ack_revoke", restored_commands[-1][1]["type"])
+            restored.observe_decoded(
+                device_id="hcs026-9bce0024",
+                name="Test Sensor A",
+                model=GENERIC_HCS02X_MODEL,
+                frame="routine",
+                state={
+                    "rf_endpoint": "9bce0024",
+                    "rf_protocol_family": HCS02X_PROTOCOL,
+                    "rf_frame_accepted": True,
+                    "soil_moisture_percent": 20,
+                },
+            )
+            restored.forget_sensor("hcs026-9bce0024")
+            self.assertEqual([], restored.ack_assignments())
+            self.assertEqual(
+                ("rp-aabbccddeeff", "routine_ack_revoke"),
+                (restored_commands[-1][0], restored_commands[-1][1]["type"]),
+            )
+            restored.close()
+
     def test_claim_and_rotation_persist_and_revoke_old_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             token_path = Path(temporary_directory) / "management-token"
@@ -159,7 +250,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(6, gateway.info()["storage_schema_version"])
+            self.assertEqual(7, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -170,7 +261,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(6, migrated.info()["storage_schema_version"])
+            self.assertEqual(7, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -950,6 +1041,35 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertFalse(node["connected"])
         self.assertTrue(node["managed"])
         self.assertEqual("Garden", node["area"])
+
+    def test_authenticated_ack_assignment_has_one_persistent_owner(self) -> None:
+        node_id = "rp-001122334455"
+        self.server.gateway.register_radio_node(
+            node_id=node_id,
+            token="ab" * 32,
+            name="Back Garden Radio",
+            area="Garden",
+        )
+        assert self.server.gateway._store is not None
+        self.server.gateway._store.upsert_enrollment_record(
+            {
+                "factory_endpoint": "1bce0024",
+                "paired_endpoint": "9bce0024",
+                "enrolled_at": "2026-08-14T00:00:00+00:00",
+                "last_seen_at": "2026-08-14T00:00:00+00:00",
+            }
+        )
+        assigned = self.post_json(
+            f"/api/v1/nodes/{node_id}/ack-assignment",
+            {
+                "paired_endpoint": "9bce0024",
+                "assigned_channel": 4,
+            },
+        )["ack_assignment"]
+        self.assertEqual(node_id, assigned["node_id"])
+        with urlopen(f"{self.base}/api/v1/ack-assignments", timeout=2) as response:
+            assignments = json.load(response)["ack_assignments"]
+        self.assertEqual([assigned], assignments)
 
     def test_identify_api_uses_bounded_non_rf_node_command(self) -> None:
         commands: list[tuple[str, dict]] = []

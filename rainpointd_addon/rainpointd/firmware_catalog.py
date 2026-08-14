@@ -28,6 +28,7 @@ class FirmwareRelease:
     channel: str
     hardware_profile: str
     firmware_variant: str
+    compatible_variants: tuple[str, ...]
     required_capability: str
     artifact_path: Path
     size_bytes: int
@@ -44,6 +45,7 @@ class FirmwareRelease:
             "channel": self.channel,
             "hardware_profile": self.hardware_profile,
             "firmware_variant": self.firmware_variant,
+            "compatible_variants": list(self.compatible_variants),
             "required_capability": self.required_capability,
             "size_bytes": self.size_bytes,
             "sha256": self.sha256,
@@ -88,6 +90,9 @@ class FirmwareCatalog:
         channel = str(raw.get("channel", ""))
         hardware_profile = str(raw.get("hardware_profile", ""))
         firmware_variant = str(raw.get("firmware_variant", ""))
+        raw_compatible_variants = raw.get(
+            "compatible_variants", [firmware_variant]
+        )
         required_capability = str(raw.get("required_capability", ""))
         filename = str(raw.get("artifact", ""))
         sha256 = str(raw.get("sha256", "")).lower()
@@ -101,6 +106,12 @@ class FirmwareCatalog:
             or not PROFILE.fullmatch(channel)
             or not PROFILE.fullmatch(hardware_profile)
             or not PROFILE.fullmatch(firmware_variant)
+            or not isinstance(raw_compatible_variants, list)
+            or not 1 <= len(raw_compatible_variants) <= 8
+            or any(
+                not isinstance(item, str) or not PROFILE.fullmatch(item)
+                for item in raw_compatible_variants
+            )
             or not PROFILE.fullmatch(required_capability)
             or not filename
             or Path(filename).name != filename
@@ -125,6 +136,7 @@ class FirmwareCatalog:
             channel=channel,
             hardware_profile=hardware_profile,
             firmware_variant=firmware_variant,
+            compatible_variants=tuple(raw_compatible_variants),
             required_capability=required_capability,
             artifact_path=root / filename,
             size_bytes=size_bytes,
@@ -210,7 +222,7 @@ class FirmwareCatalog:
             for release in self._releases.values()
             if release.required_capability in capabilities
             and release.hardware_profile == hardware_profile
-            and release.firmware_variant == firmware_variant
+            and firmware_variant in release.compatible_variants
             and release.channel == channel
             and self.artifact_ready(release.release_id)
         ]

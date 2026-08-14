@@ -42,6 +42,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 {"releases": self.server.gateway.firmware_releases()},
             )
             return
+        if parsed.path == f"/api/{API_VERSION}/ack-assignments":
+            self._json(
+                200,
+                {"ack_assignments": self.server.gateway.ack_assignments()},
+            )
+            return
         firmware_prefix = "/firmware/"
         if parsed.path.startswith(firmware_prefix) and parsed.path.endswith(
             ".bin"
@@ -207,6 +213,19 @@ class RequestHandler(BaseHTTPRequestHandler):
                         int(body.get("duration_seconds", 15)),
                     )
                     self._json(200, result)
+                    return
+                if separator and node_action == "ack-assignment":
+                    result = self.server.gateway.assign_radio_node_ack(
+                        node_id=node_id,
+                        paired_endpoint=str(body.get("paired_endpoint", "")),
+                        assigned_channel=int(body.get("assigned_channel", 0)),
+                        frequency_offset_hz=int(
+                            body.get("frequency_offset_hz", 45_000)
+                        ),
+                        power_dbm=int(body.get("power_dbm", 10)),
+                        invert=body.get("invert", False),
+                    )
+                    self._json(200, {"ack_assignment": result})
                     return
                 if separator and node_action == "firmware-update":
                     if body.get("release_id") is not None:

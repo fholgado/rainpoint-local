@@ -18,6 +18,7 @@ def stage_release(
     summary: str,
     notes: str,
     firmware_variant: str,
+    compatible_variants: list[str] | None = None,
     release_url: str | None = None,
 ) -> dict:
     """Copy an artifact and atomically replace its catalog entry."""
@@ -46,6 +47,7 @@ def stage_release(
         "channel": "experimental",
         "hardware_profile": "esp32dev-cc1101-v1",
         "firmware_variant": firmware_variant,
+        "compatible_variants": compatible_variants or [firmware_variant],
         "required_capability": "firmware_update_trial",
         "artifact": filename,
         "size_bytes": len(content),
@@ -77,6 +79,12 @@ def main() -> int:
     parser.add_argument("--summary", required=True)
     parser.add_argument("--notes", required=True)
     parser.add_argument("--firmware-variant", required=True)
+    parser.add_argument(
+        "--compatible-variant",
+        action="append",
+        dest="compatible_variants",
+        help="source firmware variant that may install this release",
+    )
     parser.add_argument("--release-url")
     args = parser.parse_args()
     release = stage_release(
@@ -87,6 +95,7 @@ def main() -> int:
         summary=args.summary,
         notes=args.notes,
         firmware_variant=args.firmware_variant,
+        compatible_variants=args.compatible_variants,
         release_url=args.release_url,
     )
     print(json.dumps(release, indent=2, sort_keys=True))

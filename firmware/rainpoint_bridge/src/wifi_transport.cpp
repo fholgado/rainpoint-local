@@ -295,10 +295,14 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
         "\"hardware_profile\":\"esp32dev-cc1101-v1\","
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
-        "\"firmware_variant\":\"routine-ack-ota\","
-#else
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_OTA_CANDIDATE == 1
+        "\"firmware_variant\":\"unified\","
+#elif RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        "\"firmware_variant\":\"routine-ack\","
+#elif RAINPOINT_OTA_CANDIDATE == 1
         "\"firmware_variant\":\"pairing-ota\","
+#else
+        "\"firmware_variant\":\"base\","
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
         "\"firmware_channel\":\"experimental\","

@@ -110,6 +110,11 @@ String pairingCommandId;
 rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
 std::uint32_t routineAckTransmissions = 0;
 std::uint32_t routineAckFailures = 0;
+void reportRoutineAckStatus(
+    const char* state,
+    const rainpoint::RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+);
 #endif
 std::uint32_t lastHealthReport = 0;
 std::uint32_t lastLoopAt = 0;
@@ -134,6 +139,36 @@ String hexString(const std::uint8_t* data, std::size_t length) {
         result += digits[data[index] & 0x0f];
     }
     return result;
+}
+
+bool parseHexEndpoint(
+    const String& value,
+    std::array<std::uint8_t, 4>& endpoint
+) {
+    if (value.length() != endpoint.size() * 2) {
+        return false;
+    }
+    for (std::size_t index = 0; index < endpoint.size(); ++index) {
+        const auto nibble = [](char value) -> int {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        };
+        const int high = nibble(value[index * 2]);
+        const int low = nibble(value[index * 2 + 1]);
+        if (high < 0 || low < 0) {
+            return false;
+        }
+        endpoint[index] = static_cast<std::uint8_t>((high << 4) | low);
+    }
+    return (endpoint[0] & 0x80U) != 0 && endpoint[3] == 0x24;
 }
 
 bool parseDecimalField(
@@ -633,6 +668,67 @@ void handleNetworkCommand() {
         reportIdentifyStatus(true);
         return;
     }
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+    if (type == "routine_ack_configure") {
+        const String endpointValue = jsonStringField(
+            command, "paired_endpoint"
+        );
+        long assignedChannel = 0;
+        long frequencyOffsetHz = 0;
+        long powerDbm = 0;
+        bool invert = false;
+        rainpoint::RoutineAckAuthorization authorization{};
+        if (pairingSession.state() == rainpoint::PairingSessionState::Armed ||
+            !parseHexEndpoint(endpointValue, authorization.pairedEndpoint) ||
+            !jsonLongField(command, "assigned_channel", assignedChannel) ||
+            !jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
+            !jsonLongField(command, "power_dbm", powerDbm) ||
+            !jsonBoolField(command, "invert", invert) ||
+            assignedChannel < 0 || assignedChannel > 255 ||
+            frequencyOffsetHz < -rainpoint::kMaxPairingFrequencyOffsetHz ||
+            frequencyOffsetHz > rainpoint::kMaxPairingFrequencyOffsetHz ||
+            powerDbm < -128 || powerDbm > 127) {
+            reportNetworkCommandError(commandId, "invalid_ack_configuration");
+            return;
+        }
+        authorization.pairingChannel = static_cast<std::uint8_t>(
+            assignedChannel
+        );
+        authorization.frequencyOffsetHz = static_cast<std::int32_t>(
+            frequencyOffsetHz
+        );
+        authorization.powerDbm = static_cast<std::int8_t>(powerDbm);
+        authorization.invert = invert;
+        authorization.active = true;
+        const bool authorized = routineAckAuthorizations.authorize(
+            authorization
+        );
+        reportRoutineAckStatus(
+            authorized ? "configured_by_gateway" : "configuration_rejected",
+            authorization
+        );
+        return;
+    }
+    if (type == "routine_ack_revoke") {
+        rainpoint::RoutineAckAuthorization authorization{};
+        const bool valid = parseHexEndpoint(
+            jsonStringField(command, "paired_endpoint"),
+            authorization.pairedEndpoint
+        );
+        if (!valid) {
+            reportNetworkCommandError(commandId, "invalid_ack_endpoint");
+            return;
+        }
+        const bool revoked = routineAckAuthorizations.revoke(
+            authorization.pairedEndpoint
+        );
+        reportRoutineAckStatus(
+            revoked ? "revoked_by_gateway" : "authorization_not_found",
+            authorization
+        );
+        return;
+    }
+#endif
 #if RAINPOINT_OTA_CANDIDATE == 1
     if (type == "firmware_update_start") {
         const String url = jsonStringField(command, "url");
@@ -985,7 +1081,7 @@ void handleSerialCommand() {
 void reportRoutineAckStatus(
     const char* state,
     const rainpoint::RoutineAckAuthorization& authorization,
-    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame
 ) {
     String line = "{\"type\":\"routine_ack_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();

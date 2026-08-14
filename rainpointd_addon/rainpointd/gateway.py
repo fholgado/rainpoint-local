@@ -63,6 +63,7 @@ FIRMWARE_SHA256 = re.compile(r"[0-9a-fA-F]{64}\Z")
 FIRMWARE_PUBLIC_HOST = re.compile(
     r"(?=.{1,253}\Z)[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?\Z"
 )
+MAXIMUM_ROUTINE_ACK_ASSIGNMENTS = 8
 _UNSET = object()
 
 
@@ -139,6 +140,7 @@ class Gateway:
         ) = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_command_id: str | None = None
+        self._active_pairing_ack_parameters: dict[str, Any] | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
 
     def info(self) -> dict[str, Any]:
@@ -193,6 +195,7 @@ class Gateway:
                     "event_long_poll",
                     "radio_node_adoption",
                     "sensor_pairing",
+                    "routine_ack_ownership",
                     *(
                         ["firmware_updates"]
                         if self._firmware_catalog.enabled
@@ -248,6 +251,171 @@ class Gateway:
         with self._lock:
             self._node_command_sender = sender
 
+    def restore_radio_node_ack_assignments(self, node_id: str) -> int:
+        """Restore gateway-owned ACK routes after a node reconnect or OTA boot."""
+        with self._lock:
+            if self._store is None or self._node_command_sender is None:
+                return 0
+            node = self._nodes.get(node_id, {})
+            if "routine_sensor_ack_tx" not in node.get("capabilities", []):
+                return 0
+            assignments = self._store.ack_assignments(node_id)
+            sender = self._node_command_sender
+        restored = 0
+        for assignment in assignments:
+            command = self._ack_configuration_command(assignment)
+            try:
+                sender(node_id, command)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                break
+            self.update_node(
+                node_id, routine_ack_command_id=command["command_id"]
+            )
+            restored += 1
+        self.update_node(
+            node_id,
+            routine_ack_assigned_sensors=len(assignments),
+            routine_ack_restore_requested=restored,
+        )
+        return restored
+
+    def assign_radio_node_ack(
+        self,
+        *,
+        node_id: str,
+        paired_endpoint: str,
+        assigned_channel: int,
+        frequency_offset_hz: int = 45_000,
+        power_dbm: int = 10,
+        invert: bool = False,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Persist one explicit single-owner ACK route and configure if online."""
+        node_id = node_id.strip().lower()
+        paired_endpoint = paired_endpoint.strip().lower()
+        if not RADIO_NODE_ID.fullmatch(node_id):
+            raise ValueError("invalid radio node ID")
+        try:
+            factory_endpoint(paired_endpoint)
+        except ValueError as error:
+            raise ValueError("invalid paired sensor endpoint") from error
+        if assigned_channel not in {4, 5}:
+            raise ValueError("ACK channel must be 4 or 5")
+        if not -200_000 <= frequency_offset_hz <= 200_000:
+            raise ValueError("ACK frequency offset is out of range")
+        if power_dbm not in {-30, -20, -15, -10, -6, 0, 5, 7, 10}:
+            raise ValueError("ACK transmit power is unsupported")
+        if not isinstance(invert, bool):
+            raise ValueError("ACK polarity must be boolean")
+        with self._lock:
+            if self._store is None:
+                raise RuntimeError("persistent ACK assignment storage unavailable")
+            if paired_endpoint not in {
+                str(item["paired_endpoint"])
+                for item in self._store.enrollment_records()
+            }:
+                raise KeyError(paired_endpoint)
+            if node_id not in {
+                str(item["node_id"]) for item in self._store.radio_nodes()
+            }:
+                raise KeyError(node_id)
+            owned = self._store.ack_assignments(node_id)
+            if (
+                len(owned) >= MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
+                and paired_endpoint
+                not in {item["paired_endpoint"] for item in owned}
+            ):
+                raise ValueError("radio node acknowledgement capacity is full")
+            assignment = {
+                "paired_endpoint": paired_endpoint,
+                "node_id": node_id,
+                "assigned_channel": assigned_channel,
+                "frequency_offset_hz": frequency_offset_hz,
+                "power_dbm": power_dbm,
+                "invert": invert,
+                "updated_at": (now or datetime.now(timezone.utc)).isoformat(),
+            }
+            previous = next(
+                (
+                    item
+                    for item in self._store.ack_assignments()
+                    if item["paired_endpoint"] == paired_endpoint
+                ),
+                None,
+            )
+            if (
+                previous is not None
+                and previous["node_id"] != node_id
+                and self._node_command_sender is not None
+            ):
+                try:
+                    self._node_command_sender(
+                        str(previous["node_id"]),
+                        {
+                            "type": "routine_ack_revoke",
+                            "command_id": uuid.uuid4().hex,
+                            "paired_endpoint": paired_endpoint,
+                        },
+                    )
+                except (ConnectionError, KeyError, RuntimeError, ValueError):
+                    pass
+            self._store.upsert_ack_assignment(assignment)
+            node = self._nodes.get(node_id, {})
+            if (
+                self._node_command_sender is not None
+                and node.get("connected") is True
+                and "routine_sensor_ack_tx" in node.get("capabilities", [])
+            ):
+                command = self._ack_configuration_command(assignment)
+                self._node_command_sender(node_id, command)
+                self._nodes.setdefault(node_id, {"node_id": node_id})[
+                    "routine_ack_command_id"
+                ] = command["command_id"]
+            return copy.deepcopy(assignment)
+
+    def ack_assignments(self) -> list[dict[str, Any]]:
+        """Return the persistent ownership map without node credentials."""
+        with self._lock:
+            return self._store.ack_assignments() if self._store else []
+
+    @staticmethod
+    def _ack_configuration_command(assignment: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "type": "routine_ack_configure",
+            "command_id": uuid.uuid4().hex,
+            "paired_endpoint": assignment["paired_endpoint"],
+            "assigned_channel": int(assignment["assigned_channel"]),
+            "frequency_offset_hz": int(assignment["frequency_offset_hz"]),
+            "power_dbm": int(assignment["power_dbm"]),
+            "invert": bool(assignment["invert"]),
+        }
+
+    def _delete_ack_assignment_locked(self, endpoint: str) -> None:
+        if self._store is None:
+            return
+        assignment = self._store.delete_ack_assignment(endpoint)
+        if assignment is None or self._node_command_sender is None:
+            return
+        try:
+            command = (
+                {
+                    "type": "routine_ack_revoke",
+                    "command_id": uuid.uuid4().hex,
+                    "paired_endpoint": endpoint,
+                }
+            )
+            self._node_command_sender(
+                str(assignment["node_id"]),
+                command,
+            )
+            node = self._nodes.setdefault(
+                str(assignment["node_id"]),
+                {"node_id": str(assignment["node_id"])},
+            )
+            node["routine_ack_command_id"] = command["command_id"]
+        except (ConnectionError, KeyError, RuntimeError, ValueError):
+            pass
+
     def nodes(self) -> list[dict[str, Any]]:
         """Return radio-node connection and receiver diagnostics."""
         with self._lock:
@@ -276,6 +444,10 @@ class Gateway:
                 )
             result = list(nodes.values())
             for node in result:
+                if self._store is not None:
+                    node["routine_ack_assigned_sensors"] = len(
+                        self._store.ack_assignments(str(node["node_id"]))
+                    )
                 release = self._firmware_catalog.latest_for_node(node)
                 if release is not None:
                     node["firmware_update"] = release
@@ -1093,6 +1265,7 @@ class Gateway:
             self._pairing.start(duration_seconds, now=now)
             self._active_pairing_node_id = None
             self._active_pairing_command_id = None
+            self._active_pairing_ack_parameters = None
             if node_id is not None:
                 nodes = {item["node_id"]: item for item in self._pairing_nodes()}
                 if node_id not in nodes:
@@ -1135,6 +1308,11 @@ class Gateway:
                     raise
                 self._active_pairing_node_id = node_id
                 self._active_pairing_command_id = command_id
+                self._active_pairing_ack_parameters = {
+                    "frequency_offset_hz": command["frequency_offset_hz"],
+                    "power_dbm": command["power_dbm"],
+                    "invert": command["invert"],
+                }
             return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
@@ -1218,6 +1396,7 @@ class Gateway:
         with self._lock:
             if self._pairing is None or self._store is None:
                 raise RuntimeError("persistent pairing state is unavailable")
+            node: dict[str, Any] | None = None
             if self._active_pairing_node_id is not None:
                 node = next(
                     (
@@ -1299,6 +1478,35 @@ class Gateway:
                 product_code=registration_product_code,
                 model_code=registration_model_code,
             )
+            if (
+                self._active_pairing_node_id is not None
+                and node is not None
+                and "routine_sensor_ack_tx" in node.get("capabilities", [])
+                and self._active_pairing_ack_parameters is not None
+                and node.get("pairing_assigned_channel") in {4, 5}
+            ):
+                assignment = {
+                    "paired_endpoint": endpoint,
+                    "node_id": self._active_pairing_node_id,
+                    "assigned_channel": int(node["pairing_assigned_channel"]),
+                    **self._active_pairing_ack_parameters,
+                    "updated_at": timestamp,
+                }
+                self._store.upsert_ack_assignment(assignment)
+                if self._node_command_sender is not None:
+                    try:
+                        command = self._ack_configuration_command(assignment)
+                        self._node_command_sender(
+                            self._active_pairing_node_id, command
+                        )
+                        node["routine_ack_command_id"] = command["command_id"]
+                    except (
+                        ConnectionError,
+                        KeyError,
+                        RuntimeError,
+                        ValueError,
+                    ):
+                        pass
             self._refresh_registry_catalog()
             self._ensure_registered_sensor_devices()
             resolved = self.catalog.sensor(endpoint)
@@ -1388,14 +1596,30 @@ class Gateway:
         """Return connected protocol-v2 nodes with the narrow pairing capability."""
         if self._node_command_sender is None:
             return []
-        return [
-            copy.deepcopy(node)
-            for node in self._nodes.values()
-            if node.get("connected") is True
-            and node.get("authenticated") is True
-            and node.get("protocol_version") == 2
-            and "sensor_pairing_tx" in node.get("capabilities", [])
-        ]
+        result = []
+        for node in self._nodes.values():
+            if not (
+                node.get("connected") is True
+                and node.get("authenticated") is True
+                and node.get("protocol_version") == 2
+                and "sensor_pairing_tx" in node.get("capabilities", [])
+            ):
+                continue
+            item = copy.deepcopy(node)
+            assigned = (
+                len(self._store.ack_assignments(str(node["node_id"])))
+                if self._store is not None
+                else 0
+            )
+            item["routine_ack_assigned_sensors"] = assigned
+            item["routine_ack_capacity"] = MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
+            if (
+                "routine_sensor_ack_tx" in node.get("capabilities", [])
+                and assigned >= MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
+            ):
+                continue
+            result.append(item)
+        return result
 
     def _cancel_active_pairing_node(self) -> None:
         """Best-effort disarm for the node selected by the current session."""
@@ -1412,6 +1636,7 @@ class Gateway:
                 pass
         self._active_pairing_node_id = None
         self._active_pairing_command_id = None
+        self._active_pairing_ack_parameters = None
 
     def accept_endpoint(
         self,
@@ -1546,6 +1771,7 @@ class Gateway:
                     enrollment_factory = factory_endpoint(endpoint)
                 except ValueError:
                     enrollment_factory = endpoint
+                self._delete_ack_assignment_locked(endpoint)
             forgotten = self._store.forget_registry_device(
                 device_id,
                 suppressed_at=datetime.now(timezone.utc).isoformat(),
@@ -1597,6 +1823,7 @@ class Gateway:
             if not re.fullmatch(r"[0-9a-f]{8}", endpoint):
                 raise ValueError("sensor has no valid paired RF endpoint")
             factory = factory_endpoint(endpoint)
+            self._delete_ack_assignment_locked(endpoint)
             registered = self._store.forget_sensor_endpoint(
                 endpoint,
                 suppressed_at=datetime.now(timezone.utc).isoformat(),

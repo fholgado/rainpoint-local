@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -157,6 +157,9 @@ class SQLiteEventStore:
             version = 5
         if version == 5:
             self._migrate_v5_to_v6()
+            version = 6
+        if version == 6:
+            self._migrate_v6_to_v7()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -336,6 +339,28 @@ class SQLiteEventStore:
                 ("device_metrics_version",),
             )
             self._connection.execute("PRAGMA user_version = 6")
+
+    def _migrate_v6_to_v7(self) -> None:
+        """Persist the single radio-node owner of each sensor ACK route."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hcs026_ack_assignments (
+                    paired_endpoint TEXT PRIMARY KEY,
+                    node_id TEXT NOT NULL,
+                    assigned_channel INTEGER NOT NULL,
+                    frequency_offset_hz INTEGER NOT NULL,
+                    power_dbm INTEGER NOT NULL,
+                    invert INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_hcs026_ack_node "
+                "ON hcs026_ack_assignments(node_id)"
+            )
+            self._connection.execute("PRAGMA user_version = 7")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -797,6 +822,67 @@ class SQLiteEventStore:
             "SELECT * FROM hcs026_enrollments ORDER BY factory_endpoint"
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def ack_assignments(self, node_id: str | None = None) -> list[dict[str, Any]]:
+        """Return persistent single-owner sensor acknowledgement routes."""
+        if node_id is None:
+            rows = self._connection.execute(
+                "SELECT * FROM hcs026_ack_assignments "
+                "ORDER BY paired_endpoint"
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM hcs026_ack_assignments WHERE node_id = ? "
+                "ORDER BY paired_endpoint",
+                (node_id,),
+            ).fetchall()
+        assignments = [dict(row) for row in rows]
+        for assignment in assignments:
+            assignment["invert"] = bool(assignment["invert"])
+        return assignments
+
+    def upsert_ack_assignment(self, assignment: dict[str, Any]) -> None:
+        """Atomically assign one paired endpoint to exactly one radio node."""
+        self._connection.execute(
+            """
+            INSERT INTO hcs026_ack_assignments(
+                paired_endpoint, node_id, assigned_channel,
+                frequency_offset_hz, power_dbm, invert, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(paired_endpoint) DO UPDATE SET
+                node_id=excluded.node_id,
+                assigned_channel=excluded.assigned_channel,
+                frequency_offset_hz=excluded.frequency_offset_hz,
+                power_dbm=excluded.power_dbm,
+                invert=excluded.invert,
+                updated_at=excluded.updated_at
+            """,
+            (
+                assignment["paired_endpoint"],
+                assignment["node_id"],
+                assignment["assigned_channel"],
+                assignment["frequency_offset_hz"],
+                assignment["power_dbm"],
+                int(bool(assignment["invert"])),
+                assignment["updated_at"],
+            ),
+        )
+        self._connection.commit()
+
+    def delete_ack_assignment(self, paired_endpoint: str) -> dict[str, Any] | None:
+        """Delete and return one sensor acknowledgement route."""
+        row = self._connection.execute(
+            "SELECT * FROM hcs026_ack_assignments WHERE paired_endpoint = ?",
+            (paired_endpoint,),
+        ).fetchone()
+        if row is None:
+            return None
+        self._connection.execute(
+            "DELETE FROM hcs026_ack_assignments WHERE paired_endpoint = ?",
+            (paired_endpoint,),
+        )
+        self._connection.commit()
+        return dict(row)
 
     def upsert_enrollment_record(self, record: dict[str, Any]) -> None:
         """Persist one enrollment observation."""

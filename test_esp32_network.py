@@ -321,7 +321,14 @@ class ESP32NetworkTest(unittest.TestCase):
 
     def test_v2_node_completes_bounded_pairing_and_registry_flow(self) -> None:
         connection, stream, response = self._connect(
-            NODE_A, TOKEN_A, protocol_version=2
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "routine_sensor_ack_tx",
+            ],
         )
         self.assertEqual("node_authenticated", response["type"])
         pairing_started_at = datetime.now().astimezone()
@@ -382,6 +389,7 @@ class ESP32NetworkTest(unittest.TestCase):
                     "command_id": command["command_id"],
                     "state": "completed",
                     "completed_steps": 3,
+                    "assigned_channel": 4,
                     "tx_armed": False,
                 }
             ).encode()
@@ -395,6 +403,10 @@ class ESP32NetworkTest(unittest.TestCase):
             endpoint="95a98024", name="Test Sensor B", area="Garden"
         )
         self.assertEqual("hcs026-95a98024", registered["device_id"])
+        ack_configuration = json.loads(stream.readline())
+        self.assertEqual("routine_ack_configure", ack_configuration["type"])
+        self.assertEqual("95a98024", ack_configuration["paired_endpoint"])
+        self.assertEqual(NODE_A, self.gateway.ack_assignments()[0]["node_id"])
         cancel = json.loads(stream.readline())
         self.assertEqual("pairing_cancel", cancel["type"])
         self.assertEqual(command["command_id"], cancel["command_id"])
@@ -471,6 +483,24 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("node_authenticated", response["type"])
         node = self.gateway.nodes()[0]
         self.assertIn("routine_sensor_ack_tx", node["capabilities"])
+        configure = {
+            "type": "routine_ack_configure",
+            "command_id": "34" * 16,
+            "paired_endpoint": "9bce0024",
+            "assigned_channel": 4,
+            "frequency_offset_hz": 45_000,
+            "power_dbm": 10,
+            "invert": False,
+        }
+        self.server.send_command(NODE_A, configure)
+        self.assertEqual(configure, json.loads(stream.readline()))
+        revoke = {
+            "type": "routine_ack_revoke",
+            "command_id": "56" * 16,
+            "paired_endpoint": "9bce0024",
+        }
+        self.server.send_command(NODE_A, revoke)
+        self.assertEqual(revoke, json.loads(stream.readline()))
         stream.close()
         connection.close()
 

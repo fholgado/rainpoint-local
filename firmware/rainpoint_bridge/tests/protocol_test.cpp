@@ -78,6 +78,15 @@ int main() {
     assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
     assert(routineAuthorizations.activeCount() == 1);
     assert(routineAuthorizations.match(routineReport) != nullptr);
+    assert(routineAuthorizations.revoke(
+        locallyAssignedAuthorization.pairedEndpoint
+    ));
+    assert(routineAuthorizations.activeCount() == 0);
+    assert(routineAuthorizations.match(routineReport) == nullptr);
+    assert(!routineAuthorizations.revoke(
+        locallyAssignedAuthorization.pairedEndpoint
+    ));
+    assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
 
     auto wrongRoutineEndpoint = routineReport;
     wrongRoutineEndpoint[9] ^= 0x01;

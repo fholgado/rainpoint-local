@@ -135,6 +135,8 @@ class ESP32NetworkServer:
             "pairing_cancel",
             "identify_start",
             "firmware_update_start",
+            "routine_ack_configure",
+            "routine_ack_revoke",
         }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
@@ -148,6 +150,8 @@ class ESP32NetworkServer:
             required_capability = "identify"
         elif command_type == "firmware_update_start":
             required_capability = "firmware_update_trial"
+        elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
+            required_capability = "routine_sensor_ack_tx"
         else:
             required_capability = "sensor_pairing_tx"
         if required_capability not in session["capabilities"]:
@@ -254,6 +258,7 @@ class ESP32NetworkServer:
                 invalid_messages=0,
             )
             self.gateway.notify_node_update(node_id, "radio_node_connected")
+            self.gateway.restore_radio_node_ack_assignments(node_id)
             received_frames = 0
             invalid_messages = 0
             while not self._stop.is_set():
@@ -329,6 +334,14 @@ class ESP32NetworkServer:
                             node_id,
                             identify_active=False,
                             identify_detail=message.get("error"),
+                        )
+                    elif message.get("command_id") == current_node.get(
+                        "routine_ack_command_id"
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            routine_ack_state="failed",
+                            routine_ack_detail=message.get("error"),
                         )
                     else:
                         self.gateway.update_node(

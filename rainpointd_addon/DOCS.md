@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.19.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.22.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -102,11 +102,14 @@ token for another node and do not post real tokens in issues or logs. Current
 node state and receive counters are available from the read-only
 `/api/v1/nodes` endpoint.
 
-Firmware 0.5 adds a bounded 30-second diagnostic heartbeat with uptime, reset
+Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime, reset
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. Firmware remains USB-flashed; OTA updates are not implemented.
+device. The unified `0.10.0-test.1` candidate combines receive, generalized
+sensor pairing, bounded routine acknowledgements, and managed OTA updates.
+After the first OTA-capable image is installed by USB, compatible releases can
+be installed from the radio node's Home Assistant firmware Update entity.
 
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway
@@ -205,12 +208,14 @@ field reports `100%` for normal and `10%` for low, matching the stock app's
 semantics. The former companion-heartbeat battery candidate has been withdrawn:
 same-file IQ identifies those reversed frames as stock-gateway acknowledgements.
 
-The isolated `0.8.0-test.1` firmware target can acknowledge routine reports
-only for HCS026 endpoints explicitly enrolled through that node since its most
-recent boot. Home Assistant exposes its authorized-sensor, successful-send,
-and failed-send counters as diagnostic entities. Production firmware keeps
-this transmitter disabled; the candidate authorization is deliberately not
-persistent while timing and long-term sensor behavior are physically tested.
+The unified candidate can acknowledge routine reports only for HCS026
+endpoints explicitly assigned to that node by the custom local gateway. The
+gateway persists exactly one radio-node owner for each sensor, restores those
+bounded assignments after reconnect or OTA reboot, and revokes them when a
+sensor is removed or reassigned. Home Assistant exposes authorized-sensor,
+successful-send, and failed-send counters as diagnostic entities. The normal
+production target keeps this transmitter disabled while the consolidated image
+completes physical migration validation.
 
 ## Safety
 
