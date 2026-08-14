@@ -229,6 +229,23 @@ With two custom radio nodes and the RTL-SDR online:
 
 ### S5 — physical interruption and recovery
 
+An existing Right Bed association completed a controlled recovery trial on
+August 14, 2026 with the stock RainPoint gateway disconnected. Home Assistant
+selected `rp-f4e5be3b015c` (Vegetable Garden Radio) running unified firmware
+`0.10.0-test.6`. The network-wide receive path first decoded factory endpoint
+`1ce58024` through another node, while the selected node transmitted the
+pairing response. Subsequent paired messages for `9ce58024` were received by
+multiple nodes and the SDR; the Vegetable Garden node received them at about
+`-48.5 dBm`. Terminal telemetry reported 15% moisture and full battery.
+
+The gateway preserved the existing `soil-right-bed` HA identity, assigned
+`9ce58024` to the selected Vegetable Garden node, and observed one routine ACK
+transmission with zero failures. The node retained three ACK assignments and
+held both its declared routine-ACK receive channel and physical radio on
+channel 0 after cleanup. This validates using any authenticated receiver to
+discover an announcement while keeping exactly one explicitly selected node
+as transmitter; it does not yet validate automatic strongest-node selection.
+
 Perform only on a disposable/unpaired test state:
 
 - cancel before the first sensor announcement;
