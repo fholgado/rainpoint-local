@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.0
+
+- Include managed radio-node names and areas in the pairing-node inventory so
+  Home Assistant can present friendly installation labels instead of IDs.
+
 ## 0.23.0
 
 - Atomically replace a stale radio-node TCP session only after the reconnecting

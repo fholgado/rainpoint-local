@@ -33,6 +33,14 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn('type == "routine_ack_configure"', command_boundary)
         self.assertIn('type == "routine_ack_revoke"', command_boundary)
 
+    def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
+        source = (
+            ROOT / "custom_components" / "rainpoint_local" / "config_flow.py"
+        ).read_text()
+        self.assertIn("node.get('name') or node['node_id']", source)
+        self.assertEqual(3, source.count("selector.AreaSelector()"))
+        self.assertNotIn('vol.Optional("area", default=""): str', source)
+
 
 if __name__ == "__main__":
     unittest.main()

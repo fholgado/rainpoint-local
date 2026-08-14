@@ -28,6 +28,35 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_pairing_nodes_include_managed_name_and_area(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                ),
+            )
+            gateway.register_radio_node(
+                node_id="rp-001122334455",
+                token="ab" * 32,
+                name="Vegetable Garden Radio",
+                area="Vegetable Garden",
+            )
+            gateway.set_node_command_sender(lambda _node_id, _command: None)
+            gateway.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                protocol_version=2,
+                capabilities=["rx", "sensor_pairing_tx"],
+            )
+
+            pairing_node = gateway.pairing()["pairing_nodes"][0]
+            self.assertEqual("Vegetable Garden Radio", pairing_node["name"])
+            self.assertEqual("Vegetable Garden", pairing_node["area"])
+            self.assertTrue(pairing_node["managed"])
+            gateway.close()
+
     def test_ack_assignment_is_single_owner_and_survives_gateway_restart(
         self,
     ) -> None:

@@ -1596,6 +1596,10 @@ class Gateway:
         """Return connected protocol-v2 nodes with the narrow pairing capability."""
         if self._node_command_sender is None:
             return []
+        registrations = {
+            str(item["node_id"]): item
+            for item in (self._store.radio_nodes() if self._store else [])
+        }
         result = []
         for node in self._nodes.values():
             if not (
@@ -1606,6 +1610,15 @@ class Gateway:
             ):
                 continue
             item = copy.deepcopy(node)
+            registration = registrations.get(str(node["node_id"]))
+            if registration is not None:
+                item.update(
+                    {
+                        "name": registration["name"],
+                        "area": registration["area"],
+                        "managed": True,
+                    }
+                )
             assigned = (
                 len(self._store.ack_assignments(str(node["node_id"])))
                 if self._store is not None

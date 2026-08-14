@@ -11,7 +11,9 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -32,6 +34,19 @@ LEGACY_TRANSPORT_GATEWAY_IDS = {
     "rainpoint-rtl433",
     "rainpoint-esp32_serial",
 }
+
+
+def _selected_area(hass: Any, value: Any) -> tuple[str | None, str | None]:
+    """Resolve an AreaSelector value to its registry ID and display name."""
+    selected = str(value or "").strip()
+    if not selected:
+        return None, None
+    area = ar.async_get(hass).async_get_area(selected)
+    if area is None:
+        # Retain compatibility with an in-flight form created by the previous
+        # string-based schema while the integration is being reloaded.
+        return None, selected
+    return selected, area.name
 
 
 class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -136,7 +151,9 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._adoption_name = str(user_input["name"]).strip()
-            self._adoption_area = str(user_input.get("area", "")).strip() or None
+            _, self._adoption_area = _selected_area(
+                self.hass, user_input.get("area")
+            )
             try:
                 await RainPointNodeCommissioningClient(
                     self._discovered_node_host,
@@ -156,7 +173,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default="RainPoint radio node"): str,
-                    vol.Optional("area", default=""): str,
+                    vol.Optional("area"): selector.AreaSelector(),
                 }
             ),
             errors=errors,
@@ -476,7 +493,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_authenticate_gateway()
         errors: dict[str, str] = {}
         if user_input is not None:
-            area = str(user_input.get("area", "")).strip() or None
+            _, area = _selected_area(self.hass, user_input.get("area"))
             try:
                 await self._client().register_radio_node(
                     self._token,
@@ -507,7 +524,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     vol.Required("node_id"): str,
                     vol.Required("node_token"): str,
                     vol.Required("name"): str,
-                    vol.Optional("area", default=""): str,
+                    vol.Optional("area"): selector.AreaSelector(),
                 }
             ),
             errors=errors,
@@ -612,7 +629,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         else:
             self._pairing_nodes = {
                 str(node["node_id"]): (
-                    f"{node['node_id']} ({node.get('firmware_version') or 'unknown firmware'})"
+                    f"{node.get('name') or node['node_id']} "
+                    f"({node.get('firmware_version') or 'unknown firmware'})"
                 )
                 for node in progress.get("pairing_nodes", [])
                 if isinstance(node, dict) and isinstance(node.get("node_id"), str)
@@ -728,7 +746,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = str(user_input["name"])
-            area = str(user_input.get("area", "")).strip() or None
+            area_id, area = _selected_area(self.hass, user_input.get("area"))
             try:
                 result = await self._client().complete_pairing(
                     self._token,
@@ -759,7 +777,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         device_registry.async_update_device(
                             device_entry.id,
                             name=name,
-                            suggested_area=area,
+                            area_id=area_id,
                         )
                 return self.async_create_entry(title="Sensor paired", data={})
 
@@ -770,7 +788,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         "name", default=f"RainPoint Sensor {self._paired_endpoint[-4:]}"
                     ): str,
-                    vol.Optional("area", default=""): str,
+                    vol.Optional("area"): selector.AreaSelector(),
                 }
             ),
             errors=errors,
