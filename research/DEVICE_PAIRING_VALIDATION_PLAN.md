@@ -25,13 +25,20 @@ traffic, providing the closest RF marker for stock-gateway recovery. Both test
 sensors had reported repeatedly immediately beforehand; neither produced a
 later frame despite a healthy custom ACK owner retaining all four assignments.
 
-This is strong timing correlation, not yet proof of causation. The leading
-hypothesis is competing replies from two gateways presenting the same logical
-RainPoint gateway identity. Qualify it with an A/B test: stock gateway off,
-manual report from both local-only sensors, then stock gateway on and another
-manual report while preserving short-reply IQ evidence and per-node TX counts.
-Do not claim safe simultaneous gateway operation until both sensors remain
-stable through that test.
+The first half of the controlled test passed immediately afterward. With the
+stock gateway confirmed offline, a short press on each sensor emitted no RF,
+consistent with dormancy. A long press on each emitted its known factory
+identity, triggered automatic one-reply recovery, retained the existing HA
+device, returned to the paired identity, and produced current telemetry. The
+Vegetable Garden node's ACK counter increased by two for each recovery with
+zero failures. Sensor A returned at 45% and Sensor B at 53%.
+
+This materially strengthens—but does not alone prove—the leading hypothesis of
+competing replies from gateways presenting the same logical RainPoint identity.
+Until a later instrumented stock-on repetition captures both short replies,
+treat the stock gateway and custom ACK nodes as mutually exclusive RF
+authorities. A local-control test installation should leave the stock gateway
+off; a stock-controlled installation should keep local nodes receive-only.
 
 ## HCS026 sensor: established evidence
 
