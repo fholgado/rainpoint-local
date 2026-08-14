@@ -106,7 +106,7 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The unified `0.10.0-test.2` candidate combines receive, generalized
+device. The unified `0.10.0-test.3` candidate combines receive, generalized
 sensor pairing, bounded routine acknowledgements, and managed OTA updates.
 After the first OTA-capable image is installed by USB, compatible releases can
 be installed from the radio node's Home Assistant firmware Update entity.

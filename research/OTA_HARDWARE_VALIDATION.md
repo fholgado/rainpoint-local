@@ -47,7 +47,7 @@ asymmetric release authenticity or deliberately failed recovery paths.
 Gateway 0.21.0 adds a strict local release catalog, immutable artifact serving,
 hardware/channel/variant compatibility checks, and install-by-release-ID. The
 Home Assistant integration adds native firmware Update entities with release
-notes and byte progress. Gateway 0.22.0 and firmware `0.10.0-test.2` consolidate
+notes and byte progress. Gateway 0.22.0 and firmware `0.10.0-test.3` consolidate
 generalized pairing, routine acknowledgements, and OTA into one experimental
 image. ACK authorization remains RAM-only on the node, while the gateway
 persists exactly one owner per sensor and restores the bounded configuration
@@ -55,5 +55,6 @@ after reconnect or OTA boot. UI-triggered unified installation and physical
 post-reboot ACK restoration remain to be exercised before this path is fully
 validated. During the first `0.9.0-test.2` to `0.10.0-test.1` managed trial,
 the artifact downloaded and verified but the immediate restart remained in the
-network-command context until a controlled USB reset. `0.10.0-test.2` defers
-that restart to the top-level firmware loop for the next physical OTA trial.
+network-command context until a controlled USB reset. `0.10.0-test.2` introduced
+the deferred top-level restart; `0.10.0-test.3` is the version-only successor
+used to validate that corrected updater path while test.2 is running.
