@@ -8,11 +8,12 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 duration="15m"
 frequency_hz="433700000"
 sample_rate="2000000"
+save_signals="known"
 output_root="${repo_root}/captures/rf"
 dry_run=false
 
 usage() {
-  echo "Usage: $0 [--duration 15m] [--frequency 434000000] [--sample-rate 1024000] [--output DIR] [--dry-run]"
+  echo "Usage: $0 [--duration 15m] [--frequency 434000000] [--sample-rate 1024000] [--save-signals known|all] [--output DIR] [--dry-run]"
 }
 
 while (($#)); do
@@ -27,6 +28,14 @@ while (($#)); do
       ;;
     --sample-rate)
       sample_rate="${2:?--sample-rate requires a value}"
+      shift 2
+      ;;
+    --save-signals)
+      save_signals="${2:?--save-signals requires known or all}"
+      if [[ "${save_signals}" != "known" && "${save_signals}" != "all" ]]; then
+        echo "--save-signals must be known or all" >&2
+        exit 2
+      fi
       shift 2
       ;;
     --output)
@@ -62,7 +71,7 @@ command_args=(
   -f "${frequency_hz}"
   -s "${sample_rate}"
   -R 0
-  -S known
+  -S "${save_signals}"
   -M time:iso:usec
   -M level
   -M bits
@@ -88,6 +97,7 @@ ln -sfn "${session_name}" "${output_root}/latest"
   printf 'started_local\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S%z)"
   printf 'frequency_hz\t%s\n' "${frequency_hz}"
   printf 'sample_rate\t%s\n' "${sample_rate}"
+  printf 'save_signals\t%s\n' "${save_signals}"
   printf 'duration\t%s\n' "${duration}"
   printf 'rtl_433\t%s\n' "$(rtl_433 -V 2>&1 | head -n 1)"
 } >"${session_dir}/session.tsv"

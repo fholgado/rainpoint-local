@@ -125,6 +125,43 @@ class RFTrialTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(["01020304<->05060708"], report["bidirectional_links"])
 
+    def test_preflight_requires_healthy_disarmed_nodes_and_capture_host(self) -> None:
+        snapshot = {
+            "info": {"transport_healthy": True},
+            "nodes": {
+                "nodes": [
+                    {
+                        "node_id": "rp-001122aabbcc",
+                        "managed": True,
+                        "connected": True,
+                        "authenticated": True,
+                        "tx_armed": False,
+                    }
+                ]
+            },
+            "pairing": {"active": False},
+        }
+        report = MODULE.evaluate_preflight(
+            snapshot,
+            selected_node_id="rp-001122aabbcc",
+            free_bytes=3 * 1024**3,
+            minimum_free_bytes=2 * 1024**3,
+            rtl_433_path="/usr/bin/rtl_433",
+        )
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["rf_transmit_authorized"])
+
+        snapshot["nodes"]["nodes"][0]["tx_armed"] = True
+        report = MODULE.evaluate_preflight(
+            snapshot,
+            selected_node_id="rp-001122aabbcc",
+            free_bytes=3 * 1024**3,
+            minimum_free_bytes=2 * 1024**3,
+            rtl_433_path="/usr/bin/rtl_433",
+        )
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["checks"]["transmitters_disarmed"])
+
 
 if __name__ == "__main__":
     unittest.main()

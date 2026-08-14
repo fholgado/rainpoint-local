@@ -31,7 +31,8 @@ python3 -m unittest -v \
   test_pairing_profile_analysis.py \
   test_radio_node_acceptance.py \
   test_rf_trial.py \
-  test_sensor_soak.py
+  test_sensor_soak.py \
+  test_valve_trial_analysis.py
 ```
 
 Also compile and run the hardware-independent firmware protocol test:

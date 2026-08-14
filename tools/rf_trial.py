@@ -6,12 +6,24 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlencode
 from urllib.request import urlopen
+
+try:
+    from valve_trial_analysis import (
+        analyze_zone_matrix,
+        classify_pairing_exchange,
+    )
+except ModuleNotFoundError:  # Imported as tools.rf_trial by the test suite.
+    from tools.valve_trial_analysis import (
+        analyze_zone_matrix,
+        classify_pairing_exchange,
+    )
 
 
 FRAME_BYTES = 38
@@ -50,6 +62,55 @@ def gateway_snapshot(
     return {
         name: _get_json(f"{base}/api/v1/{name}", opener=opener)
         for name in ("info", "devices", "nodes", "receivers", "pairing")
+    }
+
+
+def evaluate_preflight(
+    snapshot: dict[str, Any],
+    *,
+    selected_node_id: str | None,
+    free_bytes: int,
+    minimum_free_bytes: int,
+    rtl_433_path: str | None,
+) -> dict[str, Any]:
+    """Evaluate read-only capture prerequisites without arming a transmitter."""
+    info = snapshot.get("info", {})
+    nodes = snapshot.get("nodes", {}).get("nodes", [])
+    pairing = snapshot.get("pairing", {})
+    managed = [node for node in nodes if node.get("managed") is True]
+    selected = next(
+        (node for node in managed if node.get("node_id") == selected_node_id), None
+    )
+    checks = {
+        "gateway_transport_healthy": info.get("transport_healthy") is True,
+        "managed_nodes_present": bool(managed),
+        "managed_nodes_connected": bool(managed)
+        and all(node.get("connected") is True for node in managed),
+        "managed_nodes_authenticated": bool(managed)
+        and all(node.get("authenticated") is True for node in managed),
+        "transmitters_disarmed": bool(managed)
+        and all(node.get("tx_armed") is False for node in managed),
+        "pairing_idle": pairing.get("active") is not True,
+        "selected_node_ready": selected_node_id is None
+        or (
+            selected is not None
+            and selected.get("connected") is True
+            and selected.get("authenticated") is True
+            and selected.get("tx_armed") is False
+        ),
+        "rtl_433_available": rtl_433_path is not None,
+        "capture_disk_space": free_bytes >= minimum_free_bytes,
+    }
+    return {
+        "checked_at": _now(),
+        "selected_node_id": selected_node_id,
+        "managed_node_count": len(managed),
+        "rtl_433_path": rtl_433_path,
+        "free_bytes": free_bytes,
+        "minimum_free_bytes": minimum_free_bytes,
+        "checks": checks,
+        "passed": all(checks.values()),
+        "rf_transmit_authorized": False,
     }
 
 
@@ -102,7 +163,9 @@ def _event_frame(event: dict[str, Any]) -> bytes | None:
 
 
 def analyze_trial(
-    manifest: dict[str, Any], events: list[dict[str, Any]]
+    manifest: dict[str, Any],
+    events: list[dict[str, Any]],
+    actions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Summarize captured routes and pairing-specific terminal evidence."""
     routes: Counter[str] = Counter()
@@ -180,7 +243,7 @@ def analyze_trial(
     checks["known_stock_gateway_endpoint_silent"] = (
         not stock_expected_silent or stock_gateway_count == 0
     )
-    return {
+    report = {
         "event_count": len(events),
         "normalized_frame_count": normalized,
         "route_counts": dict(routes.most_common()),
@@ -198,6 +261,49 @@ def analyze_trial(
         "checks": checks,
         "passed": all(checks.values()),
     }
+    if manifest.get("kind") == "valve_pairing":
+        report["pairing_exchange"] = classify_pairing_exchange(events)
+        report["zone_matrix"] = analyze_zone_matrix(events, actions or [])
+        if report["zone_matrix"]["structured_action_count"]:
+            checks["structured_zone_matrix_complete"] = report["zone_matrix"][
+                "evidence_complete"
+            ]
+            report["passed"] = all(checks.values())
+    return report
+
+
+def _load_actions(path: Path) -> list[dict[str, Any]]:
+    actions = []
+    if not path.is_file():
+        return actions
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        if not isinstance(item, dict):
+            raise ValueError(f"invalid action row {line_number}: expected object")
+        actions.append(item)
+    return actions
+
+
+def preflight(args: argparse.Namespace) -> int:
+    snapshot = gateway_snapshot(args.gateway_url)
+    disk_path = args.output.resolve()
+    while not disk_path.exists() and disk_path != disk_path.parent:
+        disk_path = disk_path.parent
+    report = evaluate_preflight(
+        snapshot,
+        selected_node_id=args.selected_node,
+        free_bytes=shutil.disk_usage(disk_path).free,
+        minimum_free_bytes=int(args.minimum_free_gib * 1024**3),
+        rtl_433_path=shutil.which("rtl_433"),
+    )
+    encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.save:
+        args.save.parent.mkdir(parents=True, exist_ok=True)
+        args.save.write_text(encoded)
+    print(encoded, end="")
+    return 0 if report["passed"] else 1
 
 
 def prepare(args: argparse.Namespace) -> int:
@@ -249,14 +355,15 @@ def mark(args: argparse.Namespace) -> int:
     action_file = args.trial_directory / "actions.jsonl"
     if not action_file.is_file():
         raise ValueError(f"not a prepared trial: {args.trial_directory}")
+    if args.duration_seconds is not None and args.duration_seconds <= 0:
+        raise ValueError("duration must be positive")
     with action_file.open("a") as stream:
-        stream.write(
-            json.dumps(
-                {"timestamp": _now(), "action": args.action, "detail": args.detail},
-                sort_keys=True,
-            )
-            + "\n"
-        )
+        row = {"timestamp": _now(), "action": args.action, "detail": args.detail}
+        if args.zone is not None:
+            row["zone"] = args.zone
+        if args.duration_seconds is not None:
+            row["duration_seconds"] = args.duration_seconds
+        stream.write(json.dumps(row, sort_keys=True) + "\n")
     return 0
 
 
@@ -277,7 +384,11 @@ def finish(args: argparse.Namespace) -> int:
     (trial_dir / "gateway-after.json").write_text(
         json.dumps(gateway_snapshot(gateway_url), indent=2, sort_keys=True) + "\n"
     )
-    report = analyze_trial(manifest, events)
+    report = analyze_trial(
+        manifest,
+        events,
+        _load_actions(trial_dir / "actions.jsonl"),
+    )
     report.update(
         {
             "trial_id": manifest["trial_id"],
@@ -300,6 +411,14 @@ def finish(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    preflight_parser = commands.add_parser("preflight")
+    preflight_parser.add_argument("--gateway-url", required=True)
+    preflight_parser.add_argument("--selected-node")
+    preflight_parser.add_argument("--output", type=Path, default=Path("captures"))
+    preflight_parser.add_argument("--minimum-free-gib", type=float, default=2.0)
+    preflight_parser.add_argument("--save", type=Path)
+    preflight_parser.set_defaults(handler=preflight)
 
     prepare_parser = commands.add_parser("prepare")
     prepare_parser.add_argument("--trial-id", required=True)
@@ -326,6 +445,8 @@ def main() -> int:
     mark_parser.add_argument("trial_directory", type=Path)
     mark_parser.add_argument("action")
     mark_parser.add_argument("--detail", default="")
+    mark_parser.add_argument("--zone", type=int, choices=range(1, 5))
+    mark_parser.add_argument("--duration-seconds", type=int)
     mark_parser.set_defaults(handler=mark)
 
     finish_parser = commands.add_parser("finish")

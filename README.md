@@ -181,6 +181,9 @@ records and protocol/product evidence, not those names or endpoints.
   cloud-to-local identity-preserving migration.
 - [research/DEVICE_PAIRING_VALIDATION_PLAN.md](research/DEVICE_PAIRING_VALIDATION_PLAN.md)
   — retained physical evidence and remaining hardware gates.
+- [research/FOUR_ZONE_VALVE_TEST_PLAN.md](research/FOUR_ZONE_VALVE_TEST_PLAN.md)
+  — receive-only enrollment and crossed zone/duration capture sequence for the
+  isolated four-zone test valve.
 
 Cloud-specific investigation is isolated under `research/cloud` and is not a
 runtime dependency.
