@@ -10,6 +10,7 @@ registry_write_token="$(bashio::config 'registry_write_token')"
 node_listen_port="$(bashio::config 'node_listen_port')"
 node_tokens="$(bashio::config 'node_tokens')"
 device_catalog_path="$(bashio::config 'device_catalog_path')"
+firmware_catalog_path="$(bashio::config 'firmware_catalog_path')"
 event_retention_limit="$(bashio::config 'event_retention_limit')"
 if [[ "${registry_write_token}" == "null" ]]; then
   registry_write_token=""
@@ -34,6 +35,9 @@ if [[ "${node_tokens}" == "null" ]]; then
 fi
 if [[ "${device_catalog_path}" == "null" ]]; then
   device_catalog_path=""
+fi
+if [[ "${firmware_catalog_path}" == "null" ]]; then
+  firmware_catalog_path=""
 fi
 if [[ "${event_retention_limit}" == "null" ]]; then
   event_retention_limit=100000
@@ -77,7 +81,9 @@ gateway_args=(
   --event-retention-limit "${event_retention_limit}"
   --registry-token-file "${registry_token_path}"
 )
-firmware_catalog_path="/data/firmware/catalog.json"
+if [[ -z "${firmware_catalog_path}" ]]; then
+  firmware_catalog_path="/data/firmware/catalog.json"
+fi
 if [[ -f "${firmware_catalog_path}" ]]; then
   gateway_args+=(
     --firmware-catalog "${firmware_catalog_path}"

@@ -330,6 +330,8 @@ releases appear on its device page as a native Home Assistant firmware Update
 entity. The custom local gateway serves only locally staged catalog entries and
 checks the artifact size and SHA-256 before installation. The raw URL/hash API
 remains a diagnostic trial path; normal UI updates use a catalog release ID.
+On Home Assistant OS, `firmware_catalog_path` may point at a catalog beneath
+`/share`; artifact filenames are resolved beside that catalog.
 
 The gateway exposes the trial only through its authenticated management API:
 

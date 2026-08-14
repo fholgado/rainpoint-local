@@ -11,6 +11,8 @@
   native Home Assistant firmware update entity.
 - Match releases by hardware profile, channel, and firmware variant so the
   routine-ack experiment cannot be replaced by a generic OTA image.
+- Allow operators to stage the strict catalog in a configured shared-storage
+  directory when direct add-on data access is unavailable.
 
 ## Integration 0.10.0
 
