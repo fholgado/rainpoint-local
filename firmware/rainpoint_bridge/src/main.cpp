@@ -750,10 +750,6 @@ void handleNetworkCommand() {
             wifiTransport.gatewayHost()
         );
         emitLine(otaTrial.status(wifiTransport.nodeId()));
-        if (otaTrial.restartPending()) {
-            delay(250);
-            ESP.restart();
-        }
         return;
     }
 #endif
@@ -1349,6 +1345,17 @@ void loop() {
         cancelPairing("gateway_connection_lost");
     }
     handleNetworkCommand();
+#if RAINPOINT_OTA_CANDIDATE == 1
+    // Restart only after unwinding the authenticated network-command handler.
+    // A physical 0.9 -> 0.10 trial reached verified_sha256 but remained inside
+    // that handler until an external reset. Deferring the partition switch to
+    // the top-level loop keeps the command transport out of the restart path.
+    if (otaTrial.restartPending()) {
+        delay(250);
+        ESP.restart();
+        return;
+    }
+#endif
     pollIdentify();
     handleSerialCommand();
 #if RAINPOINT_RADIO_COUNT == 1

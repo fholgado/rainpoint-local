@@ -9,6 +9,8 @@
   universal experimental firmware track.
 - Allow a universal release to declare the older firmware variants from which
   it may be installed without weakening hardware/channel compatibility checks.
+- Defer a verified OTA restart to the top-level firmware loop after a physical
+  trial exposed an occasional stall inside the network-command handler.
 
 ## 0.21.0
 
