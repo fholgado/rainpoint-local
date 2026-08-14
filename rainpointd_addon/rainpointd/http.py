@@ -214,6 +214,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     self._json(200, result)
                     return
+                if separator and node_action == "metadata":
+                    result = self.server.gateway.update_radio_node_metadata(
+                        node_id=node_id,
+                        name=str(body.get("name", "")),
+                        area=(
+                            str(body["area"])
+                            if body.get("area") is not None
+                            else None
+                        ),
+                    )
+                    self._json(200, {"node": result})
+                    return
                 if separator and node_action == "ack-assignment":
                     result = self.server.gateway.assign_radio_node_ack(
                         node_id=node_id,

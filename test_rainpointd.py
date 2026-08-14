@@ -28,6 +28,104 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_radio_node_metadata_updates_without_rotating_credential(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(Path(temporary_directory) / "rainpoint.sqlite3"),
+            )
+            gateway.register_radio_node(
+                node_id="rp-001122334455",
+                token="ab" * 32,
+                name="rp-001122334455",
+                area=None,
+            )
+            updated = gateway.update_radio_node_metadata(
+                node_id="rp-001122334455",
+                name="Front Yard Radio Node",
+                area="Front Yard",
+            )
+            self.assertEqual("Front Yard Radio Node", updated["name"])
+            self.assertEqual("Front Yard", updated["area"])
+            self.assertEqual(
+                "ab" * 32,
+                gateway.radio_node_credential("rp-001122334455"),
+            )
+            gateway.close()
+
+    def test_known_factory_announcement_requests_bounded_automatic_rejoin(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(Path(temporary_directory) / "rainpoint.sqlite3"),
+            )
+            assert gateway._store is not None
+            gateway._store.upsert_enrollment_record(
+                {
+                    "factory_endpoint": "1bce0024",
+                    "paired_endpoint": "9bce0024",
+                    "enrolled_at": "2026-08-14T00:00:00+00:00",
+                    "last_seen_at": "2026-08-14T00:00:00+00:00",
+                }
+            )
+            gateway.register_radio_node(
+                node_id="rp-001122334455",
+                token="ab" * 32,
+                name="Vegetable Garden Radio",
+                area="Vegetable Garden",
+            )
+            commands: list[tuple[str, dict]] = []
+            gateway.set_node_command_sender(
+                lambda node_id, command: commands.append((node_id, command))
+            )
+            gateway.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                protocol_version=2,
+                capabilities=[
+                    "rx",
+                    "sensor_pairing_tx",
+                    "routine_sensor_ack_tx",
+                ],
+            )
+            gateway.assign_radio_node_ack(
+                node_id="rp-001122334455",
+                paired_endpoint="9bce0024",
+                assigned_channel=4,
+            )
+            commands.clear()
+            event = gateway.observe_rf_frame(
+                frame="79f4882f28" + "00" * 33,
+                state={
+                    "hcs026_pairing_state": "factory",
+                    "hcs026_factory_endpoint": "1bce0024",
+                    "rf_receiver_id": "rp-001122334455",
+                    "rf_rssi_db": -42.0,
+                    "rf_lqi": 12,
+                },
+            )
+            self.assertEqual(1, len(commands))
+            node_id, command = commands[0]
+            self.assertEqual("rp-001122334455", node_id)
+            self.assertEqual("pairing_start", command["type"])
+            self.assertEqual("hcs026_auto_v1", command["profile"])
+            self.assertEqual("1bce0024", command["factory_endpoint"])
+            self.assertEqual(60, command["duration_seconds"])
+            self.assertTrue(event["state"]["automatic_rejoin"]["requested"])
+
+            gateway.observe_rf_frame(
+                frame="79f4882f29" + "00" * 33,
+                state={
+                    "hcs026_pairing_state": "factory",
+                    "hcs026_factory_endpoint": "1bce0024",
+                },
+            )
+            self.assertEqual(1, len(commands), "rejoin requests are rate limited")
+            gateway.close()
+
     def test_pairing_nodes_include_managed_name_and_area(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = Gateway(

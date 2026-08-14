@@ -153,6 +153,7 @@ class ESP32SerialTransport:
                 "gateway_connect_attempts",
                 "gateway_authentications",
                 "routine_ack_authorized_sensors",
+                "routine_ack_receive_channel",
                 "routine_ack_transmissions",
                 "routine_ack_failures",
             ):

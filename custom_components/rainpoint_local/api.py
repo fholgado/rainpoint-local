@@ -141,6 +141,21 @@ class RainPointLocalClient:
             token,
         )
 
+    async def update_radio_node_metadata(
+        self,
+        token: str,
+        node_id: str,
+        *,
+        name: str,
+        area: str | None,
+    ) -> dict[str, Any]:
+        """Persist a managed radio node's friendly name and area."""
+        return await self._post(
+            f"nodes/{node_id}/metadata",
+            {"name": name, "area": area},
+            token,
+        )
+
     async def revoke_radio_node(
         self, token: str, node_id: str
     ) -> dict[str, Any]:

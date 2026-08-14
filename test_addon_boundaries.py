@@ -33,6 +33,15 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn('type == "routine_ack_configure"', command_boundary)
         self.assertIn('type == "routine_ack_revoke"', command_boundary)
 
+    def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
+        source = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
+        ).read_text()
+        self.assertIn("kHcs026TelemetryChannel = 0", source)
+        self.assertIn("routineAckAuthorizations.activeCount() > 0", source)
+        self.assertIn("selectChannel(kHcs026TelemetryChannel)", source)
+        self.assertIn("parseHexFactoryEndpoint", source)
+
     def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
         source = (
             ROOT / "custom_components" / "rainpoint_local" / "config_flow.py"

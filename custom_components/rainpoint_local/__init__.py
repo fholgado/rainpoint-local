@@ -8,7 +8,12 @@ import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -75,11 +80,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         event_long_poll="event_long_poll" in info.capabilities,
     )
     await coordinator.async_config_entry_first_refresh()
+    await _async_migrate_radio_node_metadata(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     coordinator.async_start_event_listener()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_migrate_radio_node_metadata(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: RainPointLocalCoordinator,
+) -> None:
+    """Move legacy HA-only node labels into the gateway registry once."""
+    token = str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))
+    if not token:
+        return
+    device_registry = dr.async_get(hass)
+    area_registry = ar.async_get(hass)
+    changed = False
+    for node_id, node in coordinator.nodes.items():
+        if node.get("name") != node_id and node.get("area") is not None:
+            continue
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, f"radio-node:{node_id}")}
+        )
+        if device is None:
+            continue
+        name = str(device.name_by_user or node.get("name") or node_id).strip()
+        area = node.get("area")
+        if area is None and device.area_id:
+            area_entry = area_registry.async_get_area(device.area_id)
+            area = area_entry.name if area_entry is not None else None
+        if name == node.get("name") and area == node.get("area"):
+            continue
+        try:
+            await coordinator.client.update_radio_node_metadata(
+                token,
+                node_id,
+                name=name,
+                area=area,
+            )
+        except RainPointLocalError as exc:
+            _LOGGER.warning(
+                "Unable to migrate radio-node metadata for %s: %s", node_id, exc
+            )
+            continue
+        changed = True
+    if changed:
+        await coordinator.async_request_refresh()
 
 
 async def async_migrate_entry(

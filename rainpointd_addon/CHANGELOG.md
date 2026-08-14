@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.26.0
+
+- Persist radio-node friendly names and areas in the gateway registry and
+  migrate legacy Home Assistant-only overrides without rotating credentials.
+- Record known-sensor factory announcements and request a bounded automatic
+  rejoin through the sensor's existing ACK owner; unknown identities remain
+  blocked until an explicit pairing window.
+- Accept identity-specific automatic rejoin profiles in unified firmware
+  `0.10.0-test.6`.
+- Keep nodes with active HCS026 acknowledgement assignments on the validated
+  telemetry channel, preventing broad-scan timing from repeatedly missing a
+  nearby sensor's retry burst.
+
+## Integration 0.10.3
+
+- Migrate legacy radio-node display names and areas from Home Assistant into
+  gateway-owned metadata so pairing and management surfaces use the same
+  friendly labels.
+
 ## 0.25.0
 
 - Expose command-scoped pairing identities and detailed exchange stages so an

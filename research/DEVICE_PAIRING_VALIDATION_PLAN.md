@@ -132,6 +132,15 @@ Pass criteria:
 
 ### S2 — persistence and rejoin behavior (release blocker)
 
+Open assumption to test: after losing its gateway acknowledgement and becoming
+dormant, an HCS026 may retry its factory announcement after an undocumented
+timeout. It may instead remain silent indefinitely until a battery cycle or
+long press. Do not infer either behavior from an hour without traffic. Leave at
+least one known dormant test sensor untouched for 24 hours while preserving
+factory-announcement events. Each event must retain receiver ID, RSSI/LQI,
+derived paired endpoint, selected ACK owner, automatic-rejoin decision, and the
+subsequent pairing/telemetry result.
+
 After a successful local enrollment:
 
 1. Power-cycle the sensor while the stock gateway remains off.

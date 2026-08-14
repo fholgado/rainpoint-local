@@ -142,6 +142,7 @@ class Gateway:
         self._active_pairing_command_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
+        self._automatic_rejoin_started: dict[str, float] = {}
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -775,6 +776,37 @@ class Gateway:
                 replace_existing=True,
             )
 
+    def update_radio_node_metadata(
+        self,
+        *,
+        node_id: str,
+        name: str,
+        area: str | None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Update a managed node's friendly metadata without its credential."""
+        if not self._store:
+            raise RuntimeError("persistent radio-node registry is unavailable")
+        node_id = node_id.strip().lower()
+        name = name.strip()
+        if not name or len(name) > 100:
+            raise ValueError("radio-node name must be 1 to 100 characters")
+        if area is not None:
+            area = area.strip() or None
+            if area is not None and len(area) > 100:
+                raise ValueError("radio-node area must be at most 100 characters")
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            updated = self._store.update_radio_node(
+                node_id,
+                name=name,
+                area=area,
+                updated_at=timestamp,
+            )
+            node = self._nodes.setdefault(node_id, {"node_id": node_id})
+            node.update({"name": name, "area": area})
+            return updated
+
     @staticmethod
     def _validate_radio_node_identity(node_id: str, token: str) -> None:
         """Validate the stable ESP32 identity and 256-bit node credential."""
@@ -930,6 +962,9 @@ class Gateway:
             )
             if duplicate is not None:
                 return duplicate
+            rejoin = self._maybe_start_known_sensor_rejoin(decoded)
+            if rejoin is not None:
+                decoded["automatic_rejoin"] = rejoin
             event_id = self._next_event_id
             self._next_event_id += 1
             event = {
@@ -947,8 +982,109 @@ class Gateway:
                 self._store.append(event)
             else:
                 self._update_memory_reception_metrics(event)
-            self._observe_pairing(state, timestamp)
+            self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
+
+    def _maybe_start_known_sensor_rejoin(
+        self, state: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Answer a known sensor's factory announcement without an open UI flow."""
+        if self._store is None or self._node_command_sender is None:
+            return None
+        if self._pairing is not None and self._pairing.status().get("active"):
+            return None
+        pairing_state = state.get(
+            "hcs026_pairing_state", state.get("rf_pairing_state")
+        )
+        factory = state.get(
+            "hcs026_factory_endpoint", state.get("rf_factory_endpoint")
+        )
+        if pairing_state != "factory" or not isinstance(factory, str):
+            return None
+        try:
+            endpoint = paired_endpoint(factory.strip().lower())
+        except ValueError:
+            return None
+        known = any(
+            str(item["paired_endpoint"]) == endpoint
+            for item in self._store.enrollment_records()
+        )
+        assignment = next(
+            (
+                item
+                for item in self._store.ack_assignments()
+                if str(item["paired_endpoint"]) == endpoint
+            ),
+            None,
+        )
+        if not known:
+            return None
+        result: dict[str, Any] = {
+            "known_sensor": True,
+            "factory_endpoint": factory.strip().lower(),
+            "paired_endpoint": endpoint,
+            "requested": False,
+        }
+        if endpoint in self._suppressed_endpoints:
+            result["reason"] = "sensor_suppressed"
+            return result
+        if assignment is None:
+            result["reason"] = "ack_owner_unassigned"
+            return result
+        result["ack_owner_node_id"] = str(assignment["node_id"])
+        now_monotonic = time.monotonic()
+        previous_request = self._automatic_rejoin_started.get(endpoint)
+        if (
+            previous_request is not None
+            and now_monotonic - previous_request < 90
+        ):
+            result["reason"] = "cooldown_active"
+            return result
+        node_id = str(assignment["node_id"])
+        node = self._nodes.get(node_id, {})
+        if not (
+            node.get("connected") is True
+            and node.get("authenticated") is True
+            and "sensor_pairing_tx" in node.get("capabilities", [])
+        ):
+            result["reason"] = "ack_owner_offline"
+            return result
+        local_clock = (
+            datetime.now().astimezone() + timedelta(seconds=240)
+        ).strftime("%Y%m%d%H%M%S")
+        command_id = uuid.uuid4().hex
+        command = {
+            "type": "pairing_start",
+            "command_id": command_id,
+            "profile": AUTOMATIC_HCS026_PROFILE_ID,
+            "factory_endpoint": factory.strip().lower(),
+            "duration_seconds": 60,
+            "local_clock": local_clock,
+            "frequency_offset_hz": int(assignment["frequency_offset_hz"]),
+            "power_dbm": int(assignment["power_dbm"]),
+            "invert": bool(assignment["invert"]),
+        }
+        try:
+            self._node_command_sender(node_id, command)
+        except (ConnectionError, KeyError, RuntimeError, ValueError):
+            result["reason"] = "command_delivery_failed"
+            return result
+        self._automatic_rejoin_started[endpoint] = now_monotonic
+        node.update(
+            {
+                "automatic_rejoin_endpoint": endpoint,
+                "automatic_rejoin_command_id": command_id,
+                "automatic_rejoin_state": "requested",
+            }
+        )
+        result.update(
+            {
+                "requested": True,
+                "reason": "known_factory_announcement",
+                "command_id": command_id,
+            }
+        )
+        return result
 
     def _receiver_duplicate_locked(
         self,

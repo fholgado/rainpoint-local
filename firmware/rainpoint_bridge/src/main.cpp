@@ -61,6 +61,7 @@ constexpr int kDiagnosticChipSelectPin = 14;
 constexpr int kPrimaryDataPin = 26;
 constexpr int kDiagnosticDataPin = 33;
 constexpr std::uint32_t kScanDwellMs = 500;
+constexpr std::uint8_t kHcs026TelemetryChannel = 0;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 constexpr std::uint32_t kIdentifyToggleMs = 250;
 
@@ -169,6 +170,34 @@ bool parseHexEndpoint(
         endpoint[index] = static_cast<std::uint8_t>((high << 4) | low);
     }
     return (endpoint[0] & 0x80U) != 0 && endpoint[3] == 0x24;
+}
+
+bool parseHexFactoryEndpoint(
+    const String& value,
+    std::array<std::uint8_t, 4>& endpoint
+) {
+    if (value.length() != endpoint.size() * 2) {
+        return false;
+    }
+    String paired = value;
+    const char highNibble = paired[0];
+    if (highNibble < '0' || highNibble > '7') {
+        return false;
+    }
+    const int associatedNibble = highNibble - '0' + 8;
+    paired.setCharAt(
+        0,
+        static_cast<char>(
+            associatedNibble < 10
+                ? '0' + associatedNibble
+                : 'a' + associatedNibble - 10
+        )
+    );
+    if (!parseHexEndpoint(paired, endpoint)) {
+        return false;
+    }
+    endpoint[0] &= 0x7fU;
+    return true;
 }
 
 bool parseDecimalField(
@@ -403,6 +432,10 @@ void printNodeHealth() {
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     line += ",\"routine_ack_authorized_sensors\":";
     line += static_cast<unsigned int>(routineAckAuthorizations.activeCount());
+    line += ",\"routine_ack_receive_channel\":";
+    line += routineAckAuthorizations.activeCount() > 0
+        ? kHcs026TelemetryChannel
+        : primaryRadio.channel();
     line += ",\"routine_ack_transmissions\":";
     line += routineAckTransmissions;
     line += ",\"routine_ack_failures\":";
@@ -780,6 +813,8 @@ void handleNetworkCommand() {
     rainpoint::PairingLocalDateTime parsedClock{};
     const rainpoint::PairingProfile* requestedProfile = nullptr;
     bool requestedAutomaticDiscovery = false;
+    std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
+    bool requestedKnownFactory = false;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
     const String sensorAFactory = hexString(
         rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.data(),
@@ -792,6 +827,10 @@ void handleNetworkCommand() {
     if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedAutomaticDiscovery = true;
+    } else if (profile == rainpoint::kAutomaticHcs026ProfileId &&
+        parseHexFactoryEndpoint(factory, requestedFactoryEndpoint)) {
+        requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
+        requestedKnownFactory = true;
     } else if (profile == rainpoint::kSensorAHcs026CandidateProfile.id &&
         factory == sensorAFactory) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
@@ -848,6 +887,12 @@ void handleNetworkCommand() {
             pairingAssignedChannel,
             activePairingProfile
         )
+        : requestedKnownFactory
+            ? rainpoint::buildAutomaticHcs026Profile(
+                requestedFactoryEndpoint,
+                pairingAssignedChannel,
+                activePairingProfile
+            )
         : rainpoint::assignPairingChannel(
             activePairingProfile, pairingAssignedChannel
         );
@@ -1361,8 +1406,25 @@ void loop() {
 #if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);
 
-    if (scanChannels && millis() - lastChannelChange >= kScanDwellMs) {
-        selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
+    if (scanChannels) {
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        // Locally enrolled HCS026 sensors return to telemetry channel 0 after
+        // their gateway assigns reply selector 4 or 5. Missing one report
+        // batch can leave a battery sensor dormant indefinitely. An ACK owner
+        // therefore stays on the proven telemetry channel and hops only for
+        // its bounded reply; nodes without assignments continue broad scans.
+        if (routineAckAuthorizations.activeCount() > 0 &&
+            primaryRadio.channel() != kHcs026TelemetryChannel) {
+            selectChannel(kHcs026TelemetryChannel);
+        } else if (routineAckAuthorizations.activeCount() == 0 &&
+            millis() - lastChannelChange >= kScanDwellMs) {
+            selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
+        }
+#else
+        if (millis() - lastChannelChange >= kScanDwellMs) {
+            selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
+        }
+#endif
     }
 #else
     pollRadio("primary", primaryRadio);
