@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import io
 import json
 import unittest
@@ -18,6 +19,12 @@ class FakeResponse(io.StringIO):
 
 
 class RainPointEventAnalysisTest(unittest.TestCase):
+    @staticmethod
+    def _valid_frame(payload: bytearray, residue: int = 0xC713) -> str:
+        trailer = binascii.crc_hqx(payload[:36], 0) ^ residue
+        payload[36:38] = trailer.to_bytes(2, "big")
+        return payload.hex()
+
     def test_fetches_all_cursor_pages(self) -> None:
         requested = []
 
@@ -93,6 +100,10 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         self.assertAlmostEqual(1.039986, candidate["delta_seconds"])
 
     def test_correlates_valve_command_response_latency(self) -> None:
+        response_frame = bytearray.fromhex(
+            "79f4882f28b9840280b42d008f8150868010cf92800000409e00569e"
+            "000000000000000044ce"
+        )
         request = {
             "event_id": 10,
             "observed_at": "2026-08-07T12:00:00.000000",
@@ -105,10 +116,7 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         response = {
             "event_id": 11,
             "observed_at": "2026-08-07T12:00:00.180000",
-            "raw": (
-                "79f4882f28b9840280b42d008f9750868010cf92800000409e00569e"
-                "000000000000000044ce"
-            ),
+            "raw": self._valid_frame(response_frame),
             "state": {},
         }
 
@@ -118,9 +126,44 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         self.assertEqual({"open": 1}, transactions["mode_counts"])
         self.assertEqual({"open": 1}, transactions["acknowledged_counts"])
         self.assertEqual({"1020": 1}, transactions["open_duration_counts"])
+        self.assertEqual(
+            {"b42d008f->b9840280": 1}, transactions["link_counts"]
+        )
         command = transactions["commands"][0]
+        self.assertEqual("b42d008f", command["controller_endpoint"])
+        self.assertEqual("b9840280", command["valve_endpoint"])
         self.assertEqual(11, command["response_event_id"])
         self.assertAlmostEqual(0.18, command["response_latency_seconds"])
+
+    def test_correlates_an_unknown_valve_link_without_house_ids(self) -> None:
+        request_frame = bytearray(38)
+        request_frame[:5] = bytes.fromhex("79f4882f28")
+        request_frame[5:9] = bytes.fromhex("11223344")
+        request_frame[9:13] = bytes.fromhex("aabbccdd")
+        request_frame[13:15] = bytes((0x81, 0x90))
+        response_frame = bytearray(38)
+        response_frame[:5] = bytes.fromhex("79f4882f28")
+        response_frame[5:9] = bytes.fromhex("aabbccdd")
+        response_frame[9:13] = bytes.fromhex("11223344")
+        response_frame[13:15] = bytes((0x81, 0xD0))
+        request = {
+            "event_id": 20,
+            "observed_at": "2026-08-07T12:00:00.000000",
+            "raw": self._valid_frame(request_frame),
+            "state": {},
+        }
+        response = {
+            "event_id": 21,
+            "observed_at": "2026-08-07T12:00:00.400000",
+            "raw": self._valid_frame(response_frame),
+            "state": {},
+        }
+
+        transactions = analyze([request, response])["valve_transactions"]
+
+        self.assertEqual(1, transactions["command_count"])
+        self.assertEqual({"11223344->aabbccdd": 1}, transactions["link_counts"])
+        self.assertEqual(21, transactions["commands"][0]["response_event_id"])
 
 
 if __name__ == "__main__":

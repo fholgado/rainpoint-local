@@ -349,6 +349,19 @@ for association experiments, with its outlet pointed safely and any motor
 movement observable. Keep the production irrigation valve and its schedules
 out of scope. Never intentionally factory-reset a production valve.
 
+The dedicated test hardware is a four-zone controller. Do not assume it uses
+the HTV145FRF single-zone RF body merely because both appear as valves in the
+cloud catalog. Record its exact model before assigning a protocol family. A
+successful four-zone implementation will exercise the more general HA entity
+and port model, but it does not automatically prove that the single-zone
+HTV145 wire format is a subset.
+
+If the label confirms `HTV405FRF`, compare captured product evidence with the
+cloud catalog's product code 38 and model code 38. The catalog represents it as
+one four-port chassis, with `CTL_WATER` DP IDs 46–49 for ports 1–4 and shared
+port-0 battery/RSSI. Treat this as a hypothesis for RF field classification,
+not as permission to synthesize commands.
+
 The stock RainPoint gateway must remain available until a complete stock
 pairing and recovery record exists. The RTL-SDR remains the independent
 reference receiver throughout custom-node work.
@@ -368,6 +381,8 @@ Before opening the stock app's pairing screen:
    minute, and mark the exact action time.
 5. Identify factory announcements, channels, wake lengths, frame lengths, and
    any identity that is not part of the existing valve link.
+6. Inventory whether the controller exposes one RF identity for the chassis,
+   one identity per zone, or a chassis identity plus an explicit port field.
 
 Do not hold a button or invoke factory reset until its behavior can be recovered
 through the stock gateway.
@@ -383,6 +398,8 @@ through the stock gateway.
    cloud integration/HA, including model and identity metadata.
 6. Trigger no watering during this phase unless the vendor workflow makes it
    unavoidable; if it does, keep the valve dry and record actuator movement.
+7. If enrollment creates multiple app or HA entities, record their shared
+   parent, per-zone identifiers, and port numbering before renaming anything.
 
 Analysis must separate valve-to-gateway triggers from gateway-to-valve replies
 by timing, endpoint direction, carrier, wake length, and repeated-frame
@@ -404,6 +421,12 @@ identity-derived, session-generated, counters, timestamps, or random material.
 Record whether app deletion itself emits RF and whether reboot uses a shorter
 rejoin exchange.
 
+After enrollment is stable, capture dry actions for zones 1 through 4
+separately using the same duration. Then repeat zone 1 with a different
+duration. This separates zone selection from duration, sequence, and trailer
+fields. Do not run simultaneous zones until the single-zone command and state
+model is understood; the product may represent simultaneous state as a bitmask.
+
 ### V3 — offline protocol reconstruction
 
 Before custom transmission:
@@ -416,6 +439,8 @@ Before custom transmission:
   polarity, wake length, repeat count, and completion indication;
 - determine whether trailer residue, sequence, time, product code `0x012e`, or
   other counters participate in acceptance;
+- determine whether the test model has one transaction counter per chassis or
+  per zone, and whether stop is zone-specific or global;
 - implement a fail-closed symbolic profile and offline waveform round-trip
   tests with transmission disabled.
 

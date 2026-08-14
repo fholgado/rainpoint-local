@@ -790,6 +790,9 @@ normalization and confirmed field decoding. Regression examples live in
 5. Capture valve enrollment, association, and forgetting traffic.
 6. Confirm valve retry timing, acknowledgement rules, and safe close behavior before
    enabling Home Assistant control.
+7. Classify the four-zone test controller independently: determine whether it
+   shares the HTV145 frame family, how it identifies ports, and whether state,
+   counters, and close commands are per-zone or chassis-wide.
 
 ## Safety boundary
 

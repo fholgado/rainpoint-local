@@ -35,15 +35,19 @@ validation.
 
 Use only the isolated, unpressurized test valve:
 
-1. Capture stock valve pairing and identify every association-specific field.
-2. Reconstruct the exchange offline using parameterized endpoint identities.
-3. Pair the valve locally and confirm passive state telemetry.
-4. Join the existing fail-closed safety controller to an experimental command
+1. Record the exact four-zone model and determine whether it uses the known
+   HTV145 RF family before sharing any decoder or command body.
+2. Capture stock valve pairing and identify every association-specific field,
+   including chassis-versus-zone identities and port selection.
+3. Reconstruct the exchange offline using parameterized endpoint identities.
+4. Pair the valve locally and confirm passive per-zone state telemetry.
+5. Join the existing fail-closed safety controller to an experimental command
    transport that targets one user-selected nearest radio node.
-5. Transmit an idempotent close first and require an idle response.
-6. Run a maximum 60-second open trial with the node-local watchdog armed before
-   transmission.
-7. Audit command, RF frame, response, timeout, retry, watchdog, and final state.
+6. Transmit an idempotent zone-specific close first and require an idle
+   response without changing the other zones.
+7. Run a maximum 60-second open trial on one dry zone with the node-local
+   watchdog armed before transmission.
+8. Audit command, RF frame, response, timeout, retry, watchdog, and final state.
 
 Open is never retried after an ambiguous result. Close may be retried until idle
 is observed or a persistent fault is raised.

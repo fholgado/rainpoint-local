@@ -148,6 +148,24 @@ low (`10%`). Its `STA_RSSI` value is receiver-measured at the hub. These facts
 refine the RF experiments but do not imply that either cloud TLV appears
 unchanged in every over-the-air report.
 
+### Four-zone valve family clue
+
+The catalog describes `HTV405FRF` as product code `38`, model code `38`, and a
+single device with `portNumber: 4`. It declares four `CTL_WATER` values on RF
+application endpoint 7: DP IDs 46–49 map to ports 1–4, each retaining DP code
+1, DP type 2, and length 2. Work state, alarm, event time, duration, and recent
+event time are likewise repeated per port, while battery and RSSI are declared
+at port 0. Its default parameter repeats the same valve parameter block four
+times separated by `|`.
+
+This is a strong cloud-model clue that the four-zone timer is one associated
+chassis with an explicit port selector rather than four independently enrolled
+RF devices. It does not locate that selector in the over-the-air frame. Other
+four-port RF valve models, including `HTV0542FRF` and `HTV445FRF`, also use
+product code 38 with different model codes. Product code 38 should therefore
+be tested as a four-zone functional-family identifier, not treated as an exact
+model name.
+
 Source snapshot:
 <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/data/product_models.json>
 

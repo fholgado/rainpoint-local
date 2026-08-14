@@ -33,6 +33,7 @@ from rainpointd.protocol import decode_receiver_event  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
+    ValveLink,
     build_close_frame,
     build_open_frame,
     close_candidates,
@@ -51,6 +52,11 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
 
 
 class RainPointRFTest(unittest.TestCase):
+    CAPTURED_VALVE_LINK = ValveLink(
+        controller_endpoint=bytes.fromhex("b42d008f"),
+        valve_endpoint=bytes.fromhex("b9840280"),
+    )
+
     @staticmethod
     def _frame_with_endpoint(frame_hex: str, endpoint: str) -> str:
         """Rewrite endpoint B and retain a supported trailer residue."""
@@ -679,19 +685,33 @@ class RainPointRFTest(unittest.TestCase):
         self.assertFalse(event["state"]["rf_frame_accepted"])
 
     def test_builds_captured_valve_commands_offline(self) -> None:
-        open_frame = build_open_frame(0x97, 60, 0xC713)
+        open_frame = build_open_frame(
+            self.CAPTURED_VALVE_LINK, 0x97, 60, 0xC713
+        )
         self.assertEqual(
             "79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824",
             open_frame.hex(),
         )
-        close_frame = build_close_frame(0x97, 0x4F03)
+        close_frame = build_close_frame(
+            self.CAPTURED_VALVE_LINK, 0x97, 0x4F03
+        )
         self.assertEqual(
             "79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf",
             close_frame.hex(),
         )
-        self.assertEqual(2, len(open_candidates(0x97, 60)))
-        self.assertEqual(2, len(close_candidates(0x97)))
+        self.assertEqual(
+            2, len(open_candidates(self.CAPTURED_VALVE_LINK, 0x97, 60))
+        )
+        self.assertEqual(
+            2, len(close_candidates(self.CAPTURED_VALVE_LINK, 0x97))
+        )
         self.assertEqual(0x80, next_sequence(0x9F))
+
+    def test_valve_frame_builder_requires_association_specific_endpoints(self) -> None:
+        with self.assertRaisesRegex(ValueError, "exactly four bytes"):
+            ValveLink(b"short", bytes.fromhex("b9840280"))
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            ValveLink(bytes.fromhex("01020304"), bytes.fromhex("01020304"))
 
     def test_encodes_confirmed_whole_minute_valve_durations(self) -> None:
         self.assertEqual(bytes.fromhex("9e00"), encode_duration(60))
@@ -731,7 +751,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertAlmostEqual(80_000, measured["tone_separation_hz"], delta=50)
 
     def test_generates_measured_command_waveform_offline(self) -> None:
-        frame = build_open_frame(0x97, 60, 0xC713)
+        frame = build_open_frame(self.CAPTURED_VALVE_LINK, 0x97, 60, 0xC713)
         symbols = command_symbols(frame)
         self.assertEqual(1_504, len(symbols))
         self.assertEqual([1, 0, 1, 0], symbols[:4])
@@ -770,7 +790,7 @@ class RainPointRFTest(unittest.TestCase):
             command_symbols(bytes(38))
 
     def test_compares_offline_waveform_spectral_profile(self) -> None:
-        frame = build_close_frame(0x97, 0x4F03)
+        frame = build_close_frame(self.CAPTURED_VALVE_LINK, 0x97, 0x4F03)
         reference_data, _ = generate_command(frame)
         candidate_data, _ = generate_command(
             frame,
@@ -985,7 +1005,9 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("watering", decoded["valve_state"])
         self.assertEqual(1020, decoded["duration_seconds"])
 
-        four_minute_frame = build_open_frame(0x9B, 240, 0x4F03)
+        four_minute_frame = build_open_frame(
+            self.CAPTURED_VALVE_LINK, 0x9B, 240, 0x4F03
+        )
         decoded = normalize_row(
             {"len": len(four_minute_frame) * 8, "data": four_minute_frame.hex()}
         )

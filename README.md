@@ -197,6 +197,25 @@ runtime dependency.
 - Only then connect physical valve commands to the safety controller and begin
   cloud-to-local migration work with the existing HomGar integration.
 
+Start and finish the sensor reliability gate with persisted snapshots rather
+than screenshots:
+
+```bash
+python3 tools/sensor_soak.py prepare \
+  --gateway-url http://homeassistant.local:8787 \
+  --output captures/sensor-soak-start.json
+
+python3 tools/sensor_soak.py finish captures/sensor-soak-start.json \
+  --gateway-url http://homeassistant.local:8787 \
+  --minimum-hours 72 \
+  --output captures/sensor-soak-report.json
+```
+
+The report requires every starting soil sensor to remain registered and fresh,
+advance at least once per effective 30-minute interval, and retain enough
+connected authenticated ACK-owner capacity. Snapshot outputs remain local
+evidence under the ignored `captures/` directory.
+
 ## Safety
 
 RainPoint Local currently receives valve telemetry but cannot operate a valve.

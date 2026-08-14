@@ -3,13 +3,35 @@
 from __future__ import annotations
 
 import binascii
+from dataclasses import dataclass
 
 
 SYNC = bytes.fromhex("79f4882f28")
-HUB_ENDPOINT = bytes.fromhex("b42d008f")
-VALVE_ENDPOINT = bytes.fromhex("b9840280")
 FRAME_BYTES = 38
 TRAILER_RESIDUES = (0xC713, 0x4F03)
+
+
+@dataclass(frozen=True)
+class ValveLink:
+    """Association-specific controller and valve RF identities.
+
+    There are intentionally no installation defaults.  A link must come from
+    the valve enrollment being analyzed so an offline candidate cannot silently
+    target the installed production valve.
+    """
+
+    controller_endpoint: bytes
+    valve_endpoint: bytes
+
+    def __post_init__(self) -> None:
+        for name, endpoint in (
+            ("controller_endpoint", self.controller_endpoint),
+            ("valve_endpoint", self.valve_endpoint),
+        ):
+            if not isinstance(endpoint, bytes) or len(endpoint) != 4:
+                raise ValueError(f"{name} must contain exactly four bytes")
+        if self.controller_endpoint == self.valve_endpoint:
+            raise ValueError("controller and valve endpoints must differ")
 
 
 def encode_duration(duration_seconds: int) -> bytes:
@@ -66,33 +88,39 @@ def _finish_frame(payload: bytes, residue: int) -> bytes:
 
 
 def build_open_frame(
-    sequence: int, duration_seconds: int, residue: int
+    link: ValveLink, sequence: int, duration_seconds: int, residue: int
 ) -> bytes:
     """Build one offline HTV145 open-command candidate."""
     _validate_sequence(sequence)
     body = bytes((sequence, 0x10, 0x82, 0x80, 0x81, 0x00))
     body += encode_duration(duration_seconds)
     body += bytes(15)
-    return _finish_frame(SYNC + HUB_ENDPOINT + VALVE_ENDPOINT + body, residue)
+    return _finish_frame(
+        SYNC + link.controller_endpoint + link.valve_endpoint + body, residue
+    )
 
 
-def build_close_frame(sequence: int, residue: int) -> bytes:
+def build_close_frame(link: ValveLink, sequence: int, residue: int) -> bytes:
     """Build one offline HTV145 close-command candidate."""
     _validate_sequence(sequence)
     body = bytes((sequence, 0x90, 0x81, 0x80, 0x81, 0x00)) + bytes(17)
-    return _finish_frame(SYNC + HUB_ENDPOINT + VALVE_ENDPOINT + body, residue)
+    return _finish_frame(
+        SYNC + link.controller_endpoint + link.valve_endpoint + body, residue
+    )
 
 
-def open_candidates(sequence: int, duration_seconds: int) -> tuple[bytes, bytes]:
+def open_candidates(
+    link: ValveLink, sequence: int, duration_seconds: int
+) -> tuple[bytes, bytes]:
     """Return both unresolved trailer candidates without transmitting either."""
     return tuple(
-        build_open_frame(sequence, duration_seconds, residue)
+        build_open_frame(link, sequence, duration_seconds, residue)
         for residue in TRAILER_RESIDUES
     )
 
 
-def close_candidates(sequence: int) -> tuple[bytes, bytes]:
+def close_candidates(link: ValveLink, sequence: int) -> tuple[bytes, bytes]:
     """Return both unresolved trailer candidates without transmitting either."""
     return tuple(
-        build_close_frame(sequence, residue) for residue in TRAILER_RESIDUES
+        build_close_frame(link, sequence, residue) for residue in TRAILER_RESIDUES
     )

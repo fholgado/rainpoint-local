@@ -24,8 +24,6 @@ SENSOR_ENDPOINTS = {
     "ce628024": "Front Yard Sensor 1",
     "d1e28024": "Front Yard Sensor 2",
 }
-HUB_ENDPOINT = bytes.fromhex("b42d008f")
-VALVE_ENDPOINT = bytes.fromhex("b9840280")
 
 
 def trailer_residual(frame: bytes) -> int:
@@ -229,16 +227,19 @@ def _valve_transaction_summary(
     commands = []
     latencies: dict[str, list[float]] = defaultdict(list)
     duration_counts: Counter[int] = Counter()
+    link_counts: Counter[str] = Counter()
     acknowledged = Counter()
     for position, (event, frame, residual) in enumerate(bursts):
-        if frame[5:9] != HUB_ENDPOINT or frame[9:13] != VALVE_ENDPOINT:
-            continue
-        if frame[14] & 0x7F != 0x10:
+        if frame[14] not in (0x10, 0x90):
             continue
         observed_at = _timestamp(event)
         if observed_at is None:
             continue
         mode = "close" if frame[14] & 0x80 else "open"
+        controller_endpoint = frame[5:9]
+        valve_endpoint = frame[9:13]
+        link = f"{controller_endpoint.hex()}->{valve_endpoint.hex()}"
+        link_counts[link] += 1
         duration = 0
         if mode == "open":
             raw_duration = int.from_bytes(frame[19:21], "little")
@@ -262,8 +263,11 @@ def _valve_transaction_summary(
             if delta > response_window_seconds:
                 break
             if (
-                candidate_frame[5:9] == VALVE_ENDPOINT
-                and candidate_frame[9:13] == HUB_ENDPOINT
+                candidate_frame[5:9] == valve_endpoint
+                and candidate_frame[9:13] == controller_endpoint
+                and candidate_frame[13] == frame[13]
+                and candidate_frame[14]
+                == (0xD0 if mode == "close" else 0x50)
             ):
                 latency = delta
                 response_event_id = candidate_event.get("event_id")
@@ -275,6 +279,8 @@ def _valve_transaction_summary(
                 "event_id": event.get("event_id"),
                 "observed_at": event.get("observed_at"),
                 "mode": mode,
+                "controller_endpoint": controller_endpoint.hex(),
+                "valve_endpoint": valve_endpoint.hex(),
                 "sequence": f"{frame[13]:02x}",
                 "duration_bytes": frame[19:21].hex(),
                 "duration_seconds": duration,
@@ -290,6 +296,7 @@ def _valve_transaction_summary(
     return {
         "response_window_seconds": response_window_seconds,
         "command_count": len(commands),
+        "link_counts": dict(link_counts.most_common()),
         "mode_counts": dict(mode_counts),
         "acknowledged_counts": dict(acknowledged),
         "acknowledgement_rates": {

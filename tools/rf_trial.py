@@ -107,6 +107,7 @@ def analyze_trial(
     """Summarize captured routes and pairing-specific terminal evidence."""
     routes: Counter[str] = Counter()
     messages: Counter[str] = Counter()
+    directed_links: set[tuple[bytes, bytes]] = set()
     factory_count = 0
     paired_count = 0
     terminal_count = 0
@@ -130,6 +131,7 @@ def analyze_trial(
         destination = frame[9:13]
         message = frame[13] & 0x7F
         routes[f"{source.hex()}->{destination.hex()}"] += 1
+        directed_links.add((source, destination))
         messages[f"0x{message:02x}"] += 1
         if destination == STOCK_PAIRING_COMPANION_ENDPOINT:
             companion_reply_count += 1
@@ -145,24 +147,45 @@ def analyze_trial(
                 terminal_count += 1
 
     stock_expected_silent = manifest.get("stock_gateway_state") == "off_verified"
-    checks = {
-        "captured_normalized_frames": normalized > 0,
-        "factory_identity_observed": factory_bytes is None or factory_count > 0,
-        "paired_identity_observed": paired_bytes is None or paired_count > 0,
-        "terminal_message_03_observed": paired_bytes is None or terminal_count > 0,
-        "known_stock_gateway_endpoint_silent": (
-            not stock_expected_silent or stock_gateway_count == 0
-        ),
-        "assigned_channel_echoed": (
-            assigned_channel is None
-            or echoed_channels[int(assigned_channel)] > 0
-        ),
-    }
+    bidirectional_links = sorted(
+        f"{source.hex()}<->{destination.hex()}"
+        for source, destination in directed_links
+        if source < destination and (destination, source) in directed_links
+    )
+    checks = {"captured_normalized_frames": normalized > 0}
+    if manifest.get("kind") == "valve_pairing":
+        checks.update(
+            {
+                "multiple_valve_frames_observed": normalized >= 2,
+                "bidirectional_valve_exchange_observed": bool(bidirectional_links),
+                "multiple_message_types_observed": len(messages) >= 2,
+            }
+        )
+    else:
+        checks.update(
+            {
+                "factory_identity_observed": (
+                    factory_bytes is None or factory_count > 0
+                ),
+                "paired_identity_observed": paired_bytes is None or paired_count > 0,
+                "terminal_message_03_observed": (
+                    paired_bytes is None or terminal_count > 0
+                ),
+                "assigned_channel_echoed": (
+                    assigned_channel is None
+                    or echoed_channels[int(assigned_channel)] > 0
+                ),
+            }
+        )
+    checks["known_stock_gateway_endpoint_silent"] = (
+        not stock_expected_silent or stock_gateway_count == 0
+    )
     return {
         "event_count": len(events),
         "normalized_frame_count": normalized,
         "route_counts": dict(routes.most_common()),
         "message_counts": dict(messages.most_common()),
+        "bidirectional_links": bidirectional_links,
         "factory_identity_frame_count": factory_count,
         "paired_identity_frame_count": paired_count,
         "terminal_message_03_count": terminal_count,

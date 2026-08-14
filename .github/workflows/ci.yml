@@ -34,7 +34,8 @@ jobs:
             test_rainpoint_safety.py \
             test_pairing_profile_analysis.py \
             test_radio_node_acceptance.py \
-            test_rf_trial.py
+            test_rf_trial.py \
+            test_sensor_soak.py
       - name: Compile hardware-independent firmware protocol tests
         run: |
           c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \

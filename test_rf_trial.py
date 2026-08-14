@@ -95,8 +95,9 @@ class RFTrialTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(0, report["stock_gateway_frame_count"])
 
-    def test_valve_baseline_does_not_require_unknown_identities(self) -> None:
+    def test_valve_pairing_requires_more_than_one_unclassified_frame(self) -> None:
         manifest = {
+            "kind": "valve_pairing",
             "expected_factory_endpoint": None,
             "expected_paired_endpoint": None,
             "stock_gateway_state": "on",
@@ -104,7 +105,25 @@ class RFTrialTests(unittest.TestCase):
         report = MODULE.analyze_trial(
             manifest, [{"raw": frame("01020304", "05060708", 1)}]
         )
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["checks"]["bidirectional_valve_exchange_observed"])
+
+    def test_valve_pairing_inventories_bidirectional_exchange(self) -> None:
+        manifest = {
+            "kind": "valve_pairing",
+            "expected_factory_endpoint": None,
+            "expected_paired_endpoint": None,
+            "stock_gateway_state": "on",
+        }
+        report = MODULE.analyze_trial(
+            manifest,
+            [
+                {"raw": frame("01020304", "05060708", 1)},
+                {"raw": frame("05060708", "01020304", 3)},
+            ],
+        )
         self.assertTrue(report["passed"])
+        self.assertEqual(["01020304<->05060708"], report["bidirectional_links"])
 
 
 if __name__ == "__main__":
