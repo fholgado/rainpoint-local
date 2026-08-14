@@ -82,22 +82,26 @@ Still provisional or not working yet:
   restart, and device-registry retention, and
 - locally opening or closing the physical valve.
 
-### High-priority remaining work: radio-node OTA
+### High-priority remaining work: production radio-node OTA
 
-Radio nodes still require a physical USB connection for every firmware update.
-Before treating distributed nodes as a maintainable installation, implement
-the complete OTA path: signed artifact verification, gateway delivery,
-alternate-partition installation, persistent boot-attempt tracking, health
-confirmation, automatic rollback, update progress, and Home Assistant update
-entities. The existing manifest generator and three-boot rollback model are
-contracts and tests only; they are not yet connected to ESP32 flash, boot
-selection, or gateway commands.
+The isolated OTA candidate has now passed its first physical end-to-end update:
+the gateway issued a hash-bound command, the node downloaded the exact artifact,
+wrote and selected the inactive partition, rebooted into the new version,
+authenticated back to the gateway, verified radio health, and confirmed the
+candidate after the health delay. See
+[`research/OTA_HARDWARE_VALIDATION.md`](research/OTA_HARDWARE_VALIDATION.md).
 
-OTA is complete only when a production node can install a signed update over
-Wi-Fi, authenticate back to the local gateway with healthy Wi-Fi and radio
-diagnostics, confirm the new partition, and automatically restore the previous
-image after three unconfirmed boots. Experimental firmware must remain on a
-separate, explicitly selected release channel.
+Normal firmware still requires USB updates. Before treating distributed nodes
+as maintainable appliances, add asymmetric release signatures, controlled
+artifact hosting and lifecycle management, compatibility policy, Home Assistant
+update entities, and fault-injection coverage for interrupted downloads, power
+loss, and three-boot automatic rollback.
+
+Production OTA is complete only when a production node can install a signed
+update over Wi-Fi, authenticate back to the local gateway with healthy Wi-Fi
+and radio diagnostics, confirm the new partition, and automatically restore
+the previous image after three unconfirmed boots. Experimental firmware must
+remain on a separate, explicitly selected release channel.
 
 The packaged gateway reports all four installed soil endpoints from local RF
 and retains unknown RainPoint frames for discovery. The receive path is fully

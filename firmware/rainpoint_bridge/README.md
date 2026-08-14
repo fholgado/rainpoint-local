@@ -335,9 +335,11 @@ state and boot-attempt diagnostics are returned in the ordinary node record.
 1. Flash `0.8.0-test.1` over USB and physically validate the isolated routine
    acknowledgement candidate and 72-hour report behavior before considering
    persistent authorization.
-2. Physically validate candidate download, partition switching, health
-   confirmation, and three-boot rollback; then add asymmetric manifest
-   signatures before enabling OTA in production firmware.
+2. Candidate download, partition switching, reboot, gateway reauthentication,
+   radio-health confirmation, and permanent confirmation passed on physical
+   hardware. Validate interrupted download, power loss, and forced three-boot
+   rollback next; then add asymmetric manifest signatures before enabling OTA
+   in production firmware.
 3. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
    physical BOOT-button confirmation, and one-click HA adoption contract on a
    second board.

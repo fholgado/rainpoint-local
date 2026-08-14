@@ -129,8 +129,11 @@ requiring a sensor, valve, SDR, or attached ESP32 during implementation.
   allowing an incompatible gateway/node combination.
 - Keep USB recovery documented even after OTA exists.
 
-OTA can be designed and tested largely offline, but it is not complete until a
-real node passes update, rollback, power-loss, and recovery tests.
+The isolated candidate has passed a real-node download, inactive-partition
+switch, reboot, gateway reauthentication, radio-health check, and permanent
+confirmation. OTA remains incomplete until forced rollback, interrupted
+download, power-loss, recovery, release-signature, and production artifact
+lifecycle tests pass.
 
 ## Physical evidence gates
 
