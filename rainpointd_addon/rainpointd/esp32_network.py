@@ -183,6 +183,7 @@ class ESP32NetworkServer:
         self, connection: socket.socket, address: tuple[str, int]
     ) -> None:
         node_id: str | None = None
+        session: dict[str, Any] | None = None
         session_reserved = False
         connection.settimeout(75)
         stream = connection.makefile("rwb", buffering=0)
@@ -203,22 +204,25 @@ class ESP32NetworkServer:
                 return
             node_id, protocol_version = authenticated
             capabilities = list(hello.get("capabilities", ["rx"]))
+            session = {
+                "connection": connection,
+                "stream": stream,
+                "write_lock": threading.Lock(),
+                "protocol_version": protocol_version,
+                "capabilities": capabilities,
+            }
             with self._sessions_lock:
-                if node_id in self._active_nodes:
-                    self._send(
-                        stream,
-                        {"type": "node_rejected", "reason": "already_connected"},
-                    )
-                    return
+                previous_session = self._sessions.get(node_id)
                 self._active_nodes.add(node_id)
-                self._sessions[node_id] = {
-                    "connection": connection,
-                    "stream": stream,
-                    "write_lock": threading.Lock(),
-                    "protocol_version": protocol_version,
-                    "capabilities": capabilities,
-                }
+                self._sessions[node_id] = session
                 session_reserved = True
+            if previous_session is not None:
+                previous_connection = previous_session["connection"]
+                try:
+                    previous_connection.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                previous_connection.close()
             authenticated_message = {
                 "type": "node_authenticated",
                 "protocol_version": protocol_version,
@@ -359,14 +363,17 @@ class ESP32NetworkServer:
         finally:
             if node_id is not None and session_reserved:
                 with self._sessions_lock:
-                    self._active_nodes.discard(node_id)
-                    self._sessions.pop(node_id, None)
-                self.gateway.update_node(
-                    node_id, connected=False, disconnected_at=_timestamp()
-                )
-                self.gateway.notify_node_update(
-                    node_id, "radio_node_disconnected"
-                )
+                    owns_active_session = self._sessions.get(node_id) is session
+                    if owns_active_session:
+                        self._active_nodes.discard(node_id)
+                        self._sessions.pop(node_id, None)
+                if owns_active_session:
+                    self.gateway.update_node(
+                        node_id, connected=False, disconnected_at=_timestamp()
+                    )
+                    self.gateway.notify_node_update(
+                        node_id, "radio_node_disconnected"
+                    )
             try:
                 stream.close()
             finally:

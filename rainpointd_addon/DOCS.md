@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.22.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.23.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -106,10 +106,13 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The unified `0.10.0-test.3` candidate combines receive, generalized
+device. The unified `0.10.0-test.4` candidate combines receive, generalized
 sensor pairing, bounded routine acknowledgements, and managed OTA updates.
 After the first OTA-capable image is installed by USB, compatible releases can
 be installed from the radio node's Home Assistant firmware Update entity.
+An authenticated reconnect atomically replaces a stale session for the same
+managed node, so a software reboot or power loss does not require restarting
+the custom local gateway.
 
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway

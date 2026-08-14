@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.23.0
+
+- Atomically replace a stale radio-node TCP session only after the reconnecting
+  node proves the same managed credential, allowing OTA and power-reset recovery
+  without restarting the custom local gateway.
+- Prevent the retired connection handler from marking its authenticated
+  replacement disconnected.
+
 ## 0.22.0
 
 - Persist one radio-node owner for each HCS026 routine acknowledgement route.

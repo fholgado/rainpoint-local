@@ -581,12 +581,18 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
-    def test_second_session_for_same_node_is_rejected(self) -> None:
+    def test_authenticated_replacement_supersedes_stale_session(self) -> None:
         first_connection, first, first_response = self._connect(NODE_A, TOKEN_A)
         second_connection, second, second_response = self._connect(NODE_A, TOKEN_A)
         self.assertEqual("node_authenticated", first_response["type"])
-        self.assertEqual("node_rejected", second_response["type"])
-        self.assertEqual("already_connected", second_response["reason"])
+        self.assertEqual("node_authenticated", second_response["type"])
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("connected") is not True:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        first_connection.settimeout(1)
+        self.assertEqual(b"", first.readline())
+        self.assertTrue(self.gateway.nodes()[0]["connected"])
         first.close()
         second.close()
         first_connection.close()
