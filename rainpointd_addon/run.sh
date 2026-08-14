@@ -37,7 +37,7 @@ if [[ "${device_catalog_path}" == "null" ]]; then
   device_catalog_path=""
 fi
 if [[ "${firmware_catalog_path}" == "null" ]]; then
-  firmware_catalog_path=""
+  firmware_catalog_path="/share/rainpoint-local/firmware/catalog.json"
 fi
 if [[ "${event_retention_limit}" == "null" ]]; then
   event_retention_limit=100000
@@ -82,7 +82,7 @@ gateway_args=(
   --registry-token-file "${registry_token_path}"
 )
 if [[ -z "${firmware_catalog_path}" ]]; then
-  firmware_catalog_path="/data/firmware/catalog.json"
+  firmware_catalog_path="/share/rainpoint-local/firmware/catalog.json"
 fi
 if [[ -f "${firmware_catalog_path}" ]]; then
   gateway_args+=(
