@@ -11,6 +11,9 @@
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
 #include "wifi_transport.h"
+#if RAINPOINT_OTA_CANDIDATE == 1
+#include "ota_trial.h"
+#endif
 
 #if RAINPOINT_RADIO_COUNT != 1 && RAINPOINT_RADIO_COUNT != 2
 #error "RAINPOINT_RADIO_COUNT must be 1 or 2"
@@ -30,6 +33,10 @@
 
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE != 0 && RAINPOINT_ROUTINE_ACK_CANDIDATE != 1
 #error "RAINPOINT_ROUTINE_ACK_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_OTA_CANDIDATE != 0 && RAINPOINT_OTA_CANDIDATE != 1
+#error "RAINPOINT_OTA_CANDIDATE must be 0 or 1"
 #endif
 
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
@@ -65,6 +72,10 @@ rainpoint::Cc1101 primaryRadio(
     kPrimaryDataPin
 );
 rainpoint::WifiTransport wifiTransport;
+#if RAINPOINT_OTA_CANDIDATE == 1
+rainpoint::OtaTrial otaTrial;
+bool radiosHealthy = false;
+#endif
 #if RAINPOINT_RADIO_COUNT == 2
 rainpoint::Cc1101 diagnosticRadio(
     radioSpi,
@@ -375,6 +386,9 @@ void reportHealth() {
     printRadioHealth("diagnostic", diagnosticRadio);
 #endif
     printNodeHealth();
+#if RAINPOINT_OTA_CANDIDATE == 1
+    emitLine(otaTrial.status(wifiTransport.nodeId()));
+#endif
 }
 
 const char* pairingStateName(rainpoint::PairingSessionState state) {
@@ -619,6 +633,34 @@ void handleNetworkCommand() {
         reportIdentifyStatus(true);
         return;
     }
+#if RAINPOINT_OTA_CANDIDATE == 1
+    if (type == "firmware_update_start") {
+        const String url = jsonStringField(command, "url");
+        const String version = jsonStringField(command, "version");
+        const String sha256 = jsonStringField(command, "sha256");
+        long sizeBytes = 0;
+        if (!jsonLongField(command, "size_bytes", sizeBytes) ||
+            sizeBytes <= 0 || pairingSession.state() ==
+                rainpoint::PairingSessionState::Armed) {
+            reportNetworkCommandError(commandId, "invalid_update_request");
+            return;
+        }
+        otaTrial.install(
+            commandId,
+            url,
+            version,
+            sha256,
+            static_cast<std::size_t>(sizeBytes),
+            wifiTransport.gatewayHost()
+        );
+        emitLine(otaTrial.status(wifiTransport.nodeId()));
+        if (otaTrial.restartPending()) {
+            delay(250);
+            ESP.restart();
+        }
+        return;
+    }
+#endif
     if (type == "pairing_cancel") {
         if (!pairingCommandId.isEmpty() && commandId != pairingCommandId) {
             reportNetworkCommandError(commandId, "pairing_command_mismatch");
@@ -1133,6 +1175,9 @@ bool beginRadio(
 void setup() {
     Serial.begin(115200);
     delay(250);
+#if RAINPOINT_OTA_CANDIDATE == 1
+    otaTrial.begin();
+#endif
     pinMode(RAINPOINT_STATUS_LED_PIN, OUTPUT);
     setIdentifyLed(false);
     wifiTransport.begin();
@@ -1150,6 +1195,11 @@ void setup() {
         "\"routine_ack_authorization_persistent\":false,"
 #else
         "\"routine_ack_candidate\":false,"
+#endif
+#if RAINPOINT_OTA_CANDIDATE == 1
+        "\"ota_trial\":true,"
+#else
+        "\"ota_trial\":false,"
 #endif
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +
@@ -1179,6 +1229,9 @@ void setup() {
             delay(1'000);
         }
     }
+#if RAINPOINT_OTA_CANDIDATE == 1
+    radiosHealthy = ready;
+#endif
 #if RAINPOINT_RADIO_COUNT == 1
     lastChannelChange = millis();
 #endif
@@ -1193,6 +1246,9 @@ void loop() {
     }
     lastLoopAt = loopAt;
     wifiTransport.poll();
+#if RAINPOINT_OTA_CANDIDATE == 1
+    otaTrial.confirmHealthy(wifiTransport.authenticated(), radiosHealthy);
+#endif
     if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
         cancelPairing("gateway_connection_lost");
     }

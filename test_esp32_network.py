@@ -490,6 +490,41 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_ota_trial_command_requires_explicit_candidate_capability(self) -> None:
+        connection, stream, _ = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "firmware_update_trial",
+            ],
+        )
+        command = {
+            "type": "firmware_update_start",
+            "command_id": "12" * 16,
+            "url": "http://192.0.2.1:8787/firmware/test.bin",
+            "version": "0.9.0-test.2",
+            "size_bytes": 900_000,
+            "sha256": "ab" * 32,
+        }
+        self.server.send_command(NODE_A, command)
+        self.assertEqual(command, json.loads(stream.readline()))
+        stream.close()
+        connection.close()
+
+        connection, stream, _ = self._connect(
+            NODE_B,
+            TOKEN_B,
+            protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx"],
+        )
+        with self.assertRaisesRegex(ValueError, "firmware_update_trial"):
+            self.server.send_command(NODE_B, command)
+        stream.close()
+        connection.close()
+
     def test_second_session_for_same_node_is_rejected(self) -> None:
         first_connection, first, first_response = self._connect(NODE_A, TOKEN_A)
         second_connection, second, second_response = self._connect(NODE_A, TOKEN_A)

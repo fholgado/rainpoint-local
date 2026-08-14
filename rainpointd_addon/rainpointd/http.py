@@ -182,6 +182,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     self._json(200, result)
                     return
+                if separator and node_action == "firmware-update":
+                    result = self.server.gateway.start_radio_node_firmware_update(
+                        node_id,
+                        url=str(body.get("url", "")),
+                        version=str(body.get("version", "")),
+                        size_bytes=int(body.get("size_bytes", 0)),
+                        sha256=str(body.get("sha256", "")),
+                    )
+                    self._json(202, result)
+                    return
                 if separator and node_action == "revoke":
                     self._json(
                         200,

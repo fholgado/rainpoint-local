@@ -130,6 +130,7 @@ class ESP32NetworkServer:
             "pairing_start",
             "pairing_cancel",
             "identify_start",
+            "firmware_update_start",
         }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
@@ -138,11 +139,13 @@ class ESP32NetworkServer:
             raise ConnectionError(f"radio node is not connected: {node_id}")
         if session["protocol_version"] != 2:
             raise ValueError("radio node protocol does not permit commands")
-        required_capability = (
-            "identify"
-            if message.get("type") == "identify_start"
-            else "sensor_pairing_tx"
-        )
+        command_type = message.get("type")
+        if command_type == "identify_start":
+            required_capability = "identify"
+        elif command_type == "firmware_update_start":
+            required_capability = "firmware_update_trial"
+        else:
+            required_capability = "sensor_pairing_tx"
         if required_capability not in session["capabilities"]:
             raise ValueError(
                 f"radio node lacks {required_capability} capability"
@@ -280,6 +283,24 @@ class ESP32NetworkServer:
                         identify_active=message.get("active") is True,
                         identify_command_id=message.get("command_id"),
                     )
+                if message.get("type") == "firmware_update_status":
+                    self.gateway.update_node(
+                        node_id,
+                        firmware_update_state=message.get("state"),
+                        firmware_update_detail=message.get("detail"),
+                        firmware_update_command_id=message.get("command_id"),
+                        firmware_candidate_version=message.get(
+                            "candidate_version"
+                        ),
+                        firmware_update_received_bytes=message.get(
+                            "received_bytes"
+                        ),
+                        firmware_update_total_bytes=message.get("total_bytes"),
+                        firmware_update_boot_attempts=message.get("boot_attempts"),
+                        firmware_candidate_pending=(
+                            message.get("candidate_pending") is True
+                        ),
+                    )
                 if message.get("type") == "command_error":
                     current_node = next(
                         (
@@ -359,6 +380,7 @@ class ESP32NetworkServer:
                         "sensor_pairing_tx",
                         "identify",
                         "routine_sensor_ack_tx",
+                        "firmware_update_trial",
                     }
                 )
             ):

@@ -972,6 +972,53 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("identify_start", commands[0][1]["type"])
         self.assertNotIn("valve", json.dumps(commands[0][1]))
 
+    def test_ota_trial_api_requires_candidate_node_capability(self) -> None:
+        commands: list[tuple[str, dict]] = []
+        node_id = "rp-001122334455"
+        self.server.gateway.update_node(
+            node_id,
+            connected=True,
+            authenticated=True,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "firmware_update_trial",
+            ],
+            tx_armed=False,
+        )
+        self.server.gateway.set_node_command_sender(
+            lambda target, message: commands.append((target, message))
+        )
+        result = self.post_json(
+            f"/api/v1/nodes/{node_id}/firmware-update",
+            {
+                "url": "http://192.0.2.1:8787/firmware/test.bin",
+                "version": "0.9.0-test.2",
+                "size_bytes": 900_000,
+                "sha256": "AB" * 32,
+            },
+        )
+        self.assertEqual("requested", result["state"])
+        self.assertEqual(node_id, commands[0][0])
+        self.assertEqual("firmware_update_start", commands[0][1]["type"])
+        self.assertEqual("ab" * 32, commands[0][1]["sha256"])
+
+        self.server.gateway.update_node(
+            node_id,
+            capabilities=["rx", "sensor_pairing_tx"],
+        )
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/nodes/{node_id}/firmware-update",
+                {
+                    "url": "http://192.0.2.1:8787/firmware/test.bin",
+                    "version": "0.9.0-test.2",
+                    "size_bytes": 900_000,
+                    "sha256": "ab" * 32,
+                },
+            )
+        self.assertEqual(400, raised.exception.code)
+
     def test_adoption_api_issues_temporary_secret_without_public_exposure(self) -> None:
         started = self.post_json(
             "/api/v1/nodes/adoptions/start",

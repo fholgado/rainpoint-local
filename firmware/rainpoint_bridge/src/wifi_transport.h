@@ -22,6 +22,7 @@ public:
     bool configured() const { return configured_; }
     bool authenticated() const { return authenticated_; }
     String localIp() const { return WiFi.localIP().toString(); }
+    const String& gatewayHost() const { return gatewayHost_; }
     int wifiRssiDbm() const { return WiFi.RSSI(); }
     std::uint64_t networkBytesSent() const { return networkBytesSent_; }
     std::uint64_t networkBytesReceived() const { return networkBytesReceived_; }

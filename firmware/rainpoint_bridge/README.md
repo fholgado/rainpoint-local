@@ -243,18 +243,21 @@ This is a trusted-LAN prototype transport. Separate nonce/HMAC proofs
 authenticate both the node and `rainpointd` and keep the token itself off the
 network, but TCP telemetry is not encrypted or individually signed. Before a
 published setup or any valve control, the transport will need further review.
-Protocol v2 accepts only the bounded `pairing_start`, `pairing_cancel`, and
-non-RF `identify_start` messages after authentication. It contains no generic
-RF or valve command.
+Production protocol v2 accepts only the bounded `pairing_start`,
+`pairing_cancel`, and non-RF `identify_start` messages after authentication.
+The isolated OTA target additionally accepts `firmware_update_start`. No target
+contains a generic RF or valve command.
 
 Firmware 0.5 and later emit a `node_health` heartbeat every 30 seconds with uptime,
 heap metrics, internal temperature, CPU frequency, maximum loop gap, reset
 reason, local IP, Wi-Fi RSSI, network byte counts, reconnects, gateway
-connection attempts, and successful authentications. Firmware must still be
-flashed over USB. The repository now produces a hash-bound, production-target
-OTA manifest and defines a three-boot rollback contract. Network delivery,
-signature verification, flash partition switching, and gateway confirmation
-are intentionally not enabled until they have hardware validation.
+connection attempts, and successful authentications. Production firmware must
+still be flashed over USB. The repository produces a hash-bound production
+artifact manifest and defines a three-boot rollback contract. A separate OTA
+candidate now implements authenticated download, flash-partition switching,
+persistent boot-attempt tracking, gateway-plus-radio health confirmation, and
+rollback selection for physical testing. Asymmetric release signatures remain
+required before production enablement.
 
 Build and verify a release manifest after PlatformIO produces `firmware.bin`:
 
@@ -293,14 +296,48 @@ pio run --project-dir firmware/rainpoint_bridge \
   --environment esp32dev_routine_ack_candidate
 ```
 
+### Isolated OTA candidate
+
+`esp32dev_ota_candidate` is the only target that accepts
+`firmware_update_start`. The command must arrive over an authenticated
+protocol-v2 gateway session, and its URL must point to the node's configured
+gateway host. The node rejects unexpected sizes, streams the image into the
+inactive OTA partition, calculates SHA-256 while writing, and changes the boot
+partition only after the complete artifact matches.
+
+The candidate records an unconfirmed boot in ESP32 preferences. It confirms
+the image only after 60 seconds with both an authenticated gateway session and
+a healthy CC1101. Three unconfirmed boots select the previous OTA partition.
+This remains a hardware-trial boundary: the mutually authenticated gateway and
+manifest hash protect this test path, but asymmetric release signatures are not
+implemented yet.
+
+Build it without uploading it:
+
+```sh
+pio run --project-dir firmware/rainpoint_bridge \
+  --environment esp32dev_ota_candidate
+```
+
+The gateway exposes the trial only through its authenticated management API:
+
+```text
+POST /api/v1/nodes/{node_id}/firmware-update
+```
+
+The request carries the gateway-hosted artifact URL, version, byte length, and
+SHA-256 digest. It is rejected unless the selected connected node explicitly
+advertises `firmware_update_trial` and is not armed for RF transmission. Update
+state and boot-attempt diagnostics are returned in the ordinary node record.
+
 ## Next firmware increments
 
 1. Flash `0.8.0-test.1` over USB and physically validate the isolated routine
    acknowledgement candidate and 72-hour report behavior before considering
    persistent authorization.
-2. Implement and hardware-validate signed, rollback-safe OTA so deployed radio
-   nodes no longer require retrieval for routine firmware updates. Until then,
-   every firmware target remains USB-flashed.
+2. Physically validate candidate download, partition switching, health
+   confirmation, and three-boot rollback; then add asymmetric manifest
+   signatures before enabling OTA in production firmware.
 3. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
    physical BOOT-button confirmation, and one-click HA adoption contract on a
    second board.

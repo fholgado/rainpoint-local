@@ -268,7 +268,11 @@ void WifiTransport::handleGatewayLine(const String& line) {
     }
     if (authenticated_ &&
         (type == "pairing_start" || type == "pairing_cancel" ||
-         type == "identify_start")) {
+         type == "identify_start"
+#if RAINPOINT_OTA_CANDIDATE == 1
+         || type == "firmware_update_start"
+#endif
+        )) {
         if (!pendingCommand_.isEmpty()) {
             reportNetworkState("protocol_error", "command_queue_full");
             return;
@@ -293,6 +297,9 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
+#endif
+#if RAINPOINT_OTA_CANDIDATE == 1
+        ",\"firmware_update_trial\""
 #endif
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",

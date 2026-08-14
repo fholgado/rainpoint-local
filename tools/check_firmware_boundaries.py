@@ -21,28 +21,42 @@ CANDIDATE_MARKERS = (
     b"authorized_until_reboot",
 )
 
+OTA_CANDIDATE_MARKERS = (
+    b"firmware_update_start",
+    b"firmware_update_trial",
+    b"verified_sha256",
+)
+
 
 def main() -> int:
-    if len(sys.argv) not in (3, 4):
+    if len(sys.argv) not in (3, 4, 5):
         print(
             "usage: check_firmware_boundaries.py "
-            "PRODUCTION_BIN BENCH_BIN [ROUTINE_ACK_CANDIDATE_BIN]"
+            "PRODUCTION_BIN BENCH_BIN [ROUTINE_ACK_CANDIDATE_BIN] "
+            "[OTA_CANDIDATE_BIN]"
         )
         return 2
     production = Path(sys.argv[1]).read_bytes()
     bench = Path(sys.argv[2]).read_bytes()
     leaked = [
         value.decode()
-        for value in (*BENCH_COMMANDS, *CANDIDATE_MARKERS)
+        for value in (*BENCH_COMMANDS, *CANDIDATE_MARKERS, *OTA_CANDIDATE_MARKERS)
         if value in production
     ]
     missing = [value.decode() for value in BENCH_COMMANDS if value not in bench]
-    if len(sys.argv) == 4:
+    if len(sys.argv) >= 4:
         candidate = Path(sys.argv[3]).read_bytes()
         missing.extend(
             value.decode()
             for value in CANDIDATE_MARKERS
             if value not in candidate
+        )
+    if len(sys.argv) == 5:
+        ota_candidate = Path(sys.argv[4]).read_bytes()
+        missing.extend(
+            value.decode()
+            for value in OTA_CANDIDATE_MARKERS
+            if value not in ota_candidate
         )
     if leaked:
         print(f"production firmware contains bench commands: {', '.join(leaked)}")

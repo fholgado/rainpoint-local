@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.0
+
+- Add an isolated, capability-gated radio-node OTA trial command without
+  enabling OTA in normal firmware.
+- Record OTA download, verification, candidate-boot, health-confirmation, and
+  rollback diagnostics in the gateway's radio-node state.
+- Accept OTA trial firmware during authenticated commissioning while retaining
+  strict rejection for unknown node capabilities and generic RF commands.
+- Add an authenticated management endpoint for hash-bound OTA trials on an
+  explicitly selected, connected, non-RF-armed candidate node.
+
 ## 0.19.3
 
 - Permit the isolated routine acknowledgement firmware capability during

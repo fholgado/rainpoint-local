@@ -59,12 +59,14 @@ jobs:
           --environment esp32dev_sensor_a_candidate
           --environment esp32dev_pairing_generalization
           --environment esp32dev_routine_ack_candidate
+          --environment esp32dev_ota_candidate
       - name: Verify production firmware excludes local TX bench controls
         run: >-
           python tools/check_firmware_boundaries.py
           firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin
           firmware/rainpoint_bridge/.pio/build/esp32dev_single_bench/firmware.bin
           firmware/rainpoint_bridge/.pio/build/esp32dev_routine_ack_candidate/firmware.bin
+          firmware/rainpoint_bridge/.pio/build/esp32dev_ota_candidate/firmware.bin
       - name: Build and verify production OTA artifact manifest
         run: |
           python tools/firmware_manifest.py \

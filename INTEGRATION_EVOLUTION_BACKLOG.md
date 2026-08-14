@@ -45,6 +45,21 @@ qualification is explicitly noted:
 Valve telemetry decoding and offline frame generation exist. Physical valve
 pairing and control do not.
 
+## Deferred Home Assistant UX defects
+
+Do not address these while the project is deliberately avoiding work that may
+overlap the eventual upstream integration merge:
+
+- Radio-node adoption currently declares `area` as a plain string in both the
+  zeroconf and manual setup forms. The area control does not behave like a
+  reliable Home Assistant area dropdown. Replace it with HA's native area
+  selector, preserve the selected area ID through the progress steps, and
+  assign the adopted node through the device registry without storing an
+  installation-specific display label as protocol metadata.
+- The serial `show_node` response labels a Wi-Fi-connected but unadopted node
+  as `wifi_configured: false`; split Wi-Fi provisioning and gateway adoption
+  into separate booleans so commissioning diagnostics are unambiguous.
+
 ## Software work that can proceed without RF hardware
 
 These items improve real functionality and publication readiness without

@@ -57,6 +57,8 @@ REGISTRY_MODELS = {
 }
 RADIO_NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 RADIO_NODE_TOKEN = re.compile(r"[0-9a-fA-F]{64}\Z")
+FIRMWARE_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}\Z")
+FIRMWARE_SHA256 = re.compile(r"[0-9a-fA-F]{64}\Z")
 _UNSET = object()
 
 
@@ -431,6 +433,67 @@ class Gateway:
                 "identify_active": True,
                 "duration_seconds": duration_seconds,
                 "command_id": command_id,
+            }
+
+    def start_radio_node_firmware_update(
+        self,
+        node_id: str,
+        *,
+        url: str,
+        version: str,
+        size_bytes: int,
+        sha256: str,
+    ) -> dict[str, Any]:
+        """Start an integrity-checked update on an explicit OTA trial node."""
+        node_id = node_id.strip().lower()
+        if (
+            not url.startswith("http://")
+            or len(url) > 320
+            or any(character.isspace() for character in url)
+            or not FIRMWARE_VERSION.fullmatch(version)
+            or not 64 * 1024 <= size_bytes <= 2 * 1024 * 1024
+            or not FIRMWARE_SHA256.fullmatch(sha256)
+        ):
+            raise ValueError("invalid firmware update metadata")
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if (
+                node is None
+                or node.get("connected") is not True
+                or node.get("authenticated") is not True
+            ):
+                raise ValueError("radio node is not connected")
+            if "firmware_update_trial" not in node.get("capabilities", []):
+                raise ValueError("radio node does not support OTA trials")
+            if node.get("tx_armed") is True:
+                raise ValueError("radio node is armed for RF transmission")
+            if self._node_command_sender is None:
+                raise RuntimeError("radio-node command transport is unavailable")
+            command_id = uuid.uuid4().hex
+            command = {
+                "type": "firmware_update_start",
+                "command_id": command_id,
+                "url": url,
+                "version": version,
+                "size_bytes": size_bytes,
+                "sha256": sha256.lower(),
+            }
+            self._node_command_sender(node_id, command)
+            node.update(
+                {
+                    "firmware_update_state": "requested",
+                    "firmware_update_command_id": command_id,
+                    "firmware_candidate_version": version,
+                    "firmware_update_received_bytes": 0,
+                    "firmware_update_total_bytes": size_bytes,
+                }
+            )
+            return {
+                "node_id": node_id,
+                "state": "requested",
+                "command_id": command_id,
+                "candidate_version": version,
+                "size_bytes": size_bytes,
             }
 
     def register_radio_node(
