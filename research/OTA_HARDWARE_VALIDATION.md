@@ -47,7 +47,7 @@ asymmetric release authenticity or deliberately failed recovery paths.
 Gateway 0.21.0 adds a strict local release catalog, immutable artifact serving,
 hardware/channel/variant compatibility checks, and install-by-release-ID. The
 Home Assistant integration adds native firmware Update entities with release
-notes and byte progress. Gateway 0.23.0 and firmware `0.10.0-test.4` consolidate
+notes and byte progress. Gateway 0.23.0 and firmware `0.10.0-test.5` consolidate
 generalized pairing, routine acknowledgements, and OTA into one experimental
 image. ACK authorization remains RAM-only on the node, while the gateway
 persists exactly one owner per sensor and restores the bounded configuration
@@ -65,6 +65,11 @@ the managed test.3 to test.4 trial then passed without USB or a gateway
 restart. Test.4 downloaded 918,720 bytes, matched SHA-256, rebooted itself,
 replaced the stale authenticated session, reported `candidate_boot`, and
 cleared its rollback marker after 60 seconds of authenticated gateway plus
-CC1101 health. The remaining gates for this consolidated path are the native
-Home Assistant Update-entity action and physical post-reboot restoration of a
-real sensor ACK assignment on a unified node.
+CC1101 health. A subsequent USB migration of the live Sensor A ACK owner to
+test.4 exposed that the authenticated firmware command allowlist omitted the
+gateway's bounded ACK configure/revoke messages. Test.5 corrected that boundary
+and passed the physical recovery check: after reboot and again after a gateway
+restart, the node reported `configured_by_gateway`, endpoint `9bce0024`, channel
+4, one assigned sensor, one authorized sensor, and zero ACK failures. The
+remaining consolidated-path gate is initiating an update through Home
+Assistant's native Update entity.

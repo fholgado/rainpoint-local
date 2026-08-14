@@ -269,6 +269,10 @@ void WifiTransport::handleGatewayLine(const String& line) {
     if (authenticated_ &&
         (type == "pairing_start" || type == "pairing_cancel" ||
          type == "identify_start"
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+         || type == "routine_ack_configure" ||
+             type == "routine_ack_revoke"
+#endif
 #if RAINPOINT_OTA_CANDIDATE == 1
          || type == "firmware_update_start"
 #endif

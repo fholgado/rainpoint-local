@@ -23,6 +23,16 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("share:ro", config)
         self.assertNotIn("share:rw", config)
 
+    def test_unified_firmware_accepts_gateway_owned_ack_commands(self) -> None:
+        source = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "wifi_transport.cpp"
+        ).read_text()
+        command_boundary = source.split("if (authenticated_ &&", 1)[1].split(
+            "pendingCommand_ = line;", 1
+        )[0]
+        self.assertIn('type == "routine_ack_configure"', command_boundary)
+        self.assertIn('type == "routine_ack_revoke"', command_boundary)
+
 
 if __name__ == "__main__":
     unittest.main()
