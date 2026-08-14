@@ -77,3 +77,20 @@ def pairing_completed_endpoint(payload: dict[str, Any]) -> str | None:
     ):
         raise APIModelError("pairing completion endpoint is invalid")
     return normalized
+
+
+def pairing_progress_action(payload: dict[str, Any]) -> str:
+    """Map gateway pairing stages to concise Home Assistant progress text."""
+    stage = payload.get("stage")
+    if stage in {
+        "factory_detected_transmitter_required",
+        "pairing_exchange_in_progress",
+    }:
+        return "exchange_with_sensor"
+    if stage in {
+        "waiting_for_terminal_confirmation",
+        "terminal_confirmation_processing",
+        "paired_identity_observed",
+    }:
+        return "confirm_sensor"
+    return "wait_for_sensor"

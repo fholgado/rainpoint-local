@@ -51,7 +51,9 @@
   },
   "options": {
     "progress": {
-      "wait_for_sensor": "Listening on {node_name} for up to {duration_seconds} seconds. Hold the sensor button through its LED sequence. The radio node will detect the request, exchange four pairing messages, wait for the sensor's terminal confirmation, and then Home Assistant will continue automatically."
+      "wait_for_sensor": "Listening on {node_name} for up to {duration_seconds} seconds. Hold the sensor button through its LED sequence.",
+      "exchange_with_sensor": "Sensor request detected. {node_name} is exchanging the four pairing messages; keep the sensor near the node and wait for its LED sequence to finish.",
+      "confirm_sensor": "Pairing messages were sent. Waiting for the sensor's terminal confirmation and first verified report."
     },
     "step": {
       "init": {

@@ -68,6 +68,26 @@ class APIModelsTest(unittest.TestCase):
                 {"completed_endpoint": "not-an-endpoint"}
             )
 
+    def test_pairing_progress_actions_follow_radio_exchange(self) -> None:
+        self.assertEqual(
+            "wait_for_sensor",
+            api_models.pairing_progress_action(
+                {"stage": "waiting_for_factory_announcement"}
+            ),
+        )
+        self.assertEqual(
+            "exchange_with_sensor",
+            api_models.pairing_progress_action(
+                {"stage": "pairing_exchange_in_progress"}
+            ),
+        )
+        self.assertEqual(
+            "confirm_sensor",
+            api_models.pairing_progress_action(
+                {"stage": "waiting_for_terminal_confirmation"}
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

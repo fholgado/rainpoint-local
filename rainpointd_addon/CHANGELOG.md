@@ -6,12 +6,14 @@
   already-enrolled sensor can complete a recovery session without being
   mistaken for an expired pairing window.
 
-## Integration 0.10.1
+## Integration 0.10.2
 
 - Complete pairing from either a newly created enrollment or a radio-confirmed
   recovery of an existing endpoint, preserving its Home Assistant identity.
 - Explain the selected radio node, pairing deadline, four-message exchange, and
   terminal-confirmation delay while the pairing modal is in progress.
+- Update the open Home Assistant progress modal as the radio advances from
+  listening to message exchange and terminal-confirmation verification.
 
 ## 0.24.0
 

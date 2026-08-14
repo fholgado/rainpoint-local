@@ -29,6 +29,7 @@ from .api_models import (
     APIModelError,
     GatewayMetadata,
     pairing_completed_endpoint,
+    pairing_progress_action,
 )
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
 
@@ -460,6 +461,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._pairing_error: str | None = None
         self._pairing_node_name = "local radio node"
         self._pairing_duration_seconds = 120
+        self._pairing_progress_action = "wait_for_sensor"
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -695,10 +697,14 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         if self._pairing_task is None:
             return self.async_abort(reason="pairing_timeout")
         if self._pairing_task.done():
-            return self.async_show_progress_done(next_step_id="pairing_result")
+            if self._paired_endpoint is not None or self._pairing_error is not None:
+                return self.async_show_progress_done(next_step_id="pairing_result")
+            self._pairing_task = self.hass.async_create_task(
+                self._async_wait_for_sensor()
+            )
         return self.async_show_progress(
             step_id="pairing_progress",
-            progress_action="wait_for_sensor",
+            progress_action=self._pairing_progress_action,
             progress_task=self._pairing_task,
             description_placeholders={
                 "node_name": self._pairing_node_name,
@@ -732,6 +738,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     return
                 if not progress.get("active"):
                     self._pairing_error = "pairing_timeout"
+                    return
+                next_action = pairing_progress_action(progress)
+                if next_action != self._pairing_progress_action:
+                    self._pairing_progress_action = next_action
                     return
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
