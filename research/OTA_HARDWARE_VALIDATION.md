@@ -61,4 +61,10 @@ used to validate that corrected updater path while test.2 is running.
 The test.2 to test.3 trial proved that the deferred reboot ran automatically,
 but also exposed the gateway retaining the pre-reboot TCP session. Gateway
 0.23.0 admits a replacement only after it proves the same managed credential;
-test.4 is the version-only end-to-end validation target for that behavior.
+the managed test.3 to test.4 trial then passed without USB or a gateway
+restart. Test.4 downloaded 918,720 bytes, matched SHA-256, rebooted itself,
+replaced the stale authenticated session, reported `candidate_boot`, and
+cleared its rollback marker after 60 seconds of authenticated gateway plus
+CC1101 health. The remaining gates for this consolidated path are the native
+Home Assistant Update-entity action and physical post-reboot restoration of a
+real sensor ACK assignment on a unified node.
