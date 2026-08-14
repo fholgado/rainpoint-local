@@ -294,6 +294,16 @@ class ESP32NetworkServer:
                         pairing_assigned_channel=message.get(
                             "assigned_channel"
                         ),
+                        pairing_step_count=message.get("step_count"),
+                        pairing_factory_endpoint=message.get(
+                            "factory_endpoint"
+                        ),
+                        pairing_paired_endpoint=message.get(
+                            "paired_endpoint"
+                        ),
+                        pairing_awaiting_terminal_confirmation=(
+                            message.get("awaiting_terminal_confirmation") is True
+                        ),
                     )
                 if message.get("type") == "identify_status":
                     self.gateway.update_node(

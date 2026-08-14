@@ -25,7 +25,11 @@ from .api import (
     RainPointNodeCommissioningClient,
     RainPointLocalUnauthorized,
 )
-from .api_models import GatewayMetadata
+from .api_models import (
+    APIModelError,
+    GatewayMetadata,
+    pairing_completed_endpoint,
+)
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
 
 
@@ -454,6 +458,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._pairing_nodes: dict[str, str] = {}
         self._pairing_task: asyncio.Task[None] | None = None
         self._pairing_error: str | None = None
+        self._pairing_node_name = "local radio node"
+        self._pairing_duration_seconds = 120
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -643,9 +649,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "no_pairing_node"
             else:
                 try:
+                    duration_seconds = int(user_input["duration_seconds"])
                     await self._client().start_pairing(
                         self._token,
-                        int(user_input["duration_seconds"]),
+                        duration_seconds,
                         node_id=node_id,
                     )
                 except RainPointLocalUnauthorized:
@@ -655,6 +662,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 except RainPointLocalInvalidResponse:
                     errors["base"] = "invalid_response"
                 else:
+                    self._pairing_node_name = self._pairing_nodes[node_id]
+                    self._pairing_duration_seconds = duration_seconds
                     self._pairing_task = self.hass.async_create_task(
                         self._async_wait_for_sensor()
                     )
@@ -691,6 +700,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             step_id="pairing_progress",
             progress_action="wait_for_sensor",
             progress_task=self._pairing_task,
+            description_placeholders={
+                "node_name": self._pairing_node_name,
+                "duration_seconds": str(self._pairing_duration_seconds),
+            },
         )
 
     async def _async_wait_for_sensor(self) -> None:
@@ -706,11 +719,13 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     self._pairing_error = "invalid_response"
                     return
 
-                new_records = progress.get("new_records", [])
-                if new_records:
-                    self._paired_endpoint = str(
-                        new_records[0]["paired_endpoint"]
-                    )
+                try:
+                    completed_endpoint = pairing_completed_endpoint(progress)
+                except APIModelError:
+                    self._pairing_error = "invalid_response"
+                    return
+                if completed_endpoint is not None:
+                    self._paired_endpoint = completed_endpoint
                     return
                 if progress.get("stage") == "transmitter_failed":
                     self._pairing_error = "pairing_failed"

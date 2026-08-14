@@ -51,7 +51,7 @@
   },
   "options": {
     "progress": {
-      "wait_for_sensor": "Hold the sensor button until its pairing LED sequence completes. Home Assistant will continue automatically when the local radio node confirms enrollment."
+      "wait_for_sensor": "Listening on {node_name} for up to {duration_seconds} seconds. Hold the sensor button through its LED sequence. The radio node will detect the request, exchange four pairing messages, wait for the sensor's terminal confirmation, and then Home Assistant will continue automatically."
     },
     "step": {
       "init": {
@@ -113,7 +113,7 @@
       },
       "pairing_progress": {
         "title": "Waiting for sensor",
-        "description": "With the original RainPoint gateway unplugged, hold the sensor button until the LED flashes. Home Assistant will continue automatically after terminal confirmation."
+        "description": "Keep the original RainPoint gateway unplugged. Pairing can take several seconds after the LED changes because the local radio node must finish and verify the complete exchange. Existing sensors are recovered in place and retain their Home Assistant identity."
       },
       "sensor_details": {
         "title": "Sensor discovered",

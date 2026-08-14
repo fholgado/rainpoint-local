@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.0
+
+- Expose command-scoped pairing identities and detailed exchange stages so an
+  already-enrolled sensor can complete a recovery session without being
+  mistaken for an expired pairing window.
+
+## Integration 0.10.1
+
+- Complete pairing from either a newly created enrollment or a radio-confirmed
+  recovery of an existing endpoint, preserving its Home Assistant identity.
+- Explain the selected radio node, pairing deadline, four-message exchange, and
+  terminal-confirmation delay while the pairing modal is in progress.
+
 ## 0.24.0
 
 - Include managed radio-node names and areas in the pairing-node inventory so

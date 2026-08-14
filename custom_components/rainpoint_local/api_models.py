@@ -58,3 +58,22 @@ def validate_object_list(
     ):
         raise APIModelError(f"{key} contains an invalid {identity_key}")
     return values
+
+
+def pairing_completed_endpoint(payload: dict[str, Any]) -> str | None:
+    """Return a validated endpoint for new enrollment or sensor recovery."""
+    endpoint = payload.get("completed_endpoint")
+    if endpoint is None:
+        records = payload.get("new_records")
+        if isinstance(records, list) and records and isinstance(records[0], dict):
+            endpoint = records[0].get("paired_endpoint")
+    if endpoint is None:
+        return None
+    if not isinstance(endpoint, str):
+        raise APIModelError("pairing completion endpoint is not a string")
+    normalized = endpoint.strip().lower()
+    if len(normalized) != 8 or any(
+        character not in "0123456789abcdef" for character in normalized
+    ):
+        raise APIModelError("pairing completion endpoint is invalid")
+    return normalized

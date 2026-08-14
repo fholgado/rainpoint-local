@@ -42,6 +42,32 @@ class APIModelsTest(unittest.TestCase):
                 "device_id",
             )
 
+    def test_pairing_completion_accepts_existing_sensor_recovery(self) -> None:
+        self.assertEqual(
+            "c4e50024",
+            api_models.pairing_completed_endpoint(
+                {
+                    "completed_endpoint": "C4E50024",
+                    "completed_existing_record": True,
+                    "new_records": [],
+                }
+            ),
+        )
+
+    def test_pairing_completion_falls_back_to_new_record(self) -> None:
+        self.assertEqual(
+            "95a98024",
+            api_models.pairing_completed_endpoint(
+                {"new_records": [{"paired_endpoint": "95a98024"}]}
+            ),
+        )
+
+    def test_pairing_completion_rejects_invalid_endpoint(self) -> None:
+        with self.assertRaises(api_models.APIModelError):
+            api_models.pairing_completed_endpoint(
+                {"completed_endpoint": "not-an-endpoint"}
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

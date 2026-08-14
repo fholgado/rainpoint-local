@@ -410,6 +410,42 @@ class ESP32NetworkTest(unittest.TestCase):
         cancel = json.loads(stream.readline())
         self.assertEqual("pairing_cancel", cancel["type"])
         self.assertEqual(command["command_id"], cancel["command_id"])
+
+        # Recovering a sensor already enrolled in this gateway does not create
+        # a new enrollment record. The radio node's command-scoped completion
+        # identity must still let Home Assistant finish the flow successfully.
+        restarted = self.gateway.start_pairing(120, node_id=NODE_A)
+        self.assertEqual([], restarted["new_records"])
+        recovery_command = json.loads(stream.readline())
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": recovery_command["command_id"],
+                    "state": "completed",
+                    "completed_steps": 4,
+                    "step_count": 4,
+                    "assigned_channel": 4,
+                    "factory_endpoint": "15a98024",
+                    "paired_endpoint": "95a98024",
+                    "awaiting_terminal_confirmation": False,
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while True:
+            recovered = self.gateway.pairing()
+            if recovered.get("completed_endpoint"):
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertEqual([], recovered["new_records"])
+        self.assertEqual("95a98024", recovered["completed_endpoint"])
+        self.assertTrue(recovered["completed_existing_record"])
+        self.assertEqual("paired_identity_observed", recovered["stage"])
         stream.close()
         connection.close()
 

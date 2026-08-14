@@ -1333,7 +1333,11 @@ class Gateway:
         snapshot = self._pairing.status(now=now)
         profile: dict[str, Any] | None = None
         candidates = snapshot.get("candidates", [])
-        if snapshot.get("new_records"):
+        completed_endpoint: str | None = None
+        completed_existing_record = False
+        new_records = snapshot.get("new_records", [])
+        if new_records:
+            completed_endpoint = str(new_records[0]["paired_endpoint"])
             stage = "paired_identity_observed"
         elif candidates:
             stage = "factory_detected_transmitter_required"
@@ -1362,10 +1366,41 @@ class Gateway:
             )
             if node_state == "failed":
                 stage = "transmitter_failed"
-            elif node_state == "completed" and not snapshot.get("new_records"):
-                stage = "terminal_confirmation_processing"
+            elif node_state == "completed":
+                reported_endpoint = selected_node.get(
+                    "pairing_paired_endpoint"
+                )
+                if isinstance(reported_endpoint, str):
+                    reported_endpoint = reported_endpoint.strip().lower()
+                    try:
+                        reported_factory = factory_endpoint(reported_endpoint)
+                    except ValueError:
+                        reported_endpoint = ""
+                    if reported_endpoint and any(
+                        item.factory_endpoint == reported_factory
+                        and item.paired_endpoint == reported_endpoint
+                        for item in self._pairing.records()
+                    ):
+                        completed_endpoint = reported_endpoint
+                        completed_existing_record = not any(
+                            item.get("paired_endpoint") == reported_endpoint
+                            for item in new_records
+                        )
+                stage = (
+                    "paired_identity_observed"
+                    if completed_endpoint is not None
+                    else "terminal_confirmation_processing"
+                )
+            elif selected_node.get(
+                "pairing_awaiting_terminal_confirmation"
+            ) is True:
+                stage = "waiting_for_terminal_confirmation"
             elif node_state == "armed":
-                stage = "transmitter_armed"
+                stage = (
+                    "pairing_exchange_in_progress"
+                    if int(selected_node.get("pairing_completed_steps") or 0) > 0
+                    else "transmitter_armed"
+                )
         return {
             "available": True,
             "supported_profiles": [automatic_hcs026_profile_metadata()],
@@ -1376,6 +1411,8 @@ class Gateway:
             "command_id": self._active_pairing_command_id,
             "transmit_performed": self._active_pairing_node_id is not None,
             "stage": stage,
+            "completed_endpoint": completed_endpoint,
+            "completed_existing_record": completed_existing_record,
             "dry_run_profile": profile,
             **snapshot,
         }
