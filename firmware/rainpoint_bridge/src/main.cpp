@@ -813,6 +813,7 @@ void handleNetworkCommand() {
     rainpoint::PairingLocalDateTime parsedClock{};
     const rainpoint::PairingProfile* requestedProfile = nullptr;
     bool requestedAutomaticDiscovery = false;
+    bool requestedAutomaticRejoin = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
     bool requestedKnownFactory = false;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
@@ -831,6 +832,7 @@ void handleNetworkCommand() {
         parseHexFactoryEndpoint(factory, requestedFactoryEndpoint)) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedKnownFactory = true;
+        jsonBoolField(command, "known_rejoin", requestedAutomaticRejoin);
     } else if (profile == rainpoint::kSensorAHcs026CandidateProfile.id &&
         factory == sensorAFactory) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
@@ -888,11 +890,17 @@ void handleNetworkCommand() {
             activePairingProfile
         )
         : requestedKnownFactory
-            ? rainpoint::buildAutomaticHcs026Profile(
-                requestedFactoryEndpoint,
-                pairingAssignedChannel,
-                activePairingProfile
-            )
+            ? (requestedAutomaticRejoin
+                ? rainpoint::buildAutomaticHcs026RejoinProfile(
+                    requestedFactoryEndpoint,
+                    pairingAssignedChannel,
+                    activePairingProfile
+                )
+                : rainpoint::buildAutomaticHcs026Profile(
+                    requestedFactoryEndpoint,
+                    pairingAssignedChannel,
+                    activePairingProfile
+                ))
         : rainpoint::assignPairingChannel(
             activePairingProfile, pairingAssignedChannel
         );

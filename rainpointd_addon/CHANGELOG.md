@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.27.0
+
+- Mark gateway-initiated recovery of a known HCS026 identity as a one-reply
+  rejoin transaction, distinct from first-time four-step enrollment.
+
+## Firmware 0.10.0-test.8
+
+- Queue up to eight authenticated gateway commands so all persisted sensor ACK
+  assignments are restored after a reconnect or OTA reboot.
+- Complete a known-sensor automatic rejoin after its first valid reply, then
+  immediately return the radio to routine receive and acknowledgement duty.
+
 ## Firmware 0.10.0-test.7
 
 - Accept the validated HCS026 factory-announcement retry counters 1, 2, and 4

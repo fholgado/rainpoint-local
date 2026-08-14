@@ -282,6 +282,23 @@ int main() {
         automatic.steps[3].trigger ==
         rainpoint::PairingTrigger::PairedMessage2Short
     );
+    rainpoint::PairingProfile automaticRejoin{};
+    assert(rainpoint::buildAutomaticHcs026RejoinProfile(
+        detectedFactory, 4, automaticRejoin
+    ));
+    assert(automaticRejoin.stepCount == 1);
+    assert(automaticRejoin.completeAfterFinalReply);
+    rainpoint::PairingSession automaticRejoinSession(automaticRejoin);
+    automaticRejoinSession.arm(10'000);
+    const auto* automaticRejoinReply = automaticRejoinSession.claimReply(
+        unknownFactoryTrigger, 10'100
+    );
+    assert(automaticRejoinReply == &automaticRejoin.steps[0]);
+    assert(automaticRejoinSession.finishReply(true, 10'200));
+    assert(
+        automaticRejoinSession.state() ==
+        rainpoint::PairingSessionState::Completed
+    );
     rainpoint::PairingProfile automaticSensorB{};
     assert(rainpoint::buildAutomaticHcs026Profile(
         profile.factoryEndpoint, 4, automaticSensorB

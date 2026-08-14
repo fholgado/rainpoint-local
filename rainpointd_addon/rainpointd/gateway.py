@@ -1058,6 +1058,7 @@ class Gateway:
             "command_id": command_id,
             "profile": AUTOMATIC_HCS026_PROFILE_ID,
             "factory_endpoint": factory.strip().lower(),
+            "known_rejoin": True,
             "duration_seconds": 60,
             "local_clock": local_clock,
             "frequency_offset_hz": int(assignment["frequency_offset_hz"]),

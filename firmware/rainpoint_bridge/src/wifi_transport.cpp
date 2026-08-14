@@ -277,11 +277,15 @@ void WifiTransport::handleGatewayLine(const String& line) {
          || type == "firmware_update_start"
 #endif
         )) {
-        if (!pendingCommand_.isEmpty()) {
+        if (pendingCommandCount_ == pendingCommands_.size()) {
             reportNetworkState("protocol_error", "command_queue_full");
             return;
         }
-        pendingCommand_ = line;
+        const std::size_t tail =
+            (pendingCommandHead_ + pendingCommandCount_) %
+            pendingCommands_.size();
+        pendingCommands_[tail] = line;
+        ++pendingCommandCount_;
     }
 }
 
@@ -335,11 +339,14 @@ void WifiTransport::authenticate(const String& nonce) {
 }
 
 bool WifiTransport::takeCommand(String& command) {
-    if (pendingCommand_.isEmpty()) {
+    if (pendingCommandCount_ == 0) {
         return false;
     }
-    command = pendingCommand_;
-    pendingCommand_.clear();
+    command = pendingCommands_[pendingCommandHead_];
+    pendingCommands_[pendingCommandHead_].clear();
+    pendingCommandHead_ =
+        (pendingCommandHead_ + 1) % pendingCommands_.size();
+    --pendingCommandCount_;
     return true;
 }
 
@@ -434,7 +441,11 @@ void WifiTransport::reportNetworkState(const char* state, const char* detail) {
 void WifiTransport::clearConnection() {
     authenticated_ = false;
     inputLine_.clear();
-    pendingCommand_.clear();
+    for (auto& command : pendingCommands_) {
+        command.clear();
+    }
+    pendingCommandHead_ = 0;
+    pendingCommandCount_ = 0;
     challengeNonce_.clear();
     client_.stop();
 }

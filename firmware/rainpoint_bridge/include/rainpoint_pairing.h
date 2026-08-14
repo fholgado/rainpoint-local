@@ -472,6 +472,25 @@ inline bool buildAutomaticHcs026Profile(
     return assignPairingChannel(profile, channel);
 }
 
+inline bool buildAutomaticHcs026RejoinProfile(
+    const std::array<std::uint8_t, 4>& factoryEndpoint,
+    std::uint8_t channel,
+    PairingProfile& profile
+) {
+    if (!buildAutomaticHcs026Profile(factoryEndpoint, channel, profile)) {
+        return false;
+    }
+    // A known sensor already has its paired identity and only needs the first
+    // factory-announcement reply to resume routine telemetry. Completing here
+    // immediately restores receive/ACK service instead of waiting for the
+    // four-step first-enrollment exchange to time out.
+    profile.stepCount = 1;
+    profile.completeAfterFinalReply = true;
+    profile.evidence =
+        "physically validated known-HCS026 one-reply automatic rejoin";
+    return validPairingProfile(profile);
+}
+
 inline bool endpointEquals(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::size_t offset,

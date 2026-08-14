@@ -115,6 +115,7 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual("1bce0024", command["factory_endpoint"])
             self.assertEqual(60, command["duration_seconds"])
             self.assertTrue(event["state"]["automatic_rejoin"]["requested"])
+            self.assertTrue(commands[-1][1]["known_rejoin"])
 
             gateway.observe_rf_frame(
                 frame="79f4882f29" + "00" * 33,

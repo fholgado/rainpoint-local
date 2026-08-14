@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
+#include <array>
 #include <cstdint>
 
 #include "commissioning_portal.h"
@@ -38,6 +39,7 @@ private:
     static constexpr std::uint16_t kProtocolVersion = 2;
     static constexpr std::uint32_t kReconnectIntervalMs = 5'000;
     static constexpr std::size_t kMaximumLineBytes = 1'024;
+    static constexpr std::size_t kCommandQueueDepth = 8;
 
     void loadConfiguration();
     void ensureSetupToken();
@@ -57,7 +59,9 @@ private:
     String gatewayHost_;
     String token_;
     String inputLine_;
-    String pendingCommand_;
+    std::array<String, kCommandQueueDepth> pendingCommands_{};
+    std::size_t pendingCommandHead_ = 0;
+    std::size_t pendingCommandCount_ = 0;
     String challengeNonce_;
     std::uint16_t gatewayPort_ = 8790;
     std::uint32_t lastReconnectAttempt_ = 0;
