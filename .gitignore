@@ -9,7 +9,8 @@ __pycache__/
 .ruff_cache/
 .venv/
 .pio/
-captures/rf/
+/captures/
+/PROJECT_DEVELOPMENT_TIMELINE.local.md
 *.kicad_prl
 *.lck
 *-backups/
