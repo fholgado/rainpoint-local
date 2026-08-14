@@ -51,29 +51,20 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
-      - name: Build production and research firmware targets
+      - name: Build the standard radio-node firmware
         run: >-
           pio run --project-dir firmware/rainpoint_bridge
-          --environment esp32dev_single
-          --environment esp32dev_dual
-          --environment esp32dev_single_bench
-          --environment esp32dev_sensor_a_candidate
-          --environment esp32dev_pairing_generalization
-          --environment esp32dev_routine_ack_candidate
-          --environment esp32dev_unified_candidate
-      - name: Verify production firmware excludes local TX bench controls
+          --environment rainpoint_bridge
+      - name: Verify the standard firmware command boundary
         run: >-
           python tools/check_firmware_boundaries.py
-          firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin
-          firmware/rainpoint_bridge/.pio/build/esp32dev_single_bench/firmware.bin
-          firmware/rainpoint_bridge/.pio/build/esp32dev_unified_candidate/firmware.bin
-          firmware/rainpoint_bridge/.pio/build/esp32dev_unified_candidate/firmware.bin
+          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
       - name: Build and verify production OTA artifact manifest
         run: |
           python tools/firmware_manifest.py \
-            firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json \
-            --version 0.6.0 --environment esp32dev_single
+            --version 0.11.0 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
-            firmware/rainpoint_bridge/.pio/build/esp32dev_single/firmware.bin \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify

@@ -1,273 +1,130 @@
-# RainPoint ESP32/CC1101 bridge firmware
+# RainPoint radio-node firmware
 
-This is the receive firmware and bounded sensor-pairing node for the
-ELEGOO ESP-WROOM-32 USB-C development board and one **433 MHz** CC1101
-transceiver. A second module is supported only as an optional dual-channel
-receive diagnostic. The firmware contains no valve commands. Its only TX path
-is bounded HCS026 sensor pairing recovered from controlled stock-gateway
-captures.
+This directory contains the single supported ESP32/CC1101 firmware for
+RainPoint Local. One node receives RainPoint RF telemetry, performs bounded
+HCS026 soil-sensor pairing and recovery, sends acknowledgements only for
+gateway-assigned sensors, and installs integrity-checked OTA updates.
 
-The `esp32dev_sensor_a_candidate` environment is an endpoint-bounded build for
-the physically validated Sensor A identity `1bce0024`. It sends the successful
-four-reply mixed-state sequence on its measured channels and requires terminal
-message `03`. It remains separate from `esp32dev_single` while the profiles are
-generalized beyond the two test identities.
+It does **not** implement valve control or arbitrary RF transmission. Historical
+pairing captures and experiments live under `research/`; they are protocol
+evidence, not alternative firmware builds.
 
-The `esp32dev_pairing_generalization` environment is the validated two-identity
-test build. It can retain either captured identity-specific profile and also
-contains an automatic model-level candidate. Version
-`0.7.0-test.1` validated Sensor B on selector 4 and Sensor A on selector 5.
-Version `0.7.0-test.2` deliberately assigns selector 4 to both identities for
-the controlled same-selector coexistence test. Both sensors subsequently
-reported as distinct identities on selector 4, proving that the selector can be
-shared and must not be allocated as a unique device slot. Keep this environment
-separate from the normal production target while its automatic identity
-adoption is physically validated.
+## Supported hardware and wiring
 
-Version `0.7.0-test.3` adds `hcs026_auto_v1`. Once armed, the node accepts only
-the strict factory-announcement structure shared by both captured HCS026
-sensors, adopts the first matching four-byte identity, derives its high-bit
-paired identity, and locks the session to it. Its common four-reply template is
-identical across the two stock first-enrollment captures after substituting the
-identity, clock, shared selector, and trailer. The builder and command contract
-are regression-tested offline; do not treat automatic adoption as physically
-validated until both test sensors complete the new path.
+The tested board is an ESP-WROOM-32 development board with USB-C and one 433 MHz
+CC1101 module. Use 3.3 V logic and power; never connect CC1101 VCC to 5 V.
 
-## Wiring
+| CC1101 pin | Label | ESP32 | Purpose |
+|---:|---|---:|---|
+| 1 | GND | GND | Power-reference ground |
+| 2 | VCC | 3V3 | 1.8–3.6 V module power |
+| 3 | GDO0 | GPIO26 | Asynchronous pairing/ACK TX data |
+| 4 | CSN | GPIO27 | SPI chip select |
+| 5 | SCK | GPIO18 | SPI clock |
+| 6 | MOSI | GPIO23 | SPI controller-to-radio data |
+| 7 | MISO/GDO1 | GPIO19 | SPI radio-to-controller data |
+| 8 | GDO2 | GPIO25 | Reserved |
 
-Use 3.3 V logic and power for the CC1101. Do not connect its VCC pin to 5 V.
+Use the module’s pin-1 marking and printed labels to orient its 2×4 connector.
+Keep wiring short, connect a 433 MHz antenna, and place a 100 nF ceramic bypass
+capacitor across CC1101 VCC/GND when practical.
 
-The production wiring uses only the primary radio. If the optional diagnostic
-radio is fitted, the modules share SPI clock and data but must have independent
-chip-select pins; never connect the two CSN pins together. The module pin
-numbers and labels below follow the pin table supplied with the tested 8-pin
-CC1101 module. Pin 7 may be labelled either `MISO` or `MISO/GDO1`; this firmware
-uses it as SPI MISO.
+## Behavior
 
-| Module pin | Module label | Primary ESP32 connection | Optional diagnostic ESP32 connection | Use |
-|---:|---|---:|---:|---|
-| 1 | GND | GND | GND | Power-reference ground |
-| 2 | VCC | 3V3 | 3V3 | 3.3 V power; never connect to 5 V |
-| 3 | GDO0 | GPIO26 | GPIO33 | Primary pairing TX data; diagnostic receive data |
-| 4 | CSN | GPIO27 | GPIO14 | Independent SPI chip select |
-| 5 | SCK | GPIO18 | GPIO18 | Shared SPI clock |
-| 6 | MOSI | GPIO23 | GPIO23 | Shared SPI controller-to-radio data |
-| 7 | MISO/GDO1 | GPIO19 | GPIO19 | Shared SPI radio-to-controller data; used as MISO |
-| 8 | GDO2 | GPIO25 | GPIO32 | Optional/reserved |
+- Receives the two observed RainPoint 2-FSK telemetry channels near 433.14 and
+  434.24 MHz and publishes normalized 38-byte frames with RSSI/LQI provenance.
+- Locks an ACK-owning node to the HCS026 telemetry channel; unassigned nodes
+  scan both channels to broaden passive coverage.
+- Supports the validated HCS026 automatic pairing profile without asking users
+  for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
+- Recovers a known dormant sensor from its strict factory announcement with one
+  bounded reply and preserves its existing HA identity.
+- Accepts at most eight persistent sensor ACK assignments from the authenticated
+  local gateway and restores all of them after reconnect or reboot.
+- Starts with RF transmission disarmed and fails closed on timeout, network
+  loss, unexpected pairing state, invalid command, or driver failure.
+- Reports radio, heap, reset, temperature, loop-latency, network, Wi-Fi, OTA,
+  pairing, and acknowledgement diagnostics every 30 seconds.
+- Uses a temporary setup access point, Home Assistant discovery, BOOT-button
+  physical confirmation, per-node credentials, and an Identify LED flow.
+- Downloads OTA images only from its configured gateway, verifies size and
+  SHA-256, requires gateway-plus-radio health confirmation, and rolls back
+  after three unconfirmed boots. Release signatures remain future hardening.
 
-Use the module's pin-1 marking and printed labels to orient its connector; do
-not infer the physical 2-by-4 header orientation from this numerical table.
-CC1101 carrier boards can use different connector orientations even when their
-signal names are identical.
+## Build, flash, and monitor
 
-Keep the module close to the ESP32, add a 100 nF ceramic capacitor directly
-across its VCC/GND pair, and connect the correct 433 MHz antenna before testing.
-The optional diagnostic module needs its own decoupling and antenna; combining
-two RF ports onto one antenna requires a proper RF combiner or switch.
-
-## Current behavior
-
-- Configures 2-FSK at approximately 20 ksymbols/s and +/-41.26 kHz deviation.
-- Uses a conservative 203.125 kHz receive filter.
-- Supports RainPoint channel 0 near 433.140 MHz and channel 11 near 434.240 MHz.
-- Reconstructs the stripped first two sync bytes into the normalized 38-byte
-  frame.
-- Reports USB serial JSON with a stable node ID, channel, CC1101 RSSI/LQI,
-  frame hex, sync validity,
-  frequency-offset estimate, and the ordinary CRC-CCITT trailer residual.
-- Reads back critical modem, sync, packet, and frequency registers at startup
-  and refuses to report the radio ready if configuration did not stick.
-- Counts received packets, RX FIFO overflows, and FIFO recoveries per radio.
-- Emits a `radio_health` record at boot and every 30 seconds so wiring,
-  configuration, tuning, and FIFO problems can be distinguished.
-- Rejects no research frames solely because their ordinary trailer is invalid.
-- Optionally mirrors the same records over an outbound Wi-Fi TCP connection to
-  `rainpointd`. The node authenticates with a nonce/HMAC proof and never sends
-  its enrollment token over the network.
-- Contains captured identity-specific HCS026 regression profiles plus a
-  model-level automatic candidate with a 320-symbol wake prefix and provisional
-  250 ms response deadline. Every path requires terminal message `03` before
-  declaring enrollment complete.
-- Uses the ESP32 RMT peripheral and CC1101 asynchronous serial mode to supply
-  the complete 20 ksymbol/s wake, sync, and frame on GDO0.
-- Starts disarmed after every boot. In the generalization build, only an
-  authenticated protocol-v2 `hcs026_auto_v1` command enables the time-limited
-  reply sequence; no factory endpoint is supplied by the gateway or user.
-- Transmits the validated sequence at the configured 10 dBm prototype setting and returns to the
-  receive configuration after every 31.2 ms reply.
-- Reports pairing state, command ID, completed steps, and armed state over
-  serial and the authenticated Wi-Fi connection. The only accepted network
-  RF commands start or cancel bounded HCS026 sensor pairing.
-- Firmware 0.6 adds a separate bounded `identify_start` command that blinks the
-  onboard GPIO2 status LED for 3 to 60 seconds. Identify never changes radio
-  configuration or enables the CC1101 transmitter.
-
-`recoveries` includes the intentional FIFO reset after a successfully consumed
-fixed-length packet as well as overflow recovery; compare it with `packets` and
-`overflows` rather than treating it as an error count by itself. The frequency
-offset uses the CC1101 `FREQEST` status register and a 26 MHz crystal. These
-diagnostics follow the register definitions in the
-[TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
-
-The production single-radio build alternates channels every 500 ms. The
-optional dual-radio diagnostic build fixes the primary radio to channel 0 and
-the second radio to channel 11 so both can be evaluated continuously against
-the existing RTL-SDR.
-
-Local RF probe, tuning, channel-lock, and pairing-arm commands are compiled
-only into `esp32dev_single_bench`. They are absent from production binaries; CI
-inspects both images to enforce that boundary. The bench procedure lives in
-[`research/PAIRING_BENCH_TEST.md`](../../research/PAIRING_BENCH_TEST.md).
-
-The research-bench-only commands are:
-
-```text
-pairing_status
-pairing_plan_b
-pairing_probe_b 1 15a98024
-pairing_probe_b 2 15a98024
-pairing_offset_hz -2000
-pairing_power_dbm 10
-pairing_invert off
-pairing_clock_local 20260811145556
-pairing_arm_b 15a98024
-pairing_cancel
-```
-
-`pairing_probe_b` emits one captured reply so the independent RTL-SDR can
-measure it before a sensor is involved. The active repeat-enrollment replies
-use 433.4715 MHz. The offset is limited to +/-100 kHz. Bench power can be set
-to 0, 5, 7, or 10 dBm. Polarity, offset, and power cannot be changed while
-armed. `pairing_clock_local` supplies the fresh target gateway-local time
-packed into the initial reply. The successful bench test used the observed
-RainPoint gateway clock, four minutes ahead of the Mac; this correction is not
-assumed universal beyond the currently fixed Sensor B profile. The supplied
-time advances internally after the command, so
-the reply does not become stale while the operator prepares the sensor.
-`pairing_arm_b` locks the primary receiver to the lower sensor
-channel, expires after two minutes, and responds only to the three validated
-Sensor B trigger layouts in order. After the replies it remains armed through
-the short message `02` until terminal message `03` confirms completion. Duplicate earlier triggers
-are ignored; timeout, an unexpected later trigger, TX failure, or loss of an
-active gateway connection fails closed. `pairing_cancel` disarms immediately.
-
-The driver uses explicit IDLE/RX/TX transitions and restores the validated
-packet receive profile after each asynchronous pairing reply. Valve command
-traffic uses a different approximately 60 ms alternating wake and remains
-unimplemented. No pairing TX result should be considered valid until the
-independent SDR confirms carrier, deviation, polarity, symbol timing, and the
-complete decoded frame from physical hardware.
-
-## Build and flash
-
-Install PlatformIO, connect the board by USB-C, then run:
+Install PlatformIO and connect the ESP32 over USB-C:
 
 ```sh
-cd firmware/rainpoint_bridge
-pio run
-pio run --environment esp32dev_single --target upload
-pio device monitor
+pio run --project-dir firmware/rainpoint_bridge
+pio run --project-dir firmware/rainpoint_bridge --target upload
+pio device monitor --baud 115200
 ```
 
-The default and production environment is `esp32dev_single`. Use
-`esp32dev_dual` only when the optional second receive module is connected:
+`rainpoint_bridge` is the only PlatformIO environment. CI builds the same image
+and checks that obsolete local RF bench commands are absent while pairing,
+ACK, and OTA capabilities are present.
+
+The generic `esp32dev` board definition matches the tested board. If automatic
+upload reset fails, hold **BOOT**, begin upload, and release it when PlatformIO
+starts connecting.
+
+## First-boot commissioning
+
+1. Power a new node. It creates **RainPoint Local Setup xxxxxx**.
+2. Join that network and enter only the home Wi-Fi name and password.
+3. In Home Assistant, accept the discovered RainPoint radio node and choose its
+   friendly name and area.
+4. Use **Identify** if needed, then press the ESP32 BOOT button when prompted.
+5. Home Assistant supplies the gateway address and one-time node credential;
+   the node restarts and mutually authenticates.
+
+An adopted node stops advertising the commissioning service. Holding BOOT for
+ten seconds clears Wi-Fi/adoption state and returns it to first-boot setup.
+
+### USB recovery
+
+At 115200 baud, `show_node` displays non-secret node configuration. On an
+unconfigured board it also exposes the generated setup token for recovery.
+`clear_wifi` clears commissioning state and rotates that token. The legacy
+`configure_wifi` tab-separated command remains a recovery path, not normal UX.
+
+## Sensor pairing and recovery
+
+Pair sensors from **Settings → Devices & services → RainPoint Local →
+Configure → Pair sensor**. Select the radio node closest to the sensor. The
+stock RainPoint gateway must be powered off during the short pairing exchange
+so it cannot race the selected local transmitter.
+
+Do not delete an existing HA device before reassociation. The gateway derives
+the paired endpoint from the factory identity and preserves the existing device
+and entity history. A later long press can recover a known dormant sensor
+without opening a pairing window or removing its batteries.
+
+## OTA releases
+
+After the first OTA-capable image is installed over USB, compatible staged
+releases appear on the radio node’s Home Assistant Update entity. Build and
+verify the standard artifact manifest with:
 
 ```sh
-pio run --environment esp32dev_dual --target upload
+python tools/firmware_manifest.py \
+  firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
+  /tmp/rainpoint-radio-node-manifest.json \
+  --version 0.11.0 --environment rainpoint_bridge
+python tools/firmware_manifest.py \
+  firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
+  /tmp/rainpoint-radio-node-manifest.json --verify
 ```
 
-Build `esp32dev_single_bench` only for controlled RF research where local
-serial TX controls are explicitly required:
+The current OTA transport is intended for a trusted LAN. Node/gateway HMAC
+authentication and artifact hashing are implemented; encrypted sessions,
+credential rotation, and asymmetric release signatures remain publication
+hardening requirements.
 
-```sh
-pio run --environment esp32dev_single_bench --target upload
-```
+## Developer verification
 
-GitHub CI explicitly compiles all five configurations from a clean environment
-and verifies that production images contain none of the local TX bench command
-strings.
-
-The generic `esp32dev` board profile matches the ESP-WROOM-32 development
-board. If upload auto-reset does not work, hold **BOOT**, start upload, and
-release it when PlatformIO begins connecting.
-
-## First-boot Wi-Fi and Home Assistant adoption
-
-Firmware 0.6 removes IDs and tokens from the normal setup path. A board without
-saved Wi-Fi starts an open, temporary access point named **RainPoint Local
-Setup xxxxxx** and redirects clients to a small captive portal. The user enters
-only the home Wi-Fi name and password. If those credentials cannot connect for
-two minutes, the setup access point returns automatically.
-
-After joining the LAN, an unadopted node advertises
-`_rainpoint-node._tcp.local.` and exposes only a temporary commissioning API.
-Home Assistant discovers it, asks for a friendly name and area, blinks GPIO2,
-and waits for a press of the ESP32 BOOT button on GPIO0. Physical confirmation
-is valid for 60 seconds. HA then delivers the custom local gateway address and
-its one-time gateway-issued node credential; the node restarts and the gateway
-persists that credential only after mutual authentication succeeds.
-
-An adopted node stops advertising and does not run the commissioning HTTP
-service. Holding BOOT for ten seconds while firmware is running clears Wi-Fi
-and adoption state and returns the node to its setup access point. The manual
-USB path remains an additional recovery mechanism.
-
-### Manual USB recovery path
-
-Wi-Fi is optional. An unconfigured node continues to work over USB exactly as
-before. Each board derives a stable ID such as `rp-001122334455` from its ESP32
-hardware identifier. Open the serial monitor at 115200 baud and enter:
-
-```text
-show_node
-```
-
-On a factory-unconfigured board, `show_node` returns a randomly generated
-32-byte setup token stored in ESP32 NVS. This recovery route deliberately does
-not appear in the normal Home Assistant flow. An operator may pre-register the
-node ID and token through the add-on's legacy advanced `node_tokens` option,
-then use the same token to provision the board with one tab-separated line:
-
-```text
-configure_wifi<TAB>SSID<TAB>PASSWORD<TAB>HA_HOST<TAB>8790<TAB>64_HEX_TOKEN
-```
-
-Use literal Tab characters and press Enter. Restart the ESP32 after it reports
-`configuration_saved`. The board stores the values in ESP32 NVS, connects as a
-Wi-Fi station, and makes an outbound connection to the configured Home
-Assistant host. Configured boards do not print the credential. `clear_wifi`
-erases the saved network configuration, rotates the setup token, and returns
-the node to commissioning state.
-
-This is a trusted-LAN prototype transport. Separate nonce/HMAC proofs
-authenticate both the node and `rainpointd` and keep the token itself off the
-network, but TCP telemetry is not encrypted or individually signed. Before a
-published setup or any valve control, the transport will need further review.
-Production protocol v2 accepts only the bounded `pairing_start`,
-`pairing_cancel`, and non-RF `identify_start` messages after authentication.
-The isolated OTA target additionally accepts `firmware_update_start`. No target
-contains a generic RF or valve command.
-
-Firmware 0.5 and later emit a `node_health` heartbeat every 30 seconds with uptime,
-heap metrics, internal temperature, CPU frequency, maximum loop gap, reset
-reason, local IP, Wi-Fi RSSI, network byte counts, reconnects, gateway
-connection attempts, and successful authentications. Production firmware must
-still be flashed over USB. The repository produces a hash-bound production
-artifact manifest and defines a three-boot rollback contract. A separate OTA
-candidate now implements authenticated download, flash-partition switching,
-persistent boot-attempt tracking, gateway-plus-radio health confirmation, and
-rollback selection for physical testing. Asymmetric release signatures remain
-required before production enablement.
-
-Build and verify a release manifest after PlatformIO produces `firmware.bin`:
-
-```sh
-python tools/firmware_manifest.py firmware.bin manifest.json \
-  --version 0.6.0 --environment esp32dev_single
-python tools/firmware_manifest.py firmware.bin manifest.json --verify
-```
-
-The hardware-independent protocol test can run without PlatformIO:
+The hardware-independent protocol regression runs without PlatformIO:
 
 ```sh
 c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
@@ -276,90 +133,15 @@ c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
 /tmp/rainpoint-protocol-test
 ```
 
-### Isolated routine-acknowledgement candidate
+Captured frames remain in `research/fixtures`. Keep uncertain protocol fields
+explicitly provisional and add a regression fixture before changing any
+pairing, acknowledgement, channel, or trailer behavior.
 
-`esp32dev_routine_ack_candidate` is the isolated research target for
-post-enrollment sensor acknowledgements. The deployment candidate now uses the
-unified target described below. Both reproduce the reversed endpoint
-layout, transformed message bytes, CRC residual, selector frequency, and
-177--188 ms response envelope measured in stock-gateway captures.
+## Remaining hardware gates
 
-The target can respond only to exact HCS026 routine reports from explicitly
-authorized endpoints. It holds at most eight authorizations in RAM. In the
-unified target, the custom local gateway owns those assignments and restores
-them after every reconnect or OTA reboot.
-Normal `esp32dev_single` and `esp32dev_pairing_generalization` builds cannot
-transmit these acknowledgements.
-
-Build it for a controlled test without uploading it:
-
-```sh
-pio run --project-dir firmware/rainpoint_bridge \
-  --environment esp32dev_routine_ack_candidate
-```
-
-### Unified OTA candidate
-
-`esp32dev_unified_candidate` combines generalized pairing, bounded routine
-sensor acknowledgements, and OTA. It accepts `firmware_update_start` only over
-an authenticated
-protocol-v2 gateway session, and its URL must point to the node's configured
-gateway host. The node rejects unexpected sizes, streams the image into the
-inactive OTA partition, calculates SHA-256 while writing, and changes the boot
-partition only after the complete artifact matches.
-
-The candidate records an unconfirmed boot in ESP32 preferences. It confirms
-the image only after 60 seconds with both an authenticated gateway session and
-a healthy CC1101. Three unconfirmed boots select the previous OTA partition.
-This remains a hardware-trial boundary: the mutually authenticated gateway and
-manifest hash protect this test path, but asymmetric release signatures are not
-implemented yet.
-
-The same authenticated boundary accepts only bounded ACK configure/revoke
-commands. The gateway persists a unique `sensor endpoint -> radio node` owner,
-restores assignments after reconnect, and revokes them when sensors are removed
-or reassigned. Merely installing the universal image does not authorize RF
-acknowledgements.
-
-Build it without uploading it:
-
-```sh
-pio run --project-dir firmware/rainpoint_bridge \
-  --environment esp32dev_unified_candidate
-```
-
-After a node has received an OTA-capable image once over USB, future compatible
-releases appear on its device page as a native Home Assistant firmware Update
-entity. The custom local gateway serves only locally staged catalog entries and
-checks the artifact size and SHA-256 before installation. The raw URL/hash API
-remains a diagnostic trial path; normal UI updates use a catalog release ID.
-On Home Assistant OS, `firmware_catalog_path` may point at a catalog beneath
-`/share`; artifact filenames are resolved beside that catalog.
-
-The gateway exposes the trial only through its authenticated management API:
-
-```text
-POST /api/v1/nodes/{node_id}/firmware-update
-```
-
-The request carries the gateway-hosted artifact URL, version, byte length, and
-SHA-256 digest. It is rejected unless the selected connected node explicitly
-advertises `firmware_update_trial` and is not armed for RF transmission. Update
-state and boot-attempt diagnostics are returned in the ordinary node record.
-
-## Next firmware increments
-
-1. Flash `0.8.0-test.1` over USB and physically validate the isolated routine
-   acknowledgement candidate and 72-hour report behavior before considering
-   persistent authorization.
-2. Candidate download, partition switching, reboot, gateway reauthentication,
-   radio-health confirmation, and permanent confirmation passed on physical
-   hardware. Validate interrupted download, power loss, and forced three-boot
-   rollback next; then add asymmetric manifest signatures before enabling OTA
-   in production firmware.
-3. Validate the temporary Wi-Fi setup portal, adoptable LAN advertisement,
-   physical BOOT-button confirmation, and one-click HA adoption contract on a
-   second board.
-4. Generalize pairing only from additional controlled device captures.
-5. Implement and validate the distinct valve wake and close command before any
-   bounded open test.
+- Accumulate at least 72 hours of unattended reporting with the stock gateway
+  unavailable to the locally paired sensors.
+- Test ACK-owner reassignment and interrupted/power-loss OTA rollback.
+- Add signed releases and a reviewed secure session transport.
+- Capture, reconstruct, and validate valve pairing and fail-safe close before
+  enabling any physical valve control.

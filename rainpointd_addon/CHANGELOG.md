@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.0 / Firmware 0.11.0
+
+- Consolidate the supported ESP32/CC1101 node into one `rainpoint_bridge`
+  firmware build containing receive, generalized HCS026 pairing, persistent
+  single-owner routine acknowledgements, diagnostics, and managed OTA.
+- Remove obsolete bench and candidate firmware choices from CI and operator
+  documentation while retaining executable protocol and safety regressions.
+- Document physically validated automatic enrollment and one-reply recovery
+  across independent test and installed-sensor identities.
+
 ## 0.27.0
 
 - Mark gateway-initiated recovery of a known HCS026 identity as a one-reply

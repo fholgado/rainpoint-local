@@ -6,6 +6,33 @@ Every test must retain raw RF evidence, normalized frames, radio-node logs,
 event markers, device state, firmware versions, antenna placement, and the
 result visible on the device or in the stock app.
 
+## Current qualification status (2026-08-14)
+
+The generalized first-enrollment path has now succeeded on both disposable test
+sensors and installed Left Bed, Right Bed, and front-yard identities. Known
+sensor recovery also succeeds through a bounded one-reply transaction while
+preserving the existing Home Assistant device identity. Persistent ACK owners
+survive gateway reconnects and radio-node OTA/restarts. The remaining release
+work is long-duration cadence, deliberate owner reassignment, stock-gateway
+coexistence, revision coverage, and interruption/reassociation edge cases.
+
+### Stock/custom gateway coexistence observation (2026-08-14)
+
+After the stock RainPoint gateway was powered again, Test Sensor A's last local
+report was 13:06:45 and Test Sensor B's was 13:07:34. At 13:08:06, Right Bed
+emitted a known factory/rejoin announcement and immediately resumed paired
+traffic, providing the closest RF marker for stock-gateway recovery. Both test
+sensors had reported repeatedly immediately beforehand; neither produced a
+later frame despite a healthy custom ACK owner retaining all four assignments.
+
+This is strong timing correlation, not yet proof of causation. The leading
+hypothesis is competing replies from two gateways presenting the same logical
+RainPoint gateway identity. Qualify it with an A/B test: stock gateway off,
+manual report from both local-only sensors, then stock gateway on and another
+manual report while preserving short-reply IQ evidence and per-node TX counts.
+Do not claim safe simultaneous gateway operation until both sensors remain
+stable through that test.
+
 ## HCS026 sensor: established evidence
 
 The following tests do not need to be repeated merely to demonstrate them
@@ -90,14 +117,14 @@ unattended observation of delivery cadence and collisions.
 advertises up to 39 paired timers/devices, invalidating the earlier eight-device
 inference.
 
-Firmware `0.7.0-test.3` and gateway app `0.18.2` contain the
+Historical firmware `0.7.0-test.3` and gateway app `0.18.2` introduced the
 `hcs026_auto_v1` workflow. Home Assistant supplies neither a factory identity
-nor an identity-specific transcript. The selected node adopts the first strict
+nor an identity-specific transcript. The current standard firmware retains
+this behavior. The selected node adopts the first strict
 HCS026 factory announcement, derives its paired identity, and generates the
-common four-reply first-enrollment branch on shared selector 4. Sensor A passed
-this automatic path end to end on August 12, including HA naming and entity
-creation. Repeat it with Sensor B before S2 and retain the same RF evidence
-required by S1.
+common four-reply first-enrollment branch on shared selector 4. The automatic
+path has since passed across both test sensors and installed sensors, including
+HA naming, identity preservation, and entity creation.
 
 ```bash
 python3 tools/analyze_pairing_profiles.py
@@ -130,7 +157,7 @@ Pass criteria:
 - any identity-specific bytes are represented as profile parameters, not
   installation conditionals.
 
-### S2 — persistence and rejoin behavior (release blocker)
+### S2 — persistence and rejoin behavior (core path passed; edge cases remain)
 
 Open assumption to test: after losing its gateway acknowledgement and becoming
 dormant, an HCS026 may retry its factory announcement after an undocumented
@@ -180,9 +207,11 @@ frames 177--188 ms after established sensor reports; A and B never received
 them. Treat routine acknowledgement support as required unless the controlled
 trial below disproves that interpretation.
 
-For firmware `0.8.0-test.1`, repeat S3 as follows:
+The original `0.8.0-test.1` procedure below is retained as historical evidence;
+the standard firmware now persists and restores exactly one ACK owner per
+sensor across reconnect and OTA:
 
-1. Flash only the selected test node with the routine-ack candidate target.
+1. Historically, flash only the selected test node with the routine-ACK build.
 2. Keep the stock RainPoint gateway off and re-enroll one test sensor through
    that node. Confirm `authorized_until_reboot` for the paired endpoint.
 3. Confirm the first routine report produces a byte-for-byte expected reply,
@@ -191,7 +220,7 @@ For firmware `0.8.0-test.1`, repeat S3 as follows:
 4. Leave the node powered for 72 hours and verify periodic reports do not
    decay. Do not reboot it; authorization is intentionally boot-scoped.
 5. Reboot the node and verify acknowledgements stop until an explicit rejoin
-   completes. This is the fail-safe behavior for the candidate build.
+   completes. This was the fail-safe behavior of the historical build.
 6. Repeat with the second sensor before designing persistent authorization,
    reassignment, or forget synchronization.
 

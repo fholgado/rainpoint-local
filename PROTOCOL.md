@@ -188,7 +188,7 @@ Current [HWG023-family product literature](https://manuals.plus/asin/B0DS2FDP62.
 advertises support for up to 39 timers or irrigation devices, so the earlier
 eight-device inference from selectors 4–11 was incorrect.
 
-### Automatic HCS026 identity adoption candidate
+### Automatic HCS026 identity adoption
 
 The two stock first-enrollment transcripts have the same four reply payloads
 after normalizing only the paired endpoint in bytes 5–8, the clock in bytes
@@ -199,7 +199,7 @@ factory announcements also share this strict body signature:
 message 01 00 83 82 7f a4 1e 80; endpoint association bit clear; suffix 24
 ```
 
-Firmware `0.7.0-test.3` therefore adds the experimental model-level profile
+The standard radio-node firmware implements the model-level profile
 `hcs026_auto_v1`. The gateway supplies no RF identity. During an explicitly
 armed window, the selected node accepts the first trailer-valid announcement
 matching the signature above, derives the paired endpoint by setting the high
@@ -208,9 +208,14 @@ assigns shared selector 4, rewrites the trailer, and locks the session to that
 identity. Unrelated frames cannot select a target, and terminal message `03`
 remains mandatory.
 
-This is a byte-supported generalization, not yet a physical result. Both test
-sensors must complete this automatic path before it replaces the captured
-identity profiles outside the experimental firmware target.
+The common path has now completed physical pairing across independent test and
+installed HCS026 identities. Known sensors can also repeat their strict factory
+announcement after becoming dormant. The gateway recognizes the retained
+factory-to-paired mapping, selects the existing ACK owner, and sends one bounded
+rejoin reply; this restored ordinary telemetry on both test identities without
+deleting their HA devices or removing batteries. Factory counters 1, 2, and 4
+are the validated retry forms. Unknown identities still require an explicitly
+opened pairing window.
 
 ### Related rtl_433 work
 
@@ -467,7 +472,7 @@ Confirmed examples:
 | `95a98024` | `... c4 05 00 ...` | 10% |
 | `95a98024` | `... c4 05 80 ...` | 11% |
 
-### Routine gateway acknowledgement candidate
+### Routine gateway acknowledgement
 
 Direct IQ captures contain short gateway-originated frames after ordinary
 lower-channel sensor reports. They are distinct from the sensor report but use
@@ -494,13 +499,20 @@ sensor's enrollment selector 8 nominal center of 433.9115 MHz plus oscillator
 error. The first local prototype therefore replies on the selector negotiated
 during enrollment rather than the telemetry channel.
 
-Test Sensors A and B, which were enrolled only to the custom local radio node,
-produced no corresponding reversed frames and eventually stopped routine
-reporting. This makes an acknowledgement/liveness role the leading
-interpretation. Firmware `0.8.0-test.1` implements the transformation only in
-an explicit candidate build and only for endpoints terminal-confirmed by that
-node since its latest boot. A reboot clears authorization; this is deliberate
-until a physical multi-day trial proves the behavior.
+Test Sensors A and B, which were initially enrolled only to the custom local
+radio node, produced no corresponding reversed frames and eventually stopped
+routine reporting. Adding the exact transformed reply restored sustained
+telemetry and manual reports for both identities, physically confirming its
+acknowledgement/liveness role.
+
+The local gateway now persists exactly one custom ACK owner for each endpoint.
+An owner holds at most eight authorizations, restores all assignments after a
+reconnect or OTA reboot, stays on telemetry channel 0 between reports, hops to
+the negotiated selector only for its bounded reply, and returns to receive.
+Two independent sensor recoveries and six installed/test assignments have
+produced local ACK transmissions with zero driver failures. Multi-day cadence
+and explicit owner-reassignment testing remain operational qualification, not
+protocol-format uncertainty.
 
 ### Confirmed marker-relative battery flag
 
@@ -773,17 +785,19 @@ normalization and confirmed field decoding. Regression examples live in
    on receive-only CC1101 hardware, including both RF channels.
 3. Test whether a captured request is accepted outside its original sequence
    window.
-4. Decode battery-low state with a controlled test sensor.
-5. Capture sensor and valve enrollment, association, and forgetting traffic.
-6. Confirm retry timing, acknowledgement rules, and safe close behavior before
+4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
+   or cloud metadata.
+5. Capture valve enrollment, association, and forgetting traffic.
+6. Confirm valve retry timing, acknowledgement rules, and safe close behavior before
    enabling Home Assistant control.
 
 ## Safety boundary
 
-The current implementation is receive-only. Transmit support must enforce a
-local maximum duration, start an independent watchdog before opening, retry an
-idempotent close until idle is observed, and fail closed after gateway, Home
-Assistant, network, or power loss.
+The current implementation transmits only validated, identity-bounded soil
+sensor pairing/rejoin replies and acknowledgements. Valve transmission remains
+absent. It must enforce a local maximum duration, start an independent watchdog
+before opening, retry an idempotent close until idle is observed, and fail
+closed after gateway, Home Assistant, network, or power loss.
 
 ## Evidence and references
 

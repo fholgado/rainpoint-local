@@ -28,10 +28,20 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "firmware" / "rainpoint_bridge" / "src" / "wifi_transport.cpp"
         ).read_text()
         command_boundary = source.split("if (authenticated_ &&", 1)[1].split(
-            "pendingCommand_ = line;", 1
+            "void WifiTransport::authenticate", 1
         )[0]
         self.assertIn('type == "routine_ack_configure"', command_boundary)
         self.assertIn('type == "routine_ack_revoke"', command_boundary)
+
+    def test_firmware_has_one_standard_build_environment(self) -> None:
+        platformio = (
+            ROOT / "firmware" / "rainpoint_bridge" / "platformio.ini"
+        ).read_text()
+        self.assertEqual(1, platformio.count("[env:"))
+        self.assertIn("[env:rainpoint_bridge]", platformio)
+        self.assertIn("default_envs = rainpoint_bridge", platformio)
+        self.assertNotIn("single_bench", platformio)
+        self.assertNotIn("candidate]", platformio)
 
     def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
         source = (

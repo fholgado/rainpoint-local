@@ -1,175 +1,90 @@
-# Local gateway and Home Assistant development
+# Local development
 
-The gateway supports captured replay and a receive-only RTL-SDR transport. It
-never connects to HomGar services. Registry and pairing-monitor metadata writes
-require gateway authorization; the Home Assistant app provisions this
-automatically through Supervisor discovery, while standalone development
-gateways require one-time authentication. Valve-control requests remain
+The repository has three runtime layers and one standard firmware build:
+
+- `rainpointd_addon/rainpointd` — local gateway and API;
+- `custom_components/rainpoint_local` — Home Assistant adapter;
+- `firmware/rainpoint_bridge` — ESP32/CC1101 radio node; and
+- `research/fixtures` — immutable captured protocol evidence used by tests.
+
+No development command contacts HomGar services. Valve-control requests remain
 rejected.
 
-## Components
+## Gateway transports
 
-- `rainpointd_addon/rainpointd/`: state/event store and versioned HTTP API
-- `rainpointd_addon/rainpointd/replay.py`: captured-fixture transport
-- `rainpointd_addon/rainpointd/rtl433.py`: live receive-only SDR transport
-- `rainpointd_addon/rainpointd/rf.py`: RF framing and HCS026 field decoder
-- `rainpointd_addon/`: installable Home Assistant app package
-- `custom_components/rainpoint_local/`: Home Assistant integration
-- `test_rainpointd.py`: gateway and HTTP contract tests
-
-## Run the replay gateway
-
-From `rainpoint-research`:
+Replay captured fixtures on loopback:
 
 ```sh
 PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
-The default listener is loopback-only:
-
-```text
-http://127.0.0.1:8787/api/v1
-```
-
-Inspect it:
-
-```sh
-curl http://127.0.0.1:8787/api/v1/info
-curl http://127.0.0.1:8787/api/v1/devices
-curl 'http://127.0.0.1:8787/api/v1/events?since=0'
-```
-
-To let a separate Home Assistant host reach a development Mac, bind the replay
-server to the Mac's LAN interface only while testing:
-
-```sh
-PYTHONPATH=rainpointd_addon python3 -m rainpointd --host 0.0.0.0
-```
-
-This is a development convenience. For persistent replay testing on HAOS, use
-the app package in `rainpointd_addon`. The eventual live gateway should run
-there or on the machine that owns the RF receiver.
-
-## Run the live SDR gateway
-
-Install `rtl_433`, attach the RTL-SDR receiver, and run:
+Run a receive-only RTL-SDR gateway:
 
 ```sh
 PYTHONPATH=rainpointd_addon python3 -m rainpointd \
   --transport rtl433 --host 0.0.0.0
 ```
 
-The transport invokes this receive-only pipeline internally:
+The live SDR path uses `rtl_433` with a 433.7 MHz / 2.0 Msps FSK pulse-decoder
+pipeline and accepts only the confirmed RainPoint sync family. Network radio
+nodes connect outbound to TCP 8790 using protocol v2.
 
-```text
-433.7 MHz / 2.0 Msps → FSK PCM / 48 us → sync 79f4882f28
-```
+## API
 
-The four confirmed HCS026 endpoints are restored as unavailable at startup and
-become available after their first valid report. Unknown endpoints with the
-confirmed moisture layout receive deterministic IDs of the form
-`hcs026-<endpoint>`.
+The default development API is `http://127.0.0.1:8787/api/v1`.
 
-The standalone process is suitable for development on the Mac containing the
-receiver. It is not yet installed as a persistent macOS service.
-
-## API contract
-
-Read-only endpoints:
+Useful read-only endpoints:
 
 - `GET /health`
 - `GET /api/v1/info`
 - `GET /api/v1/devices`
+- `GET /api/v1/nodes`
 - `GET /api/v1/endpoints`
 - `GET /api/v1/events?since=<event_id>`
 
-Each observation includes:
+Registry, pairing, node, ACK-owner, and OTA mutations require the management
+credential. Supervisor discovery provisions it automatically on HAOS. Never
+place real credentials in issues, fixtures, or logs.
 
-- monotonic gateway event ID,
-- gateway observation timestamp in UTC,
-- stable local device ID and friendly name,
-- model,
-- original raw frame, and
-- decoded typed state.
+Pass `--storage <path>` for SQLite persistence. The packaged app uses its
+private `/data` volume.
 
-The event cursor allows a future push adapter or recorder to resume without
-requiring Home Assistant to interpret RF framing. Pass `--storage <path>` to
-persist events, endpoint inventory, and decoded device state in SQLite. The
-packaged live app uses `/data/rainpointd.sqlite3` automatically.
+## Home Assistant development install
 
-## Install the development integration
+1. Copy `rainpointd_addon` to `/addons/rainpointd`.
+2. Reload the app store and rebuild/install `local_rainpointd`.
+3. Copy `custom_components/rainpoint_local` to the HA configuration directory.
+4. Restart HA and add **RainPoint Local**.
 
-Do not install it until `rainpointd` is running at an address reachable from
-Home Assistant.
+The app requests no HA/Supervisor API token or privileged/full-host mode. USB
+access supports the optional SDR; Wi-Fi radio nodes do not require USB.
 
-Copy the integration directory into the HA configuration:
+## Verification
 
-```text
-custom_components/rainpoint_local/
-```
-
-Restart Home Assistant, then use:
-
-```text
-Settings → Devices & services → Add integration → RainPoint Local
-```
-
-Enter the gateway host and port. The integration verifies `/api/v1/info` and
-uses the gateway ID as its unique identity.
-
-It currently creates:
-
-- soil moisture,
-- battery,
-- RF signal,
-- device report time,
-- valve state,
-- reported duration,
-- last water usage, and
-- read-only watering status.
-
-There is intentionally no valve entity or control service in this milestone.
-
-## Run tests
+Run the full command listed in the root README or use unittest discovery:
 
 ```sh
-python3 -m unittest -v \
-  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py
+python3 -m unittest -v
 ```
 
-The HTTP tests bind only an ephemeral loopback port.
-
-## Run persistently on Home Assistant OS
-
-For local development, copy `rainpointd_addon` into the HAOS local-app
-directory as `/addons/rainpointd`, then reload the app catalog:
+Build and inspect the sole firmware image:
 
 ```sh
-ha store reload
-ha apps info local_rainpointd
-ha apps install local_rainpointd
-ha apps start local_rainpointd
+pio run --project-dir firmware/rainpoint_bridge
+python tools/check_firmware_boundaries.py \
+  firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The installed app is intentionally protected and requests no host privileges,
-HA or Supervisor API tokens, UART, or writable HA configuration directories.
-Live mode receives through the explicitly exposed USB SDR and publishes the
-read-only API on host TCP port 8787.
-
-Verify it from another LAN machine:
+Compile the hardware-independent C++ protocol regression:
 
 ```sh
-curl http://HOME_ASSISTANT_IP:8787/health
-curl http://HOME_ASSISTANT_IP:8787/api/v1/info
+c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
+  firmware/rainpoint_bridge/tests/protocol_test.cpp \
+  -o /tmp/rainpoint-protocol-test
+/tmp/rainpoint-protocol-test
 ```
 
-The response from `/api/v1/info` must report `"read_only": true` and
-`"transport": "replay"`.
-
-## Next milestones
-
-- Improve final antenna placement and reception reliability.
-- Decode the HCS026 battery-low flag with a controlled test sensor.
-- Determine trailer integrity coverage and replay/counter semantics.
-- Prototype the ESP32/CC1101 transport while retaining the read-only API
-  boundary until valve safety requirements are satisfied.
+Research capture and analysis tools remain under `tools`, but there are no
+alternative bench/candidate firmware environments. New RF behavior must first
+be represented as captured evidence and offline tests, then added to the one
+standard firmware behind the existing bounded command authority.

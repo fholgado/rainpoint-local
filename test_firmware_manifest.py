@@ -17,7 +17,7 @@ class FirmwareManifestTest(unittest.TestCase):
             manifest = build_manifest(
                 artifact,
                 version="0.7.0",
-                environment="esp32dev_single",
+                environment="rainpoint_bridge",
             )
             verify_manifest(artifact, manifest)
             artifact.write_bytes(b"modified firmware")
@@ -32,7 +32,7 @@ class FirmwareManifestTest(unittest.TestCase):
                 build_manifest(
                     artifact,
                     version="0.7.0-test.3",
-                    environment="esp32dev_pairing_generalization",
+                    environment="obsolete_pairing_candidate",
                 )
 
 

@@ -1,362 +1,206 @@
 # RainPoint Local
 
-An experimental local RainPoint irrigation integration for Home Assistant,
-built around the devices' 433 MHz RF protocol.
+RainPoint Local is an open, local-first Home Assistant stack for RainPoint
+433 MHz irrigation devices. It receives sensor and valve telemetry without the
+vendor cloud, pairs and recovers supported soil sensors through custom radio
+nodes, and preserves Home Assistant identity while a user migrates from the
+stock RainPoint gateway.
 
-The goal is an open gateway that receives sensor and valve telemetry, manages
-device enrollment, and controls irrigation with independent local safety
-limits. The target system has no internet-service or vendor-app dependency.
+Valve transmission is deliberately disabled until pairing, close commands, and
+the independent safety controller have passed physical validation.
 
-## Current status
+## What works today
 
-This project has a working receive-only SDR deployment, a physically validated
-two-identity ESP32/CC1101 enrollment prototype, and a physically validated
-automatic HCS026 pairing path. The RF frame format, soil
-moisture, HCS026 enrollment identities, one HCS026 battery layout, valve
-duration, and last-session water usage are confirmed. Test Sensor B has been
-paired entirely through the local transmitter and subsequently reported an
-independently verified 11% moisture reading with the stock RainPoint gateway
-disconnected. Valve transmission remains protocol work.
+### HCS02x soil sensors
 
-Working now:
+- Decode moisture, confirmed full/low battery state, report time, RF endpoint,
+  signal provenance, and reporting cadence from local RF.
+- Discover compatible sensors by protocol evidence rather than household IDs.
+- Pair HCS026-class sensors from the Home Assistant UI without asking users to
+  copy RF identities or credentials.
+- Derive the stable paired endpoint from the factory announcement and retain an
+  existing HA device/entity history during reassociation.
+- Recover a known dormant sensor with a long press and one bounded gateway
+  reply—no battery removal, HA deletion, or open pairing window.
+- Persist exactly one custom radio-node ACK owner per sensor and restore all
+  assignments after gateway, network, radio-node, or OTA restart.
+- Deduplicate reception from multiple Wi-Fi radio nodes and an optional SDR
+  while retaining per-receiver coverage metrics.
 
-- decoding live and captured HCS026FRF soil-moisture RF frames,
-- discovering HCS026FRF sensors from validated paired telemetry rather than a
-  household-specific endpoint list,
-- identifying newly paired soil sensors first by their HCS02x RF protocol
-  family, using product code `0x48` to select the shared HCS02x capability
-  family, and promoting the exact `HCS026FRF` model only when model code
-  `0x013d` or trusted migration metadata supplies variant-level evidence,
-- reporting the confirmed full/low battery flag used by newly tested HCS026
-  sensors,
-- persisting an HCS026 factory-to-paired identity only after a complete
-  transition inside an explicit pairing window,
-- physically enrolling both test sensors through evidence-backed reply
-  sequences on a single ESP32/CC1101 radio node and requiring terminal message
-  `03` before declaring success,
-- deriving a newly announced HCS026 sensor's paired identity locally through
-  the model-level `hcs026_auto_v1` candidate, without user-supplied RF IDs,
-- starting that bounded pairing exchange from Home Assistant through an
-  authenticated, explicitly selected Wi-Fi radio node,
-- receiving post-enrollment moisture telemetry from that locally paired sensor
-  without the stock RainPoint gateway or cloud service,
-- naming and assigning the terminal-confirmed sensor through the integration's
-  authenticated **Configure** flow,
-- forgetting any known local HCS026 sensor through a confirmed **Configure**
-  flow without sending an RF reset, while retaining its HA identity for later
-  reassociation,
-- decoding HTV145FRF valve command, state, duration, and usage fields,
-- receiving live RainPoint 2-FSK packets through `rtl_433`,
-- reporting confirmed HCS026FRF soil moisture through the local `rainpointd`
-  API,
-- dynamically creating Home Assistant sensor entities for newly observed RF
-  endpoints,
-- retaining normalized RF events and endpoint inventory across app restarts,
-- replaying captured observations through a local `rainpointd` API,
-- running live RTL-SDR or replay transport persistently as a protected Home
-  Assistant app on `aarch64` or `amd64`,
-- building a single-CC1101 firmware prototype, with an optional dual-radio
-  diagnostic build, using the measured RainPoint radio profiles, serial frame
-  diagnostics, and a validated profile-driven pairing TX path,
-- accepting radio-node frames through serial or authenticated Wi-Fi transport,
-- simulating fail-closed startup, bounded runs, acknowledgement timeouts,
-  client loss, watchdog expiry, close retries, and persistent fault retries
-  without connecting those actions to a transmitter,
-- reporting local soil, signal, usage, and valve state to Home Assistant, and
-- rejecting every valve-control request at the gateway boundary.
+The generalized pairing path and routine acknowledgement behavior have been
+physically validated across independent HCS026 identities and the existing bed
+sensors. Multiple sensors can share pairing selector 4; selectors are not
+device slots.
 
-Still provisional or not working yet:
+### Radio nodes
 
-- verifying the marker-relative sensor battery field across additional device
-  revisions and a controlled low-battery transition,
-- guaranteeing reliable reception at the final antenna location,
-- repeating the physically validated automatic model-level pairing workflow
-  on a second independent identity before claiming broad HCS026 support,
-- completing fault-injection and reassignment tests for gateway-owned routine
-  sensor acknowledgement routes,
-- avoiding interference from a still-powered stock RainPoint gateway during
-  migration enrollment,
-- asymmetric OTA release signatures and destructive rollback fault injection,
-- HA-native lifecycle/migration coverage for rename, forget, re-pair, reload,
-  restart, and device-registry retention, and
-- locally opening or closing the physical valve.
+- One standard ESP32/CC1101 firmware image supports receive, sensor pairing,
+  known-sensor recovery, persistent ACK assignments, Identify, diagnostics,
+  Wi-Fi commissioning, and managed OTA.
+- New nodes create a temporary Wi-Fi setup portal, are discovered in Home
+  Assistant, and use the ESP32 BOOT button for physical adoption confirmation.
+- Each node has an independent credential and makes an outbound authenticated
+  connection to the local gateway, allowing nodes to be placed near different
+  garden areas.
+- OTA images are size/SHA-256 checked, health-confirmed after reboot, and use a
+  three-unconfirmed-boot rollback policy.
 
-### High-priority remaining work: production radio-node OTA
+### Valve telemetry and safety groundwork
 
-The isolated OTA candidate has now passed its first physical end-to-end update:
-the gateway issued a hash-bound command, the node downloaded the exact artifact,
-wrote and selected the inactive partition, rebooted into the new version,
-authenticated back to the gateway, verified radio health, and confirmed the
-candidate after the health delay. See
-[`research/OTA_HARDWARE_VALIDATION.md`](research/OTA_HARDWARE_VALIDATION.md).
+- Decode the tested HTV145 frame family, open/closed state, configured duration,
+  last-session duration, and water usage.
+- Correlate local RF valve events with Home Assistant/cloud observations.
+- Exercise a hardware-independent fail-closed controller for startup state,
+  open acknowledgement, client loss, run deadlines, watchdog expiry, close
+  retries, and persistent faults.
 
-The experimental OTA builds now receive managed releases from the custom local
-gateway and expose native firmware Update entities in Home Assistant. The
-gateway selects releases by hardware profile, channel, and firmware variant,
-then verifies exact size and SHA-256 before serving or installing an artifact.
-The next candidate consolidates pairing, bounded routine acknowledgements, and
-OTA into one image. The gateway remains the authority for which single node may
-acknowledge each sensor and restores that assignment after reboot, avoiding
-duplicate RF replies in multi-node installations.
-
-Normal production firmware still requires USB updates. Before treating OTA as
-a publishable production facility, add asymmetric release signatures and
-fault-injection coverage for interrupted downloads, power loss, and three-boot
-automatic rollback.
-
-Production OTA is complete only when a production node can install a signed
-update over Wi-Fi, authenticate back to the local gateway with healthy Wi-Fi
-and radio diagnostics, confirm the new partition, and automatically restore
-the previous image after three unconfirmed boots. Experimental firmware must
-remain on a separate, explicitly selected release channel.
-
-The packaged gateway reports all four installed soil endpoints from local RF
-and retains unknown RainPoint frames for discovery. The receive path is fully
-local. Home Assistant now starts one automatic HCS026 workflow; the selected
-node adopts the first strict factory announcement and locks the pairing window
-to that identity. This automatic path passed end to end on Sensor A. Repeating
-it on Sensor B and completing restart, interruption, unattended-reporting, and
-reassociation tests remain the sensor release gates. Valve pairing and control
-remain outstanding.
+The physical valve-control boundary still rejects all requests.
 
 ## Architecture
 
 ```text
-HCS026 sensors / HTV145 valve
-             |
-          433 MHz
-             |
-      local radio transport
-   - replay fixtures (implemented)
-   - receive-only SDR (implemented in the HA app)
-   - ESP32 + CC1101 node (receive plus bounded HCS026 pairing TX)
-             |
-         rainpointd
-   protocol + registry + safety
-             |
+HCS02x sensors / HTV145 valve
+              |
+           433 MHz
+              |
+   +----------+-----------+
+   |                      |
+ESP32 + CC1101 nodes   optional RTL-SDR
+   | authenticated Wi-Fi  | receive-only
+   +----------+-----------+
+              |
+          rainpointd
+  protocol + registry + ACK ownership
+              |
        versioned local API
-             |
+              |
  Home Assistant rainpoint_local
 ```
 
-The Home Assistant integration is intentionally independent of the radio
-backend. New installations default to a network-only gateway fed by
-authenticated Wi-Fi radio nodes; replay remains an explicit development mode.
+The transport boundary is intentionally generic: HA consumes the same devices
+whether a frame arrived through a radio node or the SDR. A sensor may be heard
+by many receivers, but only its explicitly assigned custom node may transmit an
+acknowledgement.
 
-See [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) for the complete
-migration and safety design.
+## Components
 
-The prioritized split between software-only work and physical RF gates is in
-[INTEGRATION_EVOLUTION_BACKLOG.md](INTEGRATION_EVOLUTION_BACKLOG.md).
-
-Physical validation procedures are tracked in
-[`research/DEVICE_PAIRING_VALIDATION_PLAN.md`](research/DEVICE_PAIRING_VALIDATION_PLAN.md),
-including the remaining multi-identity sensor tests and the staged test-valve
-stock capture, offline reconstruction, and isolated local enrollment sequence.
-
-The future handoff for existing cloud-connected users is designed in
-[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md). It preserves HA
-identity and history while switching each supported device to exactly one
-authoritative provider; active migration remains gated on sensor/valve pairing
-and bounded valve-control proof.
+1. `custom_components/rainpoint_local` — HACS-compatible Home Assistant custom
+   integration.
+2. `rainpointd_addon` — Home Assistant app/add-on that owns protocol decoding,
+   persistence, radio-node sessions, pairing, ACK ownership, and OTA artifacts.
+3. `firmware/rainpoint_bridge` — the single supported ESP32/CC1101 radio-node
+   firmware.
+4. `hardware/rainpoint_carrier` — passive carrier PCB design for the tested
+   ESP32 and 8-pin CC1101 module.
 
 ## Home Assistant installation
 
-There are two pieces:
+HACS can install the custom integration but cannot run the gateway service.
+For development on Home Assistant OS:
 
-1. `rainpoint_local`, the Home Assistant custom integration.
-2. `rainpointd`, the service that owns radio decoding, device state, and later
-   valve safety. It is now packaged in `rainpointd_addon` as an experimental
-   Home Assistant app.
+1. Copy `rainpointd_addon` to `/addons/rainpointd`.
+2. Reload the app store and install **RainPoint Local Gateway**.
+3. Copy `custom_components/rainpoint_local` into the HA configuration directory
+   or install it through HACS.
+4. Restart Home Assistant and add **RainPoint Local**.
 
-HACS can install the custom integration, but it cannot run `rainpointd`.
-The local gateway is packaged as a Home Assistant app/add-on and can
-eventually be replaced by a service on a dedicated RF gateway.
+Supervisor discovery provisions the integration’s management credential. Users
+do not paste that credential during sensor pairing or radio-node adoption.
 
-### Home Assistant app
+Pair a sensor from **Settings → Devices & services → RainPoint Local →
+Configure**. Select the radio node closest to that sensor. Temporarily power off
+the stock RainPoint gateway during the exchange to prevent two transmitters
+from racing; reconnect it afterward if cloud-controlled valves still depend on
+it. Do not delete an existing HA sensor before reassociation.
 
-The `rainpointd_addon` directory is a Supervisor-compatible app package. For
-local development, copy it to `/addons/rainpointd`, reload the app store, and
-install **RainPoint Local Gateway** from the Local apps repository.
+See [NODE_ONBOARDING.md](NODE_ONBOARDING.md) for radio-node setup and
+[firmware/rainpoint_bridge/README.md](firmware/rainpoint_bridge/README.md) for
+wiring, flashing, recovery, and OTA details.
 
-The app exposes local telemetry and authenticated sensor pairing on TCP port
-8787, maps raw USB for the SDR,
-and has no HA API access, Supervisor API access, privileged mode, or full host
-access. Live events are stored in the app's persistent data volume. The device
-API also reports persistent check-in counts and cadence, plus a current
-`reporting` status based on the measured intervals of each device class.
+## Development
 
-An authenticated local registry can accept, rename, assign, or forget observed
-endpoints. The Home Assistant app provisions its management credential through
-Supervisor discovery, so it never appears in the normal pairing UI. The
-pairing workflow can arm one authenticated
-protocol-v2 node for automatic HCS026 discovery and persists the identity only
-after terminal RF confirmation. Valve-control POST requests remain unavailable.
-
-### Development installation
-
-Run the replay gateway:
+Run the local gateway with replay fixtures:
 
 ```sh
 PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
-Run the live, receive-only SDR gateway on the machine containing the USB
-receiver:
+Run it with a receive-only RTL-SDR and `rtl_433`:
 
 ```sh
 PYTHONPATH=rainpointd_addon python3 -m rainpointd \
   --transport rtl433 --host 0.0.0.0
 ```
 
-This requires `rtl_433`. It starts no transmitter and publishes only RF frames
-matching the confirmed RainPoint sync word.
-
-The ESP32/CC1101 firmware, wiring, and build instructions are under
-[`firmware/rainpoint_bridge`](firmware/rainpoint_bridge/README.md). It is
-receive-capable and exposes only bounded HCS026 pairing TX over its
-authenticated network protocol. It contains no valve TX path.
-
-The passive socketed carrier-PCB design is under
-[`hardware/rainpoint_carrier`](hardware/rainpoint_carrier/README.md). Revision
-A deliberately reuses the ESP32's USB-C power, onboard GPIO2 status LED, and
-GPIO0 BOOT button; the carrier adds no duplicate user-interface hardware.
-
-Copy `custom_components/rainpoint_local` into the Home Assistant configuration
-directory, restart Home Assistant, and add **RainPoint Local** from
-**Settings → Devices & services**.
-
-#### Development deployment safety
-
-Never create or retain backup copies beside either live package. In
-particular, do not put directories such as `rainpoint_local.bak-*` under
-`/config/custom_components`, and do not put `rainpointd.bak-*` under
-`/addons`. Home Assistant and Supervisor scan those parent directories and
-may attempt to load a backup as a second integration or app, which can make
-the live integration appear unavailable.
-
-Before overwriting a development deployment, store both backups outside the
-discovery trees:
-
-```text
-/share/rainpoint-local/backups/<timestamp>/integration
-/share/rainpoint-local/backups/<timestamp>/addon
-```
-
-After deployment, verify that `/config/custom_components/rainpoint_local` is
-the only `rainpoint_local*` directory under `custom_components`, and that the
-gateway health endpoint responds before restarting Home Assistant Core.
-
-If Home Assistant runs on a different machine, follow
-[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) to expose the development listener
-on the LAN.
-
-### HACS
-
-The repository layout is HACS-compatible. Once the repository is public:
-
-1. Open HACS.
-2. Select **Custom repositories**.
-3. Add `https://github.com/fholgado/rainpoint-local` as an **Integration**.
-4. Download **RainPoint Local** and restart Home Assistant.
-
-This installs only the HA integration. A reachable `rainpointd` instance is
-still required.
-
-## Development
-
-Decode a captured RF recording:
-
-```sh
-python3 tools/decode_rainpoint_iq.py \
-  --sample-rate 2000000 --frequency 433700000 capture.cu8
-```
-
-Run the regression and API tests:
+Run the complete Python regression suite:
 
 ```sh
 python3 -m unittest -v \
-  test_rainpoint_protocol.py test_rainpointd.py test_rainpoint_rf.py \
-  test_rainpoint_analysis.py test_rainpoint_safety.py
+  test_rainpoint_protocol.py \
+  test_rainpoint_pairing.py \
+  test_rainpoint_pairing_protocol.py \
+  test_esp32_network.py \
+  test_rainpoint_network_transport.py \
+  test_integration_migration.py \
+  test_api_models.py \
+  test_addon_boundaries.py \
+  test_firmware_manifest.py \
+  test_firmware_catalog.py \
+  test_rainpointd.py \
+  test_rainpoint_rf.py \
+  test_rainpoint_analysis.py \
+  test_rainpoint_safety.py \
+  test_pairing_profile_analysis.py \
+  test_radio_node_acceptance.py \
+  test_rf_trial.py
 ```
 
-Analyze one or more concatenated `rainpointd` event API pages without changing
-gateway state:
+Build the one supported radio-node image:
 
 ```sh
-python3 tools/analyze_rainpoint_events.py events.json --pretty
+pio run --project-dir firmware/rainpoint_bridge
+python tools/check_firmware_boundaries.py \
+  firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-Or read every cursor page directly from a local read-only gateway:
+Automated tests remain intentionally comprehensive: they preserve the captured
+RF evidence and safety invariants while obsolete experimental firmware forks
+have been removed.
 
-```sh
-python3 tools/analyze_rainpoint_events.py \
-  --url http://homeassistant.local:8787/api/v1/events --summary --pretty
-```
+## Evidence and portability
 
-Pure offline HTV145 open/close frame builders now reproduce captured command
-vectors and generate both unresolved trailer candidates. They are deliberately
-not connected to the HTTP API, ESP32 serial transport, or any radio transmit
-operation.
+Friendly names and dashboards for the original installation live only under
+`examples/federico-garden`. Runtime behavior is driven by persistent registry
+records and protocol/product evidence, not those names or endpoints.
 
-Generate a matching command waveform for offline inspection with the same CU8
-format used by the receive tools:
+- [PROTOCOL.md](PROTOCOL.md) — supported RF facts, confidence, and unresolved
+  fields.
+- [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) — component and
+  transport responsibilities.
+- [CLOUD_TO_LOCAL_MIGRATION.md](CLOUD_TO_LOCAL_MIGRATION.md) — proposed
+  cloud-to-local identity-preserving migration.
+- [research/DEVICE_PAIRING_VALIDATION_PLAN.md](research/DEVICE_PAIRING_VALIDATION_PLAN.md)
+  — retained physical evidence and remaining hardware gates.
 
-```sh
-python3 tools/generate_rainpoint_iq.py /tmp/rainpoint-command.cu8 \
-  --frame 79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824
-python3 tools/characterize_rainpoint_iq.py /tmp/rainpoint-command.cu8
-python3 tools/compare_rainpoint_iq.py captured-reference.cu8 \
-  /tmp/rainpoint-command.cu8
-```
+Cloud-specific investigation is isolated under `research/cloud` and is not a
+runtime dependency.
 
-The generator reproduces the measured 60 ms alternating wake sequence,
-20 ksymbol/s timing, and +/-40 kHz 2-FSK deviation. It only writes a file and
-contains no socket, serial, GPIO, or radio transmission path.
-The comparator checks channel center, tone separation, and occupied bandwidth
-without requiring the two captures to have matching sample alignment.
+## Remaining gates
 
-The target bridge uses one ESP32 and one half-duplex CC1101 transceiver. The
-current SDR/Pi remains the independent receive reference during development;
-the firmware's optional second CC1101 build is diagnostic only.
-
-The HTTP tests bind only an ephemeral loopback port. They do not contact the
-hub, cloud services, or RF hardware.
-
-Prepare or run a bounded receive-only RF capture:
-
-```sh
-./tools/capture_rainpoint_rf.sh --dry-run
-./tools/capture_rainpoint_rf.sh --duration 15m
-```
-
-See [research/RF_CAPTURE_PLAN.md](research/RF_CAPTURE_PLAN.md) for the receive
-and validation procedure.
-
-## Project documents
-
-- [PROTOCOL.md](PROTOCOL.md): primary 433 MHz protocol specification
-- [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md): direct local bridge
-  and safety architecture
-- [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md): replay gateway and HA setup
-- [hardware/rainpoint_carrier/README.md](hardware/rainpoint_carrier/README.md):
-  passive ESP32/CC1101 carrier-PCB design
-- [research/RF_CAPTURE_PLAN.md](research/RF_CAPTURE_PLAN.md): RF capture and
-  validation procedure
-- [research/RF_CAPTURE_NOTES.md](research/RF_CAPTURE_NOTES.md): concise dated
-  evidence behind the protocol conclusions
-- [research/cloud/README.md](research/cloud/README.md): archived cloud-side
-  observations, isolated from the local architecture
+- Accumulate a multi-day unattended sensor reliability baseline and perform a
+  controlled ACK-owner reassignment.
+- Improve final radio-node placement where Wi-Fi or RF margins are weak.
+- Add encrypted node sessions, credential rotation, and asymmetric OTA release
+  signatures before treating the trusted-LAN prototype as publishable.
+- Capture and validate generic valve enrollment, close, status, and bounded
+  open behavior on isolated test hardware.
+- Only then connect physical valve commands to the safety controller and begin
+  cloud-to-local migration work with the existing HomGar integration.
 
 ## Safety
 
-Physical valve control will not be added until the gateway can enforce a local
-maximum duration, start an independent close watchdog, confirm state from RF
-feedback, and make close commands idempotent. The installed valve should
-remain on its known-working path while valve TX is under development. Sensor
-pairing requires the original RainPoint gateway to be temporarily powered off
-so it cannot send a competing enrollment reply.
-
-## License
-
-[MIT](LICENSE)
+RainPoint Local currently receives valve telemetry but cannot operate a valve.
+Future control must always enforce bounded duration, explicit target identity,
+positive acknowledgement, fail-closed startup, independent watchdog timing,
+close retries, and persistent fault reporting. Never test unknown RF commands
+against an installed irrigation zone without isolation and a ready manual stop.

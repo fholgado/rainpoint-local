@@ -5,17 +5,18 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.25.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.28.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
-`hcs026_auto_v1`; its automatic identity adoption has completed one physical
-end-to-end validation. Valve-control POST requests remain rejected.
+`hcs026_auto_v1`; automatic identity adoption and known-sensor recovery have
+completed physical end-to-end validation across independent identities.
+Valve-control POST requests remain rejected.
 
-An identity-specific Sensor A profile completed isolated local enrollment on
-2026-08-12 using four captured replies, terminal confirmation, and subsequent
-telemetry. It remains endpoint-bounded rather than a claim that all HCS026
-revisions share this exact branch, and requires the matching firmware target.
+The generalized HCS026 workflow completed isolated local enrollment on both
+test sensors and on installed bed sensors using generated replies, terminal
+confirmation, and subsequent telemetry. Product-family and hardware-revision
+claims remain evidence-bounded.
 
 Accepted HCS026 endpoints now provide the live decoder identity, friendly name,
 and area. Known endpoints retain their established Home Assistant device IDs
@@ -106,8 +107,8 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The unified `0.10.0-test.8` candidate combines receive, generalized
-sensor pairing, bounded routine acknowledgements, and managed OTA updates.
+device. The supported `0.11.0` firmware combines receive, generalized sensor
+pairing, bounded routine acknowledgements, and managed OTA updates in one build.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
 500 ms broad-scan cadence cannot repeatedly alias with a sensor's retry burst.
 Known factory identities may enter a bounded automatic rejoin through their

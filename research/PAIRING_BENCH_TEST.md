@@ -1,4 +1,11 @@
-# Sensor B pairing bench test
+# Historical Sensor B pairing bench test
+
+This document preserves the procedure that qualified the first transmitter.
+Its dedicated bench environment and interactive probe commands were retired
+after the protocol became executable regression coverage and the supported
+firmware was consolidated. Do not use the command examples below with current
+hardware; build and flash `rainpoint_bridge` as documented in the firmware
+README.
 
 This procedure validates the first real ESP32/CC1101 transmission against the
 independent RTL-SDR before attempting enrollment. It applies only to Test
@@ -26,11 +33,11 @@ RainPoint gateway powered off for the enrollment attempt so it cannot race the
 custom node's replies. It may remain online for receive-only probe
 characterization before the sensor is involved.
 
-## 1. Build, flash, and inspect boot
+## 1. Historical build, flash, and boot procedure
 
 ```sh
 python3 -m platformio run --project-dir firmware/rainpoint_bridge \
-  --environment esp32dev_single_bench --target upload
+  --environment <retired-bench-environment> --target upload
 python3 -m platformio device monitor --baud 115200
 ```
 

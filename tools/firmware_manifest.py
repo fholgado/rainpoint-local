@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
-PRODUCTION_ENVIRONMENTS = frozenset({"esp32dev_single", "esp32dev_dual"})
+PRODUCTION_ENVIRONMENTS = frozenset({"rainpoint_bridge"})
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\Z")
 
 
@@ -72,7 +72,7 @@ def main() -> int:
     parser.add_argument("artifact", type=Path)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--version")
-    parser.add_argument("--environment", default="esp32dev_single")
+    parser.add_argument("--environment", default="rainpoint_bridge")
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args()
     if args.verify:
