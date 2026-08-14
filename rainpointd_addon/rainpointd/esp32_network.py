@@ -22,6 +22,10 @@ DEFAULT_NODE_PORT = 8790
 MAXIMUM_LINE_BYTES = 8_192
 _NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 _HEX_SECRET = re.compile(r"[0-9a-fA-F]{64}\Z")
+_PROFILE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
+_HOST = re.compile(
+    r"(?=.{1,253}\Z)[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?\Z"
+)
 
 
 def load_node_tokens(raw: str | None) -> dict[str, str]:
@@ -238,6 +242,10 @@ class ESP32NetworkServer:
                 capabilities=capabilities,
                 tx_armed=False,
                 firmware_version=hello.get("firmware_version"),
+                hardware_profile=hello.get("hardware_profile"),
+                firmware_variant=hello.get("firmware_variant"),
+                firmware_channel=hello.get("firmware_channel"),
+                gateway_host=hello.get("gateway_host"),
                 remote_address=address[0],
                 connected_at=now,
                 last_seen=now,
@@ -245,6 +253,7 @@ class ESP32NetworkServer:
                 duplicate_frames=0,
                 invalid_messages=0,
             )
+            self.gateway.notify_node_update(node_id, "radio_node_connected")
             received_frames = 0
             invalid_messages = 0
             while not self._stop.is_set():
@@ -301,6 +310,9 @@ class ESP32NetworkServer:
                             message.get("candidate_pending") is True
                         ),
                     )
+                    self.gateway.notify_node_update(
+                        node_id, "radio_node_firmware_update"
+                    )
                 if message.get("type") == "command_error":
                     current_node = next(
                         (
@@ -339,6 +351,9 @@ class ESP32NetworkServer:
                 self.gateway.update_node(
                     node_id, connected=False, disconnected_at=_timestamp()
                 )
+                self.gateway.notify_node_update(
+                    node_id, "radio_node_disconnected"
+                )
             try:
                 stream.close()
             finally:
@@ -353,6 +368,10 @@ class ESP32NetworkServer:
         proof = hello.get("proof")
         capabilities = hello.get("capabilities", ["rx"])
         protocol_version = hello.get("protocol_version")
+        hardware_profile = hello.get("hardware_profile")
+        firmware_variant = hello.get("firmware_variant")
+        firmware_channel = hello.get("firmware_channel")
+        gateway_host = hello.get("gateway_host")
         if (
             protocol_version not in SUPPORTED_PROTOCOL_VERSIONS
             or not isinstance(node_id, str)
@@ -361,6 +380,34 @@ class ESP32NetworkServer:
             or not isinstance(capabilities, list)
             or "rx" not in capabilities
             or hello.get("tx_armed", False) is not False
+            or (
+                hardware_profile is not None
+                and (
+                    not isinstance(hardware_profile, str)
+                    or not _PROFILE.fullmatch(hardware_profile)
+                )
+            )
+            or (
+                firmware_variant is not None
+                and (
+                    not isinstance(firmware_variant, str)
+                    or not _PROFILE.fullmatch(firmware_variant)
+                )
+            )
+            or (
+                firmware_channel is not None
+                and (
+                    not isinstance(firmware_channel, str)
+                    or not _PROFILE.fullmatch(firmware_channel)
+                )
+            )
+            or (
+                gateway_host is not None
+                and (
+                    not isinstance(gateway_host, str)
+                    or not _HOST.fullmatch(gateway_host)
+                )
+            )
         ):
             return None
         if protocol_version == 1:

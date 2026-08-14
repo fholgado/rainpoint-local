@@ -298,7 +298,7 @@ pio run --project-dir firmware/rainpoint_bridge \
 
 ### Isolated OTA candidate
 
-`esp32dev_ota_candidate` is the only target that accepts
+`esp32dev_ota_candidate` and `esp32dev_routine_ack_ota_candidate` accept
 `firmware_update_start`. The command must arrive over an authenticated
 protocol-v2 gateway session, and its URL must point to the node's configured
 gateway host. The node rejects unexpected sizes, streams the image into the
@@ -312,12 +312,24 @@ This remains a hardware-trial boundary: the mutually authenticated gateway and
 manifest hash protect this test path, but asymmetric release signatures are not
 implemented yet.
 
+The generic OTA target also includes the validated pairing-generalization
+behavior. The routine-ack OTA target additionally preserves experimental
+post-enrollment sensor acknowledgements. Each reports a distinct firmware
+variant, preventing the gateway catalog from offering one track to a node on
+the other track.
+
 Build it without uploading it:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge \
   --environment esp32dev_ota_candidate
 ```
+
+After a node has received an OTA-capable image once over USB, future compatible
+releases appear on its device page as a native Home Assistant firmware Update
+entity. The custom local gateway serves only locally staged catalog entries and
+checks the artifact size and SHA-256 before installation. The raw URL/hash API
+remains a diagnostic trial path; normal UI updates use a catalog release ID.
 
 The gateway exposes the trial only through its authenticated management API:
 

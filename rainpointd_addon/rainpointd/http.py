@@ -36,6 +36,32 @@ class RequestHandler(BaseHTTPRequestHandler):
         if parsed.path == f"/api/{API_VERSION}/nodes":
             self._json(200, {"nodes": self.server.gateway.nodes()})
             return
+        if parsed.path == f"/api/{API_VERSION}/firmware/releases":
+            self._json(
+                200,
+                {"releases": self.server.gateway.firmware_releases()},
+            )
+            return
+        firmware_prefix = "/firmware/"
+        if parsed.path.startswith(firmware_prefix) and parsed.path.endswith(
+            ".bin"
+        ):
+            release_id = parsed.path[
+                len(firmware_prefix) : -len(".bin")
+            ]
+            try:
+                body, digest = self.server.gateway.firmware_artifact(release_id)
+            except (OSError, ValueError):
+                self._json(404, {"error": "firmware artifact not found"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_header("ETag", f'"sha256:{digest}"')
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if parsed.path == f"/api/{API_VERSION}/receivers":
             self._json(200, {"receivers": self.server.gateway.receivers()})
             return
@@ -183,13 +209,28 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self._json(200, result)
                     return
                 if separator and node_action == "firmware-update":
-                    result = self.server.gateway.start_radio_node_firmware_update(
-                        node_id,
-                        url=str(body.get("url", "")),
-                        version=str(body.get("version", "")),
-                        size_bytes=int(body.get("size_bytes", 0)),
-                        sha256=str(body.get("sha256", "")),
-                    )
+                    if body.get("release_id") is not None:
+                        result = (
+                            self.server.gateway.install_radio_node_firmware_release(
+                                node_id,
+                                release_id=str(body.get("release_id", "")),
+                                public_host=(
+                                    str(body["public_host"])
+                                    if body.get("public_host") is not None
+                                    else None
+                                ),
+                            )
+                        )
+                    else:
+                        result = (
+                            self.server.gateway.start_radio_node_firmware_update(
+                                node_id,
+                                url=str(body.get("url", "")),
+                                version=str(body.get("version", "")),
+                                size_bytes=int(body.get("size_bytes", 0)),
+                                sha256=str(body.get("sha256", "")),
+                            )
+                        )
                     self._json(202, result)
                     return
                 if separator and node_action == "revoke":

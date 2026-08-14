@@ -1,6 +1,7 @@
 # OTA hardware validation
 
-Status: first successful physical install path; production gates remain.
+Status: successful physical install plus managed local release path; production
+gates remain.
 
 ## 2026-08-13 isolated-candidate trial
 
@@ -37,6 +38,16 @@ asymmetric release authenticity or deliberately failed recovery paths.
   partition.
 - Verify USB recovery after an intentionally unusable candidate.
 - Replace the temporary artifact location with managed gateway hosting and
-  cleanup.
+  cleanup. (Managed hosting is implemented; retention cleanup remains.)
 - Add asymmetric signed release metadata before enabling OTA in normal
   firmware.
+
+## Managed Home Assistant path
+
+Gateway 0.21.0 adds a strict local release catalog, immutable artifact serving,
+hardware/channel/variant compatibility checks, and install-by-release-ID. The
+Home Assistant integration adds native firmware Update entities with release
+notes and byte progress. Two USB bootstrap images preserve the currently tested
+feature sets: pairing plus OTA, and pairing plus routine acknowledgements plus
+OTA. UI-triggered installation remains to be physically exercised before this
+path is considered fully validated.

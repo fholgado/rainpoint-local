@@ -76,8 +76,7 @@ Still provisional or not working yet:
   acknowledgement candidate,
 - avoiding interference from a still-powered stock RainPoint gateway during
   migration enrollment,
-- standalone gateway claiming, credential rotation/revocation, signed OTA and
-  rollback, and push-driven Home Assistant updates,
+- asymmetric OTA release signatures and destructive rollback fault injection,
 - HA-native lifecycle/migration coverage for rename, forget, re-pair, reload,
   restart, and device-registry retention, and
 - locally opening or closing the physical valve.
@@ -91,11 +90,17 @@ authenticated back to the gateway, verified radio health, and confirmed the
 candidate after the health delay. See
 [`research/OTA_HARDWARE_VALIDATION.md`](research/OTA_HARDWARE_VALIDATION.md).
 
-Normal firmware still requires USB updates. Before treating distributed nodes
-as maintainable appliances, add asymmetric release signatures, controlled
-artifact hosting and lifecycle management, compatibility policy, Home Assistant
-update entities, and fault-injection coverage for interrupted downloads, power
-loss, and three-boot automatic rollback.
+The experimental OTA builds now receive managed releases from the custom local
+gateway and expose native firmware Update entities in Home Assistant. The
+gateway selects releases by hardware profile, channel, and firmware variant,
+then verifies exact size and SHA-256 before serving or installing an artifact.
+The initial USB migration deliberately has separate pairing/OTA and
+routine-ack/OTA images so an upgrade cannot remove an active experiment.
+
+Normal production firmware still requires USB updates. Before treating OTA as
+a publishable production facility, add asymmetric release signatures and
+fault-injection coverage for interrupted downloads, power loss, and three-boot
+automatic rollback.
 
 Production OTA is complete only when a production node can install a signed
 update over Wi-Fi, authenticate back to the local gateway with healthy Wi-Fi

@@ -18,6 +18,7 @@ from typing import Any, Callable
 from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
+from .firmware_catalog import FirmwareCatalog
 from .pairing import HCS026EnrollmentManager, factory_endpoint, paired_endpoint
 from .pairing_protocol import (
     AUTOMATIC_HCS026_PROFILE_ID,
@@ -59,6 +60,9 @@ RADIO_NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 RADIO_NODE_TOKEN = re.compile(r"[0-9a-fA-F]{64}\Z")
 FIRMWARE_VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}\Z")
 FIRMWARE_SHA256 = re.compile(r"[0-9a-fA-F]{64}\Z")
+FIRMWARE_PUBLIC_HOST = re.compile(
+    r"(?=.{1,253}\Z)[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?\Z"
+)
 _UNSET = object()
 
 
@@ -78,6 +82,8 @@ class Gateway:
         registry_token_path: str | None = None,
         claim_code: str | None = None,
         catalog: DeviceCatalog = LEGACY_HOME_CATALOG,
+        firmware_catalog: FirmwareCatalog | None = None,
+        firmware_public_port: int = 8787,
     ) -> None:
         self.gateway_id = gateway_id
         self.transport = transport
@@ -89,6 +95,8 @@ class Gateway:
         self._claim_code = claim_code or None
         self._base_catalog = catalog
         self.catalog = catalog
+        self._firmware_catalog = firmware_catalog or FirmwareCatalog()
+        self._firmware_public_port = firmware_public_port
         self._registry_metadata: dict[str, dict[str, Any]] = {}
         self._suppressed_endpoints: frozenset[str] = frozenset()
         self._devices: dict[str, dict[str, Any]] = {}
@@ -185,6 +193,11 @@ class Gateway:
                     "event_long_poll",
                     "radio_node_adoption",
                     "sensor_pairing",
+                    *(
+                        ["firmware_updates"]
+                        if self._firmware_catalog.enabled
+                        else []
+                    ),
                 ],
                 "event_delivery": {
                     "mode": "long_poll",
@@ -212,6 +225,21 @@ class Gateway:
         with self._lock:
             node = self._nodes.setdefault(node_id, {"node_id": node_id})
             node.update(copy.deepcopy(fields))
+
+    def notify_node_update(self, node_id: str, event_type: str) -> None:
+        """Wake long-poll clients for an infrequent node lifecycle change."""
+        with self._event_condition:
+            event = {
+                "event_id": self._next_event_id,
+                "event_type": event_type,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "node_id": node_id,
+            }
+            self._next_event_id += 1
+            self._events.append(event)
+            if self._store:
+                self._store.append(event)
+            self._event_condition.notify_all()
 
     def set_node_command_sender(
         self, sender: Callable[[str, dict[str, Any]], None] | None
@@ -246,10 +274,22 @@ class Gateway:
                         "updated_at": registration["updated_at"],
                     }
                 )
-            return sorted(
-                list(nodes.values()),
-                key=lambda item: item["node_id"],
-            )
+            result = list(nodes.values())
+            for node in result:
+                release = self._firmware_catalog.latest_for_node(node)
+                if release is not None:
+                    node["firmware_update"] = release
+            return sorted(result, key=lambda item: item["node_id"])
+
+    def firmware_releases(self) -> list[dict[str, Any]]:
+        """Return public metadata for locally staged firmware releases."""
+        return self._firmware_catalog.releases()
+
+    def firmware_artifact(self, release_id: str) -> tuple[bytes, str]:
+        """Resolve and verify one artifact immediately before HTTP delivery."""
+        release = self._firmware_catalog.get(release_id)
+        content = self._firmware_catalog.verified_artifact_content(release_id)
+        return content, release.sha256
 
     def import_node_credentials(self, credentials: dict[str, str]) -> None:
         """Migrate legacy add-on option credentials into managed storage."""
@@ -495,6 +535,40 @@ class Gateway:
                 "candidate_version": version,
                 "size_bytes": size_bytes,
             }
+
+    def install_radio_node_firmware_release(
+        self,
+        node_id: str,
+        *,
+        release_id: str,
+        public_host: str | None = None,
+    ) -> dict[str, Any]:
+        """Install one catalogued release without accepting artifact metadata."""
+        node_id = node_id.strip().lower()
+        with self._lock:
+            node = copy.deepcopy(self._nodes.get(node_id))
+        if node is None:
+            raise ValueError("radio node is not connected")
+        if not self._firmware_catalog.compatible(release_id, node):
+            raise ValueError("firmware release is not compatible with radio node")
+        release = self._firmware_catalog.get(release_id)
+        self._firmware_catalog.verified_artifact(release_id)
+        host = str(node.get("gateway_host") or public_host or "").strip()
+        if not FIRMWARE_PUBLIC_HOST.fullmatch(host):
+            raise ValueError("firmware public host is unavailable")
+        url = (
+            f"http://{host}:{self._firmware_public_port}/firmware/"
+            f"{release.release_id}.bin"
+        )
+        result = self.start_radio_node_firmware_update(
+            node_id,
+            url=url,
+            version=release.version,
+            size_bytes=release.size_bytes,
+            sha256=release.sha256,
+        )
+        result["release_id"] = release.release_id
+        return result
 
     def register_radio_node(
         self,

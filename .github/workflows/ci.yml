@@ -27,6 +27,7 @@ jobs:
             test_api_models.py \
             test_addon_boundaries.py \
             test_firmware_manifest.py \
+            test_firmware_catalog.py \
             test_rainpointd.py \
             test_rainpoint_rf.py \
             test_rainpoint_analysis.py \
@@ -60,6 +61,7 @@ jobs:
           --environment esp32dev_pairing_generalization
           --environment esp32dev_routine_ack_candidate
           --environment esp32dev_ota_candidate
+          --environment esp32dev_routine_ack_ota_candidate
       - name: Verify production firmware excludes local TX bench controls
         run: >-
           python tools/check_firmware_boundaries.py

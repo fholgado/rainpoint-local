@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.21.0
+
+- Add a strict local firmware catalog and verify exact size plus SHA-256 before
+  making an artifact available to a radio node.
+- Serve immutable catalogued artifacts from the local gateway and let
+  authenticated management clients install by release ID instead of supplying
+  arbitrary URLs or hashes.
+- Annotate compatible radio nodes with update availability and progress for a
+  native Home Assistant firmware update entity.
+- Match releases by hardware profile, channel, and firmware variant so the
+  routine-ack experiment cannot be replaced by a generic OTA image.
+
+## Integration 0.10.0
+
+- Add one native firmware update entity per OTA-capable custom radio node,
+  including release notes, progress, reboot verification, and failure state.
+
 ## 0.20.0
 
 - Add an isolated, capability-gated radio-node OTA trial command without

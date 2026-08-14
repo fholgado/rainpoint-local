@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.20.0
+version: 0.21.0
 slug: rainpointd
 description: Local RainPoint telemetry and bounded sensor-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
@@ -17,7 +17,7 @@ ports:
   8787/tcp: 8787
   8790/tcp: 8790
 ports_description:
-  8787/tcp: RainPoint telemetry, registry, and sensor-pairing API
+  8787/tcp: RainPoint management API and verified firmware artifacts
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes
 watchdog: http://[HOST]:[PORT:8787]/health
 usb: true

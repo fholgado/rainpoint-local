@@ -77,6 +77,14 @@ gateway_args=(
   --event-retention-limit "${event_retention_limit}"
   --registry-token-file "${registry_token_path}"
 )
+firmware_catalog_path="/data/firmware/catalog.json"
+if [[ -f "${firmware_catalog_path}" ]]; then
+  gateway_args+=(
+    --firmware-catalog "${firmware_catalog_path}"
+    --firmware-public-port 8787
+  )
+  bashio::log.info "Loaded staged experimental radio-node firmware catalog"
+fi
 if [[ -n "${device_catalog_path}" ]]; then
   gateway_args+=(--device-catalog "${device_catalog_path}")
 fi

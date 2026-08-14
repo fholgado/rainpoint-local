@@ -147,6 +147,21 @@ class RainPointLocalClient:
         """Revoke one node credential from the custom local gateway."""
         return await self._post(f"nodes/{node_id}/revoke", {}, token)
 
+    async def install_radio_node_firmware(
+        self,
+        token: str,
+        *,
+        node_id: str,
+        release_id: str,
+        public_host: str,
+    ) -> dict[str, Any]:
+        """Install a gateway-catalogued release on one adopted radio node."""
+        return await self._post(
+            f"nodes/{node_id}/firmware-update",
+            {"release_id": release_id, "public_host": public_host},
+            token,
+        )
+
     async def start_radio_node_adoption(
         self,
         token: str,

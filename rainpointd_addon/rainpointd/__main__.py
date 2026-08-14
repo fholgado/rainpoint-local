@@ -9,6 +9,7 @@ import secrets
 from .device_catalog import LEGACY_HOME_CATALOG, load_catalog
 from .esp32 import ESP32SerialTransport
 from .esp32_network import ESP32NetworkServer, load_node_tokens
+from .firmware_catalog import FirmwareCatalog
 from .gateway import Gateway
 from .http import create_server
 from .network import NetworkTransport
@@ -70,6 +71,16 @@ def main() -> int:
             "identity compatibility"
         ),
     )
+    parser.add_argument(
+        "--firmware-catalog",
+        help="strict local firmware release catalog; omitted disables update offers",
+    )
+    parser.add_argument(
+        "--firmware-public-port",
+        type=int,
+        default=8787,
+        help="LAN port nodes use to download verified local artifacts",
+    )
     args = parser.parse_args()
 
     catalog = (
@@ -92,6 +103,8 @@ def main() -> int:
         registry_token_path=args.registry_token_file,
         claim_code=claim_code,
         catalog=catalog,
+        firmware_catalog=FirmwareCatalog.load(args.firmware_catalog),
+        firmware_public_port=args.firmware_public_port,
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(

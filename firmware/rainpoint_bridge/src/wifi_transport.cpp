@@ -294,6 +294,18 @@ void WifiTransport::authenticate(const String& nonce) {
         "{\"type\":\"node_hello\",\"protocol_version\":%u,"
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
+        "\"hardware_profile\":\"esp32dev-cc1101-v1\","
+#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
+        "\"firmware_variant\":\"routine-ack-ota\","
+#else
+        "\"firmware_variant\":\"pairing-ota\","
+#endif
+#if RAINPOINT_OTA_CANDIDATE == 1
+        "\"firmware_channel\":\"experimental\","
+#else
+        "\"firmware_channel\":\"stable\","
+#endif
+        "\"gateway_host\":\"%s\","
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
@@ -306,6 +318,7 @@ void WifiTransport::authenticate(const String& nonce) {
         kProtocolVersion,
         nodeId_.c_str(),
         RAINPOINT_FIRMWARE_VERSION,
+        gatewayHost_.c_str(),
         proof.c_str()
     );
     if (bytesSent > 0) {

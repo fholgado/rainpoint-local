@@ -58,6 +58,7 @@ class ESP32NetworkTest(unittest.TestCase):
         capabilities: list[str] | None = None,
         tx_armed: bool = False,
         protocol_version: int = 1,
+        hello_fields: dict[str, Any] | None = None,
     ) -> tuple[socket.socket, Any, dict[str, Any]]:
         connection = socket.create_connection(
             ("127.0.0.1", self.server.server_port), timeout=2
@@ -88,6 +89,7 @@ class ESP32NetworkTest(unittest.TestCase):
             "tx_armed": tx_armed,
             "proof": proof,
         }
+        hello.update(hello_fields or {})
         stream.write(json.dumps(hello).encode() + b"\n")
         response = json.loads(stream.readline())
         if protocol_version == 2 and response.get("type") == "node_authenticated":
@@ -102,6 +104,30 @@ class ESP32NetworkTest(unittest.TestCase):
                 )
             )
         return connection, stream, response
+
+    def test_v2_node_reports_firmware_compatibility_contract(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "firmware_update_trial"],
+            hello_fields={
+                "hardware_profile": "esp32dev-cc1101-v1",
+                "firmware_channel": "experimental",
+                "gateway_host": "192.168.9.80",
+            },
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("gateway_host"):
+                break
+            time.sleep(0.01)
+        self.assertEqual("esp32dev-cc1101-v1", node["hardware_profile"])
+        self.assertEqual("experimental", node["firmware_channel"])
+        self.assertEqual("192.168.9.80", node["gateway_host"])
+        stream.close()
+        connection.close()
 
     def test_authenticated_node_publishes_frame_with_provenance(self) -> None:
         connection, stream, response = self._connect(NODE_A, TOKEN_A)

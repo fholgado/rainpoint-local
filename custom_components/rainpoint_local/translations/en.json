@@ -184,6 +184,9 @@
     },
     "button": {
       "identify_radio_node": { "name": "Identify" }
+    },
+    "update": {
+      "radio_node_firmware": { "name": "Firmware" }
     }
   }
 }
