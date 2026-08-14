@@ -106,13 +106,14 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The unified `0.10.0-test.6` candidate combines receive, generalized
+device. The unified `0.10.0-test.7` candidate combines receive, generalized
 sensor pairing, bounded routine acknowledgements, and managed OTA updates.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
 500 ms broad-scan cadence cannot repeatedly alias with a sensor's retry burst.
 Known factory identities may enter a bounded automatic rejoin through their
 existing assignment; unknown identities still require an explicit HA pairing
-window.
+window. Automatic rejoin accepts the validated factory retry counters 1, 2,
+and 4 so a node armed by the first announcement can answer a later retry.
 After the first OTA-capable image is installed by USB, compatible releases can
 be installed from the radio node's Home Assistant firmware Update entity.
 An authenticated reconnect atomically replaces a stale session for the same

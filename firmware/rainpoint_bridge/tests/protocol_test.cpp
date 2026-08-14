@@ -209,6 +209,9 @@ int main() {
     const auto sensorAFactoryTrigger = fromHex(
         "79f4882f28800000001bce0024010083827fa41e8080b20000000000000000000000000073e3"
     );
+    const auto sensorAFactoryRetry4 = fromHex(
+        "79f4882f28800000001bce0024040083827fa41e8080b2000000000000000000000000001af5"
+    );
     std::array<std::uint8_t, 4> detectedFactory{};
     assert(rainpoint::hcs026FactoryAnnouncement(
         factoryTrigger, detectedFactory
@@ -218,6 +221,16 @@ int main() {
         sensorAFactoryTrigger, detectedFactory
     ));
     assert(detectedFactory == sensorA.factoryEndpoint);
+    assert(rainpoint::hcs026FactoryAnnouncement(
+        sensorAFactoryRetry4, detectedFactory
+    ));
+    assert(detectedFactory == sensorA.factoryEndpoint);
+    rainpoint::PairingSession sensorARetrySession(sensorA);
+    sensorARetrySession.arm(10'000);
+    assert(
+        sensorARetrySession.claimReply(sensorAFactoryRetry4, 10'100) ==
+        &sensorA.steps[0]
+    );
     assert(!rainpoint::hcs026FactoryAnnouncement(heartbeat, detectedFactory));
     auto wrongFactorySignature = factoryTrigger;
     wrongFactorySignature[18] ^= 0x01;

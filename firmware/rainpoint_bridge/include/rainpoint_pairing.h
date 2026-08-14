@@ -401,8 +401,8 @@ inline bool hcs026FactoryAnnouncement(
     // announcement signature. Keep the automatic adopter model-bounded so a
     // different RainPoint product cannot be enrolled merely because it uses
     // the same factory route and message number.
-    constexpr std::array<std::uint8_t, 8> hcs026Signature = {
-        0x01, 0x00, 0x83, 0x82, 0x7f, 0xa4, 0x1e, 0x80,
+    constexpr std::array<std::uint8_t, 7> hcs026SignatureTail = {
+        0x00, 0x83, 0x82, 0x7f, 0xa4, 0x1e, 0x80,
     };
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
         return false;
@@ -412,8 +412,15 @@ inline bool hcs026FactoryAnnouncement(
             return false;
         }
     }
-    for (std::size_t index = 0; index < hcs026Signature.size(); ++index) {
-        if (frame[13 + index] != hcs026Signature[index]) {
+    // A long press repeats the same factory announcement with message counters
+    // 1, 2, and 4. Automatic rejoin can only arm after the first copy has
+    // reached the gateway, so accept the otherwise byte-identical retries.
+    const std::uint8_t message = frame[13] & 0x7fU;
+    if (message != 1 && message != 2 && message != 4) {
+        return false;
+    }
+    for (std::size_t index = 0; index < hcs026SignatureTail.size(); ++index) {
+        if (frame[14 + index] != hcs026SignatureTail[index]) {
             return false;
         }
     }
@@ -483,15 +490,13 @@ inline bool pairingTrigger(
     const PairingProfile& profile,
     PairingTrigger& trigger
 ) {
-    constexpr std::array<std::uint8_t, 4> factoryRoute = {
-        0x80, 0x00, 0x00, 0x00,
-    };
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
         return false;
     }
     const std::uint8_t message = frame[13] & 0x7f;
-    if (endpointEquals(frame, 5, factoryRoute) &&
-        endpointEquals(frame, 9, profile.factoryEndpoint) && message == 1) {
+    std::array<std::uint8_t, 4> announcedFactory{};
+    if (hcs026FactoryAnnouncement(frame, announcedFactory) &&
+        announcedFactory == profile.factoryEndpoint) {
         trigger = PairingTrigger::FactoryAnnouncement;
         return true;
     }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Firmware 0.10.0-test.7
+
+- Accept the validated HCS026 factory-announcement retry counters 1, 2, and 4
+  during a bounded pairing session. This allows known-sensor automatic rejoin
+  to answer a retry after the first announcement triggered remote arming.
+
 ## 0.26.0
 
 - Persist radio-node friendly names and areas in the gateway registry and
