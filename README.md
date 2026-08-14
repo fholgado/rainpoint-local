@@ -226,6 +226,27 @@ Copy `custom_components/rainpoint_local` into the Home Assistant configuration
 directory, restart Home Assistant, and add **RainPoint Local** from
 **Settings → Devices & services**.
 
+#### Development deployment safety
+
+Never create or retain backup copies beside either live package. In
+particular, do not put directories such as `rainpoint_local.bak-*` under
+`/config/custom_components`, and do not put `rainpointd.bak-*` under
+`/addons`. Home Assistant and Supervisor scan those parent directories and
+may attempt to load a backup as a second integration or app, which can make
+the live integration appear unavailable.
+
+Before overwriting a development deployment, store both backups outside the
+discovery trees:
+
+```text
+/share/rainpoint-local/backups/<timestamp>/integration
+/share/rainpoint-local/backups/<timestamp>/addon
+```
+
+After deployment, verify that `/config/custom_components/rainpoint_local` is
+the only `rainpoint_local*` directory under `custom_components`, and that the
+gateway health endpoint responds before restarting Home Assistant Core.
+
 If Home Assistant runs on a different machine, follow
 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) to expose the development listener
 on the LAN.
