@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.0 / Firmware 0.12.0
+
+- Add an internal, association-specific HTV405 enrollment candidate reconstructed
+  from the isolated stock-gateway transcript.
+- Model 18 valve-originated steps with 17 bounded replies, including the
+  intentional no-transmit step and distinct initial modulation profile.
+- Keep valve open, close, and watering commands outside the production firmware
+  boundary pending isolated physical enrollment and safety validation.
+
 ## 0.28.0 / Firmware 0.11.0
 
 - Consolidate the supported ESP32/CC1101 node into one `rainpoint_bridge`

@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.28.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.29.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -107,8 +107,11 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The supported `0.11.0` firmware combines receive, generalized sensor
-pairing, bounded routine acknowledgements, and managed OTA updates in one build.
+device. The supported `0.12.0` firmware combines receive, generalized sensor
+pairing, bounded routine acknowledgements, managed OTA updates, and an internal
+bounded HTV405 enrollment candidate in one build. The valve candidate is not
+exposed through the normal Home Assistant pairing UI and contains no
+valve-control commands.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
 500 ms broad-scan cadence cannot repeatedly alias with a sensor's retry burst.
 Known factory identities may enter a bounded automatic rejoin through their
