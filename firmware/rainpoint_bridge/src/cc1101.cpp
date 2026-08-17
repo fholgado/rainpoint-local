@@ -1,5 +1,6 @@
 #include "cc1101.h"
 #include "rainpoint_pairing.h"
+#include "rainpoint_valve_pairing.h"
 
 #include <driver/rmt.h>
 
@@ -333,11 +334,14 @@ bool Cc1101::transmitAsync(
     std::uint32_t centerFrequencyHz,
     std::uint16_t wakeSymbols,
     bool invert,
-    std::uint8_t paTableValue
+    std::uint8_t paTableValue,
+    std::uint8_t deviationRegister
 ) {
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || centerFrequencyHz < 433'000'000 ||
-        centerFrequencyHz > 435'000'000) {
+        centerFrequencyHz > 435'000'000 ||
+        (deviationRegister != kOrdinaryDeviationRegister &&
+         deviationRegister != kHtv405InitialDeviationRegister)) {
         return false;
     }
 
@@ -353,6 +357,7 @@ bool Cc1101::transmitAsync(
     writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);
+    writeRegister(kDeviation, deviationRegister);
     writeBurst(kPaTable, &paTableValue, 1);
 
     const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols);

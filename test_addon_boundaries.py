@@ -52,6 +52,23 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("selectChannel(kHcs026TelemetryChannel)", source)
         self.assertIn("parseHexFactoryEndpoint", source)
 
+    def test_valve_pairing_candidate_cannot_control_watering(self) -> None:
+        source = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
+        ).read_text()
+        transport = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "wifi_transport.cpp"
+        ).read_text()
+        self.assertIn("kAutomaticHtv405ProfileId", source)
+        self.assertIn('\\"valve_control_available\\":false', source)
+        self.assertIn("valve_pairing_tx_candidate", transport)
+        for forbidden in (
+            'type == "valve_open"',
+            'type == "valve_close"',
+            'type == "watering_start"',
+        ):
+            self.assertNotIn(forbidden, source)
+
     def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
         source = (
             ROOT / "custom_components" / "rainpoint_local" / "config_flow.py"

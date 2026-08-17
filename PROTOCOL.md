@@ -190,6 +190,22 @@ authorize transmission. Local valve pairing remains disabled until the exact
 reply timing and waveform are physically validated against the isolated test
 valve.
 
+Executable transcript modeling found one important exception to a naive
+alternating-burst interpretation: the request labeled
+`paired_message_2_repeat` is followed by another valve-routed frame, not a
+gateway reply. A local pairing controller must advance that step without
+transmitting. The experimental firmware profile therefore contains 18 observed
+request steps but only 17 transmissions.
+
+The candidate local-pairing implementation requires the factory endpoint,
+valve route, and companion route to be supplied explicitly from the association
+under test. It derives only the high-bit paired identity, changes CC1101
+deviation from approximately 35 kHz on the initial assignment to the ordinary
+approximately 41 kHz profile afterward, and exposes no valve-control command.
+The fixture distinguishes measured on-air reply centers from the CC1101 command
+centers: the latter are 45 kHz lower because the calibrated node offset is
+applied by the authenticated pairing command at transmit time.
+
 ## HCS026FRF enrollment lifecycle
 
 Two controlled sensors established the same receive-side enrollment sequence.

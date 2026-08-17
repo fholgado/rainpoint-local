@@ -5,6 +5,7 @@
 
 #include "rainpoint_protocol.h"
 #include "rainpoint_pairing.h"
+#include "rainpoint_valve_pairing.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
 
@@ -413,6 +414,104 @@ int main() {
     assert(rainpoint::pairingPaTableValue(5) == 0x84);
     assert(rainpoint::pairingPaTableValue(7) == 0xc8);
     assert(rainpoint::pairingPaTableValue(10) == 0xc0);
+
+    const auto htv405Factory = fromHex(
+        "79f4882f288000000014a9801300808402ff93130000bd848000000000000000000000004795"
+    );
+    const auto htv405Request1 = fromHex(
+        "79f4882f28b984028094a98013010107862580804f8000000040800056800000000000001a73"
+    );
+    const auto htv405RequestNoReply = fromHex(
+        "79f4882f28b984028094a98013028107860582004f8000000040800056800000000000006f0a"
+    );
+    std::array<std::uint8_t, 4> htv405FactoryEndpoint{};
+    assert(rainpoint::htv405FactoryAnnouncement(
+        htv405Factory, htv405FactoryEndpoint
+    ));
+    rainpoint::Htv405PairingProfile htv405Profile{};
+    assert(rainpoint::buildAutomaticHtv405Profile(
+        htv405FactoryEndpoint,
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        htv405Profile
+    ));
+    assert(htv405Profile.pairedEndpoint[0] == 0x94);
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 0, htv405Factory
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 1, htv405Request1
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 4, htv405RequestNoReply
+    ));
+    assert(!htv405Profile.steps[4].replyExpected);
+    assert(
+        htv405Profile.steps[0].deviationRegister ==
+        rainpoint::kHtv405InitialDeviationRegister
+    );
+    assert(
+        htv405Profile.steps[1].deviationRegister ==
+        rainpoint::kOrdinaryDeviationRegister
+    );
+    std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Reply{};
+    const rainpoint::PairingLocalDateTime htv405Clock = {
+        2026, 8, 17, 18, 56, 58,
+    };
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile, 0, htv405Clock, htv405Reply
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c"
+    ));
+    assert(!rainpoint::buildHtv405PairingReply(
+        htv405Profile, 4, htv405Clock, htv405Reply
+    ));
+    rainpoint::Htv405PairingSession htv405Session(htv405Profile);
+    htv405Session.arm(30'000);
+    for (std::size_t index = 0;
+         index < rainpoint::kHtv405PairingStepCount;
+         ++index) {
+        std::array<std::uint8_t, rainpoint::kFrameBytes> request{};
+        for (std::size_t syncIndex = 0;
+             syncIndex < rainpoint::kSync.size();
+             ++syncIndex) {
+            request[syncIndex] = rainpoint::kSync[syncIndex];
+        }
+        const auto& endpointA = index == 0
+            ? std::array<std::uint8_t, 4>{{0x80, 0x00, 0x00, 0x00}}
+            : htv405Profile.valveRoute;
+        const auto& endpointB = index == 0
+            ? htv405Profile.factoryEndpoint
+            : htv405Profile.pairedEndpoint;
+        for (std::size_t endpointIndex = 0; endpointIndex < 4; ++endpointIndex) {
+            request[5 + endpointIndex] = endpointA[endpointIndex];
+            request[9 + endpointIndex] = endpointB[endpointIndex];
+        }
+        for (std::size_t bodyIndex = 0; bodyIndex < 23; ++bodyIndex) {
+            request[13 + bodyIndex] =
+                htv405Profile.steps[index].requestBody[bodyIndex];
+        }
+        rainpoint::writeTrailer(request, 0xc713);
+        const auto* step = htv405Session.claimReply(
+            request, 31'000 + static_cast<std::uint32_t>(index) * 100
+        );
+        if (htv405Profile.steps[index].replyExpected) {
+            assert(step == &htv405Profile.steps[index]);
+            assert(htv405Session.finishReply(
+                true, 31'010 + static_cast<std::uint32_t>(index) * 100
+            ));
+        } else {
+            assert(step == nullptr);
+            assert(htv405Session.completedSteps() == index + 1);
+        }
+    }
+    assert(
+        htv405Session.state() == rainpoint::PairingSessionState::Completed
+    );
+    assert(
+        htv405Session.completedSteps() == rainpoint::kHtv405PairingStepCount
+    );
     assert(rainpoint::rainpointSymbol(
         profile.steps[0].frame, 320, 0
     ) == 0);

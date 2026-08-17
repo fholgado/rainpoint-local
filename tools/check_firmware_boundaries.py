@@ -18,9 +18,17 @@ FORBIDDEN_BENCH_COMMANDS = (
 
 REQUIRED_CAPABILITIES = (
     b"routine_sensor_ack_tx",
+    b"valve_pairing_tx_candidate",
     b"firmware_update_start",
     b"firmware_update_trial",
     b"verified_sha256",
+)
+
+FORBIDDEN_VALVE_CONTROL_COMMANDS = (
+    b"valve_open",
+    b"valve_close",
+    b"valve_start",
+    b"watering_start",
 )
 
 
@@ -32,6 +40,11 @@ def main() -> int:
     leaked = [
         value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware
     ]
+    leaked.extend(
+        value.decode()
+        for value in FORBIDDEN_VALVE_CONTROL_COMMANDS
+        if value in firmware
+    )
     missing = [
         value.decode() for value in REQUIRED_CAPABILITIES if value not in firmware
     ]

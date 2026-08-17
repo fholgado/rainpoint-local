@@ -10,6 +10,7 @@
 #include "rainpoint_ack.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
+#include "rainpoint_valve_pairing.h"
 #include "wifi_transport.h"
 #if RAINPOINT_OTA_CANDIDATE == 1
 #include "ota_trial.h"
@@ -37,6 +38,10 @@
 
 #if RAINPOINT_OTA_CANDIDATE != 0 && RAINPOINT_OTA_CANDIDATE != 1
 #error "RAINPOINT_OTA_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE != 0 && RAINPOINT_VALVE_PAIRING_CANDIDATE != 1
+#error "RAINPOINT_VALVE_PAIRING_CANDIDATE must be 0 or 1"
 #endif
 
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
@@ -92,6 +97,11 @@ rainpoint::PairingProfile activePairingProfile =
     rainpoint::kValidatedHcs026Profile;
 #endif
 rainpoint::PairingSession pairingSession(activePairingProfile);
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+rainpoint::Htv405PairingProfile activeValvePairingProfile{};
+rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
+bool valvePairingActive = false;
+#endif
 std::uint8_t pairingAssignedChannel = rainpoint::pairingChannelFromReply(
     activePairingProfile.steps[0].frame
 );
@@ -142,7 +152,7 @@ String hexString(const std::uint8_t* data, std::size_t length) {
     return result;
 }
 
-bool parseHexEndpoint(
+bool parseRawHexEndpoint(
     const String& value,
     std::array<std::uint8_t, 4>& endpoint
 ) {
@@ -168,6 +178,16 @@ bool parseHexEndpoint(
             return false;
         }
         endpoint[index] = static_cast<std::uint8_t>((high << 4) | low);
+    }
+    return true;
+}
+
+bool parseHexEndpoint(
+    const String& value,
+    std::array<std::uint8_t, 4>& endpoint
+) {
+    if (!parseRawHexEndpoint(value, endpoint)) {
+        return false;
     }
     return (endpoint[0] & 0x80U) != 0 && endpoint[3] == 0x24;
 }
@@ -491,25 +511,62 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
     return "unknown";
 }
 
+rainpoint::PairingSessionState currentPairingState() {
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        return valvePairingSession.state();
+    }
+#endif
+    return pairingSession.state();
+}
+
+std::size_t currentPairingCompletedSteps() {
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        return valvePairingSession.completedSteps();
+    }
+#endif
+    return pairingSession.completedSteps();
+}
+
+rainpoint::PairingFailureReason currentPairingFailureReason() {
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        return valvePairingSession.failureReason();
+    }
+#endif
+    return pairingSession.failureReason();
+}
+
 void reportPairingStatus(const char* detail = nullptr) {
     String line;
     line.reserve(320);
     line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();
     line += "\",\"profile\":\"";
-    line += activePairingProfile.id;
+    line +=
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive ? rainpoint::kAutomaticHtv405ProfileId :
+#endif
+        activePairingProfile.id;
     line += "\",\"factory_endpoint\":\"";
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+            valvePairingActive ? activeValvePairingProfile.factoryEndpoint.data() :
+#endif
             activePairingProfile.factoryEndpoint.data(),
-            activePairingProfile.factoryEndpoint.size()
+            4
         );
     }
     line += "\",\"paired_endpoint\":\"";
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+            valvePairingActive ? activeValvePairingProfile.pairedEndpoint.data() :
+#endif
             activePairingProfile.pairedEndpoint.data(),
-            activePairingProfile.pairedEndpoint.size()
+            4
         );
     }
     line += '"';
@@ -519,11 +576,15 @@ void reportPairingStatus(const char* detail = nullptr) {
         line += '"';
     }
     line += ",\"state\":\"";
-    line += pairingStateName(pairingSession.state());
+    line += pairingStateName(currentPairingState());
     line += "\",\"completed_steps\":";
-    line += pairingSession.completedSteps();
+    line += currentPairingCompletedSteps();
     line += ",\"step_count\":";
-    line += activePairingProfile.stepCount;
+    line +=
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive ? rainpoint::kHtv405PairingStepCount :
+#endif
+        activePairingProfile.stepCount;
     line += ",\"assigned_channel\":";
     line += pairingAssignedChannel;
     line += ",\"automatic_discovery\":";
@@ -531,13 +592,23 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += ",\"factory_adopted\":";
     line += pairingFactoryAdopted ? "true" : "false";
     line += ",\"awaiting_terminal_confirmation\":";
-    line += pairingSession.awaitingTerminalConfirmation() ? "true" : "false";
-    line += ",\"terminal_trigger\":\"paired_message_3\"";
+    line +=
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive ? "false" :
+#endif
+        (pairingSession.awaitingTerminalConfirmation() ? "true" : "false");
+    line += ",\"terminal_trigger\":\"";
+    line +=
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive ? "final_reply" :
+#endif
+        "paired_message_3";
+    line += '"';
     line += ",\"failure_reason\":\"";
-    line += pairingFailureReasonName(pairingSession.failureReason());
+    line += pairingFailureReasonName(currentPairingFailureReason());
     line += '"';
     line += ",\"tx_armed\":";
-    line += pairingSession.state() == rainpoint::PairingSessionState::Armed
+    line += currentPairingState() == rainpoint::PairingSessionState::Armed
         ? "true"
         : "false";
     line += ",\"invert\":";
@@ -555,7 +626,7 @@ void reportPairingStatus(const char* detail = nullptr) {
     }
     line += '}';
     emitLine(line);
-    reportedPairingState = pairingSession.state();
+    reportedPairingState = currentPairingState();
 }
 
 void restoreScanningAfterPairing() {
@@ -567,6 +638,9 @@ void restoreScanningAfterPairing() {
 
 void cancelPairing(const char* detail) {
     pairingSession.cancel();
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    valvePairingSession.cancel();
+#endif
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
     reportPairingStatus(detail);
@@ -711,7 +785,7 @@ void handleNetworkCommand() {
         long powerDbm = 0;
         bool invert = false;
         rainpoint::RoutineAckAuthorization authorization{};
-        if (pairingSession.state() == rainpoint::PairingSessionState::Armed ||
+        if (currentPairingState() == rainpoint::PairingSessionState::Armed ||
             !parseHexEndpoint(endpointValue, authorization.pairedEndpoint) ||
             !jsonLongField(command, "assigned_channel", assignedChannel) ||
             !jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
@@ -769,7 +843,7 @@ void handleNetworkCommand() {
         const String sha256 = jsonStringField(command, "sha256");
         long sizeBytes = 0;
         if (!jsonLongField(command, "size_bytes", sizeBytes) ||
-            sizeBytes <= 0 || pairingSession.state() ==
+            sizeBytes <= 0 || currentPairingState() ==
                 rainpoint::PairingSessionState::Armed) {
             reportNetworkCommandError(commandId, "invalid_update_request");
             return;
@@ -799,7 +873,7 @@ void handleNetworkCommand() {
         reportNetworkCommandError(commandId, "unsupported_command");
         return;
     }
-    if (pairingSession.state() == rainpoint::PairingSessionState::Armed) {
+    if (currentPairingState() == rainpoint::PairingSessionState::Armed) {
         reportNetworkCommandError(commandId, "pairing_is_armed");
         return;
     }
@@ -814,7 +888,10 @@ void handleNetworkCommand() {
     const rainpoint::PairingProfile* requestedProfile = nullptr;
     bool requestedAutomaticDiscovery = false;
     bool requestedAutomaticRejoin = false;
+    bool requestedValvePairing = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
+    std::array<std::uint8_t, 4> requestedValveRoute{};
+    std::array<std::uint8_t, 4> requestedCompanionEndpoint{};
     bool requestedKnownFactory = false;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
     const String sensorAFactory = hexString(
@@ -825,7 +902,23 @@ void handleNetworkCommand() {
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.data(),
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.size()
     );
-    if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
+    if (
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        profile == rainpoint::kAutomaticHtv405ProfileId &&
+        parseRawHexEndpoint(factory, requestedFactoryEndpoint) &&
+        parseRawHexEndpoint(
+            jsonStringField(command, "valve_route"), requestedValveRoute
+        ) &&
+        parseRawHexEndpoint(
+            jsonStringField(command, "companion_endpoint"),
+            requestedCompanionEndpoint
+        )
+#else
+        false
+#endif
+    ) {
+        requestedValvePairing = true;
+    } else if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedAutomaticDiscovery = true;
     } else if (profile == rainpoint::kAutomaticHcs026ProfileId &&
@@ -849,7 +942,7 @@ void handleNetworkCommand() {
         requestedProfile = &activePairingProfile;
     }
 #endif
-    if (requestedProfile == nullptr) {
+    if (requestedProfile == nullptr && !requestedValvePairing) {
         reportNetworkCommandError(commandId, "unsupported_pairing_profile");
         return;
     }
@@ -876,9 +969,26 @@ void handleNetworkCommand() {
         return;
     }
 
-    activePairingProfile = *requestedProfile;
     pairingAutomaticDiscovery = requestedAutomaticDiscovery;
     pairingFactoryAdopted = !requestedAutomaticDiscovery;
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    valvePairingActive = requestedValvePairing;
+    if (requestedValvePairing) {
+        if (!rainpoint::buildAutomaticHtv405Profile(
+            requestedFactoryEndpoint,
+            requestedValveRoute,
+            requestedCompanionEndpoint,
+            activeValvePairingProfile
+        )) {
+            reportNetworkCommandError(commandId, "valve_association_invalid");
+            valvePairingActive = false;
+            return;
+        }
+        pairingAssignedChannel = 0;
+    } else
+#endif
+    {
+        activePairingProfile = *requestedProfile;
 #if RAINPOINT_PAIRING_GENERALIZATION == 1
     // Same-selector coexistence is physically validated: addressed sensors can
     // share one RF channel, so selector allocation must not imply uniqueness.
@@ -913,6 +1023,7 @@ void handleNetworkCommand() {
         activePairingProfile.steps[0].frame
     );
 #endif
+    }
     pairingCommandId = commandId;
     pairingFrequencyOffsetHz = static_cast<std::int32_t>(frequencyOffsetHz);
     pairingPowerDbm = static_cast<std::int8_t>(powerDbm);
@@ -924,9 +1035,18 @@ void handleNetworkCommand() {
     scanChannels = false;
     selectChannel(0);
 #endif
-    pairingSession.arm(
-        millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
-    );
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        valvePairingSession.arm(
+            millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
+        );
+    } else
+#endif
+    {
+        pairingSession.arm(
+            millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
+        );
+    }
     pairingRequiresNetwork = true;
     reportPairingStatus("waiting_for_factory_message_1");
 }
@@ -1185,7 +1305,55 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (&radio == &primaryRadio && valvePairingActive &&
+        valvePairingSession.state() == rainpoint::PairingSessionState::Armed) {
+        const std::size_t beforeStep = valvePairingSession.completedSteps();
+        const rainpoint::Htv405PairingStep* step =
+            valvePairingSession.claimReply(frame, millis());
+        if (step != nullptr) {
+            auto replyDateTime = pairingLocalDateTime;
+            const bool pairingClockValid =
+                rainpoint::advancePairingLocalDateTime(
+                    replyDateTime,
+                    (millis() - pairingLocalDateTimeSetAtMs) / 1'000
+                );
+            std::array<std::uint8_t, rainpoint::kFrameBytes> replyFrame{};
+            const bool built = pairingClockValid &&
+                rainpoint::buildHtv405PairingReply(
+                    activeValvePairingProfile,
+                    beforeStep,
+                    replyDateTime,
+                    replyFrame
+                );
+            delay(rainpoint::kHtv405ReplyDelayMs);
+            const std::int64_t adjustedFrequency =
+                static_cast<std::int64_t>(step->channelCenterHz) +
+                pairingFrequencyOffsetHz;
+            const bool sent = built && radio.transmitAsync(
+                replyFrame,
+                static_cast<std::uint32_t>(adjustedFrequency),
+                rainpoint::kPairingWakeSymbols,
+                pairingInvert,
+                rainpoint::pairingPaTableValue(pairingPowerDbm),
+                step->deviationRegister
+            );
+            valvePairingSession.finishReply(sent, millis());
+            reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
+        } else if (valvePairingSession.completedSteps() > beforeStep) {
+            reportPairingStatus("no_reply_step_observed");
+        }
+        if (valvePairingSession.state() !=
+            rainpoint::PairingSessionState::Armed) {
+            pairingRequiresNetwork = false;
+            restoreScanningAfterPairing();
+        }
+    }
+#endif
     if (&radio == &primaryRadio &&
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        !valvePairingActive &&
+#endif
         pairingSession.state() == rainpoint::PairingSessionState::Armed) {
         const auto pairingStateBeforeFrame = pairingSession.state();
         if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
@@ -1255,7 +1423,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     }
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     if (&radio == &primaryRadio &&
-        pairingSession.state() != rainpoint::PairingSessionState::Armed) {
+        currentPairingState() != rainpoint::PairingSessionState::Armed) {
         const auto* authorization = routineAckAuthorizations.match(frame);
         if (authorization != nullptr) {
             std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
@@ -1334,7 +1502,13 @@ void setup() {
 #else
         "\",\"mode\":\"radio_node\",\"local_tx_controls\":false,"
 #endif
-        "\"pairing_tx_available\":true,\"tx_armed\":false,"
+        "\"pairing_tx_available\":true,"
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        "\"valve_pairing_tx_candidate\":true,"
+#else
+        "\"valve_pairing_tx_candidate\":false,"
+#endif
+        "\"valve_control_available\":false,\"tx_armed\":false,"
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         "\"routine_ack_candidate\":true,"
         "\"routine_ack_authorization_persistent\":false,"
@@ -1438,9 +1612,16 @@ void loop() {
     pollRadio("primary", primaryRadio);
     pollRadio("diagnostic", diagnosticRadio);
 #endif
-    pairingSession.tick(millis());
-    if (pairingSession.state() != reportedPairingState) {
-        if (pairingSession.state() != rainpoint::PairingSessionState::Armed) {
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        valvePairingSession.tick(millis());
+    } else
+#endif
+    {
+        pairingSession.tick(millis());
+    }
+    if (currentPairingState() != reportedPairingState) {
+        if (currentPairingState() != rainpoint::PairingSessionState::Armed) {
             pairingRequiresNetwork = false;
             restoreScanningAfterPairing();
         }

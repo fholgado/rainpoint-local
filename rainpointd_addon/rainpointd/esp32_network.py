@@ -152,6 +152,11 @@ class ESP32NetworkServer:
             required_capability = "firmware_update_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
+        elif (
+            command_type == "pairing_start"
+            and message.get("profile") == "htv405_auto_candidate_v1"
+        ):
+            required_capability = "valve_pairing_tx_candidate"
         else:
             required_capability = "sensor_pairing_tx"
         if required_capability not in session["capabilities"]:
@@ -457,6 +462,7 @@ class ESP32NetworkServer:
                         "sensor_pairing_tx",
                         "identify",
                         "routine_sensor_ack_tx",
+                        "valve_pairing_tx_candidate",
                         "firmware_update_trial",
                     }
                 )

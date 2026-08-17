@@ -281,6 +281,21 @@ class RequestHandler(BaseHTTPRequestHandler):
                         profile_id=str(
                             body.get("profile_id", "hcs026_auto_v1")
                         ),
+                        factory_endpoint=(
+                            str(body["factory_endpoint"])
+                            if body.get("factory_endpoint") is not None
+                            else None
+                        ),
+                        valve_route=(
+                            str(body["valve_route"])
+                            if body.get("valve_route") is not None
+                            else None
+                        ),
+                        companion_endpoint=(
+                            str(body["companion_endpoint"])
+                            if body.get("companion_endpoint") is not None
+                            else None
+                        ),
                     )
                     self._json(201, result)
                     return

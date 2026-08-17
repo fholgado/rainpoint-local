@@ -25,6 +25,11 @@ from .pairing_protocol import (
     automatic_hcs026_profile_metadata,
     pairing_profile,
 )
+from .valve_pairing_protocol import (
+    AUTOMATIC_HTV405_PROFILE_ID,
+    automatic_htv405_profile_metadata,
+    build_htv405_profile,
+)
 from .product_identity import (
     GENERIC_HCS02X_MODEL,
     HCS026_MODEL,
@@ -140,6 +145,7 @@ class Gateway:
         ) = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_command_id: str | None = None
+        self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
@@ -1391,6 +1397,9 @@ class Gateway:
         *,
         node_id: str | None = None,
         profile_id: str = AUTOMATIC_HCS026_PROFILE_ID,
+        factory_endpoint: str | None = None,
+        valve_route: str | None = None,
+        companion_endpoint: str | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Open enrollment and optionally arm one authenticated radio node."""
@@ -1402,6 +1411,7 @@ class Gateway:
             self._pairing.start(duration_seconds, now=now)
             self._active_pairing_node_id = None
             self._active_pairing_command_id = None
+            self._active_pairing_profile_id = None
             self._active_pairing_ack_parameters = None
             if node_id is not None:
                 nodes = {item["node_id"]: item for item in self._pairing_nodes()}
@@ -1412,7 +1422,22 @@ class Gateway:
                     self._pairing.stop()
                     raise RuntimeError("radio-node command transport is unavailable")
                 automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
-                if automatic:
+                valve_candidate = profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                valve_profile = None
+                if valve_candidate:
+                    try:
+                        valve_profile = build_htv405_profile(
+                            factory_endpoint=str(factory_endpoint or ""),
+                            valve_route=str(valve_route or ""),
+                            companion_endpoint=str(companion_endpoint or ""),
+                        )
+                    except ValueError:
+                        self._pairing.stop()
+                        raise ValueError(
+                            "invalid HTV405 association identifiers"
+                        ) from None
+                    clock_lead_seconds = 240
+                elif automatic:
                     clock_lead_seconds = 240
                 else:
                     try:
@@ -1437,7 +1462,16 @@ class Gateway:
                     "invert": False,
                 }
                 if not automatic:
-                    command["factory_endpoint"] = profile.factory_endpoint
+                    command["factory_endpoint"] = (
+                        valve_profile.factory_endpoint
+                        if valve_profile is not None
+                        else profile.factory_endpoint
+                    )
+                if valve_profile is not None:
+                    command["valve_route"] = valve_profile.valve_route
+                    command["companion_endpoint"] = (
+                        valve_profile.companion_endpoint
+                    )
                 try:
                     self._node_command_sender(node_id, command)
                 except (ConnectionError, KeyError, RuntimeError, ValueError):
@@ -1445,6 +1479,7 @@ class Gateway:
                     raise
                 self._active_pairing_node_id = node_id
                 self._active_pairing_command_id = command_id
+                self._active_pairing_profile_id = profile_id
                 self._active_pairing_ack_parameters = {
                     "frequency_offset_hz": command["frequency_offset_hz"],
                     "power_dbm": command["power_dbm"],
@@ -1507,7 +1542,15 @@ class Gateway:
                 reported_endpoint = selected_node.get(
                     "pairing_paired_endpoint"
                 )
-                if isinstance(reported_endpoint, str):
+                if (
+                    self._active_pairing_profile_id
+                    == AUTOMATIC_HTV405_PROFILE_ID
+                    and isinstance(reported_endpoint, str)
+                    and re.fullmatch(r"[89a-f][0-9a-f]{5}13", reported_endpoint)
+                ):
+                    completed_endpoint = reported_endpoint
+                    stage = "valve_pairing_completed"
+                elif isinstance(reported_endpoint, str):
                     reported_endpoint = reported_endpoint.strip().lower()
                     try:
                         reported_factory = factory_endpoint(reported_endpoint)
@@ -1523,11 +1566,12 @@ class Gateway:
                             item.get("paired_endpoint") == reported_endpoint
                             for item in new_records
                         )
-                stage = (
-                    "paired_identity_observed"
-                    if completed_endpoint is not None
-                    else "terminal_confirmation_processing"
-                )
+                if stage != "valve_pairing_completed":
+                    stage = (
+                        "paired_identity_observed"
+                        if completed_endpoint is not None
+                        else "terminal_confirmation_processing"
+                    )
             elif selected_node.get(
                 "pairing_awaiting_terminal_confirmation"
             ) is True:
@@ -1540,11 +1584,15 @@ class Gateway:
                 )
         return {
             "available": True,
-            "supported_profiles": [automatic_hcs026_profile_metadata()],
+            "supported_profiles": [
+                automatic_hcs026_profile_metadata(),
+                automatic_htv405_profile_metadata(),
+            ],
             "transmitter_available": bool(pairing_nodes),
             "transmitter_required": True,
             "pairing_nodes": pairing_nodes,
             "selected_node_id": self._active_pairing_node_id,
+            "active_profile_id": self._active_pairing_profile_id,
             "command_id": self._active_pairing_command_id,
             "transmit_performed": self._active_pairing_node_id is not None,
             "stage": stage,
@@ -1823,6 +1871,7 @@ class Gateway:
                 pass
         self._active_pairing_node_id = None
         self._active_pairing_command_id = None
+        self._active_pairing_profile_id = None
         self._active_pairing_ack_parameters = None
 
     def accept_endpoint(

@@ -6,8 +6,11 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Valve transmission is deliberately disabled until pairing, close commands, and
-the independent safety controller have passed physical validation.
+Valve control is deliberately disabled until pairing, close commands, and the
+independent safety controller have passed physical validation. An internal,
+explicitly armed HTV405 enrollment candidate is available for isolated bench
+validation; it is not exposed in the Home Assistant UI or enabled on deployed
+radio nodes yet.
 
 ## What works today
 
@@ -47,6 +50,8 @@ device slots.
 
 ### Valve telemetry and safety groundwork
 
+- Reconstruct the captured 18-step HTV405 enrollment transcript as a bounded,
+  association-specific candidate with 17 replies and no watering commands.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
   last-session duration, and water usage.
 - Correlate local RF valve events with Home Assistant/cloud observations.
@@ -195,8 +200,10 @@ runtime dependency.
 - Improve final radio-node placement where Wi-Fi or RF margins are weak.
 - Add encrypted node sessions, credential rotation, and asymmetric OTA release
   signatures before treating the trusted-LAN prototype as publishable.
-- Capture and validate generic valve enrollment, close, status, and bounded
-  open behavior on isolated test hardware.
+- Physically validate the HTV405 enrollment candidate on the isolated test
+  valve, then generalize it from another association if the evidence differs.
+- Capture and validate close, status, and bounded open behavior on isolated
+  test hardware.
 - Only then connect physical valve commands to the safety controller and begin
   cloud-to-local migration work with the existing HomGar integration.
 

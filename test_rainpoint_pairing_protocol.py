@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -22,6 +23,13 @@ from rainpointd.pairing_protocol import (  # noqa: E402
     automatic_hcs026_profile_metadata,
     pairing_profile,
     pairing_profile_for_factory,
+)
+from rainpointd.valve_pairing_protocol import (  # noqa: E402
+    AUTOMATIC_HTV405_PROFILE_ID,
+    automatic_htv405_profile_metadata,
+    build_htv405_profile,
+    frame_for_step,
+    request_matches,
 )
 from tools.demod_rainpoint_reply_iq import demodulate  # noqa: E402
 from tools.generate_rainpoint_iq import generate_command  # noqa: E402
@@ -237,7 +245,12 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual("HTV405FRF", self.fixture["model"])
         self.assertEqual(18, len(self.fixture["exchanges"]))
         for exchange in self.fixture["exchanges"]:
-            for direction in ("request_frame", "reply_frame"):
+            directions = ["request_frame"]
+            if "reply_frame" in exchange:
+                directions.append("reply_frame")
+            if "observed_followup_frame" in exchange:
+                directions.append("observed_followup_frame")
+            for direction in directions:
                 with self.subTest(
                     request_kind=exchange["request_kind"], direction=direction
                 ):
@@ -272,8 +285,9 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         )
         self.assertTrue(
             all(
-                exchange["reply_channel_hz"] == channels["routine_reply_hz"]
+                exchange.get("reply_channel_hz") == channels["routine_reply_hz"]
                 for exchange in exchanges[1:]
+                if exchange.get("reply_expected", True)
             )
         )
         modulation = self.fixture["initial_assignment_modulation"]
@@ -282,6 +296,16 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             modulation["tone_separation_hz"],
         )
         self.assertEqual(70_007, modulation["tone_separation_hz"])
+        self.assertEqual(
+            channels["initial_assignment_hz"],
+            channels["candidate_initial_command_hz"]
+            + channels["candidate_frequency_offset_hz"],
+        )
+        self.assertEqual(
+            channels["routine_reply_hz"],
+            channels["candidate_routine_command_hz"]
+            + channels["candidate_frequency_offset_hz"],
+        )
 
     def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
         for exchange in self.fixture["exchanges"][1:4]:
@@ -291,6 +315,60 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
                 self.assertEqual(request[13] & 0x7F, reply[13] & 0x7F)
                 self.assertEqual(0x41, reply[14] & 0x7F)
                 self.assertEqual(0x01, reply[15])
+
+    def test_runtime_profile_reconstructs_the_captured_association(self) -> None:
+        profile = build_htv405_profile(
+            factory_endpoint=self.fixture["factory_endpoint"],
+            valve_route="b9840280",
+            companion_endpoint=self.fixture["companion_endpoint"],
+        )
+        self.assertEqual(AUTOMATIC_HTV405_PROFILE_ID, profile.profile_id)
+        self.assertEqual(self.fixture["paired_endpoint"], profile.paired_endpoint)
+        for index, exchange in enumerate(self.fixture["exchanges"]):
+            with self.subTest(index=index, kind=exchange["request_kind"]):
+                request = bytes.fromhex(exchange["request_frame"])
+                self.assertTrue(request_matches(profile, index, request))
+                if exchange.get("reply_expected", True):
+                    reply = bytes.fromhex(exchange["reply_frame"])
+                    self.assertEqual(reply, frame_for_step(profile, index))
+                else:
+                    self.assertIsNone(frame_for_step(profile, index))
+
+    def test_profile_requires_association_specific_identifiers(self) -> None:
+        with self.assertRaisesRegex(ValueError, "HTV405"):
+            build_htv405_profile(
+                factory_endpoint="14a98024",
+                valve_route="b9840280",
+                companion_endpoint="39840280",
+            )
+        with self.assertRaisesRegex(ValueError, "cannot be zero"):
+            build_htv405_profile(
+                factory_endpoint="14a98013",
+                valve_route="00000000",
+                companion_endpoint="39840280",
+            )
+        metadata = automatic_htv405_profile_metadata()
+        self.assertTrue(metadata["experimental"])
+        self.assertTrue(metadata["transmit_enabled"])
+        self.assertFalse(metadata["valve_control_enabled"])
+        self.assertEqual(18, metadata["step_count"])
+
+    def test_valve_clock_keeps_the_captured_marker_bits(self) -> None:
+        profile = build_htv405_profile(
+            factory_endpoint="14a98013",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+        )
+        frame = frame_for_step(
+            profile,
+            0,
+            local_clock=datetime(2026, 8, 17, 18, 56, 58),
+        )
+        self.assertEqual(bytes.fromhex("9d97118d"), frame[21:25])
+        residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+            frame[-2:], "big"
+        )
+        self.assertEqual(0xC713, residual)
 
 
 if __name__ == "__main__":

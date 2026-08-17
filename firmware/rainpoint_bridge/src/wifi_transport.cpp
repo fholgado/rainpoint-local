@@ -319,6 +319,9 @@ void WifiTransport::authenticate(const String& nonce) {
 #endif
         "\"gateway_host\":\"%s\","
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        ",\"valve_pairing_tx_candidate\""
+#endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
 #endif

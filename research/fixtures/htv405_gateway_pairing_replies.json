@@ -11,7 +11,10 @@
   "channels": {
     "valve_request_hz": 433141696,
     "initial_assignment_hz": 433506030,
-    "routine_reply_hz": 434351001
+    "routine_reply_hz": 434351001,
+    "candidate_frequency_offset_hz": 45000,
+    "candidate_initial_command_hz": 433461030,
+    "candidate_routine_command_hz": 434306001
   },
   "initial_assignment_modulation": {
     "lower_tone_hz": 433471027,
@@ -47,8 +50,10 @@
     {
       "request_kind": "paired_message_2_repeat",
       "request_frame": "79f4882f28b984028094a98013028107860582004f8000000040800056800000000000006f0a",
-      "reply_frame": "79f4882f28b984028094a9801308d00080000000000000000000000000000000000000006c02",
-      "reply_channel_hz": 434351001
+      "reply_expected": false,
+      "observed_followup_frame": "79f4882f28b984028094a9801308d00080000000000000000000000000000000000000006c02",
+      "observed_followup_channel_hz": 434351657,
+      "notes": "The following burst retains the valve-side route and is not a gateway reply. Advance without transmitting."
     },
     {
       "request_kind": "paired_message_3",

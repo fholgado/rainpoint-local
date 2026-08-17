@@ -30,7 +30,8 @@ public:
         std::uint32_t centerFrequencyHz,
         std::uint16_t wakeSymbols,
         bool invert = false,
-        std::uint8_t paTableValue = 0x60
+        std::uint8_t paTableValue = 0x60,
+        std::uint8_t deviationRegister = 0x45
     );
     bool poll(RadioPacket& packet);
     std::uint8_t channel() const;

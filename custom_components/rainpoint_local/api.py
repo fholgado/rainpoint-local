@@ -221,15 +221,25 @@ class RainPointLocalClient:
         *,
         node_id: str,
         profile_id: str = "hcs026_auto_v1",
+        factory_endpoint: str | None = None,
+        valve_route: str | None = None,
+        companion_endpoint: str | None = None,
     ) -> dict[str, Any]:
         """Open pairing and arm one authenticated local radio node."""
+        payload: dict[str, Any] = {
+            "duration_seconds": duration_seconds,
+            "node_id": node_id,
+            "profile_id": profile_id,
+        }
+        if factory_endpoint is not None:
+            payload["factory_endpoint"] = factory_endpoint
+        if valve_route is not None:
+            payload["valve_route"] = valve_route
+        if companion_endpoint is not None:
+            payload["companion_endpoint"] = companion_endpoint
         return await self._post(
             "pairing/start",
-            {
-                "duration_seconds": duration_seconds,
-                "node_id": node_id,
-                "profile_id": profile_id,
-            },
+            payload,
             token,
         )
 

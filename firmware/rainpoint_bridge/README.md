@@ -9,6 +9,15 @@ It does **not** implement valve control or arbitrary RF transmission. Historical
 pairing captures and experiments live under `research/`; they are protocol
 evidence, not alternative firmware builds.
 
+The standard source tree also contains an experimental HTV405 enrollment
+candidate. It can only run after the authenticated gateway supplies the factory
+endpoint and both association routes, and it matches the captured request
+sequence exactly. The sequence has 18 valve-originated steps and 17 bounded
+gateway replies; one step intentionally advances without transmitting. The
+candidate is not exposed in the Home Assistant pairing UI and must not be used
+on a connected irrigation valve until the isolated hardware-validation plan is
+started explicitly.
+
 ## Supported hardware and wiring
 
 The tested board is an ESP-WROOM-32 development board with USB-C and one 433 MHz
@@ -37,6 +46,8 @@ capacitor across CC1101 VCC/GND when practical.
   scan both channels to broaden passive coverage.
 - Supports the validated HCS026 automatic pairing profile without asking users
   for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
+- Compiles the association-specific HTV405 enrollment candidate while keeping
+  every valve-control command absent from the firmware boundary.
 - Recovers a known dormant sensor from its strict factory announcement with one
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated
@@ -143,5 +154,6 @@ pairing, acknowledgement, channel, or trailer behavior.
   unavailable to the locally paired sensors.
 - Test ACK-owner reassignment and interrupted/power-loss OTA rollback.
 - Add signed releases and a reviewed secure session transport.
-- Capture, reconstruct, and validate valve pairing and fail-safe close before
-  enabling any physical valve control.
+- Physically validate and generalize the reconstructed HTV405 enrollment
+  candidate, then validate fail-safe close before enabling physical valve
+  control.
