@@ -167,6 +167,29 @@ these fields, but HTV405 frame construction remains deliberately unavailable
 until custom enrollment, acknowledgement, idempotent close, and the node-local
 watchdog are validated on the isolated valve.
 
+### HTV405FRF enrollment exchange
+
+A second isolated enrollment captured the complete stock-gateway exchange.
+The factory endpoint `14a98013` became `94a98013`, again by setting the high
+bit of the first endpoint byte. The valve then exchanged messages `01` through
+`09` with companion route `39840280`. The full request/reply transcript is
+retained in `research/fixtures/htv405_gateway_pairing_replies.json`.
+
+The initial assignment reply occupied a distinct channel near 433.506 MHz and
+used tones near 433.471 and 433.541 MHz: approximately 70 kHz separation and
+35 kHz deviation. Its upper tone was weaker, so a midpoint-only demodulator
+missed the frame. Subsequent gateway replies moved near 434.351 MHz and used
+the ordinary approximately 80 kHz tone separation, while valve requests were
+near 433.142 MHz. Valve enrollment must therefore support a separate initial
+reply profile rather than reusing the HCS026 sensor profile unchanged.
+
+The first routine replies mirror the request message counter in the low seven
+bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
+receive-side assignment and acknowledgement transcript, but does not yet
+authorize transmission. Local valve pairing remains disabled until the exact
+reply timing and waveform are physically validated against the isolated test
+valve.
+
 ## HCS026FRF enrollment lifecycle
 
 Two controlled sensors established the same receive-side enrollment sequence.

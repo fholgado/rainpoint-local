@@ -1,0 +1,133 @@
+{
+  "captured_at": "2026-08-17",
+  "model": "HTV405FRF",
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "symbol_rate_sps": 20000,
+  "factory_endpoint": "14a98013",
+  "paired_endpoint": "94a98013",
+  "companion_endpoint": "39840280",
+  "interpretation": "Stock RainPoint gateway assignment and acknowledgement frames recovered from an isolated valve re-enrollment IQ capture",
+  "channels": {
+    "valve_request_hz": 433141696,
+    "initial_assignment_hz": 433506030,
+    "routine_reply_hz": 434351001
+  },
+  "initial_assignment_modulation": {
+    "lower_tone_hz": 433471027,
+    "upper_tone_hz": 433541034,
+    "tone_separation_hz": 70007,
+    "deviation_hz": 35004
+  },
+  "exchanges": [
+    {
+      "request_kind": "factory_announcement",
+      "request_frame": "79f4882f288000000014a9801300808402ff93130000bd848000000000000000000000004795",
+      "reply_frame": "79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c",
+      "reply_channel_hz": 433506030
+    },
+    {
+      "request_kind": "paired_message_1",
+      "request_frame": "79f4882f28b984028094a98013010107862580804f8000000040800056800000000000001a73",
+      "reply_frame": "79f4882f2894a980133984028081410100008000000000000000000000000000000000005c10",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_1_repeat",
+      "request_frame": "79f4882f28b984028094a98013018107860581004f8000000040800056800000000000004875",
+      "reply_frame": "79f4882f2894a980133984028081c10100008000000000000000000000000000000000006e95",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_2",
+      "request_frame": "79f4882f28b984028094a98013020107860581804f80000000408000568000000000000025e5",
+      "reply_frame": "79f4882f2894a980133984028082410100008000000000000000000000000000000000007b1d",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_2_repeat",
+      "request_frame": "79f4882f28b984028094a98013028107860582004f8000000040800056800000000000006f0a",
+      "reply_frame": "79f4882f28b984028094a9801308d00080000000000000000000000000000000000000006c02",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_3",
+      "request_frame": "79f4882f28b984028094a98013030107860582004f8000000040800056800000000000003884",
+      "reply_frame": "79f4882f2894a980133984028083410100010000000000000000000000000000000000002716",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_3_short",
+      "request_frame": "79f4882f28b984028094a98013038281060080000000000000000000000000000000000033cc",
+      "reply_frame": "79f4882f2894a980133984028083c287802c0105000f00000000000000000000000000003187",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_4_short",
+      "request_frame": "79f4882f28b984028094a9801304028106010000000000000000000000000000000000001359",
+      "reply_frame": "79f4882f2894a9801339840280844287802c0105000f00000000000000000000000000002812",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_4_short_repeat",
+      "request_frame": "79f4882f28b984028094a9801304828106018000000000000000000000000000000000004ed3",
+      "reply_frame": "79f4882f2894a980133984028084c287802c0105000f00000000000000000000000000001a97",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_5_short",
+      "request_frame": "79f4882f28b984028094a9801305028106020000000000000000000000000000000000000452",
+      "reply_frame": "79f4882f2894a9801339840280854287802c0105000f00000000000000000000000000004d19",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_5",
+      "request_frame": "79f4882f28b984028094a9801305830186008000000000000000000000000000000000004c18",
+      "reply_frame": "79f4882f2894a980133984028085c3008000000000000000000000000000000000000000693a",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_6",
+      "request_frame": "79f4882f28b984028094a9801306030186010000000000000000000000000000000000006090",
+      "reply_frame": "79f4882f2894a980133984028086430080000000000000000000000000000000000000007cb2",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_6_repeat",
+      "request_frame": "79f4882f28b984028094a9801306830186018000000000000000000000000000000000003d1a",
+      "reply_frame": "79f4882f2894a980133984028086c30080000000000000000000000000000000000000004e37",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_7",
+      "request_frame": "79f4882f28b984028094a980130703018602000000000000000000000000000000000000779b",
+      "reply_frame": "79f4882f2894a9801339840280874300800000000000000000000000000000000000000019b9",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_7_extended",
+      "request_frame": "79f4882f28b984028094a9801307ac80990000000000000000000000000000000000000071cf",
+      "reply_frame": "79f4882f2894a980133984028087ec87801906323232323232323232323232000000000076aa",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_8_extended",
+      "request_frame": "79f4882f28b984028094a98013082c8099800000000000000000000000000000000000006ab8",
+      "reply_frame": "79f4882f2894a9801339840280886c878019863232323232323232323232320000000000180b",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_8_extended_repeat",
+      "request_frame": "79f4882f28b984028094a9801308ac809a000000000000000000000000000000000000001c31",
+      "reply_frame": "79f4882f2894a980133984028088ec87801a0632323232323232323232323200000000003781",
+      "reply_channel_hz": 434351001
+    },
+    {
+      "request_kind": "paired_message_9_extended",
+      "request_frame": "79f4882f28b984028094a98013092c809a800000000000000000000000000000000000005166",
+      "reply_frame": "79f4882f2894a9801339840280896c87801a8632323232323232323232323200000000000f00",
+      "reply_channel_hz": 434351001
+    }
+  ],
+  "notes": "The initial assignment reply uses a biased 70 kHz tone pair and was missed by midpoint-only demodulation. Routine replies use the ordinary approximately 80 kHz tone separation. This is receive-side evidence only; valve transmit remains disabled pending physical local pairing and safety validation."
+}

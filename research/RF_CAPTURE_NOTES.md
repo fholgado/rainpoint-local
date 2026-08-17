@@ -90,6 +90,29 @@ then emitted a separate closed-state report roughly 1--9 seconds later. The
 local trial bundle is `four-zone-stock-enrollment-20260817`; raw household
 events remain ignored while the generalized protocol fixtures are committed.
 
+### HTV405FRF isolated re-enrollment — 2026-08-17
+
+Deleting and re-enrolling only the dry test valve produced a raw 2.0 Msps IQ
+archive spanning the factory announcement, stock-gateway assignment, and the
+complete paired message sequence through message `09`. The factory endpoint
+`14a98013` again became `94a98013`, with companion route `39840280`.
+
+Ordinary demodulation recovered the lower-channel valve messages but initially
+missed the first gateway reply. That burst had the expected 31 ms envelope,
+but used a biased tone pair near 433.471 and 433.541 MHz. A threshold and clock
+search recovered 1,804 agreeing candidates for the exact valid frame:
+
+```text
+79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c
+```
+
+Later gateway replies moved near 434.351 MHz and returned to the ordinary
+approximately 80 kHz tone spacing. The compact generalized transcript is
+committed as `fixtures/htv405_gateway_pairing_replies.json`; the verified
+111 MB raw capture remains ignored locally. The temporary raw-capture add-on
+was removed after copying and checksum verification, and the production add-on
+was restored to normal RTL-SDR operation.
+
 ## Multi-channel sensor discovery
 
 A 1.024 Msps window near 434 MHz retained upper-channel notification traffic

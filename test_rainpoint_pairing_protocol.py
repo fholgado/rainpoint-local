@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import json
 import sys
 import tempfile
@@ -223,6 +224,73 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         )
         self.assertTrue(controller.complete)
         self.assertTrue(controller.status()["terminal_confirmed"])
+
+
+class HTV405PairingEvidenceTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.fixture = json.loads(
+            (ROOT / "research/fixtures/htv405_gateway_pairing_replies.json").read_text()
+        )
+
+    def test_fixture_is_a_complete_valid_exchange(self) -> None:
+        self.assertEqual("HTV405FRF", self.fixture["model"])
+        self.assertEqual(18, len(self.fixture["exchanges"]))
+        for exchange in self.fixture["exchanges"]:
+            for direction in ("request_frame", "reply_frame"):
+                with self.subTest(
+                    request_kind=exchange["request_kind"], direction=direction
+                ):
+                    frame = bytes.fromhex(exchange[direction])
+                    self.assertEqual(38, len(frame))
+                    self.assertEqual(bytes.fromhex("79f4882f28"), frame[:5])
+                    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+                        frame[-2:], "big"
+                    )
+                    self.assertIn(residual, (0xC713, 0x4F03))
+
+    def test_factory_identity_is_promoted_to_paired_identity(self) -> None:
+        factory = bytes.fromhex(self.fixture["factory_endpoint"])
+        paired = bytes.fromhex(self.fixture["paired_endpoint"])
+        self.assertEqual(bytes([factory[0] | 0x80]) + factory[1:], paired)
+
+        initial = self.fixture["exchanges"][0]
+        request = bytes.fromhex(initial["request_frame"])
+        reply = bytes.fromhex(initial["reply_frame"])
+        self.assertEqual(bytes.fromhex("80000000"), request[5:9])
+        self.assertEqual(factory, request[9:13])
+        self.assertEqual(paired, reply[5:9])
+        self.assertEqual(
+            bytes.fromhex(self.fixture["companion_endpoint"]), reply[9:13]
+        )
+
+    def test_assignment_and_routine_replies_use_distinct_rf_profiles(self) -> None:
+        channels = self.fixture["channels"]
+        exchanges = self.fixture["exchanges"]
+        self.assertEqual(
+            channels["initial_assignment_hz"], exchanges[0]["reply_channel_hz"]
+        )
+        self.assertTrue(
+            all(
+                exchange["reply_channel_hz"] == channels["routine_reply_hz"]
+                for exchange in exchanges[1:]
+            )
+        )
+        modulation = self.fixture["initial_assignment_modulation"]
+        self.assertEqual(
+            modulation["upper_tone_hz"] - modulation["lower_tone_hz"],
+            modulation["tone_separation_hz"],
+        )
+        self.assertEqual(70_007, modulation["tone_separation_hz"])
+
+    def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
+        for exchange in self.fixture["exchanges"][1:4]:
+            with self.subTest(request_kind=exchange["request_kind"]):
+                request = bytes.fromhex(exchange["request_frame"])
+                reply = bytes.fromhex(exchange["reply_frame"])
+                self.assertEqual(request[13] & 0x7F, reply[13] & 0x7F)
+                self.assertEqual(0x41, reply[14] & 0x7F)
+                self.assertEqual(0x01, reply[15])
 
 
 if __name__ == "__main__":
