@@ -38,6 +38,7 @@ from rainpointd.valve_protocol import (  # noqa: E402
     build_open_frame,
     close_candidates,
     decode_duration,
+    decode_htv405_control_frame,
     encode_duration,
     next_sequence,
     open_candidates,
@@ -1023,6 +1024,49 @@ class RainPointRFTest(unittest.TestCase):
         self.assertFalse(decoded["is_watering"])
         self.assertEqual("idle", decoded["valve_state"])
         self.assertNotIn("duration_seconds", decoded)
+
+    def test_decodes_crossed_htv405_zone_and_duration_matrix(self) -> None:
+        frames = {
+            (1, 60): "79f4882f28b984028094a980130b010782858090cf80000000409b80569e0000000000002fc2",
+            (1, 120): "79f4882f28b984028094a980130e010782858090cf8000000040b98056bc0000000000002756",
+            (2, 60): "79f4882f28b984028094a980130f810782858110cf80000000409b80569e0000000000001163",
+            (2, 120): "79f4882f28b984028094a980130c810782858110cf8000000040b90056bc000000000000604e",
+            (3, 60): "79f4882f28b984028094a9801311010782858190cf80000000409b80569e0000000000003da8",
+            (3, 120): "79f4882f28b984028094a9801314010782858190cf8000000040b90056bc000000000000029e",
+            (4, 60): "79f4882f28b984028094a9801312810782858210cf80000000409b00569e00000000000067e8",
+            (4, 120): "79f4882f28b984028094a9801315810782858210cf8000000040b98056bc0000000000001ad8",
+        }
+        for (zone, duration), raw in frames.items():
+            with self.subTest(zone=zone, duration=duration):
+                decoded = decode_htv405_control_frame(bytes.fromhex(raw))
+                self.assertIsNotNone(decoded)
+                self.assertEqual(zone, decoded["zone"])
+                self.assertEqual(duration, decoded["duration_seconds"])
+                self.assertEqual(duration - 6, decoded["remaining_seconds"])
+                self.assertTrue(decoded["is_watering"])
+
+    def test_decodes_htv405_stop_without_stale_duration(self) -> None:
+        stop = bytes.fromhex(
+            "79f4882f28b984028094a98013160107828582004f80000000408000568000000000000025e1"
+        )
+        decoded = decode_htv405_control_frame(stop)
+        self.assertEqual({"zone": 4, "is_watering": False}, decoded)
+
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "b9840280", "94a98013", "test-four-zone",
+                    "Test Four Zone", model="HTV405FRF",
+                ),
+            )
+        )
+        normalized = normalize_row(
+            {"len": len(stop) * 8, "data": stop.hex()}, catalog=catalog
+        )
+        self.assertEqual(4, normalized["zone"])
+        self.assertFalse(normalized["is_watering"])
+        self.assertEqual("idle", normalized["valve_state"])
+        self.assertNotIn("duration_seconds", normalized)
 
     def test_decodes_packed_valve_last_usage(self) -> None:
         cases = (

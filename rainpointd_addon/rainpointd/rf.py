@@ -6,7 +6,7 @@ import binascii
 from typing import Any
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
-from .valve_protocol import decode_duration
+from .valve_protocol import decode_duration, decode_htv405_control_frame
 
 
 SYNC = bytes.fromhex("79f4882f28")
@@ -239,6 +239,15 @@ def _valve_fields(
         endpoint_a == valve.controller_endpoint
         and endpoint_b == valve.valve_endpoint
     ):
+        if valve.model.upper() == "HTV405FRF":
+            decoded = decode_htv405_control_frame(frame)
+            if decoded is None:
+                return {}
+            watering = bool(decoded["is_watering"])
+            return {
+                **decoded,
+                "valve_state": "watering" if watering else "idle",
+            }
         # The open/close flag is the high bit of byte 14. Open commands carry
         # a whole-minute duration at bytes 19-20. The low duration byte has
         # bit 7 forced on, so decode it with the confirmed minute constraint.

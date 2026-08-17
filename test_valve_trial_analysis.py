@@ -47,6 +47,18 @@ class ValveTrialAnalysisTests(unittest.TestCase):
             phases,
         )
 
+    def test_mixed_naive_and_aware_timestamps_follow_event_cursor(self) -> None:
+        events = [
+            {"event_id": 1, "observed_at": "2026-08-17T12:00:00",
+             "raw": frame("01020304", "05060708", 1)},
+            {"event_id": 2, "observed_at": "2026-08-17T16:00:01+00:00",
+             "raw": frame("05060708", "01020304", 2)},
+        ]
+
+        report = classify_pairing_exchange(events)
+
+        self.assertEqual(1, report["bidirectional_exchange_count"])
+
     def test_finds_zone_action_and_duration_candidates(self) -> None:
         base = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
         actions = []
@@ -128,6 +140,96 @@ class ValveTrialAnalysisTests(unittest.TestCase):
         self.assertFalse(report["evidence_complete"])
         self.assertFalse(report["coverage"]["matrix_complete"])
         self.assertEqual(7, len(report["coverage"]["missing_open_pairs"]))
+
+    def test_applies_append_only_zone_correction_and_ignores_notes(self) -> None:
+        base = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+        actions = [
+            {
+                "timestamp": base.isoformat(),
+                "action": "zone_open",
+                "zone": 1,
+                "duration_seconds": 120,
+            },
+            {
+                "timestamp": (base + timedelta(seconds=35)).isoformat(),
+                "action": "zone_close",
+                "zone": 1,
+            },
+            {
+                "timestamp": (base + timedelta(seconds=40)).isoformat(),
+                "action": "marker_correction",
+                "zone": 2,
+                "duration_seconds": 120,
+            },
+            {
+                "timestamp": (base + timedelta(seconds=45)).isoformat(),
+                "action": "zone_running_observation",
+                "zone": 2,
+                "duration_seconds": 120,
+            },
+        ]
+        events = [
+            {
+                "event_id": 1,
+                "observed_at": (base + timedelta(seconds=15)).isoformat(),
+                "raw": frame(
+                    "01020304", "05060708", 1, zone=2, action=0x10,
+                    duration_seconds=120,
+                ),
+            },
+            {
+                "event_id": 2,
+                "observed_at": (base + timedelta(seconds=36)).isoformat(),
+                "raw": frame(
+                    "01020304", "05060708", 2, zone=2, action=0x90,
+                ),
+            },
+        ]
+
+        report = analyze_zone_matrix(events, actions)
+
+        self.assertEqual([[2, 120]], report["coverage"]["observed_open_pairs"])
+        self.assertEqual([2], report["coverage"]["observed_close_zones"])
+        self.assertEqual(2, report["structured_action_count"])
+        self.assertTrue(all(item["frame_count"] == 1 for item in report["actions"]))
+
+    def test_uses_bounded_preceding_frame_for_retrospective_marker(self) -> None:
+        base = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+        actions = [
+            {
+                "timestamp": base.isoformat(),
+                "action": "zone_open",
+                "zone": 1,
+                "duration_seconds": 60,
+            },
+            {
+                "timestamp": (base + timedelta(seconds=50)).isoformat(),
+                "action": "zone_close",
+                "zone": 1,
+            },
+        ]
+        events = [
+            {
+                "event_id": 1,
+                "observed_at": (base + timedelta(seconds=5)).isoformat(),
+                "raw": frame(
+                    "01020304", "05060708", 1, zone=1, action=0x10,
+                    duration_seconds=60,
+                ),
+            },
+            {
+                "event_id": 2,
+                "observed_at": (base + timedelta(seconds=45)).isoformat(),
+                "raw": frame(
+                    "01020304", "05060708", 2, zone=1, action=0x90,
+                ),
+            },
+        ]
+
+        report = analyze_zone_matrix(events, actions)
+
+        self.assertEqual(1, report["actions"][0]["frame_count"])
+        self.assertEqual(1, report["actions"][1]["frame_count"])
 
 
 if __name__ == "__main__":

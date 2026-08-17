@@ -9,7 +9,7 @@ part of the protocol contract.
 
 | Property | Confirmed value |
 |---|---|
-| Devices tested | HTV145FRF valve, HCS026FRF soil sensor, HWG023WBRF-V2 hub |
+| Devices tested | HTV145FRF and HTV405FRF valves, HCS026FRF soil sensor, HWG023WBRF-V2 hub |
 | Band | 433/434 MHz |
 | Modulation | 2-FSK PCM |
 | Symbol width | 50 microseconds, 20.0 ksymbols/s |
@@ -125,6 +125,47 @@ traffic, while sensor reports use two observed route shapes.
 
 Friendly names are installation-specific. The stable endpoint values are the
 portable part of the protocol.
+
+## HTV405FRF four-zone control reports
+
+A dry, isolated HTV405FRF was enrolled through the stock RainPoint gateway and
+tested in a crossed matrix: Zones 1--4 at both 60 and 120 seconds. Every open,
+stop, and subsequent closed-state report used one paired chassis endpoint.
+The four ports are therefore selected inside the message body; they are not
+four independent RF devices.
+
+Stock gateway control frames have the confirmed signature below. Offsets are
+from the beginning of the normalized 38-byte frame:
+
+| Offset | Confirmed meaning |
+|---:|---|
+| 17 | `0x85` in open and stop control frames |
+| 18 | Low seven bits contain the zero-based zone-pair index |
+| 19 | High bit selects the odd-numbered member of the zone pair |
+| 20 | Low seven bits are `0x4f`; high bit is set while watering |
+| 25 | `0x40` in all observed control frames |
+| 26 | Low seven bits matched remaining time in two-second units |
+| 28 | `0x56` in all observed control frames |
+| 29 | Requested duration in two-second units while watering; high bit set |
+
+The one-based port number is:
+
+```text
+zone = 2 * (frame[18] & 0x7f) + ((frame[19] >> 7) & 1)
+```
+
+This produced Zones 1, 2, 3, and 4 across both tested durations. Requested
+duration decoded as `(frame[29] & 0x7f) * 2`: `0x9e` represented 60 seconds and
+`0xbc` represented 120 seconds. At the first RF observation, offset 26 decoded
+to 54 or 114 seconds, matching the roughly six-second app-to-radio delay. Stop
+frames cleared the watering bit and did not expose stale duration state.
+
+Automatic one-minute stops and manual stops both produced a stop frame followed
+by a distinct closed-state report. The observed confirmation delay ranged from
+less than one second to about nine seconds. The receive decoder implements
+these fields, but HTV405 frame construction remains deliberately unavailable
+until custom enrollment, acknowledgement, idempotent close, and the node-local
+watchdog are validated on the isolated valve.
 
 ## HCS026FRF enrollment lifecycle
 

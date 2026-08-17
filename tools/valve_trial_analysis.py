@@ -45,7 +45,10 @@ def _normalized(
         observed_at = _timestamp(event.get("observed_at"))
         if frame is not None and observed_at is not None:
             result.append((event, observed_at, frame))
-    result.sort(key=lambda row: (row[1], int(row[0].get("event_id", 0))))
+    # The retained corpus predates normalized timezone handling, so SDR rows
+    # may be naive while Wi-Fi-node rows are aware. The gateway event cursor is
+    # monotonic across both sources and is therefore the authoritative order.
+    result.sort(key=lambda row: (int(row[0].get("event_id", 0)), row[1].timestamp()))
     collapsed = []
     previous: bytes | None = None
     for row in result:
@@ -230,15 +233,56 @@ def _duration_candidates(
     return result[:12]
 
 
+def _effective_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply append-only operator corrections and return protocol actions only."""
+    effective: list[dict[str, Any]] = []
+    for original in actions:
+        action = dict(original)
+        if action.get("action") == "marker_correction":
+            corrected_zone = action.get("zone")
+            corrected_duration = action.get("duration_seconds")
+            if not isinstance(corrected_zone, int):
+                continue
+            open_index = next(
+                (
+                    index
+                    for index in range(len(effective) - 1, -1, -1)
+                    if effective[index].get("action") == "zone_open"
+                    and (
+                        corrected_duration is None
+                        or effective[index].get("duration_seconds")
+                        == corrected_duration
+                    )
+                ),
+                None,
+            )
+            if open_index is None:
+                continue
+            previous_zone = effective[open_index].get("zone")
+            effective[open_index]["zone"] = corrected_zone
+            effective[open_index]["corrected_by"] = action.get("timestamp")
+            for candidate in effective[open_index + 1 :]:
+                if (
+                    candidate.get("action") == "zone_close"
+                    and candidate.get("zone") == previous_zone
+                ):
+                    candidate["zone"] = corrected_zone
+                    candidate["corrected_by"] = action.get("timestamp")
+            continue
+        if action.get("action") in {"zone_open", "zone_close"}:
+            effective.append(action)
+    return effective
+
+
 def analyze_zone_matrix(
     events: list[dict[str, Any]],
     actions: list[dict[str, Any]],
     *,
-    window_seconds: float = 10.0,
+    window_seconds: float = 30.0,
 ) -> dict[str, Any]:
     """Associate frames with structured action markers and rank changing fields."""
     markers = []
-    for action in actions:
+    for action in _effective_actions(actions):
         timestamp = _timestamp(action.get("timestamp"))
         if timestamp is not None and (
             action.get("zone") is not None or action.get("duration_seconds") is not None
@@ -276,6 +320,17 @@ def analyze_zone_matrix(
             for _, observed_at, frame in frames
             if started_at.timestamp() <= observed_at.timestamp() < natural_end
         ]
+        if not selected:
+            previous_end = started_at.timestamp() - window_seconds
+            if position > 0:
+                previous_end = max(
+                    previous_end, markers[position - 1][0].timestamp()
+                )
+            selected = [
+                frame
+                for _, observed_at, frame in frames
+                if previous_end < observed_at.timestamp() < started_at.timestamp()
+            ]
         annotated.extend((frame, marker) for frame in selected)
         action_rows.append(
             {

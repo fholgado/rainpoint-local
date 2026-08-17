@@ -69,6 +69,27 @@ had transmitted-trailer XOR residues `0xc713` or `0x4f03`; the other 18 were
 visibly clipped or corrupted. Both residues occurred across prefix forms
 and in open/close commands, leaving only the residue-selection rule unresolved.
 
+### HTV405FRF crossed zone trial — 2026-08-17
+
+An isolated, unpressurized HTV405FRF (FCC ID `2AWDBHTV145FRF`) was enrolled
+through the stock gateway. Its factory endpoint `14a98013` became paired
+endpoint `94a98013`; the same high-bit identity transition previously observed
+on HCS026 sensors therefore also applies to this valve sample.
+
+The stock app exercised every zone at both 60 and 120 seconds. The retained
+trial contains all eight openings, manual or automatic stops for all four
+zones, and the later closed-state reports. All four ports shared the single
+paired endpoint. The crossed values established the selector and duration
+formulas promoted into `PROTOCOL.md`; notably, byte 14 correlated with zone in
+the opening subset but changed on stop frames and is not part of the stable
+zone formula.
+
+The first 60-second trials were allowed to time out. Later openings were closed
+after capture. Automatic and manual paths used the same stop-body signature,
+then emitted a separate closed-state report roughly 1--9 seconds later. The
+local trial bundle is `four-zone-stock-enrollment-20260817`; raw household
+events remain ignored while the generalized protocol fixtures are committed.
+
 ## Multi-channel sensor discovery
 
 A 1.024 Msps window near 434 MHz retained upper-channel notification traffic

@@ -67,6 +67,47 @@ def decode_duration(encoded: bytes) -> int:
     return confirmed[0]
 
 
+def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
+    """Decode the passively validated HTV405 four-zone control body.
+
+    The layout is intentionally receive-only.  It is based on a crossed stock
+    gateway trial covering every zone at both 60 and 120 seconds.  No frame
+    construction is exposed until pairing, acknowledgement, and fail-safe
+    close behavior have been validated with the custom transmitter.
+    """
+    if len(frame) != FRAME_BYTES:
+        return None
+    if (
+        frame[15] != 0x07
+        or frame[16] != 0x82
+        or frame[17] != 0x85
+        or frame[20] & 0x7F != 0x4F
+        or frame[25] != 0x40
+        or frame[28] != 0x56
+    ):
+        return None
+
+    # The zero-based pair index is byte 18's low seven bits.  Byte 19's high
+    # bit selects the odd-numbered member of that pair.
+    zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
+    if zone not in range(1, 5):
+        return None
+
+    watering = bool(frame[20] & 0x80)
+    result: dict[str, int | bool] = {
+        "zone": zone,
+        "is_watering": watering,
+    }
+    if watering:
+        duration_units = frame[29] & 0x7F
+        if duration_units:
+            result["duration_seconds"] = duration_units * 2
+        # Across all eight opens this value was the requested duration minus
+        # the elapsed app-to-radio delay, also in two-second units.
+        result["remaining_seconds"] = (frame[26] & 0x7F) * 2
+    return result
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")
