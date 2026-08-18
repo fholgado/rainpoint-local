@@ -52,6 +52,7 @@ constexpr std::uint8_t kPaTable = 0x3e;
 
 constexpr std::uint8_t kReset = 0x30;
 constexpr std::uint8_t kFrequencySynthOn = 0x31;
+constexpr std::uint8_t kCalibrate = 0x33;
 constexpr std::uint8_t kEnterRx = 0x34;
 constexpr std::uint8_t kEnterTx = 0x35;
 constexpr std::uint8_t kIdle = 0x36;
@@ -346,6 +347,51 @@ bool Cc1101::prepareTransmit() {
     return transmitPrepared_;
 }
 
+bool Cc1101::cacheTransmitFrequency(std::uint32_t centerFrequencyHz) {
+    if (centerFrequencyHz < 433'000'000 || centerFrequencyHz > 435'000'000) {
+        return false;
+    }
+    CachedFrequencyCalibration* destination = nullptr;
+    for (auto& cached : cachedTransmitFrequencies_) {
+        if (cached.valid && cached.centerFrequencyHz == centerFrequencyHz) {
+            destination = &cached;
+            break;
+        }
+        if (destination == nullptr && !cached.valid) {
+            destination = &cached;
+        }
+    }
+    if (destination == nullptr) {
+        return false;
+    }
+
+    const std::uint8_t receiveChannel = channel_;
+    if (!enterIdle()) {
+        return false;
+    }
+    writeRegister(kChannelNumber, 0);
+    setFrequency(centerFrequencyHz);
+    const bool calibrated = strobe(kCalibrate) != 0xff &&
+        waitForMainState(kMainStateIdle, 10'000);
+    const std::uint8_t calibration3 = readRegister(kFrequencyCalibration3);
+    const std::uint8_t calibration2 = readRegister(kFrequencyCalibration2);
+    const std::uint8_t calibration1 = readRegister(kFrequencyCalibration1);
+    const bool valuesValid = calibration3 != 0xff && calibration2 != 0xff &&
+        calibration1 != 0xff && calibration1 != 0x3f;
+    const bool restored = restoreReceiveConfiguration(receiveChannel);
+    if (!calibrated || !valuesValid || !restored) {
+        return false;
+    }
+    *destination = CachedFrequencyCalibration{
+        centerFrequencyHz,
+        calibration3,
+        calibration2,
+        calibration1,
+        true,
+    };
+    return true;
+}
+
 bool Cc1101::transmitAsync(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint32_t centerFrequencyHz,
@@ -376,6 +422,35 @@ bool Cc1101::transmitAsync(
     setFrequency(centerFrequencyHz);
     writeRegister(kDeviation, deviationRegister);
     writeBurst(kPaTable, &paTableValue, 1);
+
+    const CachedFrequencyCalibration* cachedCalibration = nullptr;
+    for (const auto& cached : cachedTransmitFrequencies_) {
+        if (cached.valid && cached.centerFrequencyHz == centerFrequencyHz) {
+            cachedCalibration = &cached;
+            break;
+        }
+    }
+    if (cachedCalibration != nullptr) {
+        // TI CC1101 section 28.2 permits fast hopping by restoring FSCAL3--1
+        // captured for the destination frequency. Disable automatic
+        // calibration for this transition; the PLL then settles in ~75 us
+        // instead of spending ~724 us recalibrating after the request.
+        writeRegister(kMainStateMachine0, 0x08);
+        writeRegister(
+            kFrequencyCalibration3,
+            cachedCalibration->frequencyCalibration3
+        );
+        writeRegister(
+            kFrequencyCalibration2,
+            cachedCalibration->frequencyCalibration2
+        );
+        writeRegister(
+            kFrequencyCalibration1,
+            cachedCalibration->frequencyCalibration1
+        );
+    } else {
+        writeRegister(kMainStateMachine0, 0x18);
+    }
 
     const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols);
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);

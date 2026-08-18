@@ -209,6 +209,16 @@ and the beginning of the local reply. Firmware 0.12.3 therefore pre-initializes
 the ESP32 RMT transmitter when the bounded pairing window is armed and defers
 the redundant CC1101 receive recovery until after the time-critical reply.
 
+The physical 0.12.3 trial decoded the complete local reply and measured its
+carrier at 433.505786 MHz, only 244 Hz below the stock center, with the expected
+70.007 kHz tone separation and 35.004 kHz deviation. The valve still rejected
+it. The same capture showed that the turnaround gap fell to approximately 1.1
+ms, making synthesizer latency the remaining observed mismatch. CC1101 fast
+frequency hopping permits calibration values to be measured ahead of time and
+restored for a roughly 75 us PLL transition instead of recalibrating on every
+hop. The 0.12.4 candidate caches both HTV405 reply-frequency calibrations when
+the bounded pairing window is armed.
+
 The first routine replies mirror the request message counter in the low seven
 bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
 receive-side assignment and acknowledgement transcript, but does not yet

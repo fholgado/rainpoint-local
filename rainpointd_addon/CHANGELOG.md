@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.5 / Firmware 0.12.4
+
+- Record the physically measured 0.12.3 assignment reply: correct decoded
+  frame, 433.505786 MHz center, and an approximately 1.1 ms turnaround gap.
+- Pre-calibrate the two HTV405 reply frequencies when the bounded window is
+  armed and restore their CC1101 FSCAL values for the time-critical hop.
+
 ## 0.29.4 / Firmware 0.12.3
 
 - Pre-initialize the ESP32 RMT transmitter when the bounded HTV405 pairing

@@ -1036,6 +1036,26 @@ void handleNetworkCommand() {
     pairingLocalDateTime = parsedClock;
     pairingLocalDateTimeSet = true;
     pairingLocalDateTimeSetAtMs = millis();
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        const std::uint32_t initialFrequency = static_cast<std::uint32_t>(
+            static_cast<std::int64_t>(activeValvePairingProfile.steps[0].channelCenterHz) +
+            pairingFrequencyOffsetHz
+        );
+        const std::uint32_t routineFrequency = static_cast<std::uint32_t>(
+            static_cast<std::int64_t>(activeValvePairingProfile.steps[1].channelCenterHz) +
+            pairingFrequencyOffsetHz
+        );
+        if (!primaryRadio.cacheTransmitFrequency(initialFrequency) ||
+            !primaryRadio.cacheTransmitFrequency(routineFrequency)) {
+            reportNetworkCommandError(
+                commandId, "valve_frequency_calibration_failed"
+            );
+            valvePairingActive = false;
+            return;
+        }
+    }
+#endif
 #if RAINPOINT_RADIO_COUNT == 1
     scanChannels = false;
     selectChannel(0);

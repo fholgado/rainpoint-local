@@ -336,6 +336,21 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             ),
             2_000,
         )
+        self.assertAlmostEqual(1.1, timing["firmware_0_12_3_turnaround_gap_ms"])
+        self.assertLess(
+            abs(
+                self.fixture["channels"]["firmware_0_12_3_observed_reply_hz"]
+                - self.fixture["channels"]["initial_assignment_hz"]
+            ),
+            500,
+        )
+        observation = self.fixture["candidate_observations"]
+        self.assertTrue(observation["firmware_0_12_3_reply_decoded"])
+        self.assertFalse(observation["firmware_0_12_3_valve_accepted"])
+        self.assertEqual(
+            38,
+            len(bytes.fromhex(observation["firmware_0_12_3_reply_frame"])),
+        )
 
     def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
         for exchange in self.fixture["exchanges"][1:4]:

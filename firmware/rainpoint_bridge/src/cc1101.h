@@ -4,6 +4,7 @@
 #include <SPI.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include "rainpoint_protocol.h"
@@ -26,6 +27,7 @@ public:
     bool enterReceive();
     bool setChannel(std::uint8_t channel);
     bool prepareTransmit();
+    bool cacheTransmitFrequency(std::uint32_t centerFrequencyHz);
     bool transmitAsync(
         const std::array<std::uint8_t, kFrameBytes>& frame,
         std::uint32_t centerFrequencyHz,
@@ -46,6 +48,15 @@ public:
 
 private:
     static constexpr std::uint32_t kSpiHz = 4'000'000;
+    static constexpr std::size_t kMaximumCachedTransmitFrequencies = 2;
+
+    struct CachedFrequencyCalibration {
+        std::uint32_t centerFrequencyHz = 0;
+        std::uint8_t frequencyCalibration3 = 0;
+        std::uint8_t frequencyCalibration2 = 0;
+        std::uint8_t frequencyCalibration1 = 0;
+        bool valid = false;
+    };
 
     bool reset();
     bool waitReady(std::uint32_t timeoutMicros = 2'000);
@@ -76,6 +87,10 @@ private:
     std::uint8_t channel_ = 0;
     bool configurationValid_ = false;
     bool transmitPrepared_ = false;
+    std::array<
+        CachedFrequencyCalibration,
+        kMaximumCachedTransmitFrequencies
+    > cachedTransmitFrequencies_{};
     std::uint32_t packetCount_ = 0;
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;
