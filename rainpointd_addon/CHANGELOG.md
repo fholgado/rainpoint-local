@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.31.0 / Firmware 0.13.0-combined.1
+## 0.31.0 / Firmware 0.14.0-combined.1
 
 - Combine the selector-2 HTV405 pairing candidate with authorized paired-state
   HCS026 sensor recovery in the single supported radio-node firmware.

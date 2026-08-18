@@ -107,7 +107,7 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The combined `0.13.0-combined.1` firmware includes receive, generalized sensor
+device. The combined `0.14.0-combined.1` firmware includes receive, generalized sensor
 pairing, bounded routine acknowledgements, managed OTA updates, and an internal
 bounded HTV405 enrollment candidate in one build. The valve candidate is not
 exposed through the normal Home Assistant pairing UI and contains no
