@@ -11,7 +11,10 @@ namespace rainpoint {
 constexpr const char* kAutomaticHtv405ProfileId =
     "htv405_auto_candidate_v1";
 constexpr std::size_t kHtv405PairingStepCount = 18;
-constexpr std::uint16_t kHtv405ReplyDelayMs = 10;
+// The isolated stock-gateway capture places the assignment reply 130.897 ms
+// after the factory-announcement burst begins. A full 624-symbol request lasts
+// 31.2 ms, leaving a 99.697 ms receive-complete-to-transmit delay.
+constexpr std::uint16_t kHtv405ReplyDelayMs = 100;
 constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 constexpr std::uint8_t kHtv405InitialDeviationRegister = 0x43;
 

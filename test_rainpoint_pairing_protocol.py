@@ -307,6 +307,21 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             + channels["candidate_frequency_offset_hz"],
         )
 
+    def test_candidate_uses_measured_stock_reply_cadence(self) -> None:
+        timing = self.fixture["timing"]
+        self.assertAlmostEqual(
+            timing["factory_request_start_to_reply_start_ms"]
+            - timing["request_waveform_ms"],
+            timing["receive_complete_to_reply_start_ms"],
+            places=3,
+        )
+        profile = build_htv405_profile(
+            factory_endpoint=self.fixture["factory_endpoint"],
+            valve_route="b9840280",
+            companion_endpoint=self.fixture["companion_endpoint"],
+        )
+        self.assertEqual(timing["candidate_reply_delay_ms"], profile.reply_delay_ms)
+
     def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
         for exchange in self.fixture["exchanges"][1:4]:
             with self.subTest(request_kind=exchange["request_kind"]):

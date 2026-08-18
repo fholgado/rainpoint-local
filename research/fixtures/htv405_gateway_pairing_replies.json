@@ -4,6 +4,13 @@
   "capture_center_hz": 433700000,
   "sample_rate_sps": 2000000,
   "symbol_rate_sps": 20000,
+  "timing": {
+    "request_waveform_ms": 31.2,
+    "factory_request_start_to_reply_start_ms": 130.897,
+    "receive_complete_to_reply_start_ms": 99.697,
+    "candidate_reply_delay_ms": 100,
+    "notes": "The first request/reply pair has monotonic capture timestamps. Later raw files were closed out of order by concurrent capture writers and are not timing evidence."
+  },
   "factory_endpoint": "14a98013",
   "paired_endpoint": "94a98013",
   "companion_endpoint": "39840280",

@@ -183,6 +183,14 @@ the ordinary approximately 80 kHz tone separation, while valve requests were
 near 433.142 MHz. Valve enrollment must therefore support a separate initial
 reply profile rather than reusing the HCS026 sensor profile unchanged.
 
+The clean first request/reply pair also provides timing evidence. The stock
+assignment reply began 130.897 ms after the factory announcement began. Each
+624-symbol request occupies 31.2 ms at 20 ksps, so the gateway waits about
+99.697 ms after receiving the complete request. The local candidate rounds
+that interval to a 100 ms receive-complete-to-transmit delay. Capture-file
+close times after this first pair were reordered by concurrent writers and are
+not used as timing evidence.
+
 The first routine replies mirror the request message counter in the low seven
 bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
 receive-side assignment and acknowledgement transcript, but does not yet

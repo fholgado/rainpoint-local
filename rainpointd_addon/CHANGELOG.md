@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.1 / Firmware 0.12.1
+
+- Correct the HTV405 candidate's reply delay from 10 ms to the stock gateway's
+  measured 100 ms receive-complete-to-transmit interval.
+- Retain the measured timing and its capture-quality limitation in the protocol
+  fixture so future changes do not regress to an unverified cadence.
+
 ## 0.29.0 / Firmware 0.12.0
 
 - Add an internal, association-specific HTV405 enrollment candidate reconstructed
