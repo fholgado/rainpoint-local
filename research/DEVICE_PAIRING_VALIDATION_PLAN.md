@@ -24,6 +24,12 @@ emitted a known factory/rejoin announcement and immediately resumed paired
 traffic, providing the closest RF marker for stock-gateway recovery. Both test
 sensors had reported repeatedly immediately beforehand; neither produced a
 later frame despite a healthy custom ACK owner retaining all four assignments.
+Sensors A and B are the distinguishing cohort: they have only ever been
+enrolled by the custom local gateway and were never associated with the stock
+RainPoint gateway. Left Bed, Right Bed, and both Front Yard sensors were
+previously associated with the stock gateway before migration and continue
+reporting when it returns. This makes a generic receiver-overload explanation
+less likely and points toward association-specific competing gateway traffic.
 
 The first half of the controlled test passed immediately afterward. With the
 stock gateway confirmed offline, a short press on each sensor emitted no RF,
@@ -39,6 +45,35 @@ Until a later instrumented stock-on repetition captures both short replies,
 treat the stock gateway and custom ACK nodes as mutually exclusive RF
 authorities. A local-control test installation should leave the stock gateway
 off; a stock-controlled installation should keep local nodes receive-only.
+
+After local valve enrollment is complete, run one instrumented coexistence
+trial before changing the sensor protocol:
+
+1. With the stock gateway off, establish at least two current reports from each
+   local-only test sensor and one formerly stock-paired control sensor.
+2. Start continuous wideband IQ capture and retain radio-node receive, ACK,
+   failure, channel, and RSSI counters. Record the exact stock-gateway power-on
+   time as an event marker.
+3. While both gateway implementations are active, short-press A, B, and the
+   control sensor at spaced, recorded times. Do not re-enroll anything during
+   this phase.
+4. For every sensor report, identify zero, one, or competing gateway replies;
+   compare reply bodies, frequencies, timing, and the sensor's next endpoint
+   and message counter. Specifically test whether the stock gateway responds
+   to the unknown A/B identities despite never enrolling them.
+5. If A/B become dormant, power off only the stock gateway and repeat short
+   presses before attempting known-sensor long-press recovery. This separates
+   temporary RF collision from persistent sensor-side association state.
+6. Repeat with one custom ACK owner deliberately disarmed only if the first
+   capture cannot distinguish colliding acknowledgements from a stock
+   broadcast/configuration frame. Never leave an installed sensor without an
+   acknowledgement path outside the bounded test window.
+
+Pass criteria are causal, not merely temporal: capture the first frame or
+missing acknowledgement that makes a local-only sensor diverge while a
+formerly stock-paired control sensor remains healthy. The result should decide
+whether coexistence needs gateway identity separation, reply arbitration, or a
+documented single-authority limitation.
 
 ## HCS026 sensor: established evidence
 
