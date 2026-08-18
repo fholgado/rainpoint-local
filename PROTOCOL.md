@@ -183,13 +183,15 @@ the ordinary approximately 80 kHz tone separation, while valve requests were
 near 433.142 MHz. Valve enrollment must therefore support a separate initial
 reply profile rather than reusing the HCS026 sensor profile unchanged.
 
-The clean first request/reply pair also provides timing evidence. The stock
-assignment reply began 130.897 ms after the factory announcement began. Each
-624-symbol request occupies 31.2 ms at 20 ksps, so the gateway waits about
-99.697 ms after receiving the complete request. The local candidate rounds
-that interval to a 100 ms receive-complete-to-transmit delay. Capture-file
-close times after this first pair were reordered by concurrent writers and are
-not used as timing evidence.
+The clean first request/reply pair also provides timing evidence, but the raw
+files have unequal saved windows. Their close timestamps differ by 130.897 ms;
+the request file spans 65.536 ms and the reply file spans 163.840 ms, with
+signal onsets at 26.0 and 24.3 ms respectively. Correcting for those windows
+places the reply start 30.893 ms after the request start. Since a 624-symbol
+request occupies 31.2 ms, the stock gateway adds no intentional delay after
+receiving it. The local candidate therefore transmits immediately after the
+complete request is decoded. The approximately -0.3 ms residual is within the
+envelope threshold and filesystem timestamp precision.
 
 The first local 0.12.1 on-air trial decoded to the intended assignment frame
 with the correct 320-symbol wake, polarity, and approximately 35 kHz

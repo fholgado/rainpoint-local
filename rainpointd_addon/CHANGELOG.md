@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.3 / Firmware 0.12.2
+
+- Correct the stock HTV405 response timing calculation for unequal rtl_433
+  saved-window lengths and transmit immediately after request reception.
+- Combine the zero-added-delay cadence with the measured test-node carrier
+  correction; the earlier builds validated only one of those two at a time.
+
 ## 0.29.2 / Firmware 0.12.1
 
 - Correct only the HTV405 candidate's node command offset after an SDR capture

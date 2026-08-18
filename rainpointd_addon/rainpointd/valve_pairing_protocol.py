@@ -27,10 +27,9 @@ INITIAL_DEVIATION_HZ = 35_004
 ROUTINE_DEVIATION_HZ = 41_260
 WAKE_SYMBOLS = 320
 SYMBOL_RATE_SPS = 20_000
-# The measured factory-announcement-start to assignment-reply-start interval is
-# 130.897 ms. Subtracting the 31.2 ms request waveform gives 99.697 ms after
-# receive completion; the node uses the nearest whole millisecond.
-REPLY_DELAY_MS = 100
+# After correcting the two rtl_433 files for their unequal saved-window
+# lengths, the stock reply starts as the 31.2 ms request completes.
+REPLY_DELAY_MS = 0
 REPLY_DEADLINE_MS = 250
 
 

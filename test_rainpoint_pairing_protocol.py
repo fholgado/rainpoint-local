@@ -310,6 +310,13 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
     def test_candidate_uses_measured_stock_reply_cadence(self) -> None:
         timing = self.fixture["timing"]
         self.assertAlmostEqual(
+            timing["uncorrected_file_mtime_delta_ms"]
+            - (timing["reply_saved_window_ms"] - timing["request_saved_window_ms"])
+            + (timing["reply_signal_onset_ms"] - timing["request_signal_onset_ms"]),
+            timing["factory_request_start_to_reply_start_ms"],
+            places=3,
+        )
+        self.assertAlmostEqual(
             timing["factory_request_start_to_reply_start_ms"]
             - timing["request_waveform_ms"],
             timing["receive_complete_to_reply_start_ms"],
