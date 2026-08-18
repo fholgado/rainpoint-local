@@ -76,6 +76,88 @@ int main() {
     locallyAssignedAuthorization.pairingChannel = 4;
     assert(routineAuthorizations.activeCount() == 0);
     assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
+
+    rainpoint::RoutineAckAuthorization sensorARecoveryAuthorization{
+        {{0x9b, 0xce, 0x00, 0x24}}, 4, 0, 10, false, true,
+    };
+    assert(routineAuthorizations.authorize(sensorARecoveryAuthorization));
+    const auto sensorARecoveryMessage1 = fromHex(
+        "79f4882f28b98402809bce002401018202054419800000000000000000000000000000005202"
+    );
+    rainpoint::PairingTrigger recoveryTrigger{};
+    const auto* recoveryAuthorization =
+        rainpoint::authorizedHcs026ControlFrame(
+            sensorARecoveryMessage1,
+            routineAuthorizations,
+            recoveryTrigger
+        );
+    assert(recoveryAuthorization != nullptr);
+    assert(recoveryTrigger == rainpoint::PairingTrigger::PairedMessage1);
+    std::array<std::uint8_t, rainpoint::kFrameBytes> recoveryReply{};
+    assert(rainpoint::buildKnownHcs026RecoveryReply(
+        recoveryTrigger, *recoveryAuthorization, recoveryReply
+    ));
+    assert(recoveryReply == fromHex(
+        "79f4882f289bce00243984028081c18200011f80000000000000000000000000000000000414"
+    ));
+    const auto sensorARecoveryMessage2Data = fromHex(
+        "79f4882f28b98402809bce002402018204e5c400800000000000000000000000000000001d5e"
+    );
+    recoveryAuthorization = rainpoint::authorizedHcs026ControlFrame(
+        sensorARecoveryMessage2Data, routineAuthorizations, recoveryTrigger
+    );
+    assert(recoveryAuthorization != nullptr);
+    assert(recoveryTrigger == rainpoint::PairingTrigger::PairedMessage2Data);
+    assert(rainpoint::buildKnownHcs026RecoveryReply(
+        recoveryTrigger, *recoveryAuthorization, recoveryReply
+    ));
+    assert(recoveryReply == fromHex(
+        "79f4882f289bce00243984028082428100008000000000000000000000000000000000007b92"
+    ));
+    const auto sensorARecoveryMessage2Short = fromHex(
+        "79f4882f28b98402809bce002402818204e5c400800000000000000000000000000000002fdb"
+    );
+    recoveryAuthorization = rainpoint::authorizedHcs026ControlFrame(
+        sensorARecoveryMessage2Short, routineAuthorizations, recoveryTrigger
+    );
+    assert(recoveryAuthorization != nullptr);
+    assert(recoveryTrigger == rainpoint::PairingTrigger::PairedMessage2Short);
+    assert(rainpoint::buildKnownHcs026RecoveryReply(
+        recoveryTrigger, *recoveryAuthorization, recoveryReply
+    ));
+    assert(recoveryReply == fromHex(
+        "79f4882f289bce00243984028082c18100010000000000000000000000000000000000004e6f"
+    ));
+    const auto sensorARecoveryMessage3 = fromHex(
+        "79f4882f28b98402809bce002403028104808000000000000000000000000000000000001c91"
+    );
+    recoveryAuthorization = rainpoint::authorizedHcs026ControlFrame(
+        sensorARecoveryMessage3, routineAuthorizations, recoveryTrigger
+    );
+    assert(recoveryAuthorization != nullptr);
+    assert(recoveryTrigger == rainpoint::PairingTrigger::PairedMessage3);
+    assert(!rainpoint::buildKnownHcs026RecoveryReply(
+        recoveryTrigger, *recoveryAuthorization, recoveryReply
+    ));
+    auto unknownRecovery = sensorARecoveryMessage1;
+    unknownRecovery[9] = 0xaa;
+    rainpoint::writeTrailer(
+        unknownRecovery, rainpoint::kCurrentPairingTrailerResidual
+    );
+    assert(rainpoint::authorizedHcs026ControlFrame(
+        unknownRecovery, routineAuthorizations, recoveryTrigger
+    ) == nullptr);
+    auto ordinaryMessage1Shape = sensorARecoveryMessage1;
+    ordinaryMessage1Shape[15] = 0x81;
+    rainpoint::writeTrailer(
+        ordinaryMessage1Shape, rainpoint::kCurrentPairingTrailerResidual
+    );
+    assert(rainpoint::authorizedHcs026ControlFrame(
+        ordinaryMessage1Shape, routineAuthorizations, recoveryTrigger
+    ) == nullptr);
+    assert(routineAuthorizations.revoke(
+        sensorARecoveryAuthorization.pairedEndpoint
+    ));
     assert(routineAuthorizations.activeCount() == 1);
     assert(routineAuthorizations.match(routineReport) != nullptr);
     assert(routineAuthorizations.revoke(

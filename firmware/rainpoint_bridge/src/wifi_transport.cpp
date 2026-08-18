@@ -320,7 +320,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"gateway_host\":\"%s\","
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
-        ",\"routine_sensor_ack_tx\""
+        ",\"routine_sensor_ack_tx\",\"paired_sensor_recovery_tx\""
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
         ",\"firmware_update_trial\""

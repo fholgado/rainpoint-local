@@ -111,7 +111,7 @@ verify the standard artifact manifest with:
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.11.0 --environment rainpoint_bridge
+  --version 0.13.0-sensor.1 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

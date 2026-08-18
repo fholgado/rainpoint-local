@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.1 / Firmware 0.13.0-sensor.1
+
+- Recover an already-authorized HCS026 sensor when it emits the captured
+  paired-state `01 -> 02 -> 02 -> 03` control exchange, without opening a
+  pairing window or accepting an unknown identity.
+- Keep recovery replies on the sensor's single-owner radio node and expose the
+  reply phase, outcome, owner, and aggregate recovery counters as diagnostics.
+- Publish this as a sensor-only prerelease so valve-pairing experiments remain
+  isolated until both paths have been validated independently.
+
 ## 0.28.0 / Firmware 0.11.0
 
 - Consolidate the supported ESP32/CC1101 node into one `rainpoint_bridge`

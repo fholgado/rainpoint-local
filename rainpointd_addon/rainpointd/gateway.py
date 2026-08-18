@@ -105,6 +105,7 @@ class Gateway:
         self._memory_metrics: dict[str, dict[str, Any]] = {}
         self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
         self._recent_receiver_frames: dict[str, tuple[str, float]] = {}
+        self._sensor_link_diagnostics: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = (
             SQLiteEventStore(
@@ -229,6 +230,53 @@ class Gateway:
         with self._lock:
             node = self._nodes.setdefault(node_id, {"node_id": node_id})
             node.update(copy.deepcopy(fields))
+
+    def observe_sensor_link_status(
+        self, node_id: str, endpoint: str, **fields: Any
+    ) -> None:
+        """Record an owner node's ACK or paired-sensor recovery outcome."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        with self._event_condition:
+            diagnostics = self._sensor_link_diagnostics.setdefault(
+                endpoint, {"rf_ack_owner_node_id": node_id}
+            )
+            if (
+                fields.get("rf_ack_confirmation") == "pending_observation"
+                and diagnostics.get("rf_ack_confirmation")
+                == "pending_observation"
+            ):
+                diagnostics["rf_ack_unconfirmed_attempts"] = int(
+                    diagnostics.get("rf_ack_unconfirmed_attempts", 0)
+                ) + 1
+            diagnostics.update(copy.deepcopy({
+                key: value for key, value in fields.items()
+                if value is not None
+            }))
+            diagnostics["rf_ack_owner_node_id"] = node_id
+            diagnostics["rf_link_status_at"] = timestamp
+            device_id = next(
+                (
+                    item_id
+                    for item_id, device in self._devices.items()
+                    if str(device.get("state", {}).get("rf_endpoint", "")).lower()
+                    == endpoint
+                ),
+                None,
+            )
+            event = {
+                "event_id": self._next_event_id,
+                "event_type": "sensor_link_status",
+                "observed_at": timestamp,
+                "node_id": node_id,
+                "state": copy.deepcopy(diagnostics),
+            }
+            if device_id is not None:
+                event["device_id"] = device_id
+            self._next_event_id += 1
+            self._events.append(event)
+            if self._store:
+                self._store.append(event)
+            self._event_condition.notify_all()
 
     def notify_node_update(self, node_id: str, event_type: str) -> None:
         """Wake long-poll clients for an infrequent node lifecycle change."""
@@ -954,6 +1002,7 @@ class Gateway:
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
         decoded = copy.deepcopy(state)
         with self._lock:
+            self._confirm_sensor_ack_locked(decoded, timestamp)
             duplicate = self._receiver_duplicate_locked(
                 frame=frame,
                 state=decoded,
@@ -984,6 +1033,44 @@ class Gateway:
                 self._update_memory_reception_metrics(event)
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
+
+    def _confirm_sensor_ack_locked(
+        self, state: dict[str, Any], observed_at: str
+    ) -> None:
+        """Correlate a valid over-air ACK seen by a second receiver."""
+        endpoint = state.get("routine_ack_endpoint")
+        if not isinstance(endpoint, str):
+            return
+        diagnostics = self._sensor_link_diagnostics.get(endpoint.lower())
+        if diagnostics is None or (
+            diagnostics.get("rf_ack_confirmation") != "pending_observation"
+        ):
+            return
+        attempted_at = diagnostics.get("rf_link_status_at")
+        if not isinstance(attempted_at, str):
+            return
+        try:
+            attempted = datetime.fromisoformat(
+                attempted_at.replace("Z", "+00:00")
+            )
+            observed = datetime.fromisoformat(
+                observed_at.replace("Z", "+00:00")
+            )
+            if attempted.tzinfo is None:
+                attempted = attempted.replace(tzinfo=timezone.utc)
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            elapsed = (observed - attempted).total_seconds()
+        except ValueError:
+            return
+        if not 0 <= elapsed <= 2:
+            return
+        diagnostics["rf_ack_confirmation"] = "observed_over_air"
+        diagnostics["rf_ack_observed_at"] = observed_at
+        receiver = state.get("rf_receiver_id")
+        if isinstance(receiver, str):
+            diagnostics["rf_ack_observer"] = receiver
+        state["local_ack_confirmation"] = "observed_over_air"
 
     def _maybe_start_known_sensor_rejoin(
         self, state: dict[str, Any]
@@ -1186,6 +1273,11 @@ class Gateway:
                         product_for_model(device.get("model")) is not None
                     )
                     device["capabilities"] = ["forget", "soil_moisture"]
+                    endpoint = str(state.get("rf_endpoint", "")).lower()
+                    if endpoint in self._sensor_link_diagnostics:
+                        state.update(copy.deepcopy(
+                            self._sensor_link_diagnostics[endpoint]
+                        ))
                 device.update(
                     {
                         key: value

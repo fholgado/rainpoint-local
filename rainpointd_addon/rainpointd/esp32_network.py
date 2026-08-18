@@ -457,6 +457,7 @@ class ESP32NetworkServer:
                         "sensor_pairing_tx",
                         "identify",
                         "routine_sensor_ack_tx",
+                        "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }
                 )

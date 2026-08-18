@@ -514,6 +514,22 @@ produced local ACK transmissions with zero driver failures. Multi-day cadence
 and explicit owner-reassignment testing remain operational qualification, not
 protocol-format uncertainty.
 
+### Authorized paired-sensor recovery
+
+An already-paired HCS026 can request recovery without returning to its factory
+endpoint. The observed sequence uses its paired endpoint and messages
+`01 -> 02 data -> 02 short -> 03`. Test Sensor A emitted the first of these
+frames immediately before becoming dormant while the stock RainPoint gateway
+was also active. Older firmware excluded all messages `01`--`03` from routine
+acknowledgement and therefore could not answer this path.
+
+Firmware `0.13.0-sensor.1` recognizes this sequence only for an endpoint
+already authorized to the receiving node. It reproduces the three captured
+paired-state gateway replies locally and treats message `03` as completion.
+It does not open enrollment, infer ownership, or respond to an unknown sensor.
+The gateway records the owner, phase, transmit outcome, and completion counts
+for controlled coexistence testing with the stock gateway.
+
 ### Confirmed marker-relative battery flag
 
 The two newly enrolled sensors first exposed a battery flag through a

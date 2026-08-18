@@ -207,6 +207,9 @@ class ESP32NetworkTest(unittest.TestCase):
                     "routine_ack_authorized_sensors": 1,
                     "routine_ack_transmissions": 12,
                     "routine_ack_failures": 0,
+                    "sensor_recovery_transmissions": 3,
+                    "sensor_recovery_failures": 0,
+                    "sensor_recovery_completions": 1,
                 }
             ).encode()
             + b"\n"
@@ -223,6 +226,7 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(1, node["gateway_authentications"])
         self.assertEqual(1, node["routine_ack_authorized_sensors"])
         self.assertEqual(12, node["routine_ack_transmissions"])
+        self.assertEqual(3, node["sensor_recovery_transmissions"])
 
         stream.write(
             json.dumps(
@@ -248,6 +252,30 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("transmitted", node["routine_ack_state"])
         self.assertEqual("95a98024", node["routine_ack_endpoint"])
         self.assertEqual(4, node["routine_ack_assigned_channel"])
+
+        stream.write(
+            json.dumps(
+                {
+                    "type": "sensor_recovery_status",
+                    "node_id": NODE_A,
+                    "state": "reply_transmitted",
+                    "phase": "paired_message_1",
+                    "paired_endpoint": "95a98024",
+                    "transmissions": 4,
+                    "failures": 0,
+                    "completions": 1,
+                }
+            ).encode()
+            + b"\n"
+        )
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("rf_recovery_transmissions") == 4:
+                break
+            time.sleep(0.01)
+        self.assertEqual("reply_transmitted", node["rf_recovery_state"])
+        self.assertEqual("paired_message_1", node["rf_recovery_phase"])
+        self.assertEqual("95a98024", node["sensor_recovery_endpoint"])
 
         stream.write(
             json.dumps(

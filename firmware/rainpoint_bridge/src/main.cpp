@@ -111,8 +111,17 @@ String pairingCommandId;
 rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
 std::uint32_t routineAckTransmissions = 0;
 std::uint32_t routineAckFailures = 0;
+std::uint32_t sensorRecoveryTransmissions = 0;
+std::uint32_t sensorRecoveryFailures = 0;
+std::uint32_t sensorRecoveryCompletions = 0;
 void reportRoutineAckStatus(
     const char* state,
+    const rainpoint::RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+);
+void reportSensorRecoveryStatus(
+    const char* state,
+    rainpoint::PairingTrigger trigger,
     const rainpoint::RoutineAckAuthorization& authorization,
     const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
 );
@@ -440,6 +449,12 @@ void printNodeHealth() {
     line += routineAckTransmissions;
     line += ",\"routine_ack_failures\":";
     line += routineAckFailures;
+    line += ",\"sensor_recovery_transmissions\":";
+    line += sensorRecoveryTransmissions;
+    line += ",\"sensor_recovery_failures\":";
+    line += sensorRecoveryFailures;
+    line += ",\"sensor_recovery_completions\":";
+    line += sensorRecoveryCompletions;
 #endif
     line += "}";
     emitLine(line);
@@ -1162,6 +1177,38 @@ void reportRoutineAckStatus(
     emitLine(line);
 }
 
+void reportSensorRecoveryStatus(
+    const char* state,
+    rainpoint::PairingTrigger trigger,
+    const rainpoint::RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame
+) {
+    String line = "{\"type\":\"sensor_recovery_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"state\":\"";
+    line += state;
+    line += "\",\"phase\":\"";
+    line += rainpoint::pairingTriggerName(trigger);
+    line += "\",\"paired_endpoint\":\"";
+    line += hexString(
+        authorization.pairedEndpoint.data(),
+        authorization.pairedEndpoint.size()
+    );
+    line += "\",\"transmissions\":";
+    line += sensorRecoveryTransmissions;
+    line += ",\"failures\":";
+    line += sensorRecoveryFailures;
+    line += ",\"completions\":";
+    line += sensorRecoveryCompletions;
+    if (frame != nullptr) {
+        line += ",\"frame\":\"";
+        line += hexString(frame->data(), frame->size());
+        line += '"';
+    }
+    line += '}';
+    emitLine(line);
+}
+
 void authorizeRoutineAckFromCompletedPairing() {
     rainpoint::RoutineAckAuthorization authorization{
         activePairingProfile.pairedEndpoint,
@@ -1256,6 +1303,52 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     if (&radio == &primaryRadio &&
         pairingSession.state() != rainpoint::PairingSessionState::Armed) {
+        rainpoint::PairingTrigger recoveryTrigger{};
+        const auto* recoveryAuthorization =
+            rainpoint::authorizedHcs026ControlFrame(
+                frame, routineAckAuthorizations, recoveryTrigger
+            );
+        if (recoveryAuthorization != nullptr) {
+            if (recoveryTrigger == rainpoint::PairingTrigger::PairedMessage3) {
+                ++sensorRecoveryCompletions;
+                reportSensorRecoveryStatus(
+                    "completed", recoveryTrigger, *recoveryAuthorization
+                );
+            } else {
+                std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
+                const std::uint32_t receivedAtMs = millis();
+                const bool built = rainpoint::buildKnownHcs026RecoveryReply(
+                    recoveryTrigger, *recoveryAuthorization, reply
+                );
+                if (built) {
+                    delay(rainpoint::kKnownSensorRecoveryDelayMs);
+                    const bool beforeDeadline = millis() - receivedAtMs <
+                        rainpoint::kKnownSensorRecoveryDeadlineMs;
+                    const bool sent = beforeDeadline && radio.transmitAsync(
+                        reply,
+                        rainpoint::routineAckCenterHz(*recoveryAuthorization),
+                        rainpoint::kPairingWakeSymbols,
+                        recoveryAuthorization->invert,
+                        rainpoint::pairingPaTableValue(
+                            recoveryAuthorization->powerDbm
+                        )
+                    );
+                    if (sent) {
+                        ++sensorRecoveryTransmissions;
+                    } else {
+                        ++sensorRecoveryFailures;
+                    }
+                    reportSensorRecoveryStatus(
+                        sent ? "reply_transmitted" :
+                            (beforeDeadline ? "transmit_failed" :
+                                "deadline_missed"),
+                        recoveryTrigger,
+                        *recoveryAuthorization,
+                        &reply
+                    );
+                }
+            }
+        }
         const auto* authorization = routineAckAuthorizations.match(frame);
         if (authorization != nullptr) {
             std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
