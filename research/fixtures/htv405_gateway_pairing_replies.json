@@ -16,7 +16,8 @@
     "candidate_reply_delay_ms": 0,
     "firmware_0_12_2_turnaround_gap_ms": 4.2,
     "firmware_0_12_3_turnaround_gap_ms": 1.1,
-    "notes": "Signal-start timing is file mtime minus saved-window duration plus measured in-file onset. The small negative receive-complete value is within the envelope threshold and filesystem timestamp precision; it means no intentional post-receive delay. Firmware 0.12.2 was carrier-correct but left an observed 4.2 ms silent gap between the valve request tail and the local reply. Firmware 0.12.3 reduced that gap to approximately 1.1 ms but was still rejected."
+    "firmware_0_12_4_turnaround_gap_ms": 0.8,
+    "notes": "Signal-start timing is file mtime minus saved-window duration plus measured in-file onset. The small negative receive-complete value is within the envelope threshold and filesystem timestamp precision; it means no intentional post-receive delay. Firmware 0.12.2 was carrier-correct but left an observed 4.2 ms silent gap between the valve request tail and the local reply. Firmware 0.12.3 reduced that gap to approximately 1.1 ms. Cached CC1101 calibration in firmware 0.12.4 reduced the observed gap to approximately 0.7--0.9 ms. Both local replies were rejected. The signal-grabber files cannot establish successful stock turnaround with sub-millisecond precision; a continuous-IQ capture is still required."
   },
   "factory_endpoint": "14a98013",
   "paired_endpoint": "94a98013",
@@ -34,13 +35,36 @@
     "measured_test_node_tx_error_hz": -52154,
     "corrected_initial_requested_hz": 433558184,
     "firmware_0_12_2_observed_reply_hz": 433507137,
-    "firmware_0_12_3_observed_reply_hz": 433505786
+    "firmware_0_12_3_observed_reply_hz": 433505786,
+    "firmware_0_12_4_observed_reply_hz": 433505847,
+    "stock_nearfield_observed_reply_hz": 433506946
   },
   "candidate_observations": {
     "firmware_0_12_3_reply_frame": "79f4882f2894a980133984028080c0858503067000fb4a128d008080000000000000000056c6",
     "firmware_0_12_3_reply_decoded": true,
-    "firmware_0_12_3_valve_accepted": false
+    "firmware_0_12_3_valve_accepted": false,
+    "firmware_0_12_4_reply_frame": "79f4882f2894a980133984028080c0858503067000b84c128d0080800000000000000000948d",
+    "firmware_0_12_4_reply_decoded": true,
+    "firmware_0_12_4_valve_accepted": false,
+    "firmware_0_12_4_valve_next_frame_kind": "factory_announcement",
+    "interpretation": "The valve continued transmitting under factory endpoint 14a98013 after the local assignment, proving rejection at the first exchange. Carrier, deviation, and turnaround are now close to stock; assignment payload bytes are the leading mismatch."
   },
+  "successful_stock_assignments": [
+    {
+      "captured_at": "2026-08-17T18:58:43-04:00",
+      "reply_frame": "79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c",
+      "dynamic_region_hex": "0670009d97118d008080",
+      "valve_accepted": true
+    },
+    {
+      "captured_at": "2026-08-18T09:37:12-04:00",
+      "reply_frame": "79f4882f2894a980133984028080c085850302f000a64c920d010080000000000000000008fa",
+      "dynamic_region_hex": "02f000a64c920d010080",
+      "valve_accepted": true,
+      "next_valve_frame_kind": "paired_message_1",
+      "notes": "The time bytes a6 4c equal an ordinary packed 09:37:12 clock. The following date/flag bytes 92 0d differ from the local builder's forced 12 8d layout, and bytes 18--20 plus 25--27 also vary between successful assignments. Their semantics remain unresolved."
+    }
+  ],
   "initial_assignment_modulation": {
     "lower_tone_hz": 433471027,
     "upper_tone_hz": 433541034,
@@ -159,5 +183,5 @@
       "reply_channel_hz": 434351001
     }
   ],
-  "notes": "The initial assignment reply uses a biased 70 kHz tone pair and was missed by midpoint-only demodulation. Routine replies use the ordinary approximately 80 kHz tone separation. This is receive-side evidence only; valve transmit remains disabled pending physical local pairing and safety validation."
+  "notes": "The initial assignment reply uses a biased 70 kHz tone pair and was missed by midpoint-only demodulation. Routine replies use the ordinary approximately 80 kHz tone separation. Local transmit is physically validated at the intended carrier, deviation, and sub-millisecond turnaround, but firmware 0.12.4 is rejected at the first assignment. Two successful stock assignments show that the current local clock/flag substitution is not general. Valve control remains disabled."
 }

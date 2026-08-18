@@ -113,6 +113,40 @@ committed as `fixtures/htv405_gateway_pairing_replies.json`; the verified
 was removed after copying and checksum verification, and the production add-on
 was restored to normal RTL-SDR operation.
 
+### HTV405FRF local-assignment comparison — 2026-08-18
+
+Near-field IQ captures compared cached-calibration firmware `0.12.4` with a
+fresh successful stock-gateway enrollment. The local reply measured near
+433.505847 MHz with the correct approximately 70 kHz initial tone separation.
+Cached CC1101 calibration reduced the request-to-reply silent gap to roughly
+0.7--0.9 ms. The valve nevertheless continued sending factory announcements,
+so it rejected the first assignment before entering the paired exchange.
+
+After deleting the valve from the HomGar app and enrolling it again, the stock
+gateway sent this assignment:
+
+```text
+79f4882f2894a980133984028080c085850302f000a64c920d010080000000000000000008fa
+```
+
+The valve's very next frame used paired endpoint `94a98013` and route
+`b9840280`. The first three routine stock replies exactly matched the existing
+fixture, which isolates the remaining uncertainty to the initial assignment.
+The rejected local assignment was:
+
+```text
+79f4882f2894a980133984028080c0858503067000b84c128d0080800000000000000000948d
+```
+
+The new stock sample's `a6 4c` bytes are the ordinary packed local time
+09:37:12. Its following `92 0d` bytes do not match the local builder's forced
+`12 8d` flag layout, and other nearby bytes also vary across the two successful
+stock assignments. The earlier hypothesis that only reply timing prevented
+acceptance is therefore superseded: assignment-field semantics are now the
+primary lead. Signal-grabber file timestamps are too coarse to determine the
+successful stock turnaround precisely, so the next controlled enrollment
+should use one continuous IQ recording and provide a third assignment sample.
+
 ## Multi-channel sensor discovery
 
 A 1.024 Msps window near 434 MHz retained upper-channel notification traffic
