@@ -27,6 +27,7 @@ from .pairing_protocol import (
 )
 from .valve_pairing_protocol import (
     AUTOMATIC_HTV405_PROFILE_ID,
+    CALIBRATED_FREQUENCY_OFFSET_HZ as HTV405_FREQUENCY_OFFSET_HZ,
     automatic_htv405_profile_metadata,
     build_htv405_profile,
 )
@@ -1457,7 +1458,11 @@ class Gateway:
                     "profile": profile_id,
                     "duration_seconds": duration_seconds,
                     "local_clock": local_clock,
-                    "frequency_offset_hz": 45_000,
+                    "frequency_offset_hz": (
+                        HTV405_FREQUENCY_OFFSET_HZ
+                        if valve_candidate
+                        else 45_000
+                    ),
                     "power_dbm": 10,
                     "invert": False,
                 }

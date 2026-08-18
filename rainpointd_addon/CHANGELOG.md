@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.29.2 / Firmware 0.12.1
+
+- Correct only the HTV405 candidate's node command offset after an SDR capture
+  measured its valid assignment waveform 52,154 Hz below the stock carrier.
+- Preserve the proven HCS026 pairing and routine-ack frequency correction.
+
 ## 0.29.1 / Firmware 0.12.1
 
 - Correct the HTV405 candidate's reply delay from 10 ms to the stock gateway's

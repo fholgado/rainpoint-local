@@ -298,12 +298,12 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual(70_007, modulation["tone_separation_hz"])
         self.assertEqual(
             channels["initial_assignment_hz"],
-            channels["candidate_initial_command_hz"]
-            + channels["candidate_frequency_offset_hz"],
+            channels["corrected_initial_requested_hz"]
+            + channels["measured_test_node_tx_error_hz"],
         )
         self.assertEqual(
-            channels["routine_reply_hz"],
-            channels["candidate_routine_command_hz"]
+            channels["corrected_initial_requested_hz"],
+            channels["candidate_initial_command_hz"]
             + channels["candidate_frequency_offset_hz"],
         )
 

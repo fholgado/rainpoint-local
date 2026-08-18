@@ -191,6 +191,15 @@ that interval to a 100 ms receive-complete-to-transmit delay. Capture-file
 close times after this first pair were reordered by concurrent writers and are
 not used as timing evidence.
 
+The first local 0.12.1 on-air trial decoded to the intended assignment frame
+with the correct 320-symbol wake, polarity, and approximately 35 kHz
+deviation, but its carrier was centered near 433.454 MHz instead of 433.506
+MHz. In the same capture the valve announcement was within 46 Hz of the stock
+reference, ruling out material SDR drift. The test node therefore transmitted
+52,154 Hz below its requested center. HTV405 enrollment now applies a
+node-specific +97,154 Hz correction to the compiled 433.461 MHz profile center;
+the established +45 kHz HCS026 correction remains unchanged.
+
 The first routine replies mirror the request message counter in the low seven
 bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
 receive-side assignment and acknowledgement transcript, but does not yet

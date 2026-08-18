@@ -19,9 +19,13 @@
     "valve_request_hz": 433141696,
     "initial_assignment_hz": 433506030,
     "routine_reply_hz": 434351001,
-    "candidate_frequency_offset_hz": 45000,
+    "candidate_frequency_offset_hz": 97154,
     "candidate_initial_command_hz": 433461030,
-    "candidate_routine_command_hz": 434306001
+    "candidate_routine_command_hz": 434306001,
+    "failed_candidate_requested_hz": 433506030,
+    "failed_candidate_observed_hz": 433453876,
+    "measured_test_node_tx_error_hz": -52154,
+    "corrected_initial_requested_hz": 433558184
   },
   "initial_assignment_modulation": {
     "lower_tone_hz": 433471027,

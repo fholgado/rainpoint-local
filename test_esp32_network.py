@@ -483,6 +483,7 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("14a98013", command["factory_endpoint"])
         self.assertEqual("b9840280", command["valve_route"])
         self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertEqual(97_154, command["frequency_offset_hz"])
         self.assertNotIn("open", json.dumps(command))
         self.assertNotIn("zone", json.dumps(command))
         stream.write(
