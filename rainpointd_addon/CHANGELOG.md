@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.29.4 / Firmware 0.12.3
+
+- Pre-initialize the ESP32 RMT transmitter when the bounded HTV405 pairing
+  window is armed.
+- Defer the redundant CC1101 return-to-RX calibration until after the
+  time-critical valve reply, targeting the measured 4.2 ms turnaround gap.
+
 ## 0.29.3 / Firmware 0.12.2
 
 - Correct the stock HTV405 response timing calculation for unequal rtl_433

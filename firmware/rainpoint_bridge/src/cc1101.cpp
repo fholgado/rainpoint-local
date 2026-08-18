@@ -329,6 +329,23 @@ bool Cc1101::restoreReceiveConfiguration(std::uint8_t channel) {
     return setChannel(channel);
 }
 
+bool Cc1101::prepareTransmit() {
+    if (transmitPrepared_) {
+        return true;
+    }
+    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(
+        static_cast<gpio_num_t>(dataPin_),
+        kTxRmtChannel
+    );
+    config.clk_div = 80;  // 80 MHz APB / 80 = one microsecond per tick.
+    config.mem_block_num = 1;
+    config.tx_config.idle_output_en = true;
+    config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
+    transmitPrepared_ = rmt_config(&config) == ESP_OK &&
+        rmt_driver_install(kTxRmtChannel, 0, 0) == ESP_OK;
+    return transmitPrepared_;
+}
+
 bool Cc1101::transmitAsync(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint32_t centerFrequencyHz,
@@ -374,19 +391,7 @@ bool Cc1101::transmitAsync(
         items[index].duration1 = second < symbolCount ? kSymbolMicros : 1;
     }
 
-    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(
-        static_cast<gpio_num_t>(dataPin_),
-        kTxRmtChannel
-    );
-    config.clk_div = 80;  // 80 MHz APB / 80 = one microsecond per tick.
-    config.mem_block_num = 1;
-    config.tx_config.idle_output_en = true;
-    config.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
-
-    const bool rmtConfigured = rmt_config(&config) == ESP_OK;
-    const bool rmtInstalled = rmtConfigured &&
-        rmt_driver_install(kTxRmtChannel, 0, 0) == ESP_OK;
-    bool sent = rmtInstalled;
+    bool sent = prepareTransmit();
     if (sent) {
         // Calibrate and settle the synthesizer with the PA still gated. Going
         // directly from IDLE to TX exposed roughly 140 us of constant carrier
@@ -414,9 +419,6 @@ bool Cc1101::transmitAsync(
         const bool rmtCompleted =
             rmt_wait_tx_done(kTxRmtChannel, pdMS_TO_TICKS(100)) == ESP_OK;
         sent = sent && rmtCompleted;
-    }
-    if (rmtInstalled) {
-        rmt_driver_uninstall(kTxRmtChannel);
     }
     digitalWrite(dataPin_, LOW);
     enterIdle();
@@ -471,7 +473,7 @@ void Cc1101::recoverRx() {
     enterReceive();
 }
 
-bool Cc1101::poll(RadioPacket& packet) {
+bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
     const auto rxBytes = readStatus(kRxBytes);
     if (rxBytes & 0x80) {
         ++overflowCount_;
@@ -494,8 +496,14 @@ bool Cc1101::poll(RadioPacket& packet) {
         readStatus(kFrequencyEstimate)
     );
     ++packetCount_;
-    recoverRx();
+    if (recoverAfterRead) {
+        recoverRx();
+    }
     return true;
+}
+
+void Cc1101::recoverReceive() {
+    recoverRx();
 }
 
 std::uint8_t Cc1101::channel() const {

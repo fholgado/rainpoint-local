@@ -25,6 +25,7 @@ public:
     bool enterIdle();
     bool enterReceive();
     bool setChannel(std::uint8_t channel);
+    bool prepareTransmit();
     bool transmitAsync(
         const std::array<std::uint8_t, kFrameBytes>& frame,
         std::uint32_t centerFrequencyHz,
@@ -33,7 +34,8 @@ public:
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45
     );
-    bool poll(RadioPacket& packet);
+    bool poll(RadioPacket& packet, bool recoverAfterRead = true);
+    void recoverReceive();
     std::uint8_t channel() const;
     std::uint8_t partNumber();
     std::uint8_t version();
@@ -73,6 +75,7 @@ private:
     int dataPin_;
     std::uint8_t channel_ = 0;
     bool configurationValid_ = false;
+    bool transmitPrepared_ = false;
     std::uint32_t packetCount_ = 0;
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;

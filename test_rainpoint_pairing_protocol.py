@@ -328,6 +328,14 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             companion_endpoint=self.fixture["companion_endpoint"],
         )
         self.assertEqual(timing["candidate_reply_delay_ms"], profile.reply_delay_ms)
+        self.assertAlmostEqual(4.2, timing["firmware_0_12_2_turnaround_gap_ms"])
+        self.assertLess(
+            abs(
+                self.fixture["channels"]["firmware_0_12_2_observed_reply_hz"]
+                - self.fixture["channels"]["initial_assignment_hz"]
+            ),
+            2_000,
+        )
 
     def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
         for exchange in self.fixture["exchanges"][1:4]:

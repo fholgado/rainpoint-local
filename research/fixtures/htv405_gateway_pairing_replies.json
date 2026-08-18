@@ -14,7 +14,8 @@
     "factory_request_start_to_reply_start_ms": 30.893,
     "receive_complete_to_reply_start_ms": -0.307,
     "candidate_reply_delay_ms": 0,
-    "notes": "Signal-start timing is file mtime minus saved-window duration plus measured in-file onset. The small negative receive-complete value is within the envelope threshold and filesystem timestamp precision; it means no intentional post-receive delay."
+    "firmware_0_12_2_turnaround_gap_ms": 4.2,
+    "notes": "Signal-start timing is file mtime minus saved-window duration plus measured in-file onset. The small negative receive-complete value is within the envelope threshold and filesystem timestamp precision; it means no intentional post-receive delay. Firmware 0.12.2 was carrier-correct but left an observed 4.2 ms silent gap between the valve request tail and the local reply."
   },
   "factory_endpoint": "14a98013",
   "paired_endpoint": "94a98013",
@@ -30,7 +31,8 @@
     "failed_candidate_requested_hz": 433506030,
     "failed_candidate_observed_hz": 433453876,
     "measured_test_node_tx_error_hz": -52154,
-    "corrected_initial_requested_hz": 433558184
+    "corrected_initial_requested_hz": 433558184,
+    "firmware_0_12_2_observed_reply_hz": 433507137
   },
   "initial_assignment_modulation": {
     "lower_tone_hz": 433471027,

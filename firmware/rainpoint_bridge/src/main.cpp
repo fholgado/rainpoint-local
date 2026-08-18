@@ -984,6 +984,11 @@ void handleNetworkCommand() {
             valvePairingActive = false;
             return;
         }
+        if (!primaryRadio.prepareTransmit()) {
+            reportNetworkCommandError(commandId, "valve_transmitter_prepare_failed");
+            valvePairingActive = false;
+            return;
+        }
         pairingAssignedChannel = 0;
     } else
 #endif
@@ -1301,7 +1306,14 @@ void authorizeRoutineAckFromCompletedPairing() {
 
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
-    if (!radio.poll(packet)) {
+    const bool deferReceiveRecovery = &radio == &primaryRadio &&
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive &&
+        valvePairingSession.state() == rainpoint::PairingSessionState::Armed;
+#else
+        false;
+#endif
+    if (!radio.poll(packet, !deferReceiveRecovery)) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
@@ -1326,7 +1338,9 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     replyDateTime,
                     replyFrame
                 );
-            delay(rainpoint::kHtv405ReplyDelayMs);
+            if (rainpoint::kHtv405ReplyDelayMs > 0) {
+                delay(rainpoint::kHtv405ReplyDelayMs);
+            }
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz;
@@ -1457,6 +1471,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         }
     }
 #endif
+    if (deferReceiveRecovery) {
+        // A successful reply already restored RX; repeating recovery here is
+        // harmless and keeps non-matching/no-reply valve frames on the normal
+        // receive path without delaying the time-critical transmit start.
+        radio.recoverReceive();
+    }
     printPacket(name, frame, packet, radio);
 }
 

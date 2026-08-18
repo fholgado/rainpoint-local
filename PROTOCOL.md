@@ -202,6 +202,13 @@ reference, ruling out material SDR drift. The test node therefore transmitted
 node-specific +97,154 Hz correction to the compiled 433.461 MHz profile center;
 the established +45 kHz HCS026 correction remains unchanged.
 
+A follow-up 0.12.2 capture measured the corrected local reply near 433.507
+MHz, within about 1.1 kHz of the stock assignment center. It also exposed a
+remaining approximately 4.2 ms silent gap between the end of the valve request
+and the beginning of the local reply. Firmware 0.12.3 therefore pre-initializes
+the ESP32 RMT transmitter when the bounded pairing window is armed and defers
+the redundant CC1101 receive recovery until after the time-critical reply.
+
 The first routine replies mirror the request message counter in the low seven
 bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
 receive-side assignment and acknowledgement transcript, but does not yet
