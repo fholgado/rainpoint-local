@@ -306,6 +306,11 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             channels["candidate_initial_command_hz"]
             + channels["candidate_frequency_offset_hz"],
         )
+        self.assertEqual(
+            channels["continuous_selector_2_initial_observed_hz"],
+            channels["selector_2_candidate_initial_command_hz"]
+            + channels["selector_2_measured_test_node_tx_error_hz"],
+        )
 
     def test_candidate_uses_measured_stock_reply_cadence(self) -> None:
         timing = self.fixture["timing"]
@@ -352,7 +357,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         )
         self.assertAlmostEqual(0.8, timing["firmware_0_12_4_turnaround_gap_ms"])
         self.assertFalse(observation["firmware_0_12_4_valve_accepted"])
-        self.assertEqual(50, profile.reply_delay_ms)
+        self.assertEqual(49, profile.reply_delay_ms)
 
     def test_continuous_capture_preserves_selector_branches(self) -> None:
         assignments = self.fixture["successful_stock_assignments"]
@@ -373,7 +378,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
                 self.assertEqual(0x41, reply[14] & 0x7F)
                 self.assertEqual(0x01, reply[15])
 
-    def test_runtime_profile_reconstructs_the_captured_association(self) -> None:
+    def test_runtime_profile_reconstructs_the_selector_2_association(self) -> None:
         profile = build_htv405_profile(
             factory_endpoint=self.fixture["factory_endpoint"],
             valve_route="b9840280",
@@ -383,11 +388,27 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual(self.fixture["paired_endpoint"], profile.paired_endpoint)
         for index, exchange in enumerate(self.fixture["exchanges"]):
             with self.subTest(index=index, kind=exchange["request_kind"]):
-                request = bytes.fromhex(exchange["request_frame"])
+                captured_request = bytes.fromhex(exchange["request_frame"])
+                request = bytearray(captured_request)
+                if 1 <= index <= 5:
+                    request[16] = 0x82
+                elif 6 <= index <= 9:
+                    request[16] = 0x02
+                elif 10 <= index <= 13:
+                    request[16] = 0x82
+                if 1 <= index <= 13:
+                    residual = binascii.crc_hqx(
+                        captured_request[:-2], 0
+                    ) ^ int.from_bytes(
+                        captured_request[-2:], "big"
+                    )
+                    trailer = binascii.crc_hqx(request[:-2], 0) ^ residual
+                    request[-2:] = trailer.to_bytes(2, "big")
                 self.assertTrue(request_matches(profile, index, request))
                 if exchange.get("reply_expected", True):
-                    reply = bytes.fromhex(exchange["reply_frame"])
-                    self.assertEqual(reply, frame_for_step(profile, index))
+                    if index > 0:
+                        reply = bytes.fromhex(exchange["reply_frame"])
+                        self.assertEqual(reply, frame_for_step(profile, index))
                 else:
                     self.assertIsNone(frame_for_step(profile, index))
 
@@ -421,11 +442,11 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             0,
             local_clock=datetime(2026, 8, 17, 18, 56, 58),
         )
-        self.assertEqual(bytes.fromhex("9d97118d"), frame[21:25])
+        self.assertEqual(bytes.fromhex("9d97910d"), frame[21:25])
         residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
             frame[-2:], "big"
         )
-        self.assertEqual(0xC713, residual)
+        self.assertEqual(0x4F03, residual)
 
 
 if __name__ == "__main__":

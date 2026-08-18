@@ -228,6 +228,42 @@ branch-specific and must not be mixed. Firmware 0.12.5 retains the captured
 selector-6 transcript, supplies the current local clock without the HCS026
 four-minute lead, and adds a 50 ms software delay before the cached hop.
 
+The isolated 0.12.5 trial then measured about 51.4 ms between receive completion
+and the local assignment, but the valve still repeated its factory announcement.
+This rules out the large timing error while leaving selector choice as the
+strongest observed difference. Firmware 0.12.6 therefore follows the complete
+selector-2 branch from the two latest accepted stock enrollments: its assignment
+markers, request marker `82`, initial reply channel, and routine reply channel
+move together. Watering-command transmission remains disabled.
+
+The recovered 0.12.6 assignment was otherwise structurally identical to the
+accepted selector-2 form and appeared near 433.550 MHz, but its packed clock
+decoded as 10:44:56 for an attempt made at approximately 10:40:56. The gateway
+command was independently verified to contain the current wall clock. Firmware
+0.12.7 therefore anchors the elapsed-time reference after CC1101 frequency
+preparation rather than before it, leaving all RF and selector variables fixed.
+The recovered 0.12.7 reply encoded 10:59:00 for the 10:59:00 physical attempt,
+proving that correction. Its 38-byte frame differed from the accepted 09:55
+selector-2 assignment only in the expected minute field and regenerated
+trailer. The valve nevertheless repeated its factory announcement and the
+local session stopped after step 1. The remaining leading hypothesis is the
+sub-millisecond receive-to-transmit envelope; split signal-grabber files cannot
+measure that accurately enough. A subsequent continuous local capture measured
+83.2 ms from request start to reply start, compared with 81.9 ms for the
+accepted stock exchange under the same detector. Firmware 0.12.8 therefore
+reduces only the software delay from 50 ms to 49 ms; its expected physical
+reply is within roughly 0.3 ms of stock.
+
+The 0.12.8 physical trial still stopped after its first transmitted reply,
+falsifying the small delay error as the primary rejection cause. Re-running the
+same spectral analyzer on isolated local and accepted-stock selector-2 replies
+then exposed a stronger error: local centered at 433.546375 MHz while stock
+centered at 433.556430 MHz. The valve's own request differed by only 46 Hz
+between those captures, ruling out meaningful SDR drift. Both replies retained
+approximately 70.0 kHz tone separation and 35.0 kHz deviation. Firmware 0.12.9
+therefore raises only the selector-2 initial assignment center by 10.055 kHz;
+the independently observed routine channel remains unchanged.
+
 The first routine replies mirror the request message counter in the low seven
 bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
 receive-side assignment and acknowledgement transcript, but does not yet

@@ -164,6 +164,48 @@ local candidate therefore retains the independently successful selector-6
 template, removes the sensor-specific four-minute clock lead, and waits 50 ms
 after receive completion before starting its cached frequency hop.
 
+That 0.12.5 trial produced a local assignment about 51.4 ms after request
+completion, yet the valve remained on factory endpoint `14a98013`. With timing,
+carrier, deviation, and waveform now independently bounded, 0.12.6 moves the
+entire experimental enrollment state machine to the selector-2 branch seen in
+the two most recent accepted stock pairings. The initial marker layout, request
+marker `82`, and both selector-2 reply channels are treated as one unit.
+
+The decoded 0.12.6 local reply was
+`79f4882f2894a980133984028080c08585030270009cd5920d0100800000000000000000c863`.
+It retained selector 2 and the `0x4f03` trailer family, and its carrier appeared
+near 433.550 MHz. Its packed time decoded to 10:44:56, however, roughly four
+minutes ahead of the physical attempt even though the gateway command contained
+the current time. The 0.12.7 trial moves the firmware elapsed-time anchor until
+after transmit-frequency preparation and changes no other protocol variable.
+
+The decoded 0.12.7 local reply was
+`79f4882f2894a980133984028080c0858503027000e0d7920d01008000000000000000007bc1`.
+Its packed time decoded to 10:59:00, exactly matching the physical attempt, and
+all non-clock payload bytes matched the accepted 09:55 selector-2 assignment.
+The valve still remained on factory endpoint `14a98013`, while the node reported
+one completed step. This eliminates the node clock-anchor defect. A continuous
+local-attempt capture is now required to compare the sub-millisecond response
+gap and PA/wake envelope with the accepted 50.656 ms stock exchange; close times
+from separate signal-grabber files are not sufficient for that comparison.
+
+That continuous local capture recovered a second valid 0.12.7 reply,
+`79f4882f2894a980133984028080c0858503027000c6d9920d0100800000000000000000d0b2`,
+whose 11:10:12 clock again matched the attempt. Using the same power-envelope
+detector, the accepted stock timeline measured 81.9 ms request-start to
+reply-start while the local timeline measured 83.2 ms. Firmware 0.12.8 changes
+only the software delay from 50 ms to 49 ms, targeting a physical reply about
+0.3 ms later than stock instead of 1.3 ms later.
+
+The 0.12.8 trial was still rejected after one reply. A like-for-like spectral
+comparison then corrected the stored selector-2 initial center. The local reply
+measured 433.546375 MHz and the accepted stock reply measured 433.556430 MHz;
+their adjacent valve requests measured 433.141757 and 433.141711 MHz, only 46
+Hz apart. The approximately 10.055 kHz reply difference is therefore real, not
+SDR oscillator drift. Tone separation and deviation matched within tens of Hz.
+Firmware 0.12.9 raises only the initial selector-2 command center by 10.055 kHz
+and leaves its routine reply channel untouched.
+
 ## Multi-channel sensor discovery
 
 A 1.024 Msps window near 434 MHz retained upper-channel notification traffic

@@ -1035,7 +1035,6 @@ void handleNetworkCommand() {
     pairingInvert = invert;
     pairingLocalDateTime = parsedClock;
     pairingLocalDateTimeSet = true;
-    pairingLocalDateTimeSetAtMs = millis();
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
         const std::uint32_t initialFrequency = static_cast<std::uint32_t>(
@@ -1072,6 +1071,10 @@ void handleNetworkCommand() {
             millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
         );
     }
+    // Frequency calibration is part of pairing preparation. Anchor the
+    // supplied wall clock only after preparation so that its duration is not
+    // added again when constructing the first reply.
+    pairingLocalDateTimeSetAtMs = millis();
     pairingRequiresNetwork = true;
     reportPairingStatus("waiting_for_factory_message_1");
 }

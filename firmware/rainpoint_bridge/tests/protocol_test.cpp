@@ -419,10 +419,10 @@ int main() {
         "79f4882f288000000014a9801300808402ff93130000bd848000000000000000000000004795"
     );
     const auto htv405Request1 = fromHex(
-        "79f4882f28b984028094a98013010107862580804f8000000040800056800000000000001a73"
+        "79f4882f28b984028094a98013010107822580804f800000004080005680000000000000ccbf"
     );
     const auto htv405RequestNoReply = fromHex(
-        "79f4882f28b984028094a98013028107860582004f8000000040800056800000000000006f0a"
+        "79f4882f28b984028094a98013028107820582004f800000004080005680000000000000b9c6"
     );
     std::array<std::uint8_t, 4> htv405FactoryEndpoint{};
     assert(rainpoint::htv405FactoryAnnouncement(
@@ -450,11 +450,12 @@ int main() {
         htv405Profile.steps[0].deviationRegister ==
         rainpoint::kHtv405InitialDeviationRegister
     );
+    assert(htv405Profile.steps[0].channelCenterHz == 433'511'445);
     assert(
         htv405Profile.steps[1].deviationRegister ==
         rainpoint::kOrdinaryDeviationRegister
     );
-    assert(rainpoint::kHtv405ReplyDelayMs == 50);
+    assert(rainpoint::kHtv405ReplyDelayMs == 49);
     std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Reply{};
     const rainpoint::PairingLocalDateTime htv405Clock = {
         2026, 8, 17, 18, 56, 58,
@@ -463,7 +464,7 @@ int main() {
         htv405Profile, 0, htv405Clock, htv405Reply
     ));
     assert(htv405Reply == fromHex(
-        "79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c"
+        "79f4882f2894a980133984028080c08585030270009d97910d01008000000000000000007447"
     ));
     assert(!rainpoint::buildHtv405PairingReply(
         htv405Profile, 4, htv405Clock, htv405Reply

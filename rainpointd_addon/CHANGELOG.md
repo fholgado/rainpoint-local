@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.30.0 / Firmware 0.12.9
+
+- Correct the selector-2 initial HTV405 reply center by +10.055 kHz. Direct
+  local/stock spectral comparison anchored by the valve's own request showed
+  the 0.12.8 reply at 433.546375 MHz versus 433.556430 MHz for stock.
+- Keep the selector-2 routine channel unchanged; only the initial assignment
+  center moves. Valve control remains disabled.
+
+## 0.29.9 / Firmware 0.12.8
+
+- Reduce the experimental HTV405 software reply delay from 50 ms to 49 ms.
+  A continuous local IQ capture measured the prior physical reply start about
+  1.3 ms later than the accepted stock exchange.
+- Preserve the now-validated selector-2 frame, current packed clock, carrier,
+  deviation, wake waveform, and disabled valve-control boundary.
+
+## 0.29.8 / Firmware 0.12.7
+
+- Anchor the pairing wall clock after HTV405 frequency preparation. The
+  selector-2 trial transmitted a structurally correct frame whose packed time
+  was about four minutes ahead of the physical attempt.
+- Preserve the validated selector-2 markers, channels, 50 ms reply delay, and
+  disabled valve-control boundary.
+
+## 0.29.7 / Firmware 0.12.6
+
+- Switch the isolated HTV405 enrollment candidate to the fully observed
+  selector-2 assignment, request markers, and reply-frequency branch after
+  selector 6 was rejected despite validated carrier and stock reply timing.
+- Keep watering-command transmission disabled while enrollment remains under
+  physical validation.
+
 ## 0.29.6 / Firmware 0.12.5
 
 - Replace the misleading split-file HTV405 timing estimate with a continuous
