@@ -139,13 +139,30 @@ The rejected local assignment was:
 ```
 
 The new stock sample's `a6 4c` bytes are the ordinary packed local time
-09:37:12. Its following `92 0d` bytes do not match the local builder's forced
-`12 8d` flag layout, and other nearby bytes also vary across the two successful
-stock assignments. The earlier hypothesis that only reply timing prevented
-acceptance is therefore superseded: assignment-field semantics are now the
-primary lead. Signal-grabber file timestamps are too coarse to determine the
-successful stock turnaround precisely, so the next controlled enrollment
-should use one continuous IQ recording and provide a third assignment sample.
+09:37:12. Its surrounding marker layout differs from the selector-6 fixture,
+but a later continuous capture established that this is a coherent selector-2
+branch rather than evidence that the selector-6 local template is malformed.
+
+The 90-second continuous 2.0 Msps enrollment capture placed the factory
+announcement at 26.917473--26.948703 seconds and the accepted stock assignment
+at 26.999359 seconds. The real receive-complete gap is therefore 50.656 ms,
+not the approximately zero-delay estimate derived from separate signal-file
+close timestamps. That timing error explains why carrier-correct firmware
+`0.12.4` was rejected immediately.
+
+The third successful assignment was:
+
+```text
+79f4882f2894a980133984028080c0858503027000e0ce920d01008000000000000000002d3c
+```
+
+It again selected branch 2. Clearing the marker bit from `ce` produces packed
+local time 09:55:00, exactly matching the continuous timeline. Subsequent
+valve request bodies used `82` rather than the selector-6 fixture's `86`, and
+routine stock replies appeared on the selector-2 channel branch. The next
+local candidate therefore retains the independently successful selector-6
+template, removes the sensor-specific four-minute clock lead, and waits 50 ms
+after receive completion before starting its cached frequency hop.
 
 ## Multi-channel sensor discovery
 

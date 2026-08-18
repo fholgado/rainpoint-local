@@ -454,6 +454,7 @@ int main() {
         htv405Profile.steps[1].deviationRegister ==
         rainpoint::kOrdinaryDeviationRegister
     );
+    assert(rainpoint::kHtv405ReplyDelayMs == 50);
     std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Reply{};
     const rainpoint::PairingLocalDateTime htv405Clock = {
         2026, 8, 17, 18, 56, 58,

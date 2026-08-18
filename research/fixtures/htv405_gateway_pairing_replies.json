@@ -5,19 +5,18 @@
   "sample_rate_sps": 2000000,
   "symbol_rate_sps": 20000,
   "timing": {
-    "request_waveform_ms": 31.2,
-    "uncorrected_file_mtime_delta_ms": 130.897,
-    "request_saved_window_ms": 65.536,
-    "reply_saved_window_ms": 163.84,
-    "request_signal_onset_ms": 26.0,
-    "reply_signal_onset_ms": 24.3,
-    "factory_request_start_to_reply_start_ms": 30.893,
-    "receive_complete_to_reply_start_ms": -0.307,
-    "candidate_reply_delay_ms": 0,
+    "continuous_capture_file_sha256": "b1c13697cfb2c653712136aff07ceea104f9da9522b2544766f3f75fd029d77d",
+    "factory_request_start_s": 26.917473,
+    "request_waveform_ms": 31.23,
+    "stock_reply_start_s": 26.999359,
+    "factory_request_start_to_reply_start_ms": 81.886,
+    "receive_complete_to_reply_start_ms": 50.656,
+    "candidate_reply_delay_ms": 50,
     "firmware_0_12_2_turnaround_gap_ms": 4.2,
     "firmware_0_12_3_turnaround_gap_ms": 1.1,
     "firmware_0_12_4_turnaround_gap_ms": 0.8,
-    "notes": "Signal-start timing is file mtime minus saved-window duration plus measured in-file onset. The small negative receive-complete value is within the envelope threshold and filesystem timestamp precision; it means no intentional post-receive delay. Firmware 0.12.2 was carrier-correct but left an observed 4.2 ms silent gap between the valve request tail and the local reply. Firmware 0.12.3 reduced that gap to approximately 1.1 ms. Cached CC1101 calibration in firmware 0.12.4 reduced the observed gap to approximately 0.7--0.9 ms. Both local replies were rejected. The signal-grabber files cannot establish successful stock turnaround with sub-millisecond precision; a continuous-IQ capture is still required."
+    "superseded_split_file_estimate_ms": -0.307,
+    "notes": "The first four firmware trials relied on close timestamps from separate rtl_433 signal-grabber files and therefore targeted effectively zero delay. A continuous 90-second 2.0 Msps recording instead measured the factory request at 26.917473--26.948703 seconds and the accepted stock assignment beginning at 26.999359 seconds: 50.656 ms of receive-complete silence. Firmware 0.12.5 targets a 50 ms software delay plus the measured approximately 0.8 ms cached-synthesizer hop."
   },
   "factory_endpoint": "14a98013",
   "paired_endpoint": "94a98013",
@@ -37,7 +36,9 @@
     "firmware_0_12_2_observed_reply_hz": 433507137,
     "firmware_0_12_3_observed_reply_hz": 433505786,
     "firmware_0_12_4_observed_reply_hz": 433505847,
-    "stock_nearfield_observed_reply_hz": 433506946
+    "stock_nearfield_observed_reply_hz": 433506946,
+    "continuous_selector_2_initial_observed_hz": 433546390,
+    "continuous_selector_2_routine_observed_hz": 433471408
   },
   "candidate_observations": {
     "firmware_0_12_3_reply_frame": "79f4882f2894a980133984028080c0858503067000fb4a128d008080000000000000000056c6",
@@ -47,22 +48,34 @@
     "firmware_0_12_4_reply_decoded": true,
     "firmware_0_12_4_valve_accepted": false,
     "firmware_0_12_4_valve_next_frame_kind": "factory_announcement",
-    "interpretation": "The valve continued transmitting under factory endpoint 14a98013 after the local assignment, proving rejection at the first exchange. Carrier, deviation, and turnaround are now close to stock; assignment payload bytes are the leading mismatch."
+    "interpretation": "The valve continued transmitting under factory endpoint 14a98013 after the local assignment, proving rejection at the first exchange. The continuous stock capture later established that firmware 0.12.4 replied about 50 ms too early. Its selector-6 assignment template remains byte-compatible with the successful selector-6 stock fixture apart from the dynamic clock."
   },
   "successful_stock_assignments": [
     {
       "captured_at": "2026-08-17T18:58:43-04:00",
       "reply_frame": "79f4882f2894a980133984028080c08585030670009d97118d00808000000000000000002f8c",
       "dynamic_region_hex": "0670009d97118d008080",
+      "selector": 6,
       "valve_accepted": true
     },
     {
       "captured_at": "2026-08-18T09:37:12-04:00",
       "reply_frame": "79f4882f2894a980133984028080c085850302f000a64c920d010080000000000000000008fa",
       "dynamic_region_hex": "02f000a64c920d010080",
+      "selector": 2,
       "valve_accepted": true,
       "next_valve_frame_kind": "paired_message_1",
-      "notes": "The time bytes a6 4c equal an ordinary packed 09:37:12 clock. The following date/flag bytes 92 0d differ from the local builder's forced 12 8d layout, and bytes 18--20 plus 25--27 also vary between successful assignments. Their semantics remain unresolved."
+      "notes": "The time bytes a6 4c equal an ordinary packed 09:37:12 clock. Its marker layout belongs to selector 2 and must not be substituted into the validated selector-6 template."
+    },
+    {
+      "captured_at": "2026-08-18T09:55:00-04:00",
+      "reply_frame": "79f4882f2894a980133984028080c0858503027000e0ce920d01008000000000000000002d3c",
+      "dynamic_region_hex": "027000e0ce920d010080",
+      "selector": 2,
+      "valve_accepted": true,
+      "next_valve_frame_kind": "paired_message_1",
+      "trailer_residual": "4f03",
+      "notes": "Continuous capture. Clearing the marker bit from ce yields packed local time 09:55:00. The valve immediately moved to paired identity; subsequent request bodies used selector 2 and stock replies used the selector-2 routine channel branch."
     }
   ],
   "initial_assignment_modulation": {
@@ -183,5 +196,5 @@
       "reply_channel_hz": 434351001
     }
   ],
-  "notes": "The initial assignment reply uses a biased 70 kHz tone pair and was missed by midpoint-only demodulation. Routine replies use the ordinary approximately 80 kHz tone separation. Local transmit is physically validated at the intended carrier, deviation, and sub-millisecond turnaround, but firmware 0.12.4 is rejected at the first assignment. Two successful stock assignments show that the current local clock/flag substitution is not general. Valve control remains disabled."
+  "notes": "The initial assignment reply uses a biased 70 kHz tone pair and was missed by midpoint-only demodulation. Firmware 0.12.4 matched the intended selector-6 carrier and waveform but transmitted approximately 50 ms earlier than the successful stock gateway. A continuous capture also proved that selector 2 changes assignment markers, valve request bodies, and the routine reply channel; those bytes do not invalidate the captured selector-6 template. Valve control remains disabled."
 }

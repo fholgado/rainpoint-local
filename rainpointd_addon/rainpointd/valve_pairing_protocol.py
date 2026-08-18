@@ -27,9 +27,9 @@ INITIAL_DEVIATION_HZ = 35_004
 ROUTINE_DEVIATION_HZ = 41_260
 WAKE_SYMBOLS = 320
 SYMBOL_RATE_SPS = 20_000
-# After correcting the two rtl_433 files for their unequal saved-window
-# lengths, the stock reply starts as the 31.2 ms request completes.
-REPLY_DELAY_MS = 0
+# A continuous 2.0 Msps capture measured 50.656 ms of silence between the end
+# of the 31.23 ms factory announcement and the stock assignment reply.
+REPLY_DELAY_MS = 50
 REPLY_DEADLINE_MS = 250
 
 

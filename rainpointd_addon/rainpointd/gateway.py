@@ -1437,7 +1437,9 @@ class Gateway:
                         raise ValueError(
                             "invalid HTV405 association identifiers"
                         ) from None
-                    clock_lead_seconds = 240
+                    # Continuous stock-gateway captures encode the current
+                    # wall clock. The four-minute lead is HCS026-specific.
+                    clock_lead_seconds = 0
                 elif automatic:
                     clock_lead_seconds = 240
                 else:

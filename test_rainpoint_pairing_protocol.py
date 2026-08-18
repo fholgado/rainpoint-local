@@ -310,9 +310,8 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
     def test_candidate_uses_measured_stock_reply_cadence(self) -> None:
         timing = self.fixture["timing"]
         self.assertAlmostEqual(
-            timing["uncorrected_file_mtime_delta_ms"]
-            - (timing["reply_saved_window_ms"] - timing["request_saved_window_ms"])
-            + (timing["reply_signal_onset_ms"] - timing["request_signal_onset_ms"]),
+            (timing["stock_reply_start_s"] - timing["factory_request_start_s"])
+            * 1_000,
             timing["factory_request_start_to_reply_start_ms"],
             places=3,
         )
@@ -351,6 +350,19 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             38,
             len(bytes.fromhex(observation["firmware_0_12_3_reply_frame"])),
         )
+        self.assertAlmostEqual(0.8, timing["firmware_0_12_4_turnaround_gap_ms"])
+        self.assertFalse(observation["firmware_0_12_4_valve_accepted"])
+        self.assertEqual(50, profile.reply_delay_ms)
+
+    def test_continuous_capture_preserves_selector_branches(self) -> None:
+        assignments = self.fixture["successful_stock_assignments"]
+        self.assertEqual([6, 2, 2], [item["selector"] for item in assignments])
+        latest = bytes.fromhex(assignments[-1]["reply_frame"])
+        residual = binascii.crc_hqx(latest[:-2], 0) ^ int.from_bytes(
+            latest[-2:], "big"
+        )
+        self.assertEqual(0x4F03, residual)
+        self.assertEqual(bytes.fromhex("027000e0ce920d010080"), latest[18:28])
 
     def test_initial_routine_acknowledgements_mirror_message_counter(self) -> None:
         for exchange in self.fixture["exchanges"][1:4]:

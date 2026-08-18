@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.29.6 / Firmware 0.12.5
+
+- Replace the misleading split-file HTV405 timing estimate with a continuous
+  2.0 Msps measurement: 81.886 ms request-start to reply-start and 50.656 ms
+  receive-complete to reply-start.
+- Delay the cached-calibration assignment by 50 ms and use the current local
+  wall clock instead of the HCS026-specific four-minute lead.
+- Preserve the selector-6 assignment template; a third successful stock
+  enrollment shows that selector 2 uses a distinct marker and channel branch.
+
 ## 0.29.5 / Firmware 0.12.4
 
 - Record the physically measured 0.12.3 assignment reply: correct decoded

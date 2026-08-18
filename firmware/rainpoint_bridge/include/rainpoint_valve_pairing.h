@@ -11,10 +11,10 @@ namespace rainpoint {
 constexpr const char* kAutomaticHtv405ProfileId =
     "htv405_auto_candidate_v1";
 constexpr std::size_t kHtv405PairingStepCount = 18;
-// Correcting the raw-file close timestamps for their unequal saved-window
-// lengths places the stock assignment reply about 30.9 ms after the 31.2 ms
-// request begins. Transmit as soon as the complete request is available.
-constexpr std::uint16_t kHtv405ReplyDelayMs = 0;
+// A continuous 2.0 Msps capture measured 50.656 ms of silence between the end
+// of the 31.23 ms factory announcement and the stock assignment reply. The
+// cached synthesizer hop adds about 0.8 ms after this software delay.
+constexpr std::uint16_t kHtv405ReplyDelayMs = 50;
 constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 constexpr std::uint8_t kHtv405InitialDeviationRegister = 0x43;
 
