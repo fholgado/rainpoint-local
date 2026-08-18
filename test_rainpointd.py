@@ -28,6 +28,58 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_sensor_link_diagnostics_attach_to_endpoint_device(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        gateway.observe_decoded(
+            device_id="soil-test-a",
+            name="Test Sensor A",
+            model="HCS02x-compatible soil sensor",
+            frame="79f4882f28" + "00" * 33,
+            state={
+                "rf_endpoint": "9bce0024",
+                "rf_protocol_family": "rainpoint_hcs02x",
+                "rf_frame_accepted": True,
+                "soil_moisture_percent": 51,
+            },
+        )
+        gateway.observe_sensor_link_status(
+            "rp-001122334455",
+            "9bce0024",
+            rf_recovery_state="reply_transmitted",
+            rf_recovery_phase="paired_message_1",
+            rf_recovery_transmissions=1,
+            rf_ack_confirmation="pending_observation",
+        )
+        ack_event = gateway.observe_rf_frame(
+            frame="79f4882f28" + "11" * 33,
+            state={
+                "routine_ack_endpoint": "9bce0024",
+                "rf_receiver_id": "local-sdr",
+                "rf_frame_accepted": True,
+            },
+        )
+        device = gateway.devices()[0]
+        self.assertEqual(
+            "rp-001122334455", device["state"]["rf_ack_owner_node_id"]
+        )
+        self.assertEqual(
+            "reply_transmitted", device["state"]["rf_recovery_state"]
+        )
+        self.assertEqual(
+            "paired_message_1", device["state"]["rf_recovery_phase"]
+        )
+        self.assertIn("rf_link_status_at", device["state"])
+        self.assertEqual(
+            "observed_over_air", device["state"]["rf_ack_confirmation"]
+        )
+        self.assertEqual("local-sdr", device["state"]["rf_ack_observer"])
+        self.assertEqual(
+            "observed_over_air",
+            ack_event["state"]["local_ack_confirmation"],
+        )
+        self.assertEqual("soil-test-a", gateway.events()[-2]["device_id"])
+        gateway.close()
+
     def test_radio_node_metadata_updates_without_rotating_credential(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = Gateway(

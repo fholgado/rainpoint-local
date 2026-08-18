@@ -156,6 +156,14 @@
       "last_report_interval": { "name": "Last report interval" },
       "longest_report_gap": { "name": "Longest report gap" },
       "reception_success": { "name": "RF reception success" },
+      "ack_state": { "name": "Gateway reply status" },
+      "ack_confirmation": { "name": "Gateway reply confirmation" },
+      "ack_observed_time": { "name": "Last reply heard over air" },
+      "ack_unconfirmed_attempts": { "name": "Unconfirmed gateway replies" },
+      "recovery_state": { "name": "Recovery status" },
+      "recovery_phase": { "name": "Recovery phase" },
+      "link_status_time": { "name": "Last gateway reply" },
+      "ack_owner": { "name": "Radio owner" },
       "node_last_seen": { "name": "Last heartbeat" },
       "ip_address": { "name": "IP address" },
       "wifi_signal_strength": { "name": "Wi-Fi signal strength" },
@@ -176,7 +184,10 @@
       "gateway_authentications": { "name": "Gateway authentications" },
       "routine_ack_authorized_sensors": { "name": "Acknowledged sensors" },
       "routine_ack_transmissions": { "name": "Sensor acknowledgements sent" },
-      "routine_ack_failures": { "name": "Sensor acknowledgement failures" }
+      "routine_ack_failures": { "name": "Sensor acknowledgement failures" },
+      "sensor_recovery_transmissions": { "name": "Recovery replies" },
+      "sensor_recovery_failures": { "name": "Recovery reply failures" },
+      "sensor_recovery_completions": { "name": "Completed recoveries" }
     },
     "binary_sensor": {
       "watering": { "name": "Watering" },

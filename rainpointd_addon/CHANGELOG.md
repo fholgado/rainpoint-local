@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.31.0 / Firmware 0.13.0-combined.1
+
+- Combine the selector-2 HTV405 pairing candidate with authorized paired-state
+  HCS026 sensor recovery in the single supported radio-node firmware.
+- Preserve the valve safety boundary: enrollment replies remain bounded and
+  valve open/close control is still unavailable.
+- Expose per-sensor ACK ownership, over-air confirmation, unconfirmed replies,
+  and recovery-phase diagnostics through the gateway and Home Assistant.
+
 ## 0.30.0 / Firmware 0.12.9
 
 - Correct the selector-2 initial HTV405 reply center by +10.055 kHz. Direct
@@ -84,6 +93,15 @@
   intentional no-transmit step and distinct initial modulation profile.
 - Keep valve open, close, and watering commands outside the production firmware
   boundary pending isolated physical enrollment and safety validation.
+## 0.28.1 / Firmware 0.13.0-sensor.1
+
+- Recover an already-authorized HCS026 sensor when it emits the captured
+  paired-state `01 -> 02 -> 02 -> 03` control exchange, without opening a
+  pairing window or accepting an unknown identity.
+- Keep recovery replies on the sensor's single-owner radio node and expose the
+  reply phase, outcome, owner, and aggregate recovery counters as diagnostics.
+- Publish this as a sensor-only prerelease so valve-pairing experiments remain
+  isolated until both paths have been validated independently.
 
 ## 0.28.0 / Firmware 0.11.0
 

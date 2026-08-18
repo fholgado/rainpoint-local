@@ -156,6 +156,9 @@ class ESP32SerialTransport:
                 "routine_ack_receive_channel",
                 "routine_ack_transmissions",
                 "routine_ack_failures",
+                "sensor_recovery_transmissions",
+                "sensor_recovery_failures",
+                "sensor_recovery_completions",
             ):
                 value = message.get(key)
                 if (
@@ -187,6 +190,47 @@ class ESP32SerialTransport:
                 except ValueError:
                     pass
             self.gateway.update_node(authenticated_node_id, **diagnostics)
+            return 0
+        if message_type == "sensor_recovery_status":
+            if authenticated_node_id is None:
+                return 0
+            endpoint = message.get("paired_endpoint")
+            state = message.get("state")
+            phase = message.get("phase")
+            if (
+                not isinstance(endpoint, str)
+                or len(endpoint) != 8
+                or not all(
+                    character in "0123456789abcdef" for character in endpoint
+                )
+                or not isinstance(state, str)
+                or not isinstance(phase, str)
+            ):
+                return 0
+            diagnostics: dict[str, Any] = {
+                "rf_recovery_state": state,
+                "rf_recovery_phase": phase,
+            }
+            for source, target in (
+                ("transmissions", "rf_recovery_transmissions"),
+                ("failures", "rf_recovery_failures"),
+                ("completions", "rf_recovery_completions"),
+            ):
+                value = message.get(source)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    diagnostics[target] = value
+            self.gateway.update_node(
+                authenticated_node_id,
+                sensor_recovery_endpoint=endpoint,
+                **diagnostics,
+            )
+            self.gateway.observe_sensor_link_status(
+                authenticated_node_id, endpoint, **diagnostics
+            )
             return 0
         if message_type == "routine_ack_status":
             if authenticated_node_id is None:
@@ -221,6 +265,21 @@ class ESP32SerialTransport:
                 ):
                     diagnostics[target] = value
             self.gateway.update_node(authenticated_node_id, **diagnostics)
+            self.gateway.observe_sensor_link_status(
+                authenticated_node_id,
+                endpoint,
+                rf_ack_state=state,
+                rf_ack_confirmation=(
+                    "pending_observation" if state == "transmitted" else None
+                ),
+                rf_ack_transmissions=diagnostics.get(
+                    "routine_ack_transmissions"
+                ),
+                rf_ack_failures=diagnostics.get("routine_ack_failures"),
+                rf_ack_assigned_channel=diagnostics.get(
+                    "routine_ack_assigned_channel"
+                ),
+            )
             return 0
         if message_type != "rainpoint_rf":
             return 0
