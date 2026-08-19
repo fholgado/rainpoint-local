@@ -167,6 +167,20 @@ these fields, but HTV405 frame construction remains deliberately unavailable
 until custom enrollment, acknowledgement, idempotent close, and the node-local
 watchdog are validated on the isolated valve.
 
+Local enrollment on August 18 produced the same four-zone layout with offset
+17 equal to `0x05`; the stock-controlled high bit is association state rather
+than part of the functional selector. The valve retained its paired endpoint
+after battery removal and emitted periodic paired-link reports every roughly 40
+seconds. A live chassis check also confirmed that only one outlet can be active
+at a time: opening another zone ends the previous zone. HA therefore models the
+four outlets as mutually exclusive states under one valve device.
+
+An association-specific, offline-only close candidate builder now reproduces
+the captured local `0x05` idle body. It requires the paired endpoints, current
+five-bit sequence, zone, selector, repeat phase, and trailer residue explicitly.
+It remains disconnected from the gateway API and radio firmware; the first RF
+control trial is still an idempotent close on the dry test valve.
+
 ### HTV405FRF enrollment exchange
 
 A second isolated enrollment captured the complete stock-gateway exchange.

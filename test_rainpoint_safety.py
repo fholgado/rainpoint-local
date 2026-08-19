@@ -26,6 +26,7 @@ class ValveSafetyControllerTest(unittest.TestCase):
             "close_retry_seconds": 1.5,
             "max_fast_close_attempts": 3,
             "fault_retry_seconds": 10,
+            "zone_count": 4,
         }
         settings.update(overrides)
         return ValveSafetyController(**settings)
@@ -35,6 +36,7 @@ class ValveSafetyControllerTest(unittest.TestCase):
         actions = controller.start(0)
         self.assertEqual(ActionKind.SEND_CLOSE, actions[0].kind)
         self.assertEqual("startup_recovery", actions[0].reason)
+        self.assertEqual([1, 2, 3, 4], [action.zone for action in actions])
         controller.observe_valve(watering=False, now=0.4)
         self.assertEqual(SafetyState.IDLE, controller.state)
         return controller
@@ -50,12 +52,17 @@ class ValveSafetyControllerTest(unittest.TestCase):
 
     def test_open_arms_watchdog_before_symbolic_action(self) -> None:
         controller = self.start_idle()
-        actions = controller.request_open(240, 10)
+        actions = controller.request_open(240, 10, zone=3)
         self.assertEqual(SafetyState.OPEN_PENDING, controller.state)
         self.assertEqual(250, controller.run_deadline)
         self.assertEqual(11.5, controller.acknowledgement_deadline)
         self.assertEqual(ActionKind.SEND_OPEN, actions[0].kind)
         self.assertEqual(240, actions[0].duration_seconds)
+        self.assertEqual(3, actions[0].zone)
+        with self.assertRaisesRegex(RuntimeError, "cannot open"):
+            controller.request_open(60, 10.1, zone=2)
+        with self.assertRaisesRegex(ValueError, "zone"):
+            self.start_idle().request_open(60, 0, zone=5)
         with self.assertRaisesRegex(ValueError, "whole minute"):
             self.start_idle().request_open(61, 0)
         with self.assertRaisesRegex(ValueError, "safety limit"):
@@ -66,7 +73,9 @@ class ValveSafetyControllerTest(unittest.TestCase):
         controller.request_open(60, 10)
         self.assertEqual((), controller.tick(11.49))
         actions = controller.tick(11.5)
-        self.assertEqual([ActionKind.SEND_CLOSE], [a.kind for a in actions])
+        self.assertEqual(
+            [ActionKind.SEND_CLOSE] * 4, [a.kind for a in actions]
+        )
         self.assertEqual("open_acknowledgement_timeout", actions[0].reason)
         self.assertEqual(SafetyState.CLOSE_PENDING, controller.state)
 
@@ -98,7 +107,7 @@ class ValveSafetyControllerTest(unittest.TestCase):
         self.assertEqual(2, second[0].attempt)
         third = controller.tick(8.0)
         self.assertEqual(
-            [ActionKind.SEND_CLOSE, ActionKind.REPORT_FAULT],
+            [ActionKind.SEND_CLOSE] * 4 + [ActionKind.REPORT_FAULT],
             [action.kind for action in third],
         )
         self.assertEqual(SafetyState.FAULT, controller.state)

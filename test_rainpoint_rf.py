@@ -35,6 +35,7 @@ from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
     build_close_frame,
+    build_htv405_close_frame,
     build_open_frame,
     close_candidates,
     decode_duration,
@@ -43,6 +44,8 @@ from rainpointd.valve_protocol import (  # noqa: E402
     next_sequence,
     open_candidates,
     is_htv405_link_frame,
+    htv405_close_candidates,
+    next_htv405_phase,
 )
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
 from tools.compare_rainpoint_iq import compare_waveforms  # noqa: E402
@@ -1114,6 +1117,32 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(88, valve["state"]["zone_1_remaining_seconds"])
         self.assertIsNone(valve["state"]["zone_2_remaining_seconds"])
 
+    def test_htv405_new_open_clears_other_mutually_exclusive_zones(self) -> None:
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "aa110280", "a1b2c313", "test-four-zone",
+                    "Test Four Zone", model="HTV405FRF",
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(
+            gateway, command=["unused"], catalog=catalog
+        )
+        transport.seed()
+        for frame in (
+            "79f4882f28aa110280a1b2c31308810782058088cf8000000040ac0156ac010000000000296d",
+            "79f4882f28aa110280a1b2c3130d010782058108cf8000000040ac0156ac01000000000072c7",
+        ):
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+        state = gateway.devices()[0]["state"]
+        self.assertFalse(state["zone_1_is_watering"])
+        self.assertTrue(state["zone_2_is_watering"])
+        self.assertEqual(2, state["active_zone"])
+        self.assertTrue(state["is_watering"])
+
     def test_structural_htv405_report_persists_unknown_valve_link(self) -> None:
         frame = (
             "79f4882f28aa110280a1b2c31308810782058088cf8000000040"
@@ -1148,6 +1177,73 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertTrue(is_htv405_link_frame(frame))
         self.assertIsNone(decode_htv405_control_frame(frame))
+
+    def test_builds_offline_htv405_close_candidates_from_session_inputs(self) -> None:
+        link = ValveLink(
+            controller_endpoint=bytes.fromhex("aa110280"),
+            valve_endpoint=bytes.fromhex("a1b2c313"),
+        )
+        frame = build_htv405_close_frame(
+            link,
+            sequence=0x0A,
+            zone=1,
+            selector=0x05,
+            repeat=True,
+            residue=0xC713,
+        )
+        self.assertEqual(
+            "79f4882f28aa110280a1b2c3130a8107820580804f8000000040"
+            "800056800000000000002077",
+            frame.hex(),
+        )
+        for zone in range(1, 5):
+            candidate = build_htv405_close_frame(
+                link,
+                sequence=0x0A,
+                zone=zone,
+                selector=0x05,
+                repeat=False,
+                residue=0x4F03,
+            )
+            self.assertEqual(
+                {"zone": zone, "is_watering": False},
+                decode_htv405_control_frame(candidate),
+            )
+        self.assertEqual(
+            4,
+            len(
+                htv405_close_candidates(
+                    link, sequence=0x0A, zone=1, selector=0x05
+                )
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "zone"):
+            build_htv405_close_frame(
+                link,
+                sequence=0x0A,
+                zone=5,
+                selector=0x05,
+                repeat=False,
+                residue=0xC713,
+            )
+
+    def test_derives_next_htv405_sequence_phase_from_latest_report(self) -> None:
+        primary = bytes.fromhex(
+            "79f4882f28aa110280a1b2c313080107820701004f8000000040"
+            "80005680000000000000a102"
+        )
+        # Phase extraction is independent of the trailer, so use a captured
+        # structurally valid body through the ordinary-link recognizer.
+        primary = bytearray(primary)
+        primary[-2:] = (
+            binascii.crc_hqx(primary[:-2], 0) ^ 0xC713
+        ).to_bytes(2, "big")
+        self.assertEqual((0x08, True), next_htv405_phase(bytes(primary)))
+        primary[14] |= 0x80
+        primary[-2:] = (
+            binascii.crc_hqx(primary[:-2], 0) ^ 0x4F03
+        ).to_bytes(2, "big")
+        self.assertEqual((0x09, False), next_htv405_phase(bytes(primary)))
 
     def test_retained_htv405_link_report_backfills_registry_on_upgrade(self) -> None:
         frame = (

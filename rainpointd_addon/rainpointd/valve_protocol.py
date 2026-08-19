@@ -131,6 +131,89 @@ def is_htv405_link_frame(frame: bytes) -> bool:
     )
 
 
+def build_htv405_close_frame(
+    link: ValveLink,
+    *,
+    sequence: int,
+    zone: int,
+    selector: int,
+    repeat: bool,
+    residue: int,
+) -> bytes:
+    """Build one offline HTV405 idempotent-close candidate.
+
+    This remains deliberately disconnected from every transport. Sequence,
+    association selector, endpoints, repeat phase, and trailer residue must all
+    come from the isolated valve session being tested.
+    """
+    if sequence not in range(0x20):
+        raise ValueError("HTV405 sequence must be in the observed 0x00..0x1f range")
+    if zone not in range(1, 5):
+        raise ValueError("HTV405 zone must be between 1 and 4")
+    if selector not in (0x05, 0x85):
+        raise ValueError("HTV405 selector must come from an observed association")
+    zone_pair = 0x80 | (zone // 2)
+    odd_zone = 0x80 if zone % 2 else 0x00
+    body = bytes(
+        (
+            sequence,
+            0x81 if repeat else 0x01,
+            0x07,
+            0x82,
+            selector,
+            zone_pair,
+            odd_zone,
+            0x4F,
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            0x40,
+            0x80,
+            0x00,
+            0x56,
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        )
+    )
+    return _finish_frame(
+        SYNC + link.controller_endpoint + link.valve_endpoint + body,
+        residue,
+    )
+
+
+def htv405_close_candidates(
+    link: ValveLink, *, sequence: int, zone: int, selector: int
+) -> tuple[bytes, ...]:
+    """Return all unresolved close phases without transmitting any of them."""
+    return tuple(
+        build_htv405_close_frame(
+            link,
+            sequence=sequence,
+            zone=zone,
+            selector=selector,
+            repeat=repeat,
+            residue=residue,
+        )
+        for repeat in (False, True)
+        for residue in TRAILER_RESIDUES
+    )
+
+
+def next_htv405_phase(frame: bytes) -> tuple[int, bool]:
+    """Return the sequence/repeat phase following one paired-link report."""
+    if not is_htv405_link_frame(frame):
+        raise ValueError("frame is not a recognized HTV405 paired-link report")
+    sequence = frame[13] & 0x1F
+    repeated = bool(frame[14] & 0x80)
+    return (((sequence + 1) & 0x1F), False) if repeated else (sequence, True)
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")

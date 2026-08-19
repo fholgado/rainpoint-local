@@ -150,6 +150,20 @@ class FrameIngestor:
                         valve_update[f"zone_{zone}_duration_seconds"] = decoded[
                             "duration_seconds"
                         ]
+                    if watering:
+                        # The HTV405 chassis physically permits one active
+                        # outlet. A newly observed open therefore closes every
+                        # other logical zone even if its final idle report was
+                        # missed by this receiver.
+                        for other_zone in range(1, 5):
+                            if other_zone == zone:
+                                continue
+                            valve_update[
+                                f"zone_{other_zone}_is_watering"
+                            ] = False
+                            valve_update[
+                                f"zone_{other_zone}_remaining_seconds"
+                            ] = None
                     zone_states = {
                         candidate: valve_update.get(
                             f"zone_{candidate}_is_watering",

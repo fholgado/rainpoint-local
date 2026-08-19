@@ -31,6 +31,7 @@ class SafetyAction:
     reason: str
     duration_seconds: int | None = None
     attempt: int | None = None
+    zone: int | None = None
 
 
 class ValveSafetyController:
@@ -45,6 +46,7 @@ class ValveSafetyController:
         close_retry_seconds: float = 1.5,
         max_fast_close_attempts: int = 5,
         fault_retry_seconds: float = 10.0,
+        zone_count: int = 1,
     ) -> None:
         if user_max_seconds <= 0:
             raise ValueError("user maximum must be positive")
@@ -56,6 +58,8 @@ class ValveSafetyController:
             raise ValueError("timeouts must be positive")
         if max_fast_close_attempts < 1 or fault_retry_seconds <= 0:
             raise ValueError("retry settings must be positive")
+        if zone_count not in range(1, 5):
+            raise ValueError("zone count must be between 1 and 4")
 
         self.user_max_seconds = user_max_seconds
         self.absolute_max_seconds = absolute_max_seconds
@@ -63,11 +67,13 @@ class ValveSafetyController:
         self.close_retry_seconds = close_retry_seconds
         self.max_fast_close_attempts = max_fast_close_attempts
         self.fault_retry_seconds = fault_retry_seconds
+        self.zone_count = zone_count
         self.state = SafetyState.BOOT
         self.run_deadline: float | None = None
         self.acknowledgement_deadline: float | None = None
         self.next_close_attempt: float | None = None
         self.close_attempts = 0
+        self.requested_zone: int | None = None
 
     def start(self, now: float) -> tuple[SafetyAction, ...]:
         """Fail closed on every process start before accepting an open."""
@@ -76,11 +82,15 @@ class ValveSafetyController:
         return self._begin_close(now, "startup_recovery")
 
     def request_open(
-        self, duration_seconds: int, now: float
+        self, duration_seconds: int, now: float, *, zone: int = 1
     ) -> tuple[SafetyAction, ...]:
-        """Arm the watchdog before emitting one non-idempotent open action."""
+        """Arm one mutually exclusive zone before emitting an open action."""
         if self.state is not SafetyState.IDLE:
             raise RuntimeError(f"cannot open while state is {self.state.value}")
+        if zone not in range(1, self.zone_count + 1):
+            raise ValueError(
+                f"zone must be between 1 and {self.zone_count}"
+            )
         if duration_seconds <= 0 or duration_seconds % 60:
             raise ValueError("duration must be a positive whole minute")
         maximum = min(self.user_max_seconds, self.absolute_max_seconds)
@@ -92,11 +102,13 @@ class ValveSafetyController:
             now + self.acknowledgement_timeout_seconds
         )
         self.state = SafetyState.OPEN_PENDING
+        self.requested_zone = zone
         return (
             SafetyAction(
                 ActionKind.SEND_OPEN,
                 "user_request",
                 duration_seconds=duration_seconds,
+                zone=zone,
             ),
         )
 
@@ -166,12 +178,14 @@ class ValveSafetyController:
         self.acknowledgement_deadline = None
         self.close_attempts = 1
         self.next_close_attempt = now + self.close_retry_seconds
-        return (
+        return tuple(
             SafetyAction(
                 ActionKind.SEND_CLOSE,
                 reason,
                 attempt=self.close_attempts,
-            ),
+                zone=zone,
+            )
+            for zone in range(1, self.zone_count + 1)
         )
 
     def _retry_close(self, now: float) -> tuple[SafetyAction, ...]:
@@ -181,7 +195,9 @@ class ValveSafetyController:
                 ActionKind.SEND_CLOSE,
                 "close_not_confirmed",
                 attempt=self.close_attempts,
+                zone=zone,
             )
+            for zone in range(1, self.zone_count + 1)
         ]
         if (
             self.state is SafetyState.CLOSE_PENDING
@@ -208,3 +224,4 @@ class ValveSafetyController:
         self.acknowledgement_deadline = None
         self.next_close_attempt = None
         self.close_attempts = 0
+        self.requested_zone = None
