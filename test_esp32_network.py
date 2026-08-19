@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.esp32_network import ESP32NetworkServer, load_node_tokens
 from rainpointd.gateway import Gateway
+from rainpointd.valve_protocol import ValveLink, build_htv405_close_frame
 
 
 FRAME = (
@@ -545,6 +546,73 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("94a98013", progress["completed_endpoint"])
         self.assertEqual([], progress["new_records"])
+        stream.close()
+        connection.close()
+
+    def test_existing_valve_link_does_not_complete_new_pairing_session(self) -> None:
+        self.assertIsNotNone(
+            self.gateway.register_observed_htv405_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                frame=build_htv405_close_frame(
+                    ValveLink(
+                        controller_endpoint=bytes.fromhex("b9840280"),
+                        valve_endpoint=bytes.fromhex("94a98013"),
+                    ),
+                    sequence=10,
+                    zone=1,
+                    selector=0x05,
+                    repeat=False,
+                    residue=0xC713,
+                ).hex(),
+                observed_at="2026-08-19T16:48:32+00:00",
+            )
+        )
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+            ],
+        )
+        started = self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+        )
+        command = json.loads(stream.readline())
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "armed",
+                    "completed_steps": 1,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "tx_armed": True,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while True:
+            progress = self.gateway.pairing()
+            if progress.get("stage") == "pairing_exchange_in_progress":
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertIsNone(progress["completed_endpoint"])
+        self.assertNotEqual("valve_pairing_completed", progress["stage"])
         stream.close()
         connection.close()
 

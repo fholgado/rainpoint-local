@@ -1731,21 +1731,11 @@ class Gateway:
                 else None
             )
             reported_endpoint = selected_node.get("pairing_paired_endpoint")
-            observed_valve_completed = False
-            if (
-                self._active_pairing_profile_id
-                == AUTOMATIC_HTV405_PROFILE_ID
-                and isinstance(reported_endpoint, str)
-                and self._store is not None
-            ):
-                observed_valve_completed = any(
-                    item["valve_endpoint"] == reported_endpoint.lower()
-                    for item in self._store.valve_registry()
-                )
-            if observed_valve_completed:
-                completed_endpoint = reported_endpoint.lower()
-                stage = "valve_pairing_completed"
-            elif node_state == "failed":
+            # A valve link may already be present from an earlier stock or
+            # local association. Its mere presence is not evidence that the
+            # valve accepted this session's assignment; only the selected
+            # node's command-scoped terminal state may complete pairing.
+            if node_state == "failed":
                 stage = "transmitter_failed"
             elif node_state == "completed":
                 if (
