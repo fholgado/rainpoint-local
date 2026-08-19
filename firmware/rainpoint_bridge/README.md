@@ -48,6 +48,9 @@ capacitor across CC1101 VCC/GND when practical.
   for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
 - Compiles the association-specific HTV405 enrollment candidate while keeping
   every valve-control command absent from the firmware boundary.
+- Includes a hardware-independent HTV405 close-frame builder for the isolated
+  close-first trial. It accepts only explicit association identities and is not
+  connected to the Wi-Fi, serial, Home Assistant, or CC1101 transmit paths.
 - Recovers a known dormant sensor from its strict factory announcement with one
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated

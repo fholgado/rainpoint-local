@@ -6,6 +6,7 @@
 #include "rainpoint_protocol.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
+#include "rainpoint_valve_control.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
 
@@ -26,6 +27,55 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> fromHex(
 }  // namespace
 
 int main() {
+    const rainpoint::Htv405ValveLink testValveLink{
+        {{0xaa, 0x11, 0x02, 0x80}},
+        {{0xa1, 0xb2, 0xc3, 0x13}},
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> closeFrame{};
+    assert(rainpoint::buildHtv405CloseFrame(
+        testValveLink,
+        {0x0a, true},
+        1,
+        0x05,
+        0xc713,
+        closeFrame
+    ));
+    assert(closeFrame == fromHex(
+        "79f4882f28aa110280a1b2c3130a8107820580804f8000000040"
+        "800056800000000000002077"
+    ));
+    for (std::uint8_t zone = 1; zone <= 4; ++zone) {
+        assert(rainpoint::buildHtv405CloseFrame(
+            testValveLink,
+            {0x0a, false},
+            zone,
+            0x05,
+            0x4f03,
+            closeFrame
+        ));
+        assert(closeFrame[18] == static_cast<std::uint8_t>(0x80 | zone / 2));
+        assert(closeFrame[19] == (zone % 2 ? 0x80 : 0x00));
+        assert(rainpoint::hasOrdinaryTrailer(closeFrame));
+    }
+    assert(!rainpoint::buildHtv405CloseFrame(
+        testValveLink, {0x0a, false}, 5, 0x05, 0x4f03, closeFrame
+    ));
+
+    auto localValveReport = fromHex(
+        "79f4882f28aa110280a1b2c313080107820701004f8000000040"
+        "80005680000000000000a102"
+    );
+    rainpoint::writeTrailer(localValveReport, 0xc713);
+    rainpoint::Htv405Phase nextValvePhase{};
+    assert(rainpoint::nextHtv405Phase(localValveReport, nextValvePhase));
+    assert(nextValvePhase.sequence == 0x08);
+    assert(nextValvePhase.repeat);
+    localValveReport[14] |= 0x80;
+    rainpoint::writeTrailer(localValveReport, 0x4f03);
+    assert(rainpoint::nextHtv405Phase(localValveReport, nextValvePhase));
+    assert(nextValvePhase.sequence == 0x09);
+    assert(!nextValvePhase.repeat);
+
     rainpoint::OtaBootState otaState{};
     rainpoint::beginOtaCandidate(otaState);
     rainpoint::recordCandidateBoot(otaState);
