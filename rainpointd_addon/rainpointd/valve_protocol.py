@@ -112,6 +112,25 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     return result
 
 
+def is_htv405_link_frame(frame: bytes) -> bool:
+    """Recognize a strict HTV405 paired-link report without inferring state.
+
+    Periodic reports from a locally enrolled valve use selector 0x07. Their
+    pair/odd fields cycle and therefore must not be interpreted as zone state,
+    but the stable structural markers are sufficient to persist the RF link.
+    """
+    if len(frame) != FRAME_BYTES:
+        return False
+    return bool(
+        frame[15] == 0x07
+        and frame[16] == 0x82
+        and frame[17] & 0x7F in {0x05, 0x07}
+        and frame[20] & 0x7F == 0x4F
+        and frame[25] == 0x40
+        and frame[28] == 0x56
+    )
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")

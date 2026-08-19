@@ -42,6 +42,7 @@ from rainpointd.valve_protocol import (  # noqa: E402
     encode_duration,
     next_sequence,
     open_candidates,
+    is_htv405_link_frame,
 )
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
 from tools.compare_rainpoint_iq import compare_waveforms  # noqa: E402
@@ -1139,6 +1140,14 @@ class RainPointRFTest(unittest.TestCase):
             self.assertIsNotNone(link)
             self.assertEqual("htv405-a1b2c313", link.device_id)
             restored.close()
+
+    def test_periodic_htv405_link_report_does_not_infer_zone_state(self) -> None:
+        frame = bytes.fromhex(
+            "79f4882f28aa110280a1b2c313028107820701804f8000000040"
+            "80005680000000000000837d"
+        )
+        self.assertTrue(is_htv405_link_frame(frame))
+        self.assertIsNone(decode_htv405_control_frame(frame))
 
     def test_decodes_packed_valve_last_usage(self) -> None:
         cases = (

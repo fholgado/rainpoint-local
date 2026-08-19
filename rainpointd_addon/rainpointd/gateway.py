@@ -31,7 +31,7 @@ from .valve_pairing_protocol import (
     automatic_htv405_profile_metadata,
     build_htv405_profile,
 )
-from .valve_protocol import decode_htv405_control_frame
+from .valve_protocol import is_htv405_link_frame
 from .product_identity import (
     GENERIC_HCS02X_MODEL,
     HCS026_MODEL,
@@ -1480,7 +1480,7 @@ class Gateway:
             raw = bytes.fromhex(frame)
         except ValueError:
             return None
-        if decode_htv405_control_frame(raw) is None or self._store is None:
+        if not is_htv405_link_frame(raw) or self._store is None:
             return None
         controller_endpoint = controller_endpoint.strip().lower()
         valve_endpoint = valve_endpoint.strip().lower()

@@ -8,7 +8,7 @@ from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
-from .valve_protocol import decode_htv405_control_frame
+from .valve_protocol import decode_htv405_control_frame, is_htv405_link_frame
 
 
 class FrameIngestor:
@@ -102,7 +102,7 @@ class FrameIngestor:
                     raw_frame = bytes.fromhex(decoded["frame_hex"])
                 except ValueError:
                     raw_frame = b""
-                if decode_htv405_control_frame(raw_frame) is not None:
+                if is_htv405_link_frame(raw_frame):
                     self.gateway.register_observed_htv405_link(
                         controller_endpoint=decoded["endpoint_a"],
                         valve_endpoint=decoded["endpoint_b"],
