@@ -1149,6 +1149,39 @@ class RainPointRFTest(unittest.TestCase):
         self.assertTrue(is_htv405_link_frame(frame))
         self.assertIsNone(decode_htv405_control_frame(frame))
 
+    def test_retained_htv405_link_report_backfills_registry_on_upgrade(self) -> None:
+        frame = (
+            "79f4882f28aa110280a1b2c313028107820701804f8000000040"
+            "80005680000000000000837d"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_rf_frame(
+                frame=frame,
+                state={
+                    "rf_endpoint_a": "aa110280",
+                    "rf_endpoint_b": "a1b2c313",
+                    "rf_frame_accepted": True,
+                },
+            )
+            self.assertIsNone(
+                gateway.catalog.valve_link("aa110280", "a1b2c313")
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            self.assertIsNotNone(
+                restored.catalog.valve_link("aa110280", "a1b2c313")
+            )
+            valve = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "htv405-a1b2c313"
+            )
+            self.assertFalse(valve["available"])
+            restored.close()
+
     def test_decodes_packed_valve_last_usage(self) -> None:
         cases = (
             # Historical short sessions independently reported by HA.

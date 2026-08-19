@@ -136,6 +136,7 @@ class Gateway:
         self._refresh_registry_catalog()
         if self._store:
             self._events.extend(self._store.recent_events(event_limit))
+            self._restore_observed_htv405_links()
         self._restore_devices()
         self._ensure_registered_sensor_devices()
         self._ensure_registered_valve_devices()
@@ -1515,6 +1516,49 @@ class Gateway:
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
             return registration
+
+    def _restore_observed_htv405_links(self) -> None:
+        """Backfill valve links from retained strict structural reports."""
+        if self._store is None:
+            return
+        changed = False
+        for event in reversed(self._events):
+            state = event.get("state", {})
+            raw_hex = event.get("raw")
+            controller_endpoint = state.get("rf_endpoint_a")
+            valve_endpoint = state.get("rf_endpoint_b")
+            if not all(
+                isinstance(value, str)
+                for value in (raw_hex, controller_endpoint, valve_endpoint)
+            ):
+                continue
+            try:
+                raw = bytes.fromhex(raw_hex)
+            except ValueError:
+                continue
+            if (
+                not is_htv405_link_frame(raw)
+                or not re.fullmatch(
+                    r"[89a-f][0-9a-f]{5}13", valve_endpoint.lower()
+                )
+                or self.catalog.valve_link(
+                    controller_endpoint, valve_endpoint
+                )
+                is not None
+            ):
+                continue
+            self._store.upsert_valve_link(
+                controller_endpoint=controller_endpoint.lower(),
+                valve_endpoint=valve_endpoint.lower(),
+                device_id=f"htv405-{valve_endpoint.lower()}",
+                name=f"RainPoint 4-zone valve {valve_endpoint[-4:]}",
+                model="HTV405FRF",
+                area=None,
+                accepted_at=str(event["observed_at"]),
+            )
+            changed = True
+        if changed:
+            self._refresh_registry_catalog()
 
     def endpoint_suppressed(self, endpoint: str) -> bool:
         """Return whether local policy hides an RF endpoint as a device."""
