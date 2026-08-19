@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -160,6 +160,9 @@ class SQLiteEventStore:
             version = 6
         if version == 6:
             self._migrate_v6_to_v7()
+            version = 7
+        if version == 7:
+            self._migrate_v7_to_v8()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -361,6 +364,26 @@ class SQLiteEventStore:
                 "ON hcs026_ack_assignments(node_id)"
             )
             self._connection.execute("PRAGMA user_version = 7")
+
+    def _migrate_v7_to_v8(self) -> None:
+        """Persist direction-independent multi-zone valve RF links."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS valve_registry (
+                    valve_endpoint TEXT PRIMARY KEY,
+                    controller_endpoint TEXT NOT NULL,
+                    device_id TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    area TEXT,
+                    accepted_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(controller_endpoint, valve_endpoint)
+                )
+                """
+            )
+            self._connection.execute("PRAGMA user_version = 8")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -619,6 +642,56 @@ class SQLiteEventStore:
             "SELECT * FROM device_registry ORDER BY name, endpoint"
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def valve_registry(self) -> list[dict[str, Any]]:
+        """Return persistent valve link registrations."""
+        rows = self._connection.execute(
+            "SELECT * FROM valve_registry ORDER BY name, valve_endpoint"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_valve_link(
+        self,
+        *,
+        controller_endpoint: str,
+        valve_endpoint: str,
+        device_id: str,
+        name: str,
+        model: str,
+        area: str | None,
+        accepted_at: str,
+    ) -> dict[str, Any]:
+        """Persist a structurally proven controller-to-valve RF link."""
+        self._connection.execute(
+            """
+            INSERT INTO valve_registry(
+                controller_endpoint, valve_endpoint, device_id, name, model,
+                area, accepted_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(valve_endpoint) DO UPDATE SET
+                controller_endpoint=excluded.controller_endpoint,
+                name=excluded.name,
+                model=excluded.model,
+                area=COALESCE(valve_registry.area, excluded.area),
+                updated_at=excluded.updated_at
+            """,
+            (
+                controller_endpoint,
+                valve_endpoint,
+                device_id,
+                name,
+                model,
+                area,
+                accepted_at,
+                accepted_at,
+            ),
+        )
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
 
     def accept_endpoint(
         self,

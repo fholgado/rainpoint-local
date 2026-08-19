@@ -71,6 +71,17 @@ def _entities_for_device(
         entities.append(
             ("watering", RainPointWateringBinarySensor(coordinator, device_id))
         )
+    for zone in range(1, 5):
+        key = f"zone_{zone}_is_watering"
+        if key in device.get("state", {}):
+            entities.append(
+                (
+                    key,
+                    RainPointZoneWateringBinarySensor(
+                        coordinator, device_id, zone
+                    ),
+                )
+            )
     if "reporting" in device:
         entities.append(
             ("reporting", RainPointReportingBinarySensor(coordinator, device_id))
@@ -93,6 +104,31 @@ class RainPointWateringBinarySensor(RainPointLocalEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return reported watering state."""
         value = self.decoded_state.get("is_watering")
+        return bool(value) if value is not None else None
+
+
+class RainPointZoneWateringBinarySensor(
+    RainPointLocalEntity, BinarySensorEntity
+):
+    """Report whether one zone of a multi-zone valve is watering."""
+
+    _attr_translation_key = "zone_watering"
+
+    def __init__(
+        self,
+        coordinator: RainPointLocalCoordinator,
+        device_id: str,
+        zone: int,
+    ) -> None:
+        super().__init__(coordinator, device_id)
+        self._zone = zone
+        self._attr_unique_id = f"{device_id}_zone_{zone}_watering"
+        self._attr_translation_placeholders = {"zone": str(zone)}
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the zone's reported watering state."""
+        value = self.decoded_state.get(f"zone_{self._zone}_is_watering")
         return bool(value) if value is not None else None
 
 

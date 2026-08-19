@@ -430,7 +430,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(7, gateway.info()["storage_schema_version"])
+            self.assertEqual(8, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -441,7 +441,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(7, migrated.info()["storage_schema_version"])
+            self.assertEqual(8, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -454,6 +454,15 @@ class GatewayTest(unittest.TestCase):
                 {"protocol", "model_source", "product_code", "model_code"}
                 <= registration_columns
             )
+            connection = sqlite3.connect(path)
+            valve_tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            connection.close()
+            self.assertIn("valve_registry", valve_tables)
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],

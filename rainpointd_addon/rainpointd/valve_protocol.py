@@ -80,7 +80,11 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     if (
         frame[15] != 0x07
         or frame[16] != 0x82
-        or frame[17] != 0x85
+        # Stock-controlled captures used selector 0x85. A valve enrolled by
+        # the local bridge uses the same body layout with selector 0x05. The
+        # high bit is therefore association state, not part of the model/type
+        # discriminator.
+        or frame[17] & 0x7F != 0x05
         or frame[20] & 0x7F != 0x4F
         or frame[25] != 0x40
         or frame[28] != 0x56

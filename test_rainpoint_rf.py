@@ -1068,6 +1068,78 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("idle", normalized["valve_state"])
         self.assertNotIn("duration_seconds", normalized)
 
+    def test_decodes_locally_enrolled_htv405_selector_and_all_zones(self) -> None:
+        # Locally enrolled valves clear the selector high bit (0x05 instead
+        # of 0x85) while retaining the confirmed four-zone body layout.
+        frames = {
+            1: "79f4882f28aa110280a1b2c31308810782058088cf8000000040ac0156ac010000000000296d",
+            2: "79f4882f28aa110280a1b2c3130d010782058108cf8000000040ac0156ac01000000000072c7",
+            3: "79f4882f28aa110280a1b2c31311010782058188cf8000000040ac0156ac0100000000002e8f",
+            4: "79f4882f28aa110280a1b2c31315010782058208cf8000000040ac0156ac0100000000005af8",
+        }
+        for zone, raw in frames.items():
+            with self.subTest(zone=zone):
+                decoded = decode_htv405_control_frame(bytes.fromhex(raw))
+                self.assertEqual(zone, decoded["zone"])
+                self.assertTrue(decoded["is_watering"])
+                self.assertEqual(88, decoded["duration_seconds"])
+                self.assertEqual(88, decoded["remaining_seconds"])
+
+    def test_live_transport_retains_independent_htv405_zone_states(self) -> None:
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "aa110280", "a1b2c313", "test-four-zone",
+                    "Test Four Zone", model="HTV405FRF",
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(
+            gateway, command=["unused"], catalog=catalog
+        )
+        transport.seed()
+        frames = (
+            "79f4882f28aa110280a1b2c31308810782058088cf8000000040ac0156ac010000000000296d",
+            "79f4882f28aa110280a1b2c3130e8107820581004f800000004080005680000000000000a443",
+        )
+        for frame in frames:
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        valve = gateway.devices()[0]
+        self.assertTrue(valve["state"]["zone_1_is_watering"])
+        self.assertFalse(valve["state"]["zone_2_is_watering"])
+        self.assertEqual(88, valve["state"]["zone_1_remaining_seconds"])
+        self.assertIsNone(valve["state"]["zone_2_remaining_seconds"])
+
+    def test_structural_htv405_report_persists_unknown_valve_link(self) -> None:
+        frame = (
+            "79f4882f28aa110280a1b2c31308810782058088cf8000000040"
+            "ac0156ac010000000000296d"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            transport = RTL433Transport(gateway, command=["unused"])
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+            valve = next(
+                item
+                for item in gateway.devices()
+                if item["device_id"] == "htv405-a1b2c313"
+            )
+            self.assertEqual("HTV405FRF", valve["model"])
+            self.assertTrue(valve["state"]["zone_1_is_watering"])
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            link = restored.catalog.valve_link("aa110280", "a1b2c313")
+            self.assertIsNotNone(link)
+            self.assertEqual("htv405-a1b2c313", link.device_id)
+            restored.close()
+
     def test_decodes_packed_valve_last_usage(self) -> None:
         cases = (
             # Historical short sessions independently reported by HA.

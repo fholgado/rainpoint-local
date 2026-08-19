@@ -8,6 +8,7 @@ from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
+from .valve_protocol import decode_htv405_control_frame
 
 
 class FrameIngestor:
@@ -35,12 +36,17 @@ class FrameIngestor:
 
     @staticmethod
     def _empty_valve_state() -> dict[str, Any]:
-        return {
+        state: dict[str, Any] = {
             "valve_state": None,
             "is_watering": None,
             "duration_seconds": None,
             "last_usage_liters": None,
         }
+        for zone in range(1, 5):
+            state[f"zone_{zone}_is_watering"] = None
+            state[f"zone_{zone}_remaining_seconds"] = None
+            state[f"zone_{zone}_duration_seconds"] = None
+        return state
 
     def seed(self) -> None:
         """Register catalogued devices before their first periodic packet."""
@@ -91,6 +97,32 @@ class FrameIngestor:
             valve = self.catalog.valve_link(
                 decoded["endpoint_a"], decoded["endpoint_b"]
             )
+            if valve is None:
+                try:
+                    raw_frame = bytes.fromhex(decoded["frame_hex"])
+                except ValueError:
+                    raw_frame = b""
+                if decode_htv405_control_frame(raw_frame) is not None:
+                    self.gateway.register_observed_htv405_link(
+                        controller_endpoint=decoded["endpoint_a"],
+                        valve_endpoint=decoded["endpoint_b"],
+                        frame=decoded["frame_hex"],
+                        observed_at=observed_at,
+                    )
+                    valve = self.catalog.valve_link(
+                        decoded["endpoint_a"], decoded["endpoint_b"]
+                    )
+                    if valve is not None:
+                        # The first structurally valid report established the
+                        # link after normalization, so decode its fields now.
+                        decoded.update(
+                            decode_htv405_control_frame(raw_frame) or {}
+                        )
+                        decoded["valve_state"] = (
+                            "watering"
+                            if decoded.get("is_watering")
+                            else "idle"
+                        )
             valve_update = {
                 key: decoded[key]
                 for key in (
@@ -107,6 +139,39 @@ class FrameIngestor:
                 valve_state = self._valve_states.setdefault(
                     valve.device_id, self._empty_valve_state()
                 )
+                zone = decoded.get("zone")
+                if isinstance(zone, int) and 1 <= zone <= 4:
+                    watering = bool(decoded.get("is_watering"))
+                    valve_update[f"zone_{zone}_is_watering"] = watering
+                    valve_update[f"zone_{zone}_remaining_seconds"] = (
+                        decoded.get("remaining_seconds") if watering else None
+                    )
+                    if "duration_seconds" in decoded:
+                        valve_update[f"zone_{zone}_duration_seconds"] = decoded[
+                            "duration_seconds"
+                        ]
+                    zone_states = {
+                        candidate: valve_update.get(
+                            f"zone_{candidate}_is_watering",
+                            valve_state.get(
+                                f"zone_{candidate}_is_watering"
+                            ),
+                        )
+                        for candidate in range(1, 5)
+                    }
+                    active_zone = next(
+                        (
+                            candidate
+                            for candidate, active in zone_states.items()
+                            if active is True
+                        ),
+                        None,
+                    )
+                    valve_update["active_zone"] = active_zone
+                    valve_update["is_watering"] = active_zone is not None
+                    valve_update["valve_state"] = (
+                        "watering" if active_zone is not None else "idle"
+                    )
                 state = {
                     "model": valve.model,
                     "raw": decoded["frame_hex"],

@@ -31,6 +31,7 @@ from .valve_pairing_protocol import (
     automatic_htv405_profile_metadata,
     build_htv405_profile,
 )
+from .valve_protocol import decode_htv405_control_frame
 from .product_identity import (
     GENERIC_HCS02X_MODEL,
     HCS026_MODEL,
@@ -137,6 +138,7 @@ class Gateway:
             self._events.extend(self._store.recent_events(event_limit))
         self._restore_devices()
         self._ensure_registered_sensor_devices()
+        self._ensure_registered_valve_devices()
         self._next_event_id = self.latest_event_id() + 1
         self._lock = threading.Lock()
         self._event_condition = threading.Condition(self._lock)
@@ -1465,6 +1467,55 @@ class Gateway:
         with self._lock:
             return self._store.registry() if self._store else []
 
+    def register_observed_htv405_link(
+        self,
+        *,
+        controller_endpoint: str,
+        valve_endpoint: str,
+        frame: str,
+        observed_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Persist an HTV405 link only after a strict receive-side decode."""
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            return None
+        if decode_htv405_control_frame(raw) is None or self._store is None:
+            return None
+        controller_endpoint = controller_endpoint.strip().lower()
+        valve_endpoint = valve_endpoint.strip().lower()
+        if (
+            not re.fullmatch(r"[0-9a-f]{8}", controller_endpoint)
+            or not re.fullmatch(r"[89a-f][0-9a-f]{5}13", valve_endpoint)
+            or controller_endpoint == valve_endpoint
+        ):
+            return None
+        with self._lock:
+            existing = self.catalog.valve_link(
+                controller_endpoint, valve_endpoint
+            )
+            if existing is not None:
+                return {
+                    "controller_endpoint": existing.controller_endpoint,
+                    "valve_endpoint": existing.valve_endpoint,
+                    "device_id": existing.device_id,
+                    "name": existing.name,
+                    "model": existing.model,
+                }
+            timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+            registration = self._store.upsert_valve_link(
+                controller_endpoint=controller_endpoint,
+                valve_endpoint=valve_endpoint,
+                device_id=f"htv405-{valve_endpoint}",
+                name=f"RainPoint 4-zone valve {valve_endpoint[-4:]}",
+                model="HTV405FRF",
+                area=None,
+                accepted_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            self._ensure_registered_valve_devices()
+            return registration
+
     def endpoint_suppressed(self, endpoint: str) -> bool:
         """Return whether local policy hides an RF endpoint as a device."""
         return endpoint.lower() in self._suppressed_endpoints
@@ -1635,12 +1686,24 @@ class Gateway:
                 == self._active_pairing_command_id
                 else None
             )
-            if node_state == "failed":
+            reported_endpoint = selected_node.get("pairing_paired_endpoint")
+            observed_valve_completed = False
+            if (
+                self._active_pairing_profile_id
+                == AUTOMATIC_HTV405_PROFILE_ID
+                and isinstance(reported_endpoint, str)
+                and self._store is not None
+            ):
+                observed_valve_completed = any(
+                    item["valve_endpoint"] == reported_endpoint.lower()
+                    for item in self._store.valve_registry()
+                )
+            if observed_valve_completed:
+                completed_endpoint = reported_endpoint.lower()
+                stage = "valve_pairing_completed"
+            elif node_state == "failed":
                 stage = "transmitter_failed"
             elif node_state == "completed":
-                reported_endpoint = selected_node.get(
-                    "pairing_paired_endpoint"
-                )
                 if (
                     self._active_pairing_profile_id
                     == AUTOMATIC_HTV405_PROFILE_ID
@@ -2184,7 +2247,12 @@ class Gateway:
             if self._store
             else frozenset()
         )
-        self.catalog = self._base_catalog.with_registry_sensors(registrations)
+        valve_registrations = (
+            self._store.valve_registry() if self._store else []
+        )
+        self.catalog = self._base_catalog.with_registries(
+            registrations, valve_registrations
+        )
         metadata: dict[str, dict[str, Any]] = {}
         for registration in registrations:
             if not is_hcs02x_sensor(
@@ -2195,6 +2263,13 @@ class Gateway:
             sensor = self.catalog.sensor(str(registration["endpoint"]))
             if sensor is not None:
                 metadata[sensor.device_id] = copy.deepcopy(registration)
+        for registration in valve_registrations:
+            valve = self.catalog.valve_link(
+                str(registration["controller_endpoint"]),
+                str(registration["valve_endpoint"]),
+            )
+            if valve is not None:
+                metadata[valve.device_id] = copy.deepcopy(registration)
         self._registry_metadata = metadata
 
     def _migrate_legacy_registry_identities(self) -> None:
@@ -2371,6 +2446,32 @@ class Gateway:
                     "last_event_id": 0,
                     "observed_at": None,
                     "state": state,
+                    "area": registration.get("area"),
+                },
+            )
+
+    def _ensure_registered_valve_devices(self) -> None:
+        """Expose persisted valve links before their next control report."""
+        if self._store is None:
+            return
+        for registration in self._store.valve_registry():
+            device_id = str(registration["device_id"])
+            self._devices.setdefault(
+                device_id,
+                {
+                    "device_id": device_id,
+                    "name": registration["name"],
+                    "model": registration["model"],
+                    "available": False,
+                    "last_event_id": 0,
+                    "observed_at": None,
+                    "state": {
+                        "model": registration["model"],
+                        "rf_endpoint_a": registration["controller_endpoint"],
+                        "rf_endpoint_b": registration["valve_endpoint"],
+                        "device_kind": "irrigation_valve",
+                        "rf_protocol_family": "rainpoint_htv",
+                    },
                     "area": registration.get("area"),
                 },
             )

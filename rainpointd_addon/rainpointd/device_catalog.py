@@ -159,6 +159,38 @@ class DeviceCatalog:
             hcs026_pairing_peers=self.hcs026_pairing_peers,
         )
 
+    def with_registries(
+        self,
+        sensor_registrations: Iterable[Mapping[str, Any]],
+        valve_registrations: Iterable[Mapping[str, Any]],
+    ) -> DeviceCatalog:
+        """Overlay persistent sensor identities and valve RF links."""
+        catalog = self.with_registry_sensors(sensor_registrations)
+        valves = {valve.link: valve for valve in catalog.valves}
+        for registration in valve_registrations:
+            valve = ValveDefinition(
+                controller_endpoint=str(registration["controller_endpoint"]),
+                valve_endpoint=str(registration["valve_endpoint"]),
+                device_id=str(registration["device_id"]),
+                name=str(registration["name"]),
+                model=str(registration.get("model") or "HTV405FRF"),
+            )
+            existing = valves.get(valve.link)
+            if existing is not None:
+                valve = ValveDefinition(
+                    controller_endpoint=valve.controller_endpoint,
+                    valve_endpoint=valve.valve_endpoint,
+                    device_id=existing.device_id,
+                    name=valve.name,
+                    model=valve.model,
+                )
+            valves[valve.link] = valve
+        return DeviceCatalog(
+            sensors=catalog.sensors,
+            valves=tuple(valves.values()),
+            hcs026_pairing_peers=catalog.hcs026_pairing_peers,
+        )
+
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> DeviceCatalog:
         """Build an installation catalog from a transport-neutral mapping."""
