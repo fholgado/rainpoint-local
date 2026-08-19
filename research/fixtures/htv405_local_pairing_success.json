@@ -1,0 +1,51 @@
+{
+  "captured_at": "2026-08-19T17:33:57-04:00",
+  "model": "HTV405FRF",
+  "firmware_version": "0.14.0-combined.1",
+  "node_id": "rp-cc4c05f57630",
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "selector": 2
+  },
+  "capture": {
+    "directory": "htv405-local-retry-20260819",
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "home_assistant_backup_slug": "b8fa839c",
+    "archive": "rainpoint-htv405-local-success-20260819.tar"
+  },
+  "factory_request": {
+    "capture_file": "g020_433.7M_2000k.cu8",
+    "observed_channel_center_hz": 433141635,
+    "frame": "79f4882f288000000014a9801300808402ff93130000bd848000000000000000000000004795"
+  },
+  "initial_assignment": {
+    "capture_file": "g021_433.7M_2000k.cu8",
+    "observed_channel_center_hz": 433556537,
+    "frame": "79f4882f2894a980133984028080c0858503027000bc8c930d01008000000000000000006d56"
+  },
+  "first_routine_replies": [
+    {
+      "capture_file": "g023_433.7M_2000k.cu8",
+      "observed_channel_center_hz": 433476260,
+      "frame": "79f4882f2894a980133984028081410100008000000000000000000000000000000000005c10"
+    },
+    {
+      "capture_file": "g025_433.7M_2000k.cu8",
+      "observed_channel_center_hz": 433476260,
+      "frame": "79f4882f2894a980133984028081c10100008000000000000000000000000000000000006e95"
+    }
+  ],
+  "result": {
+    "physical_success_indicator": "white LED flash",
+    "node_completed_steps": 3,
+    "paired_traffic_observed": true,
+    "last_captured_paired_sequence": 6,
+    "stock_app_registration_removed_before_attempt": true,
+    "immediately_preceding_same_firmware_attempt_failed": true
+  },
+  "interpretation": "The local selector-2 assignment was physically accepted. Its measured center was 107 Hz above the accepted stock selector-2 reference of 433556430 Hz, and the decoded frame carried the current local clock. Two routine replies were sufficient for the valve to continue emitting paired traffic even though the selected node remained on step 3 of the retained 18-row transcript. Pairing completion must therefore accept a strict paired-link frame observed by any receiver after this session's selected transmitter reports at least one completed reply; historical registry presence alone is insufficient."
+}

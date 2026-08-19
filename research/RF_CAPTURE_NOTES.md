@@ -319,6 +319,38 @@ stock-gateway acknowledgements 177--188 ms after sensor reports. Offset 17 is
 therefore not a battery candidate. Supported battery state comes from the
 marker-relative field validated in controlled Sensor A/B tests.
 
+## HTV405FRF successful local enrollment — 2026-08-19
+
+Unified firmware `0.14.0-combined.1` physically enrolled the isolated valve
+after the stock-app registration was removed and the stock gateway was
+disconnected. A bounded 433.7 MHz / 2.0 Msps signal-grabber run retained the
+factory request, local assignment, first two local routine replies, and the
+subsequent paired traffic. The valve gave the white success flash and changed
+from factory endpoint `14a98013` to paired endpoint `94a98013`.
+
+The local assignment decoded as:
+
+```text
+79f4882f2894a980133984028080c0858503027000bc8c930d01008000000000000000006d56
+```
+
+Its measured center was 433.556537 MHz, only 107 Hz above the independently
+accepted stock selector-2 assignment at 433.556430 MHz. Its packed clock
+matched the physical attempt. The first two routine replies decoded cleanly at
+433.476260 MHz. The selected node reported three completed replies, while the
+valve continued through paired sequence 6 in the bounded capture.
+
+An immediately preceding attempt with the same firmware and association inputs
+was rejected after reply 1. No protocol or frequency constant changed between
+the attempts, so enrollment still has an intermittent RF/reception component.
+Completion is now based on a strict paired-link frame seen by any receiver
+during the active session after the selected node reports at least one reply.
+This avoids both failure modes encountered during testing: requiring one node
+to observe the entire stock transcript, and treating an old persistent valve
+registry entry as proof of a new enrollment. The compact evidence is retained
+in `fixtures/htv405_local_pairing_success.json`; backup slug `b8fa839c` keeps
+the ignored IQ files.
+
 ## Current capture guidance
 
 - Use 2.0 Msps centered at 433.7 MHz for broad passive operation.

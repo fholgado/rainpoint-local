@@ -168,12 +168,38 @@ until custom enrollment, acknowledgement, idempotent close, and the node-local
 watchdog are validated on the isolated valve.
 
 Local enrollment on August 18 produced the same four-zone layout with offset
-17 equal to `0x05`; the stock-controlled high bit is association state rather
-than part of the functional selector. The valve retained its paired endpoint
-after battery removal and emitted periodic paired-link reports every roughly 40
-seconds. A live chassis check also confirmed that only one outlet can be active
-at a time: opening another zone ends the previous zone. HA therefore models the
-four outlets as mutually exclusive states under one valve device.
+17 equal to `0x05`. A later raw stock-control capture disproved the interim
+interpretation that its high bit universally distinguishes stock commands from
+local reports: association branch and command body must be treated together.
+The valve retained its paired endpoint after battery removal and emitted
+periodic paired-link reports every roughly 40 seconds. A live chassis check
+also confirmed that only one outlet can be active at a time: opening another
+zone ends the previous zone. HA therefore models the four outlets as mutually
+exclusive states under one valve device.
+
+On August 19 the valve was re-enrolled by the stock gateway on selector branch
+6, then Zone 1 was requested for 120 seconds and stopped manually after roughly
+45 seconds under a raw 2.0 Msps SDR burst capture. The recovered commands were:
+
+```text
+open  79f4882f28b984028094a9801309810786058090cf8000000040b90056bc0000000000004d64
+close 79f4882f28b984028094a980130a0107860580804f80000000408000568000000000000045ff
+```
+
+Both commands used a 320-symbol wake and appeared at approximately 433.1417
+MHz in the same SDR. The open used sequence 9 repeat phase; the close advanced
+to sequence 10 primary phase. This supports a controller-owned transaction
+counter and rejects the failed trial's 1,200-symbol wake and selector-2 pairing
+reply channel as the routine control envelope.
+
+The selector-6 stock commands contain marker pair `86 05`, whereas historical
+selector-2 stock controls contain `82 85`. Local selector-2 reports contain
+`82 05`. Offset 17 is therefore not a universal direction bit, and a validated
+association must carry its command profile as a unit: branch marker, command
+marker, carrier, wake, endpoints, transaction phase, and trailer. The exact
+local selector-2 command marker remains a physical-test gate; the isolated
+trial currently retains its locally observed `82 05` profile rather than
+substituting the historical stock selector-2 marker.
 
 An association-specific, offline-only close candidate builder now reproduces
 the captured local `0x05` idle body. It requires the paired endpoints, current
@@ -279,18 +305,32 @@ therefore raises only the selector-2 initial assignment center by 10.055 kHz;
 the independently observed routine channel remains unchanged.
 
 The first routine replies mirror the request message counter in the low seven
-bits of byte 13 and contain `41 01` in bytes 14--15. This establishes a
-receive-side assignment and acknowledgement transcript, but does not yet
-authorize transmission. Local valve pairing remains disabled until the exact
-reply timing and waveform are physically validated against the isolated test
-valve.
+bits of byte 13 and contain `41 01` in bytes 14--15. An isolated local pairing
+on August 19 physically validated the selector-2 assignment and the first two
+routine replies. The valve gave its white success flash and continued under
+paired endpoint `94a98013` even though the selected node had advanced through
+only three transmitted steps. The successful assignment decoded as:
+
+```text
+79f4882f2894a980133984028080c0858503027000bc8c930d01008000000000000000006d56
+```
+
+It centered at 433.556537 MHz in the same SDR, only 107 Hz above the accepted
+stock selector-2 reference. The first two local routine replies centered at
+433.476260 MHz and decoded exactly. This proves that the retained 18-row
+transcript is useful for modeling but is not a minimum completion counter. A
+strict paired-link frame observed by any receiver after the selected node
+transmits reply 1 is sufficient session-scoped evidence of acceptance.
+Historical registry presence must never complete a new pairing session.
 
 Executable transcript modeling found one important exception to a naive
 alternating-burst interpretation: the request labeled
 `paired_message_2_repeat` is followed by another valve-routed frame, not a
 gateway reply. A local pairing controller must advance that step without
 transmitting. The experimental firmware profile therefore contains 18 observed
-request steps but only 17 transmissions.
+request steps but only 17 transmissions. Physical success may occur after the
+first three transmissions; the remaining rows describe traffic observed in
+the stock transcript rather than a required local completion threshold.
 
 The candidate local-pairing implementation requires the factory endpoint,
 valve route, and companion route to be supplied explicitly from the association

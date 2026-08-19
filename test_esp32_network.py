@@ -587,6 +587,28 @@ class ESP32NetworkTest(unittest.TestCase):
             companion_endpoint="39840280",
         )
         command = json.loads(stream.readline())
+        pre_reply_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=10,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=pre_reply_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        self.assertNotEqual(
+            "valve_pairing_completed", self.gateway.pairing()["stage"]
+        )
         stream.write(
             json.dumps(
                 {
@@ -613,6 +635,32 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertIsNone(progress["completed_endpoint"])
         self.assertNotEqual("valve_pairing_completed", progress["stage"])
+        post_reply_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=post_reply_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        completed = self.gateway.pairing()
+        self.assertEqual("valve_pairing_completed", completed["stage"])
+        self.assertEqual("94a98013", completed["completed_endpoint"])
+        self.assertEqual(
+            "local-sdr", completed["valve_confirmation_receiver"]
+        )
+        self.assertIsNotNone(completed["valve_confirmation_observed_at"])
         stream.close()
         connection.close()
 

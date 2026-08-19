@@ -152,6 +152,10 @@ class Gateway:
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
+        self._active_pairing_expected_valve_endpoint: str | None = None
+        self._active_pairing_confirmed_valve_endpoint: str | None = None
+        self._active_pairing_confirmation_observed_at: str | None = None
+        self._active_pairing_confirmation_receiver: str | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
 
@@ -985,6 +989,7 @@ class Gateway:
             else:
                 self._update_memory_metrics(device_id, timestamp)
                 self._update_memory_reception_metrics(event)
+            self._confirm_valve_pairing_locked(frame, decoded, timestamp)
             device = {
                 "device_id": device_id,
                 "name": name,
@@ -1041,8 +1046,48 @@ class Gateway:
                 self._store.append(event)
             else:
                 self._update_memory_reception_metrics(event)
+            self._confirm_valve_pairing_locked(frame, decoded, timestamp)
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
+
+    def _confirm_valve_pairing_locked(
+        self,
+        frame: str,
+        state: dict[str, Any],
+        observed_at: str,
+    ) -> None:
+        """Accept strict paired-valve traffic only from this live session."""
+        expected = self._active_pairing_expected_valve_endpoint
+        node_id = self._active_pairing_node_id
+        command_id = self._active_pairing_command_id
+        if (
+            self._active_pairing_profile_id != AUTOMATIC_HTV405_PROFILE_ID
+            or expected is None
+            or node_id is None
+            or command_id is None
+        ):
+            return
+        node = self._nodes.get(node_id, {})
+        if (
+            node.get("pairing_command_id") != command_id
+            or int(node.get("pairing_completed_steps") or 0) < 1
+        ):
+            return
+        endpoint = state.get("rf_endpoint_b")
+        if not isinstance(endpoint, str) or endpoint.lower() != expected:
+            return
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            return
+        if not is_htv405_link_frame(raw):
+            return
+        self._active_pairing_confirmed_valve_endpoint = expected
+        self._active_pairing_confirmation_observed_at = observed_at
+        receiver = state.get("rf_receiver_id")
+        self._active_pairing_confirmation_receiver = (
+            receiver if isinstance(receiver, str) else None
+        )
 
     def _confirm_sensor_ack_locked(
         self, state: dict[str, Any], observed_at: str
@@ -1601,6 +1646,10 @@ class Gateway:
             self._active_pairing_command_id = None
             self._active_pairing_profile_id = None
             self._active_pairing_ack_parameters = None
+            self._active_pairing_expected_valve_endpoint = None
+            self._active_pairing_confirmed_valve_endpoint = None
+            self._active_pairing_confirmation_observed_at = None
+            self._active_pairing_confirmation_receiver = None
             if node_id is not None:
                 nodes = {item["node_id"]: item for item in self._pairing_nodes()}
                 if node_id not in nodes:
@@ -1679,6 +1728,10 @@ class Gateway:
                     "power_dbm": command["power_dbm"],
                     "invert": command["invert"],
                 }
+                if valve_profile is not None:
+                    self._active_pairing_expected_valve_endpoint = (
+                        valve_profile.paired_endpoint
+                    )
             return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
@@ -1735,7 +1788,18 @@ class Gateway:
             # local association. Its mere presence is not evidence that the
             # valve accepted this session's assignment; only the selected
             # node's command-scoped terminal state may complete pairing.
-            if node_state == "failed":
+            observed_valve_completed = (
+                self._active_pairing_profile_id
+                == AUTOMATIC_HTV405_PROFILE_ID
+                and isinstance(reported_endpoint, str)
+                and self._active_pairing_confirmed_valve_endpoint
+                == reported_endpoint.lower()
+                and int(selected_node.get("pairing_completed_steps") or 0) > 0
+            )
+            if observed_valve_completed:
+                completed_endpoint = reported_endpoint.lower()
+                stage = "valve_pairing_completed"
+            elif node_state == "failed":
                 stage = "transmitter_failed"
             elif node_state == "completed":
                 if (
@@ -1794,6 +1858,12 @@ class Gateway:
             "stage": stage,
             "completed_endpoint": completed_endpoint,
             "completed_existing_record": completed_existing_record,
+            "valve_confirmation_observed_at": (
+                self._active_pairing_confirmation_observed_at
+            ),
+            "valve_confirmation_receiver": (
+                self._active_pairing_confirmation_receiver
+            ),
             "dry_run_profile": profile,
             **snapshot,
         }
@@ -2069,6 +2139,10 @@ class Gateway:
         self._active_pairing_command_id = None
         self._active_pairing_profile_id = None
         self._active_pairing_ack_parameters = None
+        self._active_pairing_expected_valve_endpoint = None
+        self._active_pairing_confirmed_valve_endpoint = None
+        self._active_pairing_confirmation_observed_at = None
+        self._active_pairing_confirmation_receiver = None
 
     def accept_endpoint(
         self,
