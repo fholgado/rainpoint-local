@@ -42,6 +42,18 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("default_envs = rainpoint_bridge", platformio)
         self.assertNotIn("single_bench", platformio)
         self.assertNotIn("candidate]", platformio)
+        self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
+        build_profile = (
+            ROOT
+            / "firmware"
+            / "rainpoint_bridge"
+            / "tools"
+            / "build_profile.py"
+        ).read_text()
+        self.assertIn(
+            'os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")',
+            build_profile,
+        )
 
     def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
         source = (
@@ -62,6 +74,8 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("kAutomaticHtv405ProfileId", source)
         self.assertIn('\\"valve_control_available\\":false', source)
         self.assertIn("valve_pairing_tx_candidate", transport)
+        self.assertIn("#if RAINPOINT_RESEARCH_BENCH == 1", transport)
+        self.assertIn("valve_control_tx_candidate", transport)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',

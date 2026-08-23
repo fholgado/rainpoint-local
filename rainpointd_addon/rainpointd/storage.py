@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -163,6 +163,12 @@ class SQLiteEventStore:
             version = 7
         if version == 7:
             self._migrate_v7_to_v8()
+            version = 8
+        if version == 8:
+            self._migrate_v8_to_v9()
+            version = 9
+        if version == 9:
+            self._migrate_v9_to_v10()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -384,6 +390,56 @@ class SQLiteEventStore:
                 """
             )
             self._connection.execute("PRAGMA user_version = 8")
+
+    def _migrate_v8_to_v9(self) -> None:
+        """Persist the last observed HTV405 lower telemetry phase."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("last_sequence", "INTEGER"),
+                ("last_repeat", "INTEGER"),
+                ("next_sequence", "INTEGER"),
+                ("next_repeat", "INTEGER"),
+                ("last_phase_at", "TEXT"),
+                ("last_phase_frame", "TEXT"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 9")
+
+    def _migrate_v9_to_v10(self) -> None:
+        """Separate durable controller state from lower-channel telemetry."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("control_node_id", "TEXT"),
+                ("control_companion_endpoint", "TEXT"),
+                ("control_selector", "INTEGER"),
+                ("control_frequency_offset_hz", "INTEGER"),
+                ("control_center_hz", "INTEGER"),
+                ("control_last_sequence", "INTEGER"),
+                ("control_next_sequence", "INTEGER"),
+                ("control_confirmed_watering", "INTEGER"),
+                ("control_confirmed_at", "TEXT"),
+                ("control_response_frame", "TEXT"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 10")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -692,6 +748,131 @@ class SQLiteEventStore:
             for item in self.valve_registry()
             if item["valve_endpoint"] == valve_endpoint
         )
+
+    def update_valve_phase(
+        self,
+        *,
+        valve_endpoint: str,
+        sequence: int,
+        repeat: bool,
+        next_sequence: int,
+        next_repeat: bool,
+        observed_at: str,
+        frame: str,
+    ) -> dict[str, Any]:
+        """Persist lower telemetry cadence without inferring TX success."""
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                last_sequence = ?, last_repeat = ?,
+                next_sequence = ?, next_repeat = ?,
+                last_phase_at = ?, last_phase_frame = ?, updated_at = ?
+            WHERE valve_endpoint = ?
+            """,
+            (
+                sequence,
+                int(repeat),
+                next_sequence,
+                int(next_repeat),
+                observed_at,
+                frame,
+                observed_at,
+                valve_endpoint,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError(valve_endpoint)
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def update_valve_control_profile(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        companion_endpoint: str,
+        selector: int,
+        frequency_offset_hz: int,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Persist association-scoped control routing after local enrollment."""
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_node_id = ?, control_companion_endpoint = ?,
+                control_selector = ?, control_frequency_offset_hz = ?,
+                control_center_hz = NULL, control_last_sequence = NULL,
+                control_next_sequence = NULL,
+                control_confirmed_watering = NULL,
+                control_confirmed_at = NULL, control_response_frame = NULL,
+                updated_at = ?
+            WHERE valve_endpoint = ?
+            """,
+            (
+                node_id,
+                companion_endpoint,
+                selector,
+                frequency_offset_hz,
+                observed_at,
+                valve_endpoint,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError(valve_endpoint)
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def confirm_valve_control_response(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        sequence: int,
+        next_sequence: int,
+        watering: bool,
+        center_hz: int,
+        observed_at: str,
+        frame: str,
+    ) -> dict[str, Any]:
+        """Advance control state only after a node-authenticated response."""
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_last_sequence = ?, control_next_sequence = ?,
+                control_confirmed_watering = ?,
+                control_confirmed_at = ?, control_response_frame = ?,
+                control_center_hz = ?, updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+            """,
+            (
+                sequence,
+                next_sequence,
+                int(watering),
+                observed_at,
+                frame,
+                center_hz,
+                observed_at,
+                valve_endpoint,
+                node_id,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError((valve_endpoint, node_id))
+        self._connection.commit()
+        result = next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+        return result
 
     def accept_endpoint(
         self,

@@ -68,6 +68,13 @@ constexpr std::uint8_t kRxBytes = 0x3b;
 constexpr std::uint8_t kMainStateIdle = 0x01;
 constexpr std::uint8_t kMainStateRx = 0x0d;
 constexpr std::uint8_t kMainStateFrequencySynthOn = 0x12;
+constexpr std::uint8_t kMainStateTx = 0x13;
+
+// Intentional controller replies must not be suppressed by the receiver's
+// clear-channel assessment. Preserve RXOFF_MODE=RX and TXOFF_MODE=RX while
+// selecting CCA_MODE=always so an explicit STX cannot silently remain in
+// FSTXON after a strong, recently completed valve request.
+constexpr std::uint8_t kTransmitMainStateMachine1 = 0x0f;
 
 constexpr std::uint32_t kCrystalFrequencyHz = 26'000'000;
 constexpr std::uint16_t kSymbolMicros = 50;
@@ -398,7 +405,8 @@ bool Cc1101::transmitAsync(
     std::uint16_t wakeSymbols,
     bool invert,
     std::uint8_t paTableValue,
-    std::uint8_t deviationRegister
+    std::uint8_t deviationRegister,
+    std::uint32_t startAtMicros
 ) {
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || centerFrequencyHz < 433'000'000 ||
@@ -418,6 +426,7 @@ bool Cc1101::transmitAsync(
     // the ESP32 supplies the complete RainPoint wake, sync, and frame.
     writeRegister(kPacketControl0, 0x30);
     writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
+    writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);
     writeRegister(kDeviation, deviationRegister);
@@ -477,6 +486,23 @@ bool Cc1101::transmitAsync(
                waitForMainState(kMainStateFrequencySynthOn, 10'000);
     }
     if (sent) {
+        // Pairing replies have a narrow receive-complete-to-carrier window.
+        // Complete allocation, register writes, and synthesizer settling
+        // before waiting for the requested on-air deadline. This removes the
+        // several milliseconds of first-transmission and Wi-Fi-loop jitter
+        // that occurred when callers delayed before entering this function.
+        if (startAtMicros != 0) {
+            while (static_cast<std::int32_t>(
+                       startAtMicros - micros()
+                   ) > 500) {
+                delayMicroseconds(250);
+            }
+            while (static_cast<std::int32_t>(
+                       startAtMicros - micros()
+                   ) > 0) {
+                // Deliberately busy-wait only the final 500 us.
+            }
+        }
         digitalWrite(dataPin_, symbolAt(0));
         // Start the long alternating wake asynchronously with the PA still
         // gated, then enter TX immediately. This overlaps the short STX-to-PA
@@ -489,10 +515,25 @@ bool Cc1101::transmitAsync(
                    false
                ) == ESP_OK;
         if (sent) {
-            sent = strobe(kEnterTx) != 0xff;
+            // STX can be accepted over SPI without the radio actually leaving
+            // FSTXON when CCA inhibits transmission. Confirm the physical TX
+            // state instead of reporting an RMT-only success with no carrier.
+            sent = strobe(kEnterTx) != 0xff &&
+                waitForMainState(kMainStateTx, 2'000);
         }
-        const bool rmtCompleted =
-            rmt_wait_tx_done(kTxRmtChannel, pdMS_TO_TICKS(100)) == ESP_OK;
+        // Ordinary RainPoint frames use a 320-symbol wake and finish in about
+        // 31 ms, but the HTV405 selector-2 configuration command uses the
+        // stock gateway's 2,400-symbol wake and lasts about 135 ms. A fixed
+        // 100 ms wait truncated that command before its frame reached the
+        // air. Derive the completion timeout from the waveform itself and
+        // retain a small scheduler margin.
+        const std::uint32_t waveformDurationMs = static_cast<std::uint32_t>(
+            (symbolCount * kSymbolMicros + 999U) / 1'000U
+        );
+        const bool rmtCompleted = rmt_wait_tx_done(
+            kTxRmtChannel,
+            pdMS_TO_TICKS(waveformDurationMs + 25U)
+        ) == ESP_OK;
         sent = sent && rmtCompleted;
     }
     digitalWrite(dataPin_, LOW);
@@ -541,6 +582,25 @@ bool Cc1101::setChannel(std::uint8_t channel) {
     return enterReceive();
 }
 
+bool Cc1101::setReceiveFrequency(std::uint32_t centerFrequencyHz) {
+    if (centerFrequencyHz < 433'000'000 ||
+        centerFrequencyHz > 435'000'000 || !enterIdle()) {
+        return false;
+    }
+    strobe(kFlushRx);
+    writeRegister(kChannelNumber, 0);
+    setFrequency(centerFrequencyHz);
+    channel_ = 0;
+    return enterReceive();
+}
+
+bool Cc1101::restoreReceiveChannel(std::uint8_t channel) {
+    if (channel != 0 && channel != 11) {
+        return false;
+    }
+    return restoreReceiveConfiguration(channel);
+}
+
 void Cc1101::recoverRx() {
     ++recoveryCount_;
     enterIdle();
@@ -560,6 +620,9 @@ bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
         return false;
     }
 
+    // The fixed-length RX FIFO becomes complete at the end of the request.
+    // Capture the earliest available deadline anchor before the SPI burst.
+    packet.receivedAtMicros = micros();
     std::array<std::uint8_t, kBytesWithStatus> received{};
     readBurst(kRxFifo, received.data(), received.size());
     for (std::size_t index = 0; index < packet.payload.size(); ++index) {

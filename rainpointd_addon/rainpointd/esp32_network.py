@@ -137,6 +137,11 @@ class ESP32NetworkServer:
             "firmware_update_start",
             "routine_ack_configure",
             "routine_ack_revoke",
+            "valve_control_configure",
+            "valve_control_sync",
+            "valve_control_open",
+            "valve_control_close",
+            "valve_control_status",
         }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
@@ -152,6 +157,8 @@ class ESP32NetworkServer:
             required_capability = "firmware_update_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
+        elif command_type.startswith("valve_control_"):
+            required_capability = "valve_control_tx_candidate"
         elif (
             command_type == "pairing_start"
             and message.get("profile") == "htv405_auto_candidate_v1"
@@ -463,6 +470,7 @@ class ESP32NetworkServer:
                         "identify",
                         "routine_sensor_ack_tx",
                         "valve_pairing_tx_candidate",
+                        "valve_control_tx_candidate",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }

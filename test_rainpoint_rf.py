@@ -40,11 +40,13 @@ from rainpointd.valve_protocol import (  # noqa: E402
     close_candidates,
     decode_duration,
     decode_htv405_control_frame,
+    decode_htv405_gateway_command_response,
     encode_duration,
     next_sequence,
     open_candidates,
     is_htv405_link_frame,
     htv405_close_candidates,
+    htv405_phase_state,
     next_htv405_phase,
 )
 from tools.characterize_rainpoint_iq import characterize  # noqa: E402
@@ -1162,12 +1164,34 @@ class RainPointRFTest(unittest.TestCase):
             )
             self.assertEqual("HTV405FRF", valve["model"])
             self.assertTrue(valve["state"]["zone_1_is_watering"])
+            self.assertEqual(8, valve["state"]["rf_telemetry_sequence"])
+            self.assertTrue(valve["state"]["rf_telemetry_repeat"])
+            self.assertEqual(
+                9, valve["state"]["rf_next_telemetry_sequence"]
+            )
+            self.assertFalse(
+                valve["state"]["rf_next_telemetry_repeat"]
+            )
             gateway.close()
 
             restored = Gateway(transport="rtl433", storage_path=str(path))
             link = restored.catalog.valve_link("aa110280", "a1b2c313")
             self.assertIsNotNone(link)
             self.assertEqual("htv405-a1b2c313", link.device_id)
+            restored_valve = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "htv405-a1b2c313"
+            )
+            self.assertEqual(
+                8, restored_valve["state"]["rf_telemetry_sequence"]
+            )
+            self.assertEqual(
+                9, restored_valve["state"]["rf_next_telemetry_sequence"]
+            )
+            self.assertNotIn(
+                "rf_control_counter_authenticated", restored_valve["state"]
+            )
             restored.close()
 
     def test_periodic_htv405_link_report_does_not_infer_zone_state(self) -> None:
@@ -1177,6 +1201,78 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertTrue(is_htv405_link_frame(frame))
         self.assertIsNone(decode_htv405_control_frame(frame))
+        self.assertEqual(
+            {
+                "rf_telemetry_sequence": 2,
+                "rf_telemetry_repeat": True,
+                "rf_next_telemetry_sequence": 3,
+                "rf_next_telemetry_repeat": False,
+            },
+            htv405_phase_state(frame),
+        )
+
+    def test_decodes_only_structural_htv405_command_responses(self) -> None:
+        opened = bytes.fromhex(
+            "79f4882f28b984028094a9801303d0868010cf8000000040bc"
+            "0056bc000000000000000038bf"
+        )
+        closed = bytes.fromhex(
+            "79f4882f28b984028094a9801304508683104f800000004080"
+            "00568000000000000000001e6e"
+        )
+        self.assertEqual(
+            {
+                "rf_control_response_sequence": 3,
+                "rf_next_control_sequence": 4,
+                "rf_control_response_watering": True,
+            },
+            decode_htv405_gateway_command_response(opened),
+        )
+        self.assertEqual(
+            {
+                "rf_control_response_sequence": 4,
+                "rf_next_control_sequence": 5,
+                "rf_control_response_watering": False,
+            },
+            decode_htv405_gateway_command_response(closed),
+        )
+        corrupt = bytearray(opened)
+        corrupt[18] ^= 0x80
+        trailer = binascii.crc_hqx(corrupt[:-2], 0) ^ 0x4F03
+        corrupt[-2:] = trailer.to_bytes(2, "big")
+        self.assertIsNone(decode_htv405_gateway_command_response(bytes(corrupt)))
+
+    def test_crossed_htv405_fixture_covers_every_zone_and_duration(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_crossed_zone_reports_20260817.json"
+            ).read_text(encoding="utf-8")
+        )
+        decoded_trials = []
+        for trial in fixture["trials"]:
+            opened = decode_htv405_control_frame(
+                bytes.fromhex(trial["open_frame"])
+            )
+            closed = decode_htv405_control_frame(
+                bytes.fromhex(trial["close_frame"])
+            )
+            self.assertEqual(trial["zone"], opened["zone"])
+            self.assertTrue(opened["is_watering"])
+            self.assertEqual(
+                trial["duration_seconds"], opened["duration_seconds"]
+            )
+            self.assertEqual(trial["zone"], closed["zone"])
+            self.assertFalse(closed["is_watering"])
+            decoded_trials.append(
+                (trial["zone"], trial["duration_seconds"])
+            )
+        self.assertEqual(
+            {(zone, duration) for zone in range(1, 5) for duration in (60, 120)},
+            set(decoded_trials),
+        )
 
     def test_builds_offline_htv405_close_candidates_from_session_inputs(self) -> None:
         link = ValveLink(
@@ -1632,6 +1728,88 @@ class RainPointRFTest(unittest.TestCase):
                 json.dumps({"type": "rainpoint_rf", "frame": "00" * 38})
             ),
         )
+
+    def test_authenticated_probe_persists_separate_control_counter(self) -> None:
+        node_id = "rp-001122334455"
+        frame = (
+            "79f4882f28b984028094a9801303d0868010cf8000000040bc"
+            "0056bc000000000000000038bf"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="esp32_network",
+                storage_path=str(Path(temporary_directory) / "rainpoint.sqlite3"),
+            )
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Bench valve",
+                model="HTV405FRF",
+                area=None,
+                accepted_at="2026-08-23T12:00:00+00:00",
+            )
+            gateway._store.update_valve_control_profile(
+                valve_endpoint="94a98013",
+                node_id=node_id,
+                companion_endpoint="39840280",
+                selector=0x05,
+                frequency_offset_hz=97_154,
+                observed_at="2026-08-23T12:00:01+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            transport = ESP32SerialTransport(gateway, device="network")
+            report = {
+                "type": "valve_control_probe",
+                "node_id": node_id,
+                "state": "zone_1_open_confirmed",
+                "configured": True,
+                "controller_endpoint": "b9840280",
+                "valve_endpoint": "94a98013",
+                "companion_endpoint": "39840280",
+                "selector": 0x05,
+                "center_hz": 433_518_527,
+                "command_phase_source": "authenticated_valve_response",
+                "command_counter_valid": True,
+                "confirmed_watering": True,
+                "last_confirmed_sequence": 3,
+                "next_sequence": 4,
+                "frame": frame,
+            }
+            self.assertEqual(
+                0,
+                transport.consume_line(
+                    json.dumps(report), authenticated_node_id=node_id
+                ),
+            )
+            valve = next(
+                device
+                for device in gateway.devices()
+                if device["device_id"] == "htv405-94a98013"
+            )
+            self.assertEqual(
+                3, valve["state"]["rf_control_confirmed_sequence"]
+            )
+            self.assertEqual(4, valve["state"]["rf_next_control_sequence"])
+            self.assertTrue(
+                valve["state"]["rf_control_counter_authenticated"]
+            )
+            self.assertTrue(
+                valve["state"]["rf_control_confirmed_watering"]
+            )
+
+            rejected = dict(report, next_sequence=5)
+            transport.consume_line(
+                json.dumps(rejected), authenticated_node_id=node_id
+            )
+            unchanged = next(
+                device
+                for device in gateway.devices()
+                if device["device_id"] == "htv405-94a98013"
+            )
+            self.assertEqual(4, unchanged["state"]["rf_next_control_sequence"])
+            gateway.close()
 
     def test_esp32_serial_transport_reports_radio_health(self) -> None:
         gateway = Gateway(transport="esp32_serial")

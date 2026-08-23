@@ -8,7 +8,12 @@ from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
-from .valve_protocol import decode_htv405_control_frame, is_htv405_link_frame
+from .valve_protocol import (
+    decode_htv405_control_frame,
+    decode_htv405_gateway_command_response,
+    htv405_phase_state,
+    is_htv405_link_frame,
+)
 
 
 class FrameIngestor:
@@ -97,18 +102,24 @@ class FrameIngestor:
             valve = self.catalog.valve_link(
                 decoded["endpoint_a"], decoded["endpoint_b"]
             )
+            valve_phase: dict[str, int | bool] = {}
+            try:
+                raw_frame = bytes.fromhex(decoded["frame_hex"])
+            except ValueError:
+                raw_frame = b""
+            control_response = (
+                decode_htv405_gateway_command_response(raw_frame) or {}
+            )
+            if is_htv405_link_frame(raw_frame):
+                valve_phase = htv405_phase_state(raw_frame)
+                self.gateway.register_observed_htv405_link(
+                    controller_endpoint=decoded["endpoint_a"],
+                    valve_endpoint=decoded["endpoint_b"],
+                    frame=decoded["frame_hex"],
+                    observed_at=observed_at,
+                )
             if valve is None:
-                try:
-                    raw_frame = bytes.fromhex(decoded["frame_hex"])
-                except ValueError:
-                    raw_frame = b""
                 if is_htv405_link_frame(raw_frame):
-                    self.gateway.register_observed_htv405_link(
-                        controller_endpoint=decoded["endpoint_a"],
-                        valve_endpoint=decoded["endpoint_b"],
-                        frame=decoded["frame_hex"],
-                        observed_at=observed_at,
-                    )
                     valve = self.catalog.valve_link(
                         decoded["endpoint_a"], decoded["endpoint_b"]
                     )
@@ -194,6 +205,7 @@ class FrameIngestor:
                     "rf_trailer_residual": decoded["trailer_residual"],
                     "rf_trailer_valid": decoded["trailer_valid"],
                     "rf_frame_accepted": True,
+                    **valve_phase,
                     **valve_state,
                     **valve_update,
                 }
@@ -216,6 +228,8 @@ class FrameIngestor:
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_message_type": decoded["message_type"],
                     "rf_frame_accepted": decoded["trailer_valid"],
+                    **valve_phase,
+                    **control_response,
                 }
                 for key in ("trailer_residual", "trailer_valid"):
                     state[f"rf_{key}"] = decoded[key]

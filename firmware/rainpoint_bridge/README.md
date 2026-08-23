@@ -5,9 +5,11 @@ RainPoint Local. One node receives RainPoint RF telemetry, performs bounded
 HCS026 soil-sensor pairing and recovery, sends acknowledgements only for
 gateway-assigned sensors, and installs integrity-checked OTA updates.
 
-It does **not** implement valve control or arbitrary RF transmission. Historical
-pairing captures and experiments live under `research/`; they are protocol
-evidence, not alternative firmware builds.
+It does **not** expose valve control to Home Assistant or the public gateway
+API, and it does not permit arbitrary RF transmission. The source contains a
+compile-gated Zone 1 bench path used with the isolated dry valve; commands are
+accepted only from an authenticated protocol-v2 gateway advertising the same
+explicit experimental capability.
 
 The standard source tree also contains an experimental HTV405 enrollment
 candidate. It can only run after the authenticated gateway supplies the factory
@@ -46,11 +48,15 @@ capacitor across CC1101 VCC/GND when practical.
   scan both channels to broaden passive coverage.
 - Supports the validated HCS026 automatic pairing profile without asking users
   for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
-- Compiles the association-specific HTV405 enrollment candidate while keeping
-  every valve-control command absent from the firmware boundary.
-- Includes a hardware-independent HTV405 close-frame builder for the isolated
-  close-first trial. It accepts only explicit association identities and is not
-  connected to the Wi-Fi, serial, Home Assistant, or CC1101 transmit paths.
+- Compiles the association-specific HTV405 enrollment candidate. The research
+  build also accepts a bounded `valve_control_tx_candidate` command vocabulary
+  for the physically validated Zone 1 only; it requires explicit association
+  identities, a persisted response-authenticated counter, and the calibrated
+  carrier profile.
+- Keeps valve control absent from the Home Assistant and public HTTP APIs. The
+  bench coordinator starts with an idempotent close, spaces operations by at
+  least 15 seconds, never advances state from transmit success, and uses only
+  close frames when recovering an uncertain counter.
 - Recovers a known dormant sensor from its strict factory announcement with one
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated
@@ -78,6 +84,18 @@ pio device monitor --baud 115200
 `rainpoint_bridge` is the only PlatformIO environment. CI builds the same image
 and checks that obsolete local RF bench commands are absent while pairing,
 ACK, and OTA capabilities are present.
+
+The default build is production-safe and compiles out all research controls.
+For an explicitly authorized isolated-valve session, build the same environment
+with the research profile enabled:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.14.0-valve-control-probe.35 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+Never publish or OTA-promote that research artifact as a standard release.
 
 The generic `esp32dev` board definition matches the tested board. If automatic
 upload reset fails, hold **BOOT**, begin upload, and release it when PlatformIO

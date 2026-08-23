@@ -755,6 +755,56 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_v2_bench_valve_control_commands_require_explicit_capability(
+        self,
+    ) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_control_tx_candidate",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        commands = [
+            {
+                "type": "valve_control_configure",
+                "command_id": "61" * 16,
+                "controller_endpoint": "b9840280",
+                "valve_endpoint": "94a98013",
+                "companion_endpoint": "39840280",
+                "selector": 0x05,
+                "frequency_offset_hz": 97_154,
+            },
+            {
+                "type": "valve_control_sync",
+                "command_id": "62" * 16,
+                "next_sequence": 7,
+            },
+            {
+                "type": "valve_control_close",
+                "command_id": "63" * 16,
+                "zone": 1,
+                "expected_sequence": 7,
+            },
+        ]
+        for command in commands:
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+        stream.close()
+        connection.close()
+
+        legacy_connection, legacy_stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(ValueError, "valve_control_tx_candidate"):
+            self.server.send_command(NODE_A, commands[-1])
+        legacy_stream.close()
+        legacy_connection.close()
+
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,

@@ -214,6 +214,57 @@ def next_htv405_phase(frame: bytes) -> tuple[int, bool]:
     return (((sequence + 1) & 0x1F), False) if repeated else (sequence, True)
 
 
+def htv405_phase_state(frame: bytes) -> dict[str, int | bool]:
+    """Expose the lower-channel telemetry phase without implying TX state.
+
+    The valve's periodic report counter is independent of the counter used by
+    gateway commands.  Keeping the historical function name avoids a storage
+    migration dependency, while the returned field names make that boundary
+    explicit to every caller.
+    """
+    next_sequence_value, next_repeat = next_htv405_phase(frame)
+    return {
+        "rf_telemetry_sequence": frame[13] & 0x1F,
+        "rf_telemetry_repeat": bool(frame[14] & 0x80),
+        "rf_next_telemetry_sequence": next_sequence_value,
+        "rf_next_telemetry_repeat": next_repeat,
+    }
+
+
+def decode_htv405_gateway_command_response(
+    frame: bytes,
+) -> dict[str, int | bool] | None:
+    """Decode an authenticated high-carrier HTV405 command response.
+
+    This envelope was physically validated for both accepted Zone 1 open and
+    close commands.  It proves the resulting watering state and accepted
+    controller counter, but it does not identify a zone by itself.
+    """
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return None
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    if residual not in TRAILER_RESIDUES:
+        return None
+    if (
+        frame[14] & 0x7F != 0x50
+        or frame[15] != 0x86
+        or frame[17] != 0x10
+        or frame[18] & 0x7F != 0x4F
+        or frame[23] != 0x40
+        or frame[26] != 0x56
+        or (frame[14] ^ frame[18]) & 0x80
+    ):
+        return None
+    sequence = frame[13] & 0x1F
+    return {
+        "rf_control_response_sequence": sequence,
+        "rf_next_control_sequence": (sequence + 1) & 0x1F,
+        "rf_control_response_watering": bool(frame[18] & 0x80),
+    }
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")

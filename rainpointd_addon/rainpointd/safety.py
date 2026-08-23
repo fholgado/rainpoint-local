@@ -44,6 +44,7 @@ class ValveSafetyController:
         absolute_max_seconds: int = 3_600,
         acknowledgement_timeout_seconds: float = 1.5,
         close_retry_seconds: float = 1.5,
+        minimum_command_interval_seconds: float = 15.0,
         max_fast_close_attempts: int = 5,
         fault_retry_seconds: float = 10.0,
         zone_count: int = 1,
@@ -56,6 +57,8 @@ class ValveSafetyController:
             raise ValueError("user maximum cannot exceed absolute maximum")
         if acknowledgement_timeout_seconds <= 0 or close_retry_seconds <= 0:
             raise ValueError("timeouts must be positive")
+        if minimum_command_interval_seconds < 0:
+            raise ValueError("minimum command interval cannot be negative")
         if max_fast_close_attempts < 1 or fault_retry_seconds <= 0:
             raise ValueError("retry settings must be positive")
         if zone_count not in range(1, 5):
@@ -65,6 +68,7 @@ class ValveSafetyController:
         self.absolute_max_seconds = absolute_max_seconds
         self.acknowledgement_timeout_seconds = acknowledgement_timeout_seconds
         self.close_retry_seconds = close_retry_seconds
+        self.minimum_command_interval_seconds = minimum_command_interval_seconds
         self.max_fast_close_attempts = max_fast_close_attempts
         self.fault_retry_seconds = fault_retry_seconds
         self.zone_count = zone_count
@@ -74,6 +78,8 @@ class ValveSafetyController:
         self.next_close_attempt: float | None = None
         self.close_attempts = 0
         self.requested_zone: int | None = None
+        self.last_command_at: float | None = None
+        self.pending_close_reason: str | None = None
 
     def start(self, now: float) -> tuple[SafetyAction, ...]:
         """Fail closed on every process start before accepting an open."""
@@ -87,6 +93,12 @@ class ValveSafetyController:
         """Arm one mutually exclusive zone before emitting an open action."""
         if self.state is not SafetyState.IDLE:
             raise RuntimeError(f"cannot open while state is {self.state.value}")
+        if (
+            self.last_command_at is not None
+            and now
+            < self.last_command_at + self.minimum_command_interval_seconds
+        ):
+            raise RuntimeError("minimum valve command interval has not elapsed")
         if zone not in range(1, self.zone_count + 1):
             raise ValueError(
                 f"zone must be between 1 and {self.zone_count}"
@@ -103,6 +115,7 @@ class ValveSafetyController:
         )
         self.state = SafetyState.OPEN_PENDING
         self.requested_zone = zone
+        self.last_command_at = now
         return (
             SafetyAction(
                 ActionKind.SEND_OPEN,
@@ -176,8 +189,26 @@ class ValveSafetyController:
         self.state = SafetyState.CLOSE_PENDING
         self.run_deadline = None
         self.acknowledgement_deadline = None
-        self.close_attempts = 1
-        self.next_close_attempt = now + self.close_retry_seconds
+        self.pending_close_reason = reason
+        earliest = (
+            self.last_command_at + self.minimum_command_interval_seconds
+            if self.last_command_at is not None
+            else now
+        )
+        if now < earliest:
+            self.close_attempts = 0
+            self.next_close_attempt = earliest
+            return ()
+        return self._emit_close(now, reason)
+
+    def _emit_close(
+        self, now: float, reason: str
+    ) -> tuple[SafetyAction, ...]:
+        self.close_attempts += 1
+        self.last_command_at = now
+        self.next_close_attempt = now + max(
+            self.close_retry_seconds, self.minimum_command_interval_seconds
+        )
         return tuple(
             SafetyAction(
                 ActionKind.SEND_CLOSE,
@@ -189,16 +220,12 @@ class ValveSafetyController:
         )
 
     def _retry_close(self, now: float) -> tuple[SafetyAction, ...]:
-        self.close_attempts += 1
-        actions = [
-            SafetyAction(
-                ActionKind.SEND_CLOSE,
-                "close_not_confirmed",
-                attempt=self.close_attempts,
-                zone=zone,
-            )
-            for zone in range(1, self.zone_count + 1)
-        ]
+        reason = (
+            self.pending_close_reason
+            if self.close_attempts == 0 and self.pending_close_reason is not None
+            else "close_not_confirmed"
+        )
+        actions = list(self._emit_close(now, reason))
         if (
             self.state is SafetyState.CLOSE_PENDING
             and self.close_attempts >= self.max_fast_close_attempts
@@ -211,11 +238,15 @@ class ValveSafetyController:
                     attempt=self.close_attempts,
                 )
             )
-            self.next_close_attempt = now + self.fault_retry_seconds
+            self.next_close_attempt = now + max(
+                self.fault_retry_seconds,
+                self.minimum_command_interval_seconds,
+            )
         elif self.state is SafetyState.FAULT:
-            self.next_close_attempt = now + self.fault_retry_seconds
-        else:
-            self.next_close_attempt = now + self.close_retry_seconds
+            self.next_close_attempt = now + max(
+                self.fault_retry_seconds,
+                self.minimum_command_interval_seconds,
+            )
         return tuple(actions)
 
     def _clear_to_idle(self) -> None:
@@ -225,3 +256,4 @@ class ValveSafetyController:
         self.next_close_attempt = None
         self.close_attempts = 0
         self.requested_zone = None
+        self.pending_close_reason = None

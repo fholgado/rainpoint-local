@@ -31,7 +31,11 @@ from .valve_pairing_protocol import (
     automatic_htv405_profile_metadata,
     build_htv405_profile,
 )
-from .valve_protocol import is_htv405_link_frame
+from .valve_protocol import (
+    decode_htv405_gateway_command_response,
+    htv405_phase_state,
+    is_htv405_link_frame,
+)
 from .product_identity import (
     GENERIC_HCS02X_MODEL,
     HCS026_MODEL,
@@ -152,6 +156,7 @@ class Gateway:
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
+        self._active_pairing_control_profile: dict[str, Any] | None = None
         self._active_pairing_expected_valve_endpoint: str | None = None
         self._active_pairing_confirmed_valve_endpoint: str | None = None
         self._active_pairing_confirmation_observed_at: str | None = None
@@ -1088,6 +1093,23 @@ class Gateway:
         self._active_pairing_confirmation_receiver = (
             receiver if isinstance(receiver, str) else None
         )
+        profile = self._active_pairing_control_profile
+        if self._store is not None and profile is not None:
+            try:
+                self._store.update_valve_control_profile(
+                    valve_endpoint=expected,
+                    node_id=node_id,
+                    companion_endpoint=str(profile["companion_endpoint"]),
+                    selector=int(profile["selector"]),
+                    frequency_offset_hz=int(profile["frequency_offset_hz"]),
+                    observed_at=observed_at,
+                )
+            except KeyError:
+                # The structural link should have been registered by the
+                # ingestor before this callback. Refuse to create control
+                # state if that receive-side proof is unexpectedly absent.
+                return
+            self._refresh_registry_catalog()
 
     def _confirm_sensor_ack_locked(
         self, state: dict[str, Any], observed_at: str
@@ -1295,6 +1317,12 @@ class Gateway:
                 item["device_id"]: item
                 for item in (self._store.registry() if self._store else [])
             }
+            valve_registry = {
+                item["device_id"]: item
+                for item in (
+                    self._store.valve_registry() if self._store else []
+                )
+            }
             for device_id, device in devices.items():
                 if registered := registry.get(device_id):
                     device["name"] = registered["name"]
@@ -1318,6 +1346,57 @@ class Gateway:
                             )
                     if registered.get("model_code") is not None:
                         state["rf_model_code"] = registered["model_code"]
+                if valve_registration := valve_registry.get(device_id):
+                    state = device.setdefault("state", {})
+                    if valve_registration.get("last_sequence") is not None:
+                        state.update(
+                            {
+                                "rf_telemetry_sequence": int(
+                                    valve_registration["last_sequence"]
+                                ),
+                                "rf_telemetry_repeat": bool(
+                                    valve_registration["last_repeat"]
+                                ),
+                                "rf_next_telemetry_sequence": int(
+                                    valve_registration["next_sequence"]
+                                ),
+                                "rf_next_telemetry_repeat": bool(
+                                    valve_registration["next_repeat"]
+                                ),
+                                "rf_telemetry_phase_at": (
+                                    valve_registration["last_phase_at"]
+                                ),
+                            }
+                        )
+                    if (
+                        valve_registration.get("control_next_sequence")
+                        is not None
+                    ):
+                        state.update(
+                            {
+                                "rf_control_confirmed_sequence": int(
+                                    valve_registration[
+                                        "control_last_sequence"
+                                    ]
+                                ),
+                                "rf_next_control_sequence": int(
+                                    valve_registration[
+                                        "control_next_sequence"
+                                    ]
+                                ),
+                                "rf_control_confirmed_watering": bool(
+                                    valve_registration[
+                                        "control_confirmed_watering"
+                                    ]
+                                ),
+                                "rf_control_confirmed_at": (
+                                    valve_registration[
+                                        "control_confirmed_at"
+                                    ]
+                                ),
+                                "rf_control_counter_authenticated": True,
+                            }
+                        )
                 if is_hcs02x_sensor(
                     model=device.get("model"),
                     protocol=device.get("state", {}).get("rf_protocol_family"),
@@ -1540,27 +1619,134 @@ class Gateway:
             existing = self.catalog.valve_link(
                 controller_endpoint, valve_endpoint
             )
-            if existing is not None:
-                return {
-                    "controller_endpoint": existing.controller_endpoint,
-                    "valve_endpoint": existing.valve_endpoint,
-                    "device_id": existing.device_id,
-                    "name": existing.name,
-                    "model": existing.model,
-                }
             timestamp = observed_at or datetime.now(timezone.utc).isoformat()
-            registration = self._store.upsert_valve_link(
-                controller_endpoint=controller_endpoint,
+            if existing is None:
+                self._store.upsert_valve_link(
+                    controller_endpoint=controller_endpoint,
+                    valve_endpoint=valve_endpoint,
+                    device_id=f"htv405-{valve_endpoint}",
+                    name=f"RainPoint 4-zone valve {valve_endpoint[-4:]}",
+                    model="HTV405FRF",
+                    area=None,
+                    accepted_at=timestamp,
+                )
+            phase = htv405_phase_state(raw)
+            registration = self._store.update_valve_phase(
                 valve_endpoint=valve_endpoint,
-                device_id=f"htv405-{valve_endpoint}",
-                name=f"RainPoint 4-zone valve {valve_endpoint[-4:]}",
-                model="HTV405FRF",
-                area=None,
-                accepted_at=timestamp,
+                sequence=int(phase["rf_telemetry_sequence"]),
+                repeat=bool(phase["rf_telemetry_repeat"]),
+                next_sequence=int(phase["rf_next_telemetry_sequence"]),
+                next_repeat=bool(phase["rf_next_telemetry_repeat"]),
+                observed_at=timestamp,
+                frame=frame,
             )
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
             return registration
+
+    def observe_valve_control_probe(
+        self,
+        node_id: str,
+        report: dict[str, Any],
+        *,
+        observed_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Persist only a node-verified HTV405 command response.
+
+        The research firmware emits this status only after matching an
+        over-air response to its pending transmitted counter.  The daemon
+        independently re-decodes the response and checks the persisted local
+        association before accepting the next controller counter.
+        """
+        if self._store is None or report.get("state") not in {
+            "zone_1_open_confirmed",
+            "zone_1_closed_confirmed",
+        }:
+            return None
+        frame_hex = report.get("frame")
+        valve_endpoint = report.get("valve_endpoint")
+        controller_endpoint = report.get("controller_endpoint")
+        companion_endpoint = report.get("companion_endpoint")
+        if not all(
+            isinstance(value, str)
+            for value in (
+                frame_hex,
+                valve_endpoint,
+                controller_endpoint,
+                companion_endpoint,
+            )
+        ):
+            return None
+        try:
+            raw = bytes.fromhex(frame_hex)
+        except ValueError:
+            return None
+        response = decode_htv405_gateway_command_response(raw)
+        if response is None:
+            return None
+        valve_endpoint = valve_endpoint.lower()
+        controller_endpoint = controller_endpoint.lower()
+        companion_endpoint = companion_endpoint.lower()
+        if (
+            raw[5:9].hex() != controller_endpoint
+            or raw[9:13].hex() != valve_endpoint
+        ):
+            return None
+        confirmed_sequence = report.get("last_confirmed_sequence")
+        next_sequence = report.get("next_sequence")
+        watering = report.get("confirmed_watering")
+        center_hz = report.get("center_hz")
+        selector = report.get("selector")
+        if (
+            not isinstance(confirmed_sequence, int)
+            or isinstance(confirmed_sequence, bool)
+            or confirmed_sequence
+            != response["rf_control_response_sequence"]
+            or not isinstance(next_sequence, int)
+            or isinstance(next_sequence, bool)
+            or next_sequence != response["rf_next_control_sequence"]
+            or not isinstance(watering, bool)
+            or watering != response["rf_control_response_watering"]
+            or not isinstance(center_hz, int)
+            or isinstance(center_hz, bool)
+            or not 430_000_000 <= center_hz <= 440_000_000
+            or not isinstance(selector, int)
+            or isinstance(selector, bool)
+        ):
+            return None
+        timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == valve_endpoint
+                ),
+                None,
+            )
+            if registration is None or any(
+                (
+                    registration.get("controller_endpoint")
+                    != controller_endpoint,
+                    registration.get("control_node_id") != node_id,
+                    registration.get("control_companion_endpoint")
+                    != companion_endpoint,
+                    registration.get("control_selector") != selector,
+                )
+            ):
+                return None
+            accepted = self._store.confirm_valve_control_response(
+                valve_endpoint=valve_endpoint,
+                node_id=node_id,
+                sequence=confirmed_sequence,
+                next_sequence=next_sequence,
+                watering=watering,
+                center_hz=center_hz,
+                observed_at=timestamp,
+                frame=frame_hex.lower(),
+            )
+            self._refresh_registry_catalog()
+            return accepted
 
     def _restore_observed_htv405_links(self) -> None:
         """Backfill valve links from retained strict structural reports."""
@@ -1646,6 +1832,7 @@ class Gateway:
             self._active_pairing_command_id = None
             self._active_pairing_profile_id = None
             self._active_pairing_ack_parameters = None
+            self._active_pairing_control_profile = None
             self._active_pairing_expected_valve_endpoint = None
             self._active_pairing_confirmed_valve_endpoint = None
             self._active_pairing_confirmation_observed_at = None
@@ -1732,6 +1919,16 @@ class Gateway:
                     self._active_pairing_expected_valve_endpoint = (
                         valve_profile.paired_endpoint
                     )
+                    self._active_pairing_control_profile = {
+                        "companion_endpoint": valve_profile.companion_endpoint,
+                        # The local association reports selector byte 0x05 on
+                        # the selector-2 carrier branch. Store the body value;
+                        # the carrier is represented independently.
+                        "selector": 0x05,
+                        "frequency_offset_hz": int(
+                            command["frequency_offset_hz"]
+                        ),
+                    }
             return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
@@ -2139,6 +2336,7 @@ class Gateway:
         self._active_pairing_command_id = None
         self._active_pairing_profile_id = None
         self._active_pairing_ack_parameters = None
+        self._active_pairing_control_profile = None
         self._active_pairing_expected_valve_endpoint = None
         self._active_pairing_confirmed_valve_endpoint = None
         self._active_pairing_confirmation_observed_at = None

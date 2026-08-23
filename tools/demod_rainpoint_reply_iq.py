@@ -74,12 +74,20 @@ def demodulate(
             )
             start = candidate.find(SYNC_BITS)
             while start >= 0:
+                wake_symbols = 0
+                cursor = start - 1
+                next_bit = candidate[start]
+                while cursor >= 0 and candidate[cursor] != next_bit:
+                    wake_symbols += 1
+                    next_bit = candidate[cursor]
+                    cursor -= 1
                 frame = candidate[start : start + 304]
                 raw_matches.append(
                     {
                         "phase_samples": phase,
                         "inverted": inverted,
                         "sync_symbol": start,
+                        "alternating_wake_symbols": wake_symbols,
                         "frame_bits": len(frame),
                         "frame_hex": (
                             int(frame, 2).to_bytes(len(frame) // 8, "big").hex()
@@ -99,10 +107,14 @@ def demodulate(
                 "inverted": match["inverted"],
                 "phase_samples": [],
                 "sync_symbols": [],
+                "alternating_wake_symbols": [],
             },
         )
         item["phase_samples"].append(match["phase_samples"])
         item["sync_symbols"].append(match["sync_symbol"])
+        item["alternating_wake_symbols"].append(
+            match["alternating_wake_symbols"]
+        )
     matches = sorted(
         (
             {
@@ -112,6 +124,9 @@ def demodulate(
                 "phase_min": min(item["phase_samples"]),
                 "phase_max": max(item["phase_samples"]),
                 "sync_symbols": sorted(set(item["sync_symbols"])),
+                "alternating_wake_symbols": sorted(
+                    set(item["alternating_wake_symbols"])
+                ),
             }
             for item in grouped.values()
         ),

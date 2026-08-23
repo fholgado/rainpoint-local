@@ -1,0 +1,78 @@
+{
+  "model": "HTV405FRF",
+  "captured_at": "2026-08-17",
+  "scope": "stock-gateway lower-channel valve reports",
+  "warning": "These are valve state reports, not gateway command frames. They validate zone and duration decoding but must not be used to advance the controller counter.",
+  "controller_endpoint": "b9840280",
+  "valve_endpoint": "94a98013",
+  "trials": [
+    {
+      "zone": 1,
+      "duration_seconds": 60,
+      "open_event_id": 73289,
+      "open_frame": "79f4882f28b984028094a980130b010782858090cf80000000409b80569e0000000000002fc2",
+      "close_event_id": 73296,
+      "close_frame": "79f4882f28b984028094a980130b8107828580804f8000000040800056800000000000005674"
+    },
+    {
+      "zone": 1,
+      "duration_seconds": 120,
+      "open_event_id": 73347,
+      "open_frame": "79f4882f28b984028094a980130e010782858090cf8000000040b98056bc0000000000002756",
+      "close_event_id": 73356,
+      "close_frame": "79f4882f28b984028094a980130e8107828580804f8000000040800056800000000000003f62"
+    },
+    {
+      "zone": 2,
+      "duration_seconds": 60,
+      "open_event_id": 73372,
+      "open_frame": "79f4882f28b984028094a980130f810782858110cf80000000409b80569e0000000000001163",
+      "close_event_id": 73376,
+      "close_frame": "79f4882f28b984028094a98013100107828581004f8000000040800056800000000000006b88"
+    },
+    {
+      "zone": 2,
+      "duration_seconds": 120,
+      "open_event_id": 73322,
+      "open_frame": "79f4882f28b984028094a980130c810782858110cf8000000040b90056bc000000000000604e",
+      "close_event_id": 73327,
+      "close_frame": "79f4882f28b984028094a980130d0107828581004f8000000040800056800000000000002ad3"
+    },
+    {
+      "zone": 3,
+      "duration_seconds": 60,
+      "open_event_id": 73389,
+      "open_frame": "79f4882f28b984028094a9801311010782858190cf80000000409b80569e0000000000003da8",
+      "close_event_id": 73400,
+      "close_frame": "79f4882f28b984028094a98013118107828581804f800000004080005680000000000000441e"
+    },
+    {
+      "zone": 3,
+      "duration_seconds": 120,
+      "open_event_id": 73428,
+      "open_frame": "79f4882f28b984028094a9801314010782858190cf8000000040b90056bc000000000000029e",
+      "close_event_id": 73433,
+      "close_frame": "79f4882f28b984028094a98013148107828581804f8000000040800056800000000000002d08"
+    },
+    {
+      "zone": 4,
+      "duration_seconds": 60,
+      "open_event_id": 73408,
+      "open_frame": "79f4882f28b984028094a9801312810782858210cf80000000409b00569e00000000000067e8",
+      "close_event_id": 73415,
+      "close_frame": "79f4882f28b984028094a98013130107828582004f8000000040800056800000000000004cf7"
+    },
+    {
+      "zone": 4,
+      "duration_seconds": 120,
+      "open_event_id": 73440,
+      "open_frame": "79f4882f28b984028094a9801315810782858210cf8000000040b98056bc0000000000001ad8",
+      "close_event_id": 73447,
+      "close_frame": "79f4882f28b984028094a98013160107828582004f80000000408000568000000000000025e1"
+    }
+  ],
+  "high_carrier_command_fixtures": {
+    "zones_2_to_4": [],
+    "finding": "The retained journal contains no valid high-carrier gateway command for Zones 2-4. One candidate at event 73432 has an unsupported trailer residue and is not safe to promote."
+  }
+}

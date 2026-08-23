@@ -6,11 +6,11 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Valve control is deliberately disabled until pairing, close commands, and the
-independent safety controller have passed physical validation. An internal,
-explicitly armed HTV405 enrollment candidate is available for isolated bench
-validation; it is not exposed in the Home Assistant UI or enabled on deployed
-radio nodes yet.
+Valve control is not yet exposed in Home Assistant. Local HTV405 enrollment and
+isolated Zone 1 open/close have passed physical validation, including direct
+valve responses, automatic stop, and controller-counter progression. The
+control path remains an explicitly gated research-bench feature until it is
+connected to the independent safety controller.
 
 ## What works today
 
@@ -50,8 +50,12 @@ device slots.
 
 ### Valve telemetry and safety groundwork
 
-- Reconstruct the captured 18-step HTV405 enrollment transcript as a bounded,
-  association-specific candidate with 17 replies and no watering commands.
+- Locally enroll the isolated HTV405 through a bounded, association-specific
+  transcript without the stock RainPoint gateway.
+- Open and close HTV405 Zone 1 on its enrolled selector-2 carrier and accept
+  state only from the valve's authenticated response or later telemetry.
+- Track the independent controller command counter from matching valve replies;
+  routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
   last-session duration, and water usage.
 - Correlate local RF valve events with Home Assistant/cloud observations.
@@ -59,7 +63,7 @@ device slots.
   open acknowledgement, client loss, run deadlines, watchdog expiry, close
   retries, and persistent faults.
 
-The physical valve-control boundary still rejects all requests.
+The public gateway/HA valve-control boundary still rejects all requests.
 
 ## Architecture
 
@@ -200,12 +204,15 @@ runtime dependency.
 - Improve final radio-node placement where Wi-Fi or RF margins are weak.
 - Add encrypted node sessions, credential rotation, and asymmetric OTA release
   signatures before treating the trusted-LAN prototype as publishable.
-- Physically validate the HTV405 enrollment candidate on the isolated test
-  valve, then generalize it from another association if the evidence differs.
-- Capture and validate close, status, and bounded open behavior on isolated
-  test hardware.
-- Only then connect physical valve commands to the safety controller and begin
-  cloud-to-local migration work with the existing HomGar integration.
+- Physically verify close-first recovery after a gateway and radio-node restart;
+  the association profile and authenticated next controller counter are now
+  stored separately from lower-channel telemetry.
+- Capture and physically validate command fixtures for HTV405 Zones 2--4.
+- Physically exercise the disabled bench-only fail-closed coordinator,
+  including its 15-second command spacing and close-only counter recovery,
+  before exposing any control through the gateway or Home Assistant.
+- Generalize the local association/control evidence with another valve before
+  beginning cloud-to-local migration work with the existing HomGar integration.
 
 Start and finish the sensor reliability gate with persisted snapshots rather
 than screenshots:

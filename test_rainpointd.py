@@ -430,7 +430,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(8, gateway.info()["storage_schema_version"])
+            self.assertEqual(10, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -441,7 +441,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(8, migrated.info()["storage_schema_version"])
+            self.assertEqual(10, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -463,6 +463,35 @@ class GatewayTest(unittest.TestCase):
             }
             connection.close()
             self.assertIn("valve_registry", valve_tables)
+            connection = sqlite3.connect(path)
+            valve_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            connection.close()
+            self.assertTrue(
+                {
+                    "last_sequence",
+                    "last_repeat",
+                    "next_sequence",
+                    "next_repeat",
+                    "last_phase_at",
+                    "last_phase_frame",
+                    "control_node_id",
+                    "control_companion_endpoint",
+                    "control_selector",
+                    "control_frequency_offset_hz",
+                    "control_center_hz",
+                    "control_last_sequence",
+                    "control_next_sequence",
+                    "control_confirmed_watering",
+                    "control_confirmed_at",
+                    "control_response_frame",
+                }
+                <= valve_columns
+            )
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],

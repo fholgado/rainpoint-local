@@ -351,6 +351,43 @@ registry entry as proof of a new enrollment. The compact evidence is retained
 in `fixtures/htv405_local_pairing_success.json`; backup slug `b8fa839c` keeps
 the ignored IQ files.
 
+## HTV405FRF successful local control — 2026-08-23
+
+The isolated dry valve accepted a Zone 1 gateway command only after the
+transmitter moved from the historical selector-6 control carrier to the
+selector-2 carrier chosen by its local enrollment. The accepted 120-second
+open used controller counter 3 and was followed immediately by a valid
+high-channel watering response, then by ordinary lower-channel watering and
+countdown reports. The valve automatically returned to idle after 120 seconds.
+
+An idempotent close at counter 4 produced a valid high-channel idle response.
+Firmware `0.14.0-valve-control-probe.34` then completed a second independent
+cycle: open at counter 5, automatic counter advance from the authenticated
+response, and close at counter 6 without manual counter input. The close was
+confirmed by both the immediate high-channel response and later lower-channel
+idle reports.
+
+This falsifies the earlier hypothesis that the lower telemetry sequence can be
+mapped to the controller counter by a fixed offset. The controller counter is
+advanced only by a matching command response. It also proves that operation
+byte `0x90` means open and `0x10` means close; it is not a primary/repeat bit.
+The exact generalized frames and carrier findings are promoted into
+`../PROTOCOL.md` and frozen in firmware protocol tests.
+
+### Retained crossed-zone re-audit — 2026-08-23
+
+The persistent gateway journal still contained 79 frames for paired valve
+endpoint `94a98013` across the August 17 trial. Sixteen CRC-valid lower-channel
+reports were promoted into
+`fixtures/htv405_crossed_zone_reports_20260817.json`: open and close for every
+zone at both 60 and 120 seconds. The decoder reproduced the complete crossed
+matrix exactly.
+
+No CRC-valid high-carrier gateway command for Zones 2--4 survived in that
+journal. The only high-carrier-looking candidate, event 73432, used unsupported
+residue `0xf3e0` and is not safe construction evidence. Zone 1 remains the sole
+transmit-enabled command body until a future focused high-carrier capture.
+
 ## Current capture guidance
 
 - Use 2.0 Msps centered at 433.7 MHz for broad passive operation.

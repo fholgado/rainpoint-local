@@ -179,33 +179,84 @@ exclusive states under one valve device.
 
 On August 19 the valve was re-enrolled by the stock gateway on selector branch
 6, then Zone 1 was requested for 120 seconds and stopped manually after roughly
-45 seconds under a raw 2.0 Msps SDR burst capture. The recovered commands were:
+45 seconds under a raw 2.0 Msps SDR burst capture. The initially recovered
+lower-channel frames were valve state reports, not gateway commands:
 
 ```text
 open  79f4882f28b984028094a9801309810786058090cf8000000040b90056bc0000000000004d64
 close 79f4882f28b984028094a980130a0107860580804f80000000408000568000000000000045ff
 ```
 
-Both commands used a 320-symbol wake and appeared at approximately 433.1417
-MHz in the same SDR. The open used sequence 9 repeat phase; the close advanced
-to sequence 10 primary phase. This supports a controller-owned transaction
-counter and rejects the failed trial's 1,200-symbol wake and selector-2 pairing
-reply channel as the routine control envelope.
+Both reports used a 320-symbol wake and appeared at approximately 433.1417 MHz
+in the same SDR. Their sequence/repeat phase belongs to the lower telemetry
+stream and does not determine the gateway command counter.
 
-The selector-6 stock commands contain marker pair `86 05`, whereas historical
-selector-2 stock controls contain `82 85`. Local selector-2 reports contain
-`82 05`. Offset 17 is therefore not a universal direction bit, and a validated
-association must carry its command profile as a unit: branch marker, command
-marker, carrier, wake, endpoints, transaction phase, and trailer. The exact
-local selector-2 command marker remains a physical-test gate; the isolated
-trial currently retains its locally observed `82 05` profile rather than
-substituting the historical stock selector-2 marker.
+The corresponding stock gateway commands were later isolated on the high
+control carrier. They use a 2,400-symbol wake, paired endpoint `94a98013` as
+source, companion endpoint `39840280` as destination, and the `0x4f03` trailer
+family. Byte 14 is an operation marker: `0x90` opens and `0x10` closes. It is
+not the repeat bit used by lower telemetry.
 
-An association-specific, offline-only close candidate builder now reproduces
-the captured local `0x05` idle body. It requires the paired endpoints, current
-five-bit sequence, zone, selector, repeat phase, and trailer residue explicitly.
-It remains disconnected from the gateway API and radio firmware; the first RF
-control trial is still an idempotent close on the dry test valve.
+### HTV405FRF locally validated Zone 1 control — 2026-08-23
+
+The dry test valve was locally enrolled on selector branch 2. Replaying the
+captured Zone 1 command body on the old selector-6 carrier was ignored across
+multiple counters. Moving the unchanged command to the association's
+selector-2 gateway carrier produced an immediate authenticated response. On
+the bench node, a requested center of `433518527` Hz compensates its measured
+crystal error and lands near the physical `433471` kHz branch.
+
+The first accepted 120-second open used controller counter 3:
+
+```text
+tx  79f4882f2894a9801339840280839082808100bc00000000000000000000000000000000a621
+rx  79f4882f28b984028094a9801303d0868010cf8000000040bc0056bc000000000000000038bf
+```
+
+The response echoed counter 3 and reported watering. Roughly 6.5 seconds later
+the valve emitted its ordinary lower-channel watering report, then emitted an
+idle report after the requested 120-second run. This independently confirms
+command acceptance, state transition, countdown, and automatic stop.
+
+An idempotent close with controller counter 4 was then accepted:
+
+```text
+tx  79f4882f2894a980133984028084108180810000000000000000000000000000000000004f0c
+rx  79f4882f28b984028094a9801304508683104f80000000408000568000000000000000001e6e
+```
+
+A hardened follow-up opened for 60 seconds at counter 5, advanced the stored
+counter only after the valve's watering response, and closed at counter 6
+without manual phase input. The valve replied idle and then emitted independent
+lower-channel closed-state reports. The next controller counter is therefore 7.
+
+The controller command counter is independent of the lower report sequence.
+Only a structurally valid high-channel response with matching endpoints and
+the transmitted counter may advance it. Transmit success alone is never a
+state transition, and lower telemetry may confirm watering/idle state but may
+not rewrite the controller counter. Zone 1 open/close is physically validated;
+Zones 2--4 still require captured gateway-command fixtures before transmission
+is enabled for them.
+
+The gateway schema now persists these as two explicit domains. Lower report
+cadence is exposed as `rf_telemetry_*`; it can never mark the command counter
+synchronized. The durable `rf_next_control_sequence` is written only after an
+authenticated radio node matches a pending transmit to a structurally valid
+high-carrier response and the daemon independently revalidates that response,
+its endpoints, node assignment, selector, and association companion route.
+
+The normalized selector-2 control profile uses a nominal `433421373` Hz base
+plus the association node's calibration offset. For the validated bench node,
+`+97154` Hz produces the proven `433518527` Hz request. This replaces the
+temporary equivalent representation (`434306001 - 787474`) without changing
+the RF carrier.
+
+The retained August 17 journal was re-audited and promoted into
+`research/fixtures/htv405_crossed_zone_reports_20260817.json`. It freezes all
+eight lower-channel combinations (Zones 1--4 at 60 and 120 seconds), but it
+contains no CRC-valid high-carrier command for Zones 2--4. One apparent command
+candidate is CRC-invalid and remains research evidence only; therefore the
+transmit builder remains restricted to Zone 1.
 
 ### HTV405FRF enrollment exchange
 
