@@ -247,6 +247,7 @@ class FrameIngestor:
                     state[f"rf_{key}"] = decoded[key]
                 for key in (
                     "status_soil_moisture_percent",
+                    "associated_soil_moisture_percent",
                     "hub_rssi_db",
                     "routine_ack_endpoint",
                     "routine_ack_message",

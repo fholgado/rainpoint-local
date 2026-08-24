@@ -1,0 +1,146 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV405FRF",
+  "scope": "explicit early-stop dry-bench runs on stock-paired Zones 2 through 4",
+  "association": {
+    "app_device_address": 6,
+    "paired_endpoint": "94a98013",
+    "companion_endpoint": "39840280",
+    "valve_route": "b9840280"
+  },
+  "runs": [
+    {
+      "zone": 2,
+      "cloud_open": "2026-08-24T15:54:53.946000+00:00",
+      "open_command": null,
+      "active_report": {
+        "event_id": 156758,
+        "observed_at": "2026-08-24T15:54:59.885276+00:00",
+        "frame": "79f4882f28b984028094a9801302810786858110cf80000000409b00569e0000000000000930"
+      },
+      "cloud_close": "2026-08-24T15:55:15.732000+00:00",
+      "close_command": null,
+      "idle_report": {
+        "event_id": 156764,
+        "observed_at": "2026-08-24T15:55:21.813951+00:00",
+        "frame": "79f4882f28b984028094a98013030107868581004f800000004080005680000000000000222f"
+      },
+      "timing_seconds": {
+        "cloud_open_to_active_report": 5.939276,
+        "cloud_close_to_idle_report": 6.081951,
+        "cloud_open_to_idle_report": 27.867951
+      }
+    },
+    {
+      "zone": 3,
+      "cloud_open": "2026-08-24T15:55:52.828000+00:00",
+      "open_command": {
+        "event_id": 156770,
+        "observed_at": "2026-08-24T15:55:52.332153+00:00",
+        "sequence": 10,
+        "frame": "79f4882f2894a98013398402808a10828181009e0000000000000000000000000000000049f1"
+      },
+      "active_report": {
+        "event_id": 156771,
+        "observed_at": "2026-08-24T15:55:58.891812+00:00",
+        "frame": "79f4882f28b984028094a9801304010786858190cf80000000409b00569e0000000000000db6"
+      },
+      "cloud_close": "2026-08-24T15:56:14.609000+00:00",
+      "close_command": {
+        "event_id": 156777,
+        "observed_at": "2026-08-24T15:56:14.041945+00:00",
+        "sequence": 10,
+        "frame": "79f4882f2894a98013398402808a908181810000000000000000000000000000000000001e1a"
+      },
+      "idle_report": {
+        "event_id": 156779,
+        "observed_at": "2026-08-24T15:56:20.388825+00:00",
+        "frame": "79f4882f28b984028094a98013048107868581804f80000000408000568000000000000043a2"
+      },
+      "timing_seconds": {
+        "cloud_open_to_active_report": 6.063812,
+        "cloud_close_to_idle_report": 5.779825,
+        "cloud_open_to_idle_report": 27.560825
+      }
+    },
+    {
+      "zone": 4,
+      "cloud_open": "2026-08-24T15:56:52.106000+00:00",
+      "open_command": {
+        "event_id": 156786,
+        "observed_at": "2026-08-24T15:56:51.518738+00:00",
+        "sequence": 11,
+        "frame": "79f4882f2894a98013398402808b10828201009e0000000000000000000000000000000068f6"
+      },
+      "active_report": {
+        "event_id": 156788,
+        "observed_at": "2026-08-24T15:56:57.900070+00:00",
+        "frame": "79f4882f28b984028094a9801305810786858210cf80000000409b00569e0000000000002252"
+      },
+      "cloud_close": "2026-08-24T15:57:13.837000+00:00",
+      "close_command": {
+        "event_id": 156791,
+        "observed_at": "2026-08-24T15:57:13.342058+00:00",
+        "sequence": 11,
+        "frame": "79f4882f2894a98013398402808b908182010000000000000000000000000000000000003f1d"
+      },
+      "idle_report": {
+        "event_id": 156793,
+        "observed_at": "2026-08-24T15:57:19.891263+00:00",
+        "frame": "79f4882f28b984028094a98013060107868582004f8000000040800056800000000000004b4b"
+      },
+      "timing_seconds": {
+        "cloud_open_to_active_report": 5.79407,
+        "cloud_close_to_idle_report": 6.054263,
+        "cloud_open_to_idle_report": 27.785263
+      }
+    }
+  ],
+  "authenticated_counter_examples": [
+    {
+      "meaning": "a confirmed open advances close to the next sequence",
+      "open_command": {
+        "event_id": 155902,
+        "sequence": 4,
+        "frame": "79f4882f2894a98013398402808490828201009e000000000000000000000000000000006958"
+      },
+      "open_response": {
+        "event_id": 155903,
+        "sequence": 4,
+        "watering": true,
+        "frame": "79f4882f28b984028094a9801304d0868010cf80000000409e00569e00000000000000001a7e"
+      },
+      "close_command": {
+        "event_id": 155913,
+        "sequence": 5,
+        "frame": "79f4882f2894a980133984028085108182010000000000000000000000000000000000005bb8"
+      }
+    },
+    {
+      "meaning": "a confirmed close does not consume another sequence",
+      "close_command": {
+        "event_id": 155882,
+        "sequence": 3,
+        "frame": "79f4882f2894a980133984028083108181010000000000000000000000000000000000004b76"
+      },
+      "close_response": {
+        "event_id": 155883,
+        "sequence": 3,
+        "watering": false,
+        "frame": "79f4882f28b984028094a9801303508680104f80000000408000569e00000000000000004b22"
+      },
+      "next_open_command": {
+        "event_id": 155890,
+        "sequence": 3,
+        "frame": "79f4882f2894a98013398402808390828181009e000000000000000000000000000000000644"
+      }
+    }
+  ],
+  "findings": [
+    "Every explicit close was independently confirmed by a valve-originated idle RF report approximately six seconds after cloud acceptance.",
+    "The captured Zone 3 open and close commands both used transaction sequence 10; the captured Zone 4 open and close commands both used sequence 11.",
+    "Earlier authenticated-response captures show the complementary path: a confirmed open at sequence 4 was followed by close at sequence 5, while a confirmed close at sequence 3 was followed by the next open reusing sequence 3.",
+    "Together these paths indicate that the control counter advances once per watering session at the first authenticated command response, rather than after every command or at a fixed open/close boundary.",
+    "Lower-channel telemetry report counters remain a separate domain and cannot synchronize the high-carrier control sequence."
+  ]
+}

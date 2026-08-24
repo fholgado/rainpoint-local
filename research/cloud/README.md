@@ -148,6 +148,20 @@ low (`10%`). Its `STA_RSSI` value is receiver-measured at the hub. These facts
 refine the RF experiments but do not imply that either cloud TLV appears
 unchanged in every over-the-air report.
 
+Four exact cloud/local observations on 2026-08-24 matched the installed soil
+sensors within one second. Moisture and categorical battery agreed in every
+pair, while local receiver RSSI differed from stock-gateway RSSI as expected.
+The app addresses 2--5 did not map to normalized RF offset 15, so migration
+must not infer cloud address from that byte. The redacted observations are in
+`../fixtures/hcs026_cloud_rf_correlation_20260824.json`.
+
+The retained RF journal also contains 1,346 trailer-valid moisture relay
+reports on the original HTV145 controller route. Of those, 775 occurred within
+two seconds of an identified Right Bed report and all 775 carried the same
+value. This is strong evidence for the cloud model's Associated Controller
+behavior, but the relay envelope lacks the sensor endpoint; the local decoder
+retains the value as unassigned instead of risking a cross-device update.
+
 ### Four-zone valve family clue
 
 The catalog describes `HTV405FRF` as product code `38`, model code `38`, and a
@@ -175,6 +189,33 @@ duration; a later idle refresh decoded as 0 and cleared it. Shared battery DP
 24 stayed at 100 percent, while RSSI DP 23 varied from -20 to -30 dBm. The
 cloud values and independently observed RF command/state pairs are frozen in
 `../fixtures/htv405_stock_cloud_control_matrix_20260824.json`.
+
+A separate 60-second matrix allowed all four zones to expire with no explicit
+close. Every zone emitted independently decoded active and idle RF reports,
+with idle arriving 60.947--61.645 seconds after cloud acceptance. The Zone 1
+and Zone 4 cloud idle updates followed their RF idle reports by 113 and 111
+milliseconds, respectively. This confirms that the physical valve owns its
+duration even if HA, the network, or the custom gateway disappears. The
+timelines are retained in
+`../fixtures/htv405_stock_auto_stop_20260824.json`.
+
+Explicit early-stop was then crossed independently on Zones 2--4. Each close
+was followed by a valve-originated idle RF report 5.780--6.082 seconds after
+cloud acceptance. Direct high-carrier captures on Zones 3 and 4 showed that
+open and close reused the same transaction sequence within each session
+(`0x0a`, then `0x0b` for the following session). Earlier authenticated-response
+captures showed the other branch: a confirmed open advanced close to the next
+sequence, while a confirmed close did not consume another sequence. Together
+they show one advancement per watering session at its first authenticated
+response, not one advancement per command. Exact commands and timelines are
+in `../fixtures/htv405_stock_early_stop_20260824.json`.
+
+For the original HTV145FRF, four exact cloud/RF correlations exposed a
+categorical low-battery flag at RF offset 17 bit `0x08`. They also showed that
+offset 23 bit `0x80` restores a missing high data bit in the packed last-usage
+field; correcting it changes the correlated 93.1 L and 81.9 L observations
+from the former underreported 67.5 L and 56.3 L. The evidence is retained in
+`../fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`.
 
 ### Address allocation and replacement behavior
 

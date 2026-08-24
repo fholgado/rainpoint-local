@@ -11,6 +11,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpoint_protocol import decode, parse_tlv  # noqa: E402
+from rainpointd.rf import normalize_row  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
@@ -32,6 +33,68 @@ class RainPointProtocolTest(unittest.TestCase):
             [32, 31, 30, 2, 21, 19, 15, 54],
             [entry["type_code"] for entry in entries],
         )
+
+    def test_hcs026_cloud_and_rf_correlation_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "hcs026_cloud_rf_correlation_20260824.json"
+            ).read_text()
+        )
+
+        for observation in fixture["observations"]:
+            with self.subTest(sensor=observation["sensor"]):
+                cloud = decode(observation["cloud"]["payload"], "HCS026FRF")
+                rf_frame = observation["rf"]["frame"]
+                rf = normalize_row(
+                    {"len": len(rf_frame) * 4, "data": rf_frame}
+                )
+
+                expected = observation["expected"]
+                self.assertEqual(
+                    expected["soil_moisture_percent"],
+                    cloud["soil_moisture_percent"],
+                )
+                self.assertEqual(
+                    expected["soil_moisture_percent"],
+                    rf["soil_moisture_percent"],
+                )
+                self.assertEqual(
+                    expected["battery_percent"], cloud["battery_percent"]
+                )
+                self.assertEqual(
+                    expected["battery_percent"], rf["battery_percent"]
+                )
+                self.assertEqual(
+                    expected["cloud_rssi_dbm"], cloud["rssi_dbm"]
+                )
+                self.assertTrue(rf["trailer_valid"])
+
+    def test_htv145_cloud_battery_and_usage_correlation_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv145_cloud_rf_battery_usage_correlation_20260824.json"
+            ).read_text()
+        )
+
+        for observation in fixture["observations"]:
+            with self.subTest(event=observation["rf_event_id"]):
+                cloud = decode(observation["cloud_payload"], "HTV145FRF")
+                expected = observation["expected"]
+                self.assertEqual(
+                    expected["battery_status"], cloud["battery_status"]
+                )
+                self.assertEqual(
+                    expected["battery_percent"], cloud["battery_percent"]
+                )
+                self.assertEqual(
+                    expected["last_usage_liters"], cloud["last_usage_liters"]
+                )
 
     def test_rejects_bad_hex(self) -> None:
         with self.assertRaises(ValueError):

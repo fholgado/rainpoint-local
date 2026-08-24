@@ -81,6 +81,32 @@ def _compact_status_fields(frame: bytes) -> dict[str, Any]:
     return result
 
 
+def _associated_hcs026_fields(frame: bytes) -> dict[str, Any]:
+    """Decode a strict, unassigned controller-relay moisture report.
+
+    The stock installation repeatedly relays one associated HCS026 reading
+    through a valve/controller route rather than the sensor's ordinary RF
+    endpoint.  The relay is useful migration evidence, but the RF envelope
+    alone does not identify which sensor is associated.  Retain the value
+    under an explicitly unassigned key so it cannot update a sensor entity.
+    """
+    if len(frame) != FRAME_BYTES:
+        return {}
+    if _trailer_fields(frame).get("trailer_valid") is not True:
+        return {}
+    if (
+        frame[15:20] != bytes.fromhex("0405818005")
+        or frame[20] & 0x7F != 0x44
+        or frame[22] & 0x7F != 0x70
+        or any(frame[25:36])
+    ):
+        return {}
+    percent = frame[21] * 2 + int(bool(frame[22] & 0x80))
+    if not 0 <= percent <= 100:
+        return {}
+    return {"associated_soil_moisture_percent": percent}
+
+
 def _trailer_fields(frame: bytes) -> dict[str, Any]:
     """Return the observed CRC-CCITT residual for a normalized frame."""
     if len(frame) != FRAME_BYTES:
@@ -275,10 +301,23 @@ def _valve_fields(
         # packed half-value plus an odd-value flag, in tenths of a liter.
         if frame[20] & 0x7F != 0x4F:
             return {}
-        half_tenths = ((frame[22] & 0x7F) << 8) | (frame[21] & 0x7F)
+        # Bit 7 of the first packed byte is overloaded. Cloud/RF correlation
+        # showed that frame[23] bit 7 selects whether it is value bit 7 or an
+        # overlay flag; frame[22] bit 7 remains the odd-tenths flag.
+        half_tenths = (
+            ((frame[22] & 0x7F) << 8)
+            | (frame[21] & 0x7F)
+            | (frame[23] & 0x80)
+        )
         tenths_liters = half_tenths * 2 + int(bool(frame[22] & 0x80))
         if 0 <= tenths_liters <= 100_000:
-            return {"last_usage_liters": round(tenths_liters / 10, 1)}
+            battery_low = bool(frame[17] & 0x08)
+            return {
+                "last_usage_liters": round(tenths_liters / 10, 1),
+                "battery_low": battery_low,
+                "battery_status": 2 if battery_low else 1,
+                "battery_percent": 10 if battery_low else 100,
+            }
     return {}
 
 
@@ -330,6 +369,7 @@ def normalize_row(
         result["canonical_endpoint_b"] = canonical_endpoint_b
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
+    result.update(_associated_hcs026_fields(frame))
     result.update(_hcs026_routine_ack_candidate(frame, catalog))
     result.update(_hcs026_pairing_fields(frame, catalog))
     result.update(_hcs026_report_fields(frame, catalog))

@@ -94,6 +94,7 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         self.assertEqual(2, result["event_count"])
         association = result["compact_associations"][0]
         self.assertEqual(57, association["moisture"])
+        self.assertFalse(association["trailer_valid"])
         candidate = association["candidates"][0]
         self.assertEqual("9ce58024", candidate["endpoint"])
         self.assertTrue(candidate["value_matches"])
@@ -164,6 +165,68 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         self.assertEqual(1, transactions["command_count"])
         self.assertEqual({"11223344->aabbccdd": 1}, transactions["link_counts"])
         self.assertEqual(21, transactions["commands"][0]["response_event_id"])
+
+    def test_htv405_operation_uses_selector_not_repeat_bit(self) -> None:
+        opened = {
+            "event_id": 30,
+            "observed_at": "2026-08-24T15:55:52.332153+00:00",
+            "raw": (
+                "79f4882f2894a98013398402808a10828181009e000000000"
+                "0000000000000000000000049f1"
+            ),
+            "state": {},
+        }
+        closed = {
+            "event_id": 31,
+            "observed_at": "2026-08-24T15:56:14.041945+00:00",
+            "raw": (
+                "79f4882f2894a98013398402808a908181810000000000000"
+                "000000000000000000000001e1a"
+            ),
+            "state": {},
+        }
+
+        transactions = analyze([opened, closed])["valve_transactions"]
+
+        self.assertEqual(
+            ["open", "close"],
+            [command["mode"] for command in transactions["commands"]],
+        )
+        self.assertEqual(
+            ["8a", "8a"],
+            [command["sequence"] for command in transactions["commands"]],
+        )
+
+    def test_mixed_receiver_timestamp_styles_do_not_break_analysis(self) -> None:
+        request_frame = bytearray(38)
+        request_frame[:5] = bytes.fromhex("79f4882f28")
+        request_frame[5:9] = bytes.fromhex("11223344")
+        request_frame[9:13] = bytes.fromhex("aabbccdd")
+        request_frame[13:15] = bytes((0x81, 0x90))
+        response_frame = bytearray(38)
+        response_frame[:5] = bytes.fromhex("79f4882f28")
+        response_frame[5:9] = bytes.fromhex("aabbccdd")
+        response_frame[9:13] = bytes.fromhex("11223344")
+        response_frame[13:15] = bytes((0x81, 0xD0))
+
+        transactions = analyze(
+            [
+                {
+                    "event_id": 30,
+                    "observed_at": "2026-08-07T08:00:00.000000",
+                    "raw": self._valid_frame(request_frame),
+                    "state": {},
+                },
+                {
+                    "event_id": 31,
+                    "observed_at": "2026-08-07T12:00:00.180000+00:00",
+                    "raw": self._valid_frame(response_frame),
+                    "state": {},
+                },
+            ]
+        )["valve_transactions"]
+
+        self.assertEqual(1, transactions["command_count"])
 
 
 if __name__ == "__main__":

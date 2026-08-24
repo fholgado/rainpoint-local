@@ -264,19 +264,41 @@ frame[17] & 0x7f = 1
 ```
 
 This gives `80 81`, `81 01`, `81 81`, and `82 01` for Zones 1--4. Offset 15
-is `0x82` for open and `0x81` for close, while offset 14 remains the previously
-validated `0x90` open and `0x10` close marker. Duration remains at offsets
-19--20; `9e 00` again represented 60 seconds. Command construction must
+is `0x82` for open and `0x81` for close. Offset 14 low seven bits remain
+`0x10`; its high bit is a repeat/phase bit and is not the operation. Direct
+captures include `0x10` and `0x90` on valid opens, so analysis must use offset
+15. Duration remains at offsets 19--20; `9e 00` again represented 60 seconds.
+Command construction must
 therefore select the complete association profile rather than treating the
 radio branch as only a carrier-frequency choice. Both supported trailer
 residues occurred in the matrix without a fixed open/close mapping, so the
 trailer likewise cannot be inferred from the requested operation.
 
-Across the ordered matrix, open sequence values were 1--4 and close values
-were 2--5. A later repeated Zone 1 close used sequence 6, ruling out a fixed
-per-zone sequence. The exact stock advancement rule remains unresolved, so
-this observation does not replace authenticated counter persistence for local
-control.
+The ordered matrix's lower-channel active report values were 1--4 and its idle
+report values were 2--5. Those are telemetry counters, not stock commands, and
+do not synchronize the high-carrier control counter. Later direct command
+captures resolved the conditional control rule. Zone 3 open and close both
+used sequence `0x0a`, while the following Zone 4 open and close both used
+`0x0b`. In older captures where an immediate open response was received, open
+`0x04` was followed by close `0x05`; an authenticated close at `0x03` was
+followed by the next open reusing `0x03`. The counter therefore advances once
+per watering session at the first authenticated command response. If open
+confirmation was missed, close can reuse the open sequence and become that
+first confirmation. Exact commands, responses, and report-driven close
+evidence are retained in
+`research/fixtures/htv405_stock_early_stop_20260824.json`.
+
+A later cloud matrix deliberately allowed all four zones to expire without an
+explicit close. Every zone produced an independently decoded active report and
+idle report 60.947--61.645 seconds after cloud acceptance. Zone 1's first
+active report arrived 6.049 seconds after acceptance and its idle report at
+61.491 seconds; the cloud idle update followed 113 milliseconds later. Zone 4
+independently repeated that ordering with a 111-millisecond RF-to-cloud delay.
+This confirms that the valve owns and enforces the bounded duration; the roughly
+55-second interval between the first received active report and the idle report
+is receiver latency, not a shortened run. The exact cross-layer timelines are
+retained in
+`research/fixtures/htv405_stock_auto_stop_20260824.json`.
 
 The associated application payload maps per-port work state to DP IDs 25--28
 and per-port session duration to IDs 37--40. Active work state was `33`, the
@@ -299,6 +321,11 @@ synchronized. The durable `rf_next_control_sequence` is written only after an
 authenticated radio node matches a pending transmit to a structurally valid
 high-carrier response and the daemon independently revalidates that response,
 its endpoints, node assignment, selector, and association companion route.
+While watering, the session must retain whether its one advancement already
+occurred. A confirmed open advances before close; an unconfirmed open keeps its
+sequence so a bounded close-only recovery can reuse it. A confirmed close must
+not advance a session that already advanced at open. The stock-command fixture
+covers both branches.
 
 The normalized selector-2 control profile uses a nominal `433421373` Hz base
 plus the association node's calibration offset. For the validated bench node,
@@ -949,6 +976,33 @@ retains these as unassigned status fields rather than updating a device. The
 repeatable timing and values associate the family with Right Bed, but more
 samples are required before defining a safe automatic routing rule.
 
+Four exact cloud/local correlations on 2026-08-24 matched the installed Left
+Bed, Right Bed, Front Yard Sensor 1, and Front Yard Sensor 2 reports within
+0.105--0.918 seconds. Soil moisture matched exactly and the marker-relative
+battery flag decoded as normal/100% for all four. App addresses were 2--5, but
+normalized RF offset 15 was `0x82` for addresses 2, 4, and 5 and `0x83` for
+address 3. That byte therefore is not the app address. Cloud/local migration
+must correlate time, value, product family, and capabilities rather than infer
+an address from this RF byte. Exact redacted pairs are frozen in
+`research/fixtures/hcs026_cloud_rf_correlation_20260824.json`.
+
+### Associated-controller moisture relay
+
+A distinct trailer-valid report family uses the installed HTV145 association
+route `b9840280 -> b42d008f`, body prefix `04 05 81 80 05`, a `44`/`c4`
+marker, and a marker-relative moisture value. Of 1,346 retained valid reports,
+775 landed within two seconds of an ordinary identified Right Bed report; all
+775 decoded the same moisture and none disagreed. This strongly indicates that
+the controller relays its associated sensor's moisture, consistent with the
+cloud model's Associated Controller feature.
+
+The relay envelope contains the controller route but not the sensor endpoint.
+`rainpointd` therefore exposes `associated_soil_moisture_percent` only on the
+unassigned raw event and never promotes it to an ordinary sensor update. The
+strict decoder also requires the complete structural signature, a valid
+ordinary trailer, and a zero-filled tail. The older compact/TLV samples were
+trailer-invalid and remain research evidence rather than accepted device data.
+
 The controlled 12% sample was produced by removing the Left Bed probe from the
 ground. Its display, independently observed reference entity, local decoder,
 gateway API, and Home Assistant local entity all reported 12%. This validates
@@ -982,7 +1036,9 @@ paired endpoint `c4e50024`. See
   above.
 - Hub-reported RSSI is receiver-measured rather than generated by the sensor.
   It can appear in separate compact status traffic, but that traffic's device
-  association is not yet decoded.
+  association is not yet decoded. The trailer-valid associated-controller
+  relay described above carries moisture but no independently routable sensor
+  identity.
 - The meaning of the first body byte and remaining acknowledgement fields
   remains provisional.
 
@@ -1072,10 +1128,11 @@ reception rather than proven valve non-response.
 ### Last-session water usage
 
 Valve response frames use `0x4f` or `0xcf` as a marker at normalized frame
-offset 20. The next two bytes encode usage in tenths of a liter:
+offset 20. The next three packed bytes encode usage in tenths of a liter. The
+high bit of the third byte restores data bit 7 of the first packed byte:
 
 ```text
-half_tenths = ((second & 0x7f) << 8) | (first & 0x7f)
+half_tenths = ((second & 0x7f) << 8) | (first & 0x7f) | (third & 0x80)
 tenths_liters = half_tenths * 2 + bool(second & 0x80)
 liters = tenths_liters / 10
 ```
@@ -1090,6 +1147,21 @@ Confirmed examples:
 | `d3 00` | 16.6 L |
 | `b3 00` | 10.2 L |
 | `ec 03` | 175.2 L |
+
+Two cloud-correlated extension-bit examples are `d1 81 80` = 93.1 L and
+`99 81 80` = 81.9 L. Ignoring the third-byte bit underreports them as 67.5 L
+and 56.3 L, respectively.
+
+### HTV145FRF categorical battery flag
+
+In HTV145 usage/status reports, frame offset 17 bit `0x08` is clear while the
+stock cloud reports normal/full battery and set while it reports low battery.
+Four exact cloud/RF correlations span two full and two low observations; the
+bit began continuously asserting before the next stock cloud poll changed the
+categorical value from normal to low. Local decoding maps clear to status 1 /
+100% and set to status 2 / 10%, matching the stock integration's categorical
+semantics. The evidence and corrected usage values are frozen in
+`research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`.
 
 ## Trailer status
 
@@ -1180,11 +1252,12 @@ normalization and confirmed field decoding. Regression examples live in
 5. Validate retained-association valve rejoin after a battery cycle without a
    full enrollment exchange. Keep its one-reply matcher separate from the
    validated 18-step new-enrollment state machine.
-6. Confirm valve retry timing, acknowledgement rules, explicit early-stop, and
-   positively observed overdue-run handling before enabling Home Assistant
-   control.
-7. Cross explicit early-stop on Zones 2--4 and determine whether battery status
-   is carried by an RF family not yet independently correlated to voltage.
+6. Confirm valve retry timing, acknowledgement rules, and positively observed
+   overdue-run handling before enabling Home Assistant control. Explicit
+   early-stop is now report-validated on all four HTV405 zones.
+7. Determine whether HTV405 battery status is carried by an RF family not yet
+   independently correlated to voltage. HTV145 categorical battery is now
+   decoded separately.
 
 ## Safety boundary
 

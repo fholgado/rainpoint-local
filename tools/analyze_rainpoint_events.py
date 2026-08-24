@@ -124,9 +124,14 @@ def _timestamp(event: dict[str, Any]) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # Historical rtl_433 rows use a naive gateway-local timestamp, while
+    # Wi-Fi radio nodes emit explicit UTC offsets. Interpret only the former
+    # in the machine's local timezone so mixed receiver corpora remain
+    # comparable without rewriting retained evidence.
+    return observed.astimezone() if observed.tzinfo is None else observed
 
 
 def _top_xor_features(
@@ -235,7 +240,18 @@ def _valve_transaction_summary(
         observed_at = _timestamp(event)
         if observed_at is None:
             continue
-        mode = "close" if frame[14] & 0x80 else "open"
+        # The operation selector is frame[15] low bits: 0x02 opens and 0x01
+        # closes. HTV405 uses frame[14] bit 7 as a repeat/phase bit, so treating
+        # that bit as the operation reverses valid commands whenever the phase
+        # flips. Retain the old frame[14] fallback only for incomplete research
+        # frames that predate the full command-body capture.
+        operation_selector = frame[15] & 0x7F
+        if operation_selector == 0x02:
+            mode = "open"
+        elif operation_selector == 0x01:
+            mode = "close"
+        else:
+            mode = "close" if frame[14] & 0x80 else "open"
         controller_endpoint = frame[5:9]
         valve_endpoint = frame[9:13]
         link = f"{controller_endpoint.hex()}->{valve_endpoint.hex()}"
@@ -449,6 +465,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
 
     compact_associations = []
     for event, frame, observed_at, moisture in compact_frames:
+        residual = trailer_residual(frame)
         nearest_by_endpoint: dict[str, dict[str, Any]] = {}
         for known_at, endpoint, known_moisture in known_observations:
             delta = (observed_at - known_at).total_seconds()
@@ -470,7 +487,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 "observed_at": event.get("observed_at"),
                 "route": f"{frame[5:9].hex()}->{frame[9:13].hex()}",
                 "moisture": moisture,
-                "residual": f"{trailer_residual(frame):04x}",
+                "residual": f"{residual:04x}",
+                "trailer_valid": residual in RESIDUES,
                 "candidates": candidates,
             }
         )

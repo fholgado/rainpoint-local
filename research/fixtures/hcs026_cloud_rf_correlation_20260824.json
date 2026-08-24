@@ -1,0 +1,102 @@
+{
+  "captured_at": "2026-08-24",
+  "scope": "stock-cloud HCS026 status updates correlated to independently received trailer-valid RF telemetry",
+  "privacy": "installation-specific cloud device IDs are omitted; app address slots and previously documented RF endpoints are retained",
+  "association_rule": "match a cloud update to a local RF report by sensor capability, identical moisture and battery values, and a sub-second timestamp delta; do not infer app address from a single RF body byte",
+  "observations": [
+    {
+      "sensor": "Left Bed",
+      "app_device_address": 2,
+      "cloud": {
+        "observed_at": "2026-08-24T14:21:39.510746+00:00",
+        "payload": "10#E1B400DC018845FF0F67A5301A"
+      },
+      "rf": {
+        "event_id": 155911,
+        "observed_at": "2026-08-24T14:21:39.615784+00:00",
+        "endpoint": "c4e50024",
+        "receiver": "rp-f4e5be3b015c",
+        "receiver_rssi_dbm": -63.5,
+        "frame": "79f4882f28b9840280c4e50024090182020544228000000000000000000000000000000049f1"
+      },
+      "expected": {
+        "soil_moisture_percent": 69,
+        "battery_percent": 100,
+        "cloud_rssi_dbm": -76,
+        "cloud_minus_rf_seconds": -0.105038
+      }
+    },
+    {
+      "sensor": "Right Bed",
+      "app_device_address": 3,
+      "cloud": {
+        "observed_at": "2026-08-24T14:52:33.453220+00:00",
+        "payload": "10#E1B600DC018837FF0F21AD301A"
+      },
+      "rf": {
+        "event_id": 156190,
+        "observed_at": "2026-08-24T10:52:32.535104-04:00",
+        "endpoint": "9ce58024",
+        "receiver": "local-sdr",
+        "receiver_rssi_dbm": 1.401,
+        "frame": "79f4882f28b42d008f9ce5802417848307018005c41b8000000000000000000000000000480d"
+      },
+      "expected": {
+        "soil_moisture_percent": 55,
+        "battery_percent": 100,
+        "cloud_rssi_dbm": -74,
+        "cloud_minus_rf_seconds": 0.918116
+      }
+    },
+    {
+      "sensor": "Front Yard Sensor 1",
+      "app_device_address": 4,
+      "cloud": {
+        "observed_at": "2026-08-24T13:06:01.613047+00:00",
+        "payload": "10#E1BB00DC018848FF0F8191301A"
+      },
+      "rf": {
+        "event_id": 155186,
+        "observed_at": "2026-08-24T13:06:01.468232+00:00",
+        "endpoint": "ce628024",
+        "receiver": "rp-f4e5be3b015c",
+        "receiver_rssi_dbm": -85.5,
+        "frame": "79f4882f28b9840280ce6280240c818202054424000000000000000000000000000000005874"
+      },
+      "expected": {
+        "soil_moisture_percent": 72,
+        "battery_percent": 100,
+        "cloud_rssi_dbm": -69,
+        "cloud_minus_rf_seconds": 0.144815
+      }
+    },
+    {
+      "sensor": "Front Yard Sensor 2",
+      "app_device_address": 5,
+      "cloud": {
+        "observed_at": "2026-08-24T14:32:27.910823+00:00",
+        "payload": "10#E1B700DC018846FF0F1BA8301A"
+      },
+      "rf": {
+        "event_id": 156007,
+        "observed_at": "2026-08-24T14:32:27.807500+00:00",
+        "endpoint": "d1e28024",
+        "receiver": "rp-f4e5be3b015c",
+        "receiver_rssi_dbm": -80.0,
+        "frame": "79f4882f28b9840280d1e28024180182020544230000000000000000000000000000000021d4"
+      },
+      "expected": {
+        "soil_moisture_percent": 70,
+        "battery_percent": 100,
+        "cloud_rssi_dbm": -73,
+        "cloud_minus_rf_seconds": 0.103323
+      }
+    }
+  ],
+  "findings": [
+    "Cloud moisture and categorical battery state matched the independently decoded RF report for all four installed sensors within one second.",
+    "The stock-hub RSSI and local receiver RSSI differ because each is a measurement made at a different receiver; neither is transmitted sensor telemetry.",
+    "RF offset 15 is not the app address: addresses 2, 4, and 5 all produced 0x82 while address 3 produced 0x83.",
+    "Temporal and value correlation is suitable as cloud-to-local migration evidence, but one observation must not silently bind an identity without uniqueness and freshness checks."
+  ]
+}

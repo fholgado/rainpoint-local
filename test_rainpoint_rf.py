@@ -992,13 +992,22 @@ class RainPointRFTest(unittest.TestCase):
         self.assertNotIn("soil_moisture_percent", decoded)
 
     def test_does_not_treat_valve_payload_as_moisture(self) -> None:
-        # This valve response contains a marker-like byte sequence by chance.
+        # This strict stock-controller relay carries an associated sensor's
+        # reading, but does not identify the sensor in its RF envelope.
         frame = bytes.fromhex(
-            "79f4882f28b9840280b42d008f9d05040581800544"
-            "1e7058000000000000000000000000007be3"
+            "79f4882f28b9840280b42d008f8b050405818005c4"
+            "1bf05b000000000000000000000000287a"
         )
         decoded = normalize_row({"len": len(frame) * 8, "data": frame.hex()})
+        self.assertEqual(55, decoded["associated_soil_moisture_percent"])
         self.assertNotIn("soil_moisture_percent", decoded)
+
+        corrupted = bytearray(frame)
+        corrupted[-1] ^= 0x01
+        decoded = normalize_row(
+            {"len": len(corrupted) * 8, "data": corrupted.hex()}
+        )
+        self.assertNotIn("associated_soil_moisture_percent", decoded)
 
     def test_decodes_valve_duration_and_close_state(self) -> None:
         open_frame = bytes.fromhex(
@@ -1446,6 +1455,129 @@ class RainPointRFTest(unittest.TestCase):
 
         self.assertEqual({1, 2, 3, 4}, observed_zones)
 
+    def test_stock_htv405_auto_stop_is_report_driven(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_stock_auto_stop_20260824.json"
+            ).read_text(encoding="utf-8")
+        )
+        active = decode_htv405_control_frame(
+            bytes.fromhex(fixture["active_report"]["frame"])
+        )
+        idle = decode_htv405_control_frame(
+            bytes.fromhex(fixture["idle_report"]["frame"])
+        )
+        self.assertEqual(
+            {
+                "zone": 1,
+                "is_watering": True,
+                "duration_seconds": 60,
+                "remaining_seconds": 54,
+            },
+            active,
+        )
+        self.assertEqual({"zone": 1, "is_watering": False}, idle)
+        self.assertGreaterEqual(
+            fixture["timing_seconds"]["cloud_open_to_idle_report"], 60
+        )
+        self.assertLess(
+            fixture["timing_seconds"]["cloud_open_to_idle_report"], 65
+        )
+        for run in fixture["additional_zone_runs"]:
+            with self.subTest(zone=run["zone"]):
+                active = decode_htv405_control_frame(
+                    bytes.fromhex(run["active_report"]["frame"])
+                )
+                idle = decode_htv405_control_frame(
+                    bytes.fromhex(run["idle_report"]["frame"])
+                )
+                self.assertEqual(run["zone"], active["zone"])
+                self.assertTrue(active["is_watering"])
+                self.assertEqual(60, active["duration_seconds"])
+                self.assertFalse(idle["is_watering"])
+                self.assertGreaterEqual(
+                    run["cloud_open_to_idle_report_seconds"], 60
+                )
+                self.assertLess(
+                    run["cloud_open_to_idle_report_seconds"], 65
+                )
+
+    def test_stock_htv405_early_stop_reuses_session_sequence(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_stock_early_stop_20260824.json"
+            ).read_text(encoding="utf-8")
+        )
+        for run in fixture["runs"]:
+            with self.subTest(zone=run["zone"]):
+                active = decode_htv405_control_frame(
+                    bytes.fromhex(run["active_report"]["frame"])
+                )
+                idle = decode_htv405_control_frame(
+                    bytes.fromhex(run["idle_report"]["frame"])
+                )
+                self.assertEqual(run["zone"], active["zone"])
+                self.assertTrue(active["is_watering"])
+                self.assertFalse(idle["is_watering"])
+                self.assertGreaterEqual(
+                    run["timing_seconds"]["cloud_close_to_idle_report"], 5
+                )
+                self.assertLess(
+                    run["timing_seconds"]["cloud_close_to_idle_report"], 8
+                )
+                if run["open_command"] is None:
+                    continue
+                opened = normalize_row(
+                    {
+                        "len": 304,
+                        "data": run["open_command"]["frame"],
+                    }
+                )
+                closed = normalize_row(
+                    {
+                        "len": 304,
+                        "data": run["close_command"]["frame"],
+                    }
+                )
+                self.assertTrue(opened["trailer_valid"])
+                self.assertTrue(closed["trailer_valid"])
+                self.assertEqual(opened["message_type"], closed["message_type"])
+                self.assertEqual(
+                    run["open_command"]["sequence"],
+                    opened["message_type"] & 0x1F,
+                )
+                self.assertEqual(0x10, bytes.fromhex(opened["frame_hex"])[14])
+                self.assertEqual(0x90, bytes.fromhex(closed["frame_hex"])[14])
+
+        advanced_open, stable_close = fixture[
+            "authenticated_counter_examples"
+        ]
+        opened_response = decode_htv405_gateway_command_response(
+            bytes.fromhex(advanced_open["open_response"]["frame"])
+        )
+        self.assertIsNotNone(opened_response)
+        self.assertTrue(opened_response["rf_control_response_watering"])
+        self.assertEqual(
+            advanced_open["open_command"]["sequence"] + 1,
+            advanced_open["close_command"]["sequence"],
+        )
+
+        closed_response = decode_htv405_gateway_command_response(
+            bytes.fromhex(stable_close["close_response"]["frame"])
+        )
+        self.assertIsNotNone(closed_response)
+        self.assertFalse(closed_response["rf_control_response_watering"])
+        self.assertEqual(
+            stable_close["close_command"]["sequence"],
+            stable_close["next_open_command"]["sequence"],
+        )
+
     def test_builds_offline_htv405_close_candidates_from_session_inputs(self) -> None:
         link = ValveLink(
             controller_endpoint=bytes.fromhex("aa110280"),
@@ -1548,25 +1680,60 @@ class RainPointRFTest(unittest.TestCase):
     def test_decodes_packed_valve_last_usage(self) -> None:
         cases = (
             # Historical short sessions independently reported by HA.
-            ("8500", 1.0),
-            ("8480", 0.9),
-            ("8e00", 2.8),
-            ("d300", 16.6),
-            ("b300", 10.2),
+            ("8500", "00", 1.0),
+            ("8480", "00", 0.9),
+            ("8e00", "00", 2.8),
+            ("d300", "00", 16.6),
+            ("b300", "00", 10.2),
             # Today's 17-minute run: 175.2 L = 46.2829435731476 gal.
-            ("ec03", 175.2),
+            ("ec03", "00", 175.2),
+            # Bit 7 of the following byte restores value bit 7 of the first
+            # packed byte. These two were independently decoded by the cloud.
+            ("d181", "80", 93.1),
+            ("9981", "80", 81.9),
         )
-        for packed, liters in cases:
+        for packed, extension, liters in cases:
             with self.subTest(packed=packed):
                 frame = bytes.fromhex(
                     "79f4882f28b9840280b42d008f810107858700904f"
                     + packed
-                    + "000040858056fe0180000000002739"
+                    + extension
+                    + "0040858056fe0180000000002739"
                 )
                 decoded = normalize_row(
                     {"len": len(frame) * 8, "data": frame.hex()}
                 )
                 self.assertEqual(liters, decoded["last_usage_liters"])
+
+    def test_cloud_correlated_htv145_battery_and_usage_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv145_cloud_rf_battery_usage_correlation_20260824.json"
+            ).read_text(encoding="utf-8")
+        )
+        for observation in fixture["observations"]:
+            with self.subTest(event_id=observation["rf_event_id"]):
+                decoded = normalize_row(
+                    {
+                        "len": len(observation["rf_frame"]) * 4,
+                        "data": observation["rf_frame"],
+                    }
+                )
+                expected = observation["expected"]
+                self.assertEqual(
+                    expected["last_usage_liters"],
+                    decoded["last_usage_liters"],
+                )
+                self.assertEqual(
+                    expected["battery_percent"], decoded["battery_percent"]
+                )
+                self.assertEqual(
+                    expected["battery_status"], decoded["battery_status"]
+                )
+                self.assertTrue(decoded["trailer_valid"])
 
     def test_live_transport_publishes_confirmed_moisture(self) -> None:
         gateway = Gateway(transport="rtl433")
