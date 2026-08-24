@@ -224,6 +224,7 @@ class RainPointLocalClient:
         factory_endpoint: str | None = None,
         valve_route: str | None = None,
         companion_endpoint: str | None = None,
+        known_rejoin: bool = False,
     ) -> dict[str, Any]:
         """Open pairing and arm one authenticated local radio node."""
         payload: dict[str, Any] = {
@@ -237,6 +238,8 @@ class RainPointLocalClient:
             payload["valve_route"] = valve_route
         if companion_endpoint is not None:
             payload["companion_endpoint"] = companion_endpoint
+        if known_rejoin:
+            payload["known_rejoin"] = True
         return await self._post(
             "pairing/start",
             payload,

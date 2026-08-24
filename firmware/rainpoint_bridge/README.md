@@ -50,13 +50,13 @@ capacitor across CC1101 VCC/GND when practical.
   for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
 - Compiles the association-specific HTV405 enrollment candidate. The research
   build also accepts a bounded `valve_control_tx_candidate` command vocabulary
-  for the physically validated Zone 1 only; it requires explicit association
-  identities, a persisted response-authenticated counter, and the calibrated
-  carrier profile.
+  for physically validated one-minute opens on Zones 1--4 and Zone 1
+  early-close; it requires explicit association identities, a persisted
+  response-authenticated counter, and the calibrated carrier profile.
 - Keeps valve control absent from the Home Assistant and public HTTP APIs. The
-  bench coordinator starts with an idempotent close, spaces operations by at
-  least 15 seconds, never advances state from transmit success, and uses only
-  close frames when recovering an uncertain counter.
+  bench coordinator starts observation-only, spaces operations by at least 15
+  seconds, never advances state from transmit success, and never emits a
+  speculative startup or counter-recovery command.
 - Recovers a known dormant sensor from its strict factory announcement with one
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated
@@ -91,7 +91,7 @@ with the research profile enabled:
 
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.14.0-valve-control-probe.35 \
+  RAINPOINT_FIRMWARE_VERSION=0.14.0-valve-control-probe.39 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 

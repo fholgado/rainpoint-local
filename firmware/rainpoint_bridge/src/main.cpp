@@ -130,6 +130,7 @@ rainpoint::PairingSession pairingSession(activePairingProfile);
 rainpoint::Htv405PairingProfile activeValvePairingProfile{};
 rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
 bool valvePairingActive = false;
+bool valvePairingKnownRejoin = false;
 #endif
 std::uint8_t pairingAssignedChannel = rainpoint::pairingChannelFromReply(
     activePairingProfile.steps[0].frame
@@ -184,6 +185,10 @@ struct ValveControlProbe {
     bool commandRepeat = false;
     std::int32_t frequencyOffsetHz = 0;
     std::uint8_t selector = 0x05;
+    std::uint8_t commandZone = 1;
+    std::uint8_t transmittedZone = 0;
+    std::uint8_t confirmedActiveZone = 0;
+    std::uint8_t lastReportedActiveZone = 0;
     std::uint16_t latestReportTrailerResidual = 0;
     std::uint16_t openDurationSeconds = 60;
     std::uint32_t phaseObservedAtMs = 0;
@@ -662,13 +667,17 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += ",\"step_count\":";
     line +=
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-        valvePairingActive ? rainpoint::kHtv405PairingStepCount :
+        valvePairingActive ? valvePairingSession.stepCount() :
 #endif
         activePairingProfile.stepCount;
     line += ",\"assigned_channel\":";
     line += pairingAssignedChannel;
     line += ",\"automatic_discovery\":";
     line += pairingAutomaticDiscovery ? "true" : "false";
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    line += ",\"retained_association_rejoin\":";
+    line += valvePairingActive && valvePairingKnownRejoin ? "true" : "false";
+#endif
     line += ",\"factory_adopted\":";
     line += pairingFactoryAdopted ? "true" : "false";
     line += ",\"awaiting_terminal_confirmation\":";
@@ -861,6 +870,8 @@ void reportValveProbeStatus(
         line += valveControlProbe.selector;
         line += ",\"center_hz\":";
         line += static_cast<unsigned long>(valveProbeCenterHz());
+        line += ",\"command_zone\":";
+        line += valveControlProbe.commandZone;
     }
     line += ",\"command_phase_source\":\"";
     line += valveControlProbe.commandCounterAuthenticated
@@ -886,6 +897,8 @@ void reportValveProbeStatus(
         line += valveControlProbe.transmittedPhase.sequence;
         line += ",\"transmitted_repeat\":";
         line += valveControlProbe.transmittedPhase.repeat ? "true" : "false";
+        line += ",\"transmitted_zone\":";
+        line += valveControlProbe.transmittedZone;
     }
     line += ",\"confirmed_state_valid\":";
     line += valveControlProbe.confirmedStateValid ? "true" : "false";
@@ -894,6 +907,14 @@ void reportValveProbeStatus(
         line += valveControlProbe.confirmedWatering ? "true" : "false";
         line += ",\"last_confirmed_sequence\":";
         line += valveControlProbe.lastConfirmedSequence;
+        if (valveControlProbe.confirmedWatering) {
+            line += ",\"confirmed_active_zone\":";
+            line += valveControlProbe.confirmedActiveZone;
+        }
+    }
+    if (valveControlProbe.lastReportedActiveZone != 0) {
+        line += ",\"last_reported_active_zone\":";
+        line += valveControlProbe.lastReportedActiveZone;
     }
     if (valveControlProbe.phaseObservedAtMs != 0) {
         line += ",\"phase_age_ms\":";
@@ -973,7 +994,7 @@ bool transmitQueuedValveProbe(
         ? rainpoint::buildHtv405GatewayOpenFrame(
             valveControlProbe.gatewayControlLink,
             commandPhase,
-            1,
+            valveControlProbe.commandZone,
             valveControlProbe.selector,
             valveControlProbe.openDurationSeconds,
             kValveProbeTrailerResidual,
@@ -982,7 +1003,7 @@ bool transmitQueuedValveProbe(
         : rainpoint::buildHtv405GatewayCloseFrame(
             valveControlProbe.gatewayControlLink,
             commandPhase,
-            1,
+            valveControlProbe.commandZone,
             valveControlProbe.selector,
             kValveProbeTrailerResidual,
             frame
@@ -1029,14 +1050,25 @@ bool transmitQueuedValveProbe(
     // authoritative transaction phase here. The next received valve frame is
     // the only source allowed to move that state forward.
     valveControlProbe.transmittedPhase = commandPhase;
+    valveControlProbe.transmittedZone = valveControlProbe.commandZone;
     valveControlProbe.commandPendingConfirmation = true;
     if (opening) {
         valveControlProbe.openSent = true;
         valveControlProbe.openSentAtMs = millis();
-        reportValveProbeStatus("gateway_open_zone_1_sent", &frame);
+        reportValveProbeStatus(
+            valveControlProbe.commandZone == 1
+                ? "gateway_open_zone_1_sent"
+                : "gateway_open_zone_candidate_sent",
+            &frame
+        );
     } else {
         valveControlProbe.closeSent = true;
-        reportValveProbeStatus("gateway_close_zone_1_sent", &frame);
+        reportValveProbeStatus(
+            valveControlProbe.commandZone == 1
+                ? "gateway_close_zone_1_sent"
+                : "gateway_close_zone_candidate_sent",
+            &frame
+        );
     }
     return true;
 }
@@ -1065,6 +1097,12 @@ void observeValveProbeFrame(
             );
             return;
         }
+        if (response.zone != valveControlProbe.transmittedZone) {
+            reportValveProbeStatus(
+                "gateway_command_response_zone_mismatch", &frame
+            );
+            return;
+        }
 
         valveControlProbe.commandPendingConfirmation = false;
         valveControlProbe.responseListenActive = false;
@@ -1075,6 +1113,9 @@ void observeValveProbeFrame(
         valveControlProbe.commandCounterAuthenticated = true;
         valveControlProbe.confirmedStateValid = true;
         valveControlProbe.confirmedWatering = response.watering;
+        valveControlProbe.confirmedActiveZone = response.watering
+            ? valveControlProbe.transmittedZone
+            : 0;
         valveControlProbe.lastConfirmedSequence = response.sequence;
         if (response.watering) {
             valveControlProbe.openSent = true;
@@ -1086,10 +1127,15 @@ void observeValveProbeFrame(
         if (!radio.restoreReceiveChannel(kHcs026TelemetryChannel)) {
             reportValveProbeError("ordinary_receiver_restore_failed");
         }
+        const bool zoneOne = valveControlProbe.transmittedZone == 1;
         reportValveProbeStatus(
             response.watering
-                ? "zone_1_open_confirmed"
-                : "zone_1_closed_confirmed",
+                ? (zoneOne
+                    ? "zone_1_open_confirmed"
+                    : "zone_candidate_open_response_confirmed")
+                : (zoneOne
+                    ? "zone_1_closed_confirmed"
+                    : "zone_candidate_closed_response_confirmed"),
             &frame
         );
         return;
@@ -1099,11 +1145,13 @@ void observeValveProbeFrame(
     if (!rainpoint::nextHtv405Phase(frame, nextPhase)) {
         return;
     }
-    const std::uint8_t reportedZone = static_cast<std::uint8_t>(
-        (frame[18] & 0x7fU) * 2U +
-        ((frame[19] & 0x80U) != 0 ? 1U : 0U)
-    );
-    const bool watering = (frame[20] & 0x80U) != 0;
+    // Selector 0x05/0x85 is the state-bearing report family. Selector 0x07
+    // remains useful for link phase, but its pair/odd-looking fields cycle and
+    // must never overwrite an authenticated zone or watering state.
+    rainpoint::Htv405StateReport state{};
+    const bool stateReport = rainpoint::decodeHtv405StateReport(frame, state);
+    const std::uint8_t reportedZone = stateReport ? state.zone : 0;
+    const bool watering = stateReport && state.watering;
     valveControlProbe.nextPhase = nextPhase;
     valveControlProbe.currentReportPhase.sequence =
         static_cast<std::uint8_t>(frame[13] & 0x1fU);
@@ -1113,12 +1161,20 @@ void observeValveProbeFrame(
         rainpoint::trailerResidual(frame);
     valveControlProbe.phaseObservedAtMs = millis();
     valveControlProbe.phaseValid = true;
-    valveControlProbe.confirmedStateValid = true;
-    valveControlProbe.confirmedWatering = watering;
+    if (stateReport) {
+        valveControlProbe.confirmedStateValid = true;
+        valveControlProbe.confirmedWatering = watering;
+        if (watering && reportedZone >= 1 && reportedZone <= 4) {
+            valveControlProbe.confirmedActiveZone = reportedZone;
+            valveControlProbe.lastReportedActiveZone = reportedZone;
+        } else if (!watering) {
+            valveControlProbe.confirmedActiveZone = 0;
+        }
+    }
     if (valveControlProbe.commandPendingConfirmation) {
         reportValveProbeStatus(
-            watering && reportedZone == 1
-                ? "zone_1_open_state_reported"
+            watering && reportedZone == valveControlProbe.transmittedZone
+                ? "commanded_zone_open_state_reported"
                 : "post_command_link_state_reported",
             &frame
         );
@@ -1129,7 +1185,10 @@ void observeValveProbeFrame(
         )) {
         return;
     }
-    reportValveProbeStatus("link_report_observed", &frame);
+    reportValveProbeStatus(
+        stateReport ? "link_state_report_observed" : "link_phase_report_observed",
+        &frame
+    );
 }
 
 void pollValveProbeResponseListener() {
@@ -1241,9 +1300,15 @@ bool configureValveProbe(const String& command) {
     return true;
 }
 
-bool transmitValveProbeOpen(bool immediate, std::uint16_t durationSeconds) {
+bool transmitValveProbeOpen(
+    std::uint8_t zone,
+    bool immediate,
+    std::uint16_t durationSeconds
+) {
     if (!valveControlProbe.configured) {
         reportValveProbeError("not_configured");
+    } else if (zone < 1 || zone > 4) {
+        reportValveProbeError("invalid_zone");
     } else if (currentPairingState() ==
             rainpoint::PairingSessionState::Armed) {
         reportValveProbeError("pairing_is_armed");
@@ -1258,6 +1323,7 @@ bool transmitValveProbeOpen(bool immediate, std::uint16_t durationSeconds) {
             valveControlProbe.closeQueued) {
         reportValveProbeError("command_already_queued");
     } else {
+        valveControlProbe.commandZone = zone;
         valveControlProbe.openDurationSeconds = durationSeconds;
         valveControlProbe.openQueued = true;
         if (immediate) {
@@ -1286,10 +1352,12 @@ bool transmitValveProbeAck() {
     return true;
 }
 
-bool transmitValveProbeClose(bool immediate) {
+bool transmitValveProbeClose(std::uint8_t zone, bool immediate) {
     const std::uint32_t now = millis();
     if (!valveControlProbe.configured) {
         reportValveProbeError("not_configured");
+    } else if (zone < 1 || zone > 4) {
+        reportValveProbeError("invalid_zone");
     } else if (currentPairingState() ==
             rainpoint::PairingSessionState::Armed) {
         reportValveProbeError("pairing_is_armed");
@@ -1305,6 +1373,7 @@ bool transmitValveProbeClose(bool immediate) {
             kValveProbeMinimumCloseDelayMs) {
         reportValveProbeError("minimum_close_delay_not_elapsed");
     } else {
+        valveControlProbe.commandZone = zone;
         valveControlProbe.closeQueued = true;
         if (immediate) {
             transmitQueuedValveProbe(primaryRadio, 0);
@@ -1365,22 +1434,40 @@ bool handleValveProbeCommand(const String& command) {
         return transmitValveProbeAck();
     }
     if (command == "valve_probe_open_1_60") {
-        return transmitValveProbeOpen(false, 60);
+        return transmitValveProbeOpen(1, false, 60);
     }
     if (command == "valve_probe_open_1_60_now") {
-        return transmitValveProbeOpen(true, 60);
+        return transmitValveProbeOpen(1, true, 60);
     }
     if (command == "valve_probe_open_1_120") {
-        return transmitValveProbeOpen(false, 120);
+        return transmitValveProbeOpen(1, false, 120);
     }
     if (command == "valve_probe_open_1_120_now") {
-        return transmitValveProbeOpen(true, 120);
+        return transmitValveProbeOpen(1, true, 120);
+    }
+    if (command == "valve_probe_open_2_60_now") {
+        return transmitValveProbeOpen(2, true, 60);
+    }
+    if (command == "valve_probe_open_3_60_now") {
+        return transmitValveProbeOpen(3, true, 60);
+    }
+    if (command == "valve_probe_open_4_60_now") {
+        return transmitValveProbeOpen(4, true, 60);
     }
     if (command == "valve_probe_close_1") {
-        return transmitValveProbeClose(false);
+        return transmitValveProbeClose(1, false);
     }
     if (command == "valve_probe_close_1_now") {
-        return transmitValveProbeClose(true);
+        return transmitValveProbeClose(1, true);
+    }
+    if (command == "valve_probe_close_2_now") {
+        return transmitValveProbeClose(2, true);
+    }
+    if (command == "valve_probe_close_3_now") {
+        return transmitValveProbeClose(3, true);
+    }
+    if (command == "valve_probe_close_4_now") {
+        return transmitValveProbeClose(4, true);
     }
     if (command.startsWith("valve_probe_phase ")) {
         return configureValveProbeCommandPhase(command);
@@ -1520,7 +1607,8 @@ void handleNetworkCommand() {
         long zone = 0;
         long durationSeconds = 0;
         long expectedSequence = -1;
-        if (!jsonLongField(command, "zone", zone) || zone != 1 ||
+        if (!jsonLongField(command, "zone", zone) ||
+            zone < 1 || zone > 4 ||
             !jsonLongField(
                 command, "duration_seconds", durationSeconds
             ) || durationSeconds < 60 || durationSeconds > 240 ||
@@ -1535,14 +1623,17 @@ void handleNetworkCommand() {
             return;
         }
         transmitValveProbeOpen(
-            true, static_cast<std::uint16_t>(durationSeconds)
+            static_cast<std::uint8_t>(zone),
+            true,
+            static_cast<std::uint16_t>(durationSeconds)
         );
         return;
     }
     if (type == "valve_control_close") {
         long zone = 0;
         long expectedSequence = -1;
-        if (!jsonLongField(command, "zone", zone) || zone != 1 ||
+        if (!jsonLongField(command, "zone", zone) ||
+            zone < 1 || zone > 4 ||
             !jsonLongField(
                 command, "expected_sequence", expectedSequence
             ) || expectedSequence != valveControlProbe.commandSequence ||
@@ -1552,7 +1643,7 @@ void handleNetworkCommand() {
             );
             return;
         }
-        transmitValveProbeClose(true);
+        transmitValveProbeClose(static_cast<std::uint8_t>(zone), true);
         return;
     }
     if (type == "valve_control_status") {
@@ -1674,6 +1765,7 @@ void handleNetworkCommand() {
     bool requestedAutomaticDiscovery = false;
     bool requestedAutomaticRejoin = false;
     bool requestedValvePairing = false;
+    bool requestedValveRejoin = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
     std::array<std::uint8_t, 4> requestedValveRoute{};
     std::array<std::uint8_t, 4> requestedCompanionEndpoint{};
@@ -1703,6 +1795,7 @@ void handleNetworkCommand() {
 #endif
     ) {
         requestedValvePairing = true;
+        jsonBoolField(command, "known_rejoin", requestedValveRejoin);
     } else if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedAutomaticDiscovery = true;
@@ -1758,6 +1851,7 @@ void handleNetworkCommand() {
     pairingFactoryAdopted = !requestedAutomaticDiscovery;
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingActive = requestedValvePairing;
+    valvePairingKnownRejoin = requestedValvePairing && requestedValveRejoin;
     if (requestedValvePairing) {
         if (!rainpoint::buildAutomaticHtv405Profile(
             requestedFactoryEndpoint,
@@ -1847,7 +1941,9 @@ void handleNetworkCommand() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
         valvePairingSession.arm(
-            millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
+            millis(),
+            static_cast<std::uint32_t>(durationSeconds) * 1'000U,
+            requestedValveRejoin
         );
     } else
 #endif
@@ -1870,7 +1966,13 @@ void handleNetworkCommand() {
 #else
     pairingRequiresNetwork = true;
 #endif
-    reportPairingStatus("waiting_for_factory_message_1");
+    reportPairingStatus(
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+        valvePairingActive && valvePairingKnownRejoin
+            ? "waiting_for_cold_boot_rejoin" :
+#endif
+        "waiting_for_factory_message_1"
+    );
 }
 
 void handleSerialCommand() {

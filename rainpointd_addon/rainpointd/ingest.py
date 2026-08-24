@@ -197,6 +197,18 @@ class FrameIngestor:
                     valve_update["valve_state"] = (
                         "watering" if active_zone is not None else "idle"
                     )
+                elif zone == 0 and decoded.get("is_watering") is False:
+                    # Locally enrolled HTV405 idle reports carry no port. The
+                    # chassis permits only one active outlet, so an idle report
+                    # closes every logical zone without guessing which ran.
+                    for idle_zone in range(1, 5):
+                        valve_update[f"zone_{idle_zone}_is_watering"] = False
+                        valve_update[
+                            f"zone_{idle_zone}_remaining_seconds"
+                        ] = None
+                    valve_update["active_zone"] = None
+                    valve_update["is_watering"] = False
+                    valve_update["valve_state"] = "idle"
                 state = {
                     "model": valve.model,
                     "raw": decoded["frame_hex"],

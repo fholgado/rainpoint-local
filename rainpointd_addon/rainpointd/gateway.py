@@ -1708,6 +1708,8 @@ class Gateway:
         if self._store is None or report.get("state") not in {
             "zone_1_open_confirmed",
             "zone_1_closed_confirmed",
+            "zone_candidate_open_response_confirmed",
+            "zone_candidate_closed_response_confirmed",
         }:
             return None
         frame_hex = report.get("frame")
@@ -1742,6 +1744,7 @@ class Gateway:
         confirmed_sequence = report.get("last_confirmed_sequence")
         next_sequence = report.get("next_sequence")
         watering = report.get("confirmed_watering")
+        transmitted_zone = report.get("transmitted_zone")
         center_hz = report.get("center_hz")
         selector = report.get("selector")
         if (
@@ -1754,6 +1757,9 @@ class Gateway:
             or next_sequence != response["rf_next_control_sequence"]
             or not isinstance(watering, bool)
             or watering != response["rf_control_response_watering"]
+            or not isinstance(transmitted_zone, int)
+            or isinstance(transmitted_zone, bool)
+            or transmitted_zone != response["rf_control_response_zone"]
             or not isinstance(center_hz, int)
             or isinstance(center_hz, bool)
             or not 430_000_000 <= center_hz <= 440_000_000
@@ -1815,6 +1821,7 @@ class Gateway:
                 node_id=node_id,
                 sequence=confirmed_sequence,
                 next_sequence=next_sequence,
+                zone=transmitted_zone,
                 watering=watering,
                 center_hz=center_hz,
                 observed_at=timestamp,
@@ -1897,6 +1904,7 @@ class Gateway:
         factory_endpoint: str | None = None,
         valve_route: str | None = None,
         companion_endpoint: str | None = None,
+        known_rejoin: bool = False,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Open enrollment and optionally arm one authenticated radio node."""
@@ -1925,6 +1933,11 @@ class Gateway:
                     raise RuntimeError("radio-node command transport is unavailable")
                 automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
                 valve_candidate = profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                if known_rejoin and not valve_candidate:
+                    self._pairing.stop()
+                    raise ValueError(
+                        "known_rejoin is only valid for an HTV405 association"
+                    )
                 valve_profile = None
                 if valve_candidate:
                     try:
@@ -1980,6 +1993,8 @@ class Gateway:
                     command["companion_endpoint"] = (
                         valve_profile.companion_endpoint
                     )
+                    if known_rejoin:
+                        command["known_rejoin"] = True
                 try:
                     self._node_command_sender(node_id, command)
                 except (ConnectionError, KeyError, RuntimeError, ValueError):

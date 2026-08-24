@@ -1,8 +1,8 @@
 # Four-zone valve evidence plan
 
-This plan prepares the isolated, unpressurized four-zone test valve for passive
-protocol discovery. It does not authorize local RF transmission or connect a
-command builder to the production firmware.
+This plan records the evidence gates used for the isolated, unpressurized
+four-zone test valve. Active trials remain confined to explicitly gated
+research firmware; no command builder is connected to production firmware.
 
 ## Before powering the valve
 
@@ -95,9 +95,32 @@ chassis identity with a zone selector from independent zone identities.
 
 ## Gate after offline analysis
 
-The original receive-only gate ended after endpoint identities, Zone 1 command
+The receive-only gate ended after endpoint identities, Zone 1 command
 selection, acknowledgement, and duration-bounded open/close behavior were
-validated on dry hardware. Further active work remains research-only. New
-commands must carry an absolute local duration limit; startup and missing
-telemetry are observation-only, and automatic close requires positive evidence
-that watering continued beyond the expected completion plus grace period.
+validated on dry hardware. Zones 2--4 subsequently passed one-minute dry-bench
+opens with an authenticated port-specific response, matching lower state
+report, and automatic idle report. Exact evidence lives in
+`research/fixtures/htv405_local_multizone_control_20260823.json`.
+
+Further active work remains research-only. New commands must carry an absolute
+local duration limit; startup and missing telemetry are observation-only, and
+automatic anomaly close requires positive evidence that watering continued
+beyond the expected completion plus grace period.
+
+## Remaining power-cycle and battery validation
+
+- Verify that a locally paired HTV405FRF retains its association across a
+  battery removal, rejoins the same custom controller without opening a new
+  pairing window, and resumes authenticated idle/control reports. Distinguish
+  a retained-association rejoin from a new 18-step enrollment by endpoint,
+  counter, and frame sequence; a boot sweep or white flash alone is not proof
+  of new enrollment.
+- The fresh-battery boundary analysis ruled out ordinary paired startup,
+  selector-`0x07`, and known zone/countdown fields. A changing diagnostic
+  family was also ruled out because it changed again after watering with the
+  same fresh batteries. See
+  `research/fixtures/htv405_battery_transition_20260823.json`.
+- Decode and validate the remaining HTV405FRF battery-status field with a
+  safely controlled low-voltage test. Require the decoded state to agree with
+  the valve display/app before exposing it in Home Assistant; until then the
+  local battery entity must remain unavailable.

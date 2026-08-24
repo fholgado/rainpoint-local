@@ -1224,6 +1224,7 @@ class RainPointRFTest(unittest.TestCase):
             {
                 "rf_control_response_sequence": 3,
                 "rf_next_control_sequence": 4,
+                "rf_control_response_zone": 1,
                 "rf_control_response_watering": True,
             },
             decode_htv405_gateway_command_response(opened),
@@ -1232,6 +1233,7 @@ class RainPointRFTest(unittest.TestCase):
             {
                 "rf_control_response_sequence": 4,
                 "rf_next_control_sequence": 5,
+                "rf_control_response_zone": 1,
                 "rf_control_response_watering": False,
             },
             decode_htv405_gateway_command_response(closed),
@@ -1241,6 +1243,115 @@ class RainPointRFTest(unittest.TestCase):
         trailer = binascii.crc_hqx(corrupt[:-2], 0) ^ 0x4F03
         corrupt[-2:] = trailer.to_bytes(2, "big")
         self.assertIsNone(decode_htv405_gateway_command_response(bytes(corrupt)))
+
+        for zone, frame_hex in enumerate(
+            (
+                "79f4882f28b984028094a980130bd0868020cf80000000409e"
+                "00569e000000000000000079b2",
+                "79f4882f28b984028094a980130cd0868030cf80000000409e"
+                "00569e000000000000000062ff",
+                "79f4882f28b984028094a980130dd0868040cf80000000409e"
+                "00569e00000000000000001e77",
+            ),
+            start=2,
+        ):
+            decoded = decode_htv405_gateway_command_response(
+                bytes.fromhex(frame_hex)
+            )
+            self.assertIsNotNone(decoded)
+            self.assertEqual(zone, decoded["rf_control_response_zone"])
+            self.assertTrue(decoded["rf_control_response_watering"])
+
+    def test_decodes_locally_enrolled_htv405_zone_selector(self) -> None:
+        local_reports = (
+            (
+                2,
+                "79f4882f28b984028094a98013068107820580a0cf8000000040"
+                "9d00569e00000000000010ad",
+            ),
+            (
+                3,
+                "79f4882f28b984028094a980130a0107820580b0cf8000000040"
+                "9b00569e0000000000005bb0",
+            ),
+            (
+                4,
+                "79f4882f28b984028094a980130e8107820580c0cf8000000040"
+                "9b00569e0000000000003f2f",
+            ),
+        )
+        for zone, frame_hex in local_reports:
+            decoded = decode_htv405_control_frame(bytes.fromhex(frame_hex))
+            self.assertIsNotNone(decoded)
+            self.assertEqual(zone, decoded["zone"])
+            self.assertTrue(decoded["is_watering"])
+            self.assertEqual(60, decoded["duration_seconds"])
+
+    def test_local_multizone_control_fixture_is_fully_crossed(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_local_multizone_control_20260823.json"
+            ).read_text()
+        )
+        for trial in fixture["trials"]:
+            with self.subTest(zone=trial["zone"]):
+                response = decode_htv405_gateway_command_response(
+                    bytes.fromhex(trial["response_frame"])
+                )
+                self.assertEqual(
+                    trial["zone"], response["rf_control_response_zone"]
+                )
+                self.assertTrue(response["rf_control_response_watering"])
+
+                active = decode_htv405_control_frame(
+                    bytes.fromhex(trial["active_report"])
+                )
+                self.assertEqual(trial["zone"], active["zone"])
+                self.assertTrue(active["is_watering"])
+                self.assertEqual(60, active["duration_seconds"])
+
+                phase_only = bytes.fromhex(trial["phase_only_report"])
+                self.assertTrue(is_htv405_link_frame(phase_only))
+                self.assertIsNone(decode_htv405_control_frame(phase_only))
+
+                idle = decode_htv405_control_frame(
+                    bytes.fromhex(trial["idle_report"])
+                )
+                self.assertEqual(
+                    {"zone": 0, "is_watering": False}, idle
+                )
+
+    def test_local_idle_report_clears_every_zone(self) -> None:
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "b9840280", "94a98013", "test-four-zone",
+                    "Test Four Zone", model="HTV405FRF",
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(
+            gateway, command=["unused"], catalog=catalog
+        )
+        transport.seed()
+        frames = (
+            "79f4882f28b984028094a98013088107820580c0cf80000000409b00569e0000000000007134",
+            "79f4882f28b984028094a980130b0107820580804f8000000040800056800000000000007e28",
+        )
+        for frame in frames:
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        state = gateway.devices()[0]["state"]
+        self.assertIsNone(state["active_zone"])
+        self.assertFalse(state["is_watering"])
+        for zone in range(1, 5):
+            self.assertFalse(state[f"zone_{zone}_is_watering"])
+            self.assertIsNone(state[f"zone_{zone}_remaining_seconds"])
 
     def test_crossed_htv405_fixture_covers_every_zone_and_duration(self) -> None:
         fixture = json.loads(
@@ -1301,10 +1412,9 @@ class RainPointRFTest(unittest.TestCase):
                 repeat=False,
                 residue=0x4F03,
             )
-            self.assertEqual(
-                {"zone": zone, "is_watering": False},
-                decode_htv405_control_frame(candidate),
-            )
+            decoded = decode_htv405_control_frame(candidate)
+            self.assertFalse(decoded["is_watering"])
+            self.assertEqual(0 if zone == 1 else zone, decoded["zone"])
         self.assertEqual(
             4,
             len(
@@ -1773,6 +1883,7 @@ class RainPointRFTest(unittest.TestCase):
                 "command_phase_source": "authenticated_valve_response",
                 "command_counter_valid": True,
                 "confirmed_watering": True,
+                "transmitted_zone": 1,
                 "last_confirmed_sequence": 3,
                 "next_sequence": 4,
                 "open_age_ms": 2_000,

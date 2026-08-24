@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased / Research firmware 0.14.0-valve-control-probe.39
+
+- Physically validate duration-bounded local opens for HTV405 Zones 2--4 with
+  port-specific authenticated responses, matching lower state reports, and
+  automatic idle reports.
+- Keep selector-`0x07` phase reports from overwriting valve state, decode the
+  locally enrolled port nibble, and clear all mutually exclusive zones when a
+  local idle report omits the previous active port.
+- Retain the fresh-battery boundary comparison without assigning an unsupported
+  battery field; known startup/link families were unchanged, while the changing
+  diagnostic offsets also varied with watering-session state.
+- Keep multi-zone transmit commands compiled out of production firmware and
+  unavailable through public gateway and Home Assistant APIs.
+
+## 0.31.2 / Firmware 0.14.0-valve-control-probe.35
+
+- Persist the start, duration, and expected completion of an authenticated
+  duration-bounded HTV405 research run separately from routine telemetry.
+- Make startup, client loss, missing acknowledgements, and missing telemetry
+  observation-only; none of them emits a valve command.
+- Block control when the authenticated counter is uncertain. Permit exact-
+  counter retries only for an explicit early-stop, and require a fresh overdue
+  watering report before an automatic anomaly close.
+- Keep valve control unavailable through the public gateway and Home Assistant
+  APIs.
+
 ## 0.31.0 / Firmware 0.14.0-combined.1
 
 - Combine the selector-2 HTV405 pairing candidate with authorized paired-state

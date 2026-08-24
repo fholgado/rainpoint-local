@@ -6,11 +6,12 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Valve control is not yet exposed in Home Assistant. Local HTV405 enrollment and
-isolated Zone 1 open/close have passed physical validation, including direct
-valve responses, automatic stop, and controller-counter progression. The
-control path remains an explicitly gated research-bench feature until it is
-connected to the independent safety controller.
+Valve control is not yet exposed in Home Assistant. Local HTV405 enrollment,
+isolated one-minute opens on all four zones, and Zone 1 early-close have passed
+physical validation, including direct valve responses, automatic stop, and
+controller-counter progression. The control path remains an explicitly gated
+research-bench feature until it is connected to the independent safety
+controller.
 
 ## What works today
 
@@ -52,8 +53,9 @@ device slots.
 
 - Locally enroll the isolated HTV405 through a bounded, association-specific
   transcript without the stock RainPoint gateway.
-- Open and close HTV405 Zone 1 on its enrolled selector-2 carrier and accept
-  state only from the valve's authenticated response or later telemetry.
+- Open every HTV405 zone for a bounded minute and early-close Zone 1 on its
+  enrolled selector-2 carrier, accepting state only from the valve's
+  authenticated response or later telemetry.
 - Track the independent controller command counter from matching valve replies;
   routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
@@ -209,11 +211,15 @@ runtime dependency.
   restarts; the association profile, authenticated controller counter, and
   expected completion of an active bounded run are stored separately from
   lower-channel telemetry.
-- Capture and physically validate command fixtures for HTV405 Zones 2--4.
-- Physically exercise the disabled bench-only duration-bounded coordinator,
-  including its 15-second command spacing, explicit early-stop, late response
-  recovery, and overdue-run anomaly close before exposing control through the
-  gateway or Home Assistant.
+- Generalize the disabled bench-only duration-bounded coordinator from its
+  Zone 1 safety harness to all four physically validated command selectors,
+  retaining one-active-zone behavior and exact response-zone matching.
+- Physically exercise its 15-second command spacing, explicit early-stop on
+  every zone, late-response recovery, and overdue-run anomaly close before
+  exposing control through the gateway or Home Assistant.
+- Validate retained association and authenticated controller-counter recovery
+  across a battery change, and capture an independently known low-battery RF
+  transition before exposing valve battery state.
 - Generalize the local association/control evidence with another valve before
   beginning cloud-to-local migration work with the existing HomGar integration.
 
@@ -239,8 +245,8 @@ evidence under the ignored `captures/` directory.
 ## Safety
 
 RainPoint Local's public gateway and Home Assistant boundary remains read-only;
-the isolated research profile has physically operated HTV405 Zone 1. Future
-public control must enforce bounded duration, explicit target identity,
+the isolated research profile has physically operated all four HTV405 zones.
+Future public control must enforce bounded duration, explicit target identity,
 authenticated state, command-counter persistence, and persistent fault
 reporting. Restart, client loss, and missing telemetry must not generate RF
 traffic. An explicit early-stop may retry, while an automatic anomaly close

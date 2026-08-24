@@ -24,6 +24,12 @@ struct Htv405Phase {
 
 struct Htv405GatewayCommandResponse {
     std::uint8_t sequence;
+    std::uint8_t zone;
+    bool watering;
+};
+
+struct Htv405StateReport {
+    std::uint8_t zone;
     bool watering;
 };
 
@@ -50,11 +56,11 @@ inline bool buildHtv405GatewayOpenFrame(
     std::uint16_t trailerResidual,
     std::array<std::uint8_t, kFrameBytes>& frame
 ) {
-    // Only Zone 1 has a captured gateway-command fixture. Keep the active
-    // builder narrower than the receive-side zone decoder until the other
-    // three gateway commands are captured and physically validated.
+    // This builder is compiled only into research-bench firmware. One-minute
+    // opens on all four zones have authenticated response, matching state-
+    // report, and automatic-idle evidence.
     if (!validHtv405GatewayControlLink(link) || phase.sequence > 0x1f ||
-        zone != 1 ||
+        zone < 1 || zone > 4 ||
         (associationSelector != 0x05 && associationSelector != 0x85) ||
         durationSeconds < 60 || durationSeconds > 254 ||
         (durationSeconds % 2U) != 0 ||
@@ -100,7 +106,7 @@ inline bool buildHtv405GatewayCloseFrame(
     std::array<std::uint8_t, kFrameBytes>& frame
 ) {
     if (!validHtv405GatewayControlLink(link) || phase.sequence > 0x1f ||
-        zone != 1 ||
+        zone < 1 || zone > 4 ||
         (associationSelector != 0x05 && associationSelector != 0x85) ||
         trailerResidual != 0x4f03) {
         return false;
@@ -178,23 +184,54 @@ inline bool nextHtv405Phase(
     return true;
 }
 
+inline bool decodeHtv405StateReport(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    Htv405StateReport& report
+) {
+    if (!isHtv405LinkFrame(frame) || (frame[17] & 0x7fU) != 0x05) {
+        return false;
+    }
+    const bool watering = (frame[20] & 0x80U) != 0;
+    const auto localZone = static_cast<std::uint8_t>(
+        (frame[19] & 0x70U) >> 4U
+    );
+    const bool directLocalLayout = frame[17] == 0x05 &&
+        (frame[19] & 0x0fU) == 0 &&
+        (watering || (frame[18] == 0x80 && frame[19] == 0x80));
+    const auto zone = static_cast<std::uint8_t>(
+        directLocalLayout
+            ? localZone
+            : (frame[18] & 0x7fU) * 2U +
+                ((frame[19] & 0x80U) != 0 ? 1U : 0U)
+    );
+    if ((zone < 1 || zone > 4) && !(zone == 0 && !watering)) {
+        return false;
+    }
+    report.zone = zone;
+    report.watering = watering;
+    return true;
+}
+
 inline bool decodeHtv405GatewayCommandResponse(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     Htv405GatewayCommandResponse& response
 ) {
     // The valve answers accepted gateway commands on the command carrier.
-    // Open and close responses share the 50/86/10 envelope; the high bit of
-    // both byte 14 and byte 18 reports the resulting watering state. Byte 16
-    // has varied across accepted captures, so it is deliberately excluded
-    // from the discriminator.
+    // Open and close responses share the 50/86 envelope; byte 17 contains a
+    // one-hot-looking zone nibble (0x10..0x40), while the high bit of both
+    // byte 14 and byte 18 reports the resulting watering state. Byte 16 has
+    // varied across accepted captures, so it is deliberately excluded.
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
         (frame[14] & 0x7fU) != 0x50 || frame[15] != 0x86 ||
-        frame[17] != 0x10 || (frame[18] & 0x7fU) != 0x4f ||
+        (frame[17] & 0x0fU) != 0 ||
+        (frame[17] >> 4U) < 1 || (frame[17] >> 4U) > 4 ||
+        (frame[18] & 0x7fU) != 0x4f ||
         frame[23] != 0x40 || frame[26] != 0x56 ||
         ((frame[14] ^ frame[18]) & 0x80U) != 0) {
         return false;
     }
     response.sequence = static_cast<std::uint8_t>(frame[13] & 0x1fU);
+    response.zone = static_cast<std::uint8_t>(frame[17] >> 4U);
     response.watering = (frame[18] & 0x80U) != 0;
     return true;
 }

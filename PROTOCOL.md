@@ -234,9 +234,22 @@ The controller command counter is independent of the lower report sequence.
 Only a structurally valid high-channel response with matching endpoints and
 the transmitted counter may advance it. Transmit success alone is never a
 state transition, and lower telemetry may confirm watering/idle state but may
-not rewrite the controller counter. Zone 1 open/close is physically validated;
-Zones 2--4 still require captured gateway-command fixtures before transmission
-is enabled for them.
+not rewrite the controller counter.
+
+On August 23, dry-bench one-minute opens physically validated Zones 2--4. The
+only command-body change is offset 17: `0x80 | zone`. The immediate authenticated
+response identifies the accepted port as `zone << 4` at the same offset. The
+locally enrolled lower state report independently identifies the active port
+in offset 19 bits 4--6. Each tested port emitted its matching active report and
+then an idle report after the bounded run. Exact transmissions, responses,
+state reports, phase-only reports, and idle reports are frozen in
+`research/fixtures/htv405_local_multizone_control_20260823.json`.
+
+Selector-`0x07` lower reports advance only the telemetry phase. Their zone-like
+fields cycle and may not overwrite authenticated state. Selector-`0x05` reports
+carry local state, but their idle form clears the port nibble; because the
+chassis permits only one active outlet, that idle report clears all four HA
+zone states rather than being misread as Zone 1.
 
 The gateway schema now persists these as two explicit domains. Lower report
 cadence is exposed as `rf_telemetry_*`; it can never mark the command counter
@@ -254,9 +267,30 @@ the RF carrier.
 The retained August 17 journal was re-audited and promoted into
 `research/fixtures/htv405_crossed_zone_reports_20260817.json`. It freezes all
 eight lower-channel combinations (Zones 1--4 at 60 and 120 seconds), but it
-contains no CRC-valid high-carrier command for Zones 2--4. One apparent command
-candidate is CRC-invalid and remains research evidence only; therefore the
-transmit builder remains restricted to Zone 1.
+contains no CRC-valid high-carrier command for Zones 2--4. The later isolated
+local trials supplied that missing transmit evidence and keep it behind the
+research-only firmware gate; public gateway and Home Assistant valve-control
+APIs remain disabled until the remaining persistence and safety gates pass.
+
+### HTV405FRF battery-field status — 2026-08-23
+
+The retained RF journal was split at the fresh-battery replacement boundary
+and normalized to remove sequence, repeat, and CRC variation. The paired
+startup sequence, startup tail, and selector-`0x07` link family had no changed
+byte-value sets across the boundary. Changes in selector-`0x05` reports occur
+only in fields already crossed against zone selection and countdown.
+
+A rarer diagnostic family changed at offsets 19--22 and 28--29, but those same
+offsets changed again after bounded watering while the fresh batteries were
+unchanged. They therefore contain dynamic device/session data and cannot be
+promoted as battery. The comparison and representative frames are retained in
+`research/fixtures/htv405_battery_transition_20260823.json`; the reproducible
+analysis is `tools/analyze_htv405_battery_events.py`.
+
+The cloud catalog confirms a port-0 `STA_BAT` semantic value, but it does not
+locate that value in RF. No HTV405 battery percentage or categorical flag is
+exposed locally yet. A controlled normal-to-low voltage transition with an
+independent LCD or app observation remains required.
 
 ### HTV405FRF enrollment exchange
 
@@ -1069,25 +1103,26 @@ normalization and confirmed field decoding. Regression examples live in
    window.
 4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
    or cloud metadata.
-5. Capture valve enrollment, association, and forgetting traffic.
+5. Validate retained-association valve rejoin after a battery cycle without a
+   full enrollment exchange.
 6. Confirm valve retry timing, acknowledgement rules, explicit early-stop, and
    positively observed overdue-run handling before enabling Home Assistant
    control.
-7. Classify the four-zone test controller independently: determine whether it
-   shares the HTV145 frame family, how it identifies ports, and whether state,
-   counters, and close commands are per-zone or chassis-wide.
+7. Cross explicit early-stop on Zones 2--4 and determine whether battery status
+   is carried by an RF family not yet independently correlated to voltage.
 
 ## Safety boundary
 
 Production firmware transmits only validated, identity-bounded soil-sensor
 pairing/rejoin replies and acknowledgements. The research build additionally
-contains a physically validated, identity-bound HTV405 Zone 1 command path that
-is unavailable through public APIs. Every open carries a locally enforced
-maximum duration. Gateway, Home Assistant, network, or power loss is
-observation-only because the valve owns that countdown. Silence marks state
-unknown and must not cause speculative RF. Close retries are permitted only for
-an explicit early-stop or after a fresh report proves watering continued beyond
-the expected completion plus grace period.
+contains physically validated, identity-bound HTV405 one-minute open paths for
+Zones 1--4 and a Zone 1 early-close path; they are unavailable through public
+APIs. Every open carries a locally enforced maximum duration. Gateway, Home
+Assistant, network, or power loss is observation-only because the valve owns
+that countdown. Silence marks state unknown and must not cause speculative RF.
+Close retries are permitted only for an explicit early-stop or after a fresh
+report proves watering continued beyond the expected completion plus grace
+period.
 
 ## Evidence and references
 

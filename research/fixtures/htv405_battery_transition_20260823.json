@@ -1,0 +1,59 @@
+{
+  "captured_at": "2026-08-23",
+  "model": "HTV405FRF",
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "controller_endpoint": "b9840280"
+  },
+  "battery_change_boundary_event": 145271,
+  "evidence_window": {
+    "first_event": 143000,
+    "last_event": 146000,
+    "before_context": "The old battery set could no longer sustain repeated enrollment attempts; no independently observed low icon or cloud battery value was retained.",
+    "after_context": "A fresh alkaline set was installed before the successful attempts beginning at the boundary."
+  },
+  "normalized_family_comparison": {
+    "paired_startup": {
+      "before_events": 162,
+      "after_events": 34,
+      "changed_byte_value_sets": []
+    },
+    "paired_startup_tail": {
+      "before_events": 26,
+      "after_events": 5,
+      "changed_byte_value_sets": []
+    },
+    "paired_link_selector_07": {
+      "before_events": 164,
+      "after_events": 52,
+      "changed_byte_value_sets": []
+    },
+    "paired_link_selector_05": {
+      "before_events": 118,
+      "after_events": 17,
+      "changed_offsets": [19, 26],
+      "interpretation": "Both offsets are already crossed against zone selection and watering countdown; neither is a battery candidate."
+    }
+  },
+  "diagnostic_examples": {
+    "old_battery_period": {
+      "event_id": 144203,
+      "frame": "79f4882f28b984028094a980131502078200808472970d088000000002800000000000003142"
+    },
+    "fresh_battery_before_control_trials": {
+      "event_id": 145708,
+      "frame": "79f4882f28b984028094a98013140207820080d981178d0880000000140000000000000072c6"
+    },
+    "fresh_battery_after_bounded_control_trials": {
+      "event_id": 148770,
+      "frame": "79f4882f28b984028094a98013098207820080d82c970d20800000001e000000000000005ade"
+    }
+  },
+  "conclusions": [
+    "No ordinary paired-link, startup, or factory field is presently supported as HTV405 battery state.",
+    "The diagnostic family changed across the battery replacement, but the same offsets changed again after bounded watering while the fresh batteries were unchanged. Those offsets encode dynamic device/session data and cannot be promoted as battery.",
+    "The cloud catalog's port-0 STA_BAT declaration establishes the semantic feature but does not locate it in the RF frame.",
+    "A controlled normal-to-low voltage transition with an independently observed LCD or app state is still required. Until then Home Assistant must report HTV405 battery as unavailable rather than invent a percentage."
+  ]
+}

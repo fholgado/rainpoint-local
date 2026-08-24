@@ -296,6 +296,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             if body.get("companion_endpoint") is not None
                             else None
                         ),
+                        known_rejoin=body.get("known_rejoin") is True,
                     )
                     self._json(201, result)
                     return

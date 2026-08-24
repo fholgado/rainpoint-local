@@ -514,6 +514,7 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("14a98013", command["factory_endpoint"])
         self.assertEqual("b9840280", command["valve_route"])
         self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertNotIn("known_rejoin", command)
         self.assertEqual(97_154, command["frequency_offset_hz"])
         encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
         expected_clock = pairing_started_at.replace(tzinfo=None, microsecond=0)
@@ -546,6 +547,39 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("94a98013", progress["completed_endpoint"])
         self.assertEqual([], progress["new_records"])
+        stream.close()
+        connection.close()
+
+    def test_v2_node_accepts_bounded_known_valve_rejoin(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+            ],
+        )
+        started = self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+            known_rejoin=True,
+        )
+        self.assertEqual(
+            "htv405_auto_candidate_v1", started["active_profile_id"]
+        )
+        command = json.loads(stream.readline())
+        self.assertEqual("pairing_start", command["type"])
+        self.assertTrue(command["known_rejoin"])
+        self.assertEqual("14a98013", command["factory_endpoint"])
+        self.assertEqual("b9840280", command["valve_route"])
+        self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertEqual(120, command["duration_seconds"])
         stream.close()
         connection.close()
 

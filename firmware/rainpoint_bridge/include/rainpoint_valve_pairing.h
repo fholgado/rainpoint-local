@@ -281,6 +281,33 @@ inline bool htv405RequestMatches(
     return true;
 }
 
+inline bool htv405RetainedRejoinRequestMatches(
+    const Htv405PairingProfile& profile,
+    const std::array<std::uint8_t, kFrameBytes>& frame
+) {
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
+        !endpointEquals(frame, 5, {{0x80, 0x00, 0x00, 0x00}}) ||
+        !endpointEquals(frame, 9, profile.factoryEndpoint)) {
+        return false;
+    }
+    // A battery boot preserves the association but changes the explicit
+    // enrollment flag from 0xff to 0x7f. The first two body bytes advance as
+    // the valve sweeps channels, exactly like the long-press request. Keep
+    // every other product and payload byte pinned to the captured profile.
+    for (std::size_t index = 2; index < 23; ++index) {
+        if (index == 4) {
+            if (frame[13 + index] != 0x7fU) {
+                return false;
+            }
+            continue;
+        }
+        if (frame[13 + index] != profile.steps[0].requestBody[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 inline bool buildHtv405PairingReply(
     const Htv405PairingProfile& profile,
     std::size_t stepIndex,
@@ -360,9 +387,14 @@ public:
     explicit Htv405PairingSession(const Htv405PairingProfile& profile)
         : profile_(profile) {}
 
-    void arm(std::uint32_t nowMs, std::uint32_t durationMs = 120'000) {
+    void arm(
+        std::uint32_t nowMs,
+        std::uint32_t durationMs = 120'000,
+        bool retainedRejoin = false
+    ) {
         state_ = PairingSessionState::Armed;
         step_ = 0;
+        retainedRejoin_ = retainedRejoin;
         pending_ = false;
         pendingAdvances_ = false;
         counterOffset_ = 0;
@@ -376,6 +408,7 @@ public:
     void cancel() {
         state_ = PairingSessionState::Disarmed;
         step_ = 0;
+        retainedRejoin_ = false;
         pending_ = false;
         pendingAdvances_ = false;
         counterOffset_ = 0;
@@ -397,7 +430,10 @@ public:
         // Step zero may be retransmitted with a later sweep counter. Once an
         // assignment has been sent, retry it until paired traffic proves that
         // the valve advanced; do not strand the session at step one.
-        if (step_ <= 1 && htv405RequestMatches(profile_, 0, frame)) {
+        const bool assignmentRequestMatches = retainedRejoin_
+            ? htv405RetainedRejoinRequestMatches(profile_, frame)
+            : htv405RequestMatches(profile_, 0, frame);
+        if (step_ <= 1 && assignmentRequestMatches) {
             pending_ = true;
             pendingAdvances_ = step_ == 0;
             replyCounterOffset_ = 0;
@@ -673,7 +709,8 @@ public:
             ++step_;
         }
         pendingAdvances_ = false;
-        if (step_ == profile_.steps.size()) {
+        if ((retainedRejoin_ && step_ == 1) ||
+            step_ == profile_.steps.size()) {
             state_ = PairingSessionState::Completed;
         }
         return true;
@@ -688,6 +725,10 @@ public:
 
     PairingSessionState state() const { return state_; }
     std::size_t completedSteps() const { return step_; }
+    std::size_t stepCount() const {
+        return retainedRejoin_ ? 1 : profile_.steps.size();
+    }
+    bool retainedRejoin() const { return retainedRejoin_; }
     bool pending() const { return pending_; }
     PairingFailureReason failureReason() const { return failureReason_; }
     std::uint8_t counterOffset() const { return counterOffset_; }
@@ -717,6 +758,7 @@ private:
     std::uint32_t claimedAtMs_ = 0;
     bool pending_ = false;
     bool pendingAdvances_ = false;
+    bool retainedRejoin_ = false;
     std::uint8_t counterOffset_ = 0;
     std::uint8_t replyCounterOffset_ = 0;
     bool counterOffsetKnown_ = false;

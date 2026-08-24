@@ -91,13 +91,32 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     ):
         return None
 
-    # The zero-based pair index is byte 18's low seven bits.  Byte 19's high
-    # bit selects the odd-numbered member of that pair.
-    zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
-    if zone not in range(1, 5):
+    # Stock/selector-6 reports use a pair index plus odd/even bit. Locally
+    # enrolled selector-2 reports instead expose the one-based port directly
+    # in byte 19 bits 4--6 (0x10, 0x20, 0x30, 0x40). Both layouts were crossed
+    # against accepted Zone 1--4 commands.
+    watering = bool(frame[20] & 0x80)
+    local_zone = (frame[19] & 0x70) >> 4
+    direct_local_layout = (
+        frame[17] == 0x05
+        and frame[19] & 0x0F == 0
+        and (
+            watering
+            or (frame[18] == 0x80 and frame[19] == 0x80)
+        )
+    )
+    if direct_local_layout:
+        # Locally associated idle reports clear the direct port nibble. Zone 0
+        # therefore means "no active outlet" and lets the stateful transport
+        # clear whichever of the four mutually exclusive outlets was active.
+        # Older captured/synthetic selector-2 reports retain the stock
+        # pair/odd layout and are distinguished by their low-nibble marker.
+        zone = local_zone
+    else:
+        zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
+    if zone not in range(1, 5) and not (zone == 0 and not watering):
         return None
 
-    watering = bool(frame[20] & 0x80)
     result: dict[str, int | bool] = {
         "zone": zone,
         "is_watering": watering,
@@ -236,9 +255,9 @@ def decode_htv405_gateway_command_response(
 ) -> dict[str, int | bool] | None:
     """Decode an authenticated high-carrier HTV405 command response.
 
-    This envelope was physically validated for both accepted Zone 1 open and
-    close commands.  It proves the resulting watering state and accepted
-    controller counter, but it does not identify a zone by itself.
+    This envelope was physically validated for accepted opens on Zones 1--4
+    and a Zone 1 close. It proves resulting watering state, accepted controller
+    counter, and the selected zone.
     """
     if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
         return None
@@ -250,7 +269,8 @@ def decode_htv405_gateway_command_response(
     if (
         frame[14] & 0x7F != 0x50
         or frame[15] != 0x86
-        or frame[17] != 0x10
+        or frame[17] & 0x0F
+        or frame[17] >> 4 not in range(1, 5)
         or frame[18] & 0x7F != 0x4F
         or frame[23] != 0x40
         or frame[26] != 0x56
@@ -261,6 +281,7 @@ def decode_htv405_gateway_command_response(
     return {
         "rf_control_response_sequence": sequence,
         "rf_next_control_sequence": (sequence + 1) & 0x1F,
+        "rf_control_response_zone": frame[17] >> 4,
         "rf_control_response_watering": bool(frame[18] & 0x80),
     }
 

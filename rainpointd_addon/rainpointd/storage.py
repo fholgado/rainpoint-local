@@ -864,6 +864,7 @@ class SQLiteEventStore:
         node_id: str,
         sequence: int,
         next_sequence: int,
+        zone: int,
         watering: bool,
         center_hz: int,
         observed_at: str,
@@ -874,7 +875,8 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Advance control state only after a node-authenticated response."""
         if watering and (
-            run_started_at is None
+            zone not in range(1, 5)
+            or run_started_at is None
             or run_duration_seconds is None
             or expected_idle_at is None
         ):
@@ -898,7 +900,7 @@ class SQLiteEventStore:
                 observed_at,
                 frame,
                 center_hz,
-                1 if watering else None,
+                zone if watering else None,
                 run_started_at if watering else None,
                 run_duration_seconds if watering else None,
                 expected_idle_at if watering else None,

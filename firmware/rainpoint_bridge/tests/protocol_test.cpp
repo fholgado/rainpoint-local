@@ -162,15 +162,32 @@ int main() {
         "79f4882f2894a98013398402808a4101000100000000000000"
         "00000000000000000000005a26"
     ));
-    assert(!rainpoint::buildHtv405GatewayOpenFrame(
-        capturedGatewayControlLink,
-        {0x01, true},
-        2,
-        0x85,
-        120,
-        0x4f03,
-        gatewayCommand
-    ));
+    // The dry-bench multi-zone trial varies only this command selector. The
+    // live research firmware still requires a per-command authenticated
+    // response; production builds do not compile this transmit path.
+    for (std::uint8_t zone = 1; zone <= 4; ++zone) {
+        assert(rainpoint::buildHtv405GatewayOpenFrame(
+            capturedGatewayControlLink,
+            {0x01, true},
+            zone,
+            0x85,
+            120,
+            0x4f03,
+            gatewayCommand
+        ));
+        assert(gatewayCommand[17] ==
+            static_cast<std::uint8_t>(0x80U | zone));
+        assert(rainpoint::buildHtv405GatewayCloseFrame(
+            capturedGatewayControlLink,
+            {0x02, false},
+            zone,
+            0x85,
+            0x4f03,
+            gatewayCommand
+        ));
+        assert(gatewayCommand[17] ==
+            static_cast<std::uint8_t>(0x80U | zone));
+    }
     assert(rainpoint::buildHtv405GatewayOpenFrame(
         capturedGatewayControlLink,
         {0x01, true},
@@ -219,6 +236,7 @@ int main() {
         capturedLocalOpenResponse, commandResponse
     ));
     assert(commandResponse.sequence == 0x03);
+    assert(commandResponse.zone == 1);
     assert(commandResponse.watering);
     assert(
         rainpoint::nextHtv405GatewayCommandSequence(commandResponse.sequence) ==
@@ -232,11 +250,55 @@ int main() {
         capturedLocalCloseResponse, commandResponse
     ));
     assert(commandResponse.sequence == 0x04);
+    assert(commandResponse.zone == 1);
     assert(!commandResponse.watering);
     assert(
         rainpoint::nextHtv405GatewayCommandSequence(commandResponse.sequence) ==
         0x05
     );
+    const std::array<std::string, 3> multiZoneResponses{{
+        "79f4882f28b984028094a980130bd0868020cf80000000409e"
+        "00569e000000000000000079b2",
+        "79f4882f28b984028094a980130cd0868030cf80000000409e"
+        "00569e000000000000000062ff",
+        "79f4882f28b984028094a980130dd0868040cf80000000409e"
+        "00569e00000000000000001e77",
+    }};
+    for (std::uint8_t zone = 2; zone <= 4; ++zone) {
+        assert(rainpoint::decodeHtv405GatewayCommandResponse(
+            fromHex(multiZoneResponses[zone - 2]), commandResponse
+        ));
+        assert(commandResponse.sequence ==
+            static_cast<std::uint8_t>(zone + 9));
+        assert(commandResponse.zone == zone);
+        assert(commandResponse.watering);
+    }
+    rainpoint::Htv405StateReport stateReport{};
+    const auto localZoneTwoReport = fromHex(
+        "79f4882f28b984028094a980131a8107820580a0cf80000000409e"
+        "00569e0000000000000d22"
+    );
+    assert(rainpoint::decodeHtv405StateReport(
+        localZoneTwoReport, stateReport
+    ));
+    assert(stateReport.zone == 2);
+    assert(stateReport.watering);
+    const auto localIdleReport = fromHex(
+        "79f4882f28b984028094a980131d0107820580804f800000004080"
+        "0056800000000000000045"
+    );
+    assert(rainpoint::decodeHtv405StateReport(
+        localIdleReport, stateReport
+    ));
+    assert(stateReport.zone == 0);
+    assert(!stateReport.watering);
+    const auto selectorSevenPhaseReport = fromHex(
+        "79f4882f28b984028094a980131c8107820700a0cf800000004088"
+        "00569e0000000000006700"
+    );
+    assert(!rainpoint::decodeHtv405StateReport(
+        selectorSevenPhaseReport, stateReport
+    ));
     auto corruptCommandResponse = capturedLocalOpenResponse;
     corruptCommandResponse[18] ^= 0x80;
     rainpoint::writeTrailer(corruptCommandResponse, 0x4f03);
@@ -889,6 +951,28 @@ int main() {
     assert(!rainpoint::htv405RequestMatches(
         htv405Profile, 0, coldBootHtv405Factory
     ));
+    assert(rainpoint::htv405RetainedRejoinRequestMatches(
+        htv405Profile, coldBootHtv405Factory
+    ));
+    auto wrongProductColdBoot = coldBootHtv405Factory;
+    wrongProductColdBoot[16] ^= 0x01;
+    rainpoint::writeTrailer(wrongProductColdBoot, 0xc713);
+    assert(!rainpoint::htv405RetainedRejoinRequestMatches(
+        htv405Profile, wrongProductColdBoot
+    ));
+    rainpoint::Htv405PairingSession htv405RejoinSession(htv405Profile);
+    htv405RejoinSession.arm(19'000, 120'000, true);
+    assert(htv405RejoinSession.retainedRejoin());
+    assert(htv405RejoinSession.stepCount() == 1);
+    assert(htv405RejoinSession.claimReply(
+        coldBootHtv405Factory, 19'100
+    ) == &htv405Profile.steps[0]);
+    assert(htv405RejoinSession.finishReply(true, 19'110));
+    assert(htv405RejoinSession.completedSteps() == 1);
+    assert(
+        htv405RejoinSession.state() ==
+        rainpoint::PairingSessionState::Completed
+    );
     rainpoint::Htv405PairingSession htv405RetrySession(htv405Profile);
     htv405RetrySession.arm(20'000);
     assert(htv405RetrySession.claimReply(htv405Factory, 20'100) ==
