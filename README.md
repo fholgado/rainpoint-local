@@ -59,9 +59,10 @@ device slots.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
   last-session duration, and water usage.
 - Correlate local RF valve events with Home Assistant/cloud observations.
-- Exercise a hardware-independent fail-closed controller for startup state,
-  open acknowledgement, client loss, run deadlines, watchdog expiry, close
-  retries, and persistent faults.
+- Exercise a hardware-independent duration-bounded controller: startup and
+  client loss are observation-only, missing acknowledgements block further
+  commands, explicit early-stop can retry, and only a positively observed
+  overdue run can trigger an anomaly close.
 
 The public gateway/HA valve-control boundary still rejects all requests.
 
@@ -204,13 +205,15 @@ runtime dependency.
 - Improve final radio-node placement where Wi-Fi or RF margins are weak.
 - Add encrypted node sessions, credential rotation, and asymmetric OTA release
   signatures before treating the trusted-LAN prototype as publishable.
-- Physically verify close-first recovery after a gateway and radio-node restart;
-  the association profile and authenticated next controller counter are now
-  stored separately from lower-channel telemetry.
+- Physically verify observation-only recovery after gateway and radio-node
+  restarts; the association profile, authenticated controller counter, and
+  expected completion of an active bounded run are stored separately from
+  lower-channel telemetry.
 - Capture and physically validate command fixtures for HTV405 Zones 2--4.
-- Physically exercise the disabled bench-only fail-closed coordinator,
-  including its 15-second command spacing and close-only counter recovery,
-  before exposing any control through the gateway or Home Assistant.
+- Physically exercise the disabled bench-only duration-bounded coordinator,
+  including its 15-second command spacing, explicit early-stop, late response
+  recovery, and overdue-run anomaly close before exposing control through the
+  gateway or Home Assistant.
 - Generalize the local association/control evidence with another valve before
   beginning cloud-to-local migration work with the existing HomGar integration.
 
@@ -235,8 +238,12 @@ evidence under the ignored `captures/` directory.
 
 ## Safety
 
-RainPoint Local currently receives valve telemetry but cannot operate a valve.
-Future control must always enforce bounded duration, explicit target identity,
-positive acknowledgement, fail-closed startup, independent watchdog timing,
-close retries, and persistent fault reporting. Never test unknown RF commands
-against an installed irrigation zone without isolation and a ready manual stop.
+RainPoint Local's public gateway and Home Assistant boundary remains read-only;
+the isolated research profile has physically operated HTV405 Zone 1. Future
+public control must enforce bounded duration, explicit target identity,
+authenticated state, command-counter persistence, and persistent fault
+reporting. Restart, client loss, and missing telemetry must not generate RF
+traffic. An explicit early-stop may retry, while an automatic anomaly close
+requires a fresh report that the valve is still watering after its expected
+completion plus grace period. Never test unknown RF commands against an
+installed irrigation zone without isolation and a ready manual stop.

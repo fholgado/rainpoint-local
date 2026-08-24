@@ -476,8 +476,9 @@ Before custom transmission:
   other counters participate in acceptance;
 - determine whether the test model has one transaction counter per chassis or
   per zone, and whether stop is zone-specific or global;
-- implement a fail-closed symbolic profile and offline waveform round-trip
-  tests with transmission disabled.
+- implement a duration-bounded symbolic profile and offline waveform round-trip
+  tests with transmission disabled; restart and missing telemetry must remain
+  observation-only.
 
 Exit criterion: replaying captured valve triggers through the symbolic state
 machine selects exactly the captured reply sequence and rejects truncated,
@@ -520,8 +521,10 @@ bounded watering tests as part of this sequence.
    identity.
 5. Confirm changing node placement does not change the HA valve device.
 
-The preferred node is not yet authorized to open the valve. Valve-control
-testing begins later with the separate close-first/watchdog plan.
+The preferred node is not authorized by enrollment alone. Valve-control testing
+uses the separate duration-bounded research gate: no startup transmission, no
+counter guessing after a missed response, and no automatic close without a
+fresh positively overdue watering report.
 
 ## Evidence record for every trial
 

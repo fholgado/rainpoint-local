@@ -430,7 +430,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(10, gateway.info()["storage_schema_version"])
+            self.assertEqual(11, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -441,7 +441,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(10, migrated.info()["storage_schema_version"])
+            self.assertEqual(11, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -489,6 +489,10 @@ class GatewayTest(unittest.TestCase):
                     "control_confirmed_watering",
                     "control_confirmed_at",
                     "control_response_frame",
+                    "control_active_zone",
+                    "control_run_started_at",
+                    "control_run_duration_seconds",
+                    "control_expected_idle_at",
                 }
                 <= valve_columns
             )

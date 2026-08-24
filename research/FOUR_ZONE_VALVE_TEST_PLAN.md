@@ -95,8 +95,9 @@ chassis identity with a zone selector from independent zone identities.
 
 ## Gate after offline analysis
 
-Local RF work remains receive-only until endpoint identities, zone selection,
-close behavior, acknowledgements, and the trailer variant are supported by
-captured evidence. The first active test is an idempotent close on dry hardware.
-A bounded open test comes only after that close passes and the independent
-node-local watchdog is armed.
+The original receive-only gate ended after endpoint identities, Zone 1 command
+selection, acknowledgement, and duration-bounded open/close behavior were
+validated on dry hardware. Further active work remains research-only. New
+commands must carry an absolute local duration limit; startup and missing
+telemetry are observation-only, and automatic close requires positive evidence
+that watering continued beyond the expected completion plus grace period.

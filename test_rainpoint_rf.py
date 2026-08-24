@@ -1775,6 +1775,8 @@ class RainPointRFTest(unittest.TestCase):
                 "confirmed_watering": True,
                 "last_confirmed_sequence": 3,
                 "next_sequence": 4,
+                "open_age_ms": 2_000,
+                "open_duration_seconds": 120,
                 "frame": frame,
             }
             self.assertEqual(
@@ -1798,6 +1800,14 @@ class RainPointRFTest(unittest.TestCase):
             self.assertTrue(
                 valve["state"]["rf_control_confirmed_watering"]
             )
+            self.assertEqual(1, valve["state"]["rf_control_active_zone"])
+            self.assertEqual(
+                120,
+                valve["state"]["rf_control_run_duration_seconds"],
+            )
+            self.assertIn(
+                "rf_control_expected_idle_at", valve["state"]
+            )
 
             rejected = dict(report, next_sequence=5)
             transport.consume_line(
@@ -1809,6 +1819,30 @@ class RainPointRFTest(unittest.TestCase):
                 if device["device_id"] == "htv405-94a98013"
             )
             self.assertEqual(4, unchanged["state"]["rf_next_control_sequence"])
+
+            closed = dict(
+                report,
+                state="zone_1_closed_confirmed",
+                confirmed_watering=False,
+                last_confirmed_sequence=4,
+                next_sequence=5,
+                frame=(
+                    "79f4882f28b984028094a9801304508683104f800000004080"
+                    "00568000000000000000001e6e"
+                ),
+            )
+            transport.consume_line(
+                json.dumps(closed), authenticated_node_id=node_id
+            )
+            idle = next(
+                device
+                for device in gateway.devices()
+                if device["device_id"] == "htv405-94a98013"
+            )
+            self.assertFalse(
+                idle["state"]["rf_control_confirmed_watering"]
+            )
+            self.assertNotIn("rf_control_active_zone", idle["state"])
             gateway.close()
 
     def test_esp32_serial_transport_reports_radio_health(self) -> None:

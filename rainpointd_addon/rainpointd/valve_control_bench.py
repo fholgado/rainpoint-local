@@ -1,6 +1,6 @@
 """Explicitly gated HTV405 Zone 1 control coordinator.
 
-This module connects the fail-closed safety state machine to the authenticated
+This module connects the duration-bounded safety state machine to authenticated
 radio-node command vocabulary.  It is intentionally not imported by the HTTP
 API or Home Assistant integration, and construction defaults to disabled.
 """
@@ -79,7 +79,7 @@ class BenchValveControlSession:
         self.pending_sequence: int | None = None
         self.pending_kind: ActionKind | None = None
         self.pending_attempt = 0
-        self.uncertain_base_sequence: int | None = None
+        self.counter_synchronized = True
         self.last_fault: str | None = None
         self.started = False
 
@@ -88,7 +88,7 @@ class BenchValveControlSession:
         return self.safety.state
 
     def start(self, now: float) -> tuple[dict[str, Any], ...]:
-        """Restore the authenticated counter and perform close-first recovery."""
+        """Restore the counter without transmitting an actuator command."""
         self._require_enabled()
         if self.started:
             raise RuntimeError("bench valve session has already started")
@@ -115,12 +115,16 @@ class BenchValveControlSession:
         self._require_ready()
         if self.pending_sequence is not None:
             raise RuntimeError("a valve response is still pending")
+        if not self.counter_synchronized:
+            raise RuntimeError("the valve control counter is not synchronized")
         return self._dispatch(
             self.safety.request_open(duration_seconds, now, zone=1)
         )
 
     def request_close(self, now: float) -> tuple[dict[str, Any], ...]:
         self._require_ready()
+        if self.pending_sequence is not None or not self.counter_synchronized:
+            raise RuntimeError("the valve control counter is not synchronized")
         return self._dispatch(self.safety.request_close(now))
 
     def tick(self, now: float) -> tuple[dict[str, Any], ...]:
@@ -142,7 +146,18 @@ class BenchValveControlSession:
         self.pending_sequence = None
         self.pending_kind = None
         self.pending_attempt = 0
-        self.uncertain_base_sequence = None
+        self.counter_synchronized = True
+        return self._dispatch(
+            self.safety.observe_valve(watering=watering, now=now)
+        )
+
+    def observe_telemetry(
+        self, *, watering: bool, now: float
+    ) -> tuple[dict[str, Any], ...]:
+        """Observe valve state without treating telemetry as a counter ACK."""
+        self._require_ready()
+        if not isinstance(watering, bool):
+            raise ValueError("watering must be a boolean")
         return self._dispatch(
             self.safety.observe_valve(watering=watering, now=now)
         )
@@ -154,26 +169,30 @@ class BenchValveControlSession:
         for action in actions:
             if action.kind is ActionKind.REPORT_FAULT:
                 self.last_fault = action.reason
+                if action.reason == "open_confirmation_missing_bounded_run":
+                    self.counter_synchronized = False
                 continue
             if action.zone != 1:
                 raise RuntimeError("only physically validated Zone 1 is enabled")
-            sequence = self.next_sequence
             if self.pending_sequence is not None:
-                if action.kind is not ActionKind.SEND_CLOSE:
-                    raise RuntimeError("cannot overlap valve commands")
-                # An open/close may have been accepted even when its response
-                # was missed. Close is idempotent, so bounded recovery alternates
-                # between the pre-command and post-command counter hypotheses.
-                if self.uncertain_base_sequence is None:
-                    self.uncertain_base_sequence = self.pending_sequence
-                previous = self.uncertain_base_sequence
-                attempt = int(action.attempt or 1)
-                sequence = (previous + (attempt % 2)) & 0x1F
-                commands.append(
-                    self._command(
-                        "valve_control_sync", next_sequence=sequence
-                    )
-                )
+                if (
+                    action.kind is ActionKind.SEND_CLOSE
+                    and self.pending_kind is ActionKind.SEND_CLOSE
+                ):
+                    # Repeating the exact idempotent early-stop is safe under
+                    # either outcome: it is accepted if the first frame was
+                    # lost and stale if the first frame advanced the counter.
+                    # Never guess the post-command counter.
+                    sequence = self.pending_sequence
+                else:
+                    self.last_fault = "control_counter_unknown_no_command_sent"
+                    self.counter_synchronized = False
+                    continue
+            elif not self.counter_synchronized:
+                self.last_fault = "control_counter_unknown_no_command_sent"
+                continue
+            else:
+                sequence = self.next_sequence
             if action.kind is ActionKind.SEND_OPEN:
                 command = self._command(
                     "valve_control_open",

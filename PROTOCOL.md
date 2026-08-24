@@ -163,9 +163,9 @@ frames cleared the watering bit and did not expose stale duration state.
 Automatic one-minute stops and manual stops both produced a stop frame followed
 by a distinct closed-state report. The observed confirmation delay ranged from
 less than one second to about nine seconds. The receive decoder implements
-these fields, but HTV405 frame construction remains deliberately unavailable
-until custom enrollment, acknowledgement, idempotent close, and the node-local
-watchdog are validated on the isolated valve.
+these fields. The research-only Zone 1 command builder is now physically
+validated, but remains compiled out of production firmware and unavailable
+through the public gateway and Home Assistant APIs.
 
 Local enrollment on August 18 produced the same four-zone layout with offset
 17 equal to `0x05`. A later raw stock-control capture disproved the interim
@@ -1070,19 +1070,24 @@ normalization and confirmed field decoding. Regression examples live in
 4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
    or cloud metadata.
 5. Capture valve enrollment, association, and forgetting traffic.
-6. Confirm valve retry timing, acknowledgement rules, and safe close behavior before
-   enabling Home Assistant control.
+6. Confirm valve retry timing, acknowledgement rules, explicit early-stop, and
+   positively observed overdue-run handling before enabling Home Assistant
+   control.
 7. Classify the four-zone test controller independently: determine whether it
    shares the HTV145 frame family, how it identifies ports, and whether state,
    counters, and close commands are per-zone or chassis-wide.
 
 ## Safety boundary
 
-The current implementation transmits only validated, identity-bounded soil
-sensor pairing/rejoin replies and acknowledgements. Valve transmission remains
-absent. It must enforce a local maximum duration, start an independent watchdog
-before opening, retry an idempotent close until idle is observed, and fail
-closed after gateway, Home Assistant, network, or power loss.
+Production firmware transmits only validated, identity-bounded soil-sensor
+pairing/rejoin replies and acknowledgements. The research build additionally
+contains a physically validated, identity-bound HTV405 Zone 1 command path that
+is unavailable through public APIs. Every open carries a locally enforced
+maximum duration. Gateway, Home Assistant, network, or power loss is
+observation-only because the valve owns that countdown. Silence marks state
+unknown and must not cause speculative RF. Close retries are permitted only for
+an explicit early-stop or after a fresh report proves watering continued beyond
+the expected completion plus grace period.
 
 ## Evidence and references
 

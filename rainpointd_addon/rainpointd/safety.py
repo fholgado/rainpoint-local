@@ -1,4 +1,4 @@
-"""Hardware-independent valve safety state machine.
+"""Hardware-independent duration-bounded valve safety state machine.
 
 This module emits symbolic actions only. It is deliberately not connected to
 the HTTP API, serial transport, command frame builder, or radio hardware.
@@ -14,8 +14,10 @@ class SafetyState(str, Enum):
     BOOT = "boot"
     IDLE = "idle"
     OPEN_PENDING = "open_pending"
+    RUN_UNCONFIRMED = "run_unconfirmed"
     WATERING = "watering"
     CLOSE_PENDING = "close_pending"
+    UNKNOWN = "unknown"
     FAULT = "fault"
 
 
@@ -35,7 +37,7 @@ class SafetyAction:
 
 
 class ValveSafetyController:
-    """Enforce fail-closed startup, bounded watering, and close retries."""
+    """Enforce bounded opens without speculative recovery transmissions."""
 
     def __init__(
         self,
@@ -43,6 +45,7 @@ class ValveSafetyController:
         user_max_seconds: int,
         absolute_max_seconds: int = 3_600,
         acknowledgement_timeout_seconds: float = 1.5,
+        completion_grace_seconds: float = 15.0,
         close_retry_seconds: float = 1.5,
         minimum_command_interval_seconds: float = 15.0,
         max_fast_close_attempts: int = 5,
@@ -55,7 +58,11 @@ class ValveSafetyController:
             raise ValueError("absolute maximum must be positive")
         if user_max_seconds > absolute_max_seconds:
             raise ValueError("user maximum cannot exceed absolute maximum")
-        if acknowledgement_timeout_seconds <= 0 or close_retry_seconds <= 0:
+        if (
+            acknowledgement_timeout_seconds <= 0
+            or completion_grace_seconds < 0
+            or close_retry_seconds <= 0
+        ):
             raise ValueError("timeouts must be positive")
         if minimum_command_interval_seconds < 0:
             raise ValueError("minimum command interval cannot be negative")
@@ -67,6 +74,7 @@ class ValveSafetyController:
         self.user_max_seconds = user_max_seconds
         self.absolute_max_seconds = absolute_max_seconds
         self.acknowledgement_timeout_seconds = acknowledgement_timeout_seconds
+        self.completion_grace_seconds = completion_grace_seconds
         self.close_retry_seconds = close_retry_seconds
         self.minimum_command_interval_seconds = minimum_command_interval_seconds
         self.max_fast_close_attempts = max_fast_close_attempts
@@ -74,6 +82,7 @@ class ValveSafetyController:
         self.zone_count = zone_count
         self.state = SafetyState.BOOT
         self.run_deadline: float | None = None
+        self.completion_deadline: float | None = None
         self.acknowledgement_deadline: float | None = None
         self.next_close_attempt: float | None = None
         self.close_attempts = 0
@@ -82,10 +91,11 @@ class ValveSafetyController:
         self.pending_close_reason: str | None = None
 
     def start(self, now: float) -> tuple[SafetyAction, ...]:
-        """Fail closed on every process start before accepting an open."""
+        """Start observation-only; a restart must never create RF traffic."""
         if self.state is not SafetyState.BOOT:
             raise RuntimeError("safety controller has already started")
-        return self._begin_close(now, "startup_recovery")
+        self.state = SafetyState.IDLE
+        return ()
 
     def request_open(
         self, duration_seconds: int, now: float, *, zone: int = 1
@@ -110,6 +120,9 @@ class ValveSafetyController:
             raise ValueError(f"duration exceeds {maximum}-second safety limit")
 
         self.run_deadline = now + duration_seconds
+        self.completion_deadline = (
+            self.run_deadline + self.completion_grace_seconds
+        )
         self.acknowledgement_deadline = (
             now + self.acknowledgement_timeout_seconds
         )
@@ -126,17 +139,15 @@ class ValveSafetyController:
         )
 
     def request_close(self, now: float) -> tuple[SafetyAction, ...]:
-        """Begin an idempotent close sequence unless one is already active."""
+        """Begin an explicit early-stop sequence unless one is active."""
         if self.state is SafetyState.BOOT:
-            return self.start(now)
+            self.start(now)
         if self.state in (SafetyState.CLOSE_PENDING, SafetyState.FAULT):
             return ()
         return self._begin_close(now, "user_request")
 
     def client_lost(self, now: float) -> tuple[SafetyAction, ...]:
-        """Close if the client disappears during a pending or active run."""
-        if self.state in (SafetyState.OPEN_PENDING, SafetyState.WATERING):
-            return self._begin_close(now, "controlling_client_lost")
+        """Do nothing: the valve's transmitted duration bounds the run."""
         return ()
 
     def observe_valve(
@@ -147,34 +158,71 @@ class ValveSafetyController:
             self._clear_to_idle()
             return ()
 
-        if self.state is SafetyState.OPEN_PENDING:
-            if self.run_deadline is not None and now >= self.run_deadline:
-                return self._begin_close(now, "late_open_acknowledgement")
+        if self.state in (
+            SafetyState.OPEN_PENDING,
+            SafetyState.RUN_UNCONFIRMED,
+        ):
+            if self._completion_is_overdue(now):
+                return self._begin_close(now, "overdue_watering_observed")
             self.state = SafetyState.WATERING
             self.acknowledgement_deadline = None
             return ()
         if self.state is SafetyState.WATERING:
+            if self._completion_is_overdue(now):
+                return self._begin_close(now, "overdue_watering_observed")
             return ()
         if self.state in (SafetyState.CLOSE_PENDING, SafetyState.FAULT):
             return ()
-        return self._begin_close(now, "unexpected_watering")
+        if self.state is SafetyState.UNKNOWN and self._completion_is_overdue(
+            now
+        ):
+            return self._begin_close(now, "overdue_watering_observed")
+        self.state = SafetyState.UNKNOWN
+        return (
+            SafetyAction(
+                ActionKind.REPORT_FAULT,
+                "watering_observed_without_bounded_run_context",
+            ),
+        )
 
     def tick(self, now: float) -> tuple[SafetyAction, ...]:
-        """Evaluate acknowledgement, watchdog, and close-retry deadlines."""
+        """Evaluate confirmation, bounded-run, and close-retry deadlines."""
         if (
             self.state is SafetyState.OPEN_PENDING
             and self.acknowledgement_deadline is not None
             and now >= self.acknowledgement_deadline
         ):
-            # An open may have succeeded even if its RF acknowledgement was
-            # missed. Never retry it; begin the safe idempotent close path.
-            return self._begin_close(now, "open_acknowledgement_timeout")
+            # The open may have succeeded, but its requested duration already
+            # bounds the run. Preserve that deadline and stop transmitting
+            # until authenticated state restores the counter.
+            self.state = SafetyState.RUN_UNCONFIRMED
+            self.acknowledgement_deadline = None
+            return (
+                SafetyAction(
+                    ActionKind.REPORT_FAULT,
+                    "open_confirmation_missing_bounded_run",
+                ),
+            )
         if (
-            self.state is SafetyState.WATERING
-            and self.run_deadline is not None
-            and now >= self.run_deadline
+            self.state
+            in (
+                SafetyState.OPEN_PENDING,
+                SafetyState.RUN_UNCONFIRMED,
+                SafetyState.WATERING,
+            )
+            and self._completion_is_overdue(now)
         ):
-            return self._begin_close(now, "run_watchdog_expired")
+            # A missing idle report is not proof that the bounded run failed
+            # to stop. Mark it unknown; only a fresh positive watering report
+            # after this point is evidence for an anomaly close.
+            self.state = SafetyState.UNKNOWN
+            self.acknowledgement_deadline = None
+            return (
+                SafetyAction(
+                    ActionKind.REPORT_FAULT,
+                    "bounded_run_completion_unobserved",
+                ),
+            )
         if (
             self.state in (SafetyState.CLOSE_PENDING, SafetyState.FAULT)
             and self.next_close_attempt is not None
@@ -187,7 +235,6 @@ class ValveSafetyController:
         self, now: float, reason: str
     ) -> tuple[SafetyAction, ...]:
         self.state = SafetyState.CLOSE_PENDING
-        self.run_deadline = None
         self.acknowledgement_deadline = None
         self.pending_close_reason = reason
         earliest = (
@@ -252,8 +299,15 @@ class ValveSafetyController:
     def _clear_to_idle(self) -> None:
         self.state = SafetyState.IDLE
         self.run_deadline = None
+        self.completion_deadline = None
         self.acknowledgement_deadline = None
         self.next_close_attempt = None
         self.close_attempts = 0
         self.requested_zone = None
         self.pending_close_reason = None
+
+    def _completion_is_overdue(self, now: float) -> bool:
+        return (
+            self.completion_deadline is not None
+            and now >= self.completion_deadline
+        )

@@ -1397,6 +1397,53 @@ class Gateway:
                                 "rf_control_counter_authenticated": True,
                             }
                         )
+                    if (
+                        valve_registration.get("control_active_zone")
+                        is not None
+                    ):
+                        expected_idle_at = valve_registration[
+                            "control_expected_idle_at"
+                        ]
+                        state.update(
+                            {
+                                "rf_control_run_started_at": (
+                                    valve_registration[
+                                        "control_run_started_at"
+                                    ]
+                                ),
+                                "rf_control_run_duration_seconds": int(
+                                    valve_registration[
+                                        "control_run_duration_seconds"
+                                    ]
+                                ),
+                                "rf_control_expected_idle_at": (
+                                    expected_idle_at
+                                ),
+                            }
+                        )
+                        try:
+                            completion_expected = datetime.fromisoformat(
+                                expected_idle_at
+                            )
+                            if completion_expected.tzinfo is None:
+                                completion_expected = (
+                                    completion_expected.replace(
+                                        tzinfo=timezone.utc
+                                    )
+                                )
+                            run_is_current = completion_expected > datetime.now(
+                                timezone.utc
+                            )
+                        except (TypeError, ValueError):
+                            run_is_current = False
+                        if run_is_current:
+                            state["rf_control_active_zone"] = int(
+                                valve_registration["control_active_zone"]
+                            )
+                        else:
+                            state[
+                                "rf_control_run_completion_unconfirmed"
+                            ] = True
                 if is_hcs02x_sensor(
                     model=device.get("model"),
                     protocol=device.get("state", {}).get("rf_protocol_family"),
@@ -1715,6 +1762,34 @@ class Gateway:
         ):
             return None
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        run_started_at: str | None = None
+        run_duration_seconds: int | None = None
+        expected_idle_at: str | None = None
+        if watering:
+            duration = report.get("open_duration_seconds")
+            age_ms = report.get("open_age_ms")
+            if (
+                not isinstance(duration, int)
+                or isinstance(duration, bool)
+                or duration <= 0
+                or duration % 60
+                or duration > 3_600
+                or not isinstance(age_ms, int)
+                or isinstance(age_ms, bool)
+                or age_ms < 0
+            ):
+                return None
+            try:
+                observed = datetime.fromisoformat(timestamp)
+            except ValueError:
+                return None
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            started = observed - timedelta(milliseconds=age_ms)
+            expected = started + timedelta(seconds=duration)
+            run_started_at = started.isoformat()
+            run_duration_seconds = duration
+            expected_idle_at = expected.isoformat()
         with self._lock:
             registration = next(
                 (
@@ -1744,6 +1819,9 @@ class Gateway:
                 center_hz=center_hz,
                 observed_at=timestamp,
                 frame=frame_hex.lower(),
+                run_started_at=run_started_at,
+                run_duration_seconds=run_duration_seconds,
+                expected_idle_at=expected_idle_at,
             )
             self._refresh_registry_catalog()
             return accepted

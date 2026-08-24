@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -169,6 +169,9 @@ class SQLiteEventStore:
             version = 9
         if version == 9:
             self._migrate_v9_to_v10()
+            version = 10
+        if version == 10:
+            self._migrate_v10_to_v11()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -440,6 +443,27 @@ class SQLiteEventStore:
                         f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
                     )
             self._connection.execute("PRAGMA user_version = 10")
+
+    def _migrate_v10_to_v11(self) -> None:
+        """Persist the deadline of an authenticated duration-bounded run."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("control_active_zone", "INTEGER"),
+                ("control_run_started_at", "TEXT"),
+                ("control_run_duration_seconds", "INTEGER"),
+                ("control_expected_idle_at", "TEXT"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 11")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -809,6 +833,9 @@ class SQLiteEventStore:
                 control_next_sequence = NULL,
                 control_confirmed_watering = NULL,
                 control_confirmed_at = NULL, control_response_frame = NULL,
+                control_active_zone = NULL, control_run_started_at = NULL,
+                control_run_duration_seconds = NULL,
+                control_expected_idle_at = NULL,
                 updated_at = ?
             WHERE valve_endpoint = ?
             """,
@@ -841,15 +868,27 @@ class SQLiteEventStore:
         center_hz: int,
         observed_at: str,
         frame: str,
+        run_started_at: str | None = None,
+        run_duration_seconds: int | None = None,
+        expected_idle_at: str | None = None,
     ) -> dict[str, Any]:
         """Advance control state only after a node-authenticated response."""
+        if watering and (
+            run_started_at is None
+            or run_duration_seconds is None
+            or expected_idle_at is None
+        ):
+            raise ValueError("watering confirmation requires a bounded run")
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
                 control_last_sequence = ?, control_next_sequence = ?,
                 control_confirmed_watering = ?,
                 control_confirmed_at = ?, control_response_frame = ?,
-                control_center_hz = ?, updated_at = ?
+                control_center_hz = ?, control_active_zone = ?,
+                control_run_started_at = ?,
+                control_run_duration_seconds = ?,
+                control_expected_idle_at = ?, updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
             """,
             (
@@ -859,6 +898,10 @@ class SQLiteEventStore:
                 observed_at,
                 frame,
                 center_hz,
+                1 if watering else None,
+                run_started_at if watering else None,
+                run_duration_seconds if watering else None,
+                expected_idle_at if watering else None,
                 observed_at,
                 valve_endpoint,
                 node_id,

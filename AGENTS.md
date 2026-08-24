@@ -55,8 +55,10 @@ variants.
 - Never give a valve builder installation-default RF endpoints. Controller,
   valve, and port identities must come from the association under test.
 - Valve association and valve control are separate gates. Do not add a live
-  valve transmit path until isolated pairing, close-first acceptance, bounded
-  open, acknowledgement, and watchdog tests pass on dry test hardware.
+  valve transmit path until isolated pairing, duration-bounded open,
+  acknowledgement, early-stop, and overdue-run anomaly tests pass on dry test
+  hardware. Restart and missing telemetry are observation-only; never transmit
+  a speculative startup close.
 - Keep sensor ACK ownership single-node and persistent. Any reassignment must
   revoke the old owner before the new owner can transmit.
 - Keep experimental RF probes compiled out of production firmware.
