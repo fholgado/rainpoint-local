@@ -115,11 +115,14 @@ beyond the expected completion plus grace period.
   a retained-association rejoin from a new 18-step enrollment by endpoint,
   counter, and frame sequence; a boot sweep or white flash alone is not proof
   of new enrollment.
-- Keep this experiment on its own one-reply retained-rejoin state machine. The
-  validated 18-step new-enrollment matcher, advancement rules, and completion
-  gate must not branch on or accept a battery-boot announcement. Before the
-  physical trial, regression tests must prove each session rejects the other
-  session's announcement.
+- The one-reply retained-rejoin hypothesis transmitted successfully but did
+  not restore paired traffic and must not be treated as a successful rejoin.
+  The next bounded candidate accepts the battery-boot `0x7f` announcement only
+  as an alternate first trigger, then uses the unchanged 18-step request
+  matcher, replies, advancement rules, timing, and counter resynchronization.
+  Normal `0xff` long-press enrollment remains isolated from that mode. Report
+  success only after 18/18 steps and a command-scoped paired HTV405 frame; a
+  transmitted reply, boot sweep, or white flash is not terminal evidence.
 - The fresh-battery boundary analysis ruled out ordinary paired startup,
   selector-`0x07`, and known zone/countdown fields. A changing diagnostic
   family was also ruled out because it changed again after watering with the

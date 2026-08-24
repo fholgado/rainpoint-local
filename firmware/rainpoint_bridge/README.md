@@ -91,7 +91,7 @@ with the research profile enabled:
 
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.14.0-valve-control-probe.40 \
+  RAINPOINT_FIRMWARE_VERSION=0.14.0-valve-control-probe.41 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 

@@ -387,9 +387,14 @@ public:
     explicit Htv405PairingSession(const Htv405PairingProfile& profile)
         : profile_(profile) {}
 
-    void arm(std::uint32_t nowMs, std::uint32_t durationMs = 120'000) {
+    void arm(
+        std::uint32_t nowMs,
+        std::uint32_t durationMs = 120'000,
+        bool acceptColdBootStart = false
+    ) {
         state_ = PairingSessionState::Armed;
         step_ = 0;
+        acceptColdBootStart_ = acceptColdBootStart;
         pending_ = false;
         pendingAdvances_ = false;
         counterOffset_ = 0;
@@ -403,6 +408,7 @@ public:
     void cancel() {
         state_ = PairingSessionState::Disarmed;
         step_ = 0;
+        acceptColdBootStart_ = false;
         pending_ = false;
         pendingAdvances_ = false;
         counterOffset_ = 0;
@@ -424,12 +430,19 @@ public:
         // Step zero may be retransmitted with a later sweep counter. Once an
         // assignment has been sent, retry it until paired traffic proves that
         // the valve advanced; do not strand the session at step one.
-        if (step_ <= 1 && htv405RequestMatches(profile_, 0, frame)) {
+        const bool assignmentRequest = !acceptColdBootStart_ &&
+            htv405RequestMatches(profile_, 0, frame);
+        const bool coldBootRequest = acceptColdBootStart_ &&
+            htv405RetainedRejoinRequestMatches(profile_, frame);
+        if (step_ <= 1 && (assignmentRequest || coldBootRequest)) {
             pending_ = true;
             pendingAdvances_ = step_ == 0;
             replyCounterOffset_ = 0;
             claimedAtMs_ = nowMs;
             return &profile_.steps[0];
+        }
+        if (acceptColdBootStart_ && step_ == 0) {
+            return nullptr;
         }
         // A later-sweep assignment can enter controller initialization with
         // its transaction counter already advanced. The 2026-08-23 capture
@@ -748,89 +761,7 @@ private:
     std::uint8_t replyCounterOffset_ = 0;
     bool counterOffsetKnown_ = false;
     std::uint32_t replyStartDelayOverrideUs_ = 0;
-};
-
-class Htv405RetainedRejoinSession {
-public:
-    explicit Htv405RetainedRejoinSession(
-        const Htv405PairingProfile& profile
-    ) : profile_(profile) {}
-
-    void arm(
-        std::uint32_t nowMs,
-        std::uint32_t durationMs = 120'000
-    ) {
-        state_ = PairingSessionState::Armed;
-        completed_ = false;
-        pending_ = false;
-        expiresAtMs_ = nowMs + durationMs;
-        failureReason_ = PairingFailureReason::None;
-    }
-
-    void cancel() {
-        state_ = PairingSessionState::Disarmed;
-        completed_ = false;
-        pending_ = false;
-        failureReason_ = PairingFailureReason::None;
-    }
-
-    const Htv405PairingStep* claimReply(
-        const std::array<std::uint8_t, kFrameBytes>& frame,
-        std::uint32_t nowMs
-    ) {
-        tick(nowMs);
-        if (state_ != PairingSessionState::Armed || pending_ ||
-            !htv405RetainedRejoinRequestMatches(profile_, frame)) {
-            return nullptr;
-        }
-        pending_ = true;
-        claimedAtMs_ = nowMs;
-        return &profile_.steps[0];
-    }
-
-    bool finishReply(bool success, std::uint32_t nowMs) {
-        if (state_ != PairingSessionState::Armed || !pending_ || !success) {
-            fail(PairingFailureReason::ReplyFailed);
-            return false;
-        }
-        if (nowMs - claimedAtMs_ > kPairingReplyDeadlineMs) {
-            fail(PairingFailureReason::ReplyDeadlineMissed);
-            return false;
-        }
-        pending_ = false;
-        completed_ = true;
-        state_ = PairingSessionState::Completed;
-        return true;
-    }
-
-    void tick(std::uint32_t nowMs) {
-        if (state_ == PairingSessionState::Armed &&
-            static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0) {
-            fail(PairingFailureReason::SessionTimeout);
-        }
-    }
-
-    PairingSessionState state() const { return state_; }
-    std::size_t completedSteps() const { return completed_ ? 1 : 0; }
-    bool pending() const { return pending_; }
-    PairingFailureReason failureReason() const { return failureReason_; }
-    std::uint8_t replyCounterOffset() const { return 0; }
-    std::uint32_t replyStartDelayOverrideUs() const { return 0; }
-
-private:
-    void fail(PairingFailureReason reason) {
-        state_ = PairingSessionState::Failed;
-        pending_ = false;
-        failureReason_ = reason;
-    }
-
-    const Htv405PairingProfile& profile_;
-    PairingSessionState state_ = PairingSessionState::Disarmed;
-    PairingFailureReason failureReason_ = PairingFailureReason::None;
-    std::uint32_t expiresAtMs_ = 0;
-    std::uint32_t claimedAtMs_ = 0;
-    bool completed_ = false;
-    bool pending_ = false;
+    bool acceptColdBootStart_ = false;
 };
 
 }  // namespace rainpoint

@@ -129,9 +129,6 @@ rainpoint::PairingSession pairingSession(activePairingProfile);
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
 rainpoint::Htv405PairingProfile activeValvePairingProfile{};
 rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
-rainpoint::Htv405RetainedRejoinSession valveRejoinSession(
-    activeValvePairingProfile
-);
 bool valvePairingActive = false;
 bool valvePairingKnownRejoin = false;
 #endif
@@ -602,9 +599,7 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
 rainpoint::PairingSessionState currentPairingState() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingKnownRejoin
-            ? valveRejoinSession.state()
-            : valvePairingSession.state();
+        return valvePairingSession.state();
     }
 #endif
     return pairingSession.state();
@@ -613,9 +608,7 @@ rainpoint::PairingSessionState currentPairingState() {
 std::size_t currentPairingCompletedSteps() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingKnownRejoin
-            ? valveRejoinSession.completedSteps()
-            : valvePairingSession.completedSteps();
+        return valvePairingSession.completedSteps();
     }
 #endif
     return pairingSession.completedSteps();
@@ -624,9 +617,7 @@ std::size_t currentPairingCompletedSteps() {
 rainpoint::PairingFailureReason currentPairingFailureReason() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingKnownRejoin
-            ? valveRejoinSession.failureReason()
-            : valvePairingSession.failureReason();
+        return valvePairingSession.failureReason();
     }
 #endif
     return pairingSession.failureReason();
@@ -677,9 +668,7 @@ void reportPairingStatus(const char* detail = nullptr) {
     line +=
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive
-            ? (valvePairingKnownRejoin
-                ? 1
-                : rainpoint::kHtv405PairingStepCount)
+            ? rainpoint::kHtv405PairingStepCount
             :
 #endif
         activePairingProfile.stepCount;
@@ -742,7 +731,6 @@ void cancelPairing(const char* detail) {
     pairingSession.cancel();
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingSession.cancel();
-    valveRejoinSession.cancel();
 #endif
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
@@ -1956,11 +1944,9 @@ void handleNetworkCommand() {
     if (valvePairingActive) {
         const auto durationMs =
             static_cast<std::uint32_t>(durationSeconds) * 1'000U;
-        if (requestedValveRejoin) {
-            valveRejoinSession.arm(millis(), durationMs);
-        } else {
-            valvePairingSession.arm(millis(), durationMs);
-        }
+        valvePairingSession.arm(
+            millis(), durationMs, requestedValveRejoin
+        );
     } else
 #endif
     {
@@ -2278,44 +2264,30 @@ bool activeValvePairingArmed() {
 }
 
 std::size_t activeValvePairingCompletedSteps() {
-    return valvePairingKnownRejoin
-        ? valveRejoinSession.completedSteps()
-        : valvePairingSession.completedSteps();
+    return valvePairingSession.completedSteps();
 }
 
 const rainpoint::Htv405PairingStep* claimActiveValvePairingReply(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     std::uint32_t nowMs
 ) {
-    return valvePairingKnownRejoin
-        ? valveRejoinSession.claimReply(frame, nowMs)
-        : valvePairingSession.claimReply(frame, nowMs);
+    return valvePairingSession.claimReply(frame, nowMs);
 }
 
 std::uint8_t activeValvePairingReplyCounterOffset() {
-    return valvePairingKnownRejoin
-        ? valveRejoinSession.replyCounterOffset()
-        : valvePairingSession.replyCounterOffset();
+    return valvePairingSession.replyCounterOffset();
 }
 
 std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
-    return valvePairingKnownRejoin
-        ? valveRejoinSession.replyStartDelayOverrideUs()
-        : valvePairingSession.replyStartDelayOverrideUs();
+    return valvePairingSession.replyStartDelayOverrideUs();
 }
 
 bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
-    return valvePairingKnownRejoin
-        ? valveRejoinSession.finishReply(success, nowMs)
-        : valvePairingSession.finishReply(success, nowMs);
+    return valvePairingSession.finishReply(success, nowMs);
 }
 
 void tickActiveValvePairing(std::uint32_t nowMs) {
-    if (valvePairingKnownRejoin) {
-        valveRejoinSession.tick(nowMs);
-    } else {
-        valvePairingSession.tick(nowMs);
-    }
+    valvePairingSession.tick(nowMs);
 }
 #endif
 

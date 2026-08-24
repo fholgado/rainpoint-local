@@ -541,10 +541,32 @@ class ESP32NetworkTest(unittest.TestCase):
         deadline = time.monotonic() + 2
         while True:
             progress = self.gateway.pairing()
-            if progress.get("stage") == "valve_pairing_completed":
+            if progress.get("stage") == "waiting_for_terminal_confirmation":
                 break
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.01)
+        self.assertIsNone(progress["completed_endpoint"])
+        confirmation_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=confirmation_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        progress = self.gateway.pairing()
+        self.assertEqual("valve_pairing_completed", progress["stage"])
         self.assertEqual("94a98013", progress["completed_endpoint"])
         self.assertEqual([], progress["new_records"])
         stream.close()
@@ -688,7 +710,35 @@ class ESP32NetworkTest(unittest.TestCase):
                 "rf_receiver_id": "local-sdr",
             },
         )
-        completed = self.gateway.pairing()
+        awaiting_exchange = self.gateway.pairing()
+        self.assertEqual(
+            "pairing_exchange_in_progress", awaiting_exchange["stage"]
+        )
+        self.assertIsNone(awaiting_exchange["completed_endpoint"])
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "completed",
+                    "completed_steps": 18,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while True:
+            completed = self.gateway.pairing()
+            if completed.get("stage") == "valve_pairing_completed":
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
         self.assertEqual("valve_pairing_completed", completed["stage"])
         self.assertEqual("94a98013", completed["completed_endpoint"])
         self.assertEqual(

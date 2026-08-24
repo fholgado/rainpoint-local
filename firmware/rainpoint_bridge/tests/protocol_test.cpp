@@ -970,10 +970,8 @@ int main() {
         isolatedNewPairingSession.state() ==
         rainpoint::PairingSessionState::Armed
     );
-    rainpoint::Htv405RetainedRejoinSession htv405RejoinSession(
-        htv405Profile
-    );
-    htv405RejoinSession.arm(19'000, 120'000);
+    rainpoint::Htv405PairingSession htv405RejoinSession(htv405Profile);
+    htv405RejoinSession.arm(19'000, 120'000, true);
     assert(htv405RejoinSession.claimReply(
         htv405Factory, 19'050
     ) == nullptr);
@@ -985,8 +983,16 @@ int main() {
     assert(htv405RejoinSession.completedSteps() == 1);
     assert(
         htv405RejoinSession.state() ==
-        rainpoint::PairingSessionState::Completed
+        rainpoint::PairingSessionState::Armed
     );
+    const auto htv405RejoinFirstPairedRequest = htv405Request(
+        htv405Profile, 1
+    );
+    assert(htv405RejoinSession.claimReply(
+        htv405RejoinFirstPairedRequest, 19'200
+    ) == &htv405Profile.steps[1]);
+    assert(htv405RejoinSession.finishReply(true, 19'210));
+    assert(htv405RejoinSession.completedSteps() == 2);
     rainpoint::Htv405PairingSession htv405RetrySession(htv405Profile);
     htv405RetrySession.arm(20'000);
     assert(htv405RetrySession.claimReply(htv405Factory, 20'100) ==

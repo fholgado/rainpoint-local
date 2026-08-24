@@ -2081,6 +2081,7 @@ class Gateway:
             observed_valve_completed = (
                 self._active_pairing_profile_id
                 == AUTOMATIC_HTV405_PROFILE_ID
+                and node_state == "completed"
                 and isinstance(reported_endpoint, str)
                 and self._active_pairing_confirmed_valve_endpoint
                 == reported_endpoint.lower()
@@ -2098,8 +2099,7 @@ class Gateway:
                     and isinstance(reported_endpoint, str)
                     and re.fullmatch(r"[89a-f][0-9a-f]{5}13", reported_endpoint)
                 ):
-                    completed_endpoint = reported_endpoint
-                    stage = "valve_pairing_completed"
+                    stage = "waiting_for_terminal_confirmation"
                 elif isinstance(reported_endpoint, str):
                     reported_endpoint = reported_endpoint.strip().lower()
                     try:
@@ -2116,7 +2116,11 @@ class Gateway:
                             item.get("paired_endpoint") == reported_endpoint
                             for item in new_records
                         )
-                if stage != "valve_pairing_completed":
+                if (
+                    self._active_pairing_profile_id
+                    != AUTOMATIC_HTV405_PROFILE_ID
+                    and stage != "valve_pairing_completed"
+                ):
                     stage = (
                         "paired_identity_observed"
                         if completed_endpoint is not None
