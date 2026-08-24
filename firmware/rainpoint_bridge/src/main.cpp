@@ -1265,10 +1265,13 @@ void pollValveProbeResponseListener() {
         reportValveProbeError("ordinary_receiver_restore_failed");
     }
     if (valveControlProbe.commandPendingConfirmation) {
+        // Emit while the pending fields are still present so the gateway can
+        // match and durably fail the exact reservation instead of leaving it
+        // stuck forever after a missed response.
+        reportValveProbeStatus("gateway_command_response_timeout");
         valveControlProbe.commandPendingConfirmation = false;
         valveControlProbe.openSent = false;
         valveControlProbe.closeSent = false;
-        reportValveProbeStatus("gateway_command_response_timeout");
         valveControlProbe.commandId.clear();
     }
 }

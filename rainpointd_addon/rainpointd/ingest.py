@@ -292,6 +292,13 @@ class FrameIngestor:
                     observed_at=observed_at,
                     device_id=valve.device_id if valve else None,
                 )
+                receiver = receiver_metadata.get("rf_receiver_id")
+                if control_response and isinstance(receiver, str):
+                    self.gateway.observe_valve_control_air_response(
+                        receiver,
+                        decoded["frame_hex"],
+                        observed_at=observed_at,
+                    )
                 published += 1
                 continue
 

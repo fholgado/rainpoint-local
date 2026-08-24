@@ -19,7 +19,12 @@ from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .firmware_catalog import FirmwareCatalog
-from .htv405_control import Htv405ControlCoordinator, Htv405ControlProfile
+from .htv405_control import (
+    HTV405_CONTROL_BASE_CENTER_HZ,
+    HTV405_RESPONSE_WINDOW_SECONDS,
+    Htv405ControlCoordinator,
+    Htv405ControlProfile,
+)
 from .pairing import HCS026EnrollmentManager, factory_endpoint, paired_endpoint
 from .pairing_protocol import (
     AUTOMATIC_HCS026_PROFILE_ID,
@@ -78,6 +83,18 @@ FIRMWARE_PUBLIC_HOST = re.compile(
 )
 MAXIMUM_ROUTINE_ACK_ASSIGNMENTS = 8
 _UNSET = object()
+
+
+def _observed_utc(value: str | datetime) -> datetime:
+    """Interpret legacy naive rtl_433 values as gateway-local time."""
+    observed = (
+        value
+        if isinstance(value, datetime)
+        else datetime.fromisoformat(value.replace("Z", "+00:00"))
+    )
+    if observed.tzinfo is None:
+        observed = observed.astimezone()
+    return observed.astimezone(timezone.utc)
 
 
 class Gateway:
@@ -167,6 +184,7 @@ class Gateway:
         self._active_pairing_confirmation_receiver: str | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
+        self._recover_pending_htv405_air_responses()
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -414,16 +432,8 @@ class Gateway:
             device = self._devices.get(device_id, {})
             reported_at = device.get("observed_at")
             try:
-                reported = datetime.fromisoformat(str(reported_at))
-                if reported.tzinfo is None:
-                    # rtl_433 emits local wall-clock time without an offset.
-                    # Interpret that legacy form in the gateway's local
-                    # timezone before comparing it with an aware UTC clock.
-                    reported = reported.astimezone()
-                reported = reported.astimezone(timezone.utc)
-                if current.tzinfo is None:
-                    current = current.astimezone()
-                current = current.astimezone(timezone.utc)
+                reported = _observed_utc(str(reported_at))
+                current = _observed_utc(current)
                 report_age = (current - reported).total_seconds()
             except (TypeError, ValueError):
                 report_age = float("inf")
@@ -1936,6 +1946,193 @@ class Gateway:
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
             return registration
+
+    def observe_valve_control_air_response(
+        self,
+        node_id: str,
+        frame: str,
+        *,
+        observed_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Confirm a pending command from one authenticated node's RF frame.
+
+        The network listener supplies ``node_id`` only after authenticating
+        the radio node. The gateway independently validates the frame,
+        durable association, reserved counter, zone, action, and short
+        response window before advancing control state.
+        """
+        if (
+            self._store is None
+            or not self._valve_control_enabled
+            or not RADIO_NODE_ID.fullmatch(node_id)
+        ):
+            return None
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            return None
+        response = decode_htv405_gateway_command_response(raw)
+        if response is None:
+            return None
+        timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        valve_endpoint = raw[9:13].hex()
+        controller_endpoint = raw[5:9].hex()
+        with self._lock:
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == valve_endpoint
+                ),
+                None,
+            )
+            if registration is None:
+                return None
+            sequence = response["rf_control_response_sequence"]
+            next_sequence = response["rf_next_control_sequence"]
+            zone = response["rf_control_response_zone"]
+            watering = response["rf_control_response_watering"]
+            action = "open" if watering else "close"
+            pending_started_at = registration.get(
+                "control_pending_started_at"
+            )
+            if (
+                registration.get("control_node_id") != node_id
+                or registration.get("controller_endpoint")
+                != controller_endpoint
+                or not isinstance(
+                    registration.get("control_pending_command_id"), str
+                )
+                or registration.get("control_pending_sequence") != sequence
+                or registration.get("control_pending_zone") != zone
+                or registration.get("control_pending_action") != action
+                or not isinstance(pending_started_at, str)
+            ):
+                return None
+            try:
+                started = _observed_utc(pending_started_at)
+                observed = _observed_utc(timestamp)
+            except (TypeError, ValueError):
+                return None
+            response_age = (observed - started).total_seconds()
+            if not 0 <= response_age <= HTV405_RESPONSE_WINDOW_SECONDS:
+                return None
+            run_started_at: str | None = None
+            run_duration_seconds: int | None = None
+            expected_idle_at: str | None = None
+            if watering:
+                duration = registration.get(
+                    "control_pending_duration_seconds"
+                )
+                if (
+                    not isinstance(duration, int)
+                    or isinstance(duration, bool)
+                    or duration not in range(60, 241)
+                    or duration % 60
+                ):
+                    return None
+                run_started_at = started.isoformat()
+                run_duration_seconds = duration
+                expected_idle_at = (
+                    started + timedelta(seconds=duration)
+                ).isoformat()
+            frequency_offset = registration.get(
+                "control_frequency_offset_hz"
+            )
+            if not isinstance(frequency_offset, int) or isinstance(
+                frequency_offset, bool
+            ):
+                return None
+            center_hz = HTV405_CONTROL_BASE_CENTER_HZ + frequency_offset
+            try:
+                accepted = self._store.confirm_valve_control_response(
+                    valve_endpoint=valve_endpoint,
+                    node_id=node_id,
+                    sequence=sequence,
+                    next_sequence=next_sequence,
+                    zone=zone,
+                    watering=watering,
+                    center_hz=center_hz,
+                    observed_at=observed.isoformat(),
+                    frame=frame.lower(),
+                    run_started_at=run_started_at,
+                    run_duration_seconds=run_duration_seconds,
+                    expected_idle_at=expected_idle_at,
+                )
+            except (KeyError, ValueError):
+                return None
+            self._refresh_registry_catalog()
+            self._append_valve_control_event_locked(
+                registration=accepted,
+                event_type="valve_control_confirmed",
+                observed_at=observed.isoformat(),
+                action=action,
+            )
+            return accepted
+
+    def _recover_pending_htv405_air_responses(self) -> None:
+        """Finish a journaled response interrupted before durable commit."""
+        if self._store is None or not self._valve_control_enabled:
+            return
+        retained_events = list(self._events)
+        pending = [
+            item
+            for item in self._store.valve_registry()
+            if isinstance(item.get("control_pending_command_id"), str)
+        ]
+        for registration in pending:
+            node_id = registration.get("control_node_id")
+            if not isinstance(node_id, str):
+                continue
+            accepted_event: dict[str, Any] | None = None
+            for event in retained_events:
+                state = event.get("state", {})
+                if (
+                    event.get("event_type") != "rf_frame"
+                    or state.get("rf_receiver_id") != node_id
+                    or not isinstance(event.get("raw"), str)
+                    or not isinstance(event.get("observed_at"), str)
+                ):
+                    continue
+                accepted = self.observe_valve_control_air_response(
+                    node_id,
+                    str(event["raw"]),
+                    observed_at=str(event["observed_at"]),
+                )
+                if accepted is not None:
+                    accepted_event = event
+                    break
+            if accepted_event is None:
+                continue
+            device = self._devices.get(str(registration["device_id"]))
+            if device is None:
+                continue
+            watering = device.get("state", {}).get("is_watering")
+            state_observed_at = device.get("observed_at")
+            if not isinstance(watering, bool) or not isinstance(
+                state_observed_at, str
+            ):
+                continue
+            try:
+                state_time = _observed_utc(state_observed_at)
+                response_time = _observed_utc(
+                    str(accepted_event["observed_at"])
+                )
+            except (TypeError, ValueError):
+                continue
+            if state_time < response_time:
+                continue
+            zone = device.get("state", {}).get("active_zone")
+            if not isinstance(zone, int) or isinstance(zone, bool):
+                zone = None
+            with self._lock:
+                self._store.observe_htv405_state_report(
+                    valve_endpoint=str(registration["valve_endpoint"]),
+                    watering=watering,
+                    zone=zone,
+                    observed_at=state_time.isoformat(),
+                )
+                self._refresh_registry_catalog()
 
     def observe_valve_control_probe(
         self,

@@ -13,6 +13,8 @@ from .storage import SQLiteEventStore
 
 _ENDPOINT = re.compile(r"[0-9a-f]{8}\Z")
 _NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
+HTV405_CONTROL_BASE_CENTER_HZ = 433_421_373
+HTV405_RESPONSE_WINDOW_SECONDS = 5.0
 
 
 @dataclass(frozen=True)

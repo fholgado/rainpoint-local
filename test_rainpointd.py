@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
+from rainpointd.ingest import FrameIngestor
 from rainpointd.pairing import HCS026EnrollmentManager
 from rainpointd.product_identity import (
     GENERIC_HCS02X_MODEL,
@@ -29,6 +30,171 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    HTV405_OPEN_RESPONSE_SEQUENCE_6 = (
+        "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
+        "00000000000000005878"
+    )
+
+    @staticmethod
+    def _gateway_with_pending_htv405_open(path: Path) -> Gateway:
+        gateway = Gateway(
+            storage_path=str(path),
+            valve_control_enabled=True,
+        )
+        assert gateway._store is not None
+        gateway._store.upsert_valve_link(
+            controller_endpoint="b9840280",
+            valve_endpoint="94a98013",
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            area="Garden",
+            accepted_at="2026-08-24T20:00:00+00:00",
+        )
+        gateway._store.update_valve_control_profile(
+            valve_endpoint="94a98013",
+            node_id="rp-001122334455",
+            companion_endpoint="39840280",
+            selector=0x05,
+            frequency_offset_hz=97_154,
+            observed_at="2026-08-24T20:00:01+00:00",
+        )
+        gateway._store.synchronize_htv405_control_counter(
+            valve_endpoint="94a98013",
+            node_id="rp-001122334455",
+            next_sequence=6,
+            source="retained_association_capture",
+            observed_at="2026-08-24T20:00:02+00:00",
+        )
+        gateway._refresh_registry_catalog()
+        gateway._ensure_registered_valve_devices()
+        gateway.update_node(
+            "rp-001122334455",
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "valve_control_tx_candidate"],
+        )
+        gateway.set_node_command_sender(lambda _node_id, _command: None)
+        gateway.request_htv405_control(
+            device_id="htv405-94a98013",
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        return gateway
+
+    def test_authenticated_node_air_response_confirms_pending_open(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = self._gateway_with_pending_htv405_open(
+                Path(temporary_directory) / "rainpoint.sqlite3"
+            )
+            self.assertIsNone(
+                gateway.observe_valve_control_air_response(
+                    "rp-aabbccddeeff",
+                    self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                    observed_at="2026-08-24T20:00:20.900000+00:00",
+                )
+            )
+            pending = gateway._store.valve_registry()[0]
+            self.assertIsNotNone(pending["control_pending_command_id"])
+
+            accepted = gateway.observe_valve_control_air_response(
+                "rp-001122334455",
+                self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                observed_at="2026-08-24T20:00:20.900000+00:00",
+            )
+
+            self.assertIsNotNone(accepted)
+            assert accepted is not None
+            self.assertIsNone(accepted["control_pending_command_id"])
+            self.assertEqual(7, accepted["control_next_sequence"])
+            self.assertTrue(accepted["control_confirmed_watering"])
+            self.assertEqual(1, accepted["control_active_zone"])
+            self.assertEqual(433_518_527, accepted["control_center_hz"])
+            self.assertEqual(
+                "valve_control_confirmed", gateway.events()[-1]["event_type"]
+            )
+            gateway.close()
+
+    def test_restart_recovers_journaled_response_then_later_idle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = self._gateway_with_pending_htv405_open(path)
+            gateway.observe_rf_frame(
+                frame=self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                state={
+                    "rf_receiver_id": "rp-001122334455",
+                    "rf_frame_accepted": True,
+                },
+                observed_at="2026-08-24T20:00:20.900000+00:00",
+                device_id="htv405-94a98013",
+            )
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="idle-after-bounded-run",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:01:21+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(
+                storage_path=str(path),
+                valve_control_enabled=True,
+            )
+            assert restored._store is not None
+            registration = restored._store.valve_registry()[0]
+            self.assertIsNone(registration["control_pending_command_id"])
+            self.assertEqual(7, registration["control_next_sequence"])
+            self.assertFalse(registration["control_confirmed_watering"])
+            self.assertIsNone(registration["control_active_zone"])
+            self.assertEqual(
+                "automatic_idle_confirmed_from_telemetry",
+                registration["control_last_result"],
+            )
+            restored.close()
+
+    def test_authenticated_network_ingest_confirms_air_response(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = self._gateway_with_pending_htv405_open(
+                Path(temporary_directory) / "rainpoint.sqlite3"
+            )
+            ingestor = FrameIngestor(
+                gateway,
+                receiver_id="rp-001122334455",
+            )
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-24T20:00:20.900000+00:00",
+                    "rows": [
+                        {
+                            "len": len(
+                                self.HTV405_OPEN_RESPONSE_SEQUENCE_6
+                            )
+                            * 4,
+                            "data": self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                        }
+                    ],
+                }
+            )
+
+            self.assertEqual(1, published)
+            registration = gateway._store.valve_registry()[0]
+            self.assertIsNone(registration["control_pending_command_id"])
+            self.assertEqual(7, registration["control_next_sequence"])
+            self.assertTrue(registration["control_confirmed_watering"])
+            gateway.close()
+
     def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
         previous_timezone = os.environ.get("TZ")
         try:
