@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import unittest
 from pathlib import Path
 
@@ -130,6 +132,81 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("node.get('name') or node['node_id']", source)
         self.assertEqual(3, source.count("selector.AreaSelector()"))
         self.assertNotIn('vol.Optional("area", default=""): str', source)
+
+    def test_htv405_duration_entities_preserve_the_supervised_boundary(self) -> None:
+        const_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "const.py"
+        ).read_text()
+        coordinator_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "coordinator.py"
+        ).read_text()
+        number_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "number.py"
+        ).read_text()
+        valve_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "valve.py"
+        ).read_text()
+        self.assertIn('"number"', const_source)
+        self.assertIn("MAXIMUM_RUN_MINUTES = 60", number_source)
+        self.assertIn("_attr_native_min_value = 1", number_source)
+        self.assertIn("htv405_run_minutes", coordinator_source)
+        self.assertIn("run_minutes * 60", valve_source)
+        self.assertNotIn("DEFAULT_BOUNDED_RUN_SECONDS", valve_source)
+
+    def test_garden_example_uses_the_current_htv405_identity(self) -> None:
+        dashboard = (
+            ROOT
+            / "examples"
+            / "federico-garden"
+            / "garden-local-dashboard.yaml"
+        ).read_text()
+        self.assertNotIn("garden_valve_", dashboard)
+        for entity in (
+            "binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering",
+            "sensor.rainpoint_4_zone_valve_8013_device_report_time",
+            "sensor.rainpoint_4_zone_valve_8013_last_water_usage",
+            "sensor.rainpoint_4_zone_valve_8013_battery",
+        ):
+            self.assertIn(entity, dashboard)
+        self.assertIn("Valve Battery (not decoded)", dashboard)
+
+    def test_release_versions_are_recorded_in_the_current_changelog(self) -> None:
+        addon_config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
+        addon_match = re.search(r"^version: (\S+)$", addon_config, re.MULTILINE)
+        self.assertIsNotNone(addon_match)
+        assert addon_match is not None
+        integration_version = json.loads(
+            (
+                ROOT
+                / "custom_components"
+                / "rainpoint_local"
+                / "manifest.json"
+            ).read_text()
+        )["version"]
+        current_changelog = (
+            ROOT / "rainpointd_addon" / "CHANGELOG.md"
+        ).read_text()[:2_000]
+        addon_docs = (ROOT / "rainpointd_addon" / "DOCS.md").read_text()
+        self.assertIn(f"## {addon_match.group(1)} /", current_changelog)
+        self.assertIn(
+            f"Integration {integration_version}", current_changelog
+        )
+        self.assertIn(f"Version {addon_match.group(1)} supports", addon_docs)
+
+    def test_firmware_docs_describe_the_supervised_htv405_boundary(self) -> None:
+        firmware_docs = (
+            ROOT / "firmware" / "rainpoint_bridge" / "README.md"
+        ).read_text()
+        self.assertIn("1--60 whole-minute opens", firmware_docs)
+        self.assertIn("disabled by default", firmware_docs)
+        self.assertNotIn(
+            "Keeps valve control absent from the Home Assistant", firmware_docs
+        )
+
+    def test_migration_design_uses_valve_owned_bounded_runs(self) -> None:
+        migration = (ROOT / "CLOUD_TO_LOCAL_MIGRATION.md").read_text()
+        self.assertNotIn("Close-first valve control", migration)
+        self.assertIn("Valve-owned bounded open", migration)
 
 
 if __name__ == "__main__":

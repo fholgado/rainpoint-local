@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
-from rainpointd.gateway import Gateway
+from rainpointd.gateway import Gateway, _observed_utc
 from rainpointd.http import create_server
 from rainpointd.ingest import FrameIngestor
 from rainpointd.pairing import HCS026EnrollmentManager
@@ -34,6 +34,49 @@ class GatewayTest(unittest.TestCase):
         "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
         "00000000000000005878"
     )
+
+    def test_timestamp_normalization_portability_matrix(self) -> None:
+        explicit = {
+            "2026-01-15T12:00:00Z": "2026-01-15T12:00:00+00:00",
+            "2026-01-15T12:00:00+05:30": "2026-01-15T06:30:00+00:00",
+            "2026-01-15T12:00:00-08:00": "2026-01-15T20:00:00+00:00",
+            # Both occurrences of the North American repeated fall-back hour.
+            "2026-11-01T01:30:00-04:00": "2026-11-01T05:30:00+00:00",
+            "2026-11-01T01:30:00-05:00": "2026-11-01T06:30:00+00:00",
+            # Both occurrences of the European repeated fall-back hour.
+            "2026-10-25T02:30:00+02:00": "2026-10-25T00:30:00+00:00",
+            "2026-10-25T02:30:00+01:00": "2026-10-25T01:30:00+00:00",
+        }
+        for observed, expected in explicit.items():
+            with self.subTest(observed=observed):
+                self.assertEqual(
+                    datetime.fromisoformat(expected), _observed_utc(observed)
+                )
+
+        previous_timezone = os.environ.get("TZ")
+        try:
+            legacy_local = {
+                ("UTC", "2026-01-15T12:00:00"): "2026-01-15T12:00:00+00:00",
+                ("Asia/Kolkata", "2026-01-15T12:00:00"): "2026-01-15T06:30:00+00:00",
+                ("America/New_York", "2026-01-15T12:00:00"): "2026-01-15T17:00:00+00:00",
+                ("America/New_York", "2026-07-15T12:00:00"): "2026-07-15T16:00:00+00:00",
+                ("Europe/Berlin", "2026-01-15T12:00:00"): "2026-01-15T11:00:00+00:00",
+                ("Europe/Berlin", "2026-07-15T12:00:00"): "2026-07-15T10:00:00+00:00",
+            }
+            for (zone, observed), expected in legacy_local.items():
+                with self.subTest(zone=zone, observed=observed):
+                    os.environ["TZ"] = zone
+                    time.tzset()
+                    self.assertEqual(
+                        datetime.fromisoformat(expected),
+                        _observed_utc(observed),
+                    )
+        finally:
+            if previous_timezone is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = previous_timezone
+            time.tzset()
 
     @staticmethod
     def _gateway_with_pending_htv405_open(path: Path) -> Gateway:
