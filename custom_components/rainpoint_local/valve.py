@@ -14,7 +14,7 @@ from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
 
 
-DEFAULT_BOUNDED_RUN_SECONDS = 60
+DEFAULT_BOUNDED_RUN_MINUTES = 1
 
 
 async def async_setup_entry(
@@ -101,9 +101,12 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """Expose the bounded pilot settings and confirmation boundary."""
+        run_minutes = self.coordinator.htv405_run_minutes.get(
+            (self.device_id, self._zone), DEFAULT_BOUNDED_RUN_MINUTES
+        )
         return {
             "zone": self._zone,
-            "bounded_run_seconds": DEFAULT_BOUNDED_RUN_SECONDS,
+            "bounded_run_seconds": run_minutes * 60,
             "control_available": self.decoded_state.get(
                 "rf_control_available"
             ),
@@ -120,18 +123,21 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
         }
 
     async def async_open_valve(self, **kwargs) -> None:
-        """Start one one-minute supervised pilot run."""
+        """Start one duration-bounded supervised run."""
         if self.decoded_state.get("rf_control_available") is not True:
             raise HomeAssistantError(
                 self.decoded_state.get("rf_control_unavailable_reason")
                 or "RainPoint valve control is unavailable"
             )
         try:
+            run_minutes = self.coordinator.htv405_run_minutes.get(
+                (self.device_id, self._zone), DEFAULT_BOUNDED_RUN_MINUTES
+            )
             await self.coordinator.client.open_htv405_zone(
                 self._token,
                 device_id=self.device_id,
                 zone=self._zone,
-                duration_seconds=DEFAULT_BOUNDED_RUN_SECONDS,
+                duration_seconds=run_minutes * 60,
             )
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error

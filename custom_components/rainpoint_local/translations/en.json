@@ -199,6 +199,9 @@
     "button": {
       "identify_radio_node": { "name": "Identify" }
     },
+    "number": {
+      "htv405_zone_duration": { "name": "Zone {zone} duration" }
+    },
     "update": {
       "radio_node_firmware": { "name": "Firmware" }
     },

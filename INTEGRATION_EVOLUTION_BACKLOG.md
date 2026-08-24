@@ -54,6 +54,11 @@ is observed or a persistent fault is raised.
 
 ## Publication hardening after the valve prototype
 
+- Exercise timestamp normalization under UTC, positive and negative offsets,
+  a half-hour timezone, European and North American DST transitions, and the
+  repeated fall-back hour. New transports must emit timezone-aware UTC;
+  gateway-local interpretation of naive values remains a legacy rtl_433
+  compatibility path only.
 - Coordinate the provider/identity contract with the existing HomGar
   integration and implement cloud-to-local migration there.
 - Add HA-native integration lifecycle coverage and formal entity/config-entry
