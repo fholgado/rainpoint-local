@@ -100,7 +100,7 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Expose the bounded pilot settings and confirmation boundary."""
+        """Expose the supervised duration and confirmation boundary."""
         run_minutes = self.coordinator.htv405_run_minutes.get(
             (self.device_id, self._zone), DEFAULT_BOUNDED_RUN_MINUTES
         )

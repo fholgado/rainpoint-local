@@ -163,9 +163,10 @@ frames cleared the watering bit and did not expose stale duration state.
 Automatic one-minute stops and manual stops both produced a stop frame followed
 by a distinct closed-state report. The observed confirmation delay ranged from
 less than one second to about nine seconds. The receive decoder implements
-these fields. The research-only Zone 1 command builder is now physically
-validated, but remains compiled out of production firmware and unavailable
-through the public gateway and Home Assistant APIs.
+these fields. The supervised HTV405 beta exposes the physically validated
+association-specific command builder through token-protected gateway and Home
+Assistant APIs only when the explicit control option is enabled and the
+assigned radio node advertises the required capability.
 
 Local enrollment on August 18 produced the same four-zone layout with offset
 17 equal to `0x05`. A later raw stock-control capture disproved the interim
@@ -337,9 +338,10 @@ The retained August 17 journal was re-audited and promoted into
 `research/fixtures/htv405_crossed_zone_reports_20260817.json`. It freezes all
 eight lower-channel combinations (Zones 1--4 at 60 and 120 seconds), but it
 contains no CRC-valid high-carrier command for Zones 2--4. The later isolated
-local trials supplied that missing transmit evidence and keep it behind the
-research-only firmware gate; public gateway and Home Assistant valve-control
-APIs remain disabled until the remaining persistence and safety gates pass.
+local trials supplied that missing transmit evidence. The supervised beta now
+keeps this path behind build capability, authenticated-node assignment,
+token-protected gateway access, a disabled-by-default add-on option, and
+durable counter/state validation rather than presenting it as general support.
 
 ### HTV405FRF battery-field status — 2026-08-23
 
@@ -1309,14 +1311,17 @@ normalization and confirmed field decoding. Regression examples live in
 
 ## Safety boundary
 
-Production firmware transmits only validated, identity-bounded soil-sensor
-pairing/rejoin replies and acknowledgements. The research build additionally
-contains physically validated, identity-bound HTV405 one-minute open paths for
-Zones 1--4 and a Zone 1 early-close path; they are unavailable through public
-APIs. A separate compile-gated HTV145 candidate constructs the retained
+The standard receive/sensor firmware transmits only validated,
+identity-bounded soil-sensor pairing/rejoin replies and acknowledgements. The
+supervised HTV405 beta additionally contains physically validated,
+identity-bound open paths for Zones 1--4 and a Zone 1 early-close path. That
+capability is unavailable unless the build, authenticated node, assigned valve
+association, token-protected gateway, and disabled-by-default add-on option all
+agree. A separate compile-gated HTV145 candidate constructs the retained
 long-wake command family, persists its independent command counter, and emits
 only one bounded burst, but has not been deployed or physically accepted.
-Every open carries a locally enforced maximum duration. Gateway, Home
+Every HTV405 open carries a locally enforced 1--60 whole-minute duration;
+physical validation currently covers one and two minutes. Gateway, Home
 Assistant, network, or power loss is observation-only because the valve owns
 that countdown. Silence marks state unknown and must not cause speculative RF.
 Close retries are permitted only for an explicit early-stop or after a fresh

@@ -16,7 +16,7 @@ is not a backend or dependency of the target architecture.
 ## Target system
 
 ```text
-HCS026FRF sensors          HTV145FRF valve
+HCS02x sensors       HTV405FRF / HTV145FRF valves
           \                    /
            \---- 433 MHz -----/
                      |

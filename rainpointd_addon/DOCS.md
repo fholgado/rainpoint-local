@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.32.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -109,12 +109,13 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The combined `0.14.0-combined.1` firmware includes receive, generalized sensor
-pairing, bounded routine acknowledgements, managed OTA updates, and an internal
-bounded HTV405 enrollment candidate in one build. The valve candidate is not
-exposed through the normal Home Assistant pairing UI and contains no
-valve-control commands. It also answers the captured paired-state recovery
-sequence only for sensors already assigned to the node as ACK owner.
+device. The current unified firmware includes receive, generalized sensor
+pairing, bounded routine acknowledgements, managed OTA updates, and the bounded
+HTV405 enrollment implementation in one source tree. A compatible supervised
+build advertises association and control capabilities to the gateway; Home
+Assistant exposes them only while the explicit HTV405 beta option is enabled.
+The same firmware answers the captured paired-state recovery sequence only for
+sensors already assigned to the node as ACK owner.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
 500 ms broad-scan cadence cannot repeatedly alias with a sensor's retry burst.
 Known factory identities may enter a bounded automatic rejoin through their
@@ -134,12 +135,12 @@ the custom local gateway.
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway
 before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2
-firmware advertises `rx`, `sensor_pairing_tx`, and, beginning with firmware
-0.6, the non-RF `identify` capability; no generic or valve TX capability
-exists. The app sends a
-time-limited pairing command only after an authenticated Home Assistant request
-selects that node. Its state, command ID, completed reply count, and armed state
-appear in `/api/v1/nodes`.
+firmware advertises `rx`, `sensor_pairing_tx`, routine-acknowledgement, and the
+non-RF `identify` capability. Supervised builds additionally advertise narrowly
+scoped HTV405 pairing/control capabilities; there is no generic RF-transmit
+API. The app sends a time-limited pairing or valve command only after an
+authenticated Home Assistant request selects the assigned node. Its state,
+command ID, completed reply count, and armed state appear in `/api/v1/nodes`.
 
 ### Event retention
 
@@ -194,9 +195,13 @@ The app exposes its local device and pairing API on TCP port 8787. Configure the
 - Host: the IP address of the Home Assistant host
 - Port: `8787`
 
-The supported transports currently create confirmed
-HCS026FRF soil-moisture entities and a receive-only HTV145 valve device with
-confirmed watering state, requested duration, and last-session water usage.
+The supported transports currently create confirmed HCS026FRF soil-moisture
+entities, a receive-only HTV145 valve device, and an association-backed HTV405
+four-zone device. HTV405 exposes one bounded-duration control and one duration
+setting per zone only when supervised control is explicitly enabled; state is
+accepted only from authenticated responses or subsequent valve telemetry.
+HTV145 exposes confirmed watering state, requested duration, and last-session
+water usage but remains receive-only.
 Valid RainPoint frames that do not match the confirmed layouts are retained as
 `rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
 remain research work.

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.33.0 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
+
+- Extend supervised HTV405 opens from the original 1--4 minute pilot boundary
+  to configurable 1--60 whole-minute runs across the gateway, authenticated
+  radio-node command boundary, frame builder, and Home Assistant entities.
+- Add one HA duration number per HTV405 zone. Valve opens consume the selected
+  duration while retaining single-zone exclusivity, durable command
+  reservation, authenticated response matching, and valve-owned automatic
+  stop semantics.
+- Preserve the authenticated response role across radio-node and gateway
+  restart recovery, and normalize mixed legacy SDR timestamps without allowing
+  telemetry to substitute for the independent controller counter.
+- Move the installation example dashboard from the retired HTV145 `valve-1`
+  identity to the currently paired HTV405 Zone 1. HTV405 battery remains
+  unavailable pending an independently correlated RF transition.
+- Record the remaining publication gates explicitly: installed longer-duration
+  field acceptance, battery-cycle rejoin, battery decoding, interrupted OTA,
+  signed releases, and a second valve specimen.
+
 ## 0.32.0 / Firmware 0.15.0-supervised-beta.1
 
 - Add a disabled-by-default, token-protected HTV405 control API and four Home

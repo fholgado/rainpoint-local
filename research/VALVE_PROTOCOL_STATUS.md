@@ -2,8 +2,8 @@
 
 This is the concise evidence ledger for the two tested RainPoint valve
 families. `PROTOCOL.md` remains the detailed wire reference; this document
-separates confirmed behavior from the physical gates that still block public
-control.
+separates confirmed behavior from the physical gates that keep supervised
+HTV405 control in disabled-by-default beta and still block HTV145 control.
 
 ## Terminology
 
@@ -104,5 +104,5 @@ HTV145 transmit candidate out.
 3. Capture stock battery rejoin for each valve family, then reproduce it
    locally without changing the proven new-enrollment paths.
 4. Correlate a controlled HTV405 normal-to-low battery transition.
-5. Repeat association/control acceptance on another specimen before designing
-   a public actuator API or Home Assistant migration flow.
+5. Repeat association/control acceptance on another specimen before promoting
+   HTV405 control from beta or enabling a Home Assistant migration flow.

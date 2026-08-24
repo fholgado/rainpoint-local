@@ -6,12 +6,14 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Supervised HTV405 control is now available as a disabled-by-default beta. Local
-enrollment, isolated one-minute opens on all four zones, and early stop have
-passed physical validation, including direct valve responses, automatic stop,
-and controller-counter progression. Enabling the beta adds four HA valve
-entities, but still requires association-specific candidate firmware on the
-selected radio node.
+Supervised HTV405 control is available as a disabled-by-default beta. Local
+enrollment, isolated one- and two-minute opens on all four zones, and Zone 1
+early stop have passed physical validation, including direct valve responses,
+automatic stop, and controller-counter progression. The gateway and HA expose
+1--60 whole-minute bounded runs; durations longer than two minutes remain a
+field-acceptance gate. Enabling the beta adds four HA valve entities and four
+duration controls, and requires compatible supervised firmware on the valve's
+assigned radio node.
 
 ## What works today
 
@@ -49,13 +51,17 @@ device slots.
 - OTA images are size/SHA-256 checked, health-confirmed after reboot, and use a
   three-unconfirmed-boot rollback policy.
 
-### Valve telemetry and safety groundwork
+### Valve telemetry and supervised control
 
 - Locally enroll the isolated HTV405 through a bounded, association-specific
   transcript without the stock RainPoint gateway.
-- Open every HTV405 zone for a bounded minute and early-close its confirmed
-  active zone on the enrolled selector-2 carrier, accepting state only from
-  the valve's authenticated response or later telemetry.
+- Open every HTV405 zone for physically validated one- and two-minute runs and
+  early-close the confirmed active Zone 1 on the enrolled selector-2 carrier,
+  accepting state only from the valve's authenticated response or later
+  telemetry.
+- Configure the next run independently for each zone from 1--60 whole minutes;
+  longer encodings are regression-tested while installed field acceptance is
+  still pending.
 - Track the independent controller command counter from matching valve replies;
   routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
@@ -79,7 +85,7 @@ remains undeployed pending supervised acceptance with the isolated dry valve.
 ## Architecture
 
 ```text
-HCS02x sensors / HTV145 valve
+HCS02x sensors / HTV405 and HTV145 valves
               |
            433 MHz
               |
@@ -215,18 +221,19 @@ runtime dependency.
 - Accumulate a multi-day unattended sensor reliability baseline and perform a
   controlled ACK-owner reassignment.
 - Improve final radio-node placement where Wi-Fi or RF margins are weak.
-- Add encrypted node sessions, credential rotation, and asymmetric OTA release
-  signatures before treating the trusted-LAN prototype as publishable.
+- Add encrypted node sessions, per-node credential rotation, replay protection,
+  and asymmetric OTA release signatures before treating the trusted-LAN
+  prototype as publishable.
+- Complete the installed HTV405 Zone 1 longer-duration field run and retain its
+  authenticated response, active report, valve-owned automatic stop, usage,
+  Home Assistant completion notification, and watchdog outcome.
 - Physically verify observation-only recovery after gateway and radio-node
   restarts; the association profile, authenticated controller counter, and
   expected completion of an active bounded run are stored separately from
   lower-channel telemetry.
-- Generalize the disabled bench-only duration-bounded coordinator from its
-  Zone 1 safety harness to all four physically validated command selectors,
-  retaining one-active-zone behavior and exact response-zone matching.
-- Physically exercise its 15-second command spacing, explicit early-stop on
-  every zone, late-response recovery, and overdue-run anomaly close before
-  exposing control through the gateway or Home Assistant.
+- Physically exercise explicit local early-stop on Zones 2--4, late-response
+  recovery, and positively observed overdue-run anomaly close while preserving
+  the enforced 15-second hardware command interval.
 - Physically accept the separate HTV145 long-wake path: explicit association
   residue, one bounded three-attempt burst, immediate-response/state-report
   fallback, durable command counter, restart without replay, and valve-owned

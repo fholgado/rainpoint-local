@@ -11,9 +11,17 @@ The supported sensor path is now one coherent stack:
 - identity-preserving reassociation of existing HA sensors;
 - button-only recovery of known dormant sensors;
 - persistent single-owner acknowledgements restored after reconnect/reboot; and
-- local sensor entities, activity, freshness, cadence, battery, and dashboards.
+- local sensor entities, activity, freshness, cadence, battery, and dashboards;
+- durable event-cursor long polling with slow full-snapshot reconciliation;
+- standalone gateway claim, management-token rotation, radio-node adoption,
+  per-node credentials, and immediate revocation; and
+- timezone-aware transport timestamps plus legacy local-SDR normalization with
+  UTC, offset, half-hour, and DST regression coverage.
 
-Valve telemetry is local. Valve pairing and physical control are not.
+HTV405 telemetry, local enrollment, all-zone bounded control, per-zone duration
+entities, authenticated responses, valve-owned automatic stop, and Zone 1
+early stop are available behind the disabled-by-default supervised beta. Local
+HTV145 transmit remains compile-gated and physically unaccepted.
 
 Per project direction, do not begin upstream HomGar integration-merger work
 until the dedicated test valve completes local pairing and bounded-control
@@ -31,44 +39,37 @@ validation.
 5. Verify reload/restart and HA identity retention after the consolidated
    firmware and gateway release.
 
-## Test-valve gate
+## HTV405 beta qualification
 
-Use only the isolated, unpressurized test valve:
+Completed evidence covers the exact HTV405 model, association-specific 18-step
+enrollment, parameterized offline reconstruction, passive per-zone telemetry,
+one- and two-minute dry opens on all four zones, authenticated command
+responses, independent active/idle reports, single-zone exclusivity, durable
+counter state, valve-owned automatic stop, and Zone 1 early stop. Open is never
+retried after an ambiguous result; close is limited to explicit early stop or a
+fresh report proving an overdue run.
 
-1. Record the exact four-zone model and determine whether it uses the known
-   HTV145 RF family before sharing any decoder or command body.
-2. Capture stock valve pairing and identify every association-specific field,
-   including chassis-versus-zone identities and port selection.
-3. Reconstruct the exchange offline using parameterized endpoint identities.
-4. Pair the valve locally and confirm passive per-zone state telemetry.
-5. Join the existing fail-closed safety controller to an experimental command
-   transport that targets one user-selected nearest radio node.
-6. Transmit an idempotent zone-specific close first and require an idle
-   response without changing the other zones.
-7. Run a maximum 60-second open trial on one dry zone with the node-local
-   watchdog armed before transmission.
-8. Audit command, RF frame, response, timeout, retry, watchdog, and final state.
+Remaining qualification:
 
-Open is never retried after an ambiguous result. Close may be retried until idle
-is observed or a persistent fault is raised.
+1. Retain the installed Zone 1 longer-duration field result across RF,
+   gateway, HA completion notification, usage, and watchdog layers.
+2. Prove retained association and command-counter recovery after battery
+   removal without changing the validated new-enrollment path.
+3. Correlate a controlled HTV405 normal-to-low battery transition.
+4. Physically exercise local early stop on Zones 2--4 and positively observed
+   overdue-run recovery.
+5. Repeat association and control acceptance on another specimen/profile.
 
 ## Publication hardening after the valve prototype
 
-- Exercise timestamp normalization under UTC, positive and negative offsets,
-  a half-hour timezone, European and North American DST transitions, and the
-  repeated fall-back hour. New transports must emit timezone-aware UTC;
-  gateway-local interpretation of naive values remains a legacy rtl_433
-  compatibility path only.
 - Coordinate the provider/identity contract with the existing HomGar
   integration and implement cloud-to-local migration there.
 - Add HA-native integration lifecycle coverage and formal entity/config-entry
   migrations.
 - Extract typed protocol/API models and structured errors from gateway
   dictionaries.
-- Replace five-second full polling with event-driven updates plus slow
-  reconciliation.
-- Add standalone gateway claim, credential rotation/revocation, encrypted node
-  sessions, and replay protection.
+- Add encrypted node sessions and replay protection on top of the existing
+  claim, rotation, adoption, and revocation lifecycle.
 - Sign OTA releases and test interrupted download, power loss, and forced
   rollback.
 - Separate network-only publishable app packaging from SDR/replay developer
