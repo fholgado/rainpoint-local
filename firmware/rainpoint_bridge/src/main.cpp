@@ -242,12 +242,20 @@ struct Htv145ControlCandidate {
     std::uint8_t nextSequence = 0;
     std::uint8_t transmittedSequence = 0;
     std::uint8_t attemptsSent = 0;
+    std::uint8_t successfulAttempts = 0;
+    std::uint16_t observedFrames = 0;
+    std::uint16_t matchingRouteFrames = 0;
+    std::uint16_t invalidTrailerFrames = 0;
+    std::uint16_t classifiedResponseFrames = 0;
+    std::uint16_t classifiedStateFrames = 0;
+    std::uint16_t conflictingStateFrames = 0;
     bool invert = false;
     bool configured = false;
     bool counterAuthenticated = false;
     bool pending = false;
     bool commandWatering = false;
     bool listeningOnCommandCarrier = false;
+    bool immediateResponseWindowClosed = false;
 };
 
 Htv145ControlCandidate htv145ControlCandidate;
@@ -1520,10 +1528,11 @@ bool handleValveProbeCommand(const String& command) {
 void reportHtv145CandidateStatus(
     const char* state,
     const char* confirmation = nullptr,
-    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr,
+    const char* failureClass = nullptr
 ) {
     String line;
-    line.reserve(620);
+    line.reserve(900);
     line += "{\"type\":\"htv145_control_candidate\",\"node_id\":\"";
     line += wifiTransport.nodeId();
     line += "\",\"state\":\"";
@@ -1553,11 +1562,51 @@ void reportHtv145CandidateStatus(
         line += htv145ControlCandidate.commandId;
         line += '"';
     }
-    if (htv145ControlCandidate.pending) {
+    if (!htv145ControlCandidate.commandId.isEmpty()) {
         line += ",\"transmitted_sequence\":";
         line += htv145ControlCandidate.transmittedSequence;
-        line += ",\"attempts_sent\":";
+        line += ",\"attempts_started\":";
         line += htv145ControlCandidate.attemptsSent;
+        line += ",\"attempts_sent\":";
+        line += htv145ControlCandidate.successfulAttempts;
+        line += ",\"observed_frames\":";
+        line += htv145ControlCandidate.observedFrames;
+        line += ",\"matching_route_frames\":";
+        line += htv145ControlCandidate.matchingRouteFrames;
+        line += ",\"invalid_trailer_frames\":";
+        line += htv145ControlCandidate.invalidTrailerFrames;
+        line += ",\"classified_response_frames\":";
+        line += htv145ControlCandidate.classifiedResponseFrames;
+        line += ",\"classified_state_frames\":";
+        line += htv145ControlCandidate.classifiedStateFrames;
+        line += ",\"conflicting_state_frames\":";
+        line += htv145ControlCandidate.conflictingStateFrames;
+        line += ",\"immediate_response_window_closed\":";
+        line += htv145ControlCandidate.immediateResponseWindowClosed
+            ? "true" : "false";
+        line += ",\"immediate_response_outcome\":\"";
+        if (htv145ControlCandidate.classifiedResponseFrames > 0) {
+            line += "classified";
+        } else if (htv145ControlCandidate.invalidTrailerFrames > 0 ||
+            htv145ControlCandidate.matchingRouteFrames >
+                htv145ControlCandidate.classifiedStateFrames) {
+            line += "corrupt_or_foreign";
+        } else {
+            line += "none_observed";
+        }
+        line += "\",\"state_confirmation_outcome\":\"";
+        if (htv145ControlCandidate.classifiedStateFrames >
+                htv145ControlCandidate.conflictingStateFrames) {
+            line += "matching";
+        } else if (htv145ControlCandidate.conflictingStateFrames > 0) {
+            line += "conflicting";
+        } else if (!htv145ControlCandidate.pending &&
+            htv145ControlCandidate.immediateResponseWindowClosed) {
+            line += "missed";
+        } else {
+            line += "pending";
+        }
+        line += '"';
         line += ",\"requested_watering\":";
         line += htv145ControlCandidate.commandWatering ? "true" : "false";
         if (htv145ControlCandidate.commandWatering) {
@@ -1569,6 +1618,13 @@ void reportHtv145CandidateStatus(
         line += ",\"confirmation\":\"";
         line += confirmation;
         line += '"';
+    }
+    if (failureClass != nullptr) {
+        line += ",\"failure_class\":\"";
+        line += failureClass;
+        line += "\",\"counter_ambiguous\":";
+        line += htv145ControlCandidate.successfulAttempts > 0
+            ? "true" : "false";
     }
     if (frame != nullptr) {
         line += ",\"frame\":\"";
@@ -1589,13 +1645,43 @@ void restoreHtv145CandidateReceive() {
 #endif
 }
 
+const char* htv145CandidateFailureClass(const char* state) {
+    if (strcmp(state, "transmit_failed") == 0 &&
+        htv145ControlCandidate.successfulAttempts == 0) {
+        return "nothing_transmitted";
+    }
+    if (strcmp(state, "response_receiver_tune_failed") == 0) {
+        return "transmitted_but_response_receiver_failed";
+    }
+    if (strcmp(state, "conflicting_command_response") == 0) {
+        return "conflicting_authenticated_response";
+    }
+    if (strcmp(state, "gateway_connection_lost_counter_unsynchronized") == 0) {
+        return htv145ControlCandidate.successfulAttempts > 0
+            ? "gateway_lost_after_transmission"
+            : "gateway_lost_before_transmission";
+    }
+    if (htv145ControlCandidate.invalidTrailerFrames > 0 ||
+        htv145ControlCandidate.matchingRouteFrames >
+            htv145ControlCandidate.classifiedResponseFrames +
+            htv145ControlCandidate.classifiedStateFrames) {
+        return "corrupt_or_foreign_matching_route_response";
+    }
+    if (htv145ControlCandidate.immediateResponseWindowClosed) {
+        return "state_confirmation_missed_after_no_immediate_response";
+    }
+    return "transmitted_no_matching_response_or_state";
+}
+
 void failHtv145Candidate(const char* state) {
     // Once any attempt may have reached the air, failure to observe the valve
     // makes the outbound counter ambiguous. Fail closed and require a new
     // passive stock/local synchronization before accepting another command.
     htv145ControlCandidate.counterAuthenticated = false;
     htv145ControlCandidate.pending = false;
-    reportHtv145CandidateStatus(state);
+    reportHtv145CandidateStatus(
+        state, nullptr, nullptr, htv145CandidateFailureClass(state)
+    );
     restoreHtv145CandidateReceive();
     htv145ControlCandidate.commandId.clear();
 }
@@ -1631,6 +1717,9 @@ bool transmitNextHtv145CandidateAttempt() {
         )
     );
     ++htv145ControlCandidate.attemptsSent;
+    if (sent) {
+        ++htv145ControlCandidate.successfulAttempts;
+    }
     if (!sent || !primaryRadio.setReceiveFrequency(
             htv145ControlCandidate.centerHz
         )) {
@@ -1691,6 +1780,14 @@ bool startHtv145Candidate(
         htv145ControlCandidate.nextSequence;
     htv145ControlCandidate.commandWatering = watering;
     htv145ControlCandidate.attemptsSent = 0;
+    htv145ControlCandidate.successfulAttempts = 0;
+    htv145ControlCandidate.observedFrames = 0;
+    htv145ControlCandidate.matchingRouteFrames = 0;
+    htv145ControlCandidate.invalidTrailerFrames = 0;
+    htv145ControlCandidate.classifiedResponseFrames = 0;
+    htv145ControlCandidate.classifiedStateFrames = 0;
+    htv145ControlCandidate.conflictingStateFrames = 0;
+    htv145ControlCandidate.immediateResponseWindowClosed = false;
     htv145ControlCandidate.pending = true;
     htv145ControlCandidate.burstStartedAtMs = millis();
     htv145ControlCandidate.immediateResponseDeadlineMs =
@@ -1711,10 +1808,24 @@ void observeHtv145CandidateFrame(
     if (!htv145ControlCandidate.pending) {
         return;
     }
+    ++htv145ControlCandidate.observedFrames;
+    const bool matchingRoute = rainpoint::htv145RouteMatches(
+        frame,
+        htv145ControlCandidate.link.valveEndpoint,
+        htv145ControlCandidate.link.controllerEndpoint
+    );
+    if (matchingRoute) {
+        ++htv145ControlCandidate.matchingRouteFrames;
+        if (!rainpoint::hasOrdinaryTrailer(frame)) {
+            ++htv145ControlCandidate.invalidTrailerFrames;
+            return;
+        }
+    }
     rainpoint::Htv145CommandResponse response{};
     if (rainpoint::decodeHtv145CommandResponse(
             frame, htv145ControlCandidate.link, response
         )) {
+        ++htv145ControlCandidate.classifiedResponseFrames;
         if (response.sequence != htv145ControlCandidate.transmittedSequence ||
             response.watering != htv145ControlCandidate.commandWatering) {
             failHtv145Candidate("conflicting_command_response");
@@ -1726,7 +1837,12 @@ void observeHtv145CandidateFrame(
     bool watering = false;
     if (rainpoint::decodeHtv145StateReport(
             frame, htv145ControlCandidate.link, watering
-        ) && watering == htv145ControlCandidate.commandWatering) {
+        )) {
+        ++htv145ControlCandidate.classifiedStateFrames;
+        if (watering != htv145ControlCandidate.commandWatering) {
+            ++htv145ControlCandidate.conflictingStateFrames;
+            return;
+        }
         // This report has its own telemetry counter. It proves resulting state
         // but never supplies or overwrites the outbound command counter.
         confirmHtv145Candidate("matching_independent_state_report", frame);
@@ -1753,6 +1869,7 @@ void pollHtv145Candidate() {
         // The fallback watering/idle report is on the ordinary telemetry
         // carrier. Restore it once the immediate response window closes.
         restoreHtv145CandidateReceive();
+        htv145ControlCandidate.immediateResponseWindowClosed = true;
 #if RAINPOINT_RADIO_COUNT == 1
         scanChannels = false;
 #endif

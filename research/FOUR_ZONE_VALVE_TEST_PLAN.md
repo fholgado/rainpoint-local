@@ -109,6 +109,14 @@ beyond the expected completion plus grace period.
 
 ## Remaining power-cycle and battery validation
 
+Machine classification of the 11 retained lifecycle attempts found three
+retained-association rejoins, two assignment-followed-by-paired-traffic cases,
+two assignment-only failures, two cold-boot sweep-only cases, one explicit
+sweep-only failure, and one invalid-methodology attempt. Only the controlled
+20:17 capture proves acceptance of a new assignment. Re-run the classifier with
+`python3 tools/valve_trial_analysis.py htv405-lifecycle
+research/fixtures/htv405_pairing_cross_reference_20260820.json`.
+
 - Verify that a locally paired HTV405FRF retains its association across a
   battery removal, rejoins the same custom controller without opening a new
   pairing window, and resumes authenticated idle/control reports. Distinguish

@@ -201,6 +201,8 @@ records and protocol/product evidence, not those names or endpoints.
 - [research/FOUR_ZONE_VALVE_TEST_PLAN.md](research/FOUR_ZONE_VALVE_TEST_PLAN.md)
   — receive-only enrollment and crossed zone/duration capture sequence for the
   isolated four-zone test valve.
+- [research/VALVE_PROTOCOL_STATUS.md](research/VALVE_PROTOCOL_STATUS.md) —
+  concise confirmed-versus-pending evidence ledger for both valve families.
 
 Cloud-specific investigation is isolated under `research/cloud` and is not a
 runtime dependency.

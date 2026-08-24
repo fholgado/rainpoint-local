@@ -282,10 +282,14 @@ class Htv145ControlCoordinator:
             "gateway_connection_lost_counter_unsynchronized",
             "conflicting_command_response",
         }:
+            failure_class = message.get("failure_class")
+            reason = str(status)
+            if isinstance(failure_class, str) and failure_class:
+                reason = f"{reason}:{failure_class}"
             return self.store.fail_htv145_command(
                 valve_endpoint=profile.valve_endpoint,
                 command_id=command_id,
-                reason=str(status),
+                reason=reason,
                 observed_at=observed_at,
             )
         return None

@@ -59,6 +59,12 @@ capacitor across CC1101 VCC/GND when practical.
   accepts only explicit association endpoints/carrier/residue, and advances
   its command counter only from a matching response or independent state
   confirmation. The standard image compiles this path out.
+- The HTV145 candidate reports bounded-attempt evidence separately from its
+  verdict: attempts started/sent, matching-route and invalid-trailer frames,
+  classified response/state frames, response and state outcomes, a precise
+  failure class, and whether the command counter is ambiguous. These fields
+  feed the disabled dry-valve acceptance transcript; they are not a public
+  actuator interface.
 - Keeps valve control absent from the Home Assistant and public HTTP APIs. The
   bench coordinator starts observation-only, spaces operations by at least 15
   seconds, never advances state from transmit success, and never emits a

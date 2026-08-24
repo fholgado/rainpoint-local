@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased / Research firmware 0.14.0-valve-control-probe.40
+## Unreleased
+
+- Add a disabled, non-public HTV145 dry-valve acceptance harness that selects
+  one node, synchronizes only from passive command evidence, dispatches one
+  bounded logical open, and requires observed open plus automatic idle.
+- Distinguish candidate transmit, receiver, corrupt/foreign-response, missing
+  response/state, gateway-loss, and ambiguous-counter failures in the radio
+  node audit report.
+- Generalize retained transaction analysis across HTV145 and both HTV405 zone
+  layouts, and machine-classify new enrollment versus retained rejoin evidence.
+
+## Research firmware 0.14.0-valve-control-probe.40
 
 - Isolate the unvalidated HTV405 battery-cycle retained-rejoin candidate in a
   dedicated one-reply state machine. The validated 18-step new-enrollment

@@ -5,7 +5,12 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from tools.valve_trial_analysis import analyze_zone_matrix, classify_pairing_exchange
+from tools.valve_trial_analysis import (
+    analyze_valve_transactions,
+    analyze_zone_matrix,
+    classify_htv405_retained_attempts,
+    classify_pairing_exchange,
+)
 
 
 def frame(source: str, destination: str, message: int, *, zone: int = 0,
@@ -22,6 +27,137 @@ def frame(source: str, destination: str, message: int, *, zone: int = 0,
 
 
 class ValveTrialAnalysisTests(unittest.TestCase):
+    def test_distinguishes_retained_rejoin_from_new_assignment(self) -> None:
+        report = classify_htv405_retained_attempts(
+            [
+                {
+                    "capture": "boot",
+                    "factory_flag": "7f",
+                    "assignment_observed": False,
+                    "paired_traffic_observed": False,
+                },
+                {
+                    "capture": "stored",
+                    "factory_flag": "ff",
+                    "assignment_observed": False,
+                    "paired_traffic_observed": True,
+                },
+                {
+                    "capture": "accepted",
+                    "factory_flag": "ff",
+                    "assignment_observed": True,
+                    "paired_traffic_observed": True,
+                    "node_completed_steps": 1,
+                    "interpretation": "assignment accepted under controlled test",
+                },
+            ]
+        )
+
+        self.assertEqual("cold_boot_sweep_only", report["attempts"][0]["classification"])
+        self.assertEqual(
+            "retained_association_rejoin", report["attempts"][1]["classification"]
+        )
+        self.assertTrue(report["attempts"][2]["new_assignment_proven"])
+        self.assertFalse(report["findings"]["white_led_is_assignment_proof"])
+
+    def test_correlates_htv145_retries_response_and_independent_state(self) -> None:
+        raws = [
+            "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68",
+            "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68",
+            "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68",
+            "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802000000000000004bfa",
+            "79f4882f28b9840280b42d008f89810785898090cf8702000040d58256d80200000000003fc6",
+        ]
+        offsets = (0, 0.729210, 1.668479, 1.719304, 7.348155)
+        base = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+        events = [
+            {
+                "event_id": index + 1,
+                "observed_at": (base + timedelta(seconds=offset)).isoformat(),
+                "raw": raw,
+            }
+            for index, (offset, raw) in enumerate(zip(offsets, raws))
+        ]
+
+        report = analyze_valve_transactions(
+            events,
+            model="HTV145FRF",
+            controller_endpoint="b42d008f",
+            valve_endpoint="b9840280",
+        )
+
+        self.assertEqual(1, report["logical_command_count"])
+        self.assertEqual(3, report["rf_attempt_count"])
+        transaction = report["transactions"][0]
+        self.assertEqual([0.0, 729.21, 1668.479], transaction["attempt_offsets_ms"])
+        self.assertEqual(4, transaction["response_event_id"])
+        self.assertEqual(50.825, transaction["response_latency_ms"])
+        self.assertEqual(5, transaction["state_event_id"])
+        self.assertEqual(0x89, transaction["state_sequence"])
+
+    def test_correlates_htv405_profile_specific_zone_transaction(self) -> None:
+        raws = [
+            "79f4882f2894a98013398402808e90828082009e0000000000000000000000000000000030da",
+            "79f4882f28b984028094a980130ed0868020cf80000000409e00569e000000000000000010a4",
+            "79f4882f28b984028094a980131a8107820580a0cf80000000409e00569e0000000000000d22",
+        ]
+        base = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+        events = [
+            {
+                "event_id": index + 1,
+                "observed_at": (base + timedelta(seconds=index)).isoformat(),
+                "raw": raw,
+            }
+            for index, raw in enumerate(raws)
+        ]
+
+        report = analyze_valve_transactions(
+            events,
+            model="HTV405FRF",
+            controller_endpoint="b9840280",
+            valve_endpoint="94a98013",
+            companion_endpoint="39840280",
+        )
+
+        transaction = report["transactions"][0]
+        self.assertEqual(2, transaction["zone"])
+        self.assertEqual("selector2_local", transaction["zone_packing"])
+        self.assertEqual(60, transaction["duration_seconds"])
+        self.assertEqual(2, transaction["response_event_id"])
+        self.assertEqual(3, transaction["state_event_id"])
+        self.assertTrue(transaction["state_watering"])
+
+    def test_correlates_htv405_close_response_and_zone_less_idle(self) -> None:
+        raws = [
+            "79f4882f2894a980133984028084108180810000000000000000000000000000000000004f0c",
+            "79f4882f28b984028094a9801304508683104f80000000408000568000000000000000001e6e",
+            "79f4882f28b984028094a980131d0107820580804f8000000040800056800000000000000045",
+        ]
+        base = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+        events = [
+            {
+                "event_id": index + 1,
+                "observed_at": (base + timedelta(seconds=index)).isoformat(),
+                "raw": raw,
+            }
+            for index, raw in enumerate(raws)
+        ]
+
+        report = analyze_valve_transactions(
+            events,
+            model="HTV405FRF",
+            controller_endpoint="b9840280",
+            valve_endpoint="94a98013",
+            companion_endpoint="39840280",
+        )
+
+        transaction = report["transactions"][0]
+        self.assertEqual("close", transaction["action"])
+        self.assertEqual(1, transaction["zone"])
+        self.assertEqual(2, transaction["response_event_id"])
+        self.assertEqual(3, transaction["state_event_id"])
+        self.assertFalse(transaction["state_watering"])
+
     def test_classifies_structural_three_phase_exchange(self) -> None:
         events = [
             {"event_id": 1, "observed_at": "2026-08-17T12:00:00Z",

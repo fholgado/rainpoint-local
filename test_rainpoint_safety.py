@@ -24,6 +24,7 @@ from rainpointd.htv145_control import (  # noqa: E402
     Htv145ControlCoordinator,
     Htv145ControlProfile,
 )
+from rainpointd.htv145_acceptance import Htv145DryValveAcceptance  # noqa: E402
 from rainpointd.storage import SQLiteEventStore  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     build_open_frame,
@@ -471,6 +472,36 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
         self.assertIsNone(failed["pending_command_id"])
         self.assertIn("node_rejected", failed["last_result"])
 
+    def test_candidate_failure_class_is_retained_in_durable_audit(self) -> None:
+        command = self.coordinator.request_open(
+            self.profile,
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        failed = self.coordinator.observe_candidate_status(
+            self.profile,
+            {
+                "type": "htv145_control_candidate",
+                "node_id": self.profile.node_id,
+                "command_id": command["command_id"],
+                "state": "confirmation_timeout_counter_unsynchronized",
+                "failure_class": (
+                    "state_confirmation_missed_after_no_immediate_response"
+                ),
+                "attempts_sent": 3,
+                "matching_route_frames": 0,
+            },
+            observed_at="2026-08-24T12:00:35+00:00",
+        )
+
+        self.assertIsNotNone(failed)
+        self.assertEqual(
+            "confirmation_timeout_counter_unsynchronized:"
+            "state_confirmation_missed_after_no_immediate_response",
+            failed["last_result"],
+        )
+        self.assertFalse(failed["counter_synchronized"])
+
     def test_command_interval_and_single_pending_are_enforced(self) -> None:
         self.coordinator.request_open(
             self.profile,
@@ -490,6 +521,84 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
             self.coordinator.request_close(
                 self.profile, started_at="2026-08-24T12:00:30+00:00"
             )
+
+    def test_dry_acceptance_requires_one_open_and_observed_automatic_idle(self) -> None:
+        harness = Htv145DryValveAcceptance(
+            coordinator=self.coordinator,
+            profile=self.profile,
+            enabled=True,
+        )
+        passive = build_open_frame(
+            self.profile.link, 0x80, 1_200, 0xC713
+        )
+        harness.prepare(
+            idle_frame=self.IDLE,
+            passive_command_frame=passive,
+            observed_at="2026-08-24T12:00:00+00:00",
+        )
+        command = harness.open_once(
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        with self.assertRaisesRegex(RuntimeError, "exactly one"):
+            harness.open_once(
+                duration_seconds=600,
+                started_at="2026-08-24T12:00:40+00:00",
+            )
+        harness.observe_frame(
+            self.OPEN_RESPONSE,
+            observed_at="2026-08-24T12:00:22+00:00",
+        )
+        harness.observe_frame(
+            self.IDLE,
+            observed_at="2026-08-24T12:10:20+00:00",
+        )
+        report = harness.report(finished_at="2026-08-24T12:10:21+00:00")
+        self.assertTrue(report["passed"])
+        self.assertEqual(command["command_id"], report["command_id"])
+        self.assertEqual(
+            [
+                "prepared",
+                "open_dispatched",
+                "open_confirmed",
+                "automatic_idle_confirmed",
+            ],
+            [item["event"] for item in report["audit"]],
+        )
+
+    def test_dry_acceptance_is_disabled_and_dispatch_is_not_success(self) -> None:
+        disabled = Htv145DryValveAcceptance(
+            coordinator=self.coordinator,
+            profile=self.profile,
+        )
+        with self.assertRaisesRegex(PermissionError, "disabled"):
+            disabled.prepare(
+                idle_frame=self.IDLE,
+                passive_command_frame=build_open_frame(
+                    self.profile.link, 0x80, 600, 0xC713
+                ),
+                observed_at="2026-08-24T12:00:00+00:00",
+            )
+
+        harness = Htv145DryValveAcceptance(
+            coordinator=self.coordinator,
+            profile=self.profile,
+            enabled=True,
+        )
+        harness.prepare(
+            idle_frame=self.IDLE,
+            passive_command_frame=build_open_frame(
+                self.profile.link, 0x80, 600, 0xC713
+            ),
+            observed_at="2026-08-24T12:00:00+00:00",
+        )
+        harness.open_once(
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        report = harness.report(finished_at="2026-08-24T12:00:21+00:00")
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["checks"]["open_confirmed_by_valve_evidence"])
 
 
 if __name__ == "__main__":

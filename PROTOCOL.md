@@ -1294,9 +1294,11 @@ normalization and confirmed field decoding. Regression examples live in
    window.
 4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
    or cloud metadata.
-5. Validate retained-association valve rejoin after a battery cycle without a
-   full enrollment exchange. Keep its one-reply matcher separate from the
-   validated 18-step new-enrollment state machine.
+5. Capture a controlled stock-gateway valve battery rejoin before changing the
+   local implementation again. The one-reply hypothesis and the unchanged
+   18-step transcript after a `0x7f` boot trigger both failed; keep rejoin
+   separate from the validated `0xff` new-enrollment state machine and require
+   paired traffic as terminal evidence.
 6. Physically validate the HTV145 one-logical-command/three-attempt bounded
    burst, matching response, independent state fallback, counter persistence,
    and positively observed overdue-run handling before enabling Home Assistant

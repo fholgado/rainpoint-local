@@ -101,6 +101,9 @@ class AddonBoundaryTest(unittest.TestCase):
         http_source = (
             ROOT / "rainpointd_addon" / "rainpointd" / "http.py"
         ).read_text()
+        main_source = (
+            ROOT / "rainpointd_addon" / "rainpointd" / "__main__.py"
+        ).read_text()
         self.assertIn("RAINPOINT_HTV145_TX_CANDIDATE == 1", source)
         self.assertIn("htv145_control_candidate", source)
         self.assertIn(
@@ -109,6 +112,8 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertNotIn("htv145_control", http_source)
+        self.assertNotIn("htv145_acceptance", http_source)
+        self.assertNotIn("htv145_acceptance", main_source)
 
     def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
         source = (
