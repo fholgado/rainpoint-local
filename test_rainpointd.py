@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -28,6 +29,68 @@ from rainpointd.replay import ReplayTransport, load_fixtures
 
 
 class GatewayTest(unittest.TestCase):
+    def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
+        previous_timezone = os.environ.get("TZ")
+        try:
+            os.environ["TZ"] = "America/New_York"
+            time.tzset()
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                gateway = Gateway(
+                    storage_path=str(
+                        Path(temporary_directory) / "rainpoint.sqlite3"
+                    ),
+                    valve_control_enabled=True,
+                )
+                assert gateway._store is not None
+                gateway._store.upsert_valve_link(
+                    controller_endpoint="b9840280",
+                    valve_endpoint="94a98013",
+                    device_id="htv405-94a98013",
+                    name="Test four-zone valve",
+                    model="HTV405FRF",
+                    area="Garden",
+                    accepted_at="2026-08-24T20:00:00+00:00",
+                )
+                gateway._store.update_valve_control_profile(
+                    valve_endpoint="94a98013",
+                    node_id="rp-001122334455",
+                    companion_endpoint="39840280",
+                    selector=0x05,
+                    frequency_offset_hz=97_154,
+                    observed_at="2026-08-24T20:00:01+00:00",
+                )
+                gateway._refresh_registry_catalog()
+                gateway._ensure_registered_valve_devices()
+                gateway.observe_decoded(
+                    device_id="htv405-94a98013",
+                    name="Test four-zone valve",
+                    model="HTV405FRF",
+                    frame="idle",
+                    state={
+                        "rf_endpoint_b": "94a98013",
+                        "is_watering": False,
+                        "valve_state": "idle",
+                    },
+                    observed_at="2026-08-24T16:00:00",
+                )
+
+                synchronized = gateway.synchronize_htv405_control_counter(
+                    device_id="htv405-94a98013",
+                    next_sequence=6,
+                    evidence_source="retained_association_capture",
+                    now=datetime.fromisoformat("2026-08-24T20:00:30+00:00"),
+                )
+
+                self.assertEqual(6, synchronized["control_next_sequence"])
+                self.assertFalse(synchronized["control_confirmed_watering"])
+                gateway.close()
+        finally:
+            if previous_timezone is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = previous_timezone
+            time.tzset()
+
     def test_sensor_link_diagnostics_attach_to_endpoint_device(self) -> None:
         gateway = Gateway(transport="rtl433")
         gateway.observe_decoded(

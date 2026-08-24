@@ -416,9 +416,14 @@ class Gateway:
             try:
                 reported = datetime.fromisoformat(str(reported_at))
                 if reported.tzinfo is None:
-                    reported = reported.replace(tzinfo=timezone.utc)
+                    # rtl_433 emits local wall-clock time without an offset.
+                    # Interpret that legacy form in the gateway's local
+                    # timezone before comparing it with an aware UTC clock.
+                    reported = reported.astimezone()
+                reported = reported.astimezone(timezone.utc)
                 if current.tzinfo is None:
-                    current = current.replace(tzinfo=timezone.utc)
+                    current = current.astimezone()
+                current = current.astimezone(timezone.utc)
                 report_age = (current - reported).total_seconds()
             except (TypeError, ValueError):
                 report_age = float("inf")
