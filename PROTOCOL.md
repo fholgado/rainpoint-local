@@ -302,14 +302,22 @@ retained in `research/fixtures/htv405_gateway_pairing_replies.json`.
 
 A later stock re-enrollment on 2026-08-24 was correlated directly with the
 RainPoint app's device-information screen. The app reported **Device Address
-6**, while all captured paired requests used the selector-6 `0x86` family.
-This independently confirms that the user-visible device address corresponds
-to the assigned RF selector branch. The same screen reported a full battery,
-stock-hub RSSI of -42 dBm, firmware display `123`, and decimal device ID
-`637555497` (`0x26005329`). The device ID was not present directly or
-byte-reversed in the RF frames, and the other values are retained only as
-correlation labels until their RF fields are demonstrated. See
-`research/fixtures/htv405_stock_selector6_app_correlation_20260824.json`.
+6**. All captured paired requests and six later idle-link reports carried
+logical-address byte `0x86`, strongly tying that field to the assigned valve
+address. The valve association also used the carrier and marker family
+historically described here as the selector-6 branch, but the address must not
+be treated as a generic radio-channel selector: an independent HCS026 app
+correlation has address 2 but negotiated acknowledgement channel 4. The
+HCS026 report body also cannot yet locate its app address because the tempting
+`0x82` field occurs in reports from other installed sensors.
+The same valve screen reported a full battery, stock-hub RSSI of -42 dBm,
+firmware display `123`, and decimal device ID `637555497` (`0x26005329`). The
+upper device-ID byte `0x26` equals the catalogued HTV405 product code 38; the
+remaining bytes were not present directly or byte-reversed in the RF frames.
+Battery, RSSI, and firmware values remain correlation labels until their RF
+fields are demonstrated. See
+`research/fixtures/htv405_stock_selector6_app_correlation_20260824.json` and
+`research/fixtures/app_device_metadata_rf_correlation_20260824.json`.
 
 The initial assignment reply occupied a distinct channel near 433.506 MHz and
 used tones near 433.471 and 433.541 MHz: approximately 70 kHz separation and
@@ -909,6 +917,19 @@ Example Left Bed frame:
 ```text
 79f4882f28b9840280c4e500240981820385c406000000000000000000000000000000004cea
 ```
+
+The RainPoint app identified this device as address 2. Its 32-bit device ID
+begins with `0x48`; the installation-specific lower 24 bits are redacted.
+Historical Left Bed reports contain `0x82` at normalized offset 15, but that
+value is not promoted as the app address because other installed HCS026 report
+layouts also contain it. Its locally observed acknowledgement channel is
+independently assigned as channel 4, proving that the app address and
+enrollment channel are separate values. The upper byte of the app device ID,
+`0x48`, equals the catalogued HCS02x soil-sensor product code, mirroring the
+HTV405 device-ID/product-code relationship. The remaining 24 bits do not
+directly or byte-reversed match the sensor's factory endpoint `44e50024` or
+paired endpoint `c4e50024`. See
+`research/fixtures/app_device_metadata_rf_correlation_20260824.json`.
 
 ### Sensor fields not yet decoded
 

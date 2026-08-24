@@ -1,0 +1,69 @@
+{
+  "captured_at": "2026-08-24",
+  "source": "RainPoint app device-information screenshots correlated with retained and live local RF observations",
+  "devices": [
+    {
+      "installation_label": "Left Bed",
+      "model": "HCS026FRF",
+      "app": {
+        "device_id_high_byte_hex": "48",
+        "device_id_lower_24_bits_redacted": true,
+        "device_address": 2,
+        "battery_display": "full icon",
+        "rssi_dbm": -78,
+        "firmware_version_display": "100",
+        "associated_controller": null
+      },
+      "catalog": {
+        "product_code_decimal": 72,
+        "product_code_hex": "48",
+        "model_code_decimal": 317,
+        "model_code_hex": "013d"
+      },
+      "rf": {
+        "factory_endpoint": "44e50024",
+        "paired_endpoint": "c4e50024",
+        "retained_historical_frame": "79f4882f28b9840280c4e500240981820385c406000000000000000000000000000000004cea",
+        "candidate_address_byte_offset": 15,
+        "candidate_address_byte_hex": "82",
+        "address_mapping_status": "unconfirmed because the same field value occurs in reports from other installed HCS026 sensors",
+        "locally_observed_ack_channel": 4
+      }
+    },
+    {
+      "model": "HTV405FRF",
+      "app": {
+        "device_id_high_byte_hex": "26",
+        "device_id_lower_24_bits_redacted": true,
+        "device_address": 6,
+        "battery_display": "full icon",
+        "rssi_dbm": -42,
+        "firmware_version_display": "123"
+      },
+      "catalog": {
+        "product_code_decimal": 38,
+        "product_code_hex": "26",
+        "model_code_decimal": 38,
+        "model_code_hex": "0026"
+      },
+      "rf": {
+        "factory_endpoint": "14a98013",
+        "paired_endpoint": "94a98013",
+        "first_paired_request": "79f4882f28b984028094a9801301010786a580804f80000000408000568000000000000000aa",
+        "logical_address_byte_offset": 16,
+        "logical_address_byte_hex": "86",
+        "association_branch": 6
+      }
+    }
+  ],
+  "conclusions": [
+    "For both tested product families, the high byte of the 32-bit app device ID equals the catalogued product code.",
+    "For the HTV405 association, app address 6 maps directly to 0x86 in paired requests and subsequent idle-link reports.",
+    "The HCS026 app-address field is not yet located over RF; a 0x82 candidate in Left Bed traffic is shared by other sensor report layouts.",
+    "The Left Bed app address 2 is distinct from its locally observed acknowledgement channel 4, so device address and radio-channel selector must not be modeled as synonyms.",
+    "The observed installation order is consistent with the stock gateway allocating monotonically increasing child addresses, but deletion reuse and maximum address behavior remain untested.",
+    "The lower 24 bits of either app device ID do not appear directly or byte-reversed in the correlated RF frames and are not promoted as RF identities.",
+    "App RSSI is stock-gateway receiver metadata and must remain separate from local receiver RSSI.",
+    "The two device-ID examples support a migration hypothesis, not a universal device-ID format claim."
+  ]
+}

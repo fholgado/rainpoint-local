@@ -166,6 +166,15 @@ product code 38 with different model codes. Product code 38 should therefore
 be tested as a four-zone functional-family identifier, not treated as an exact
 model name.
 
+Two app/RF correlations on 2026-08-24 exposed an additional identity rule.
+The RainPoint app's device IDs are 32-bit values whose upper byte matched the
+catalogued product code in both tested families: the Left Bed HCS026FRF ID
+begins with product code `0x48`, and the HTV405FRF ID begins with product code
+`0x26` (decimal 38). Installation-specific lower 24-bit values are redacted;
+they did not directly identify the devices' observed RF endpoints. This is
+useful migration metadata and a two-family hypothesis, not yet a universal
+identifier rule.
+
 Source snapshot:
 <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/data/product_models.json>
 

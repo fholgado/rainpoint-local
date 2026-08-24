@@ -40,9 +40,18 @@
     "initial_assignment_decoded": false,
     "notes": "The passive decoders did not retain the initial stock assignment burst. The immediate paired-identity transition nevertheless proves that it was accepted. A raw IQ capture is still required for the stock battery-rejoin reply."
   },
+  "post_pairing_idle_link_reports": {
+    "event_ids": [155292, 155365, 155441, 155508, 155577, 155646, 155720],
+    "logical_address_byte_hex": "86",
+    "telemetry_sequence_values": [18, 19, 20, 21, 22, 23, 24],
+    "intervals_seconds": [473.081, 496.922, 471.077, 469.992, 471.018, 497.996],
+    "mean_interval_seconds": 480.014,
+    "interpretation": "The address-6 association remained stable after enrollment. Successive received intervals span roughly 470 to 498 seconds, so the observed idle-link cadence is about eight minutes without yet claiming whether the longer intervals are protocol scheduling or reception delay."
+  },
   "correlations": [
-    "The app's device address 6 agrees with the selector-6 request family encoded as 0x86 in the paired valve frames.",
-    "The decimal app device ID converts to 0x26005329 and appears neither directly nor byte-reversed in the captured pairing frames; it is not promoted as an RF identity.",
+    "The app's device address 6 agrees with logical-address byte 0x86 in the paired valve frames and every retained post-pairing idle-link report; this valve association also uses the carrier family historically called selector 6.",
+    "The decimal app device ID converts to 0x26005329. Its upper byte 0x26 equals the catalogued HTV405 product code 38, while the lower 24 bits appear neither directly nor byte-reversed in the captured pairing frames.",
+    "The independent Left Bed HCS026 correlation has app address 2 but acknowledgement channel 4, so logical device address and radio-channel selector must not be modeled as synonyms. Its over-air app-address field remains unlocated.",
     "The app full-battery icon labels this enrollment boundary as normal battery state but does not locate the battery field in RF.",
     "The app RSSI is measured by the stock gateway and must remain distinct from local SDR or radio-node RSSI.",
     "Firmware display 123 is a search clue only; no plain 0x7b, 01 02 03, or ASCII 123 representation was identified in the decoded pairing frames."
