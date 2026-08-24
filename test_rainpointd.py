@@ -43,7 +43,7 @@ class GatewayTest(unittest.TestCase):
         )
         assert gateway._store is not None
         gateway._store.upsert_valve_link(
-            controller_endpoint="b9840280",
+            controller_endpoint="b9c40280",
             valve_endpoint="94a98013",
             device_id="htv405-94a98013",
             name="Test four-zone valve",
@@ -145,6 +145,20 @@ class GatewayTest(unittest.TestCase):
                 },
                 observed_at="2026-08-24T20:01:21+00:00",
             )
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="later-ambiguous-heartbeat",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": None,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:02:21+00:00",
+            )
             gateway.close()
 
             restored = Gateway(
@@ -160,6 +174,16 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(
                 "automatic_idle_confirmed_from_telemetry",
                 registration["control_last_result"],
+            )
+            restored_device = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "htv405-94a98013"
+            )
+            self.assertFalse(restored_device["state"]["is_watering"])
+            self.assertEqual(
+                "2026-08-24T20:01:21+00:00",
+                restored_device["state_observed_at"],
             )
             restored.close()
 

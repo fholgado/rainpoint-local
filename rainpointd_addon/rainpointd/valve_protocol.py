@@ -291,6 +291,26 @@ def decode_htv405_gateway_command_response(
     }
 
 
+def htv405_command_response_endpoint(companion_endpoint: str) -> str:
+    """Return the over-air response role derived from a paired companion.
+
+    HTV405 enrollment assigns a controller-role endpoint such as
+    ``b9c40280`` alongside companion ``39840280``. Successful command
+    responses use ``b9840280``: the companion identity with its high source
+    role bit asserted. This role identity is stable across the physically
+    validated Zone 1--4 responses and must not be compared byte-for-byte with
+    the configured controller role.
+    """
+    try:
+        endpoint = bytearray.fromhex(companion_endpoint)
+    except ValueError as error:
+        raise ValueError("invalid HTV405 companion endpoint") from error
+    if len(endpoint) != 4:
+        raise ValueError("HTV405 companion endpoint must contain four bytes")
+    endpoint[0] |= 0x80
+    return endpoint.hex()
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")

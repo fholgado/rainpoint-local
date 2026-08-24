@@ -39,6 +39,7 @@ from .valve_pairing_protocol import (
 )
 from .valve_protocol import (
     decode_htv405_gateway_command_response,
+    htv405_command_response_endpoint,
     htv405_phase_state,
     is_htv405_link_frame,
 )
@@ -185,6 +186,7 @@ class Gateway:
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
         self._recover_pending_htv405_air_responses()
+        self._reconcile_htv405_control_state_from_events()
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -1578,11 +1580,30 @@ class Gateway:
                             "rf_control_command_pending": (
                                 pending_command is not None
                             ),
+                            "rf_control_node_id": control_node_id,
+                            "rf_control_controller_endpoint": (
+                                valve_registration.get("controller_endpoint")
+                            ),
+                            "rf_control_companion_endpoint": (
+                                valve_registration.get(
+                                    "control_companion_endpoint"
+                                )
+                            ),
                             "rf_control_pending_action": valve_registration.get(
                                 "control_pending_action"
                             ),
+                            "rf_control_pending_sequence": (
+                                valve_registration.get(
+                                    "control_pending_sequence"
+                                )
+                            ),
                             "rf_control_pending_zone": valve_registration.get(
                                 "control_pending_zone"
+                            ),
+                            "rf_control_pending_duration_seconds": (
+                                valve_registration.get(
+                                    "control_pending_duration_seconds"
+                                )
                             ),
                             "rf_control_pending_started_at": (
                                 valve_registration.get(
@@ -1976,7 +1997,7 @@ class Gateway:
             return None
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
         valve_endpoint = raw[9:13].hex()
-        controller_endpoint = raw[5:9].hex()
+        response_endpoint = raw[5:9].hex()
         with self._lock:
             registration = next(
                 (
@@ -1996,10 +2017,20 @@ class Gateway:
             pending_started_at = registration.get(
                 "control_pending_started_at"
             )
+            companion_endpoint = registration.get(
+                "control_companion_endpoint"
+            )
+            try:
+                expected_response_endpoint = (
+                    htv405_command_response_endpoint(
+                        str(companion_endpoint)
+                    )
+                )
+            except ValueError:
+                return None
             if (
                 registration.get("control_node_id") != node_id
-                or registration.get("controller_endpoint")
-                != controller_endpoint
+                or response_endpoint != expected_response_endpoint
                 or not isinstance(
                     registration.get("control_pending_command_id"), str
                 )
@@ -2084,7 +2115,6 @@ class Gateway:
             node_id = registration.get("control_node_id")
             if not isinstance(node_id, str):
                 continue
-            accepted_event: dict[str, Any] | None = None
             for event in retained_events:
                 state = event.get("state", {})
                 if (
@@ -2100,29 +2130,50 @@ class Gateway:
                     observed_at=str(event["observed_at"]),
                 )
                 if accepted is not None:
-                    accepted_event = event
                     break
-            if accepted_event is None:
+
+    def _reconcile_htv405_control_state_from_events(self) -> None:
+        """Apply the latest definitive valve state after a confirmation.
+
+        Some valid HTV405 heartbeats report no definitive watering boolean.
+        They may be the newest device snapshot, so startup deliberately scans
+        the retained decoded journal for the newest boolean state instead.
+        """
+        if self._store is None or not self._valve_control_enabled:
+            return
+        retained_events = list(self._events)
+        for registration in self._store.valve_registry():
+            confirmed_at = registration.get("control_confirmed_at")
+            if not isinstance(confirmed_at, str):
                 continue
-            device = self._devices.get(str(registration["device_id"]))
-            if device is None:
+            device_id = str(registration["device_id"])
+            definitive_state_event = next(
+                (
+                    event
+                    for event in reversed(retained_events)
+                    if event.get("event_type") == "device_observation"
+                    and event.get("device_id") == device_id
+                    and isinstance(
+                        event.get("state", {}).get("is_watering"), bool
+                    )
+                    and isinstance(event.get("observed_at"), str)
+                ),
+                None,
+            )
+            if definitive_state_event is None:
                 continue
-            watering = device.get("state", {}).get("is_watering")
-            state_observed_at = device.get("observed_at")
-            if not isinstance(watering, bool) or not isinstance(
-                state_observed_at, str
-            ):
-                continue
+            watering = bool(
+                definitive_state_event["state"]["is_watering"]
+            )
+            state_observed_at = str(definitive_state_event["observed_at"])
             try:
                 state_time = _observed_utc(state_observed_at)
-                response_time = _observed_utc(
-                    str(accepted_event["observed_at"])
-                )
+                response_time = _observed_utc(confirmed_at)
             except (TypeError, ValueError):
                 continue
             if state_time < response_time:
                 continue
-            zone = device.get("state", {}).get("active_zone")
+            zone = definitive_state_event["state"].get("active_zone")
             if not isinstance(zone, int) or isinstance(zone, bool):
                 zone = None
             with self._lock:
@@ -2132,6 +2183,19 @@ class Gateway:
                     zone=zone,
                     observed_at=state_time.isoformat(),
                 )
+                device = self._devices.get(device_id)
+                if device is not None:
+                    device_state = device.setdefault("state", {})
+                    device_state.update(
+                        {
+                            "is_watering": watering,
+                            "active_zone": zone,
+                            "valve_state": (
+                                "watering" if watering else "idle"
+                            ),
+                        }
+                    )
+                    device["observed_at"] = state_time.isoformat()
                 self._refresh_registry_catalog()
 
     def observe_valve_control_probe(
@@ -2242,8 +2306,14 @@ class Gateway:
         valve_endpoint = valve_endpoint.lower()
         controller_endpoint = controller_endpoint.lower()
         companion_endpoint = companion_endpoint.lower()
+        try:
+            expected_response_endpoint = htv405_command_response_endpoint(
+                companion_endpoint
+            )
+        except ValueError:
+            return None
         if (
-            raw[5:9].hex() != controller_endpoint
+            raw[5:9].hex() != expected_response_endpoint
             or raw[9:13].hex() != valve_endpoint
         ):
             return None
