@@ -54,6 +54,10 @@ class AddonBoundaryTest(unittest.TestCase):
             'os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")',
             build_profile,
         )
+        self.assertIn(
+            'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
+            build_profile,
+        )
 
     def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
         source = (
@@ -82,6 +86,29 @@ class AddonBoundaryTest(unittest.TestCase):
             'type == "watering_start"',
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_htv145_control_is_compile_gated_and_has_no_public_api(self) -> None:
+        source = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
+        ).read_text()
+        build_profile = (
+            ROOT
+            / "firmware"
+            / "rainpoint_bridge"
+            / "tools"
+            / "build_profile.py"
+        ).read_text()
+        http_source = (
+            ROOT / "rainpointd_addon" / "rainpointd" / "http.py"
+        ).read_text()
+        self.assertIn("RAINPOINT_HTV145_TX_CANDIDATE == 1", source)
+        self.assertIn("htv145_control_candidate", source)
+        self.assertIn(
+            "RAINPOINT_HTV145_TX_CANDIDATE requires "
+            "RAINPOINT_RESEARCH_BENCH=1",
+            build_profile,
+        )
+        self.assertNotIn("htv145_control", http_source)
 
     def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
         source = (

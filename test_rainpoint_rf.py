@@ -1950,9 +1950,13 @@ class RainPointRFTest(unittest.TestCase):
         valve = next(
             device for device in gateway.devices() if device["device_id"] == "valve-1"
         )
-        self.assertTrue(valve["state"]["is_watering"])
+        self.assertFalse(valve["state"]["is_watering"])
+        self.assertEqual("idle", valve["state"]["valve_state"])
         self.assertEqual(1020, valve["state"]["duration_seconds"])
         self.assertEqual(175.2, valve["state"]["last_usage_liters"])
+        self.assertEqual(100, valve["state"]["battery_percent"])
+        self.assertEqual(1, valve["state"]["battery_status"])
+        self.assertFalse(valve["state"]["battery_low"])
 
     def test_live_transport_terminal_summary_confirms_valve_closed(self) -> None:
         gateway = Gateway(transport="rtl433")
@@ -1979,6 +1983,34 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("idle", valve["state"]["valve_state"])
         self.assertEqual(600, valve["state"]["duration_seconds"])
         self.assertEqual(105.7, valve["state"]["last_usage_liters"])
+
+    def test_live_transport_publishes_confirmed_htv145_low_battery(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        low_battery_usage = (
+            "79f4882f28b9840280b42d008f970107858b00804f998180"
+            "00408000568000000000000049ef"
+        )
+        event = {
+            "rows": [
+                {
+                    "len": len(low_battery_usage) * 4,
+                    "data": low_battery_usage,
+                }
+            ]
+        }
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        valve = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "valve-1"
+        )
+        self.assertEqual(10, valve["state"]["battery_percent"])
+        self.assertEqual(2, valve["state"]["battery_status"])
+        self.assertTrue(valve["state"]["battery_low"])
+        self.assertEqual(81.9, valve["state"]["last_usage_liters"])
 
     def test_live_transport_retains_non_sensor_and_ignores_invalid_rows(self) -> None:
         gateway = Gateway(transport="rtl433")

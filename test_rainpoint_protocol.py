@@ -12,6 +12,12 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpoint_protocol import decode, parse_tlv  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
+from rainpointd.valve_protocol import (  # noqa: E402
+    ValveLink,
+    decode_htv145_command_response,
+    decode_htv145_gateway_command,
+    decode_htv145_state_report,
+)
 
 
 class RainPointProtocolTest(unittest.TestCase):
@@ -95,6 +101,13 @@ class RainPointProtocolTest(unittest.TestCase):
                 self.assertEqual(
                     expected["last_usage_liters"], cloud["last_usage_liters"]
                 )
+                self.assertFalse(cloud["is_watering"])
+                rf_frame = observation["rf_frame"]
+                rf = normalize_row(
+                    {"len": len(rf_frame) * 4, "data": rf_frame}
+                )
+                self.assertFalse(rf["is_watering"])
+                self.assertEqual("idle", rf["valve_state"])
 
     def test_htv145_terminal_summary_correlation_fixture(self) -> None:
         fixture = json.loads(
@@ -136,6 +149,62 @@ class RainPointProtocolTest(unittest.TestCase):
                 self.assertTrue(rf["trailer_valid"])
                 self.assertNotIn("battery_status", rf)
                 self.assertNotIn("battery_percent", rf)
+
+    def test_htv145_stock_command_counter_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv145_stock_command_counter_20260824.json"
+            ).read_text()
+        )
+        link = ValveLink(
+            bytes.fromhex("b42d008f"), bytes.fromhex("b9840280")
+        )
+        for transaction in fixture["transactions"]:
+            frames = {
+                item["role"]: bytes.fromhex(item["raw"])
+                for item in transaction["frames"]
+            }
+            requests = [
+                frame
+                for role, frame in frames.items()
+                if role.startswith("open_request")
+            ]
+            for request in requests:
+                decoded = decode_htv145_gateway_command(request, link)
+                self.assertIsNotNone(decoded)
+                self.assertEqual(
+                    transaction["requested_duration_seconds"],
+                    decoded["duration_seconds"],
+                )
+            if len(requests) > 1:
+                self.assertEqual(1, len(set(requests)))
+            response = frames.get("immediate_open_response")
+            if response is not None:
+                decoded_response = decode_htv145_command_response(
+                    response, link
+                )
+                self.assertIsNotNone(decoded_response)
+                self.assertEqual(
+                    int(transaction["command_sequence"], 16),
+                    decoded_response["sequence"],
+                )
+            corrupted = frames.get("corrupted_response_candidate")
+            if corrupted is not None:
+                self.assertIsNone(
+                    decode_htv145_command_response(corrupted, link)
+                )
+            report = decode_htv145_state_report(
+                frames["watering_state_confirmation"], link
+            )
+            self.assertIsNotNone(report)
+            self.assertTrue(report["watering"])
+            self.assertNotEqual(
+                int(transaction["command_sequence"], 16),
+                report["telemetry_sequence"],
+            )
 
     def test_rejects_bad_hex(self) -> None:
         with self.assertRaises(ValueError):

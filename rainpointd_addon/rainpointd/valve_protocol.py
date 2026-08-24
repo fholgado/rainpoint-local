@@ -299,6 +299,124 @@ def next_sequence(sequence: int) -> int:
     return 0x80 | ((sequence + 1) & 0x1F)
 
 
+def _ordinary_frame_valid(frame: bytes) -> bool:
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return False
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    return residual in TRAILER_RESIDUES
+
+
+def _route_matches(
+    frame: bytes, source_endpoint: bytes, destination_endpoint: bytes
+) -> bool:
+    return frame[5:9] == source_endpoint and frame[9:13] == destination_endpoint
+
+
+def decode_htv145_gateway_command(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode a strict stock/local HTV145 command request.
+
+    This is the only passive observation allowed to establish the next
+    outbound command counter. Routine telemetry has its own counter and must
+    never be used for that purpose.
+    """
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.controller_endpoint, link.valve_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+    ):
+        return None
+    if frame[14] == 0x10:
+        if (
+            frame[15:19] != bytes.fromhex("82808100")
+            or any(frame[21:36])
+        ):
+            return None
+        try:
+            duration_seconds = decode_duration(frame[19:21])
+        except ValueError:
+            return None
+        return {
+            "sequence": frame[13],
+            "next_sequence": next_sequence(frame[13]),
+            "watering": True,
+            "duration_seconds": duration_seconds,
+        }
+    if (
+        frame[14] == 0x90
+        and frame[15:19] == bytes.fromhex("81808100")
+        and not any(frame[19:36])
+    ):
+        return {
+            "sequence": frame[13],
+            "next_sequence": next_sequence(frame[13]),
+            "watering": False,
+        }
+    return None
+
+
+def decode_htv145_command_response(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode a valve response carrying the accepted command counter."""
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14] not in {0x50, 0xD0}
+        or frame[15] != 0x86
+        or frame[16] != 0x80
+        or frame[17] & 0x0F
+        or (frame[18] & 0x7F) != 0x4F
+        or frame[23] != 0x40
+        or frame[26] != 0x56
+        or not ((frame[14] ^ frame[18]) & 0x80)
+    ):
+        return None
+    watering = frame[14] == 0x50
+    result: dict[str, int | bool] = {
+        "sequence": frame[13],
+        "next_sequence": next_sequence(frame[13]),
+        "watering": watering,
+    }
+    return result
+
+
+def decode_htv145_state_report(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode an independent HTV145 watering/idle telemetry report.
+
+    ``telemetry_sequence`` is deliberately named: it confirms resulting state
+    but is not the controller's next outbound command counter.
+    """
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14] not in {0x01, 0x81}
+        or frame[15] != 0x07
+        or frame[16] != 0x85
+        or (frame[20] & 0x7F) != 0x4F
+        or frame[25] != 0x40
+        or frame[28] != 0x56
+    ):
+        return None
+    return {
+        "telemetry_sequence": frame[13],
+        "watering": bool(frame[20] & 0x80),
+    }
+
+
 def _finish_frame(payload: bytes, residue: int) -> bytes:
     if len(payload) != FRAME_BYTES - 2:
         raise ValueError("ordinary frame payload must contain 36 bytes")

@@ -48,6 +48,7 @@ from .product_identity import (
     is_hcs02x_sensor,
     product_for_model,
 )
+from .rf import normalize_row
 from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
     SQLiteEventStore,
@@ -2780,6 +2781,41 @@ class Gateway:
                 continue
             device_id = str(event["device_id"])
             registry_metadata = self._registry_metadata.get(device_id)
+            state = copy.deepcopy(event["state"])
+            # Device snapshots retain the decoder projection that was current
+            # when the frame arrived. Re-run only accepted HTV145 snapshots so
+            # receive-side protocol corrections can clear stale watering state
+            # and backfill supported battery/usage fields after an upgrade.
+            if event.get("model") == HTV145_MODEL:
+                raw = event.get("raw")
+                if isinstance(raw, str):
+                    try:
+                        refreshed = normalize_row(
+                            {"len": len(raw) * 4, "data": raw},
+                            catalog=self.catalog,
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        refreshed = {}
+                    valve = self.catalog.valve_link(
+                        str(refreshed.get("endpoint_a", "")),
+                        str(refreshed.get("endpoint_b", "")),
+                    )
+                    if (
+                        refreshed.get("trailer_valid") is True
+                        and valve is not None
+                        and valve.device_id == device_id
+                    ):
+                        for key in (
+                            "valve_state",
+                            "is_watering",
+                            "duration_seconds",
+                            "last_usage_liters",
+                            "battery_low",
+                            "battery_status",
+                            "battery_percent",
+                        ):
+                            if key in refreshed:
+                                state[key] = refreshed[key]
             device = {
                 "device_id": event["device_id"],
                 "name": (
@@ -2791,7 +2827,7 @@ class Gateway:
                 "available": True,
                 "last_event_id": event["event_id"],
                 "observed_at": event["observed_at"],
-                "state": copy.deepcopy(event["state"]),
+                "state": state,
             }
             if registry_metadata is not None:
                 device["area"] = registry_metadata.get("area")

@@ -60,6 +60,9 @@ device slots.
   routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
   last-session duration, and water usage.
+- Separate HTV145 command and telemetry counters, model a stock command as one
+  logical operation with a bounded burst of identical RF attempts, and persist
+  an at-most-once candidate reservation across gateway restarts.
 - Correlate local RF valve events with Home Assistant/cloud observations.
 - Exercise a hardware-independent duration-bounded controller: startup and
   client loss are observation-only, missing acknowledgements block further
@@ -67,6 +70,8 @@ device slots.
   overdue run can trigger an anomaly close.
 
 The public gateway/HA valve-control boundary still rejects all requests.
+The HTV145 transmitter implementation is compiled out of standard firmware and
+remains undeployed pending supervised acceptance with the isolated dry valve.
 
 ## Architecture
 
@@ -217,6 +222,10 @@ runtime dependency.
 - Physically exercise its 15-second command spacing, explicit early-stop on
   every zone, late-response recovery, and overdue-run anomaly close before
   exposing control through the gateway or Home Assistant.
+- Physically accept the separate HTV145 long-wake path: explicit association
+  residue, one bounded three-attempt burst, immediate-response/state-report
+  fallback, durable command counter, restart without replay, and valve-owned
+  automatic stop.
 - Validate retained association and authenticated controller-counter recovery
   across a battery change, and capture an independently known low-battery RF
   transition before exposing valve battery state.

@@ -1117,6 +1117,28 @@ Exact requests were observed retransmitted without changes, including the
 trailer. This proves there is no per-burst nonce. It does not yet prove that a
 request from an older transaction can be replayed later.
 
+Retained stock-gateway captures on 2026-08-22 and 2026-08-24 separate one
+logical command from its RF attempts. A 1,200-second open at sequence `0x81`
+contained three byte-identical requests beginning at offsets 0, 0.729210, and
+1.668479 seconds. The matching valve response arrived 0.050825 seconds after
+the final attempt, and an independent watering-state report arrived 5.679676
+seconds after it. A later 600-second open at command sequence `0x8c` had a
+corrupted immediate-response capture but was positively confirmed by a
+watering report 6.552309 seconds later. The controller must therefore send at
+most one logical open while permitting the proven bounded burst of identical
+attempts; it must never create a second logical open because a response was
+missed.
+
+The two later watering confirmations used telemetry sequences `0x89` and
+`0x9b`, not command sequences `0x81` and `0x8c`. Retained traffic contains 237
+trailer-valid routine report/ack pairs with median acknowledgement latency
+0.015732 seconds and p95 0.083495 seconds. The routine telemetry counter is an
+independent stream: it can prove resulting watering/idle state but cannot
+supply or overwrite the next outbound command counter. Only a passively
+observed command or evidence matching an already reserved command may advance
+that counter. The exact transactions are frozen in
+`research/fixtures/htv145_stock_command_counter_20260824.json`.
+
 Across 14 captured commands (seven opens and seven closes), 12 had a retained
 reverse-route response within three seconds. Normal response latency was
 0.372--0.380 seconds; two responses arrived at 1.062 and 1.083 seconds. This
@@ -1179,6 +1201,10 @@ categorical value from normal to low. Local decoding maps clear to status 1 /
 100% and set to status 2 / 10%, matching the stock integration's categorical
 semantics. The evidence and corrected usage values are frozen in
 `research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`.
+Every exact cloud correlation for this marker-based usage/status family was
+idle, so a trailer-valid report also clears stale watering state. Active open
+and close responses use a distinct body layout and are not classified by this
+rule.
 
 ## Trailer status
 
@@ -1222,10 +1248,12 @@ state, an omitted lower-layer input, or two forms accepted by the receiver;
 the cloud API does not provide a missing bit that can simply be copied.
 
 This is sufficient to validate ordinary received frames and reject most
-demodulation artifacts. It is not yet sufficient to generate arbitrary
-commands because the rule selecting the two residues remains unknown. Compact
-product-code/status frames are a separate family and do not satisfy this
-ordinary-frame rule, so they must be retained rather than rejected globally.
+demodulation artifacts. It is not sufficient to infer the residue for an
+arbitrary unknown association. The isolated HTV145 transmitter candidate must
+therefore use an explicitly evidenced association residue and fail closed; it
+cannot guess or rotate residues. Compact product-code/status frames are a
+separate family and do not satisfy this ordinary-frame rule, so they must be
+retained rather than rejected globally.
 
 ## Receive and decode
 
@@ -1269,9 +1297,10 @@ normalization and confirmed field decoding. Regression examples live in
 5. Validate retained-association valve rejoin after a battery cycle without a
    full enrollment exchange. Keep its one-reply matcher separate from the
    validated 18-step new-enrollment state machine.
-6. Confirm valve retry timing, acknowledgement rules, and positively observed
-   overdue-run handling before enabling Home Assistant control. Explicit
-   early-stop is now report-validated on all four HTV405 zones.
+6. Physically validate the HTV145 one-logical-command/three-attempt bounded
+   burst, matching response, independent state fallback, counter persistence,
+   and positively observed overdue-run handling before enabling Home Assistant
+   control. Explicit early-stop is report-validated on all four HTV405 zones.
 7. Determine whether HTV405 battery status is carried by an RF family not yet
    independently correlated to voltage. HTV145 categorical battery is now
    decoded separately.
@@ -1282,7 +1311,10 @@ Production firmware transmits only validated, identity-bounded soil-sensor
 pairing/rejoin replies and acknowledgements. The research build additionally
 contains physically validated, identity-bound HTV405 one-minute open paths for
 Zones 1--4 and a Zone 1 early-close path; they are unavailable through public
-APIs. Every open carries a locally enforced maximum duration. Gateway, Home
+APIs. A separate compile-gated HTV145 candidate constructs the retained
+long-wake command family, persists its independent command counter, and emits
+only one bounded burst, but has not been deployed or physically accepted.
+Every open carries a locally enforced maximum duration. Gateway, Home
 Assistant, network, or power loss is observation-only because the valve owns
 that countdown. Silence marks state unknown and must not cause speculative RF.
 Close retries are permitted only for an explicit early-stop or after a fresh

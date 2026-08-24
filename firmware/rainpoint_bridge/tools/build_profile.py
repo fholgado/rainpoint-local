@@ -12,7 +12,16 @@ research_value = os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")
 if research_value not in {"0", "1"}:
     raise ValueError("RAINPOINT_RESEARCH_BENCH must be 0 or 1")
 
+htv145_value = os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")
+if htv145_value not in {"0", "1"}:
+    raise ValueError("RAINPOINT_HTV145_TX_CANDIDATE must be 0 or 1")
+
 research_enabled = research_value == "1"
+htv145_enabled = htv145_value == "1"
+if htv145_enabled and not research_enabled:
+    raise ValueError(
+        "RAINPOINT_HTV145_TX_CANDIDATE requires RAINPOINT_RESEARCH_BENCH=1"
+    )
 default_version = (
     "0.14.0-valve-control-probe.41" if research_enabled else "0.14.0"
 )
@@ -25,6 +34,7 @@ if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", firmware_version):
 env.Append(
     CPPDEFINES=[
         ("RAINPOINT_RESEARCH_BENCH", int(research_enabled)),
+        ("RAINPOINT_HTV145_TX_CANDIDATE", int(htv145_enabled)),
         ("RAINPOINT_FIRMWARE_VERSION", f'\\"{firmware_version}\\"'),
     ]
 )

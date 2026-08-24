@@ -7,6 +7,7 @@
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
 #include "rainpoint_valve_control.h"
+#include "rainpoint_htv145_control.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
 
@@ -1587,5 +1588,62 @@ int main() {
         incomplete.failureReason() ==
         rainpoint::PairingFailureReason::TerminalConfirmationTimeout
     );
+
+    const rainpoint::Htv145Link htv145Link{
+        {{0xb4, 0x2d, 0x00, 0x8f}},
+        {{0xb9, 0x84, 0x02, 0x80}},
+    };
+    assert(rainpoint::validHtv145Link(htv145Link));
+    assert(rainpoint::kHtv145CommandWakeSymbols == 1'200);
+    assert((
+        rainpoint::kHtv145CommandAttemptOffsetsMs ==
+        std::array<std::uint32_t, 3>{{0, 730, 1'670}}
+    ));
+    std::array<std::uint8_t, rainpoint::kFrameBytes> htv145Frame{};
+    assert(rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x97, 60, 0xc713, htv145Frame
+    ));
+    assert(
+        htv145Frame == fromHex(
+            "79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824"
+        )
+    );
+    assert(rainpoint::buildHtv145CloseFrame(
+        htv145Link, 0x97, 0x4f03, htv145Frame
+    ));
+    assert(
+        htv145Frame == fromHex(
+            "79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf"
+        )
+    );
+    assert(!rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x97, 61, 0xc713, htv145Frame
+    ));
+    assert(!rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x7f, 60, 0xc713, htv145Frame
+    ));
+    assert(rainpoint::nextHtv145CommandSequence(0x9f) == 0x80);
+
+    rainpoint::Htv145CommandResponse htv145Response{};
+    const auto htv145OpenResponse = fromHex(
+        "79f4882f28b9840280b42d008f9750868010cf92800000409e00569e000000000000000044ce"
+    );
+    assert(rainpoint::decodeHtv145CommandResponse(
+        htv145OpenResponse, htv145Link, htv145Response
+    ));
+    assert(htv145Response.sequence == 0x97);
+    assert(htv145Response.watering);
+
+    bool htv145Watering = false;
+    const auto htv145ActiveState = fromHex(
+        "79f4882f28b9840280b42d008f9b810785898090cf9981800040a90156ac0100000000003431"
+    );
+    assert(rainpoint::decodeHtv145StateReport(
+        htv145ActiveState, htv145Link, htv145Watering
+    ));
+    assert(htv145Watering);
+    // The state report's 0x9b is a separate telemetry counter and must never
+    // be mistaken for the response to an outbound 0x8c command.
+    assert(htv145ActiveState[13] != 0x8c);
     return 0;
 }

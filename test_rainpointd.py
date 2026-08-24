@@ -430,7 +430,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(11, gateway.info()["storage_schema_version"])
+            self.assertEqual(12, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -441,7 +441,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(11, migrated.info()["storage_schema_version"])
+            self.assertEqual(12, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -501,6 +501,41 @@ class GatewayTest(unittest.TestCase):
                 migrated.devices()[0]["state"]["soil_moisture_percent"],
             )
             migrated.close()
+
+    def test_restore_redecodes_accepted_htv145_snapshot(self) -> None:
+        low_battery_idle = (
+            "79f4882f28b9840280b42d008f970107858b00804f998180"
+            "00408000568000000000000049ef"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=low_battery_idle,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": True,
+                    "valve_state": "watering",
+                    "last_usage_liters": 0.0,
+                },
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            valve = next(
+                device
+                for device in restored.devices()
+                if device["device_id"] == "valve-1"
+            )
+            self.assertFalse(valve["state"]["is_watering"])
+            self.assertEqual("idle", valve["state"]["valve_state"])
+            self.assertEqual(81.9, valve["state"]["last_usage_liters"])
+            self.assertEqual(10, valve["state"]["battery_percent"])
+            self.assertEqual(2, valve["state"]["battery_status"])
+            restored.close()
 
     def test_storage_rejects_newer_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

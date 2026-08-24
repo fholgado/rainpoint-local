@@ -228,6 +228,112 @@ class RainPointEventAnalysisTest(unittest.TestCase):
 
         self.assertEqual(1, transactions["command_count"])
 
+    def test_htv145_separates_command_and_telemetry_counters(self) -> None:
+        events = [
+            {
+                "event_id": 1,
+                "observed_at": "2026-08-24T16:22:48.812276+00:00",
+                "raw": (
+                    "79f4882f28b9840280b42d008f9b0107858b00804f998180"
+                    "0040800056800000000000005dc9"
+                ),
+                "state": {
+                    "model": "HTV145FRF",
+                    "is_watering": False,
+                    "rf_frame_accepted": True,
+                },
+            },
+            {
+                "event_id": 2,
+                "observed_at": "2026-08-24T16:22:48.824772+00:00",
+                "raw": (
+                    "79f4882f28b42d008fb98402809b410380065862980d0080"
+                    "00000000000000000000000069c7"
+                ),
+                "state": {"rf_frame_accepted": True},
+            },
+            {
+                "event_id": 3,
+                "observed_at": "2026-08-24T16:23:21.295196+00:00",
+                "raw": (
+                    "79f4882f28b42d008fb98402808c1082808100ac01000000"
+                    "0000000000000000000000001497"
+                ),
+                "state": {
+                    "model": "HTV145FRF",
+                    "is_watering": True,
+                    "rf_frame_accepted": True,
+                },
+            },
+            {
+                "event_id": 4,
+                "observed_at": "2026-08-24T16:23:27.847505+00:00",
+                "raw": (
+                    "79f4882f28b9840280b42d008f9b810785898090cf998180"
+                    "0040a90156ac0100000000003431"
+                ),
+                "state": {
+                    "model": "HTV145FRF",
+                    "is_watering": True,
+                    "rf_frame_accepted": True,
+                },
+            },
+            {
+                "event_id": 5,
+                "observed_at": "2026-08-24T16:23:27.854651+00:00",
+                "raw": (
+                    "79f4882f28b42d008fb98402809bc1010006000000000000"
+                    "00000000000000000000000002fc"
+                ),
+                "state": {"rf_frame_accepted": True},
+            },
+            {
+                "event_id": 6,
+                "observed_at": "2026-08-24T16:27:05.912451+00:00",
+                "raw": (
+                    "79f4882f28b9840280b42d008f9c050405818005441c705a"
+                    "8000000000000000000000007356"
+                ),
+                "state": {
+                    "model": "HTV145FRF",
+                    "rf_frame_accepted": True,
+                },
+            },
+            {
+                "event_id": 7,
+                "observed_at": "2026-08-24T16:27:05.919000+00:00",
+                "raw": (
+                    "79f4882f28b42d008fb98402809c45010001000000000000"
+                    "0000000000000000000000000e27"
+                ),
+                "state": {"rf_frame_accepted": True},
+            },
+        ]
+
+        summary = analyze(events)["htv145_transactions"]
+
+        self.assertEqual(1, summary["command_count"])
+        command = summary["commands"][0]
+        self.assertEqual("8c", command["command_sequence"])
+        self.assertEqual(600, command["duration_seconds"])
+        self.assertIsNone(command["immediate_response"])
+        self.assertEqual(
+            "9b", command["state_confirmation"]["telemetry_sequence"]
+        )
+        self.assertAlmostEqual(
+            6.552309,
+            command["state_confirmation"][
+                "latency_from_first_attempt_seconds"
+            ],
+        )
+        self.assertEqual(
+            {"1": 1},
+            summary["telemetry_counter_transitions"][
+                "b42d008f->b9840280"
+            ],
+        )
+        self.assertEqual(3, summary["telemetry_acknowledgements"]["count"])
+
 
 if __name__ == "__main__":
     unittest.main()

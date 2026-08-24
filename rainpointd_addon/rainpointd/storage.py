@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -172,6 +172,9 @@ class SQLiteEventStore:
             version = 10
         if version == 10:
             self._migrate_v10_to_v11()
+            version = 11
+        if version == 11:
+            self._migrate_v11_to_v12()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -464,6 +467,39 @@ class SQLiteEventStore:
                         f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
                     )
             self._connection.execute("PRAGMA user_version = 11")
+
+    def _migrate_v11_to_v12(self) -> None:
+        """Persist disabled-by-default HTV145 command coordination state."""
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS htv145_control_state (
+                    valve_endpoint TEXT PRIMARY KEY,
+                    controller_endpoint TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    center_hz INTEGER NOT NULL,
+                    power_dbm INTEGER NOT NULL,
+                    invert INTEGER NOT NULL,
+                    trailer_residual INTEGER NOT NULL,
+                    next_sequence INTEGER,
+                    counter_synchronized INTEGER NOT NULL DEFAULT 0,
+                    counter_source TEXT,
+                    pending_command_id TEXT UNIQUE,
+                    pending_action TEXT,
+                    pending_sequence INTEGER,
+                    pending_duration_seconds INTEGER,
+                    pending_started_at TEXT,
+                    expected_idle_at TEXT,
+                    last_command_started_at TEXT,
+                    confirmed_watering INTEGER,
+                    confirmed_at TEXT,
+                    last_response_frame TEXT,
+                    last_result TEXT,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute("PRAGMA user_version = 12")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -918,6 +954,330 @@ class SQLiteEventStore:
             if item["valve_endpoint"] == valve_endpoint
         )
         return result
+
+    def htv145_control_states(
+        self, valve_endpoint: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return private HTV145 coordinator state; never an actuator API."""
+        if valve_endpoint is None:
+            rows = self._connection.execute(
+                "SELECT * FROM htv145_control_state ORDER BY valve_endpoint"
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM htv145_control_state WHERE valve_endpoint = ?",
+                (valve_endpoint,),
+            ).fetchall()
+        result = [dict(row) for row in rows]
+        for item in result:
+            item["invert"] = bool(item["invert"])
+            item["counter_synchronized"] = bool(
+                item["counter_synchronized"]
+            )
+            if item["confirmed_watering"] is not None:
+                item["confirmed_watering"] = bool(
+                    item["confirmed_watering"]
+                )
+        return result
+
+    def configure_htv145_control(
+        self,
+        *,
+        valve_endpoint: str,
+        controller_endpoint: str,
+        node_id: str,
+        center_hz: int,
+        power_dbm: int,
+        invert: bool,
+        trailer_residual: int,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """Persist an association-specific profile with control unsynchronized."""
+        cursor = self._connection.execute(
+            """
+            INSERT INTO htv145_control_state(
+                valve_endpoint, controller_endpoint, node_id, center_hz,
+                power_dbm, invert, trailer_residual, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(valve_endpoint) DO UPDATE SET
+                controller_endpoint=excluded.controller_endpoint,
+                node_id=excluded.node_id,
+                center_hz=excluded.center_hz,
+                power_dbm=excluded.power_dbm,
+                invert=excluded.invert,
+                trailer_residual=excluded.trailer_residual,
+                next_sequence=NULL,
+                counter_synchronized=0,
+                counter_source=NULL,
+                pending_command_id=NULL,
+                pending_action=NULL,
+                pending_sequence=NULL,
+                pending_duration_seconds=NULL,
+                pending_started_at=NULL,
+                expected_idle_at=NULL,
+                last_command_started_at=NULL,
+                confirmed_watering=NULL,
+                confirmed_at=NULL,
+                last_response_frame=NULL,
+                last_result='profile_configured_counter_required',
+                updated_at=excluded.updated_at
+            WHERE htv145_control_state.pending_command_id IS NULL
+            """,
+            (
+                valve_endpoint,
+                controller_endpoint,
+                node_id,
+                center_hz,
+                power_dbm,
+                int(invert),
+                trailer_residual,
+                updated_at,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("cannot reconfigure HTV145 while command pending")
+        self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def synchronize_htv145_control_counter(
+        self,
+        *,
+        valve_endpoint: str,
+        next_sequence: int,
+        source: str,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Set an outbound counter only from explicit, evidenced state."""
+        if next_sequence not in range(0x80, 0xA0):
+            raise ValueError("HTV145 sequence must be in 0x80..0x9f")
+        if source not in {
+            "passive_stock_command",
+            "matching_immediate_response",
+            "matching_independent_state_report",
+        }:
+            raise ValueError("unsupported HTV145 counter source")
+        cursor = self._connection.execute(
+            """
+            UPDATE htv145_control_state SET
+                next_sequence = ?, counter_synchronized = 1,
+                counter_source = ?, last_result = 'counter_synchronized',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND pending_command_id IS NULL
+            """,
+            (next_sequence, source, observed_at, valve_endpoint),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV145 profile missing or command pending")
+        self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def observe_htv145_control_state(
+        self,
+        *,
+        valve_endpoint: str,
+        watering: bool,
+        observed_at: str,
+        frame: str,
+    ) -> dict[str, Any]:
+        """Persist state without changing the independent command counter."""
+        cursor = self._connection.execute(
+            """
+            UPDATE htv145_control_state SET
+                confirmed_watering = ?, confirmed_at = ?,
+                expected_idle_at = CASE WHEN ? THEN expected_idle_at ELSE NULL END,
+                last_response_frame = ?, updated_at = ?
+            WHERE valve_endpoint = ?
+            """,
+            (
+                int(watering),
+                observed_at,
+                int(watering),
+                frame,
+                observed_at,
+                valve_endpoint,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError(valve_endpoint)
+        self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def reserve_htv145_command(
+        self,
+        *,
+        valve_endpoint: str,
+        command_id: str,
+        action: str,
+        duration_seconds: int | None,
+        started_at: str,
+        expected_idle_at: str | None,
+    ) -> dict[str, Any]:
+        """Atomically reserve one logical command before any node write."""
+        if action not in {"open", "close"}:
+            raise ValueError("HTV145 action must be open or close")
+        if action == "open" and (
+            duration_seconds is None
+            or duration_seconds <= 0
+            or duration_seconds % 60
+            or expected_idle_at is None
+        ):
+            raise ValueError("HTV145 open requires a bounded whole-minute run")
+        if action == "close" and (
+            duration_seconds is not None or expected_idle_at is not None
+        ):
+            raise ValueError("HTV145 close cannot carry a run duration")
+        with self._connection:
+            row = self._connection.execute(
+                "SELECT * FROM htv145_control_state WHERE valve_endpoint = ?",
+                (valve_endpoint,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(valve_endpoint)
+            if row["pending_command_id"] is not None:
+                raise RuntimeError("an HTV145 command is already pending")
+            if not row["counter_synchronized"] or row["next_sequence"] is None:
+                raise RuntimeError("the HTV145 command counter is unsynchronized")
+            if action == "open" and row["confirmed_watering"] != 0:
+                raise RuntimeError("HTV145 open requires confirmed idle state")
+            previous_started_at = row["last_command_started_at"]
+            if previous_started_at is not None:
+                elapsed = (
+                    datetime.fromisoformat(started_at)
+                    - datetime.fromisoformat(previous_started_at)
+                ).total_seconds()
+                if elapsed < 15:
+                    raise RuntimeError(
+                        "HTV145 commands require a 15-second hardware interval"
+                    )
+            cursor = self._connection.execute(
+                """
+                UPDATE htv145_control_state SET
+                    pending_command_id = ?, pending_action = ?,
+                    pending_sequence = ?, pending_duration_seconds = ?,
+                    pending_started_at = ?, expected_idle_at = ?,
+                    last_command_started_at = ?,
+                    last_result = 'reserved_not_confirmed', updated_at = ?
+                WHERE valve_endpoint = ?
+                  AND pending_command_id IS NULL
+                  AND counter_synchronized = 1
+                  AND next_sequence = ?
+                  AND last_command_started_at IS ?
+                  AND (? = 'close' OR confirmed_watering = 0)
+                """,
+                (
+                    command_id,
+                    action,
+                    row["next_sequence"],
+                    duration_seconds,
+                    started_at,
+                    expected_idle_at,
+                    started_at,
+                    started_at,
+                    valve_endpoint,
+                    row["next_sequence"],
+                    previous_started_at,
+                    action,
+                ),
+            )
+            if not cursor.rowcount:
+                raise RuntimeError(
+                    "HTV145 reservation state changed before dispatch"
+                )
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def confirm_htv145_command(
+        self,
+        *,
+        valve_endpoint: str,
+        command_id: str,
+        sequence: int,
+        watering: bool,
+        confirmation: str,
+        observed_at: str,
+        frame: str,
+    ) -> dict[str, Any]:
+        """Advance a reserved counter only from matching valve evidence."""
+        if confirmation not in {
+            "matching_immediate_response",
+            "matching_independent_state_report",
+        }:
+            raise ValueError("unsupported HTV145 confirmation")
+        row = self._connection.execute(
+            "SELECT * FROM htv145_control_state WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        expected_watering = row["pending_action"] == "open"
+        if (
+            row["pending_command_id"] != command_id
+            or row["pending_sequence"] != sequence
+            or bool(watering) != expected_watering
+        ):
+            raise ValueError("HTV145 confirmation does not match reservation")
+        next_sequence = 0x80 | ((sequence + 1) & 0x1F)
+        cursor = self._connection.execute(
+            """
+            UPDATE htv145_control_state SET
+                next_sequence = ?, counter_synchronized = 1,
+                counter_source = ?, pending_command_id = NULL,
+                pending_action = NULL, pending_sequence = NULL,
+                pending_duration_seconds = NULL, pending_started_at = NULL,
+                expected_idle_at = CASE WHEN ? THEN expected_idle_at ELSE NULL END,
+                confirmed_watering = ?,
+                confirmed_at = ?, last_response_frame = ?,
+                last_result = 'confirmed', updated_at = ?
+            WHERE valve_endpoint = ? AND pending_command_id = ?
+              AND pending_sequence = ? AND pending_action = ?
+            """,
+            (
+                next_sequence,
+                confirmation,
+                int(watering),
+                int(watering),
+                observed_at,
+                frame,
+                observed_at,
+                valve_endpoint,
+                command_id,
+                sequence,
+                row["pending_action"],
+            ),
+        )
+        if not cursor.rowcount:
+            raise ValueError("HTV145 reservation changed before confirmation")
+        self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def fail_htv145_command(
+        self,
+        *,
+        valve_endpoint: str,
+        command_id: str,
+        reason: str,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Clear a failed reservation and make the counter unusable."""
+        cursor = self._connection.execute(
+            """
+            UPDATE htv145_control_state SET
+                counter_synchronized = 0, counter_source = NULL,
+                pending_command_id = NULL, pending_action = NULL,
+                pending_sequence = NULL, pending_duration_seconds = NULL,
+                pending_started_at = NULL,
+                expected_idle_at = CASE
+                    WHEN pending_action = 'open' THEN expected_idle_at
+                    ELSE NULL
+                END,
+                last_result = ?, updated_at = ?
+            WHERE valve_endpoint = ? AND pending_command_id = ?
+            """,
+            (reason, observed_at, valve_endpoint, command_id),
+        )
+        if not cursor.rowcount:
+            raise ValueError("HTV145 failure does not match reservation")
+        self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
 
     def accept_endpoint(
         self,

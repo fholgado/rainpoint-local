@@ -353,6 +353,8 @@ def _valve_fields(
         if 0 <= tenths_liters <= 100_000:
             battery_low = bool(frame[17] & 0x08)
             return {
+                "is_watering": False,
+                "valve_state": "idle",
                 "last_usage_liters": round(tenths_liters / 10, 1),
                 "battery_low": battery_low,
                 "battery_status": 2 if battery_low else 1,

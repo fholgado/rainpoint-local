@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,14 @@ from rainpointd.safety import (  # noqa: E402
 from rainpointd.valve_control_bench import (  # noqa: E402
     BenchValveControlProfile,
     BenchValveControlSession,
+)
+from rainpointd.htv145_control import (  # noqa: E402
+    Htv145ControlCoordinator,
+    Htv145ControlProfile,
+)
+from rainpointd.storage import SQLiteEventStore  # noqa: E402
+from rainpointd.valve_protocol import (  # noqa: E402
+    build_open_frame,
 )
 
 
@@ -270,6 +279,217 @@ class BenchValveControlSessionTest(unittest.TestCase):
         )
         self.assertEqual(8, retry[0]["expected_sequence"])
         self.assertNotEqual("valve_control_sync", retry[0]["type"])
+
+
+class Htv145ControlCoordinatorTest(unittest.TestCase):
+    IDLE = bytes.fromhex(
+        "79f4882f28b9840280b42d008f970107858b00804f998180004080005680"
+        "00000000000049ef"
+    )
+    OPEN_RESPONSE = bytes.fromhex(
+        "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802"
+        "000000000000004bfa"
+    )
+    ACTIVE_REPORT = bytes.fromhex(
+        "79f4882f28b9840280b42d008f9b810785898090cf9981800040a90156ac"
+        "0100000000003431"
+    )
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.store = SQLiteEventStore(
+            Path(self.temporary_directory.name) / "events.sqlite3"
+        )
+        self.sent = []
+        self.profile = Htv145ControlProfile(
+            node_id="rp-001122334455",
+            controller_endpoint="b42d008f",
+            valve_endpoint="b9840280",
+            center_hz=433_920_000,
+            power_dbm=10,
+            invert=False,
+            trailer_residual=0xC713,
+        )
+
+        def sender(node_id, command):
+            self.sent.append((node_id, command))
+
+        self.sender = sender
+        self.coordinator = Htv145ControlCoordinator(
+            store=self.store, sender=sender, enabled=True
+        )
+        self.coordinator.configure(
+            self.profile, observed_at="2026-08-24T12:00:00+00:00"
+        )
+        self.coordinator.observe_frame(
+            self.profile,
+            self.IDLE,
+            observed_at="2026-08-24T12:00:01+00:00",
+        )
+        passive = build_open_frame(
+            self.profile.link, 0x80, 1_200, 0xC713
+        )
+        self.coordinator.synchronize_from_passive_command(
+            self.profile,
+            passive,
+            observed_at="2026-08-24T12:00:02+00:00",
+        )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self.temporary_directory.cleanup()
+
+    def test_disabled_by_default_sends_nothing(self) -> None:
+        disabled = Htv145ControlCoordinator(
+            store=self.store, sender=self.sender
+        )
+        with self.assertRaisesRegex(PermissionError, "disabled"):
+            disabled.start(
+                self.profile, observed_at="2026-08-24T12:00:03+00:00"
+            )
+        with self.assertRaisesRegex(PermissionError, "disabled"):
+            disabled.request_open(
+                self.profile,
+                duration_seconds=60,
+                started_at="2026-08-24T12:00:20+00:00",
+            )
+        self.assertEqual([], self.sent)
+
+    def test_start_restores_configuration_without_actuating(self) -> None:
+        commands = self.coordinator.start(
+            self.profile, observed_at="2026-08-24T12:00:03+00:00"
+        )
+        self.assertEqual(
+            ["htv145_control_configure", "htv145_control_sync"],
+            [item["type"] for item in commands],
+        )
+        self.assertEqual(0x81, commands[1]["next_sequence"])
+        self.assertFalse(
+            any(item[1]["type"].endswith(("open", "close")) for item in self.sent)
+        )
+
+    def test_reservation_survives_restart_without_replay(self) -> None:
+        self.coordinator.start(
+            self.profile, observed_at="2026-08-24T12:00:03+00:00"
+        )
+        command = self.coordinator.request_open(
+            self.profile,
+            duration_seconds=1_200,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        self.assertEqual("htv145_control_open", command["type"])
+        self.assertEqual(0x81, command["expected_sequence"])
+        sent_count = len(self.sent)
+
+        restarted = Htv145ControlCoordinator(
+            store=self.store, sender=self.sender, enabled=True
+        )
+        with self.assertRaisesRegex(RuntimeError, "will not replay"):
+            restarted.start(
+                self.profile, observed_at="2026-08-24T12:00:21+00:00"
+            )
+        self.assertEqual(sent_count, len(self.sent))
+
+        confirmed = restarted.observe_frame(
+            self.profile,
+            self.OPEN_RESPONSE,
+            observed_at="2026-08-24T12:00:22+00:00",
+        )
+        self.assertEqual(0x82, confirmed["next_sequence"])
+        self.assertTrue(confirmed["confirmed_watering"])
+        self.assertEqual(
+            "2026-08-24T12:20:20+00:00", confirmed["expected_idle_at"]
+        )
+
+    def test_independent_telemetry_confirms_without_counter_substitution(self) -> None:
+        self.coordinator.start(
+            self.profile, observed_at="2026-08-24T12:00:03+00:00"
+        )
+        self.coordinator.request_open(
+            self.profile,
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        confirmed = self.coordinator.observe_frame(
+            self.profile,
+            self.ACTIVE_REPORT,
+            observed_at="2026-08-24T12:00:27+00:00",
+        )
+        self.assertEqual(0x9B, self.ACTIVE_REPORT[13])
+        self.assertEqual(0x82, confirmed["next_sequence"])
+        self.assertEqual(
+            "matching_independent_state_report",
+            confirmed["counter_source"],
+        )
+
+    def test_dispatch_failure_unsynchronizes_and_does_not_retry(self) -> None:
+        def failing_sender(_node_id, _command):
+            raise ConnectionError("offline")
+
+        coordinator = Htv145ControlCoordinator(
+            store=self.store, sender=failing_sender, enabled=True
+        )
+        with self.assertRaises(ConnectionError):
+            coordinator.request_open(
+                self.profile,
+                duration_seconds=600,
+                started_at="2026-08-24T12:00:20+00:00",
+            )
+        state = self.store.htv145_control_states(
+            self.profile.valve_endpoint
+        )[0]
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["pending_command_id"])
+        self.assertEqual(
+            "2026-08-24T12:10:20+00:00", state["expected_idle_at"]
+        )
+        with self.assertRaisesRegex(RuntimeError, "unsynchronized"):
+            coordinator.request_open(
+                self.profile,
+                duration_seconds=600,
+                started_at="2026-08-24T12:00:40+00:00",
+            )
+
+    def test_node_rejection_unsynchronizes_durable_reservation(self) -> None:
+        command = self.coordinator.request_open(
+            self.profile,
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        failed = self.coordinator.observe_candidate_status(
+            self.profile,
+            {
+                "type": "command_error",
+                "node_id": self.profile.node_id,
+                "command_id": command["command_id"],
+                "error": "invalid_htv145_control_open",
+            },
+            observed_at="2026-08-24T12:00:21+00:00",
+        )
+        self.assertIsNotNone(failed)
+        self.assertFalse(failed["counter_synchronized"])
+        self.assertIsNone(failed["pending_command_id"])
+        self.assertIn("node_rejected", failed["last_result"])
+
+    def test_command_interval_and_single_pending_are_enforced(self) -> None:
+        self.coordinator.request_open(
+            self.profile,
+            duration_seconds=1_200,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        with self.assertRaisesRegex(RuntimeError, "already pending"):
+            self.coordinator.request_close(
+                self.profile, started_at="2026-08-24T12:00:25+00:00"
+            )
+        self.coordinator.observe_frame(
+            self.profile,
+            self.OPEN_RESPONSE,
+            observed_at="2026-08-24T12:00:26+00:00",
+        )
+        with self.assertRaisesRegex(RuntimeError, "15-second"):
+            self.coordinator.request_close(
+                self.profile, started_at="2026-08-24T12:00:30+00:00"
+            )
 
 
 if __name__ == "__main__":

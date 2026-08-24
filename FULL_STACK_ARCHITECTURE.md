@@ -123,8 +123,11 @@ coordinated:
 The standard firmware uses an authenticated outbound Wi-Fi connection from
 each node to `rainpointd`, making it possible to place nodes near the garden
 areas they serve while keeping the SDR as a reference. Bounded sensor pairing,
-rejoin, and acknowledgement TX are implemented. Valve control still requires a
-separately reviewed encrypted and replay-protected session before enablement.
+rejoin, and acknowledgement TX are implemented. HTV405 control remains a
+research-bench path. A distinct HTV145 long-wake candidate is compiled only
+when both research and HTV145-specific build gates are enabled; it remains
+absent from standard firmware and every public API until physical acceptance
+and transport-security review are complete.
 
 For installations with multiple RainPoint valves, setup must ask the user
 which local radio node is physically closest to each valve. Observed receive
@@ -141,8 +144,10 @@ receive loop scans both observed channels with one radio and implements
 frame reconstruction, integrity diagnostics, startup register verification,
 packet/overflow/recovery counters, frequency-offset estimates, and serial JSON
 output. It transmits only gateway-authorized HCS026 pairing/rejoin replies and
-routine acknowledgements. The distinct long valve-command wake and all valve
-TX commands remain unimplemented.
+routine acknowledgements in the standard build. The research-only HTV145 path
+constructs the observed long-wake open/close family, emits one bounded burst of
+up to three byte-identical attempts, stops on a valid response, and falls back
+to an independent state report without substituting its telemetry counter.
 
 ### Home Assistant integration (`rainpoint_local`)
 
@@ -264,8 +269,11 @@ physical update and recovery qualification.
 - Generate open and close frames with valid counters and trailers.
 - Require positive returned-state acknowledgement.
 - Enforce configured and absolute maximum durations.
-- Start the close watchdog before transmitting open.
-- Retry idempotent close until idle or a hard fault is reported.
+- Persist the requested duration and expected idle deadline before transmitting
+  open.
+- Never repeat a logical open; keep proven within-command RF attempts bounded.
+- Issue early-stop or anomaly-close only from explicit intent or positively
+  observed overdue watering.
 - Audit every request, response, timeout, retry, and failure.
 
 ### Phase 5 — fully local operation and migration
@@ -285,9 +293,9 @@ The gateway must guarantee:
 - fail-closed startup and recovery,
 - a user maximum and non-bypassable absolute run limit,
 - no open command without an active local watchdog,
-- automatic close after loss of the controlling client,
+- no replay or speculative close after loss of the controlling client,
 - confirmation from returned valve state rather than transmit success,
-- repeated idempotent close attempts,
+- one durably reserved logical operation at a time,
 - no restoration of an old open command after restart, and
 - persistent audit records for all control activity and faults.
 
@@ -295,17 +303,17 @@ Scheduling may live in Home Assistant, but this contract must continue to work
 while Home Assistant is stopped.
 
 The hardware-independent safety state machine is implemented in
-`rainpointd_addon/rainpointd/safety.py` and exercised entirely with symbolic
-actions. It currently proves the intended behavior without being connected to
-HTTP, serial, frame construction, or radio hardware:
+`rainpointd_addon/rainpointd/safety.py`; the disabled HTV145 transport
+candidate adds a separate durable reservation and independent command-counter
+boundary. Neither is connected to a public HTTP or Home Assistant actuator:
 
-- startup sends close and will not accept open until idle is observed,
+- startup is observation-only and will not accept open until idle is observed,
 - the hard run deadline is armed before an open action is emitted,
-- a missing open acknowledgement transitions to close instead of retrying
-  the non-idempotent open,
-- client loss, unexpected watering, and watchdog expiry initiate close,
-- close retries every 1.5 seconds before entering a reported fault, and
-- fault state continues slower close attempts until idle is observed.
+- a missing acknowledgement invalidates the command counter without emitting a
+  second logical open,
+- the expected valve-owned completion deadline survives an ambiguous result,
+- client loss cannot restore or replay a command, and
+- only matching valve evidence advances the independently persisted counter.
 
 This simulation is a prerequisite, not authorization to transmit. Integrating
 its symbolic actions with a radio transport remains a separately reviewed

@@ -53,6 +53,12 @@ capacitor across CC1101 VCC/GND when practical.
   for physically validated one-minute opens on Zones 1--4 and Zone 1
   early-close; it requires explicit association identities, a persisted
   response-authenticated counter, and the calibrated carrier profile.
+- Contains a separate HTV145 single-zone candidate behind both
+  `RAINPOINT_RESEARCH_BENCH=1` and `RAINPOINT_HTV145_TX_CANDIDATE=1`. It uses
+  the retained 1,200-symbol wake and one bounded three-attempt RF burst,
+  accepts only explicit association endpoints/carrier/residue, and advances
+  its command counter only from a matching response or independent state
+  confirmation. The standard image compiles this path out.
 - Keeps valve control absent from the Home Assistant and public HTTP APIs. The
   bench coordinator starts observation-only, spaces operations by at least 15
   seconds, never advances state from transmit success, and never emits a
@@ -96,6 +102,17 @@ RAINPOINT_RESEARCH_BENCH=1 \
 ```
 
 Never publish or OTA-promote that research artifact as a standard release.
+
+The unaccepted HTV145 candidate requires an additional explicit build gate:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_HTV145_TX_CANDIDATE=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.1 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+Do not deploy that artifact before the isolated dry-valve acceptance session.
 
 The generic `esp32dev` board definition matches the tested board. If automatic
 upload reset fails, hold **BOOT**, begin upload, and release it when PlatformIO

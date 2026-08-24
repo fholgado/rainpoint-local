@@ -889,6 +889,57 @@ class ESP32NetworkTest(unittest.TestCase):
         legacy_stream.close()
         legacy_connection.close()
 
+    def test_htv145_candidate_commands_require_distinct_capability(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "htv145_control_tx_candidate",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        commands = [
+            {
+                "type": "htv145_control_configure",
+                "command_id": "71" * 16,
+                "controller_endpoint": "b42d008f",
+                "valve_endpoint": "b9840280",
+                "center_hz": 433_920_000,
+                "power_dbm": 10,
+                "invert": False,
+                "trailer_residual": 0xC713,
+            },
+            {
+                "type": "htv145_control_sync",
+                "command_id": "72" * 16,
+                "next_sequence": 0x8D,
+            },
+            {
+                "type": "htv145_control_open",
+                "command_id": "73" * 16,
+                "expected_sequence": 0x8D,
+                "duration_seconds": 600,
+            },
+        ]
+        for command in commands:
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+        stream.close()
+        connection.close()
+
+        legacy_connection, legacy_stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(
+            ValueError, "htv145_control_tx_candidate"
+        ):
+            self.server.send_command(NODE_A, commands[-1])
+        legacy_stream.close()
+        legacy_connection.close()
+
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,

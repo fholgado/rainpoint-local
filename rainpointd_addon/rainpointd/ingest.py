@@ -46,6 +46,9 @@ class FrameIngestor:
             "is_watering": None,
             "duration_seconds": None,
             "last_usage_liters": None,
+            "battery_low": None,
+            "battery_status": None,
+            "battery_percent": None,
         }
         for zone in range(1, 5):
             state[f"zone_{zone}_is_watering"] = None
@@ -144,6 +147,22 @@ class FrameIngestor:
                 )
                 if key in decoded
             }
+            # Battery fields occur in both HCS026 sensor reports and HTV145
+            # valve usage reports.  Add them only after the endpoint pair has
+            # resolved to a catalogued valve; otherwise a sensor battery
+            # report would enter the valve branch and skip sensor ingestion.
+            if valve is not None:
+                valve_update.update(
+                    {
+                        key: decoded[key]
+                        for key in (
+                            "battery_low",
+                            "battery_status",
+                            "battery_percent",
+                        )
+                        if key in decoded
+                    }
+                )
             if valve_update:
                 if valve is None:
                     continue
