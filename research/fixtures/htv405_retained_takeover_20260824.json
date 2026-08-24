@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "model": "HTV405FRF",
+  "trial": "retained stock association resumed by custom local radio node",
+  "observed_at": "2026-08-24T19:44:48+00:00",
+  "stock_gateway_powered": false,
+  "selected_node": {
+    "firmware_version": "0.14.0-combined.1",
+    "profile": "htv405_auto_candidate_v1",
+    "reported_completed_steps": 3,
+    "reported_step_count": 18,
+    "terminal_fresh_enrollment_state": false
+  },
+  "operator_observation": {
+    "trigger": "explicit long press after battery restart",
+    "terminal_led": "white flash"
+  },
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "paired_idle_reports": [
+    "79f4882f28b984028094a98013018107820581004f80000000408000568000000000000016a9",
+    "79f4882f28b984028094a98013020107820581004f8000000040800056800000000000000321",
+    "79f4882f28b984028094a98013028107820581004f80000000408000568000000000000031a4",
+    "79f4882f28b984028094a98013030107820581804f8000000040800056800000000000001e32",
+    "79f4882f28b984028094a98013038107820581804f8000000040800056800000000000002cb7",
+    "79f4882f28b984028094a98013040107820581804f8000000040800056800000000000003522",
+    "79f4882f28b984028094a98013048107820582004f8000000040800056800000000000007fcd",
+    "79f4882f28b984028094a98013050107820582004f8000000040800056800000000000002843",
+    "79f4882f28b984028094a98013058107820582004f8000000040800056800000000000001ac6",
+    "79f4882f28b984028094a98013060107820700804f8000000040800056800000000000004405"
+  ],
+  "receiver_evidence": {
+    "vegetable_garden_node_rssi_db": -50.5,
+    "ota_test_node_rssi_db": -36.0,
+    "local_sdr_observed": true
+  },
+  "classification": "retained_association_locally_resumed",
+  "findings": [
+    "The white LED and paired traffic prove operational association recovery while the stock gateway was absent.",
+    "Three of eighteen fresh-enrollment replies do not prove acceptance of a new assignment.",
+    "This path may support cloud-to-local takeover when the custom controller intentionally preserves the existing controller identity.",
+    "Fresh-device enrollment must continue to require the strict eighteen-step terminal state and command-scoped paired traffic."
+  ]
+}

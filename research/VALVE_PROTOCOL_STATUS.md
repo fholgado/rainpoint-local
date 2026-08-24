@@ -49,6 +49,16 @@ after a `0x7f` trigger stopped at step 1/18. No further local rejoin hypothesis
 should replace it until a continuous stock-gateway battery-rejoin capture
 establishes the actual reply count, carriers, payloads, and terminal evidence.
 
+On August 24, the stock gateway was powered off and a custom node running the
+known-good `0.14.0-combined.1` pairing image answered an explicit long press.
+The node completed 3/18 fresh-enrollment replies, after which the valve gave a
+white flash and resumed a complete stream of authenticated paired idle reports.
+This is retained-association local takeover evidence, not a new assignment.
+The redacted frames are frozen in
+`research/fixtures/htv405_retained_takeover_20260824.json`. A migration path
+may accept that outcome only for a previously known association whose existing
+controller identity is being preserved; unknown devices still require 18/18.
+
 Run the retained lifecycle classifier with:
 
 ```sh
