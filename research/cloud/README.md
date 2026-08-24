@@ -166,6 +166,34 @@ product code 38 with different model codes. Product code 38 should therefore
 be tested as a four-zone functional-family identifier, not treated as an exact
 model name.
 
+A subsequent dry-bench cloud-control matrix opened and stopped all four ports
+through the stock gateway. The retained application payloads confirmed the
+catalog mapping directly: work-state DP IDs 25--28 and session-duration DP IDs
+37--40 each changed only for the commanded port. Active state decoded as 33;
+the first stopped update decoded as 32 and retained the requested 60-second
+duration; a later idle refresh decoded as 0 and cleared it. Shared battery DP
+24 stayed at 100 percent, while RSSI DP 23 varied from -20 to -30 dBm. The
+cloud values and independently observed RF command/state pairs are frozen in
+`../fixtures/htv405_stock_cloud_control_matrix_20260824.json`.
+
+### Address allocation and replacement behavior
+
+The tested stock installation initially occupied app addresses 1--6. After
+the former address-6 accessory was deleted, the newly enrolled HTV405FRF was
+assigned address 6 rather than 7. Addresses therefore appear sequential for
+an empty gateway, but they are reusable slots rather than a permanently
+increasing identity.
+
+This exposed a replacement edge case in the observed cloud integration. Its
+Home Assistant identity is derived from the hub and address, so the new valve
+initially inherited the deleted sensor's address-6 device/entity identity.
+Reloading the integration created the valve-zone entities and refreshed model
+metadata, but some surviving entity IDs still contained the old sensor model
+and its obsolete soil-moisture entity remained unavailable. A future combined
+cloud/local integration must include product family or a stable device ID when
+reconciling replacements at a reused address; `(hub, address)` alone is not a
+durable physical-device identity.
+
 Two app/RF correlations on 2026-08-24 exposed an additional identity rule.
 The RainPoint app's device IDs are 32-bit values whose upper byte matched the
 catalogued product code in both tested families: the Left Bed HCS026FRF ID

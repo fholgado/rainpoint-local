@@ -70,16 +70,17 @@ def decode_duration(encoded: bytes) -> int:
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     """Decode the passively validated HTV405 four-zone control body.
 
-    The layout is intentionally receive-only.  It is based on a crossed stock
-    gateway trial covering every zone at both 60 and 120 seconds.  No frame
-    construction is exposed until pairing, acknowledgement, and fail-safe
-    close behavior have been validated with the custom transmitter.
+    The layout is based on crossed stock-gateway and local-gateway trials. The
+    paired logical address occupies the low seven bits of byte 16; captures at
+    app addresses 2 and 6 carried 0x82 and 0x86 respectively.
     """
     if len(frame) != FRAME_BYTES:
         return None
+    logical_address = frame[16] & 0x7F
     if (
         frame[15] != 0x07
-        or frame[16] != 0x82
+        or not frame[16] & 0x80
+        or logical_address == 0
         # Stock-controlled captures used selector 0x85. A valve enrolled by
         # the local bridge uses the same body layout with selector 0x05. The
         # high bit is therefore association state, not part of the model/type
@@ -142,7 +143,8 @@ def is_htv405_link_frame(frame: bytes) -> bool:
         return False
     return bool(
         frame[15] == 0x07
-        and frame[16] == 0x82
+        and frame[16] & 0x80
+        and frame[16] & 0x7F
         and frame[17] & 0x7F in {0x05, 0x07}
         and frame[20] & 0x7F == 0x4F
         and frame[25] == 0x40

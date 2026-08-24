@@ -236,14 +236,56 @@ the transmitted counter may advance it. Transmit success alone is never a
 state transition, and lower telemetry may confirm watering/idle state but may
 not rewrite the controller counter.
 
-On August 23, dry-bench one-minute opens physically validated Zones 2--4. The
-only command-body change is offset 17: `0x80 | zone`. The immediate authenticated
+On August 23, dry-bench one-minute opens physically validated Zones 2--4 for
+the locally enrolled selector-2 association. Within that profile, the only
+command-body change is offset 17: `0x80 | zone`. The immediate authenticated
 response identifies the accepted port as `zone << 4` at the same offset. The
 locally enrolled lower state report independently identifies the active port
 in offset 19 bits 4--6. Each tested port emitted its matching active report and
 then an idle report after the bounded run. Exact transmissions, responses,
 state reports, phase-only reports, and idle reports are frozen in
 `research/fixtures/htv405_local_multizone_control_20260823.json`.
+
+### HTV405FRF stock selector-6 cloud-control matrix — 2026-08-24
+
+An isolated dry valve was re-enrolled through the stock RainPoint gateway at
+app address 6. Cloud commands then opened each port for 60 seconds and stopped
+it after at least 15 seconds. All four trials produced a matching valve-originated
+active report, idle report, cloud work-state transition, and per-port 60-second
+session-duration value. This independently validates all four stock control
+paths without treating a submitted cloud request as proof of valve state.
+
+The selector-6 command profile does **not** use the selector-2 profile's direct
+offset-17 port byte. Its port is packed across offsets 16 and 17:
+
+```text
+zone = 2 * (frame[16] & 0x7f) + ((frame[17] >> 7) & 1)
+frame[17] & 0x7f = 1
+```
+
+This gives `80 81`, `81 01`, `81 81`, and `82 01` for Zones 1--4. Offset 15
+is `0x82` for open and `0x81` for close, while offset 14 remains the previously
+validated `0x90` open and `0x10` close marker. Duration remains at offsets
+19--20; `9e 00` again represented 60 seconds. Command construction must
+therefore select the complete association profile rather than treating the
+radio branch as only a carrier-frequency choice. Both supported trailer
+residues occurred in the matrix without a fixed open/close mapping, so the
+trailer likewise cannot be inferred from the requested operation.
+
+Across the ordered matrix, open sequence values were 1--4 and close values
+were 2--5. A later repeated Zone 1 close used sequence 6, ruling out a fixed
+per-zone sequence. The exact stock advancement rule remains unresolved, so
+this observation does not replace authenticated counter persistence for local
+control.
+
+The associated application payload maps per-port work state to DP IDs 25--28
+and per-port session duration to IDs 37--40. Active work state was `33`, the
+first stopped update used `32` while retaining the 60-second session duration,
+and a later idle refresh used `0` and cleared the duration. Shared DP 24 stayed
+at 100 percent battery while DP 23 varied from -20 to -30 dBm, confirming that
+the stock-hub RSSI is a dynamic receiver measurement. The full redacted matrix
+is retained in
+`research/fixtures/htv405_stock_cloud_control_matrix_20260824.json`.
 
 Selector-`0x07` lower reports advance only the telemetry phase. Their zone-like
 fields cycle and may not overwrite authenticated state. Selector-`0x05` reports

@@ -1,0 +1,120 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV405FRF",
+  "scope": "stock-gateway cloud control of an isolated dry-bench four-zone valve",
+  "association": {
+    "app_device_address": 6,
+    "paired_endpoint": "94a98013",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280",
+    "selector_branch": 6
+  },
+  "safety": {
+    "valve_connected_to_water": false,
+    "requested_duration_seconds": 60,
+    "minimum_inter_command_seconds": 15,
+    "acceptance_rule": "a valve-originated active report and matching cloud work-state update, never the submitted command alone",
+    "completion_rule": "a valve-originated idle report and matching cloud work-state update"
+  },
+  "cloud_metadata": {
+    "battery_percent": 100,
+    "firmware_version_display": "123",
+    "rssi_range_dbm_during_matrix": [-30, -20],
+    "rssi_interpretation": "dynamic stock-gateway receiver measurement"
+  },
+  "trials": [
+    {
+      "zone": 1,
+      "open_event_id": 155856,
+      "open_command_sequence": 1,
+      "open_command_frame": "79f4882f2894a98013398402808190828081009e0000000000000000000000000000000071f1",
+      "active_event_id": 155857,
+      "active_report_frame": "79f4882f28b984028094a980130d810786858090cf80000000409b00569e0000000000003a22",
+      "cloud_active_payload": "11#17E1E80019D8211AD8001BD8001CD8001D201E201F20202018DC0121B788A4301A22B70000000023B70000000024B70000000025AD3C0026AD000027AD000028AD0000FEFF0F48A4301A",
+      "close_event_id": 155865,
+      "close_command_sequence": 2,
+      "close_command_frame": "79f4882f2894a980133984028082108180810000000000000000000000000000000000000117",
+      "idle_event_id": 155866,
+      "idle_report_frame": "79f4882f28b984028094a980130e0107868580804f800000004080005680000000000000533b",
+      "cloud_stop_payload": "11#17E1EB0019D8201AD8001BD8001CD8001D201E201F20202018DC0121B70000000022B70000000023B70000000024B70000000025AD3C0026AD000027AD000028AD0000FEFF0F77A4301A",
+      "result": "active and idle independently confirmed over RF and in the cloud payload"
+    },
+    {
+      "zone": 2,
+      "open_event_id": 155874,
+      "open_command_sequence": 2,
+      "open_command_frame": "79f4882f2894a98013398402808290828101009e000000000000000000000000000000007996",
+      "active_event_id": 155875,
+      "active_report_frame": "79f4882f28b984028094a980130f010786858110cf80000000409b80569e0000000000007d3a",
+      "cloud_active_payload": "11#17E1E90019D8001AD8211BD8001CD8001D201E201F20202018DC0121B70000000022B7E3A4301A23B70000000024B70000000025AD000026AD3C0027AD000028AD0000FEFF0FA3A4301A",
+      "close_event_id": 155882,
+      "close_command_sequence": 3,
+      "close_command_frame": "79f4882f2894a980133984028083108181010000000000000000000000000000000000004b76",
+      "idle_event_id": 155886,
+      "idle_report_frame": "79f4882f28b984028094a980130f8107868581004f800000004080005680000000000000048c",
+      "cloud_stop_payload": "11#17E1E90019D8001AD8201BD8001CD8001D201E201F20202018DC0121B70000000022B70000000023B70000000024B70000000025AD000026AD3C0027AD000028AD0000FEFF0FE0A4301A",
+      "result": "active and idle independently confirmed over RF and in the cloud payload"
+    },
+    {
+      "zone": 3,
+      "open_event_id": 155890,
+      "open_command_sequence": 3,
+      "open_command_frame": "79f4882f2894a98013398402808390828181009e000000000000000000000000000000000644",
+      "active_event_id": 155892,
+      "active_report_frame": "79f4882f28b984028094a9801310810786858190cf80000000409b80569e00000000000034fa",
+      "cloud_active_payload": "11#17E1EB0019D8001AD8001BD8211CD8001D201E201F20202018DC0121B70000000022B70000000023B743A5301A24B70000000025AD000026AD000027AD3C0028AD0000FEFF0F03A5301A",
+      "close_event_id": 155896,
+      "close_command_sequence": 4,
+      "close_command_frame": "79f4882f2894a980133984028084108181810000000000000000000000000000000000007abf",
+      "idle_event_id": 155898,
+      "idle_report_frame": "79f4882f28b984028094a98013110107868581804f8000000040800056800000000000002847",
+      "cloud_stop_payload": "11#17E1EC0019D8001AD8001BD8201CD8001D201E201F20202018DC0121B70000000022B70000000023B70000000024B70000000025AD000026AD000027AD3C0028AD0000FEFF0F2DA5301A",
+      "result": "active and idle independently confirmed over RF and in the cloud payload"
+    },
+    {
+      "zone": 4,
+      "open_event_id": 155902,
+      "open_command_sequence": 4,
+      "open_command_frame": "79f4882f2894a98013398402808490828201009e000000000000000000000000000000006958",
+      "active_event_id": 155905,
+      "active_report_frame": "79f4882f28b984028094a9801312010786858210cf80000000409b00569e0000000000000bb1",
+      "cloud_active_payload": "11#17E1E90019D8001AD8001BD8001CD8211D201E201F20202018DC0121B70000000022B70000000023B70000000024B78EA5301A25AD000026AD000027AD000028AD3C00FEFF0F4EA5301A",
+      "close_event_id": 155913,
+      "close_command_sequence": 5,
+      "close_command_frame": "79f4882f2894a980133984028085108182010000000000000000000000000000000000005bb8",
+      "idle_event_id": 155915,
+      "idle_report_frame": "79f4882f28b984028094a98013128107868582004f80000000408000568000000000000045a5",
+      "cloud_stop_payload": "11#17E1E70019D8001AD8001BD8001CD8201D201E201F20202018DC0121B70000000022B70000000023B70000000024B70000000025AD000026AD000027AD000028AD3C00FEFF0F79A5301A",
+      "result": "active and idle independently confirmed over RF and in the cloud payload"
+    }
+  ],
+  "cloud_tlv_mapping": {
+    "work_state_dp_ids": {
+      "1": 25,
+      "2": 26,
+      "3": 27,
+      "4": 28
+    },
+    "session_duration_dp_ids": {
+      "1": 37,
+      "2": 38,
+      "3": 39,
+      "4": 40
+    },
+    "battery_dp_id": 24,
+    "rssi_dp_id": 23,
+    "active_work_state": 33,
+    "stopped_work_state": 32,
+    "idle_work_state": 0
+  },
+  "findings": [
+    "All four stock-cloud commands were accepted by the same associated chassis, and only one port was active in each payload.",
+    "The branch-6 command port is packed across offsets 16 and 17: zone = 2 * (frame[16] & 0x7f) + ((frame[17] >> 7) & 1), while frame[17] & 0x7f remains 1.",
+    "Offset 15 is 0x82 for open and 0x81 for close; offset 14 remains the already validated 0x90 open and 0x10 close operation marker.",
+    "The branch-6 packing differs from the locally enrolled selector-2 command layout, so command construction must be association-profile-specific.",
+    "Stock commands used both supported trailer residues without a fixed open/close mapping; the trailer must remain part of authenticated association state rather than be inferred from the requested operation.",
+    "Open sequence values were 1, 2, 3, and 4; close sequence values were 2, 3, 4, and 5. A later repeated Zone 1 close used sequence 6, ruling out a fixed per-zone sequence but not yet identifying the stock gateway's advancement rule.",
+    "The cloud application payload retained the requested 60-second session duration on the first stopped update, then cleared it on a later idle refresh.",
+    "Battery remained 100 percent while RSSI varied per report, confirming that cloud RSSI is measured dynamically by the stock gateway."
+  ]
+}

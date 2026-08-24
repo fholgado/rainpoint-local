@@ -1385,6 +1385,67 @@ class RainPointRFTest(unittest.TestCase):
             set(decoded_trials),
         )
 
+    def test_stock_cloud_matrix_decodes_reused_logical_address_six(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_stock_cloud_control_matrix_20260824.json"
+            ).read_text(encoding="utf-8")
+        )
+        observed_zones = set()
+        for trial in fixture["trials"]:
+            zone = trial["zone"]
+            opened = decode_htv405_control_frame(
+                bytes.fromhex(trial["active_report_frame"])
+            )
+            closed = decode_htv405_control_frame(
+                bytes.fromhex(trial["idle_report_frame"])
+            )
+            self.assertIsNotNone(opened)
+            self.assertIsNotNone(closed)
+            self.assertEqual(
+                6,
+                bytes.fromhex(trial["active_report_frame"])[16] & 0x7F,
+            )
+            self.assertEqual(
+                6,
+                bytes.fromhex(trial["idle_report_frame"])[16] & 0x7F,
+            )
+            self.assertEqual(zone, opened["zone"])
+            self.assertEqual(zone, closed["zone"])
+            self.assertTrue(opened["is_watering"])
+            self.assertFalse(closed["is_watering"])
+            self.assertEqual(60, opened["duration_seconds"])
+
+            for action, operation, companion in (
+                ("open", 0x90, 0x82),
+                ("close", 0x10, 0x81),
+            ):
+                command = bytes.fromhex(trial[f"{action}_command_frame"])
+                residual = binascii.crc_hqx(
+                    command[:-2], 0
+                ) ^ int.from_bytes(command[-2:], "big")
+                packed_zone = (
+                    2 * (command[16] & 0x7F)
+                    + int(bool(command[17] & 0x80))
+                )
+                self.assertIn(residual, {0xC713, 0x4F03})
+                self.assertEqual(operation, command[14])
+                self.assertEqual(companion, command[15])
+                self.assertEqual(zone, packed_zone)
+                self.assertEqual(1, command[17] & 0x7F)
+            self.assertEqual(
+                60,
+                decode_duration(
+                    bytes.fromhex(trial["open_command_frame"])[19:21]
+                ),
+            )
+            observed_zones.add(zone)
+
+        self.assertEqual({1, 2, 3, 4}, observed_zones)
+
     def test_builds_offline_htv405_close_candidates_from_session_inputs(self) -> None:
         link = ValveLink(
             controller_endpoint=bytes.fromhex("aa110280"),
