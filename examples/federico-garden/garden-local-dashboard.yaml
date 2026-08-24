@@ -11,9 +11,10 @@ views:
         cards:
           - type: markdown
             content: >-
-              **Local RF telemetry.** This dashboard reads RainPoint moisture and
-              valve reports from `rainpoint_local`. Valve control and watering
-              automations remain on the existing production path for now.
+              **Local RF telemetry and control.** This dashboard reads RainPoint
+              moisture and the currently paired HTV405 valve from
+              `rainpoint_local`. Garden watering uses Zone 1; HTV405 battery
+              remains unavailable until its RF field is independently validated.
           - type: heading
             heading: Garden Moisture
             heading_style: title
@@ -143,13 +144,13 @@ views:
             color: blue
             vertical: false
           - type: tile
-            entity: sensor.garden_valve_last_water_usage
+            entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
             name: Last Session
             icon: mdi:cup-water
             color: blue
             vertical: false
           - type: tile
-            entity: sensor.garden_valve_reported_duration
+            entity: sensor.rainpoint_4_zone_valve_8013_reported_duration
             name: Session Duration
             icon: mdi:timer-outline
             color: teal
@@ -158,9 +159,9 @@ views:
             title: Watering Activity
             hours_to_show: 24
             entities:
-              - entity: sensor.garden_valve_last_water_usage
+              - entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
                 name: Liters
-              - entity: binary_sensor.garden_valve_watering
+              - entity: binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering
                 name: Zone 1
       - type: grid
         cards:
@@ -169,12 +170,12 @@ views:
             heading_style: title
             icon: mdi:valve
           - type: tile
-            entity: binary_sensor.garden_valve_watering
+            entity: binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering
             name: Zone 1 Watering
             icon: mdi:valve
             color: green
           - type: tile
-            entity: sensor.garden_valve_device_report_time
+            entity: sensor.rainpoint_4_zone_valve_8013_device_report_time
             name: Last Valve Report
             icon: mdi:clock-check-outline
             color: amber
@@ -182,18 +183,18 @@ views:
             title: Local Valve Report
             show_header_toggle: false
             entities:
-              - entity: sensor.garden_valve_valve_state
+              - entity: sensor.rainpoint_4_zone_valve_8013_valve_state
                 name: Valve State
-              - entity: sensor.garden_valve_reported_duration
+              - entity: sensor.rainpoint_4_zone_valve_8013_reported_duration
                 name: Reported Duration
-              - entity: sensor.garden_valve_last_water_usage
+              - entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
                 name: Last Water Usage
           - type: entities
             title: Device Health
             show_header_toggle: false
             entities:
-              - entity: sensor.garden_valve_battery
-                name: Valve Battery
+              - entity: sensor.rainpoint_4_zone_valve_8013_battery
+                name: Valve Battery (not decoded)
               - entity: sensor.left_bed_battery
                 name: Left Sensor Battery
               - entity: sensor.right_bed_battery
@@ -202,7 +203,7 @@ views:
                 name: Test Sensor A Battery
               - entity: sensor.rainpoint_hcs026_95a98024_battery
                 name: Test Sensor B Battery
-              - entity: sensor.garden_valve_signal_strength
+              - entity: sensor.rainpoint_4_zone_valve_8013_signal_strength
                 name: Valve Signal
               - entity: sensor.left_bed_signal_strength
                 name: Left Sensor Signal
@@ -224,7 +225,7 @@ views:
             title: Receive Reliability
             show_header_toggle: false
             entities:
-              - entity: binary_sensor.garden_valve_reporting
+              - entity: binary_sensor.rainpoint_4_zone_valve_8013_reporting
                 name: Valve Reporting
               - entity: binary_sensor.left_bed_reporting
                 name: Left Sensor Reporting
@@ -234,13 +235,13 @@ views:
                 name: Test Sensor A Reporting
               - entity: binary_sensor.rainpoint_hcs026_95a98024_reporting
                 name: Test Sensor B Reporting
-              - entity: sensor.garden_valve_average_report_interval
+              - entity: sensor.rainpoint_4_zone_valve_8013_average_report_interval
                 name: Valve Average Interval
               - entity: sensor.left_bed_average_report_interval
                 name: Left Average Interval
               - entity: sensor.right_bed_average_report_interval
                 name: Right Average Interval
-              - entity: sensor.garden_valve_reports_received
+              - entity: sensor.rainpoint_4_zone_valve_8013_reports_received
                 name: Valve Reports Received
               - entity: sensor.left_bed_reports_received
                 name: Left Reports Received
