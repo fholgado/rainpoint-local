@@ -123,6 +123,15 @@ beyond the expected completion plus grace period.
   Normal `0xff` long-press enrollment remains isolated from that mode. Report
   success only after 18/18 steps and a command-scoped paired HTV405 frame; a
   transmitted reply, boot sweep, or white flash is not terminal evidence.
+- The `0x7f`-triggered full-transcript trial also failed on 2026-08-24. Probe
+  `.41` received the cold-boot sweep and transmitted the unchanged assignment,
+  but stopped at 1/18 because the valve never emitted a paired-endpoint
+  continuation. The session was explicitly disarmed and no success was
+  recorded. See
+  `research/fixtures/htv405_battery_rejoin_full_exchange_20260824.json`.
+- Do not make another local rejoin protocol change until a controlled stock
+  gateway battery-rejoin capture establishes the actual reply count, carrier,
+  timing, payloads, identity transition, and terminal behavior.
 - The fresh-battery boundary analysis ruled out ordinary paired startup,
   selector-`0x07`, and known zone/countdown fields. A changing diagnostic
   family was also ruled out because it changed again after watering with the

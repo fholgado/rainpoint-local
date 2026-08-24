@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV405FRF",
+  "trial": "local battery-boot trigger followed by full pairing transcript",
+  "firmware": "0.14.0-valve-control-probe.41",
+  "selected_node_id": "rp-cc4c05f57630",
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "cold_boot_announcements": [
+    {
+      "event_id": 154854,
+      "observed_at": "2026-08-24T08:29:07.845214",
+      "message_type": 0,
+      "receiver_id": "local-sdr",
+      "frame": "79f4882f288000000014a98013008084027f93130000bd848000000000000000000000005d4c"
+    },
+    {
+      "event_id": 154856,
+      "observed_at": "2026-08-24T08:29:13.327712",
+      "message_type": 2,
+      "receiver_id": "local-sdr",
+      "frame": "79f4882f288000000014a98013020084027f93130000bd848000000000000000000000002dcf"
+    },
+    {
+      "event_id": 154858,
+      "observed_at": "2026-08-24T12:29:19.454496+00:00",
+      "message_type": 3,
+      "receiver_id": "rp-f4e5be3b015c",
+      "rssi_db": -61.0,
+      "frame": "79f4882f288000000014a98013038084027f93130000bd848000000000000000000000007a41"
+    }
+  ],
+  "local_result": {
+    "initial_reply_transmitted": true,
+    "completed_steps": 1,
+    "step_count": 18,
+    "paired_endpoint_traffic_observed": false,
+    "terminal_confirmation_observed": false,
+    "session_cancelled_after_failure": true
+  },
+  "conclusion": "The captured step-0 assignment reply did not make a 0x7f battery-boot sweep enter the ordinary 18-step enrollment transcript. Reply transmission alone is not rejoin evidence.",
+  "next_test": "Pair the valve to the stock RainPoint gateway, confirm normal control, then record a continuous wideband IQ capture during battery removal and reinstall without a button press."
+}
