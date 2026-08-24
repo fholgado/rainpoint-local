@@ -129,6 +129,9 @@ rainpoint::PairingSession pairingSession(activePairingProfile);
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
 rainpoint::Htv405PairingProfile activeValvePairingProfile{};
 rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
+rainpoint::Htv405RetainedRejoinSession valveRejoinSession(
+    activeValvePairingProfile
+);
 bool valvePairingActive = false;
 bool valvePairingKnownRejoin = false;
 #endif
@@ -599,7 +602,9 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
 rainpoint::PairingSessionState currentPairingState() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingSession.state();
+        return valvePairingKnownRejoin
+            ? valveRejoinSession.state()
+            : valvePairingSession.state();
     }
 #endif
     return pairingSession.state();
@@ -608,7 +613,9 @@ rainpoint::PairingSessionState currentPairingState() {
 std::size_t currentPairingCompletedSteps() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingSession.completedSteps();
+        return valvePairingKnownRejoin
+            ? valveRejoinSession.completedSteps()
+            : valvePairingSession.completedSteps();
     }
 #endif
     return pairingSession.completedSteps();
@@ -617,7 +624,9 @@ std::size_t currentPairingCompletedSteps() {
 rainpoint::PairingFailureReason currentPairingFailureReason() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        return valvePairingSession.failureReason();
+        return valvePairingKnownRejoin
+            ? valveRejoinSession.failureReason()
+            : valvePairingSession.failureReason();
     }
 #endif
     return pairingSession.failureReason();
@@ -667,7 +676,11 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += ",\"step_count\":";
     line +=
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-        valvePairingActive ? valvePairingSession.stepCount() :
+        valvePairingActive
+            ? (valvePairingKnownRejoin
+                ? 1
+                : rainpoint::kHtv405PairingStepCount)
+            :
 #endif
         activePairingProfile.stepCount;
     line += ",\"assigned_channel\":";
@@ -729,6 +742,7 @@ void cancelPairing(const char* detail) {
     pairingSession.cancel();
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingSession.cancel();
+    valveRejoinSession.cancel();
 #endif
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
@@ -1940,11 +1954,13 @@ void handleNetworkCommand() {
 #endif
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        valvePairingSession.arm(
-            millis(),
-            static_cast<std::uint32_t>(durationSeconds) * 1'000U,
-            requestedValveRejoin
-        );
+        const auto durationMs =
+            static_cast<std::uint32_t>(durationSeconds) * 1'000U;
+        if (requestedValveRejoin) {
+            valveRejoinSession.arm(millis(), durationMs);
+        } else {
+            valvePairingSession.arm(millis(), durationMs);
+        }
     } else
 #endif
     {
@@ -2256,12 +2272,59 @@ void authorizeRoutineAckFromCompletedPairing() {
 }
 #endif
 
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+bool activeValvePairingArmed() {
+    return currentPairingState() == rainpoint::PairingSessionState::Armed;
+}
+
+std::size_t activeValvePairingCompletedSteps() {
+    return valvePairingKnownRejoin
+        ? valveRejoinSession.completedSteps()
+        : valvePairingSession.completedSteps();
+}
+
+const rainpoint::Htv405PairingStep* claimActiveValvePairingReply(
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
+    std::uint32_t nowMs
+) {
+    return valvePairingKnownRejoin
+        ? valveRejoinSession.claimReply(frame, nowMs)
+        : valvePairingSession.claimReply(frame, nowMs);
+}
+
+std::uint8_t activeValvePairingReplyCounterOffset() {
+    return valvePairingKnownRejoin
+        ? valveRejoinSession.replyCounterOffset()
+        : valvePairingSession.replyCounterOffset();
+}
+
+std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
+    return valvePairingKnownRejoin
+        ? valveRejoinSession.replyStartDelayOverrideUs()
+        : valvePairingSession.replyStartDelayOverrideUs();
+}
+
+bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
+    return valvePairingKnownRejoin
+        ? valveRejoinSession.finishReply(success, nowMs)
+        : valvePairingSession.finishReply(success, nowMs);
+}
+
+void tickActiveValvePairing(std::uint32_t nowMs) {
+    if (valvePairingKnownRejoin) {
+        valveRejoinSession.tick(nowMs);
+    } else {
+        valvePairingSession.tick(nowMs);
+    }
+}
+#endif
+
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
     const bool deferReceiveRecovery = &radio == &primaryRadio &&
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive &&
-        valvePairingSession.state() == rainpoint::PairingSessionState::Armed;
+        activeValvePairingArmed();
 #else
         false;
 #endif
@@ -2276,10 +2339,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #endif
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (&radio == &primaryRadio && valvePairingActive &&
-        valvePairingSession.state() == rainpoint::PairingSessionState::Armed) {
-        const std::size_t beforeStep = valvePairingSession.completedSteps();
+        activeValvePairingArmed()) {
+        const std::size_t beforeStep = activeValvePairingCompletedSteps();
         const rainpoint::Htv405PairingStep* step =
-            valvePairingSession.claimReply(frame, millis());
+            claimActiveValvePairingReply(frame, millis());
         if (step != nullptr) {
             auto replyDateTime = pairingLocalDateTime;
             const bool pairingClockValid =
@@ -2297,10 +2360,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     replyStep,
                     replyDateTime,
                     replyFrame,
-                    valvePairingSession.replyCounterOffset()
+                    activeValvePairingReplyCounterOffset()
                 );
             const std::uint32_t replyStartDelayOverrideUs =
-                valvePairingSession.replyStartDelayOverrideUs();
+                activeValvePairingReplyStartDelayOverrideUs();
             const std::uint32_t replyStartDelayUs =
                 replyStartDelayOverrideUs != 0
                 ? replyStartDelayOverrideUs
@@ -2324,7 +2387,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 sent = rainpoint::buildHtv405Selector2ConfigurationReply(
                     activeValvePairingProfile,
                     configurationFrame,
-                    valvePairingSession.replyCounterOffset()
+                    activeValvePairingReplyCounterOffset()
                 ) && radio.transmitAsync(
                     configurationFrame,
                     static_cast<std::uint32_t>(adjustedFrequency),
@@ -2337,13 +2400,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                             kHtv405Selector2ConfigurationReplyStartDelayUs
                 );
             }
-            valvePairingSession.finishReply(sent, millis());
+            finishActiveValvePairingReply(sent, millis());
             reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
-        } else if (valvePairingSession.completedSteps() > beforeStep) {
+        } else if (activeValvePairingCompletedSteps() > beforeStep) {
             reportPairingStatus("no_reply_step_observed");
         }
-        if (valvePairingSession.state() !=
-            rainpoint::PairingSessionState::Armed) {
+        if (!activeValvePairingArmed()) {
             pairingRequiresNetwork = false;
             restoreScanningAfterPairing();
         }
@@ -2686,7 +2748,7 @@ void loop() {
 #endif
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        valvePairingSession.tick(millis());
+        tickActiveValvePairing(millis());
     } else
 #endif
     {

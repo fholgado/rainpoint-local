@@ -960,10 +960,24 @@ int main() {
     assert(!rainpoint::htv405RetainedRejoinRequestMatches(
         htv405Profile, wrongProductColdBoot
     ));
-    rainpoint::Htv405PairingSession htv405RejoinSession(htv405Profile);
-    htv405RejoinSession.arm(19'000, 120'000, true);
-    assert(htv405RejoinSession.retainedRejoin());
-    assert(htv405RejoinSession.stepCount() == 1);
+    rainpoint::Htv405PairingSession isolatedNewPairingSession(htv405Profile);
+    isolatedNewPairingSession.arm(18'000);
+    assert(isolatedNewPairingSession.claimReply(
+        coldBootHtv405Factory, 18'100
+    ) == nullptr);
+    assert(isolatedNewPairingSession.completedSteps() == 0);
+    assert(
+        isolatedNewPairingSession.state() ==
+        rainpoint::PairingSessionState::Armed
+    );
+    rainpoint::Htv405RetainedRejoinSession htv405RejoinSession(
+        htv405Profile
+    );
+    htv405RejoinSession.arm(19'000, 120'000);
+    assert(htv405RejoinSession.claimReply(
+        htv405Factory, 19'050
+    ) == nullptr);
+    assert(htv405RejoinSession.completedSteps() == 0);
     assert(htv405RejoinSession.claimReply(
         coldBootHtv405Factory, 19'100
     ) == &htv405Profile.steps[0]);

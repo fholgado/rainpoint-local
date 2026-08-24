@@ -1104,7 +1104,8 @@ normalization and confirmed field decoding. Regression examples live in
 4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
    or cloud metadata.
 5. Validate retained-association valve rejoin after a battery cycle without a
-   full enrollment exchange.
+   full enrollment exchange. Keep its one-reply matcher separate from the
+   validated 18-step new-enrollment state machine.
 6. Confirm valve retry timing, acknowledgement rules, explicit early-stop, and
    positively observed overdue-run handling before enabling Home Assistant
    control.

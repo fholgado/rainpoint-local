@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased / Research firmware 0.14.0-valve-control-probe.39
+## Unreleased / Research firmware 0.14.0-valve-control-probe.40
+
+- Isolate the unvalidated HTV405 battery-cycle retained-rejoin candidate in a
+  dedicated one-reply state machine. The validated 18-step new-enrollment
+  session no longer contains a rejoin mode, and crossed regression tests prove
+  that each workflow rejects the other's announcement.
+
+## Research firmware 0.14.0-valve-control-probe.39
 
 - Physically validate duration-bounded local opens for HTV405 Zones 2--4 with
   port-specific authenticated responses, matching lower state reports, and
