@@ -1954,6 +1954,32 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(1020, valve["state"]["duration_seconds"])
         self.assertEqual(175.2, valve["state"]["last_usage_liters"])
 
+    def test_live_transport_terminal_summary_confirms_valve_closed(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        open_frame = (
+            "79f4882f28b42d008fb9840280811082808100fe0180"
+            "0000000000000000000000000000007669"
+        )
+        terminal_summary = (
+            "79f4882f28b9840280b42d008f9e8207858080ea62980d10"
+            "908200002c01000000000000421f"
+        )
+        for frame in (open_frame, terminal_summary):
+            event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
+            self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        valve = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "valve-1"
+        )
+        self.assertFalse(valve["state"]["is_watering"])
+        self.assertEqual("idle", valve["state"]["valve_state"])
+        self.assertEqual(600, valve["state"]["duration_seconds"])
+        self.assertEqual(105.7, valve["state"]["last_usage_liters"])
+
     def test_live_transport_retains_non_sensor_and_ignores_invalid_rows(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])

@@ -96,6 +96,47 @@ class RainPointProtocolTest(unittest.TestCase):
                     expected["last_usage_liters"], cloud["last_usage_liters"]
                 )
 
+    def test_htv145_terminal_summary_correlation_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv145_cloud_rf_terminal_summary_correlation_20260824.json"
+            ).read_text()
+        )
+
+        for observation in fixture["observations"]:
+            with self.subTest(event=observation["rf_event_id"]):
+                expected = observation["expected"]
+                cloud = decode(observation["cloud_payload"], "HTV145FRF")
+                rf_frame = observation["rf_frame"]
+                rf = normalize_row(
+                    {"len": len(rf_frame) * 4, "data": rf_frame}
+                )
+                self.assertEqual(
+                    expected["last_usage_liters"],
+                    cloud["last_usage_liters"],
+                )
+                self.assertEqual(
+                    expected["last_usage_liters"],
+                    rf["last_usage_liters"],
+                )
+                self.assertEqual(
+                    expected["duration_seconds"],
+                    rf["duration_seconds"],
+                )
+                self.assertEqual(
+                    expected["is_watering"], cloud["is_watering"]
+                )
+                self.assertEqual(
+                    expected["is_watering"], rf["is_watering"]
+                )
+                self.assertEqual("idle", rf["valve_state"])
+                self.assertTrue(rf["trailer_valid"])
+                self.assertNotIn("battery_status", rf)
+                self.assertNotIn("battery_percent", rf)
+
     def test_rejects_bad_hex(self) -> None:
         with self.assertRaises(ValueError):
             decode("10#not-hex", "HCS026FRF")

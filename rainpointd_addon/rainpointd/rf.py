@@ -248,6 +248,18 @@ def _hcs026_report_fields(
     return {}
 
 
+def _packed_valve_usage_tenths(
+    first: int, second: int, extension: int
+) -> int:
+    """Decode the packed HTV145 last-session usage value."""
+    half_tenths = (
+        ((second & 0x7F) << 8)
+        | (first & 0x7F)
+        | (extension & 0x80)
+    )
+    return half_tenths * 2 + int(bool(second & 0x80))
+
+
 def _valve_fields(
     frame: bytes, catalog: DeviceCatalog
 ) -> dict[str, Any]:
@@ -297,6 +309,37 @@ def _valve_fields(
         endpoint_a == valve.valve_endpoint
         and endpoint_b == valve.controller_endpoint
     ):
+        # A terminal/summary response family omits the 0x4f marker but carries
+        # the same packed usage value at bytes 24-26.  Bytes 28-29 repeat the
+        # requested duration in two-second units.  Five exact cloud/RF
+        # correlations cover 81.9-106.3 L, including today's low-battery
+        # 600-second run.  Battery is intentionally not decoded here: full and
+        # low cloud states share the stable bytes in this response layout.
+        if (
+            frame[14:19] == bytes.fromhex("8207858080")
+            and frame[23] in {0x08, 0x10}
+            and frame[26] & 0x7F == 0
+            and frame[27] == 0
+            and not any(frame[30:36])
+        ):
+            tenths_liters = _packed_valve_usage_tenths(
+                frame[24], frame[25], frame[26]
+            )
+            if not 0 <= tenths_liters <= 100_000:
+                return {}
+            result = {
+                "is_watering": False,
+                "valve_state": "idle",
+                "last_usage_liters": round(tenths_liters / 10, 1),
+            }
+            try:
+                duration_seconds = decode_duration(frame[28:30])
+            except ValueError:
+                pass
+            else:
+                result["duration_seconds"] = duration_seconds
+            return result
+
         # 0x4f/0xcf marks last-session usage. The following bytes hold a
         # packed half-value plus an odd-value flag, in tenths of a liter.
         if frame[20] & 0x7F != 0x4F:
@@ -304,12 +347,9 @@ def _valve_fields(
         # Bit 7 of the first packed byte is overloaded. Cloud/RF correlation
         # showed that frame[23] bit 7 selects whether it is value bit 7 or an
         # overlay flag; frame[22] bit 7 remains the odd-tenths flag.
-        half_tenths = (
-            ((frame[22] & 0x7F) << 8)
-            | (frame[21] & 0x7F)
-            | (frame[23] & 0x80)
+        tenths_liters = _packed_valve_usage_tenths(
+            frame[21], frame[22], frame[23]
         )
-        tenths_liters = half_tenths * 2 + int(bool(frame[22] & 0x80))
         if 0 <= tenths_liters <= 100_000:
             battery_low = bool(frame[17] & 0x08)
             return {

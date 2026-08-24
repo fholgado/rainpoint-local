@@ -1152,6 +1152,23 @@ Two cloud-correlated extension-bit examples are `d1 81 80` = 93.1 L and
 `99 81 80` = 81.9 L. Ignoring the third-byte bit underreports them as 67.5 L
 and 56.3 L, respectively.
 
+The valve also emits a terminal/summary response family without the
+`0x4f`/`0xcf` marker. On the valve-to-controller route, its normalized bytes
+14--18 are `82 07 85 80 80`; bytes 24--26 use the same packed-usage formula,
+and bytes 28--29 repeat the requested duration in two-second units. Five exact
+cloud/RF correlations cover 81.9--106.3 L. The latest was a single 600-second
+run: `90 82 00` decoded to 105.7 L and `2c 01` decoded to 600 seconds. This
+layout was cloud-labelled idle in every correlation, so it also provides a
+valve-originated closure confirmation. It is now decoded receive-only and
+frozen in
+`research/fixtures/htv145_cloud_rf_terminal_summary_correlation_20260824.json`.
+
+This summary family does **not** have a confirmed battery selector. Stable
+bytes are identical across independently cloud-labelled full and low battery
+observations, so local battery state must continue to come only from the
+marker-based usage/status family described below. Byte 23 was `0x08` in four
+correlations and `0x10` in the latest one; its meaning remains unresolved.
+
 ### HTV145FRF categorical battery flag
 
 In HTV145 usage/status reports, frame offset 17 bit `0x08` is clear while the
