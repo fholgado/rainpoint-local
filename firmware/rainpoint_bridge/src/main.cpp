@@ -2152,7 +2152,7 @@ void handleNetworkCommand() {
             zone < 1 || zone > 4 ||
             !jsonLongField(
                 command, "duration_seconds", durationSeconds
-            ) || durationSeconds < 60 || durationSeconds > 240 ||
+            ) || durationSeconds < 60 || durationSeconds > 3'600 ||
             durationSeconds % 60 != 0 ||
             !jsonLongField(
                 command, "expected_sequence", expectedSequence

@@ -199,6 +199,18 @@ int main() {
         gatewayCommand
     ));
     assert(gatewayCommand[17] == 0x81);
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x01, false},
+        1,
+        0x05,
+        1'200,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand[19] == 0xd8);
+    assert(gatewayCommand[20] == 0x02);
+    assert(rainpoint::trailerResidual(gatewayCommand) == 0x4f03);
     std::array<std::uint8_t, rainpoint::kFrameBytes> openFrame{};
     assert(rainpoint::buildHtv405OpenFrame(
         capturedValveLink,

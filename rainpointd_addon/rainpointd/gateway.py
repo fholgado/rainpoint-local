@@ -2058,7 +2058,7 @@ class Gateway:
                 if (
                     not isinstance(duration, int)
                     or isinstance(duration, bool)
-                    or duration not in range(60, 241)
+                    or duration not in range(60, 3_601)
                     or duration % 60
                 ):
                     return None

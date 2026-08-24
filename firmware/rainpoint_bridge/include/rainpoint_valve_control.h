@@ -56,13 +56,14 @@ inline bool buildHtv405GatewayOpenFrame(
     std::uint16_t trailerResidual,
     std::array<std::uint8_t, kFrameBytes>& frame
 ) {
-    // This builder is compiled only into research-bench firmware. One-minute
-    // opens on all four zones have authenticated response, matching state-
-    // report, and automatic-idle evidence.
+    // This builder is compiled only into supervised prototype firmware.
+    // Bounded opens use whole-minute durations; one- and two-minute physical
+    // runs have authenticated response, matching state-report, and
+    // automatic-idle evidence, while longer encodings are protocol-tested.
     if (!validHtv405GatewayControlLink(link) || phase.sequence > 0x1f ||
         zone < 1 || zone > 4 ||
         (associationSelector != 0x05 && associationSelector != 0x85) ||
-        durationSeconds < 60 || durationSeconds > 254 ||
+        durationSeconds < 60 || durationSeconds > 3'600 ||
         (durationSeconds % 2U) != 0 ||
         trailerResidual != 0x4f03) {
         return false;

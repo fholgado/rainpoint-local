@@ -947,11 +947,11 @@ class SQLiteEventStore:
         if action == "open":
             if (
                 duration_seconds is None
-                or duration_seconds not in range(60, 241)
+                or duration_seconds not in range(60, 3_601)
                 or duration_seconds % 60
             ):
                 raise ValueError(
-                    "HTV405 open must be 60-240 seconds in whole minutes"
+                    "HTV405 open must be 60-3600 seconds in whole minutes"
                 )
         elif duration_seconds is not None:
             raise ValueError("HTV405 close cannot include a duration")

@@ -1921,6 +1921,22 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual("valve_control_failed", event["event_type"])
         self.assertEqual("open", event["state"]["action"])
 
+    def test_twenty_minute_open_is_reserved_for_production_schedule(self) -> None:
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 1_200},
+        )["control"]
+
+        self.assertEqual(1_200, result["duration_seconds"])
+        self.assertEqual(
+            1_200,
+            self.commands[-1][1]["duration_seconds"],
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            1_200, registration["control_pending_duration_seconds"]
+        )
+
     def test_armed_node_is_never_control_available(self) -> None:
         self.server.gateway.update_node(self.NODE_ID, tx_armed=True)
         device = next(
