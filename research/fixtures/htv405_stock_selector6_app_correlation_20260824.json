@@ -1,0 +1,50 @@
+{
+  "captured_at": "2026-08-24T09:07:00-04:00",
+  "model": "HTV405FRF",
+  "source": "stock RainPoint re-enrollment observed by rainpointd plus contemporaneous RainPoint app device-information screenshot",
+  "application_metadata": {
+    "device_id_decimal": 637555497,
+    "device_id_hex": "26005329",
+    "device_model": "HTV405FRF",
+    "device_address": 6,
+    "battery_display": "full icon",
+    "rssi_dbm": -42,
+    "firmware_version_display": "123"
+  },
+  "rf_identity": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "event_boundary": {
+    "first_event_id": 155188,
+    "last_pairing_event_id": 155213,
+    "factory_request": "79f4882f288000000014a9801300808402ff93130000bd848000000000000000000000004795",
+    "first_paired_request": "79f4882f28b984028094a9801301010786a580804f80000000408000568000000000000000aa",
+    "captured_paired_request_count": 18,
+    "message_counts": {
+      "1": 3,
+      "2": 3,
+      "3": 2,
+      "4": 2,
+      "5": 2,
+      "6": 2,
+      "7": 2,
+      "8": 2
+    },
+    "captured_stock_reply_frames": [
+      "79f4882f2894a980133984028082c10100008000000000000000000000000000000000004998",
+      "79f4882f2894a9801339840280876c878019063232323232323232323232320000000000442f"
+    ],
+    "initial_assignment_decoded": false,
+    "notes": "The passive decoders did not retain the initial stock assignment burst. The immediate paired-identity transition nevertheless proves that it was accepted. A raw IQ capture is still required for the stock battery-rejoin reply."
+  },
+  "correlations": [
+    "The app's device address 6 agrees with the selector-6 request family encoded as 0x86 in the paired valve frames.",
+    "The decimal app device ID converts to 0x26005329 and appears neither directly nor byte-reversed in the captured pairing frames; it is not promoted as an RF identity.",
+    "The app full-battery icon labels this enrollment boundary as normal battery state but does not locate the battery field in RF.",
+    "The app RSSI is measured by the stock gateway and must remain distinct from local SDR or radio-node RSSI.",
+    "Firmware display 123 is a search clue only; no plain 0x7b, 01 02 03, or ASCII 123 representation was identified in the decoded pairing frames."
+  ]
+}

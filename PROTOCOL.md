@@ -300,6 +300,17 @@ bit of the first endpoint byte. The valve then exchanged messages `01` through
 `09` with companion route `39840280`. The full request/reply transcript is
 retained in `research/fixtures/htv405_gateway_pairing_replies.json`.
 
+A later stock re-enrollment on 2026-08-24 was correlated directly with the
+RainPoint app's device-information screen. The app reported **Device Address
+6**, while all captured paired requests used the selector-6 `0x86` family.
+This independently confirms that the user-visible device address corresponds
+to the assigned RF selector branch. The same screen reported a full battery,
+stock-hub RSSI of -42 dBm, firmware display `123`, and decimal device ID
+`637555497` (`0x26005329`). The device ID was not present directly or
+byte-reversed in the RF frames, and the other values are retained only as
+correlation labels until their RF fields are demonstrated. See
+`research/fixtures/htv405_stock_selector6_app_correlation_20260824.json`.
+
 The initial assignment reply occupied a distinct channel near 433.506 MHz and
 used tones near 433.471 and 433.541 MHz: approximately 70 kHz separation and
 35 kHz deviation. Its upper tone was weaker, so a midpoint-only demodulator
