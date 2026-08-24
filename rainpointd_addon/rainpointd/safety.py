@@ -138,12 +138,24 @@ class ValveSafetyController:
             ),
         )
 
-    def request_close(self, now: float) -> tuple[SafetyAction, ...]:
-        """Begin an explicit early-stop sequence unless one is active."""
+    def request_close(
+        self, now: float, *, zone: int | None = None
+    ) -> tuple[SafetyAction, ...]:
+        """Begin an explicit early-stop sequence for the known active zone."""
         if self.state is SafetyState.BOOT:
             self.start(now)
         if self.state in (SafetyState.CLOSE_PENDING, SafetyState.FAULT):
             return ()
+        if self.requested_zone is None:
+            if zone is None and self.zone_count == 1:
+                zone = 1
+            if zone not in range(1, self.zone_count + 1):
+                raise ValueError(
+                    "an explicit zone is required without active run context"
+                )
+            self.requested_zone = zone
+        elif zone is not None and zone != self.requested_zone:
+            raise ValueError("close zone does not match the active run")
         return self._begin_close(now, "user_request")
 
     def client_lost(self, now: float) -> tuple[SafetyAction, ...]:
@@ -256,14 +268,15 @@ class ValveSafetyController:
         self.next_close_attempt = now + max(
             self.close_retry_seconds, self.minimum_command_interval_seconds
         )
-        return tuple(
+        if self.requested_zone is None:
+            raise RuntimeError("cannot close without a known target zone")
+        return (
             SafetyAction(
                 ActionKind.SEND_CLOSE,
                 reason,
                 attempt=self.close_attempts,
-                zone=zone,
-            )
-            for zone in range(1, self.zone_count + 1)
+                zone=self.requested_zone,
+            ),
         )
 
     def _retry_close(self, now: float) -> tuple[SafetyAction, ...]:

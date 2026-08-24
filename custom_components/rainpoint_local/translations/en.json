@@ -201,6 +201,9 @@
     },
     "update": {
       "radio_node_firmware": { "name": "Firmware" }
+    },
+    "valve": {
+      "htv405_zone": { "name": "Zone {zone}" }
     }
   }
 }

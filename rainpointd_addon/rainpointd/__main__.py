@@ -81,6 +81,11 @@ def main() -> int:
         default=8787,
         help="LAN port nodes use to download verified local artifacts",
     )
+    parser.add_argument(
+        "--enable-supervised-htv405-control",
+        action="store_true",
+        help="enable authenticated, duration-bounded HTV405 beta control",
+    )
     args = parser.parse_args()
 
     catalog = (
@@ -105,6 +110,7 @@ def main() -> int:
         catalog=catalog,
         firmware_catalog=FirmwareCatalog.load(args.firmware_catalog),
         firmware_public_port=args.firmware_public_port,
+        valve_control_enabled=args.enable_supervised_htv405_control,
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(

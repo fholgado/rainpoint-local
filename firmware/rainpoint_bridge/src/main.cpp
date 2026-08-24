@@ -221,6 +221,7 @@ struct ValveControlProbe {
     bool closeSent = false;
     bool responseListenActive = false;
     std::uint32_t responseListenUntilMs = 0;
+    String commandId;
 };
 
 ValveControlProbe valveControlProbe;
@@ -901,6 +902,10 @@ void reportValveProbeStatus(
     line += wifiTransport.nodeId();
     line += "\",\"state\":\"";
     line += state;
+    if (validCommandId(valveControlProbe.commandId)) {
+        line += "\",\"command_id\":\"";
+        line += valveControlProbe.commandId;
+    }
     line += "\",\"configured\":";
     line += valveControlProbe.configured ? "true" : "false";
     if (valveControlProbe.configured) {
@@ -1009,7 +1014,13 @@ void reportValveProbeStatus(
 void reportValveProbeError(const char* error) {
     String line = "{\"type\":\"command_error\",\"node_id\":\"";
     line += wifiTransport.nodeId();
-    line += "\",\"command\":\"valve_control_probe\",\"error\":\"";
+    line += "\",\"command\":\"valve_control_probe\"";
+    if (validCommandId(valveControlProbe.commandId)) {
+        line += ",\"command_id\":\"";
+        line += valveControlProbe.commandId;
+        line += '"';
+    }
+    line += ",\"error\":\"";
     line += error;
     line += "\"}";
     emitLine(line);
@@ -1155,7 +1166,9 @@ void observeValveProbeFrame(
         valveControlProbe.commandPendingConfirmation = false;
         valveControlProbe.responseListenActive = false;
         valveControlProbe.commandSequence =
-            rainpoint::nextHtv405GatewayCommandSequence(response.sequence);
+            rainpoint::nextHtv405GatewayCommandSequence(
+                response.sequence, response.watering
+            );
         valveControlProbe.commandRepeat = false;
         valveControlProbe.manualPhaseConfigured = true;
         valveControlProbe.commandCounterAuthenticated = true;
@@ -1186,6 +1199,7 @@ void observeValveProbeFrame(
                     : "zone_candidate_closed_response_confirmed"),
             &frame
         );
+        valveControlProbe.commandId.clear();
         return;
     }
 
@@ -1255,6 +1269,7 @@ void pollValveProbeResponseListener() {
         valveControlProbe.openSent = false;
         valveControlProbe.closeSent = false;
         reportValveProbeStatus("gateway_command_response_timeout");
+        valveControlProbe.commandId.clear();
     }
 }
 
@@ -2066,6 +2081,7 @@ void handleNetworkCommand() {
 #endif
 #if RAINPOINT_RESEARCH_BENCH == 1
     if (type == "valve_control_configure") {
+        valveControlProbe.commandId = commandId;
         const String controller = jsonStringField(
             command, "controller_endpoint"
         );
@@ -2095,9 +2111,13 @@ void handleNetworkCommand() {
         local += ' ';
         local += frequencyOffsetHz;
         configureValveProbe(local);
+        if (valveControlProbe.configured) {
+            valveControlProbe.commandId = commandId;
+        }
         return;
     }
     if (type == "valve_control_sync") {
+        valveControlProbe.commandId = commandId;
         long sequence = -1;
         if (!jsonLongField(command, "next_sequence", sequence) ||
             sequence < 0 || sequence > 0x1f ||
@@ -2121,6 +2141,7 @@ void handleNetworkCommand() {
         return;
     }
     if (type == "valve_control_open") {
+        valveControlProbe.commandId = commandId;
         long zone = 0;
         long durationSeconds = 0;
         long expectedSequence = -1;
@@ -2147,6 +2168,7 @@ void handleNetworkCommand() {
         return;
     }
     if (type == "valve_control_close") {
+        valveControlProbe.commandId = commandId;
         long zone = 0;
         long expectedSequence = -1;
         if (!jsonLongField(command, "zone", zone) ||

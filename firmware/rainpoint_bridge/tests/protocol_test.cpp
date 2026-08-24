@@ -240,7 +240,9 @@ int main() {
     assert(commandResponse.zone == 1);
     assert(commandResponse.watering);
     assert(
-        rainpoint::nextHtv405GatewayCommandSequence(commandResponse.sequence) ==
+        rainpoint::nextHtv405GatewayCommandSequence(
+            commandResponse.sequence, commandResponse.watering
+        ) ==
         0x04
     );
     const auto capturedLocalCloseResponse = fromHex(
@@ -254,8 +256,10 @@ int main() {
     assert(commandResponse.zone == 1);
     assert(!commandResponse.watering);
     assert(
-        rainpoint::nextHtv405GatewayCommandSequence(commandResponse.sequence) ==
-        0x05
+        rainpoint::nextHtv405GatewayCommandSequence(
+            commandResponse.sequence, commandResponse.watering
+        ) ==
+        0x04
     );
     const std::array<std::string, 3> multiZoneResponses{{
         "79f4882f28b984028094a980130bd0868020cf80000000409e"

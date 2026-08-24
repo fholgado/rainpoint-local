@@ -143,12 +143,18 @@ class RequestHandler(BaseHTTPRequestHandler):
         registry_path = parsed.path.startswith(f"{base}/registry/")
         device_path = parsed.path.startswith(f"{base}/devices/")
         device_forget_path = device_path and parsed.path.endswith("/forget")
+        valve_control_path = device_path and (
+            parsed.path.endswith("/valve/open")
+            or parsed.path.endswith("/valve/close")
+            or parsed.path.endswith("/valve/synchronize")
+        )
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
         node_path = parsed.path.startswith(f"{base}/nodes/")
         if (
             parsed.path == f"{base}/learning"
             or registry_path
             or device_forget_path
+            or valve_control_path
             or pairing_path
             or node_path
         ):
@@ -321,6 +327,43 @@ class RequestHandler(BaseHTTPRequestHandler):
                         },
                     )
                     return
+                if valve_control_path:
+                    device_prefix = f"{base}/devices/"
+                    device_suffix = parsed.path[len(device_prefix) :]
+                    device_id, separator, action = device_suffix.rpartition(
+                        "/valve/"
+                    )
+                    if not separator or action not in {
+                        "open",
+                        "close",
+                        "synchronize",
+                    }:
+                        self._json(404, {"error": "not found"})
+                        return
+                    if action == "synchronize":
+                        result = (
+                            self.server.gateway.synchronize_htv405_control_counter(
+                                device_id=device_id,
+                                next_sequence=int(
+                                    body.get("next_sequence", -1)
+                                ),
+                                evidence_source=str(
+                                    body.get("evidence_source", "")
+                                ),
+                            )
+                        )
+                    else:
+                        duration = body.get("duration_seconds")
+                        result = self.server.gateway.request_htv405_control(
+                            device_id=device_id,
+                            action=action,
+                            zone=int(body.get("zone", 0)),
+                            duration_seconds=(
+                                int(duration) if duration is not None else None
+                            ),
+                        )
+                    self._json(202, {"control": result})
+                    return
                 if parsed.path == f"{base}/registry/accept":
                     result = self.server.gateway.accept_endpoint(
                         endpoint=str(body.get("endpoint", "")),
@@ -391,6 +434,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             except KeyError as error:
                 self._json(404, {"error": f"not found: {error.args[0]}"})
+                return
+            except PermissionError as error:
+                self._json(403, {"error": str(error)})
                 return
             except (RuntimeError, TypeError, ValueError) as error:
                 self._json(400, {"error": str(error)})

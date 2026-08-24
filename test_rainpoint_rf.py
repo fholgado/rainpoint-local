@@ -1241,7 +1241,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(
             {
                 "rf_control_response_sequence": 4,
-                "rf_next_control_sequence": 5,
+                "rf_next_control_sequence": 4,
                 "rf_control_response_zone": 1,
                 "rf_control_response_watering": False,
             },
@@ -2222,7 +2222,7 @@ class RainPointRFTest(unittest.TestCase):
                 state="zone_1_closed_confirmed",
                 confirmed_watering=False,
                 last_confirmed_sequence=4,
-                next_sequence=5,
+                next_sequence=4,
                 frame=(
                     "79f4882f28b984028094a9801304508683104f800000004080"
                     "00568000000000000000001e6e"
@@ -2239,6 +2239,7 @@ class RainPointRFTest(unittest.TestCase):
             self.assertFalse(
                 idle["state"]["rf_control_confirmed_watering"]
             )
+            self.assertEqual(4, idle["state"]["rf_next_control_sequence"])
             self.assertNotIn("rf_control_active_zone", idle["state"])
             gateway.close()
 

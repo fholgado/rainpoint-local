@@ -5,13 +5,15 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.31.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.32.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
 `hcs026_auto_v1`; automatic identity adoption and known-sensor recovery have
 completed physical end-to-end validation across independent identities.
-Valve-control POST requests remain rejected.
+HTV405 valve-control POST requests remain rejected unless the explicit
+`supervised_htv405_control` beta option is enabled and the selected
+association-specific radio node advertises its candidate control capability.
 
 The generalized HCS026 workflow completed isolated local enrollment on both
 test sensors and on installed bed sensors using generated replies, terminal
@@ -237,11 +239,11 @@ completes physical migration validation.
 
 ## Safety
 
-This release has no cloud transport, valve control entity, valve command API,
-or valve frame in its network vocabulary. Its sole RF mutation is the
-evidence-backed, time-limited `hcs026_auto_v1` enrollment operation on a
-user-selected authenticated node.
-It starts disarmed, cancels on coordinator loss, and requires terminal RF
-confirmation. USB access is used only by `rtl_433` or the serial bridge. The
-read-only share mapping supports an optional external device catalog and cannot
-be used to write raw captures.
+This release has no cloud transport and remains receive-only by default. When
+`supervised_htv405_control` is explicitly enabled, the API accepts only
+token-authenticated, association-specific, duration-bounded HTV405 operations.
+Each command is reserved durably before RF dispatch and HA state changes only
+after a matching valve response or accepted state report. Restart, missing
+telemetry, and client loss never emit a speculative command. USB access is used
+only by `rtl_433` or the serial bridge. The read-only share mapping supports an
+optional external device catalog and cannot be used to write raw captures.

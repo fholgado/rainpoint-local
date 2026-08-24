@@ -280,11 +280,14 @@ def decode_htv405_gateway_command_response(
     ):
         return None
     sequence = frame[13] & 0x1F
+    watering = bool(frame[18] & 0x80)
     return {
         "rf_control_response_sequence": sequence,
-        "rf_next_control_sequence": (sequence + 1) & 0x1F,
+        "rf_next_control_sequence": (
+            (sequence + 1) & 0x1F if watering else sequence
+        ),
         "rf_control_response_zone": frame[17] >> 4,
-        "rf_control_response_watering": bool(frame[18] & 0x80),
+        "rf_control_response_watering": watering,
     }
 
 

@@ -25,6 +25,10 @@ from rainpointd.htv145_control import (  # noqa: E402
     Htv145ControlProfile,
 )
 from rainpointd.htv145_acceptance import Htv145DryValveAcceptance  # noqa: E402
+from rainpointd.htv405_control import (  # noqa: E402
+    Htv405ControlCoordinator,
+    Htv405ControlProfile,
+)
 from rainpointd.storage import SQLiteEventStore  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     build_open_frame,
@@ -111,7 +115,8 @@ class ValveSafetyControllerTest(unittest.TestCase):
         self.assertEqual(SafetyState.CLOSE_PENDING, controller.state)
         self.assertEqual((), controller.tick(14.99))
         close = controller.tick(15)
-        self.assertEqual([ActionKind.SEND_CLOSE] * 4, [a.kind for a in close])
+        self.assertEqual([ActionKind.SEND_CLOSE], [a.kind for a in close])
+        self.assertEqual(2, close[0].zone)
         self.assertEqual("user_request", close[0].reason)
         self.assertEqual(1, close[0].attempt)
 
@@ -156,12 +161,12 @@ class ValveSafetyControllerTest(unittest.TestCase):
 
     def test_close_retries_faults_and_continues_slow_retries(self) -> None:
         controller = self.start_idle()
-        controller.request_close(5)
+        controller.request_close(5, zone=3)
         second = controller.tick(6.5)
         self.assertEqual(2, second[0].attempt)
         third = controller.tick(8.0)
         self.assertEqual(
-            [ActionKind.SEND_CLOSE] * 4 + [ActionKind.REPORT_FAULT],
+            [ActionKind.SEND_CLOSE, ActionKind.REPORT_FAULT],
             [action.kind for action in third],
         )
         self.assertEqual(SafetyState.FAULT, controller.state)
@@ -220,17 +225,18 @@ class BenchValveControlSessionTest(unittest.TestCase):
         self.assertEqual(SafetyState.IDLE, session.state)
         self.assertEqual(7, session.next_sequence)
 
-        opened = session.request_open(60, 0)
+        opened = session.request_open(60, 0, zone=3)
         self.assertEqual("valve_control_open", opened[0]["type"])
+        self.assertEqual(3, opened[0]["zone"])
         self.assertEqual(7, opened[0]["expected_sequence"])
-        session.observe_response(sequence=7, watering=True, now=0.4)
+        session.observe_response(sequence=7, zone=3, watering=True, now=0.4)
         self.assertEqual(SafetyState.WATERING, session.state)
 
         self.assertEqual((), session.request_close(5))
         closed = session.tick(15)
         self.assertEqual("valve_control_close", closed[0]["type"])
         self.assertEqual(8, closed[0]["expected_sequence"])
-        session.observe_response(sequence=8, watering=False, now=15.4)
+        session.observe_response(sequence=8, zone=3, watering=False, now=15.4)
         self.assertEqual(SafetyState.IDLE, session.state)
         self.assertEqual(9, session.next_sequence)
         self.assertEqual(len(sent), 4)
@@ -238,7 +244,7 @@ class BenchValveControlSessionTest(unittest.TestCase):
     def test_missing_open_response_blocks_without_counter_guessing(self) -> None:
         session, _sent = self.session()
         session.start(0)
-        session.request_open(60, 0)
+        session.request_open(60, 0, zone=1)
 
         self.assertEqual((), session.tick(1.5))
         self.assertFalse(session.counter_synchronized)
@@ -249,11 +255,11 @@ class BenchValveControlSessionTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not synchronized"):
             session.request_close(80)
         with self.assertRaisesRegex(RuntimeError, "still pending"):
-            session.request_open(60, 80)
+            session.request_open(60, 80, zone=1)
 
         # A late authenticated response restores the exact counter without a
         # speculative sync or close transmission.
-        session.observe_response(sequence=7, watering=False, now=80.4)
+        session.observe_response(sequence=7, zone=1, watering=False, now=80.4)
         self.assertTrue(session.counter_synchronized)
         self.assertEqual(SafetyState.IDLE, session.state)
         self.assertEqual(8, session.next_sequence)
@@ -261,8 +267,8 @@ class BenchValveControlSessionTest(unittest.TestCase):
     def test_overdue_telemetry_closes_only_with_synchronized_counter(self) -> None:
         session, _sent = self.session()
         session.start(0)
-        session.request_open(60, 0)
-        session.observe_response(sequence=7, watering=True, now=0.4)
+        session.request_open(60, 0, zone=4)
+        session.observe_response(sequence=7, zone=4, watering=True, now=0.4)
         self.assertEqual((), session.tick(75))
         close = session.observe_telemetry(watering=True, now=75.1)
         self.assertEqual("valve_control_close", close[0]["type"])
@@ -271,8 +277,8 @@ class BenchValveControlSessionTest(unittest.TestCase):
     def test_explicit_close_retry_reuses_exact_pending_counter(self) -> None:
         session, _sent = self.session()
         session.start(0)
-        session.request_open(60, 0)
-        session.observe_response(sequence=7, watering=True, now=0.4)
+        session.request_open(60, 0, zone=2)
+        session.observe_response(sequence=7, zone=2, watering=True, now=0.4)
         session.request_close(15)
         retry = session.tick(30)
         self.assertEqual(
@@ -280,6 +286,208 @@ class BenchValveControlSessionTest(unittest.TestCase):
         )
         self.assertEqual(8, retry[0]["expected_sequence"])
         self.assertNotEqual("valve_control_sync", retry[0]["type"])
+
+
+class Htv405ControlCoordinatorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.store = SQLiteEventStore(
+            Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        )
+        self.profile = Htv405ControlProfile(
+            node_id="rp-001122334455",
+            controller_endpoint="b9840280",
+            valve_endpoint="94a98013",
+            companion_endpoint="39840280",
+            selector=0x05,
+            frequency_offset_hz=97_154,
+        )
+        self.store.upsert_valve_link(
+            controller_endpoint=self.profile.controller_endpoint,
+            valve_endpoint=self.profile.valve_endpoint,
+            device_id="htv405-94a98013",
+            name="Test valve",
+            model="HTV405FRF",
+            area=None,
+            accepted_at="2026-08-24T20:00:00+00:00",
+        )
+        self.store.update_valve_control_profile(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            companion_endpoint=self.profile.companion_endpoint,
+            selector=self.profile.selector,
+            frequency_offset_hz=self.profile.frequency_offset_hz,
+            observed_at="2026-08-24T20:00:01+00:00",
+        )
+        # This simulates a previously authenticated idle command response. It
+        # is the only supported source of the next control counter.
+        self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=6,
+            next_sequence=6,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:02+00:00",
+            frame="00",
+        )
+        self.sent: list[tuple[str, dict]] = []
+        self.coordinator = Htv405ControlCoordinator(
+            store=self.store,
+            sender=lambda node_id, command: self.sent.append(
+                (node_id, command)
+            ),
+            enabled=True,
+        )
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self.temporary_directory.cleanup()
+
+    def test_reservation_is_durable_and_close_reuses_session_counter(self) -> None:
+        pending = self.coordinator.request_open(
+            self.profile,
+            zone=4,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        self.assertEqual("pending_authenticated_response", pending["state"])
+        self.assertEqual(
+            [
+                "valve_control_configure",
+                "valve_control_sync",
+                "valve_control_open",
+            ],
+            [command["type"] for _node, command in self.sent],
+        )
+        self.assertEqual(
+            1,
+            len({command["command_id"] for _node, command in self.sent}),
+            "the configure/sync/action transaction must share one audit id",
+        )
+        self.assertEqual(6, self.sent[-1][1]["expected_sequence"])
+        with self.assertRaisesRegex(RuntimeError, "already pending"):
+            self.coordinator.request_open(
+                self.profile,
+                zone=1,
+                duration_seconds=60,
+                started_at="2026-08-24T20:00:21+00:00",
+            )
+
+        self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=6,
+            next_sequence=7,
+            zone=4,
+            watering=True,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:21+00:00",
+            frame="00",
+            run_started_at="2026-08-24T20:00:20+00:00",
+            run_duration_seconds=60,
+            expected_idle_at="2026-08-24T20:01:20+00:00",
+        )
+        self.coordinator.request_close(
+            self.profile,
+            zone=4,
+            started_at="2026-08-24T20:00:36+00:00",
+        )
+        self.assertEqual(7, self.sent[-1][1]["expected_sequence"])
+        self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=7,
+            next_sequence=7,
+            zone=4,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:37+00:00",
+            frame="00",
+        )
+        self.coordinator.request_open(
+            self.profile,
+            zone=2,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:52+00:00",
+        )
+        self.assertEqual(7, self.sent[-1][1]["expected_sequence"])
+
+    def test_dispatch_failure_invalidates_counter_without_retry(self) -> None:
+        coordinator = Htv405ControlCoordinator(
+            store=self.store,
+            sender=lambda _node, _command: (_ for _ in ()).throw(
+                ConnectionError("offline")
+            ),
+            enabled=True,
+        )
+        with self.assertRaises(ConnectionError):
+            coordinator.request_open(
+                self.profile,
+                zone=1,
+                duration_seconds=60,
+                started_at="2026-08-24T20:00:20+00:00",
+            )
+        state = self.store.valve_registry()[0]
+        self.assertIsNone(state["control_next_sequence"])
+        self.assertIsNone(state["control_pending_command_id"])
+
+    def test_automatic_idle_preserves_the_authenticated_next_counter(self) -> None:
+        self.coordinator.request_open(
+            self.profile,
+            zone=3,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=6,
+            next_sequence=7,
+            zone=3,
+            watering=True,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:21+00:00",
+            frame="00",
+            run_started_at="2026-08-24T20:00:20+00:00",
+            run_duration_seconds=60,
+            expected_idle_at="2026-08-24T20:01:20+00:00",
+        )
+        idle = self.store.observe_htv405_state_report(
+            valve_endpoint=self.profile.valve_endpoint,
+            watering=False,
+            zone=None,
+            observed_at="2026-08-24T20:01:21+00:00",
+        )
+        self.assertFalse(idle["control_confirmed_watering"])
+        self.assertEqual(7, idle["control_next_sequence"])
+        self.assertEqual(
+            "automatic_idle_confirmed_from_telemetry",
+            idle["control_last_result"],
+        )
+        self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:01:36+00:00",
+        )
+        self.assertEqual(7, self.sent[-1][1]["expected_sequence"])
+
+    def test_unexpected_watering_invalidates_the_controller_counter(self) -> None:
+        state = self.store.observe_htv405_state_report(
+            valve_endpoint=self.profile.valve_endpoint,
+            watering=True,
+            zone=2,
+            observed_at="2026-08-24T20:00:20+00:00",
+        )
+        self.assertTrue(state["control_confirmed_watering"])
+        self.assertEqual(2, state["control_active_zone"])
+        self.assertIsNone(state["control_next_sequence"])
+        self.assertEqual(
+            "unexpected_watering_counter_unsynchronized",
+            state["control_last_result"],
+        )
 
 
 class Htv145ControlCoordinatorTest(unittest.TestCase):

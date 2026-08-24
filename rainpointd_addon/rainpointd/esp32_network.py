@@ -387,7 +387,15 @@ class ESP32NetworkServer:
                         ),
                         {},
                     )
-                    if message.get("command_id") == current_node.get(
+                    if self.gateway.observe_valve_control_error(
+                        node_id, message
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            valve_control_probe_state="failed",
+                            valve_control_probe_detail=message.get("error"),
+                        )
+                    elif message.get("command_id") == current_node.get(
                         "identify_command_id"
                     ):
                         self.gateway.update_node(

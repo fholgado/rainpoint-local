@@ -1,7 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.32.0 / Firmware 0.15.0-supervised-beta.1
 
+- Add a disabled-by-default, token-protected HTV405 control API and four Home
+  Assistant valve entities. Every open is limited to 1--4 whole minutes, only
+  one zone may run, and early stop targets only the confirmed active zone.
+- Persist every HTV405 command reservation before RF dispatch. Node rejection,
+  response mismatch, or timeout invalidates the counter and is never retried;
+  HA state changes only after a matching valve response or accepted telemetry.
+- Preserve the authenticated next command counter across a valve's automatic
+  idle report. Unexpected watering invalidates it as possible competing-
+  controller activity.
+- Correlate the stock early-stop exchanges: an accepted open consumes the
+  current command counter, while a confirmed close leaves that counter ready
+  for the next bounded open.
 - Add a disabled, non-public HTV145 dry-valve acceptance harness that selects
   one node, synchronizes only from passive command evidence, dispatches one
   bounded logical open, and requires observed open plus automatic idle.

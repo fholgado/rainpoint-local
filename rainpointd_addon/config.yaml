@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.31.2
+version: 0.32.0
 slug: rainpointd
 description: Local RainPoint telemetry and bounded sensor-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
@@ -35,6 +35,7 @@ options:
   device_catalog_path: ""
   firmware_catalog_path: "/share/rainpoint-local/firmware/catalog.json"
   event_retention_limit: 100000
+  supervised_htv405_control: false
 schema:
   transport: "list(network|rtl433|esp32_serial)"
   frequency: "int(433000000,435000000)"
@@ -47,3 +48,4 @@ schema:
   device_catalog_path: str?
   firmware_catalog_path: str?
   event_retention_limit: "int(1000,1000000)"
+  supervised_htv405_control: bool

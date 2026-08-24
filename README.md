@@ -6,12 +6,12 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Valve control is not yet exposed in Home Assistant. Local HTV405 enrollment,
-isolated one-minute opens on all four zones, and Zone 1 early-close have passed
-physical validation, including direct valve responses, automatic stop, and
-controller-counter progression. The control path remains an explicitly gated
-research-bench feature until it is connected to the independent safety
-controller.
+Supervised HTV405 control is now available as a disabled-by-default beta. Local
+enrollment, isolated one-minute opens on all four zones, and early stop have
+passed physical validation, including direct valve responses, automatic stop,
+and controller-counter progression. Enabling the beta adds four HA valve
+entities, but still requires association-specific candidate firmware on the
+selected radio node.
 
 ## What works today
 
@@ -53,9 +53,9 @@ device slots.
 
 - Locally enroll the isolated HTV405 through a bounded, association-specific
   transcript without the stock RainPoint gateway.
-- Open every HTV405 zone for a bounded minute and early-close Zone 1 on its
-  enrolled selector-2 carrier, accepting state only from the valve's
-  authenticated response or later telemetry.
+- Open every HTV405 zone for a bounded minute and early-close its confirmed
+  active zone on the enrolled selector-2 carrier, accepting state only from
+  the valve's authenticated response or later telemetry.
 - Track the independent controller command counter from matching valve replies;
   routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
@@ -69,7 +69,10 @@ device slots.
   commands, explicit early-stop can retry, and only a positively observed
   overdue run can trigger an anomaly close.
 
-The public gateway/HA valve-control boundary still rejects all requests.
+The gateway/HA valve-control boundary rejects all requests unless the explicit
+`supervised_htv405_control` option is enabled. Even then, it requires an
+authenticated candidate node, a complete durable association, an
+evidence-synchronized command counter, and no command already pending.
 The HTV145 transmitter implementation is compiled out of standard firmware and
 remains undeployed pending supervised acceptance with the isolated dry valve.
 
@@ -255,12 +258,10 @@ evidence under the ignored `captures/` directory.
 
 ## Safety
 
-RainPoint Local's public gateway and Home Assistant boundary remains read-only;
-the isolated research profile has physically operated all four HTV405 zones.
-Future public control must enforce bounded duration, explicit target identity,
-authenticated state, command-counter persistence, and persistent fault
-reporting. Restart, client loss, and missing telemetry must not generate RF
-traffic. An explicit early-stop may retry, while an automatic anomaly close
-requires a fresh report that the valve is still watering after its expected
-completion plus grace period. Never test unknown RF commands against an
-installed irrigation zone without isolation and a ready manual stop.
+RainPoint Local remains receive-only by default. The supervised HTV405 beta
+enforces bounded duration, explicit target identity, authenticated node state,
+durable at-most-once command reservations, and valve-originated confirmation.
+Restart, client loss, and missing telemetry do not generate RF traffic, and a
+failed or ambiguous command invalidates the counter instead of retrying. Never
+test unknown RF commands against an installed irrigation zone without
+isolation and a ready manual stop.

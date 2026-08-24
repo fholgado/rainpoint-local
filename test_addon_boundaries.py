@@ -68,18 +68,26 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("selectChannel(kHcs026TelemetryChannel)", source)
         self.assertIn("parseHexFactoryEndpoint", source)
 
-    def test_valve_pairing_candidate_cannot_control_watering(self) -> None:
+    def test_htv405_control_requires_both_build_and_gateway_gates(self) -> None:
         source = (
             ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
         ).read_text()
         transport = (
             ROOT / "firmware" / "rainpoint_bridge" / "src" / "wifi_transport.cpp"
         ).read_text()
+        platformio = (
+            ROOT / "firmware" / "rainpoint_bridge" / "platformio.ini"
+        ).read_text()
+        addon_config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
         self.assertIn("kAutomaticHtv405ProfileId", source)
         self.assertIn('\\"valve_control_available\\":false', source)
         self.assertIn("valve_pairing_tx_candidate", transport)
         self.assertIn("#if RAINPOINT_RESEARCH_BENCH == 1", transport)
         self.assertIn("valve_control_tx_candidate", transport)
+        self.assertIn("#if RAINPOINT_RESEARCH_BENCH == 1", source)
+        self.assertIn('type == "valve_control_open"', source)
+        self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
+        self.assertIn("supervised_htv405_control: false", addon_config)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',

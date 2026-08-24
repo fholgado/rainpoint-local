@@ -237,9 +237,15 @@ inline bool decodeHtv405GatewayCommandResponse(
 }
 
 inline std::uint8_t nextHtv405GatewayCommandSequence(
-    std::uint8_t acceptedSequence
+    std::uint8_t acceptedSequence,
+    bool watering
 ) {
-    return static_cast<std::uint8_t>((acceptedSequence + 1U) & 0x1fU);
+    // Stock early-stop captures show that the first accepted open advances
+    // the watering-session counter, while a confirmed close leaves that next
+    // session counter unchanged. Lower telemetry uses a separate counter.
+    return watering
+        ? static_cast<std::uint8_t>((acceptedSequence + 1U) & 0x1fU)
+        : acceptedSequence;
 }
 
 inline bool buildHtv405CloseFrame(

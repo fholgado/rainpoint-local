@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -175,6 +175,9 @@ class SQLiteEventStore:
             version = 11
         if version == 11:
             self._migrate_v11_to_v12()
+            version = 12
+        if version == 12:
+            self._migrate_v12_to_v13()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -500,6 +503,30 @@ class SQLiteEventStore:
                 """
             )
             self._connection.execute("PRAGMA user_version = 12")
+
+    def _migrate_v12_to_v13(self) -> None:
+        """Add durable at-most-once HTV405 command reservations."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("control_pending_command_id", "TEXT"),
+                ("control_pending_action", "TEXT"),
+                ("control_pending_sequence", "INTEGER"),
+                ("control_pending_zone", "INTEGER"),
+                ("control_pending_duration_seconds", "INTEGER"),
+                ("control_pending_started_at", "TEXT"),
+                ("control_last_result", "TEXT"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 13")
 
     def append(self, event: dict[str, Any]) -> None:
         """Store one event and update endpoint inventory atomically."""
@@ -872,6 +899,13 @@ class SQLiteEventStore:
                 control_active_zone = NULL, control_run_started_at = NULL,
                 control_run_duration_seconds = NULL,
                 control_expected_idle_at = NULL,
+                control_pending_command_id = NULL,
+                control_pending_action = NULL,
+                control_pending_sequence = NULL,
+                control_pending_zone = NULL,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = NULL,
+                control_last_result = 'association_updated_counter_required',
                 updated_at = ?
             WHERE valve_endpoint = ?
             """,
@@ -887,6 +921,278 @@ class SQLiteEventStore:
         if not cursor.rowcount:
             raise KeyError(valve_endpoint)
         self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def reserve_htv405_command(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        command_id: str,
+        action: str,
+        zone: int,
+        duration_seconds: int | None,
+        started_at: str,
+        minimum_interval_seconds: float = 15.0,
+    ) -> dict[str, Any]:
+        """Atomically reserve one authenticated HTV405 command counter."""
+        if action not in {"open", "close"}:
+            raise ValueError("HTV405 action must be open or close")
+        if zone not in range(1, 5):
+            raise ValueError("HTV405 zone must be between 1 and 4")
+        if action == "open":
+            if (
+                duration_seconds is None
+                or duration_seconds not in range(60, 241)
+                or duration_seconds % 60
+            ):
+                raise ValueError(
+                    "HTV405 open must be 60-240 seconds in whole minutes"
+                )
+        elif duration_seconds is not None:
+            raise ValueError("HTV405 close cannot include a duration")
+        try:
+            started = datetime.fromisoformat(started_at)
+        except ValueError as error:
+            raise ValueError("invalid HTV405 command timestamp") from error
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if state["control_node_id"] != node_id:
+            raise ValueError("HTV405 node differs from durable association")
+        if state["control_pending_command_id"] is not None:
+            raise RuntimeError("an HTV405 command is already pending")
+        sequence = state["control_next_sequence"]
+        if sequence is None:
+            raise RuntimeError("HTV405 control counter is not synchronized")
+        confirmed_watering = state["control_confirmed_watering"]
+        if action == "open" and confirmed_watering is not False and confirmed_watering != 0:
+            raise RuntimeError("HTV405 valve is not confirmed idle")
+        if action == "close" and (
+            confirmed_watering not in {1, True}
+            or state["control_active_zone"] != zone
+        ):
+            raise RuntimeError("HTV405 zone is not confirmed watering")
+        last_at = state["control_confirmed_at"]
+        if isinstance(last_at, str):
+            try:
+                previous = datetime.fromisoformat(last_at)
+                if previous.tzinfo is None and started.tzinfo is not None:
+                    previous = previous.replace(tzinfo=started.tzinfo)
+                if started.tzinfo is None and previous.tzinfo is not None:
+                    started = started.replace(tzinfo=previous.tzinfo)
+                if (started - previous).total_seconds() < minimum_interval_seconds:
+                    raise RuntimeError(
+                        "minimum HTV405 command interval has not elapsed"
+                    )
+            except ValueError:
+                pass
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_pending_command_id = ?,
+                control_pending_action = ?,
+                control_pending_sequence = ?,
+                control_pending_zone = ?,
+                control_pending_duration_seconds = ?,
+                control_pending_started_at = ?,
+                control_last_result = 'pending_authenticated_response',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+              AND control_next_sequence = ?
+            """,
+            (
+                command_id,
+                action,
+                sequence,
+                zone,
+                duration_seconds,
+                started_at,
+                started_at,
+                valve_endpoint,
+                node_id,
+                sequence,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 command reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def synchronize_htv405_control_counter(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        next_sequence: int,
+        source: str,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Restore a counter from explicit, externally retained evidence."""
+        if next_sequence not in range(0x20):
+            raise ValueError("HTV405 counter must be in 0x00..0x1f")
+        if source not in {
+            "retained_association_capture",
+            "authenticated_command_response",
+        }:
+            raise ValueError("unsupported HTV405 counter evidence source")
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_last_sequence = NULL,
+                control_next_sequence = ?,
+                control_confirmed_watering = 0,
+                control_confirmed_at = ?,
+                control_response_frame = NULL,
+                control_active_zone = NULL,
+                control_run_started_at = NULL,
+                control_run_duration_seconds = NULL,
+                control_expected_idle_at = NULL,
+                control_last_result = ?, updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+            """,
+            (
+                next_sequence,
+                observed_at,
+                f"counter_synchronized:{source}",
+                observed_at,
+                valve_endpoint,
+                node_id,
+            ),
+        )
+        if not cursor.rowcount:
+            raise KeyError((valve_endpoint, node_id))
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def fail_htv405_command(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        command_id: str,
+        reason: str,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Fail a reservation and invalidate the unconfirmed counter."""
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_next_sequence = NULL,
+                control_pending_command_id = NULL,
+                control_pending_action = NULL,
+                control_pending_sequence = NULL,
+                control_pending_zone = NULL,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = NULL,
+                control_last_result = ?, updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id = ?
+            """,
+            (reason, observed_at, valve_endpoint, node_id, command_id),
+        )
+        if not cursor.rowcount:
+            raise KeyError((valve_endpoint, command_id))
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def observe_htv405_state_report(
+        self,
+        *,
+        valve_endpoint: str,
+        watering: bool,
+        zone: int | None,
+        observed_at: str,
+    ) -> dict[str, Any] | None:
+        """Apply independent valve state without substituting its counter.
+
+        An idle report can close a previously confirmed bounded run because
+        automatic stop does not consume the gateway command counter. An
+        otherwise-unexpected watering report makes that counter unsafe: it
+        may have been produced by another controller, so local control is
+        disabled until new command-counter evidence is supplied.
+        """
+        if watering and (
+            not isinstance(zone, int)
+            or isinstance(zone, bool)
+            or zone not in range(1, 5)
+        ):
+            raise ValueError("watering HTV405 report requires a valid zone")
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            return None
+        state = dict(row)
+        if (
+            state["control_pending_command_id"] is not None
+            or state["control_next_sequence"] is None
+        ):
+            return state
+        confirmed_watering = state["control_confirmed_watering"] in {1, True}
+        confirmed_zone = state["control_active_zone"]
+        if not watering and confirmed_watering:
+            self._connection.execute(
+                """
+                UPDATE valve_registry SET
+                    control_confirmed_watering = 0,
+                    control_confirmed_at = ?,
+                    control_active_zone = NULL,
+                    control_run_started_at = NULL,
+                    control_run_duration_seconds = NULL,
+                    control_expected_idle_at = NULL,
+                    control_last_result =
+                        'automatic_idle_confirmed_from_telemetry',
+                    updated_at = ?
+                WHERE valve_endpoint = ? AND control_pending_command_id IS NULL
+                """,
+                (observed_at, observed_at, valve_endpoint),
+            )
+            self._connection.commit()
+        elif watering and (
+            not confirmed_watering or confirmed_zone != zone
+        ):
+            self._connection.execute(
+                """
+                UPDATE valve_registry SET
+                    control_next_sequence = NULL,
+                    control_confirmed_watering = 1,
+                    control_confirmed_at = ?,
+                    control_active_zone = ?,
+                    control_run_started_at = NULL,
+                    control_run_duration_seconds = NULL,
+                    control_expected_idle_at = NULL,
+                    control_last_result =
+                        'unexpected_watering_counter_unsynchronized',
+                    updated_at = ?
+                WHERE valve_endpoint = ? AND control_pending_command_id IS NULL
+                """,
+                (observed_at, zone, observed_at, valve_endpoint),
+            )
+            self._connection.commit()
         return next(
             item
             for item in self.valve_registry()
@@ -917,6 +1223,26 @@ class SQLiteEventStore:
             or expected_idle_at is None
         ):
             raise ValueError("watering confirmation requires a bounded run")
+        registration = next(
+            (
+                item
+                for item in self.valve_registry()
+                if item["valve_endpoint"] == valve_endpoint
+            ),
+            None,
+        )
+        if registration is None:
+            raise KeyError(valve_endpoint)
+        pending_id = registration.get("control_pending_command_id")
+        if pending_id is not None and any(
+            (
+                registration.get("control_pending_sequence") != sequence,
+                registration.get("control_pending_zone") != zone,
+                registration.get("control_pending_action")
+                != ("open" if watering else "close"),
+            )
+        ):
+            raise ValueError("HTV405 response does not match reservation")
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -926,7 +1252,15 @@ class SQLiteEventStore:
                 control_center_hz = ?, control_active_zone = ?,
                 control_run_started_at = ?,
                 control_run_duration_seconds = ?,
-                control_expected_idle_at = ?, updated_at = ?
+                control_expected_idle_at = ?,
+                control_pending_command_id = NULL,
+                control_pending_action = NULL,
+                control_pending_sequence = NULL,
+                control_pending_zone = NULL,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = NULL,
+                control_last_result = 'authenticated_response_confirmed',
+                updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
             """,
             (
