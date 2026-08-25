@@ -30,7 +30,7 @@ if htv145_enabled and not research_enabled:
         "RAINPOINT_HTV145_TX_CANDIDATE requires RAINPOINT_RESEARCH_BENCH=1"
     )
 standard_version = "0.15.0"
-supervised_version = "0.15.0-supervised-beta.4"
+supervised_version = "0.15.0-supervised-beta.5"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.1"
 if htv145_enabled:
     default_version = htv145_candidate_version

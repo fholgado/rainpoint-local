@@ -467,6 +467,13 @@ inline bool buildAutomaticHcs026Profile(
         !validRfControllerIdentity(controllerEndpoint, companionEndpoint)) {
         return false;
     }
+    // The live automatic-discovery path rebuilds activePairingProfile in
+    // place and passes that profile's current identity members here. Preserve
+    // those inputs before assigning the validated template below; otherwise
+    // the assignment aliases and overwrites the references with the retained
+    // stock identity before they are copied back into the profile.
+    const auto retainedControllerEndpoint = controllerEndpoint;
+    const auto retainedCompanionEndpoint = companionEndpoint;
     // The common first-enrollment branch is byte-identical across the two
     // stock captures after identity, clock, selector, and trailer substitution.
     // Start with the physically validated Sensor A profile and replace its
@@ -479,8 +486,8 @@ inline bool buildAutomaticHcs026Profile(
     profile.factoryEndpoint = factoryEndpoint;
     profile.pairedEndpoint = factoryEndpoint;
     profile.pairedEndpoint[0] |= 0x80U;
-    profile.sensorRoute = controllerEndpoint;
-    profile.companionEndpoint = companionEndpoint;
+    profile.sensorRoute = retainedControllerEndpoint;
+    profile.companionEndpoint = retainedCompanionEndpoint;
     profile.steps[3].frame = {{
         0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
         0x84, 0x02, 0x80, 0x82, 0xc2, 0x81, 0x00, 0x00, 0x80, 0x00,
