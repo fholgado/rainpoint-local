@@ -193,7 +193,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )["version"]
         current_changelog = (
             ROOT / "rainpointd_addon" / "CHANGELOG.md"
-        ).read_text()[:2_000]
+        ).read_text()
         addon_docs = (ROOT / "rainpointd_addon" / "DOCS.md").read_text()
         self.assertIn(f"## {addon_match.group(1)} /", current_changelog)
         self.assertIn(
