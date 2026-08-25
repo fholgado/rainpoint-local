@@ -281,6 +281,10 @@ RainPoint Local remains receive-only by default. The supervised HTV405 beta
 enforces bounded duration, explicit target identity, authenticated node state,
 durable at-most-once command reservations, and valve-originated confirmation.
 Restart, client loss, and missing telemetry do not generate RF traffic, and a
-failed or ambiguous command invalidates the counter instead of retrying. Never
+failed or ambiguous command does not trigger an immediate retry. A timed-out
+bounded HTV405 open can retain only the same and next counter as candidates for
+a later explicit request, after the entire possible run plus a guard interval;
+unexpected watering or an explicit transport/response failure cancels that
+path. Never
 test unknown RF commands against an installed irrigation zone without
 isolation and a ready manual stop.

@@ -206,6 +206,19 @@ entities, a receive-only HTV145 valve device, and an association-backed HTV405
 four-zone device. HTV405 exposes one bounded-duration control and one duration
 setting per zone only when supervised control is explicitly enabled; state is
 accepted only from authenticated responses or subsequent valve telemetry.
+If an authenticated response times out, the app retains only the two smallest
+plausible counter candidates. A later explicit open may use a candidate only
+after the full requested duration plus a 15-second guard has elapsed; it never
+replays the timed-out command immediately. Unexpected watering or any explicit
+node/response failure cancels this recovery path.
+The gateway also applies its own response deadline. If a radio node never
+returns a usable terminal status, routine device polling fails the exact
+durable reservation and enters the same bounded recovery policy rather than
+leaving control stuck pending.
+The selected HTV405 RF egress node is routing metadata, not part of the valve's
+controller identity. It may be moved to another connected, capable node while
+idle; doing so preserves the association parameters but deliberately clears the
+command counter until it is synchronized again.
 HTV145 exposes confirmed watering state, requested duration, and last-session
 water usage but remains receive-only.
 The temporary `htv145_dry_acceptance` option is a research-only physical-test

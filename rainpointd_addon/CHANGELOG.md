@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Retain narrowly scoped HTV405 timeout evidence and permit the next explicit
+  bounded open to try only the same or immediately following command counter,
+  after the entire possibly accepted run plus a 15-second guard has elapsed.
+  Unexpected watering, node rejection, dispatch failure, and authenticated
+  response mismatch remain terminal and cancel recovery.
+- Expire an HTV405 command reservation in the gateway when a disconnected,
+  outdated, or interrupted radio node does not return a usable terminal result,
+  preventing one missing node report from wedging all later valve control.
+- Allow the authenticated RF egress node for an idle HTV405 association to be
+  changed independently of the valve/controller identity. The change clears
+  command-counter state and requires fresh synchronization before control.
 - Generate and persist one gateway-wide RF controller/companion identity in
   SQLite, expose it in diagnostics, and share it across every radio node.
 - Parameterize automatic HCS026 pairing, known-sensor recovery, routine ACKs,
