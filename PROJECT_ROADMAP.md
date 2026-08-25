@@ -44,7 +44,7 @@ until this baseline is clean.
 
 - [x] Reject invalid or provisional valve identities before they can create a
       Home Assistant device.
-- [ ] Remove the three known phantom HTV405 records through the supported
+- [x] Remove the three known phantom HTV405 records through the supported
       lifecycle path; preserve the canonical association and its HA history.
 - [x] Verify dashboards, automations, notifications, and watchdogs reference
       only the canonical local valve and local moisture entities.
@@ -63,6 +63,10 @@ sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
 normal observation window creates no replacement phantoms.
 
 ## Phase 1 — Home Assistant device lifecycle
+
+- [ ] After a successful device removal, navigate back to the RainPoint Local
+      device list instead of leaving the user on the deleted device's error
+      page.
 
 ### HCS026-class soil sensors
 
