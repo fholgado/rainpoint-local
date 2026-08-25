@@ -861,6 +861,30 @@ class SQLiteEventStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def forget_valve_registry_device(
+        self,
+        device_id: str,
+        *,
+        suppressed_at: str,
+    ) -> dict[str, Any]:
+        """Remove one valve link and suppress automatic RF rediscovery."""
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(device_id)
+        device = dict(row)
+        with self._connection:
+            self._connection.execute(
+                "DELETE FROM valve_registry WHERE device_id = ?", (device_id,)
+            )
+            self._connection.execute(
+                "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
+                "VALUES (?, ?)",
+                (device["valve_endpoint"], suppressed_at),
+            )
+        return device
+
     def upsert_valve_link(
         self,
         *,

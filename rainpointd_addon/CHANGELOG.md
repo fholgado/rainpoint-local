@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Attribute retained HTV145 controller requests and valve-originated reports
+  by the transmitting endpoint so requests cannot advance device cadence and
+  valid valve reports can confirm availability.
+- Allow authenticated removal of persisted valve links, suppress forgotten
+  endpoints from RF rediscovery, and cover corrupted phantom-device cleanup
+  with storage and HTTP regressions.
 - Complete HTV405 pairing from a session-scoped, trailer-valid paired-link
   report after the selected node transmits at least one reply; the 18-row stock
   transcript remains a traffic model rather than a mandatory completion count.

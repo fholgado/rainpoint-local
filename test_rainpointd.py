@@ -365,6 +365,46 @@ class GatewayTest(unittest.TestCase):
             self.assertFalse(event["state"]["rf_frame_accepted"])
             gateway.close()
 
+    def test_forgotten_htv405_link_is_removed_and_suppressed(self) -> None:
+        valid = (
+            "79f4882f28b984028094a98013108107820580804f80000000408000568"
+            "00000000000000043a1"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-08-25T18:00:00+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+
+            forgotten = gateway.forget_registry_device("htv405-94a98013")
+
+            self.assertEqual("94a98013", forgotten["endpoint"])
+            self.assertEqual([], gateway._store.valve_registry())
+            self.assertEqual([], gateway.devices())
+            self.assertTrue(gateway.endpoint_suppressed("94a98013"))
+            self.assertIsNone(
+                gateway.register_observed_htv405_link(
+                    controller_endpoint="b9840280",
+                    valve_endpoint="94a98013",
+                    frame=valid,
+                    observed_at="2026-08-25T18:01:00+00:00",
+                )
+            )
+            self.assertEqual([], gateway._store.valve_registry())
+            gateway.close()
+
     def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
         previous_timezone = os.environ.get("TZ")
         try:
@@ -2237,6 +2277,26 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         with urlopen(request, timeout=2) as response:
             return json.load(response)
+
+    def test_authenticated_registry_forget_removes_valve_link(self) -> None:
+        result = self.post_json(
+            f"/api/v1/registry/{self.DEVICE_ID}/forget", {}
+        )
+
+        self.assertFalse(result["rf_unpaired"])
+        self.assertEqual(
+            self.VALVE_ENDPOINT, result["forgotten"]["endpoint"]
+        )
+        self.assertEqual([], self.server.gateway._store.valve_registry())
+        self.assertFalse(
+            any(
+                device["device_id"] == self.DEVICE_ID
+                for device in self.server.gateway.devices()
+            )
+        )
+        self.assertTrue(
+            self.server.gateway.endpoint_suppressed(self.VALVE_ENDPOINT)
+        )
 
     def test_open_is_bounded_reserved_and_node_rejection_is_terminal(self) -> None:
         with self.assertRaises(HTTPError) as raised:

@@ -2403,6 +2403,7 @@ class Gateway:
             not re.fullmatch(r"[0-9a-f]{8}", controller_endpoint)
             or not re.fullmatch(r"[89a-f][0-9a-f]{5}13", valve_endpoint)
             or controller_endpoint == valve_endpoint
+            or valve_endpoint in self._suppressed_endpoints
         ):
             return None
         with self._lock:
@@ -3770,7 +3771,19 @@ class Gateway:
         with self._lock:
             if not self._store:
                 raise RuntimeError("persistent registry is unavailable")
-            existing = self._store.registry_device(device_id)
+            try:
+                existing = self._store.registry_device(device_id)
+            except KeyError:
+                forgotten_valve = self._store.forget_valve_registry_device(
+                    device_id,
+                    suppressed_at=datetime.now(timezone.utc).isoformat(),
+                )
+                self._refresh_registry_catalog()
+                self._devices.pop(device_id, None)
+                return {
+                    **forgotten_valve,
+                    "endpoint": forgotten_valve["valve_endpoint"],
+                }
             endpoint = str(existing["endpoint"])
             sensor = self.catalog.sensor(endpoint)
             resolved_device_id = sensor.device_id if sensor else device_id
