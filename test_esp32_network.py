@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import hashlib
 import hmac
 import json
@@ -31,6 +32,20 @@ NODE_B = "rp-aabbccddeeff"
 NODE_C = "rp-102030405060"
 TOKEN_A = "01" * 32
 TOKEN_B = "ab" * 32
+
+
+def _replace_frame_endpoint(
+    frame_hex: str, *, offset: int, endpoint: str
+) -> str:
+    """Substitute one endpoint while preserving the frame's CRC residue."""
+    frame = bytearray.fromhex(frame_hex)
+    residue = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    frame[offset : offset + 4] = bytes.fromhex(endpoint)
+    trailer = binascii.crc_hqx(frame[:-2], 0) ^ residue
+    frame[-2:] = trailer.to_bytes(2, "big")
+    return frame.hex()
 
 
 class ESP32NetworkTest(unittest.TestCase):
@@ -357,6 +372,7 @@ class ESP32NetworkTest(unittest.TestCase):
                 "rx",
                 "sensor_pairing_tx",
                 "routine_sensor_ack_tx",
+                "configurable_rf_controller_identity",
             ],
         )
         self.assertEqual("node_authenticated", response["type"])
@@ -377,6 +393,14 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("pairing_start", command["type"])
         self.assertEqual("hcs026_auto_v1", command["profile"])
         self.assertNotIn("factory_endpoint", command)
+        self.assertEqual(
+            self.gateway.rf_identity.controller_endpoint,
+            command["controller_endpoint"],
+        )
+        self.assertEqual(
+            self.gateway.rf_identity.companion_endpoint,
+            command["companion_endpoint"],
+        )
         encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
         expected_clock = (
             pairing_started_at + timedelta(seconds=240)
@@ -389,8 +413,10 @@ class ESP32NetworkTest(unittest.TestCase):
         factory = (
             "79f4882f288000000015a98024010083827fa41e8080848000000000000000000000000022f1"
         )
-        terminal = (
-            "79f4882f28b984028095a9802403028102008000000000000000000000000000000000000f0f"
+        terminal = _replace_frame_endpoint(
+            "79f4882f28b984028095a9802403028102008000000000000000000000000000000000000f0f",
+            offset=5,
+            endpoint=self.gateway.rf_identity.controller_endpoint,
         )
         for frame in (factory, terminal):
             stream.write(
@@ -435,6 +461,14 @@ class ESP32NetworkTest(unittest.TestCase):
         ack_configuration = json.loads(stream.readline())
         self.assertEqual("routine_ack_configure", ack_configuration["type"])
         self.assertEqual("95a98024", ack_configuration["paired_endpoint"])
+        self.assertEqual(
+            self.gateway.rf_identity.controller_endpoint,
+            ack_configuration["controller_endpoint"],
+        )
+        self.assertEqual(
+            self.gateway.rf_identity.companion_endpoint,
+            ack_configuration["companion_endpoint"],
+        )
         self.assertEqual(NODE_A, self.gateway.ack_assignments()[0]["node_id"])
         cancel = json.loads(stream.readline())
         self.assertEqual("pairing_cancel", cancel["type"])
@@ -514,6 +548,7 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("14a98013", command["factory_endpoint"])
         self.assertEqual("b9840280", command["valve_route"])
         self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertNotIn("known_rejoin", command)
         self.assertEqual(97_154, command["frequency_offset_hz"])
         encoded_clock = datetime.strptime(command["local_clock"], "%Y%m%d%H%M%S")
         expected_clock = pairing_started_at.replace(tzinfo=None, microsecond=0)
@@ -540,12 +575,114 @@ class ESP32NetworkTest(unittest.TestCase):
         deadline = time.monotonic() + 2
         while True:
             progress = self.gateway.pairing()
-            if progress.get("stage") == "valve_pairing_completed":
+            if progress.get("stage") == "waiting_for_terminal_confirmation":
                 break
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.01)
+        self.assertIsNone(progress["completed_endpoint"])
+        confirmation_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=confirmation_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        progress = self.gateway.pairing()
+        self.assertEqual("valve_pairing_completed", progress["stage"])
         self.assertEqual("94a98013", progress["completed_endpoint"])
         self.assertEqual([], progress["new_records"])
+        stream.close()
+        connection.close()
+
+    def test_v2_valve_pairing_defaults_to_persistent_local_rf_identity(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+                "configurable_rf_controller_identity",
+            ],
+        )
+        self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+        )
+        command = json.loads(stream.readline())
+        self.assertEqual(
+            self.gateway.rf_identity.controller_endpoint,
+            command["valve_route"],
+        )
+        self.assertEqual(
+            self.gateway.rf_identity.companion_endpoint,
+            command["companion_endpoint"],
+        )
+        self.assertNotEqual("b9840280", command["valve_route"])
+        self.gateway.stop_pairing()
+        cancel = json.loads(stream.readline())
+        self.assertEqual("pairing_cancel", cancel["type"])
+        stream.close()
+        connection.close()
+
+    def test_old_node_firmware_rejects_generated_identity_pairing(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx"],
+        )
+        with self.assertRaisesRegex(ValueError, "does not support"):
+            self.gateway.start_pairing(120, node_id=NODE_A)
+        self.assertFalse(self.gateway.pairing()["active"])
+        stream.close()
+        connection.close()
+
+    def test_v2_node_accepts_bounded_known_valve_rejoin(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+            ],
+        )
+        started = self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+            known_rejoin=True,
+        )
+        self.assertEqual(
+            "htv405_auto_candidate_v1", started["active_profile_id"]
+        )
+        command = json.loads(stream.readline())
+        self.assertEqual("pairing_start", command["type"])
+        self.assertTrue(command["known_rejoin"])
+        self.assertEqual("14a98013", command["factory_endpoint"])
+        self.assertEqual("b9840280", command["valve_route"])
+        self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertEqual(120, command["duration_seconds"])
         stream.close()
         connection.close()
 
@@ -654,7 +791,40 @@ class ESP32NetworkTest(unittest.TestCase):
                 "rf_receiver_id": "local-sdr",
             },
         )
-        completed = self.gateway.pairing()
+        awaiting_exchange = self.gateway.pairing()
+        self.assertEqual(
+            "valve_pairing_completed", awaiting_exchange["stage"]
+        )
+        self.assertEqual(
+            "94a98013", awaiting_exchange["completed_endpoint"]
+        )
+        self.assertEqual(
+            "local-sdr", awaiting_exchange["valve_confirmation_receiver"]
+        )
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "completed",
+                    "completed_steps": 18,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while True:
+            completed = self.gateway.pairing()
+            if completed.get("stage") == "valve_pairing_completed":
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
         self.assertEqual("valve_pairing_completed", completed["stage"])
         self.assertEqual("94a98013", completed["completed_endpoint"])
         self.assertEqual(
@@ -754,6 +924,107 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(revoke, json.loads(stream.readline()))
         stream.close()
         connection.close()
+
+    def test_v2_bench_valve_control_commands_require_explicit_capability(
+        self,
+    ) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_control_tx_candidate",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        commands = [
+            {
+                "type": "valve_control_configure",
+                "command_id": "61" * 16,
+                "controller_endpoint": "b9840280",
+                "valve_endpoint": "94a98013",
+                "companion_endpoint": "39840280",
+                "selector": 0x05,
+                "frequency_offset_hz": 97_154,
+            },
+            {
+                "type": "valve_control_sync",
+                "command_id": "62" * 16,
+                "next_sequence": 7,
+            },
+            {
+                "type": "valve_control_close",
+                "command_id": "63" * 16,
+                "zone": 1,
+                "expected_sequence": 7,
+            },
+        ]
+        for command in commands:
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+        stream.close()
+        connection.close()
+
+        legacy_connection, legacy_stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(ValueError, "valve_control_tx_candidate"):
+            self.server.send_command(NODE_A, commands[-1])
+        legacy_stream.close()
+        legacy_connection.close()
+
+    def test_htv145_candidate_commands_require_distinct_capability(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "htv145_control_tx_candidate",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        commands = [
+            {
+                "type": "htv145_control_configure",
+                "command_id": "71" * 16,
+                "controller_endpoint": "b42d008f",
+                "valve_endpoint": "b9840280",
+                "center_hz": 433_920_000,
+                "power_dbm": 10,
+                "invert": False,
+                "trailer_residual": 0xC713,
+            },
+            {
+                "type": "htv145_control_sync",
+                "command_id": "72" * 16,
+                "next_sequence": 0x8D,
+            },
+            {
+                "type": "htv145_control_open",
+                "command_id": "73" * 16,
+                "expected_sequence": 0x8D,
+                "duration_seconds": 600,
+            },
+        ]
+        for command in commands:
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+        stream.close()
+        connection.close()
+
+        legacy_connection, legacy_stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(
+            ValueError, "htv145_control_tx_candidate"
+        ):
+            self.server.send_command(NODE_A, commands[-1])
+        legacy_stream.close()
+        legacy_connection.close()
 
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(

@@ -7,6 +7,7 @@
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
 #include "rainpoint_valve_control.h"
+#include "rainpoint_htv145_control.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
 
@@ -23,6 +24,38 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> fromHex(
         );
     }
     return result;
+}
+
+std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
+    const rainpoint::Htv405PairingProfile& profile,
+    std::size_t stepIndex,
+    std::uint8_t counterOffset = 0
+) {
+    assert(stepIndex < profile.steps.size());
+    std::array<std::uint8_t, rainpoint::kFrameBytes> request{};
+    for (std::size_t index = 0; index < rainpoint::kSync.size(); ++index) {
+        request[index] = rainpoint::kSync[index];
+    }
+    const auto& endpointA = stepIndex == 0
+        ? std::array<std::uint8_t, 4>{{0x80, 0x00, 0x00, 0x00}}
+        : profile.valveRoute;
+    const auto& endpointB = stepIndex == 0
+        ? profile.factoryEndpoint
+        : profile.pairedEndpoint;
+    for (std::size_t index = 0; index < 4; ++index) {
+        request[5 + index] = endpointA[index];
+        request[9 + index] = endpointB[index];
+    }
+    for (std::size_t index = 0; index < 23; ++index) {
+        request[13 + index] = profile.steps[stepIndex].requestBody[index];
+    }
+    if (stepIndex > 0) {
+        request[13] = rainpoint::htv405ShiftedCounter(
+            request[13], counterOffset
+        );
+    }
+    rainpoint::writeTrailer(request, 0xc713);
+    return request;
 }
 }  // namespace
 
@@ -61,6 +94,245 @@ int main() {
         testValveLink, {0x0a, false}, 5, 0x05, 0x4f03, closeFrame
     ));
 
+    const rainpoint::Htv405ValveLink capturedValveLink{
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x94, 0xa9, 0x80, 0x13}},
+    };
+    const rainpoint::Htv405GatewayControlLink capturedGatewayControlLink{
+        {{0x94, 0xa9, 0x80, 0x13}},
+        {{0x39, 0x84, 0x02, 0x80}},
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> gatewayCommand{};
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x01, true},
+        1,
+        0x85,
+        120,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand == fromHex(
+        "79f4882f2894a9801339840280819082808100bc0000000000"
+        "00000000000000000000006c37"
+    ));
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x01, false},
+        1,
+        0x85,
+        120,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand == fromHex(
+        "79f4882f2894a9801339840280819082808100bc0000000000"
+        "00000000000000000000006c37"
+    ));
+    assert(rainpoint::buildHtv405GatewayCloseFrame(
+        capturedGatewayControlLink,
+        {0x02, false},
+        1,
+        0x85,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand == fromHex(
+        "79f4882f2894a9801339840280821081808100000000000000"
+        "00000000000000000000000117"
+    ));
+    assert(rainpoint::buildHtv405GatewayCloseFrame(
+        capturedGatewayControlLink,
+        {0x02, true},
+        1,
+        0x85,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand == fromHex(
+        "79f4882f2894a9801339840280821081808100000000000000"
+        "00000000000000000000000117"
+    ));
+    assert(rainpoint::buildHtv405GatewayLinkAckFrame(
+        capturedGatewayControlLink,
+        {0x0a, false},
+        0xc713,
+        gatewayCommand
+    ));
+    assert(gatewayCommand == fromHex(
+        "79f4882f2894a98013398402808a4101000100000000000000"
+        "00000000000000000000005a26"
+    ));
+    // The dry-bench multi-zone trial varies only this command selector. The
+    // live research firmware still requires a per-command authenticated
+    // response; production builds do not compile this transmit path.
+    for (std::uint8_t zone = 1; zone <= 4; ++zone) {
+        assert(rainpoint::buildHtv405GatewayOpenFrame(
+            capturedGatewayControlLink,
+            {0x01, true},
+            zone,
+            0x85,
+            120,
+            0x4f03,
+            gatewayCommand
+        ));
+        assert(gatewayCommand[17] ==
+            static_cast<std::uint8_t>(0x80U | zone));
+        assert(rainpoint::buildHtv405GatewayCloseFrame(
+            capturedGatewayControlLink,
+            {0x02, false},
+            zone,
+            0x85,
+            0x4f03,
+            gatewayCommand
+        ));
+        assert(gatewayCommand[17] ==
+            static_cast<std::uint8_t>(0x80U | zone));
+    }
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x01, true},
+        1,
+        0x05,
+        120,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand[17] == 0x81);
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x01, false},
+        1,
+        0x05,
+        1'200,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand[19] == 0xd8);
+    assert(gatewayCommand[20] == 0x02);
+    assert(rainpoint::trailerResidual(gatewayCommand) == 0x4f03);
+    std::array<std::uint8_t, rainpoint::kFrameBytes> openFrame{};
+    assert(rainpoint::buildHtv405OpenFrame(
+        capturedValveLink,
+        {0x0b, false},
+        1,
+        0x85,
+        60,
+        54,
+        0x4f03,
+        openFrame
+    ));
+    assert(openFrame == fromHex(
+        "79f4882f28b984028094a980130b010782858090cf8000000040"
+        "9b80569e0000000000002fc2"
+    ));
+    assert(rainpoint::buildHtv405OpenFrame(
+        capturedValveLink,
+        {0x0b, false},
+        1,
+        0x05,
+        60,
+        54,
+        0x4f03,
+        openFrame
+    ));
+    assert(openFrame == fromHex(
+        "79f4882f28b984028094a980130b010782058090cf8000000040"
+        "9b80569e000000000000bd0b"
+    ));
+    rainpoint::Htv405GatewayCommandResponse commandResponse{};
+    const auto capturedLocalOpenResponse = fromHex(
+        "79f4882f28b984028094a9801303d0868010cf8000000040bc"
+        "0056bc000000000000000038bf"
+    );
+    assert(rainpoint::decodeHtv405GatewayCommandResponse(
+        capturedLocalOpenResponse, commandResponse
+    ));
+    assert(commandResponse.sequence == 0x03);
+    assert(commandResponse.zone == 1);
+    assert(commandResponse.watering);
+    assert(
+        rainpoint::nextHtv405GatewayCommandSequence(
+            commandResponse.sequence, commandResponse.watering
+        ) ==
+        0x04
+    );
+    const auto capturedLocalCloseResponse = fromHex(
+        "79f4882f28b984028094a9801304508683104f800000004080"
+        "00568000000000000000001e6e"
+    );
+    assert(rainpoint::decodeHtv405GatewayCommandResponse(
+        capturedLocalCloseResponse, commandResponse
+    ));
+    assert(commandResponse.sequence == 0x04);
+    assert(commandResponse.zone == 1);
+    assert(!commandResponse.watering);
+    assert(
+        rainpoint::nextHtv405GatewayCommandSequence(
+            commandResponse.sequence, commandResponse.watering
+        ) ==
+        0x04
+    );
+    const std::array<std::string, 3> multiZoneResponses{{
+        "79f4882f28b984028094a980130bd0868020cf80000000409e"
+        "00569e000000000000000079b2",
+        "79f4882f28b984028094a980130cd0868030cf80000000409e"
+        "00569e000000000000000062ff",
+        "79f4882f28b984028094a980130dd0868040cf80000000409e"
+        "00569e00000000000000001e77",
+    }};
+    for (std::uint8_t zone = 2; zone <= 4; ++zone) {
+        assert(rainpoint::decodeHtv405GatewayCommandResponse(
+            fromHex(multiZoneResponses[zone - 2]), commandResponse
+        ));
+        assert(commandResponse.sequence ==
+            static_cast<std::uint8_t>(zone + 9));
+        assert(commandResponse.zone == zone);
+        assert(commandResponse.watering);
+    }
+    rainpoint::Htv405StateReport stateReport{};
+    const auto localZoneTwoReport = fromHex(
+        "79f4882f28b984028094a980131a8107820580a0cf80000000409e"
+        "00569e0000000000000d22"
+    );
+    assert(rainpoint::decodeHtv405StateReport(
+        localZoneTwoReport, stateReport
+    ));
+    assert(stateReport.zone == 2);
+    assert(stateReport.watering);
+    const auto localIdleReport = fromHex(
+        "79f4882f28b984028094a980131d0107820580804f800000004080"
+        "0056800000000000000045"
+    );
+    assert(rainpoint::decodeHtv405StateReport(
+        localIdleReport, stateReport
+    ));
+    assert(stateReport.zone == 0);
+    assert(!stateReport.watering);
+    const auto selectorSevenPhaseReport = fromHex(
+        "79f4882f28b984028094a980131c8107820700a0cf800000004088"
+        "00569e0000000000006700"
+    );
+    assert(!rainpoint::decodeHtv405StateReport(
+        selectorSevenPhaseReport, stateReport
+    ));
+    auto corruptCommandResponse = capturedLocalOpenResponse;
+    corruptCommandResponse[18] ^= 0x80;
+    rainpoint::writeTrailer(corruptCommandResponse, 0x4f03);
+    assert(!rainpoint::decodeHtv405GatewayCommandResponse(
+        corruptCommandResponse, commandResponse
+    ));
+    assert(!rainpoint::buildHtv405OpenFrame(
+        capturedValveLink,
+        {0x0b, false},
+        1,
+        0x05,
+        60,
+        55,
+        0x4f03,
+        openFrame
+    ));
+
     auto localValveReport = fromHex(
         "79f4882f28aa110280a1b2c313080107820701004f8000000040"
         "80005680000000000000a102"
@@ -71,6 +343,14 @@ int main() {
     assert(nextValvePhase.sequence == 0x08);
     assert(nextValvePhase.repeat);
     localValveReport[14] |= 0x80;
+    rainpoint::writeTrailer(localValveReport, 0x4f03);
+    assert(rainpoint::nextHtv405Phase(localValveReport, nextValvePhase));
+    assert(nextValvePhase.sequence == 0x09);
+    assert(!nextValvePhase.repeat);
+    // Active-state reports from the same locally enrolled HTV405 use the
+    // association selector (0x05) instead of the idle-link selector (0x07).
+    // Both shapes retain the same phase and control-slot markers.
+    localValveReport[17] = 0x05;
     rainpoint::writeTrailer(localValveReport, 0x4f03);
     assert(rainpoint::nextHtv405Phase(localValveReport, nextValvePhase));
     assert(nextValvePhase.sequence == 0x09);
@@ -103,8 +383,15 @@ int main() {
     const auto capturedRoutineAck = fromHex(
         "79f4882f28ce6280243984028097418100010000000000000000000000000000000000005242"
     );
+    const std::array<std::uint8_t, 4> stockController{{
+        0xb9, 0x84, 0x02, 0x80,
+    }};
+    const std::array<std::uint8_t, 4> stockCompanion{{
+        0x39, 0x84, 0x02, 0x80,
+    }};
     rainpoint::RoutineAckAuthorization routineAuthorization{
-        {{0xce, 0x62, 0x80, 0x24}}, 8, 45'000, 10, false, true,
+        {{0xce, 0x62, 0x80, 0x24}}, stockController, stockCompanion,
+        8, 45'000, 10, false, true,
     };
     std::array<std::uint8_t, rainpoint::kFrameBytes> generatedRoutineAck{};
     assert(rainpoint::isAuthorizedRoutineHcs026Report(
@@ -128,8 +415,34 @@ int main() {
     assert(routineAuthorizations.activeCount() == 0);
     assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
 
+    const std::array<std::uint8_t, 4> localController{{
+        0xc1, 0x23, 0x45, 0x80,
+    }};
+    const std::array<std::uint8_t, 4> localCompanion{{
+        0x41, 0x23, 0x45, 0x80,
+    }};
+    assert(rainpoint::validRfControllerIdentity(
+        localController, localCompanion
+    ));
+    auto localRoutineReport = routineReport;
+    for (std::size_t index = 0; index < localController.size(); ++index) {
+        localRoutineReport[5 + index] = localController[index];
+    }
+    rainpoint::writeTrailer(
+        localRoutineReport, rainpoint::trailerResidual(routineReport)
+    );
+    auto localAuthorization = routineAuthorization;
+    localAuthorization.controllerEndpoint = localController;
+    localAuthorization.companionEndpoint = localCompanion;
+    std::array<std::uint8_t, rainpoint::kFrameBytes> localRoutineAck{};
+    assert(rainpoint::buildRoutineHcs026Acknowledgement(
+        localRoutineReport, localAuthorization, localRoutineAck
+    ));
+    assert(rainpoint::endpointEquals(localRoutineAck, 9, localCompanion));
+
     rainpoint::RoutineAckAuthorization sensorARecoveryAuthorization{
-        {{0x9b, 0xce, 0x00, 0x24}}, 4, 0, 10, false, true,
+        {{0x9b, 0xce, 0x00, 0x24}}, stockController, stockCompanion,
+        4, 0, 10, false, true,
     };
     assert(routineAuthorizations.authorize(sensorARecoveryAuthorization));
     const auto sensorARecoveryMessage1 = fromHex(
@@ -389,10 +702,11 @@ int main() {
     }}));
     rainpoint::PairingProfile automatic{};
     assert(!rainpoint::buildAutomaticHcs026Profile(
-        {{0x92, 0x34, 0x00, 0x24}}, 4, automatic
+        {{0x92, 0x34, 0x00, 0x24}}, stockController, stockCompanion,
+        4, automatic
     ));
     assert(rainpoint::buildAutomaticHcs026Profile(
-        detectedFactory, 4, automatic
+        detectedFactory, stockController, stockCompanion, 4, automatic
     ));
     assert(std::string(automatic.id) == "hcs026_auto_v1");
     assert(automatic.factoryEndpoint == detectedFactory);
@@ -415,9 +729,22 @@ int main() {
         automatic.steps[3].trigger ==
         rainpoint::PairingTrigger::PairedMessage2Short
     );
+    rainpoint::PairingProfile localIdentityAutomatic{};
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        detectedFactory, localController, localCompanion,
+        4, localIdentityAutomatic
+    ));
+    assert(localIdentityAutomatic.sensorRoute == localController);
+    assert(localIdentityAutomatic.companionEndpoint == localCompanion);
+    for (std::size_t index = 0;
+         index < localIdentityAutomatic.stepCount; ++index) {
+        assert(rainpoint::endpointEquals(
+            localIdentityAutomatic.steps[index].frame, 9, localCompanion
+        ));
+    }
     rainpoint::PairingProfile automaticRejoin{};
     assert(rainpoint::buildAutomaticHcs026RejoinProfile(
-        detectedFactory, 4, automaticRejoin
+        detectedFactory, stockController, stockCompanion, 4, automaticRejoin
     ));
     assert(automaticRejoin.stepCount == 1);
     assert(automaticRejoin.completeAfterFinalReply);
@@ -434,7 +761,8 @@ int main() {
     );
     rainpoint::PairingProfile automaticSensorB{};
     assert(rainpoint::buildAutomaticHcs026Profile(
-        profile.factoryEndpoint, 4, automaticSensorB
+        profile.factoryEndpoint, stockController, stockCompanion,
+        4, automaticSensorB
     ));
     rainpoint::PairingSession automaticSensorBSession(automaticSensorB);
     automaticSensorBSession.arm(20'000);
@@ -578,16 +906,46 @@ int main() {
         htv405Profile, 4, htv405RequestNoReply
     ));
     assert(!htv405Profile.steps[4].replyExpected);
+    assert(htv405Profile.steps[
+        rainpoint::kHtv405Selector2PhaseReplyStepIndex
+    ].replyExpected);
     assert(
         htv405Profile.steps[0].deviationRegister ==
         rainpoint::kHtv405InitialDeviationRegister
     );
-    assert(htv405Profile.steps[0].channelCenterHz == 433'511'445);
+    // Freeze the physically accepted initial exchange. Later HTV405
+    // controller-handshake experiments must not silently recalibrate it.
+    assert(rainpoint::kHtv405InitialDeviationRegister == 0x43);
+    assert(
+        htv405Profile.steps[0].channelCenterHz ==
+        rainpoint::kHtv405InitialChannelCenterHz
+    );
+    assert(rainpoint::kHtv405InitialChannelCenterHz == 433'511'445);
+    assert(rainpoint::kPairingWakeSymbols == 320);
     assert(
         htv405Profile.steps[1].deviationRegister ==
         rainpoint::kOrdinaryDeviationRegister
     );
-    assert(rainpoint::kHtv405ReplyDelayMs == 49);
+    assert(
+        htv405Profile.steps[1].channelCenterHz ==
+        rainpoint::kHtv405RoutineChannelCenterHz
+    );
+    assert(rainpoint::kHtv405AssignmentReplyStartDelayUs == 49'500);
+    assert(rainpoint::kHtv405OrdinaryReplyStartDelayUs == 49'500);
+    assert(
+        rainpoint::kHtv405Selector2PhaseReplyStartDelayUs == 35'650
+    );
+    assert(
+        rainpoint::kHtv405Selector2ImmediateReplyStartDelayUs == 38'000
+    );
+    assert(
+        rainpoint::kHtv405Selector2ShortRepeatReplyStartDelayUs == 39'000
+    );
+    assert(
+        rainpoint::kHtv405Selector2ConfigurationReplyStartDelayUs ==
+        997'500
+    );
+    assert(rainpoint::kHtv405Selector2ConfigurationWakeSymbols == 2'400);
     std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Reply{};
     const rainpoint::PairingLocalDateTime htv405Clock = {
         2026, 8, 17, 18, 56, 58,
@@ -601,6 +959,589 @@ int main() {
     assert(!rainpoint::buildHtv405PairingReply(
         htv405Profile, 4, htv405Clock, htv405Reply
     ));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        rainpoint::kHtv405Selector2ConfigurationStepIndex,
+        htv405Clock,
+        htv405Reply
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028082410100008000000000000000000000000000000000007b1d"
+    ));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        rainpoint::kHtv405Selector2PhaseReplyStepIndex,
+        htv405Clock,
+        htv405Reply
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028081c10100008000000000000000000000000000000000006e95"
+    ));
+    assert(rainpoint::buildHtv405Selector2ConfigurationReply(
+        htv405Profile,
+        htv405Reply
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028082100101000000000000000000000000000000000000002465"
+    ));
+    // The immediate acknowledgement follows the ordinary counter offset.
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        rainpoint::kHtv405Selector2ConfigurationStepIndex,
+        htv405Clock,
+        htv405Reply,
+        3
+    ));
+    assert(htv405Reply[13] == 0x85);
+    // The subsequent controller transition shares the same transaction
+    // counter while retaining its distinct 10/01/01 command body.
+    assert(rainpoint::buildHtv405Selector2ConfigurationReply(
+        htv405Profile,
+        htv405Reply,
+        3
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028085100101000000000000000000000000000000000000000f75"
+    ));
+    auto laterHtv405Factory = htv405Factory;
+    laterHtv405Factory[13] = 0x02;
+    laterHtv405Factory[14] = 0x00;
+    rainpoint::writeTrailer(laterHtv405Factory, 0xc713);
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 0, laterHtv405Factory
+    ));
+    auto coldBootHtv405Factory = laterHtv405Factory;
+    coldBootHtv405Factory[17] = 0x7f;
+    rainpoint::writeTrailer(coldBootHtv405Factory, 0xc713);
+    assert(!rainpoint::htv405RequestMatches(
+        htv405Profile, 0, coldBootHtv405Factory
+    ));
+    assert(rainpoint::htv405RetainedRejoinRequestMatches(
+        htv405Profile, coldBootHtv405Factory
+    ));
+    auto wrongProductColdBoot = coldBootHtv405Factory;
+    wrongProductColdBoot[16] ^= 0x01;
+    rainpoint::writeTrailer(wrongProductColdBoot, 0xc713);
+    assert(!rainpoint::htv405RetainedRejoinRequestMatches(
+        htv405Profile, wrongProductColdBoot
+    ));
+    rainpoint::Htv405PairingSession isolatedNewPairingSession(htv405Profile);
+    isolatedNewPairingSession.arm(18'000);
+    assert(isolatedNewPairingSession.claimReply(
+        coldBootHtv405Factory, 18'100
+    ) == nullptr);
+    assert(isolatedNewPairingSession.completedSteps() == 0);
+    assert(
+        isolatedNewPairingSession.state() ==
+        rainpoint::PairingSessionState::Armed
+    );
+    rainpoint::Htv405PairingSession htv405RejoinSession(htv405Profile);
+    htv405RejoinSession.arm(19'000, 120'000, true);
+    assert(htv405RejoinSession.claimReply(
+        htv405Factory, 19'050
+    ) == nullptr);
+    assert(htv405RejoinSession.completedSteps() == 0);
+    assert(htv405RejoinSession.claimReply(
+        coldBootHtv405Factory, 19'100
+    ) == &htv405Profile.steps[0]);
+    assert(htv405RejoinSession.finishReply(true, 19'110));
+    assert(htv405RejoinSession.completedSteps() == 1);
+    assert(
+        htv405RejoinSession.state() ==
+        rainpoint::PairingSessionState::Armed
+    );
+    const auto htv405RejoinFirstPairedRequest = htv405Request(
+        htv405Profile, 1
+    );
+    assert(htv405RejoinSession.claimReply(
+        htv405RejoinFirstPairedRequest, 19'200
+    ) == &htv405Profile.steps[1]);
+    assert(htv405RejoinSession.finishReply(true, 19'210));
+    assert(htv405RejoinSession.completedSteps() == 2);
+    rainpoint::Htv405PairingSession htv405RetrySession(htv405Profile);
+    htv405RetrySession.arm(20'000);
+    assert(htv405RetrySession.claimReply(htv405Factory, 20'100) ==
+        &htv405Profile.steps[0]);
+    assert(htv405RetrySession.finishReply(true, 20'110));
+    assert(htv405RetrySession.completedSteps() == 1);
+    assert(htv405RetrySession.claimReply(laterHtv405Factory, 20'200) ==
+        &htv405Profile.steps[0]);
+    assert(htv405RetrySession.finishReply(true, 20'210));
+    assert(htv405RetrySession.completedSteps() == 1);
+    // The deadline-scheduled local assignment was accepted on factory sweep
+    // counter 3. The valve then began the ordinary logical 01/01 sequence at
+    // transaction counter 4, proving that the whole transcript is shifted
+    // rather than skipped forward.
+    const auto htv405ShiftedInitialRequest = fromHex(
+        "79f4882f28b984028094a98013040107822580804f8000000040800056800000000000002db9"
+    );
+    const auto htv405ShiftedInitialRepeat = fromHex(
+        "79f4882f28b984028094a98013048107822580804f8000000040800056800000000000001f3c"
+    );
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 1, htv405ShiftedInitialRequest, 3
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 2, htv405ShiftedInitialRepeat, 3
+    ));
+    rainpoint::Htv405PairingSession htv405ResyncSession(htv405Profile);
+    htv405ResyncSession.arm(25'000);
+    assert(htv405ResyncSession.claimReply(htv405Factory, 25'100) ==
+        &htv405Profile.steps[0]);
+    assert(htv405ResyncSession.finishReply(true, 25'110));
+    assert(htv405ResyncSession.completedSteps() == 1);
+    assert(htv405ResyncSession.claimReply(
+        htv405ShiftedInitialRequest, 25'200
+    ) == &htv405Profile.steps[1]);
+    assert(htv405ResyncSession.counterOffsetKnown());
+    assert(htv405ResyncSession.counterOffset() == 3);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        1,
+        htv405Clock,
+        htv405Reply,
+        htv405ResyncSession.counterOffset()
+    ));
+    assert(htv405Reply[13] == 0x84);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+    assert(htv405ResyncSession.finishReply(true, 25'210));
+    assert(htv405ResyncSession.completedSteps() == 2);
+    assert(htv405ResyncSession.claimReply(
+        htv405ShiftedInitialRepeat, 25'300
+    ) == &htv405Profile.steps[2]);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        2,
+        htv405Clock,
+        htv405Reply,
+        htv405ResyncSession.counterOffset()
+    ));
+    assert(htv405Reply[13] == 0x84);
+    assert(htv405Reply[14] == 0xc1);
+    assert(htv405ResyncSession.finishReply(true, 25'310));
+    assert(htv405ResyncSession.completedSteps() == 3);
+    for (std::size_t index = 3;
+         index < rainpoint::kHtv405PairingStepCount;
+         ++index) {
+        std::array<std::uint8_t, rainpoint::kFrameBytes> request{};
+        for (std::size_t syncIndex = 0;
+             syncIndex < rainpoint::kSync.size();
+             ++syncIndex) {
+            request[syncIndex] = rainpoint::kSync[syncIndex];
+        }
+        for (std::size_t endpointIndex = 0; endpointIndex < 4; ++endpointIndex) {
+            request[5 + endpointIndex] = htv405Profile.valveRoute[endpointIndex];
+            request[9 + endpointIndex] =
+                htv405Profile.pairedEndpoint[endpointIndex];
+        }
+        for (std::size_t bodyIndex = 0; bodyIndex < 23; ++bodyIndex) {
+            request[13 + bodyIndex] =
+                htv405Profile.steps[index].requestBody[bodyIndex];
+        }
+        request[13] = rainpoint::htv405ShiftedCounter(request[13], 3);
+        rainpoint::writeTrailer(request, 0xc713);
+        const auto* step = htv405ResyncSession.claimReply(
+            request, 25'400 + static_cast<std::uint32_t>(index) * 100
+        );
+        if (htv405Profile.steps[index].replyExpected) {
+            assert(step == &htv405Profile.steps[index]);
+            assert(rainpoint::buildHtv405PairingReply(
+                htv405Profile, index, htv405Clock, htv405Reply, 3
+            ));
+            assert(htv405Reply[13] == rainpoint::htv405ShiftedCounter(
+                htv405Profile.steps[index].replyBody[0], 3
+            ));
+            assert(htv405ResyncSession.finishReply(
+                true, 25'410 + static_cast<std::uint32_t>(index) * 100
+            ));
+        } else {
+            assert(step == nullptr);
+            assert(htv405ResyncSession.completedSteps() == index + 1);
+        }
+    }
+    assert(
+        htv405ResyncSession.state() ==
+        rainpoint::PairingSessionState::Completed
+    );
+    assert(
+        htv405ResyncSession.completedSteps() ==
+        rainpoint::kHtv405PairingStepCount
+    );
+    // A successful later-sweep assignment observed on 2026-08-23 entered at
+    // 02/81, confirmed the shifted 83/10 controller command, then repeated
+    // the long 04/01 and 04/81 phase pair before short-form initialization.
+    // Preserve the accepted initial exchange while allowing only that proven
+    // post-configuration continuation at step 6.
+    const auto htv405ObservedStartRepeat = fromHex(
+        "79f4882f28b984028094a98013028107822580804f8000000040800056800000000000005127"
+    );
+    const auto htv405ObservedConfigurationRequest = fromHex(
+        "79f4882f28b984028094a98013030107822580804f80000000408000568000000000000006a9"
+    );
+    const auto htv405ObservedPostConfiguration = fromHex(
+        "79f4882f28b984028094a98013040107820581004f8000000040800056800000000000004d3a"
+    );
+    const auto htv405ObservedPostConfigurationRepeat = fromHex(
+        "79f4882f28b984028094a98013048107820581004f8000000040800056800000000000007fbf"
+    );
+    const auto htv405ObservedNextOrdinary = fromHex(
+        "79f4882f28b984028094a98013050107820581004f8000000040800056800000000000002831"
+    );
+    rainpoint::Htv405PairingSession htv405PostConfigurationSession(
+        htv405Profile
+    );
+    htv405PostConfigurationSession.arm(27'000);
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405Factory, 27'100
+    ) == &htv405Profile.steps[0]);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'110));
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ObservedStartRepeat, 27'200
+    ) == &htv405Profile.steps[2]);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 1);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'210));
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ObservedConfigurationRequest, 27'300
+    ) == &htv405Profile.steps[3]);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 1);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'310));
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ObservedPostConfiguration, 27'400
+    ) == &htv405Profile.steps[5]);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 1);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'410));
+    assert(htv405PostConfigurationSession.completedSteps() == 6);
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ObservedPostConfigurationRepeat, 27'500
+    ) == &htv405Profile.steps[2]);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 3);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        rainpoint::kHtv405Selector2PhaseReplyStepIndex,
+        htv405Clock,
+        htv405Reply,
+        htv405PostConfigurationSession.replyCounterOffset()
+    ));
+    assert(htv405Reply == fromHex(
+        "79f4882f2894a980133984028084c10100008000000000000000000000000000000000008f93"
+    ));
+    assert(htv405PostConfigurationSession.finishReply(true, 27'510));
+    assert(htv405PostConfigurationSession.completedSteps() == 6);
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ObservedNextOrdinary, 27'600
+    ) == &htv405Profile.steps[5]);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 2);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        rainpoint::kHtv405Selector2InitialOrdinaryStepIndex,
+        htv405Clock,
+        htv405Reply,
+        htv405PostConfigurationSession.replyCounterOffset()
+    ));
+    assert(htv405Reply[13] == 0x85);
+    assert(htv405Reply[14] == 0x41);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'610));
+    assert(htv405PostConfigurationSession.completedSteps() == 6);
+    auto htv405ShiftedShortRequest = fromHex(
+        "79f4882f28b984028094a9801303828102008000000000000000000000000000000000000000"
+    );
+    htv405ShiftedShortRequest[13] = 0x05;
+    rainpoint::writeTrailer(htv405ShiftedShortRequest, 0xc713);
+    assert(htv405PostConfigurationSession.claimReply(
+        htv405ShiftedShortRequest, 27'700
+    ) == &htv405Profile.steps[6]);
+    assert(htv405PostConfigurationSession.counterOffset() == 2);
+    assert(htv405PostConfigurationSession.replyCounterOffset() == 2);
+    assert(htv405PostConfigurationSession.finishReply(true, 27'710));
+    assert(htv405PostConfigurationSession.completedSteps() == 7);
+    const auto htv405ObservedShortOrdinary = fromHex(
+        "79f4882f28b984028094a98013090281020080000000000000000000000000000000000005a8"
+    );
+    const auto htv405ObservedShortRepeat = fromHex(
+        "79f4882f28b984028094a980130982810200800000000000000000000000000000000000372d"
+    );
+    const auto htv405ObservedNextShortOrdinary = fromHex(
+        "79f4882f28b984028094a980130a0281020080000000000000000000000000000000000022a5"
+    );
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 7, htv405ObservedShortOrdinary, 5
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 8, htv405ObservedShortRepeat, 5
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 9, htv405ObservedNextShortOrdinary, 5
+    ));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile, 7, htv405Clock, htv405Reply, 5
+    ));
+    assert(htv405Reply[13] == 0x89);
+    assert(htv405Reply[14] == 0x42);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile, 8, htv405Clock, htv405Reply, 5
+    ));
+    assert(htv405Reply[13] == 0x89);
+    assert(htv405Reply[14] == 0xc2);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile, 9, htv405Clock, htv405Reply, 5
+    ));
+    assert(htv405Reply[13] == 0x8a);
+    assert(htv405Reply[14] == 0x42);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+
+    // The 2026-08-23 successful local association reached step 10, then sent
+    // 0b/82 with state 1 instead of transitioning to selector-2 0b/83. This
+    // is a bounded retry of logical 04/82, not a new pairing branch. Re-anchor
+    // its counter and answer it in the stock gateway's measured 39 ms slot.
+    rainpoint::Htv405PairingSession htv405LateRetrySession(htv405Profile);
+    htv405LateRetrySession.arm(28'000);
+    for (std::size_t index = 0; index <= 9; ++index) {
+        const auto request = htv405Request(
+            htv405Profile, index, index == 0 ? 0 : 6
+        );
+        const auto* step = htv405LateRetrySession.claimReply(
+            request, 28'100 + static_cast<std::uint32_t>(index) * 100
+        );
+        if (htv405Profile.steps[index].replyExpected) {
+            assert(step == &htv405Profile.steps[index]);
+            assert(htv405LateRetrySession.finishReply(
+                true, 28'110 + static_cast<std::uint32_t>(index) * 100
+            ));
+        } else {
+            assert(step == nullptr);
+        }
+    }
+    assert(htv405LateRetrySession.completedSteps() == 10);
+    const auto htv405ObservedLateRepeat = fromHex(
+        "79f4882f28b984028094a980130b828102018000000000000000000000000000000000002324"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedLateRepeat, 29'200
+    ) == &htv405Profile.steps[8]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 7);
+    assert(
+        htv405LateRetrySession.replyStartDelayOverrideUs() ==
+        rainpoint::kHtv405Selector2ShortRepeatReplyStartDelayUs
+    );
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        8,
+        htv405Clock,
+        htv405Reply,
+        htv405LateRetrySession.replyCounterOffset()
+    ));
+    assert(htv405Reply[13] == 0x8b);
+    assert(htv405Reply[14] == 0xc2);
+    assert(htv405LateRetrySession.finishReply(true, 29'210));
+    assert(htv405LateRetrySession.completedSteps() == 10);
+
+    // Once the earlier repeat is accepted, state 2 is the final xx/02
+    // request. Its acknowledgement keeps the re-anchored offset, allowing the
+    // stock xx/83 transcript to resume normally at logical step 10.
+    const auto htv405AdvancedOrdinary = htv405Request(
+        htv405Profile, 9, 7
+    );
+    assert(htv405AdvancedOrdinary[13] == 0x0c);
+    assert(htv405AdvancedOrdinary[14] == 0x02);
+    assert(htv405AdvancedOrdinary[17] == 0x02);
+    assert(htv405LateRetrySession.claimReply(
+        htv405AdvancedOrdinary, 29'300
+    ) == &htv405Profile.steps[9]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 7);
+    assert(htv405LateRetrySession.replyStartDelayOverrideUs() == 0);
+    assert(htv405LateRetrySession.finishReply(true, 29'310));
+    assert(htv405LateRetrySession.completedSteps() == 10);
+    const auto htv405ResumedTransition = htv405Request(
+        htv405Profile, 10, 7
+    );
+    assert(htv405ResumedTransition[13] == 0x0c);
+    assert(htv405ResumedTransition[14] == 0x83);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ResumedTransition, 29'400
+    ) == &htv405Profile.steps[10]);
+    assert(htv405LateRetrySession.finishReply(true, 29'410));
+    assert(htv405LateRetrySession.completedSteps() == 11);
+
+    // Probe.10 then observed the correct selector-2 03/83 families with their
+    // state triplet still one phase behind the stock transcript. The route,
+    // counter, marker, selector, and remaining payload stay exact.
+    const auto htv405ObservedControllerOrdinary = fromHex(
+        "79f4882f28b984028094a980130b030182008000000000000000000000000000000000007661"
+    );
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 11, htv405ObservedControllerOrdinary, 5
+    ));
+    auto htv405ShiftedControllerOrdinary =
+        htv405ObservedControllerOrdinary;
+    htv405ShiftedControllerOrdinary[13] = 0x0d;
+    rainpoint::writeTrailer(htv405ShiftedControllerOrdinary, 0xc713);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ShiftedControllerOrdinary, 29'500
+    ) == &htv405Profile.steps[11]);
+    assert(htv405LateRetrySession.finishReply(true, 29'510));
+    assert(htv405LateRetrySession.completedSteps() == 12);
+    const auto htv405ObservedControllerRepeat = fromHex(
+        "79f4882f28b984028094a980130b8301820080000000000000000000000000000000000044e4"
+    );
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 12, htv405ObservedControllerRepeat, 5
+    ));
+    auto htv405ShiftedControllerRepeat = htv405ObservedControllerRepeat;
+    htv405ShiftedControllerRepeat[13] = 0x0d;
+    rainpoint::writeTrailer(htv405ShiftedControllerRepeat, 0x4f03);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ShiftedControllerRepeat, 29'600
+    ) == &htv405Profile.steps[12]);
+    assert(htv405LateRetrySession.finishReply(true, 29'610));
+    assert(htv405LateRetrySession.completedSteps() == 13);
+    const auto htv405ObservedControllerNext = fromHex(
+        "79f4882f28b984028094a980130c030182008000000000000000000000000000000000005d71"
+    );
+    assert(rainpoint::htv405RequestMatches(
+        htv405Profile, 13, htv405ObservedControllerNext, 5
+    ));
+    auto htv405ShiftedControllerNext = htv405ObservedControllerNext;
+    htv405ShiftedControllerNext[13] = 0x0e;
+    rainpoint::writeTrailer(htv405ShiftedControllerNext, 0xc713);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ShiftedControllerNext, 29'700
+    ) == &htv405Profile.steps[13]);
+    assert(htv405LateRetrySession.finishReply(true, 29'710));
+    assert(htv405LateRetrySession.completedSteps() == 14);
+
+    // Probe.11 physically reached step 14, then the valve repeated the 03/83
+    // controller-authorization pair with an advancing transaction counter.
+    // These retries must be acknowledged without rewinding or advancing the
+    // logical transcript until the captured AC extended request appears.
+    const auto htv405ObservedLateControllerOrdinary = fromHex(
+        "79f4882f28b984028094a980130c030182010000000000000000000000000000000000006471"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedLateControllerOrdinary, 29'800
+    ) == &htv405Profile.steps[11]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 6);
+    assert(htv405LateRetrySession.finishReply(true, 29'810));
+    assert(htv405LateRetrySession.completedSteps() == 14);
+    const auto htv405ObservedLateControllerRepeat = fromHex(
+        "79f4882f28b984028094a980130c8301820100000000000000000000000000000000000056f4"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedLateControllerRepeat, 29'900
+    ) == &htv405Profile.steps[12]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 6);
+    assert(htv405LateRetrySession.finishReply(true, 29'910));
+    assert(htv405LateRetrySession.completedSteps() == 14);
+    const auto htv405ObservedLaterControllerOrdinary = fromHex(
+        "79f4882f28b984028094a980130d03018201000000000000000000000000000000000000017a"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedLaterControllerOrdinary, 30'000
+    ) == &htv405Profile.steps[11]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 7);
+    assert(htv405LateRetrySession.finishReply(true, 30'010));
+    assert(htv405LateRetrySession.completedSteps() == 14);
+    auto htv405ObservedFinalControllerOrdinary =
+        htv405ObservedLaterControllerOrdinary;
+    htv405ObservedFinalControllerOrdinary[17] = 0x02;
+    rainpoint::writeTrailer(htv405ObservedFinalControllerOrdinary, 0xc713);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedFinalControllerOrdinary, 30'100
+    ) == &htv405Profile.steps[13]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 6);
+    assert(htv405LateRetrySession.finishReply(true, 30'110));
+    assert(htv405LateRetrySession.completedSteps() == 14);
+
+    auto htv405ExtendedStart = htv405Request(htv405Profile, 14, 6);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ExtendedStart, 30'200
+    ) == &htv405Profile.steps[14]);
+    assert(htv405LateRetrySession.finishReply(true, 30'210));
+    assert(htv405LateRetrySession.completedSteps() == 15);
+    const auto htv405ObservedExtendedStartRepeat = fromHex(
+        "79f4882f28b984028094a9801311ac8099000000000000000000000000000000000000000fa2"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedExtendedStartRepeat, 30'300
+    ) == &htv405Profile.steps[14]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 10);
+    assert(htv405LateRetrySession.finishReply(true, 30'310));
+    assert(htv405LateRetrySession.completedSteps() == 15);
+    // The physical selector-2 request retains state 00 where the stock
+    // selector-6 fixture row carried 80. Every other byte remains exact.
+    const auto htv405ObservedExtendedNext = fromHex(
+        "79f4882f28b984028094a98013122c8099000000000000000000000000000000000000001a2a"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedExtendedNext, 30'400
+    ) == &htv405Profile.steps[15]);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        15,
+        htv405Clock,
+        htv405Reply,
+        htv405LateRetrySession.replyCounterOffset()
+    ));
+    assert(htv405Reply[14] == 0x6c);
+    // The valve can retain stale state 00 while retrying this 2C/99 row. The
+    // gateway must send the stock advancing state 86 in the measured 39 ms
+    // slot; echoing 06 left probe.15 parked in the 99-family loop.
+    assert(htv405Reply[18] == 0x86);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+    assert(
+        rainpoint::htv405PairingReplyStartDelayUs(14) ==
+        rainpoint::kHtv405OrdinaryReplyStartDelayUs
+    );
+    assert(
+        rainpoint::htv405PairingReplyStartDelayUs(15) == 39'000
+    );
+    assert(
+        rainpoint::htv405PairingReplyStartDelayUs(16) == 41'000
+    );
+    assert(
+        rainpoint::htv405PairingReplyStartDelayUs(17) == 39'000
+    );
+    assert(htv405LateRetrySession.finishReply(true, 30'410));
+    assert(htv405LateRetrySession.completedSteps() == 16);
+    const auto htv405ObservedEarlierExtendedRepeat = fromHex(
+        "79f4882f28b984028094a9801312ac80990000000000000000000000000000000000000028af"
+    );
+    assert(htv405LateRetrySession.claimReply(
+        htv405ObservedEarlierExtendedRepeat, 30'500
+    ) == &htv405Profile.steps[14]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 11);
+    assert(htv405LateRetrySession.finishReply(true, 30'510));
+    assert(htv405LateRetrySession.completedSteps() == 16);
+    auto htv405ExtendedPhaseTwo = htv405Request(htv405Profile, 16, 11);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ExtendedPhaseTwo, 30'600
+    ) == &htv405Profile.steps[16]);
+    assert(htv405LateRetrySession.finishReply(true, 30'610));
+    assert(htv405LateRetrySession.completedSteps() == 17);
+    auto htv405ExtendedFinal = htv405Request(htv405Profile, 17, 11);
+    htv405ExtendedFinal[17] = 0x00;
+    rainpoint::writeTrailer(htv405ExtendedFinal, 0xc713);
+    assert(htv405LateRetrySession.claimReply(
+        htv405ExtendedFinal, 30'700
+    ) == &htv405Profile.steps[17]);
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        17,
+        htv405Clock,
+        htv405Reply,
+        htv405LateRetrySession.replyCounterOffset()
+    ));
+    assert(htv405Reply[14] == 0x6c);
+    assert(htv405Reply[18] == 0x86);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
+    assert(htv405LateRetrySession.finishReply(true, 30'710));
+    assert(htv405LateRetrySession.completedSteps() == 18);
+    assert(
+        htv405LateRetrySession.state() ==
+        rainpoint::PairingSessionState::Completed
+    );
+
     rainpoint::Htv405PairingSession htv405Session(htv405Profile);
     htv405Session.arm(30'000);
     for (std::size_t index = 0;
@@ -711,5 +1652,62 @@ int main() {
         incomplete.failureReason() ==
         rainpoint::PairingFailureReason::TerminalConfirmationTimeout
     );
+
+    const rainpoint::Htv145Link htv145Link{
+        {{0xb4, 0x2d, 0x00, 0x8f}},
+        {{0xb9, 0x84, 0x02, 0x80}},
+    };
+    assert(rainpoint::validHtv145Link(htv145Link));
+    assert(rainpoint::kHtv145CommandWakeSymbols == 1'200);
+    assert((
+        rainpoint::kHtv145CommandAttemptOffsetsMs ==
+        std::array<std::uint32_t, 3>{{0, 730, 1'670}}
+    ));
+    std::array<std::uint8_t, rainpoint::kFrameBytes> htv145Frame{};
+    assert(rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x97, 60, 0xc713, htv145Frame
+    ));
+    assert(
+        htv145Frame == fromHex(
+            "79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824"
+        )
+    );
+    assert(rainpoint::buildHtv145CloseFrame(
+        htv145Link, 0x97, 0x4f03, htv145Frame
+    ));
+    assert(
+        htv145Frame == fromHex(
+            "79f4882f28b42d008fb984028097908180810000000000000000000000000000000000006fcf"
+        )
+    );
+    assert(!rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x97, 61, 0xc713, htv145Frame
+    ));
+    assert(!rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x7f, 60, 0xc713, htv145Frame
+    ));
+    assert(rainpoint::nextHtv145CommandSequence(0x9f) == 0x80);
+
+    rainpoint::Htv145CommandResponse htv145Response{};
+    const auto htv145OpenResponse = fromHex(
+        "79f4882f28b9840280b42d008f9750868010cf92800000409e00569e000000000000000044ce"
+    );
+    assert(rainpoint::decodeHtv145CommandResponse(
+        htv145OpenResponse, htv145Link, htv145Response
+    ));
+    assert(htv145Response.sequence == 0x97);
+    assert(htv145Response.watering);
+
+    bool htv145Watering = false;
+    const auto htv145ActiveState = fromHex(
+        "79f4882f28b9840280b42d008f9b810785898090cf9981800040a90156ac0100000000003431"
+    );
+    assert(rainpoint::decodeHtv145StateReport(
+        htv145ActiveState, htv145Link, htv145Watering
+    ));
+    assert(htv145Watering);
+    // The state report's 0x9b is a separate telemetry counter and must never
+    // be mistaken for the response to an outbound 0x8c command.
+    assert(htv145ActiveState[13] != 0x8c);
     return 0;
 }

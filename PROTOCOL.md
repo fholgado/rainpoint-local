@@ -163,9 +163,10 @@ frames cleared the watering bit and did not expose stale duration state.
 Automatic one-minute stops and manual stops both produced a stop frame followed
 by a distinct closed-state report. The observed confirmation delay ranged from
 less than one second to about nine seconds. The receive decoder implements
-these fields, but HTV405 frame construction remains deliberately unavailable
-until custom enrollment, acknowledgement, idempotent close, and the node-local
-watchdog are validated on the isolated valve.
+these fields. The supervised HTV405 beta exposes the physically validated
+association-specific command builder through token-protected gateway and Home
+Assistant APIs only when the explicit control option is enabled and the
+assigned radio node advertises the required capability.
 
 Local enrollment on August 18 produced the same four-zone layout with offset
 17 equal to `0x05`. A later raw stock-control capture disproved the interim
@@ -179,33 +180,188 @@ exclusive states under one valve device.
 
 On August 19 the valve was re-enrolled by the stock gateway on selector branch
 6, then Zone 1 was requested for 120 seconds and stopped manually after roughly
-45 seconds under a raw 2.0 Msps SDR burst capture. The recovered commands were:
+45 seconds under a raw 2.0 Msps SDR burst capture. The initially recovered
+lower-channel frames were valve state reports, not gateway commands:
 
 ```text
 open  79f4882f28b984028094a9801309810786058090cf8000000040b90056bc0000000000004d64
 close 79f4882f28b984028094a980130a0107860580804f80000000408000568000000000000045ff
 ```
 
-Both commands used a 320-symbol wake and appeared at approximately 433.1417
-MHz in the same SDR. The open used sequence 9 repeat phase; the close advanced
-to sequence 10 primary phase. This supports a controller-owned transaction
-counter and rejects the failed trial's 1,200-symbol wake and selector-2 pairing
-reply channel as the routine control envelope.
+Both reports used a 320-symbol wake and appeared at approximately 433.1417 MHz
+in the same SDR. Their sequence/repeat phase belongs to the lower telemetry
+stream and does not determine the gateway command counter.
 
-The selector-6 stock commands contain marker pair `86 05`, whereas historical
-selector-2 stock controls contain `82 85`. Local selector-2 reports contain
-`82 05`. Offset 17 is therefore not a universal direction bit, and a validated
-association must carry its command profile as a unit: branch marker, command
-marker, carrier, wake, endpoints, transaction phase, and trailer. The exact
-local selector-2 command marker remains a physical-test gate; the isolated
-trial currently retains its locally observed `82 05` profile rather than
-substituting the historical stock selector-2 marker.
+The corresponding stock gateway commands were later isolated on the high
+control carrier. They use a 2,400-symbol wake, paired endpoint `94a98013` as
+source, companion endpoint `39840280` as destination, and the `0x4f03` trailer
+family. Byte 14 is an operation marker: `0x90` opens and `0x10` closes. It is
+not the repeat bit used by lower telemetry.
 
-An association-specific, offline-only close candidate builder now reproduces
-the captured local `0x05` idle body. It requires the paired endpoints, current
-five-bit sequence, zone, selector, repeat phase, and trailer residue explicitly.
-It remains disconnected from the gateway API and radio firmware; the first RF
-control trial is still an idempotent close on the dry test valve.
+### HTV405FRF locally validated Zone 1 control — 2026-08-23
+
+The dry test valve was locally enrolled on selector branch 2. Replaying the
+captured Zone 1 command body on the old selector-6 carrier was ignored across
+multiple counters. Moving the unchanged command to the association's
+selector-2 gateway carrier produced an immediate authenticated response. On
+the bench node, a requested center of `433518527` Hz compensates its measured
+crystal error and lands near the physical `433471` kHz branch.
+
+The first accepted 120-second open used controller counter 3:
+
+```text
+tx  79f4882f2894a9801339840280839082808100bc00000000000000000000000000000000a621
+rx  79f4882f28b984028094a9801303d0868010cf8000000040bc0056bc000000000000000038bf
+```
+
+The response echoed counter 3 and reported watering. Roughly 6.5 seconds later
+the valve emitted its ordinary lower-channel watering report, then emitted an
+idle report after the requested 120-second run. This independently confirms
+command acceptance, state transition, countdown, and automatic stop.
+
+An idempotent close with controller counter 4 was then accepted:
+
+```text
+tx  79f4882f2894a980133984028084108180810000000000000000000000000000000000004f0c
+rx  79f4882f28b984028094a9801304508683104f80000000408000568000000000000000001e6e
+```
+
+A hardened follow-up opened for 60 seconds at counter 5, advanced the stored
+counter only after the valve's watering response, and closed at counter 6
+without manual phase input. The valve replied idle and then emitted independent
+lower-channel closed-state reports. The next controller counter is therefore 7.
+
+The controller command counter is independent of the lower report sequence.
+Only a structurally valid high-channel response with matching endpoints and
+the transmitted counter may advance it. Transmit success alone is never a
+state transition, and lower telemetry may confirm watering/idle state but may
+not rewrite the controller counter.
+
+On August 23, dry-bench one-minute opens physically validated Zones 2--4 for
+the locally enrolled selector-2 association. Within that profile, the only
+command-body change is offset 17: `0x80 | zone`. The immediate authenticated
+response identifies the accepted port as `zone << 4` at the same offset. The
+locally enrolled lower state report independently identifies the active port
+in offset 19 bits 4--6. Each tested port emitted its matching active report and
+then an idle report after the bounded run. Exact transmissions, responses,
+state reports, phase-only reports, and idle reports are frozen in
+`research/fixtures/htv405_local_multizone_control_20260823.json`.
+
+### HTV405FRF stock selector-6 cloud-control matrix — 2026-08-24
+
+An isolated dry valve was re-enrolled through the stock RainPoint gateway at
+app address 6. Cloud commands then opened each port for 60 seconds and stopped
+it after at least 15 seconds. All four trials produced a matching valve-originated
+active report, idle report, cloud work-state transition, and per-port 60-second
+session-duration value. This independently validates all four stock control
+paths without treating a submitted cloud request as proof of valve state.
+
+The selector-6 command profile does **not** use the selector-2 profile's direct
+offset-17 port byte. Its port is packed across offsets 16 and 17:
+
+```text
+zone = 2 * (frame[16] & 0x7f) + ((frame[17] >> 7) & 1)
+frame[17] & 0x7f = 1
+```
+
+This gives `80 81`, `81 01`, `81 81`, and `82 01` for Zones 1--4. Offset 15
+is `0x82` for open and `0x81` for close. Offset 14 low seven bits remain
+`0x10`; its high bit is a repeat/phase bit and is not the operation. Direct
+captures include `0x10` and `0x90` on valid opens, so analysis must use offset
+15. Duration remains at offsets 19--20; `9e 00` again represented 60 seconds.
+Command construction must
+therefore select the complete association profile rather than treating the
+radio branch as only a carrier-frequency choice. Both supported trailer
+residues occurred in the matrix without a fixed open/close mapping, so the
+trailer likewise cannot be inferred from the requested operation.
+
+The ordered matrix's lower-channel active report values were 1--4 and its idle
+report values were 2--5. Those are telemetry counters, not stock commands, and
+do not synchronize the high-carrier control counter. Later direct command
+captures resolved the conditional control rule. Zone 3 open and close both
+used sequence `0x0a`, while the following Zone 4 open and close both used
+`0x0b`. In older captures where an immediate open response was received, open
+`0x04` was followed by close `0x05`; an authenticated close at `0x03` was
+followed by the next open reusing `0x03`. The counter therefore advances once
+per watering session at the first authenticated command response. If open
+confirmation was missed, close can reuse the open sequence and become that
+first confirmation. Exact commands, responses, and report-driven close
+evidence are retained in
+`research/fixtures/htv405_stock_early_stop_20260824.json`.
+
+A later cloud matrix deliberately allowed all four zones to expire without an
+explicit close. Every zone produced an independently decoded active report and
+idle report 60.947--61.645 seconds after cloud acceptance. Zone 1's first
+active report arrived 6.049 seconds after acceptance and its idle report at
+61.491 seconds; the cloud idle update followed 113 milliseconds later. Zone 4
+independently repeated that ordering with a 111-millisecond RF-to-cloud delay.
+This confirms that the valve owns and enforces the bounded duration; the roughly
+55-second interval between the first received active report and the idle report
+is receiver latency, not a shortened run. The exact cross-layer timelines are
+retained in
+`research/fixtures/htv405_stock_auto_stop_20260824.json`.
+
+The associated application payload maps per-port work state to DP IDs 25--28
+and per-port session duration to IDs 37--40. Active work state was `33`, the
+first stopped update used `32` while retaining the 60-second session duration,
+and a later idle refresh used `0` and cleared the duration. Shared DP 24 stayed
+at 100 percent battery while DP 23 varied from -20 to -30 dBm, confirming that
+the stock-hub RSSI is a dynamic receiver measurement. The full redacted matrix
+is retained in
+`research/fixtures/htv405_stock_cloud_control_matrix_20260824.json`.
+
+Selector-`0x07` lower reports advance only the telemetry phase. Their zone-like
+fields cycle and may not overwrite authenticated state. Selector-`0x05` reports
+carry local state, but their idle form clears the port nibble; because the
+chassis permits only one active outlet, that idle report clears all four HA
+zone states rather than being misread as Zone 1.
+
+The gateway schema now persists these as two explicit domains. Lower report
+cadence is exposed as `rf_telemetry_*`; it can never mark the command counter
+synchronized. The durable `rf_next_control_sequence` is written only after an
+authenticated radio node matches a pending transmit to a structurally valid
+high-carrier response and the daemon independently revalidates that response,
+its endpoints, node assignment, selector, and association companion route.
+While watering, the session must retain whether its one advancement already
+occurred. A confirmed open advances before close; an unconfirmed open keeps its
+sequence so a bounded close-only recovery can reuse it. A confirmed close must
+not advance a session that already advanced at open. The stock-command fixture
+covers both branches.
+
+The normalized selector-2 control profile uses a nominal `433421373` Hz base
+plus the association node's calibration offset. For the validated bench node,
+`+97154` Hz produces the proven `433518527` Hz request. This replaces the
+temporary equivalent representation (`434306001 - 787474`) without changing
+the RF carrier.
+
+The retained August 17 journal was re-audited and promoted into
+`research/fixtures/htv405_crossed_zone_reports_20260817.json`. It freezes all
+eight lower-channel combinations (Zones 1--4 at 60 and 120 seconds), but it
+contains no CRC-valid high-carrier command for Zones 2--4. The later isolated
+local trials supplied that missing transmit evidence. The supervised beta now
+keeps this path behind build capability, authenticated-node assignment,
+token-protected gateway access, a disabled-by-default add-on option, and
+durable counter/state validation rather than presenting it as general support.
+
+### HTV405FRF battery-field status — 2026-08-23
+
+The retained RF journal was split at the fresh-battery replacement boundary
+and normalized to remove sequence, repeat, and CRC variation. The paired
+startup sequence, startup tail, and selector-`0x07` link family had no changed
+byte-value sets across the boundary. Changes in selector-`0x05` reports occur
+only in fields already crossed against zone selection and countdown.
+
+A rarer diagnostic family changed at offsets 19--22 and 28--29, but those same
+offsets changed again after bounded watering while the fresh batteries were
+unchanged. They therefore contain dynamic device/session data and cannot be
+promoted as battery. The comparison and representative frames are retained in
+`research/fixtures/htv405_battery_transition_20260823.json`; the reproducible
+analysis is `tools/analyze_htv405_battery_events.py`.
+
+The cloud catalog confirms a port-0 `STA_BAT` semantic value, but it does not
+locate that value in RF. No HTV405 battery percentage or categorical flag is
+exposed locally yet. A controlled normal-to-low voltage transition with an
+independent LCD or app observation remains required.
 
 ### HTV405FRF enrollment exchange
 
@@ -214,6 +370,25 @@ The factory endpoint `14a98013` became `94a98013`, again by setting the high
 bit of the first endpoint byte. The valve then exchanged messages `01` through
 `09` with companion route `39840280`. The full request/reply transcript is
 retained in `research/fixtures/htv405_gateway_pairing_replies.json`.
+
+A later stock re-enrollment on 2026-08-24 was correlated directly with the
+RainPoint app's device-information screen. The app reported **Device Address
+6**. All captured paired requests and six later idle-link reports carried
+logical-address byte `0x86`, strongly tying that field to the assigned valve
+address. The valve association also used the carrier and marker family
+historically described here as the selector-6 branch, but the address must not
+be treated as a generic radio-channel selector: an independent HCS026 app
+correlation has address 2 but negotiated acknowledgement channel 4. The
+HCS026 report body also cannot yet locate its app address because the tempting
+`0x82` field occurs in reports from other installed sensors.
+The same valve screen reported a full battery, stock-hub RSSI of -42 dBm,
+firmware display `123`, and decimal device ID `637555497` (`0x26005329`). The
+upper device-ID byte `0x26` equals the catalogued HTV405 product code 38; the
+remaining bytes were not present directly or byte-reversed in the RF frames.
+Battery, RSSI, and firmware values remain correlation labels until their RF
+fields are demonstrated. See
+`research/fixtures/htv405_stock_selector6_app_correlation_20260824.json` and
+`research/fixtures/app_device_metadata_rf_correlation_20260824.json`.
 
 The initial assignment reply occupied a distinct channel near 433.506 MHz and
 used tones near 433.471 and 433.541 MHz: approximately 70 kHz separation and
@@ -415,13 +590,17 @@ message 01 00 83 82 7f a4 1e 80; endpoint association bit clear; suffix 24
 ```
 
 The standard radio-node firmware implements the model-level profile
-`hcs026_auto_v1`. The gateway supplies no RF identity. During an explicitly
-armed window, the selected node accepts the first trailer-valid announcement
-matching the signature above, derives the paired endpoint by setting the high
-bit of the first endpoint byte, substitutes it into the common reply template,
-assigns shared selector 4, rewrites the trailer, and locks the session to that
-identity. Unrelated frames cannot select a target, and terminal message `03`
-remains mandatory.
+`hcs026_auto_v1`. The authenticated gateway supplies its durable controller and
+companion endpoints; every radio node attached to that gateway uses the same
+pair. During an explicitly armed window, the selected node accepts the first
+trailer-valid announcement matching the signature above, derives the sensor's
+paired endpoint by setting the high bit of the first endpoint byte, substitutes
+the sensor and gateway endpoints into the common reply template, assigns shared
+selector 4, rewrites the trailer, and locks the session to that sensor identity.
+Unrelated frames cannot select a target, and terminal message `03` remains
+mandatory. Older firmware is accepted only for an association that explicitly
+retains the observed stock controller/companion pair; it cannot create or own a
+generated-identity association.
 
 The common path has now completed physical pairing across independent test and
 installed HCS026 identities. Known sensors can also repeat their strict factory
@@ -803,6 +982,33 @@ retains these as unassigned status fields rather than updating a device. The
 repeatable timing and values associate the family with Right Bed, but more
 samples are required before defining a safe automatic routing rule.
 
+Four exact cloud/local correlations on 2026-08-24 matched the installed Left
+Bed, Right Bed, Front Yard Sensor 1, and Front Yard Sensor 2 reports within
+0.105--0.918 seconds. Soil moisture matched exactly and the marker-relative
+battery flag decoded as normal/100% for all four. App addresses were 2--5, but
+normalized RF offset 15 was `0x82` for addresses 2, 4, and 5 and `0x83` for
+address 3. That byte therefore is not the app address. Cloud/local migration
+must correlate time, value, product family, and capabilities rather than infer
+an address from this RF byte. Exact redacted pairs are frozen in
+`research/fixtures/hcs026_cloud_rf_correlation_20260824.json`.
+
+### Associated-controller moisture relay
+
+A distinct trailer-valid report family uses the installed HTV145 association
+route `b9840280 -> b42d008f`, body prefix `04 05 81 80 05`, a `44`/`c4`
+marker, and a marker-relative moisture value. Of 1,346 retained valid reports,
+775 landed within two seconds of an ordinary identified Right Bed report; all
+775 decoded the same moisture and none disagreed. This strongly indicates that
+the controller relays its associated sensor's moisture, consistent with the
+cloud model's Associated Controller feature.
+
+The relay envelope contains the controller route but not the sensor endpoint.
+`rainpointd` therefore exposes `associated_soil_moisture_percent` only on the
+unassigned raw event and never promotes it to an ordinary sensor update. The
+strict decoder also requires the complete structural signature, a valid
+ordinary trailer, and a zero-filled tail. The older compact/TLV samples were
+trailer-invalid and remain research evidence rather than accepted device data.
+
 The controlled 12% sample was produced by removing the Left Bed probe from the
 ground. Its display, independently observed reference entity, local decoder,
 gateway API, and Home Assistant local entity all reported 12%. This validates
@@ -814,6 +1020,19 @@ Example Left Bed frame:
 79f4882f28b9840280c4e500240981820385c406000000000000000000000000000000004cea
 ```
 
+The RainPoint app identified this device as address 2. Its 32-bit device ID
+begins with `0x48`; the installation-specific lower 24 bits are redacted.
+Historical Left Bed reports contain `0x82` at normalized offset 15, but that
+value is not promoted as the app address because other installed HCS026 report
+layouts also contain it. Its locally observed acknowledgement channel is
+independently assigned as channel 4, proving that the app address and
+enrollment channel are separate values. The upper byte of the app device ID,
+`0x48`, equals the catalogued HCS02x soil-sensor product code, mirroring the
+HTV405 device-ID/product-code relationship. The remaining 24 bits do not
+directly or byte-reversed match the sensor's factory endpoint `44e50024` or
+paired endpoint `c4e50024`. See
+`research/fixtures/app_device_metadata_rf_correlation_20260824.json`.
+
 ### Sensor fields not yet decoded
 
 - The former companion-heartbeat battery hypothesis is withdrawn. Same-file IQ
@@ -823,7 +1042,9 @@ Example Left Bed frame:
   above.
 - Hub-reported RSSI is receiver-measured rather than generated by the sensor.
   It can appear in separate compact status traffic, but that traffic's device
-  association is not yet decoded.
+  association is not yet decoded. The trailer-valid associated-controller
+  relay described above carries moisture but no independently routable sensor
+  identity.
 - The meaning of the first body byte and remaining acknowledgement fields
   remains provisional.
 
@@ -902,6 +1123,28 @@ Exact requests were observed retransmitted without changes, including the
 trailer. This proves there is no per-burst nonce. It does not yet prove that a
 request from an older transaction can be replayed later.
 
+Retained stock-gateway captures on 2026-08-22 and 2026-08-24 separate one
+logical command from its RF attempts. A 1,200-second open at sequence `0x81`
+contained three byte-identical requests beginning at offsets 0, 0.729210, and
+1.668479 seconds. The matching valve response arrived 0.050825 seconds after
+the final attempt, and an independent watering-state report arrived 5.679676
+seconds after it. A later 600-second open at command sequence `0x8c` had a
+corrupted immediate-response capture but was positively confirmed by a
+watering report 6.552309 seconds later. The controller must therefore send at
+most one logical open while permitting the proven bounded burst of identical
+attempts; it must never create a second logical open because a response was
+missed.
+
+The two later watering confirmations used telemetry sequences `0x89` and
+`0x9b`, not command sequences `0x81` and `0x8c`. Retained traffic contains 237
+trailer-valid routine report/ack pairs with median acknowledgement latency
+0.015732 seconds and p95 0.083495 seconds. The routine telemetry counter is an
+independent stream: it can prove resulting watering/idle state but cannot
+supply or overwrite the next outbound command counter. Only a passively
+observed command or evidence matching an already reserved command may advance
+that counter. The exact transactions are frozen in
+`research/fixtures/htv145_stock_command_counter_20260824.json`.
+
 Across 14 captured commands (seven opens and seven closes), 12 had a retained
 reverse-route response within three seconds. Normal response latency was
 0.372--0.380 seconds; two responses arrived at 1.062 and 1.083 seconds. This
@@ -910,13 +1153,34 @@ against immediately retrying a non-idempotent open command. The two missing
 responses were from the scheduled cycle and are consistent with missed RF
 reception rather than proven valve non-response.
 
+The first isolated local transmit trial on 2026-08-25 confirmed that HTV145
+command traffic for this association uses RainPoint channel 11 at the CC1101
+center 434.239594 MHz. A corrected 60-second candidate was independently
+captured by the SDR and another radio node as three byte-identical, valid
+`0xc713` attempts with the measured 1,200-symbol wake prefix. The valve emitted
+no response or state transition and did not actuate. Its last pre-trial report
+had already asserted the confirmed low-battery flag, and routine traffic then
+stopped during the acceptance window. A valid valve-originated idle/low-battery
+report resumed about 26 minutes after the command. That late report proves the
+radio was not completely dead but cannot confirm a 60-second open without an
+immediate response, active state, actuation, or expected automatic-idle timing.
+The result is therefore blocked by likely low-voltage command/actuator lockout
+rather than classified as a protocol rejection. A fresh-battery, freshly
+synchronized repeat remains required.
+
+This negative trial confirms that controller-to-valve requests are intent, not
+state evidence: local receivers hear their own request even when the valve is
+silent. Only valve-to-controller command responses, active/idle marker reports,
+or terminal idle summaries may update valve watering state and report cadence.
+
 ### Last-session water usage
 
 Valve response frames use `0x4f` or `0xcf` as a marker at normalized frame
-offset 20. The next two bytes encode usage in tenths of a liter:
+offset 20. The next three packed bytes encode usage in tenths of a liter. The
+high bit of the third byte restores data bit 7 of the first packed byte:
 
 ```text
-half_tenths = ((second & 0x7f) << 8) | (first & 0x7f)
+half_tenths = ((second & 0x7f) << 8) | (first & 0x7f) | (third & 0x80)
 tenths_liters = half_tenths * 2 + bool(second & 0x80)
 liters = tenths_liters / 10
 ```
@@ -931,6 +1195,42 @@ Confirmed examples:
 | `d3 00` | 16.6 L |
 | `b3 00` | 10.2 L |
 | `ec 03` | 175.2 L |
+
+Two cloud-correlated extension-bit examples are `d1 81 80` = 93.1 L and
+`99 81 80` = 81.9 L. Ignoring the third-byte bit underreports them as 67.5 L
+and 56.3 L, respectively.
+
+The valve also emits a terminal/summary response family without the
+`0x4f`/`0xcf` marker. On the valve-to-controller route, its normalized bytes
+14--18 are `82 07 85 80 80`; bytes 24--26 use the same packed-usage formula,
+and bytes 28--29 repeat the requested duration in two-second units. Five exact
+cloud/RF correlations cover 81.9--106.3 L. The latest was a single 600-second
+run: `90 82 00` decoded to 105.7 L and `2c 01` decoded to 600 seconds. This
+layout was cloud-labelled idle in every correlation, so it also provides a
+valve-originated closure confirmation. It is now decoded receive-only and
+frozen in
+`research/fixtures/htv145_cloud_rf_terminal_summary_correlation_20260824.json`.
+
+This summary family does **not** have a confirmed battery selector. Stable
+bytes are identical across independently cloud-labelled full and low battery
+observations, so local battery state must continue to come only from the
+marker-based usage/status family described below. Byte 23 was `0x08` in four
+correlations and `0x10` in the latest one; its meaning remains unresolved.
+
+### HTV145FRF categorical battery flag
+
+In HTV145 usage/status reports, frame offset 17 bit `0x08` is clear while the
+stock cloud reports normal/full battery and set while it reports low battery.
+Four exact cloud/RF correlations span two full and two low observations; the
+bit began continuously asserting before the next stock cloud poll changed the
+categorical value from normal to low. Local decoding maps clear to status 1 /
+100% and set to status 2 / 10%, matching the stock integration's categorical
+semantics. The evidence and corrected usage values are frozen in
+`research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`.
+Every exact cloud correlation for this marker-based usage/status family was
+idle, so a trailer-valid report also clears stale watering state. Active open
+and close responses use a distinct body layout and are not classified by this
+rule.
 
 ## Trailer status
 
@@ -974,10 +1274,12 @@ state, an omitted lower-layer input, or two forms accepted by the receiver;
 the cloud API does not provide a missing bit that can simply be copied.
 
 This is sufficient to validate ordinary received frames and reject most
-demodulation artifacts. It is not yet sufficient to generate arbitrary
-commands because the rule selecting the two residues remains unknown. Compact
-product-code/status frames are a separate family and do not satisfy this
-ordinary-frame rule, so they must be retained rather than rejected globally.
+demodulation artifacts. It is not sufficient to infer the residue for an
+arbitrary unknown association. The isolated HTV145 transmitter candidate must
+therefore use an explicitly evidenced association residue and fail closed; it
+cannot guess or rotate residues. Compact product-code/status frames are a
+separate family and do not satisfy this ordinary-frame rule, so they must be
+retained rather than rejected globally.
 
 ## Receive and decode
 
@@ -1009,29 +1311,49 @@ normalization and confirmed field decoding. Regression examples live in
 
 ## Remaining protocol work
 
-1. Determine by bounded active acceptance testing whether either ordinary
-   trailer residue is accepted for a newly constructed payload, then
-   characterize the compact-frame trailer family.
+1. With fresh valve batteries and newly confirmed stock command-counter
+   evidence, repeat one channel-11 dry-valve acceptance using the explicitly
+   evidenced ordinary trailer residue; then characterize the compact-frame
+   trailer family.
 2. Validate the measured channel, rate, deviation, bandwidth, and sync profile
    on receive-only CC1101 hardware, including both RF channels.
 3. Test whether a captured request is accepted outside its original sequence
    window.
 4. Determine whether P1–P6 soil profile selection is transmitted, local-only,
    or cloud metadata.
-5. Capture valve enrollment, association, and forgetting traffic.
-6. Confirm valve retry timing, acknowledgement rules, and safe close behavior before
-   enabling Home Assistant control.
-7. Classify the four-zone test controller independently: determine whether it
-   shares the HTV145 frame family, how it identifies ports, and whether state,
-   counters, and close commands are per-zone or chassis-wide.
+5. Capture a controlled stock-gateway valve battery rejoin before changing the
+   local implementation again. The one-reply hypothesis and the unchanged
+   18-step transcript after a `0x7f` boot trigger both failed; keep rejoin
+   separate from the validated `0xff` new-enrollment state machine and require
+   paired traffic as terminal evidence.
+6. Complete physical HTV145 acceptance. The one-logical-command/three-attempt
+   waveform is now independently captured on the correct carrier, but valve
+   response, independent state fallback, automatic stop, counter persistence,
+   and positively observed overdue-run handling remain unaccepted pending a
+   fresh-battery repeat. Explicit early-stop is report-validated on all four
+   HTV405 zones.
+7. Determine whether HTV405 battery status is carried by an RF family not yet
+   independently correlated to voltage. HTV145 categorical battery is now
+   decoded separately.
 
 ## Safety boundary
 
-The current implementation transmits only validated, identity-bounded soil
-sensor pairing/rejoin replies and acknowledgements. Valve transmission remains
-absent. It must enforce a local maximum duration, start an independent watchdog
-before opening, retry an idempotent close until idle is observed, and fail
-closed after gateway, Home Assistant, network, or power loss.
+The standard receive/sensor firmware transmits only validated,
+identity-bounded soil-sensor pairing/rejoin replies and acknowledgements. The
+supervised HTV405 beta additionally contains physically validated,
+identity-bound open paths for Zones 1--4 and a Zone 1 early-close path. That
+capability is unavailable unless the build, authenticated node, assigned valve
+association, token-protected gateway, and disabled-by-default add-on option all
+agree. A separate compile-gated HTV145 candidate constructs the retained
+long-wake command family, persists its independent command counter, and emits
+only one bounded burst, but has not been deployed or physically accepted.
+Every HTV405 open carries a locally enforced 1--60 whole-minute duration;
+physical validation currently covers one and two minutes. Gateway, Home
+Assistant, network, or power loss is observation-only because the valve owns
+that countdown. Silence marks state unknown and must not cause speculative RF.
+Close retries are permitted only for an explicit early-stop or after a fresh
+report proves watering continued beyond the expected completion plus grace
+period.
 
 ## Evidence and references
 

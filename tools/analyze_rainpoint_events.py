@@ -124,9 +124,14 @@ def _timestamp(event: dict[str, Any]) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # Historical rtl_433 rows use a naive gateway-local timestamp, while
+    # Wi-Fi radio nodes emit explicit UTC offsets. Interpret only the former
+    # in the machine's local timezone so mixed receiver corpora remain
+    # comparable without rewriting retained evidence.
+    return observed.astimezone() if observed.tzinfo is None else observed
 
 
 def _top_xor_features(
@@ -219,6 +224,286 @@ def _latency_summary(values: list[float]) -> dict[str, float | int]:
     }
 
 
+def _htv145_links(
+    events: list[tuple[dict[str, Any], bytes, int]],
+) -> set[tuple[bytes, bytes]]:
+    """Infer HTV145 controller/valve links from decoded observations.
+
+    A link is deliberately learned from model-qualified retained evidence, not
+    from installation-specific endpoint constants. Commands run controller to
+    valve; every decoded status/usage report runs valve to controller.
+    """
+    links: set[tuple[bytes, bytes]] = set()
+    for event, frame, _ in events:
+        state = event.get("state", {})
+        if state.get("model") != "HTV145FRF":
+            continue
+        if frame[14] in (0x10, 0x90):
+            links.add((frame[5:9], frame[9:13]))
+        else:
+            links.add((frame[9:13], frame[5:9]))
+    return links
+
+
+def _deduplicate_receiver_observations(
+    events: list[tuple[dict[str, Any], bytes, int]],
+    *,
+    window_seconds: float = 0.15,
+) -> list[tuple[dict[str, Any], bytes, int]]:
+    """Collapse one air transmission heard by multiple receivers.
+
+    Exact frames farther apart than the short receiver fan-in window remain
+    separate. That preserves true on-air retransmissions while avoiding a
+    false retransmission count caused by SDR and ESP32 diversity reception.
+    """
+    ordered = sorted(
+        events,
+        key=lambda item: _timestamp(item[0]) or datetime.min,
+    )
+    result: list[tuple[dict[str, Any], bytes, int]] = []
+    last_by_raw: dict[bytes, datetime] = {}
+    for item in ordered:
+        observed_at = _timestamp(item[0])
+        if observed_at is None:
+            continue
+        previous = last_by_raw.get(item[1])
+        if previous is not None:
+            delta = (observed_at - previous).total_seconds()
+            if 0 <= delta <= window_seconds:
+                continue
+        result.append(item)
+        last_by_raw[item[1]] = observed_at
+    return result
+
+
+def _htv145_transaction_summary(
+    clean_events: list[tuple[dict[str, Any], bytes, int]],
+    *,
+    response_window_seconds: float = 3.0,
+    state_confirmation_window_seconds: float = 15.0,
+) -> dict[str, Any]:
+    """Separate HTV145 command, response, and telemetry counter evidence."""
+    links = _htv145_links(clean_events)
+    if not links:
+        return {
+            "links": [],
+            "command_count": 0,
+            "commands": [],
+            "telemetry_counter_transitions": {},
+            "telemetry_acknowledgements": {"count": 0},
+        }
+
+    route_events = [
+        item
+        for item in clean_events
+        if any(
+            (item[1][5:9], item[1][9:13])
+            in ((controller, valve), (valve, controller))
+            for controller, valve in links
+        )
+    ]
+    transmissions = _deduplicate_receiver_observations(route_events)
+    transmissions.sort(key=lambda item: _timestamp(item[0]) or datetime.min)
+
+    command_groups: list[list[tuple[int, dict[str, Any], bytes, int]]] = []
+    for position, (event, frame, residual) in enumerate(transmissions):
+        if (
+            (frame[5:9], frame[9:13]) not in links
+            or frame[14] not in (0x10, 0x90)
+        ):
+            continue
+        observed_at = _timestamp(event)
+        if observed_at is None:
+            continue
+        if command_groups:
+            previous = command_groups[-1][-1]
+            previous_at = _timestamp(previous[1])
+            if (
+                previous[2] == frame
+                and previous_at is not None
+                and 0 <= (observed_at - previous_at).total_seconds() <= 5.0
+            ):
+                command_groups[-1].append((position, event, frame, residual))
+                continue
+        command_groups.append([(position, event, frame, residual)])
+
+    commands: list[dict[str, Any]] = []
+    for attempts in command_groups:
+        position, event, frame, residual = attempts[0]
+        observed_at = _timestamp(event)
+        last_attempt_at = _timestamp(attempts[-1][1])
+        if observed_at is None or last_attempt_at is None:
+            continue
+        mode = "open" if frame[14] == 0x10 else "close"
+        expected_watering = mode == "open"
+        response = None
+        state_confirmation = None
+        for candidate_event, candidate_frame, candidate_residual in transmissions[
+            position + 1 :
+        ]:
+            candidate_at = _timestamp(candidate_event)
+            if candidate_at is None:
+                continue
+            delta = (candidate_at - observed_at).total_seconds()
+            if delta < 0:
+                continue
+            if delta > state_confirmation_window_seconds:
+                break
+            reverse_link = (
+                candidate_frame[5:9] == frame[9:13]
+                and candidate_frame[9:13] == frame[5:9]
+            )
+            if not reverse_link:
+                continue
+            if (
+                response is None
+                and delta <= response_window_seconds
+                and candidate_frame[13] == frame[13]
+                and candidate_frame[14]
+                == (0x50 if mode == "open" else 0xD0)
+            ):
+                response = {
+                    "event_id": candidate_event.get("event_id"),
+                    "latency_from_first_attempt_seconds": round(delta, 6),
+                    "latency_from_last_attempt_seconds": round(
+                        (candidate_at - last_attempt_at).total_seconds(), 6
+                    ),
+                    "residual": f"{candidate_residual:04x}",
+                }
+            state = candidate_event.get("state", {})
+            if (
+                state_confirmation is None
+                and state.get("model") == "HTV145FRF"
+                and state.get("is_watering") is expected_watering
+            ):
+                state_confirmation = {
+                    "event_id": candidate_event.get("event_id"),
+                    "latency_from_first_attempt_seconds": round(delta, 6),
+                    "latency_from_last_attempt_seconds": round(
+                        (candidate_at - last_attempt_at).total_seconds(), 6
+                    ),
+                    "telemetry_sequence": f"{candidate_frame[13]:02x}",
+                }
+        duration = None
+        if mode == "open":
+            raw_duration = int.from_bytes(frame[19:21], "little")
+            duration_candidates = {
+                raw_duration * 2,
+                (raw_duration & ~0x80) * 2,
+            }
+            confirmed = [
+                value
+                for value in duration_candidates
+                if 0 < value <= 24 * 60 * 60 and value % 60 == 0
+            ]
+            duration = confirmed[0] if len(confirmed) == 1 else None
+        commands.append(
+            {
+                "event_id": event.get("event_id"),
+                "observed_at": event.get("observed_at"),
+                "controller_endpoint": frame[5:9].hex(),
+                "valve_endpoint": frame[9:13].hex(),
+                "mode": mode,
+                "command_sequence": f"{frame[13]:02x}",
+                "attempt_count": len(attempts),
+                "attempt_intervals_seconds": [
+                    round(
+                        (
+                            _timestamp(right[1]) - _timestamp(left[1])
+                        ).total_seconds(),
+                        6,
+                    )
+                    for left, right in zip(attempts, attempts[1:])
+                    if _timestamp(left[1]) is not None
+                    and _timestamp(right[1]) is not None
+                ],
+                "duration_seconds": duration,
+                "residual": f"{residual:04x}",
+                "immediate_response": response,
+                "state_confirmation": state_confirmation,
+            }
+        )
+
+    command_transitions: Counter[int] = Counter()
+    for previous, current in zip(commands, commands[1:]):
+        if (
+            previous["controller_endpoint"] == current["controller_endpoint"]
+            and previous["valve_endpoint"] == current["valve_endpoint"]
+        ):
+            left = int(previous["command_sequence"], 16) & 0x1F
+            right = int(current["command_sequence"], 16) & 0x1F
+            command_transitions[(right - left) & 0x1F] += 1
+
+    telemetry_sequences: dict[str, list[int]] = defaultdict(list)
+    ack_latencies: list[float] = []
+    ack_pairs = 0
+    for position, (event, frame, _) in enumerate(transmissions):
+        for controller, valve in links:
+            if frame[5:9] != valve or frame[9:13] != controller:
+                continue
+            if frame[14] in (0x50, 0xD0):
+                continue
+            route = f"{controller.hex()}->{valve.hex()}"
+            sequence = frame[13] & 0x1F
+            if (
+                not telemetry_sequences[route]
+                or telemetry_sequences[route][-1] != sequence
+            ):
+                telemetry_sequences[route].append(sequence)
+            observed_at = _timestamp(event)
+            if observed_at is None:
+                continue
+            for candidate_event, candidate_frame, _ in transmissions[position + 1 :]:
+                candidate_at = _timestamp(candidate_event)
+                if candidate_at is None:
+                    continue
+                delta = (candidate_at - observed_at).total_seconds()
+                if delta < 0:
+                    continue
+                if delta > response_window_seconds:
+                    break
+                if (
+                    candidate_frame[5:9] == controller
+                    and candidate_frame[9:13] == valve
+                    and candidate_frame[13] == frame[13]
+                    and candidate_frame[14] not in (0x10, 0x90)
+                ):
+                    ack_pairs += 1
+                    ack_latencies.append(delta)
+                    break
+
+    telemetry_transitions: dict[str, dict[str, int]] = {}
+    for route, sequences in telemetry_sequences.items():
+        counts = Counter(
+            (right - left) & 0x1F
+            for left, right in zip(sequences, sequences[1:])
+        )
+        telemetry_transitions[route] = {
+            str(delta): count for delta, count in sorted(counts.items())
+        }
+
+    return {
+        "links": [
+            {
+                "controller_endpoint": controller.hex(),
+                "valve_endpoint": valve.hex(),
+            }
+            for controller, valve in sorted(links)
+        ],
+        "command_count": len(commands),
+        "command_counter_transitions": {
+            str(delta): count
+            for delta, count in sorted(command_transitions.items())
+        },
+        "commands": commands,
+        "telemetry_counter_transitions": telemetry_transitions,
+        "telemetry_acknowledgements": {
+            "count": ack_pairs,
+            "latency": _latency_summary(ack_latencies),
+        },
+    }
+
+
 def _valve_transaction_summary(
     bursts: list[tuple[dict[str, Any], bytes, int]],
     response_window_seconds: float = 3.0,
@@ -235,7 +520,18 @@ def _valve_transaction_summary(
         observed_at = _timestamp(event)
         if observed_at is None:
             continue
-        mode = "close" if frame[14] & 0x80 else "open"
+        # The operation selector is frame[15] low bits: 0x02 opens and 0x01
+        # closes. HTV405 uses frame[14] bit 7 as a repeat/phase bit, so treating
+        # that bit as the operation reverses valid commands whenever the phase
+        # flips. Retain the old frame[14] fallback only for incomplete research
+        # frames that predate the full command-body capture.
+        operation_selector = frame[15] & 0x7F
+        if operation_selector == 0x02:
+            mode = "open"
+        elif operation_selector == 0x01:
+            mode = "close"
+        else:
+            mode = "close" if frame[14] & 0x80 else "open"
         controller_endpoint = frame[5:9]
         valve_endpoint = frame[9:13]
         link = f"{controller_endpoint.hex()}->{valve_endpoint.hex()}"
@@ -449,6 +745,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
 
     compact_associations = []
     for event, frame, observed_at, moisture in compact_frames:
+        residual = trailer_residual(frame)
         nearest_by_endpoint: dict[str, dict[str, Any]] = {}
         for known_at, endpoint, known_moisture in known_observations:
             delta = (observed_at - known_at).total_seconds()
@@ -470,7 +767,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
                 "observed_at": event.get("observed_at"),
                 "route": f"{frame[5:9].hex()}->{frame[9:13].hex()}",
                 "moisture": moisture,
-                "residual": f"{trailer_residual(frame):04x}",
+                "residual": f"{residual:04x}",
+                "trailer_valid": residual in RESIDUES,
                 "candidates": candidates,
             }
         )
@@ -526,6 +824,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
             )
         },
         "valve_transactions": _valve_transaction_summary(bursts),
+        "htv145_transactions": _htv145_transaction_summary(clean_events),
         "compact_associations": compact_associations,
     }
 
@@ -555,7 +854,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--section",
-        choices=("valve_transactions", "compact_associations"),
+        choices=(
+            "valve_transactions",
+            "htv145_transactions",
+            "compact_associations",
+        ),
         help="emit only one detailed analysis section",
     )
     parser.add_argument("--pretty", action="store_true")
@@ -573,6 +876,7 @@ def main() -> int:
     result = analyze(events)
     if args.summary:
         result["valve_transactions"].pop("commands", None)
+        result["htv145_transactions"].pop("commands", None)
     if args.section:
         result = {args.section: result[args.section]}
     json.dump(result, sys.stdout, indent=2 if args.pretty else None)

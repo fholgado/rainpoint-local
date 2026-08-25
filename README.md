@@ -6,11 +6,14 @@ vendor cloud, pairs and recovers supported soil sensors through custom radio
 nodes, and preserves Home Assistant identity while a user migrates from the
 stock RainPoint gateway.
 
-Valve control is deliberately disabled until pairing, close commands, and the
-independent safety controller have passed physical validation. An internal,
-explicitly armed HTV405 enrollment candidate is available for isolated bench
-validation; it is not exposed in the Home Assistant UI or enabled on deployed
-radio nodes yet.
+Supervised HTV405 control is available as a disabled-by-default beta. Local
+enrollment, isolated one- and two-minute opens on all four zones, and Zone 1
+early stop have passed physical validation, including direct valve responses,
+automatic stop, and controller-counter progression. The gateway and HA expose
+1--60 whole-minute bounded runs; durations longer than two minutes remain a
+field-acceptance gate. Enabling the beta adds four HA valve entities and four
+duration controls, and requires compatible supervised firmware on the valve's
+assigned radio node.
 
 ## What works today
 
@@ -48,23 +51,46 @@ device slots.
 - OTA images are size/SHA-256 checked, health-confirmed after reboot, and use a
   three-unconfirmed-boot rollback policy.
 
-### Valve telemetry and safety groundwork
+### Valve telemetry and supervised control
 
-- Reconstruct the captured 18-step HTV405 enrollment transcript as a bounded,
-  association-specific candidate with 17 replies and no watering commands.
+- Locally enroll the isolated HTV405 through a bounded, association-specific
+  transcript without the stock RainPoint gateway.
+- Open every HTV405 zone for physically validated one- and two-minute runs and
+  early-close the confirmed active Zone 1 on the enrolled selector-2 carrier,
+  accepting state only from the valve's authenticated response or later
+  telemetry.
+- Configure the next run independently for each zone from 1--60 whole minutes;
+  longer encodings are regression-tested while installed field acceptance is
+  still pending.
+- Track the independent controller command counter from matching valve replies;
+  routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,
   last-session duration, and water usage.
+- Separate HTV145 command and telemetry counters, model a stock command as one
+  logical operation with a bounded burst of identical RF attempts, and persist
+  an at-most-once candidate reservation across gateway restarts.
+- Run the isolated HTV145 one-shot acceptance harness through a separate,
+  disabled-by-default research gate; it is token-protected and intentionally
+  absent from the Home Assistant entity/control model. Its first correct-
+  channel transmission was independently received but the already-low-battery
+  valve remained silent, so fresh-battery physical acceptance is still open.
 - Correlate local RF valve events with Home Assistant/cloud observations.
-- Exercise a hardware-independent fail-closed controller for startup state,
-  open acknowledgement, client loss, run deadlines, watchdog expiry, close
-  retries, and persistent faults.
+- Exercise a hardware-independent duration-bounded controller: startup and
+  client loss are observation-only, missing acknowledgements block further
+  commands, explicit early-stop can retry, and only a positively observed
+  overdue run can trigger an anomaly close.
 
-The physical valve-control boundary still rejects all requests.
+The gateway/HA valve-control boundary rejects all requests unless the explicit
+`supervised_htv405_control` option is enabled. Even then, it requires an
+authenticated candidate node, a complete durable association, an
+evidence-synchronized command counter, and no command already pending.
+The HTV145 transmitter implementation is compiled out of standard firmware and
+remains undeployed pending supervised acceptance with the isolated dry valve.
 
 ## Architecture
 
 ```text
-HCS02x sensors / HTV145 valve
+HCS02x sensors / HTV405 and HTV145 valves
               |
            433 MHz
               |
@@ -189,6 +215,8 @@ records and protocol/product evidence, not those names or endpoints.
 - [research/FOUR_ZONE_VALVE_TEST_PLAN.md](research/FOUR_ZONE_VALVE_TEST_PLAN.md)
   — receive-only enrollment and crossed zone/duration capture sequence for the
   isolated four-zone test valve.
+- [research/VALVE_PROTOCOL_STATUS.md](research/VALVE_PROTOCOL_STATUS.md) —
+  concise confirmed-versus-pending evidence ledger for both valve families.
 
 Cloud-specific investigation is isolated under `research/cloud` and is not a
 runtime dependency.
@@ -198,14 +226,35 @@ runtime dependency.
 - Accumulate a multi-day unattended sensor reliability baseline and perform a
   controlled ACK-owner reassignment.
 - Improve final radio-node placement where Wi-Fi or RF margins are weak.
-- Add encrypted node sessions, credential rotation, and asymmetric OTA release
-  signatures before treating the trusted-LAN prototype as publishable.
-- Physically validate the HTV405 enrollment candidate on the isolated test
-  valve, then generalize it from another association if the evidence differs.
-- Capture and validate close, status, and bounded open behavior on isolated
-  test hardware.
-- Only then connect physical valve commands to the safety controller and begin
-  cloud-to-local migration work with the existing HomGar integration.
+- Add encrypted node sessions, per-node credential rotation, replay protection,
+  and asymmetric OTA release signatures before treating the trusted-LAN
+  prototype as publishable.
+- Complete the installed HTV405 Zone 1 longer-duration field run and retain its
+  authenticated response, active report, valve-owned automatic stop, usage,
+  Home Assistant completion notification, and watchdog outcome.
+- Physically verify observation-only recovery after gateway and radio-node
+  restarts; the association profile, authenticated controller counter, and
+  expected completion of an active bounded run are stored separately from
+  lower-channel telemetry.
+- Physically exercise explicit local early-stop on Zones 2--4, late-response
+  recovery, and positively observed overdue-run anomaly close while preserving
+  the enforced 15-second hardware command interval.
+- Physically accept the separate HTV145 long-wake path: explicit association
+  residue, one bounded three-attempt burst, immediate-response/state-report
+  fallback, durable command counter, restart without replay, and valve-owned
+  automatic stop. Correct channel-11 transmission is captured; repeat with
+  fresh valve batteries to establish valve acceptance.
+- Validate retained association and authenticated controller-counter recovery
+  across a battery change, and capture an independently known low-battery RF
+  transition before exposing valve battery state.
+- Generalize the local association/control evidence with another valve before
+  beginning cloud-to-local migration work with the existing HomGar integration.
+- Physically validate the staged, durably persisted custom RF controller
+  identity with a disposable sensor, then prove stock/custom device-cohort
+  coexistence before exposing the generalized Home Assistant valve pairing
+  flow. Existing assignments retain their original controller identity; the
+  `39840280` companion route remains retained-association evidence rather than
+  the default for a new local enrollment.
 
 Start and finish the sensor reliability gate with persisted snapshots rather
 than screenshots:
@@ -228,8 +277,14 @@ evidence under the ignored `captures/` directory.
 
 ## Safety
 
-RainPoint Local currently receives valve telemetry but cannot operate a valve.
-Future control must always enforce bounded duration, explicit target identity,
-positive acknowledgement, fail-closed startup, independent watchdog timing,
-close retries, and persistent fault reporting. Never test unknown RF commands
-against an installed irrigation zone without isolation and a ready manual stop.
+RainPoint Local remains receive-only by default. The supervised HTV405 beta
+enforces bounded duration, explicit target identity, authenticated node state,
+durable at-most-once command reservations, and valve-originated confirmation.
+Restart, client loss, and missing telemetry do not generate RF traffic, and a
+failed or ambiguous command does not trigger an immediate retry. A timed-out
+bounded HTV405 open can retain only the same and next counter as candidates for
+a later explicit request, after the entire possible run plus a guard interval;
+unexpected watering or an explicit transport/response failure cancels that
+path. Never
+test unknown RF commands against an installed irrigation zone without
+isolation and a ready manual stop.

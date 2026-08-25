@@ -1,0 +1,60 @@
+{
+  "captured_at": "2026-08-23",
+  "model": "HTV405FRF",
+  "scope": "isolated dry-bench local-gateway control",
+  "firmware_version": "0.14.0-valve-control-probe.39",
+  "node_id": "rp-cc4c05f57630",
+  "association": {
+    "controller_endpoint": "b9840280",
+    "valve_endpoint": "94a98013",
+    "companion_endpoint": "39840280",
+    "selector": 5,
+    "control_center_hz": 433518527
+  },
+  "safety": {
+    "valve_connected_to_water": false,
+    "duration_seconds": 60,
+    "minimum_inter_command_seconds": 15,
+    "acceptance_rule": "authenticated high-carrier response plus matching lower-carrier active report",
+    "completion_rule": "lower-carrier idle report after the bounded run"
+  },
+  "trials": [
+    {
+      "zone": 2,
+      "command_sequence": 14,
+      "command_frame": "79f4882f2894a98013398402808e90828082009e0000000000000000000000000000000030da",
+      "response_frame": "79f4882f28b984028094a980130ed0868020cf80000000409e00569e000000000000000010a4",
+      "active_report": "79f4882f28b984028094a980131a8107820580a0cf80000000409e00569e0000000000000d22",
+      "phase_only_report": "79f4882f28b984028094a980131c8107820700a0cf80000000408800569e0000000000006700",
+      "idle_report": "79f4882f28b984028094a980131d0107820580804f8000000040800056800000000000000045",
+      "result": "authenticated response, Zone 2 state, and automatic idle confirmed"
+    },
+    {
+      "zone": 3,
+      "command_sequence": 15,
+      "command_frame": "79f4882f2894a98013398402808f90828083009e000000000000000000000000000000008bce",
+      "response_frame": "79f4882f28b984028094a980130fd0868030cf80000000409e00569e000000000000000045f2",
+      "active_report": "79f4882f28b984028094a98013040107820580b0cf80000000409b80569e0000000000003a32",
+      "phase_only_report": "79f4882f28b984028094a98013060107820700b0cf80000000408700569e000000000000777e",
+      "idle_report": "79f4882f28b984028094a98013068107820580804f8000000040800056800000000000003d80",
+      "result": "authenticated response, Zone 3 state, and automatic idle confirmed"
+    },
+    {
+      "zone": 4,
+      "command_sequence": 16,
+      "command_frame": "79f4882f2894a98013398402809090828084009e00000000000000000000000000000000b28c",
+      "response_frame": "79f4882f28b984028094a9801310d0868040cf80000000409e00569e00000000000000005f2c",
+      "active_report": "79f4882f28b984028094a98013088107820580c0cf80000000409b00569e0000000000007134",
+      "phase_only_report": "79f4882f28b984028094a980130a8107820700c0cf80000000408700569e0000000000000bda",
+      "idle_report": "79f4882f28b984028094a980130b0107820580804f8000000040800056800000000000007e28",
+      "result": "authenticated response, Zone 4 state, and automatic idle confirmed"
+    }
+  ],
+  "findings": [
+    "The gateway command port selector is byte 17 = 0x80 | zone.",
+    "The authenticated response reports the accepted port as byte 17 = zone << 4.",
+    "Locally enrolled state reports carry the one-based active port in byte 19 bits 4-6.",
+    "Selector-0x07 reports preserve link phase but do not carry authoritative zone state.",
+    "Locally enrolled idle reports clear the port nibble; the stateful decoder must clear all mutually exclusive zones rather than infer Zone 1."
+  ]
+}

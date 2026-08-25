@@ -148,6 +148,20 @@ low (`10%`). Its `STA_RSSI` value is receiver-measured at the hub. These facts
 refine the RF experiments but do not imply that either cloud TLV appears
 unchanged in every over-the-air report.
 
+Four exact cloud/local observations on 2026-08-24 matched the installed soil
+sensors within one second. Moisture and categorical battery agreed in every
+pair, while local receiver RSSI differed from stock-gateway RSSI as expected.
+The app addresses 2--5 did not map to normalized RF offset 15, so migration
+must not infer cloud address from that byte. The redacted observations are in
+`../fixtures/hcs026_cloud_rf_correlation_20260824.json`.
+
+The retained RF journal also contains 1,346 trailer-valid moisture relay
+reports on the original HTV145 controller route. Of those, 775 occurred within
+two seconds of an identified Right Bed report and all 775 carried the same
+value. This is strong evidence for the cloud model's Associated Controller
+behavior, but the relay envelope lacks the sensor endpoint; the local decoder
+retains the value as unassigned instead of risking a cross-device update.
+
 ### Four-zone valve family clue
 
 The catalog describes `HTV405FRF` as product code `38`, model code `38`, and a
@@ -165,6 +179,70 @@ four-port RF valve models, including `HTV0542FRF` and `HTV445FRF`, also use
 product code 38 with different model codes. Product code 38 should therefore
 be tested as a four-zone functional-family identifier, not treated as an exact
 model name.
+
+A subsequent dry-bench cloud-control matrix opened and stopped all four ports
+through the stock gateway. The retained application payloads confirmed the
+catalog mapping directly: work-state DP IDs 25--28 and session-duration DP IDs
+37--40 each changed only for the commanded port. Active state decoded as 33;
+the first stopped update decoded as 32 and retained the requested 60-second
+duration; a later idle refresh decoded as 0 and cleared it. Shared battery DP
+24 stayed at 100 percent, while RSSI DP 23 varied from -20 to -30 dBm. The
+cloud values and independently observed RF command/state pairs are frozen in
+`../fixtures/htv405_stock_cloud_control_matrix_20260824.json`.
+
+A separate 60-second matrix allowed all four zones to expire with no explicit
+close. Every zone emitted independently decoded active and idle RF reports,
+with idle arriving 60.947--61.645 seconds after cloud acceptance. The Zone 1
+and Zone 4 cloud idle updates followed their RF idle reports by 113 and 111
+milliseconds, respectively. This confirms that the physical valve owns its
+duration even if HA, the network, or the custom gateway disappears. The
+timelines are retained in
+`../fixtures/htv405_stock_auto_stop_20260824.json`.
+
+Explicit early-stop was then crossed independently on Zones 2--4. Each close
+was followed by a valve-originated idle RF report 5.780--6.082 seconds after
+cloud acceptance. Direct high-carrier captures on Zones 3 and 4 showed that
+open and close reused the same transaction sequence within each session
+(`0x0a`, then `0x0b` for the following session). Earlier authenticated-response
+captures showed the other branch: a confirmed open advanced close to the next
+sequence, while a confirmed close did not consume another sequence. Together
+they show one advancement per watering session at its first authenticated
+response, not one advancement per command. Exact commands and timelines are
+in `../fixtures/htv405_stock_early_stop_20260824.json`.
+
+For the original HTV145FRF, four exact cloud/RF correlations exposed a
+categorical low-battery flag at RF offset 17 bit `0x08`. They also showed that
+offset 23 bit `0x80` restores a missing high data bit in the packed last-usage
+field; correcting it changes the correlated 93.1 L and 81.9 L observations
+from the former underreported 67.5 L and 56.3 L. The evidence is retained in
+`../fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`.
+
+### Address allocation and replacement behavior
+
+The tested stock installation initially occupied app addresses 1--6. After
+the former address-6 accessory was deleted, the newly enrolled HTV405FRF was
+assigned address 6 rather than 7. Addresses therefore appear sequential for
+an empty gateway, but they are reusable slots rather than a permanently
+increasing identity.
+
+This exposed a replacement edge case in the observed cloud integration. Its
+Home Assistant identity is derived from the hub and address, so the new valve
+initially inherited the deleted sensor's address-6 device/entity identity.
+Reloading the integration created the valve-zone entities and refreshed model
+metadata, but some surviving entity IDs still contained the old sensor model
+and its obsolete soil-moisture entity remained unavailable. A future combined
+cloud/local integration must include product family or a stable device ID when
+reconciling replacements at a reused address; `(hub, address)` alone is not a
+durable physical-device identity.
+
+Two app/RF correlations on 2026-08-24 exposed an additional identity rule.
+The RainPoint app's device IDs are 32-bit values whose upper byte matched the
+catalogued product code in both tested families: the Left Bed HCS026FRF ID
+begins with product code `0x48`, and the HTV405FRF ID begins with product code
+`0x26` (decimal 38). Installation-specific lower 24-bit values are redacted;
+they did not directly identify the devices' observed RF endpoints. This is
+useful migration metadata and a two-family hypothesis, not yet a universal
+identifier rule.
 
 Source snapshot:
 <https://github.com/brettmeyerowitz/homeassistant-homgar/blob/main/custom_components/homgar/data/product_models.json>

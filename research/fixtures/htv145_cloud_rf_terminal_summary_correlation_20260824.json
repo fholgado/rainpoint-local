@@ -1,0 +1,79 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV145FRF",
+  "scope": "stock-cloud idle payloads correlated to trailer-valid original-valve terminal summary responses",
+  "association": {
+    "controller_endpoint": "b42d008f",
+    "valve_endpoint": "b9840280"
+  },
+  "observations": [
+    {
+      "cloud_observed_at": "2026-08-17T22:14:41.823912+00:00",
+      "cloud_payload": "10#E1B500DC01D80020B700000000AD00009F27040000FF0FA923231A",
+      "rf_event_id": 73153,
+      "rf_observed_at": "2026-08-17T22:15:01.185945+00:00",
+      "rf_frame": "79f4882f28b9840280b42d008f818207858080fd5e110d08938200002c010000000000001c7e",
+      "expected": {
+        "duration_seconds": 600,
+        "is_watering": false,
+        "last_usage_liters": 106.3
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-19T17:23:53.690444+00:00",
+      "cloud_payload": "10#E1A600DC01D80020B700000000AD00009FA3030000FF0FF5D5261A",
+      "rf_event_id": 96809,
+      "rf_observed_at": "2026-08-19T17:24:12.323903+00:00",
+      "rf_frame": "79f4882f28b9840280b42d008f908207858080d0e1930d08d18180002c0100000000000063b1",
+      "expected": {
+        "duration_seconds": 600,
+        "is_watering": false,
+        "last_usage_liters": 93.1
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-22T12:49:59.232318+00:00",
+      "cloud_payload": "10#E1AC00DC02D80020B700000000AD00009F0E040000FF0F7B8C2C1A",
+      "rf_event_id": 128946,
+      "rf_observed_at": "2026-08-22T12:50:21.750736+00:00",
+      "rf_frame": "79f4882f28b9840280b42d008f948207858080cd3d950d08870200002c0100000000000039e2",
+      "expected": {
+        "duration_seconds": 600,
+        "is_watering": false,
+        "last_usage_liters": 103.8
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-24T13:12:30.320798+00:00",
+      "cloud_payload": "10#E1AD00DC02D80020B700000000AD00009F33030000FF0F1E93301A",
+      "rf_event_id": 155278,
+      "rf_observed_at": "2026-08-24T13:13:01.849899+00:00",
+      "rf_frame": "79f4882f28b9840280b42d008f998207858080d33b180d08998180002c010000000000000792",
+      "expected": {
+        "duration_seconds": 600,
+        "is_watering": false,
+        "last_usage_liters": 81.9
+      }
+    },
+    {
+      "cloud_report_time_local": "2026-08-24T12:33:23",
+      "cloud_payload": "10#E1AD00DC02D80020B700000000AD00009F21040000FF0F57C8301A",
+      "rf_event_id": 157130,
+      "rf_observed_at": "2026-08-24T16:33:31.867721+00:00",
+      "rf_frame": "79f4882f28b9840280b42d008f9e8207858080ea62980d10908200002c01000000000000421f",
+      "expected": {
+        "duration_seconds": 600,
+        "is_watering": false,
+        "last_usage_liters": 105.7
+      }
+    }
+  ],
+  "findings": [
+    "The valve-to-controller terminal summary family has bytes 14-18 equal to 82 07 85 80 80.",
+    "Bytes 24-26 use the same packed half-value, odd-tenths, and extension-bit representation as the marker-based usage report.",
+    "Bytes 28-29 repeat the duration in two-second units; 2c 01 is 600 seconds in every retained observation here.",
+    "All five exact cloud correlations report idle, so this family is a valve-originated closure/status confirmation rather than command intent.",
+    "The stable bytes in this family do not distinguish independently cloud-labeled full and low battery states, so it must not publish battery state.",
+    "Byte 23 was 08 in four observations and 10 in the latest observation; its meaning remains unresolved."
+  ]
+}

@@ -281,6 +281,30 @@ class ESP32SerialTransport:
                 ),
             )
             return 0
+        if message_type == "valve_control_probe":
+            # Research-only status is never an actuator request. Accept
+            # durable controller state only from an authenticated network
+            # node; the gateway performs an independent frame/profile check.
+            if authenticated_node_id is None:
+                return 0
+            status = message.get("state")
+            if isinstance(status, str):
+                self.gateway.update_node(
+                    authenticated_node_id,
+                    valve_control_probe_state=status,
+                    valve_control_probe_configured=(
+                        message.get("configured") is True
+                    ),
+                    valve_control_probe_counter_authenticated=(
+                        message.get("command_counter_valid") is True
+                        and message.get("command_phase_source")
+                        == "authenticated_valve_response"
+                    ),
+                )
+            self.gateway.observe_valve_control_probe(
+                authenticated_node_id, message
+            )
+            return 0
         if message_type != "rainpoint_rf":
             return 0
         frame_hex = message.get("frame")

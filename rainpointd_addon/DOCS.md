@@ -5,13 +5,21 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.31.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.1 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
 `hcs026_auto_v1`; automatic identity adoption and known-sensor recovery have
 completed physical end-to-end validation across independent identities.
-Valve-control POST requests remain rejected.
+The staged coexistence release persists one custom RF controller identity for
+the local gateway and supplies it to every radio node. Existing associations
+retain the identity under which they were paired. A node must advertise
+`configurable_rf_controller_identity` before it may pair or acknowledge a
+custom-identity device; older nodes remain usable for retained stock-identity
+associations. Physical custom-identity enrollment remains a release gate.
+HTV405 valve-control POST requests remain rejected unless the explicit
+`supervised_htv405_control` beta option is enabled and the selected
+association-specific radio node advertises its candidate control capability.
 
 The generalized HCS026 workflow completed isolated local enrollment on both
 test sensors and on installed bed sensors using generated replies, terminal
@@ -107,12 +115,13 @@ Firmware 0.5 and later add a bounded 30-second diagnostic heartbeat with uptime,
 reason, heap pressure, internal temperature, maximum loop gap, Wi-Fi address
 and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
-device. The combined `0.14.0-combined.1` firmware includes receive, generalized sensor
-pairing, bounded routine acknowledgements, managed OTA updates, and an internal
-bounded HTV405 enrollment candidate in one build. The valve candidate is not
-exposed through the normal Home Assistant pairing UI and contains no
-valve-control commands. It also answers the captured paired-state recovery
-sequence only for sensors already assigned to the node as ACK owner.
+device. The current unified firmware includes receive, generalized sensor
+pairing, bounded routine acknowledgements, managed OTA updates, and the bounded
+HTV405 enrollment implementation in one source tree. A compatible supervised
+build advertises association and control capabilities to the gateway; Home
+Assistant exposes them only while the explicit HTV405 beta option is enabled.
+The same firmware answers the captured paired-state recovery sequence only for
+sensors already assigned to the node as ACK owner.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
 500 ms broad-scan cadence cannot repeatedly alias with a sensor's retry burst.
 Known factory identities may enter a bounded automatic rejoin through their
@@ -132,12 +141,12 @@ the custom local gateway.
 This configuration is intended for trusted-LAN hardware testing. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway
 before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2
-firmware advertises `rx`, `sensor_pairing_tx`, and, beginning with firmware
-0.6, the non-RF `identify` capability; no generic or valve TX capability
-exists. The app sends a
-time-limited pairing command only after an authenticated Home Assistant request
-selects that node. Its state, command ID, completed reply count, and armed state
-appear in `/api/v1/nodes`.
+firmware advertises `rx`, `sensor_pairing_tx`, routine-acknowledgement, and the
+non-RF `identify` capability. Supervised builds additionally advertise narrowly
+scoped HTV405 pairing/control capabilities; there is no generic RF-transmit
+API. The app sends a time-limited pairing or valve command only after an
+authenticated Home Assistant request selects the assigned node. Its state,
+command ID, completed reply count, and armed state appear in `/api/v1/nodes`.
 
 ### Event retention
 
@@ -192,9 +201,43 @@ The app exposes its local device and pairing API on TCP port 8787. Configure the
 - Host: the IP address of the Home Assistant host
 - Port: `8787`
 
-The supported transports currently create confirmed
-HCS026FRF soil-moisture entities and a receive-only HTV145 valve device with
-confirmed watering state, requested duration, and last-session water usage.
+The supported transports currently create confirmed HCS026FRF soil-moisture
+entities, a receive-only HTV145 valve device, and an association-backed HTV405
+four-zone device. HTV405 exposes one bounded-duration control and one duration
+setting per zone only when supervised control is explicitly enabled; state is
+accepted only from authenticated responses or subsequent valve telemetry.
+HTV405 enrollment completes when a trailer-valid paired-link report for the
+expected endpoint is observed after the selected node transmits at least one
+session-scoped reply. The retained 18-row stock exchange describes later
+initialization traffic but is not a required minimum: physical acceptance and
+control have been validated from shorter exchanges. Trailer-invalid frames
+cannot create valve links, and phase-only reports advance reception/phase
+diagnostics without erasing the latest definitive watering state.
+If an authenticated response times out, the app retains only the two smallest
+plausible counter candidates. A later explicit open may use a candidate only
+after the full requested duration plus a 15-second guard has elapsed; it never
+replays the timed-out command immediately. Unexpected watering or any explicit
+node/response failure cancels this recovery path.
+The gateway also applies its own response deadline. If a radio node never
+returns a usable terminal status, routine device polling fails the exact
+durable reservation and enters the same bounded recovery policy rather than
+leaving control stuck pending.
+The selected HTV405 RF egress node is routing metadata, not part of the valve's
+controller identity. It may be moved to another connected, capable node while
+idle; doing so preserves the association parameters but deliberately clears the
+command counter until it is synchronized again.
+HTV145 exposes confirmed watering state, requested duration, and last-session
+water usage but remains receive-only.
+The temporary `htv145_dry_acceptance` option is a research-only physical-test
+gate, not a Home Assistant actuator path. When explicitly enabled it adds a
+token-protected one-shot endpoint for an isolated, unpressurized HTV145 valve.
+The runner requires fresh valve-originated idle evidence, a retained passive
+stock command for counter synchronization, and at least ten minutes without
+stock-controller RF before it can transmit one bounded open. It also requires
+a confirmed non-low valve battery report, derives channel 0 or 11 from the
+confirmed command rather than a frequency default, and will not reuse evidence
+that predates an earlier local attempt. Leave the option disabled outside a
+supervised acceptance session.
 Valid RainPoint frames that do not match the confirmed layouts are retained as
 `rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
 remain research work.
@@ -237,11 +280,11 @@ completes physical migration validation.
 
 ## Safety
 
-This release has no cloud transport, valve control entity, valve command API,
-or valve frame in its network vocabulary. Its sole RF mutation is the
-evidence-backed, time-limited `hcs026_auto_v1` enrollment operation on a
-user-selected authenticated node.
-It starts disarmed, cancels on coordinator loss, and requires terminal RF
-confirmation. USB access is used only by `rtl_433` or the serial bridge. The
-read-only share mapping supports an optional external device catalog and cannot
-be used to write raw captures.
+This release has no cloud transport and remains receive-only by default. When
+`supervised_htv405_control` is explicitly enabled, the API accepts only
+token-authenticated, association-specific, duration-bounded HTV405 operations.
+Each command is reserved durably before RF dispatch and HA state changes only
+after a matching valve response or accepted state report. Restart, missing
+telemetry, and client loss never emit a speculative command. USB access is used
+only by `rtl_433` or the serial bridge. The read-only share mapping supports an
+optional external device catalog and cannot be used to write raw captures.

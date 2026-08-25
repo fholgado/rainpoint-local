@@ -32,6 +32,12 @@ from rainpointd.valve_pairing_protocol import (  # noqa: E402
     request_matches,
 )
 from tools.demod_rainpoint_reply_iq import demodulate  # noqa: E402
+from tools.analyze_htv405_pairing_iq import (  # noqa: E402
+    DEFAULT_ASSIGNMENT_CENTER_HZ,
+    DEFAULT_REQUEST_CENTER_HZ,
+    DEFAULT_ROUTINE_CENTER_HZ,
+    analyze_pairing_capture,
+)
 from tools.generate_rainpoint_iq import generate_command  # noqa: E402
 
 
@@ -157,6 +163,60 @@ class HCS026PairingProtocolTest(unittest.TestCase):
                     self.assertEqual(
                         step.frame.hex(), recovered["matches"][0]["frame_hex"]
                     )
+
+    def test_htv405_iq_analyzer_correlates_assignment_acceptance(self) -> None:
+        factory_request = bytes.fromhex(
+            "79f4882f288000000014a9801300808402ff93130000bd8480"
+            "00000000000000000000004795"
+        )
+        local_assignment = bytes.fromhex(
+            "79f4882f2894a980133984028080c0858503027000cfa9970d"
+            "01008000000000000000006942"
+        )
+        paired_request = bytes.fromhex(
+            "79f4882f28b984028094a98013028107822580804f80000000"
+            "40800056800000000000005127"
+        )
+        request_iq, _ = generate_command(
+            factory_request,
+            wake_symbols=320,
+            channel_center_hz=DEFAULT_REQUEST_CENTER_HZ,
+            leading_silence_ms=5,
+            trailing_silence_ms=50,
+        )
+        assignment_iq, _ = generate_command(
+            local_assignment,
+            wake_symbols=320,
+            channel_center_hz=DEFAULT_ASSIGNMENT_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=500,
+        )
+        paired_iq, _ = generate_command(
+            paired_request,
+            wake_symbols=320,
+            channel_center_hz=DEFAULT_ROUTINE_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=5,
+        )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(request_iq + assignment_iq + paired_iq)
+            capture.flush()
+            result = analyze_pairing_capture(
+                Path(capture.name),
+                factory_endpoint=bytes.fromhex("14a98013"),
+                paired_endpoint=bytes.fromhex("94a98013"),
+                companion_endpoint=bytes.fromhex("39840280"),
+                controller_endpoint=bytes.fromhex("b9840280"),
+            )
+
+        self.assertEqual(1, result["factory_request_count"])
+        self.assertEqual(1, result["assignment_count"])
+        self.assertEqual(1, len(result["trials"]))
+        trial = result["trials"][0]
+        self.assertEqual(50.0, trial["request_end_to_assignment_start_ms"])
+        self.assertTrue(
+            trial["paired_link_observed_before_next_factory_request"]
+        )
 
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:
         controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
@@ -425,10 +485,20 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
                 valve_route="00000000",
                 companion_endpoint="39840280",
             )
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            build_htv405_profile(
+                factory_endpoint="14a98013",
+                valve_route="c1234580",
+                companion_endpoint="39840280",
+            )
         metadata = automatic_htv405_profile_metadata()
         self.assertTrue(metadata["experimental"])
         self.assertTrue(metadata["transmit_enabled"])
         self.assertFalse(metadata["valve_control_enabled"])
+        self.assertEqual(["factory_endpoint"], metadata["association_inputs_required"])
+        self.assertEqual(
+            "persistent_local_gateway", metadata["controller_identity_default"]
+        )
         self.assertEqual(18, metadata["step_count"])
 
     def test_valve_clock_keeps_the_captured_marker_bits(self) -> None:

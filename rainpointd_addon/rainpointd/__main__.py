@@ -81,6 +81,16 @@ def main() -> int:
         default=8787,
         help="LAN port nodes use to download verified local artifacts",
     )
+    parser.add_argument(
+        "--enable-supervised-htv405-control",
+        action="store_true",
+        help="enable authenticated, duration-bounded HTV405 beta control",
+    )
+    parser.add_argument(
+        "--enable-htv145-dry-acceptance",
+        action="store_true",
+        help="enable the isolated, one-shot HTV145 physical acceptance harness",
+    )
     args = parser.parse_args()
 
     catalog = (
@@ -105,6 +115,8 @@ def main() -> int:
         catalog=catalog,
         firmware_catalog=FirmwareCatalog.load(args.firmware_catalog),
         firmware_public_port=args.firmware_public_port,
+        valve_control_enabled=args.enable_supervised_htv405_control,
+        htv145_acceptance_enabled=args.enable_htv145_dry_acceptance,
     )
     if args.transport == "rtl433":
         transport = RTL433Transport(
@@ -133,6 +145,9 @@ def main() -> int:
             host=args.node_listen_host,
             port=args.node_listen_port,
             node_tokens=load_node_tokens(os.environ.get("RAINPOINT_NODE_TOKENS")),
+            htv145_candidate_observer=(
+                gateway.observe_htv145_acceptance_candidate
+            ),
         )
         node_server.start()
         print(

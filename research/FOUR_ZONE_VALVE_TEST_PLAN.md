@@ -1,8 +1,8 @@
 # Four-zone valve evidence plan
 
-This plan prepares the isolated, unpressurized four-zone test valve for passive
-protocol discovery. It does not authorize local RF transmission or connect a
-command builder to the production firmware.
+This plan records the evidence gates used for the isolated, unpressurized
+four-zone test valve. Active trials remain confined to explicitly gated
+research firmware; no command builder is connected to production firmware.
 
 ## Before powering the valve
 
@@ -95,8 +95,57 @@ chassis identity with a zone selector from independent zone identities.
 
 ## Gate after offline analysis
 
-Local RF work remains receive-only until endpoint identities, zone selection,
-close behavior, acknowledgements, and the trailer variant are supported by
-captured evidence. The first active test is an idempotent close on dry hardware.
-A bounded open test comes only after that close passes and the independent
-node-local watchdog is armed.
+The receive-only gate ended after endpoint identities, Zone 1 command
+selection, acknowledgement, and duration-bounded open/close behavior were
+validated on dry hardware. Zones 2--4 subsequently passed one-minute dry-bench
+opens with an authenticated port-specific response, matching lower state
+report, and automatic idle report. Exact evidence lives in
+`research/fixtures/htv405_local_multizone_control_20260823.json`.
+
+Further active work remains research-only. New commands must carry an absolute
+local duration limit; startup and missing telemetry are observation-only, and
+automatic anomaly close requires positive evidence that watering continued
+beyond the expected completion plus grace period.
+
+## Remaining power-cycle and battery validation
+
+Machine classification of the 11 retained lifecycle attempts found three
+retained-association rejoins, two assignment-followed-by-paired-traffic cases,
+two assignment-only failures, two cold-boot sweep-only cases, one explicit
+sweep-only failure, and one invalid-methodology attempt. Only the controlled
+20:17 capture proves acceptance of a new assignment. Re-run the classifier with
+`python3 tools/valve_trial_analysis.py htv405-lifecycle
+research/fixtures/htv405_pairing_cross_reference_20260820.json`.
+
+- Verify that a locally paired HTV405FRF retains its association across a
+  battery removal, rejoins the same custom controller without opening a new
+  pairing window, and resumes authenticated idle/control reports. Distinguish
+  a retained-association rejoin from a new 18-step enrollment by endpoint,
+  counter, and frame sequence; a boot sweep or white flash alone is not proof
+  of new enrollment.
+- The one-reply retained-rejoin hypothesis transmitted successfully but did
+  not restore paired traffic and must not be treated as a successful rejoin.
+  The next bounded candidate accepts the battery-boot `0x7f` announcement only
+  as an alternate first trigger, then uses the unchanged 18-step request
+  matcher, replies, advancement rules, timing, and counter resynchronization.
+  Normal `0xff` long-press enrollment remains isolated from that mode. Report
+  success only after 18/18 steps and a command-scoped paired HTV405 frame; a
+  transmitted reply, boot sweep, or white flash is not terminal evidence.
+- The `0x7f`-triggered full-transcript trial also failed on 2026-08-24. Probe
+  `.41` received the cold-boot sweep and transmitted the unchanged assignment,
+  but stopped at 1/18 because the valve never emitted a paired-endpoint
+  continuation. The session was explicitly disarmed and no success was
+  recorded. See
+  `research/fixtures/htv405_battery_rejoin_full_exchange_20260824.json`.
+- Do not make another local rejoin protocol change until a controlled stock
+  gateway battery-rejoin capture establishes the actual reply count, carrier,
+  timing, payloads, identity transition, and terminal behavior.
+- The fresh-battery boundary analysis ruled out ordinary paired startup,
+  selector-`0x07`, and known zone/countdown fields. A changing diagnostic
+  family was also ruled out because it changed again after watering with the
+  same fresh batteries. See
+  `research/fixtures/htv405_battery_transition_20260823.json`.
+- Decode and validate the remaining HTV405FRF battery-status field with a
+  safely controlled low-voltage test. Require the decoded state to agree with
+  the valve display/app before exposing it in Home Assistant; until then the
+  local battery entity must remain unavailable.

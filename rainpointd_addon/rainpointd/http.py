@@ -143,12 +143,24 @@ class RequestHandler(BaseHTTPRequestHandler):
         registry_path = parsed.path.startswith(f"{base}/registry/")
         device_path = parsed.path.startswith(f"{base}/devices/")
         device_forget_path = device_path and parsed.path.endswith("/forget")
+        valve_control_path = device_path and (
+            parsed.path.endswith("/valve/open")
+            or parsed.path.endswith("/valve/close")
+            or parsed.path.endswith("/valve/synchronize")
+            or parsed.path.endswith("/valve/node")
+        )
+        htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
+        htv145_acceptance_path = parsed.path.startswith(
+            htv145_acceptance_prefix
+        )
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
         node_path = parsed.path.startswith(f"{base}/nodes/")
         if (
             parsed.path == f"{base}/learning"
             or registry_path
             or device_forget_path
+            or valve_control_path
+            or htv145_acceptance_path
             or pairing_path
             or node_path
         ):
@@ -296,6 +308,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             if body.get("companion_endpoint") is not None
                             else None
                         ),
+                        known_rejoin=body.get("known_rejoin") is True,
                     )
                     self._json(201, result)
                     return
@@ -319,6 +332,97 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "transmit_performed": transmit_performed,
                         },
                     )
+                    return
+                if htv145_acceptance_path:
+                    action = parsed.path[len(htv145_acceptance_prefix) :]
+                    if action == "prepare":
+                        result = self.server.gateway.prepare_htv145_acceptance(
+                            node_id=str(body.get("node_id", "")),
+                            controller_endpoint=str(
+                                body.get("controller_endpoint", "")
+                            ),
+                            valve_endpoint=str(
+                                body.get("valve_endpoint", "")
+                            ),
+                            center_hz=int(body.get("center_hz", 0)),
+                            power_dbm=int(body.get("power_dbm", 0)),
+                            invert=body.get("invert", False),
+                            trailer_residual=int(
+                                body.get("trailer_residual", 0)
+                            ),
+                            idle_frame=str(body.get("idle_frame", "")),
+                            passive_command_frame=str(
+                                body.get("passive_command_frame", "")
+                            ),
+                            idle_observed_at=str(
+                                body.get("idle_observed_at", "")
+                            ),
+                            passive_command_observed_at=str(
+                                body.get("passive_command_observed_at", "")
+                            ),
+                        )
+                        self._json(200, result)
+                        return
+                    if action == "open":
+                        result = (
+                            self.server.gateway.start_htv145_acceptance_open(
+                                duration_seconds=int(
+                                    body.get("duration_seconds", 0)
+                                )
+                            )
+                        )
+                        self._json(202, result)
+                        return
+                    if action == "status":
+                        self._json(
+                            200,
+                            self.server.gateway.htv145_acceptance_status(),
+                        )
+                        return
+                    self._json(404, {"error": "not found"})
+                    return
+                if valve_control_path:
+                    device_prefix = f"{base}/devices/"
+                    device_suffix = parsed.path[len(device_prefix) :]
+                    device_id, separator, action = device_suffix.rpartition(
+                        "/valve/"
+                    )
+                    if not separator or action not in {
+                        "open",
+                        "close",
+                        "synchronize",
+                        "node",
+                    }:
+                        self._json(404, {"error": "not found"})
+                        return
+                    if action == "node":
+                        result = self.server.gateway.assign_htv405_control_node(
+                            device_id=device_id,
+                            node_id=str(body.get("node_id", "")),
+                        )
+                    elif action == "synchronize":
+                        result = (
+                            self.server.gateway.synchronize_htv405_control_counter(
+                                device_id=device_id,
+                                next_sequence=int(
+                                    body.get("next_sequence", -1)
+                                ),
+                                evidence_source=str(
+                                    body.get("evidence_source", "")
+                                ),
+                            )
+                        )
+                    else:
+                        duration = body.get("duration_seconds")
+                        result = self.server.gateway.request_htv405_control(
+                            device_id=device_id,
+                            action=action,
+                            zone=int(body.get("zone", 0)),
+                            duration_seconds=(
+                                int(duration) if duration is not None else None
+                            ),
+                        )
+                    self._json(202, {"control": result})
                     return
                 if parsed.path == f"{base}/registry/accept":
                     result = self.server.gateway.accept_endpoint(
@@ -390,6 +494,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             except KeyError as error:
                 self._json(404, {"error": f"not found: {error.args[0]}"})
+                return
+            except PermissionError as error:
+                self._json(403, {"error": str(error)})
                 return
             except (RuntimeError, TypeError, ValueError) as error:
                 self._json(400, {"error": str(error)})

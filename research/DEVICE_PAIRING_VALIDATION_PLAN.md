@@ -75,6 +75,58 @@ formerly stock-paired control sensor remains healthy. The result should decide
 whether coexistence needs gateway identity separation, reply arbitration, or a
 documented single-authority limitation.
 
+### Local RF controller identity and migration order
+
+Do not confuse the gateway's API/discovery ID with its RF controller identity.
+The former identifies one `rainpointd` instance to Home Assistant. The latter is
+the four-byte endpoint placed in pairing replies and valve commands.
+
+The currently deployed installation uses the observed RainPoint companion
+endpoint `39840280`; the corresponding command-response route is `b9840280`.
+That was useful for retained-association takeover, but it deliberately
+impersonates the stock RainPoint gateway and cannot be the default for a
+coexistence-capable release. The staged implementation now generates a distinct
+gateway-wide identity and parameterizes sensor pairing, sensor ACK/recovery,
+and valve pairing with it. The permitted generated-value space still needs one
+physical enrollment validation before deployment.
+
+Implementation and validation order is therefore fixed:
+
+1. **Implemented, pending deployment:** generate one random RF controller
+   identity per custom local gateway, store
+   it durably, include it in backup/restore and diagnostics, and never change it
+   on restart, OTA, or radio-node replacement. All radio nodes belonging to the
+   gateway share this identity; node selection only chooses the best physical
+   transmitter/ACK owner.
+2. **Implemented, pending deployment:** parameterize HCS026 and HTV405
+   pairing profiles plus HCS026 recovery/ACK so firmware receives the identity
+   from the authenticated gateway instead of embedding `39840280`. Older node
+   firmware may continue servicing retained stock-identity assignments, but is
+   explicitly rejected for a generated-identity enrollment or ownership.
+3. **Next physical gate:** validate a disposable sensor enrollment under the
+   generated identity with
+   the stock RainPoint gateway powered, then validate ordinary reports and
+   acknowledgements from both independently owned device cohorts.
+4. Make generated identity the default for new local enrollment. Retained
+   stock-identity takeover remains an explicit migration mode that requires the
+   stock gateway to be off and must warn that the same RF identity cannot safely
+   coexist.
+5. Expose valve pairing in Home Assistant only after the identity boundary is
+   stable, so early adopters are not forced to re-pair devices after an upgrade.
+
+Coexistence does not make one device simultaneously controllable by both RF
+gateways. During migration, the stock RainPoint gateway owns devices not yet
+migrated and the custom local gateway owns devices paired to its generated
+identity. Cloud data may supplement devices that remain stock-owned, but must
+not overwrite locally owned device state.
+
+The Home Assistant valve enrollment flow must require no endpoint entry. It
+should select a radio node by friendly name, detect the factory announcement,
+show exchange and terminal-verification progress, retain the HA device identity
+on re-enrollment, and create the valve only after command-scoped completion plus
+ordinary paired telemetry. HTV405 is the first supported valve family; HTV145
+pairing remains blocked until its local enrollment exchange is reproduced.
+
 ## HCS026 sensor: established evidence
 
 The following tests do not need to be repeated merely to demonstrate them
@@ -476,8 +528,9 @@ Before custom transmission:
   other counters participate in acceptance;
 - determine whether the test model has one transaction counter per chassis or
   per zone, and whether stop is zone-specific or global;
-- implement a fail-closed symbolic profile and offline waveform round-trip
-  tests with transmission disabled.
+- implement a duration-bounded symbolic profile and offline waveform round-trip
+  tests with transmission disabled; restart and missing telemetry must remain
+  observation-only.
 
 Exit criterion: replaying captured valve triggers through the symbolic state
 machine selects exactly the captured reply sequence and rejects truncated,
@@ -520,8 +573,10 @@ bounded watering tests as part of this sequence.
    identity.
 5. Confirm changing node placement does not change the HA valve device.
 
-The preferred node is not yet authorized to open the valve. Valve-control
-testing begins later with the separate close-first/watchdog plan.
+The preferred node is not authorized by enrollment alone. Valve-control testing
+uses the separate duration-bounded research gate: no startup transmission, no
+counter guessing after a missed response, and no automatic close without a
+fresh positively overdue watering report.
 
 ## Evidence record for every trial
 

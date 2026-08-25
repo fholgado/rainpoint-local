@@ -16,6 +16,7 @@ struct RadioPacket {
     std::int16_t rssiTenthsDbm = 0;
     std::int32_t frequencyOffsetHz = 0;
     std::uint8_t lqi = 0;
+    std::uint32_t receivedAtMicros = 0;
 };
 
 class Cc1101 {
@@ -26,6 +27,8 @@ public:
     bool enterIdle();
     bool enterReceive();
     bool setChannel(std::uint8_t channel);
+    bool setReceiveFrequency(std::uint32_t centerFrequencyHz);
+    bool restoreReceiveChannel(std::uint8_t channel);
     bool prepareTransmit();
     bool cacheTransmitFrequency(std::uint32_t centerFrequencyHz);
     bool transmitAsync(
@@ -34,7 +37,8 @@ public:
         std::uint16_t wakeSymbols,
         bool invert = false,
         std::uint8_t paTableValue = 0x60,
-        std::uint8_t deviationRegister = 0x45
+        std::uint8_t deviationRegister = 0x45,
+        std::uint32_t startAtMicros = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();

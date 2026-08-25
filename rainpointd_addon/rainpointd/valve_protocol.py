@@ -70,16 +70,17 @@ def decode_duration(encoded: bytes) -> int:
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     """Decode the passively validated HTV405 four-zone control body.
 
-    The layout is intentionally receive-only.  It is based on a crossed stock
-    gateway trial covering every zone at both 60 and 120 seconds.  No frame
-    construction is exposed until pairing, acknowledgement, and fail-safe
-    close behavior have been validated with the custom transmitter.
+    The layout is based on crossed stock-gateway and local-gateway trials. The
+    paired logical address occupies the low seven bits of byte 16; captures at
+    app addresses 2 and 6 carried 0x82 and 0x86 respectively.
     """
     if len(frame) != FRAME_BYTES:
         return None
+    logical_address = frame[16] & 0x7F
     if (
         frame[15] != 0x07
-        or frame[16] != 0x82
+        or not frame[16] & 0x80
+        or logical_address == 0
         # Stock-controlled captures used selector 0x85. A valve enrolled by
         # the local bridge uses the same body layout with selector 0x05. The
         # high bit is therefore association state, not part of the model/type
@@ -91,13 +92,32 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     ):
         return None
 
-    # The zero-based pair index is byte 18's low seven bits.  Byte 19's high
-    # bit selects the odd-numbered member of that pair.
-    zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
-    if zone not in range(1, 5):
+    # Stock/selector-6 reports use a pair index plus odd/even bit. Locally
+    # enrolled selector-2 reports instead expose the one-based port directly
+    # in byte 19 bits 4--6 (0x10, 0x20, 0x30, 0x40). Both layouts were crossed
+    # against accepted Zone 1--4 commands.
+    watering = bool(frame[20] & 0x80)
+    local_zone = (frame[19] & 0x70) >> 4
+    direct_local_layout = (
+        frame[17] == 0x05
+        and frame[19] & 0x0F == 0
+        and (
+            watering
+            or (frame[18] == 0x80 and frame[19] == 0x80)
+        )
+    )
+    if direct_local_layout:
+        # Locally associated idle reports clear the direct port nibble. Zone 0
+        # therefore means "no active outlet" and lets the stateful transport
+        # clear whichever of the four mutually exclusive outlets was active.
+        # Older captured/synthetic selector-2 reports retain the stock
+        # pair/odd layout and are distinguished by their low-nibble marker.
+        zone = local_zone
+    else:
+        zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
+    if zone not in range(1, 5) and not (zone == 0 and not watering):
         return None
 
-    watering = bool(frame[20] & 0x80)
     result: dict[str, int | bool] = {
         "zone": zone,
         "is_watering": watering,
@@ -123,7 +143,8 @@ def is_htv405_link_frame(frame: bytes) -> bool:
         return False
     return bool(
         frame[15] == 0x07
-        and frame[16] == 0x82
+        and frame[16] & 0x80
+        and frame[16] & 0x7F
         and frame[17] & 0x7F in {0x05, 0x07}
         and frame[20] & 0x7F == 0x4F
         and frame[25] == 0x40
@@ -214,6 +235,82 @@ def next_htv405_phase(frame: bytes) -> tuple[int, bool]:
     return (((sequence + 1) & 0x1F), False) if repeated else (sequence, True)
 
 
+def htv405_phase_state(frame: bytes) -> dict[str, int | bool]:
+    """Expose the lower-channel telemetry phase without implying TX state.
+
+    The valve's periodic report counter is independent of the counter used by
+    gateway commands.  Keeping the historical function name avoids a storage
+    migration dependency, while the returned field names make that boundary
+    explicit to every caller.
+    """
+    next_sequence_value, next_repeat = next_htv405_phase(frame)
+    return {
+        "rf_telemetry_sequence": frame[13] & 0x1F,
+        "rf_telemetry_repeat": bool(frame[14] & 0x80),
+        "rf_next_telemetry_sequence": next_sequence_value,
+        "rf_next_telemetry_repeat": next_repeat,
+    }
+
+
+def decode_htv405_gateway_command_response(
+    frame: bytes,
+) -> dict[str, int | bool] | None:
+    """Decode an authenticated high-carrier HTV405 command response.
+
+    This envelope was physically validated for accepted opens on Zones 1--4
+    and a Zone 1 close. It proves resulting watering state, accepted controller
+    counter, and the selected zone.
+    """
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return None
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    if residual not in TRAILER_RESIDUES:
+        return None
+    if (
+        frame[14] & 0x7F != 0x50
+        or frame[15] != 0x86
+        or frame[17] & 0x0F
+        or frame[17] >> 4 not in range(1, 5)
+        or frame[18] & 0x7F != 0x4F
+        or frame[23] != 0x40
+        or frame[26] != 0x56
+        or (frame[14] ^ frame[18]) & 0x80
+    ):
+        return None
+    sequence = frame[13] & 0x1F
+    watering = bool(frame[18] & 0x80)
+    return {
+        "rf_control_response_sequence": sequence,
+        "rf_next_control_sequence": (
+            (sequence + 1) & 0x1F if watering else sequence
+        ),
+        "rf_control_response_zone": frame[17] >> 4,
+        "rf_control_response_watering": watering,
+    }
+
+
+def htv405_command_response_endpoint(companion_endpoint: str) -> str:
+    """Return the over-air response role derived from a paired companion.
+
+    HTV405 enrollment assigns a controller-role endpoint such as
+    ``b9c40280`` alongside companion ``39840280``. Successful command
+    responses use ``b9840280``: the companion identity with its high source
+    role bit asserted. This role identity is stable across the physically
+    validated Zone 1--4 responses and must not be compared byte-for-byte with
+    the configured controller role.
+    """
+    try:
+        endpoint = bytearray.fromhex(companion_endpoint)
+    except ValueError as error:
+        raise ValueError("invalid HTV405 companion endpoint") from error
+    if len(endpoint) != 4:
+        raise ValueError("HTV405 companion endpoint must contain four bytes")
+    endpoint[0] |= 0x80
+    return endpoint.hex()
+
+
 def _validate_sequence(sequence: int) -> None:
     if sequence < 0x80 or sequence > 0x9F:
         raise ValueError("sequence must be in the observed 0x80..0x9f range")
@@ -223,6 +320,157 @@ def next_sequence(sequence: int) -> int:
     """Advance the observed five-bit transaction counter."""
     _validate_sequence(sequence)
     return 0x80 | ((sequence + 1) & 0x1F)
+
+
+def _ordinary_frame_valid(frame: bytes) -> bool:
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return False
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    return residual in TRAILER_RESIDUES
+
+
+def _route_matches(
+    frame: bytes, source_endpoint: bytes, destination_endpoint: bytes
+) -> bool:
+    return frame[5:9] == source_endpoint and frame[9:13] == destination_endpoint
+
+
+def decode_htv145_gateway_command(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode a strict stock/local HTV145 command request.
+
+    This is the only passive observation allowed to establish the next
+    outbound command counter. Routine telemetry has its own counter and must
+    never be used for that purpose.
+    """
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.controller_endpoint, link.valve_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+    ):
+        return None
+    if frame[14] == 0x10:
+        if (
+            frame[15:19] != bytes.fromhex("82808100")
+            # Stock HTV145 captures contain both 0x00 and 0x80 at byte 21.
+            # The latter is an observed overlay immediately after the packed
+            # duration, not payload continuation; all remaining reserved
+            # bytes must still be zero for a command to be accepted.
+            or frame[21] not in {0x00, 0x80}
+            or any(frame[22:36])
+        ):
+            return None
+        try:
+            duration_seconds = decode_duration(frame[19:21])
+        except ValueError:
+            return None
+        return {
+            "sequence": frame[13],
+            "next_sequence": next_sequence(frame[13]),
+            "watering": True,
+            "duration_seconds": duration_seconds,
+        }
+    if (
+        frame[14] == 0x90
+        and frame[15:19] == bytes.fromhex("81808100")
+        and not any(frame[19:36])
+    ):
+        return {
+            "sequence": frame[13],
+            "next_sequence": next_sequence(frame[13]),
+            "watering": False,
+        }
+    return None
+
+
+def decode_htv145_command_response(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode a valve response carrying the accepted command counter."""
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14] not in {0x50, 0xD0}
+        or frame[15] != 0x86
+        or frame[16] != 0x80
+        or frame[17] & 0x0F
+        or (frame[18] & 0x7F) != 0x4F
+        or frame[23] != 0x40
+        or frame[26] != 0x56
+        or not ((frame[14] ^ frame[18]) & 0x80)
+    ):
+        return None
+    watering = frame[14] == 0x50
+    result: dict[str, int | bool] = {
+        "sequence": frame[13],
+        "next_sequence": next_sequence(frame[13]),
+        "watering": watering,
+    }
+    return result
+
+
+def decode_htv145_state_report(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode an independent HTV145 watering/idle telemetry report.
+
+    ``telemetry_sequence`` is deliberately named: it confirms resulting state
+    but is not the controller's next outbound command counter.
+    """
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14] not in {0x01, 0x81}
+        or frame[15] != 0x07
+        or frame[16] != 0x85
+        or (frame[20] & 0x7F) != 0x4F
+        or frame[25] != 0x40
+        or frame[28] != 0x56
+    ):
+        return None
+    return {
+        "telemetry_sequence": frame[13],
+        "watering": bool(frame[20] & 0x80),
+    }
+
+
+def decode_htv145_terminal_idle_report(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode the independently cloud-correlated terminal idle summary."""
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14:19] != bytes.fromhex("8207858080")
+        or frame[23] not in {0x08, 0x10}
+        or frame[26] & 0x7F
+        or frame[27] != 0
+        or any(frame[30:36])
+    ):
+        return None
+    try:
+        duration_seconds = decode_duration(frame[28:30])
+    except ValueError:
+        return None
+    return {
+        "telemetry_sequence": frame[13],
+        "watering": False,
+        "duration_seconds": duration_seconds,
+    }
 
 
 def _finish_frame(payload: bytes, residue: int) -> bytes:

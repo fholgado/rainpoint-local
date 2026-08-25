@@ -1,0 +1,75 @@
+{
+  "fixture_version": 1,
+  "model": "HTV145FRF",
+  "purpose": "Freeze stock-gateway command burst, response, and independent telemetry-counter evidence.",
+  "findings": {
+    "command_counter_and_telemetry_counter_are_independent": true,
+    "logical_open_may_use_identical_rf_attempts": true,
+    "positive_state_report_is_a_valid_fallback_when_immediate_response_is_missed": true,
+    "speculative_second_logical_open_is_not_justified": true
+  },
+  "transactions": [
+    {
+      "requested_duration_seconds": 1200,
+      "command_sequence": "81",
+      "command_attempt_intervals_seconds": [0.729210, 0.939269],
+      "response_latency_from_last_attempt_seconds": 0.050825,
+      "state_confirmation_latency_from_last_attempt_seconds": 5.679676,
+      "state_confirmation_telemetry_sequence": "89",
+      "frames": [
+        {
+          "role": "open_request_attempt_1",
+          "observed_at": "2026-08-22T14:49:20.896292+00:00",
+          "raw": "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68"
+        },
+        {
+          "role": "open_request_attempt_2",
+          "observed_at": "2026-08-22T14:49:21.625502+00:00",
+          "raw": "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68"
+        },
+        {
+          "role": "open_request_attempt_3",
+          "observed_at": "2026-08-22T14:49:22.564771+00:00",
+          "raw": "79f4882f28b42d008fb9840280811082808100d8020000000000000000000000000000001c68"
+        },
+        {
+          "role": "immediate_open_response",
+          "observed_at": "2026-08-22T14:49:22.615596+00:00",
+          "raw": "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802000000000000004bfa"
+        },
+        {
+          "role": "watering_state_confirmation",
+          "observed_at": "2026-08-22T14:49:28.244447+00:00",
+          "raw": "79f4882f28b9840280b42d008f89810785898090cf8702000040d58256d80200000000003fc6"
+        }
+      ]
+    },
+    {
+      "requested_duration_seconds": 600,
+      "command_sequence": "8c",
+      "valid_command_attempts_captured": 1,
+      "corrupted_response_candidate_latency_seconds": 0.337569,
+      "state_confirmation_latency_seconds": 6.552309,
+      "state_confirmation_telemetry_sequence": "9b",
+      "frames": [
+        {
+          "role": "open_request",
+          "observed_at": "2026-08-24T16:23:21.295196+00:00",
+          "raw": "79f4882f28b42d008fb98402808c1082808100ac010000000000000000000000000000001497"
+        },
+        {
+          "role": "corrupted_response_candidate",
+          "observed_at": "2026-08-24T16:23:21.632765+00:00",
+          "raw": "79f4882f28b9840280b42d008f8c54868010cf9981800040ac0156ac01000000000000007b7b",
+          "accepted": false,
+          "observed_residual": "e842"
+        },
+        {
+          "role": "watering_state_confirmation",
+          "observed_at": "2026-08-24T16:23:27.847505+00:00",
+          "raw": "79f4882f28b9840280b42d008f9b810785898090cf9981800040a90156ac0100000000003431"
+        }
+      ]
+    }
+  ]
+}

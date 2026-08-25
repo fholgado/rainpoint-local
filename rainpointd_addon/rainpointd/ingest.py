@@ -8,7 +8,12 @@ from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
-from .valve_protocol import decode_htv405_control_frame, is_htv405_link_frame
+from .valve_protocol import (
+    decode_htv405_control_frame,
+    decode_htv405_gateway_command_response,
+    htv405_phase_state,
+    is_htv405_link_frame,
+)
 
 
 class FrameIngestor:
@@ -41,6 +46,9 @@ class FrameIngestor:
             "is_watering": None,
             "duration_seconds": None,
             "last_usage_liters": None,
+            "battery_low": None,
+            "battery_status": None,
+            "battery_percent": None,
         }
         for zone in range(1, 5):
             state[f"zone_{zone}_is_watering"] = None
@@ -97,18 +105,28 @@ class FrameIngestor:
             valve = self.catalog.valve_link(
                 decoded["endpoint_a"], decoded["endpoint_b"]
             )
+            valve_phase: dict[str, int | bool] = {}
+            try:
+                raw_frame = bytes.fromhex(decoded["frame_hex"])
+            except ValueError:
+                raw_frame = b""
+            control_response = (
+                decode_htv405_gateway_command_response(raw_frame) or {}
+            )
+            valid_htv405_link = bool(
+                is_htv405_link_frame(raw_frame)
+                and decoded.get("trailer_valid") is True
+            )
+            if valid_htv405_link:
+                valve_phase = htv405_phase_state(raw_frame)
+                self.gateway.register_observed_htv405_link(
+                    controller_endpoint=decoded["endpoint_a"],
+                    valve_endpoint=decoded["endpoint_b"],
+                    frame=decoded["frame_hex"],
+                    observed_at=observed_at,
+                )
             if valve is None:
-                try:
-                    raw_frame = bytes.fromhex(decoded["frame_hex"])
-                except ValueError:
-                    raw_frame = b""
-                if is_htv405_link_frame(raw_frame):
-                    self.gateway.register_observed_htv405_link(
-                        controller_endpoint=decoded["endpoint_a"],
-                        valve_endpoint=decoded["endpoint_b"],
-                        frame=decoded["frame_hex"],
-                        observed_at=observed_at,
-                    )
+                if valid_htv405_link:
                     valve = self.catalog.valve_link(
                         decoded["endpoint_a"], decoded["endpoint_b"]
                     )
@@ -133,7 +151,37 @@ class FrameIngestor:
                 )
                 if key in decoded
             }
-            if valve_update:
+            # Battery fields occur in both HCS026 sensor reports and HTV145
+            # valve usage reports.  Add them only after the endpoint pair has
+            # resolved to a catalogued valve; otherwise a sensor battery
+            # report would enter the valve branch and skip sensor ingestion.
+            if valve is not None:
+                valve_update.update(
+                    {
+                        key: decoded[key]
+                        for key in (
+                            "battery_low",
+                            "battery_status",
+                            "battery_percent",
+                        )
+                        if key in decoded
+                    }
+                )
+                if (
+                    valve.model == "HTV405FRF"
+                    and not isinstance(decoded.get("is_watering"), bool)
+                ):
+                    # Valid phase-only link reports prove reception and advance
+                    # only the independent telemetry phase. They must not
+                    # replace the latest definitive watering/idle state.
+                    for key in (
+                        "valve_state",
+                        "is_watering",
+                        "duration_seconds",
+                        "last_usage_liters",
+                    ):
+                        valve_update.pop(key, None)
+            if valve_update and decoded.get("trailer_valid") is True:
                 if valve is None:
                     continue
                 valve_state = self._valve_states.setdefault(
@@ -186,6 +234,18 @@ class FrameIngestor:
                     valve_update["valve_state"] = (
                         "watering" if active_zone is not None else "idle"
                     )
+                elif zone == 0 and decoded.get("is_watering") is False:
+                    # Locally enrolled HTV405 idle reports carry no port. The
+                    # chassis permits only one active outlet, so an idle report
+                    # closes every logical zone without guessing which ran.
+                    for idle_zone in range(1, 5):
+                        valve_update[f"zone_{idle_zone}_is_watering"] = False
+                        valve_update[
+                            f"zone_{idle_zone}_remaining_seconds"
+                        ] = None
+                    valve_update["active_zone"] = None
+                    valve_update["is_watering"] = False
+                    valve_update["valve_state"] = "idle"
                 state = {
                     "model": valve.model,
                     "raw": decoded["frame_hex"],
@@ -194,6 +254,7 @@ class FrameIngestor:
                     "rf_trailer_residual": decoded["trailer_residual"],
                     "rf_trailer_valid": decoded["trailer_valid"],
                     "rf_frame_accepted": True,
+                    **valve_phase,
                     **valve_state,
                     **valve_update,
                 }
@@ -210,17 +271,28 @@ class FrameIngestor:
                 published += 1
                 continue
             if moisture is None:
+                valve_originated = bool(
+                    valve is not None
+                    and decoded["endpoint_a"] == valve.valve_endpoint
+                )
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],
                     "rf_endpoint_a": decoded["endpoint_a"],
                     "rf_endpoint_b": decoded["endpoint_b"],
                     "rf_message_type": decoded["message_type"],
                     "rf_frame_accepted": decoded["trailer_valid"],
+                    **valve_phase,
+                    **control_response,
                 }
                 for key in ("trailer_residual", "trailer_valid"):
                     state[f"rf_{key}"] = decoded[key]
                 for key in (
+                    "valve_command",
+                    "command_sequence",
+                    "requested_duration_seconds",
+                    "command_response_sequence",
                     "status_soil_moisture_percent",
+                    "associated_soil_moisture_percent",
                     "hub_rssi_db",
                     "routine_ack_endpoint",
                     "routine_ack_message",
@@ -244,8 +316,20 @@ class FrameIngestor:
                     frame=decoded["frame_hex"],
                     state=state,
                     observed_at=observed_at,
-                    device_id=valve.device_id if valve else None,
+                    # Controller requests can be heard by our own receivers,
+                    # but they are intent—not a report from the valve. Do not
+                    # let them advance valve cadence or availability metrics.
+                    device_id=(
+                        valve.device_id if valve_originated else None
+                    ),
                 )
+                receiver = receiver_metadata.get("rf_receiver_id")
+                if control_response and isinstance(receiver, str):
+                    self.gateway.observe_valve_control_air_response(
+                        receiver,
+                        decoded["frame_hex"],
+                        observed_at=observed_at,
+                    )
                 published += 1
                 continue
 

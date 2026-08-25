@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterable
 
 
@@ -148,6 +152,337 @@ def classify_pairing_exchange(events: list[dict[str, Any]]) -> dict[str, Any]:
         "exchanges": exchanges,
         "interpretation_warning": (
             "Phase names are structural candidates, not decoded protocol semantics."
+        ),
+    }
+
+
+def classify_htv405_retained_attempts(
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Separate enrollment, retained rejoin, and inconclusive HTV405 trials.
+
+    This consumes the redacted attempt summaries promoted from retained IQ
+    captures.  It deliberately does not equate a white LED with successful new
+    enrollment: paired traffic can resume under the valve's stored identity
+    without accepting a new assignment.
+    """
+    rows = []
+    counts: Counter[str] = Counter()
+    for attempt in attempts:
+        flag = str(attempt.get("factory_flag", "")).lower()
+        assignment = attempt.get("assignment_observed") is True
+        paired = attempt.get("paired_traffic_observed") is True
+        paired_before = attempt.get("paired_traffic_before_attempt") is True
+        interpretation = str(attempt.get("interpretation", ""))
+        if "methodology failure" in interpretation:
+            classification = "invalid_methodology"
+        elif flag == "7f":
+            classification = (
+                "cold_boot_rejoin_observed" if paired else "cold_boot_sweep_only"
+            )
+        elif paired_before and paired:
+            classification = "retained_association_rejoin"
+        elif paired and not assignment:
+            classification = "retained_association_rejoin"
+        elif assignment and paired:
+            classification = "assignment_followed_by_paired_traffic"
+        elif assignment:
+            classification = "assignment_only_no_paired_progress"
+        else:
+            classification = "explicit_sweep_only"
+        counts[classification] += 1
+        rows.append(
+            {
+                "capture": attempt.get("capture"),
+                "trigger": (
+                    "cold_boot" if flag == "7f" else
+                    "explicit_long_press" if flag == "ff" else "unknown"
+                ),
+                "classification": classification,
+                "assignment_observed": assignment,
+                "paired_traffic_before_attempt": paired_before,
+                "paired_traffic_observed": paired,
+                "new_assignment_proven": (
+                    classification == "assignment_followed_by_paired_traffic"
+                    and attempt.get("node_completed_steps") == 1
+                    and "assignment accepted" in interpretation
+                ),
+            }
+        )
+    return {
+        "attempt_count": len(rows),
+        "classification_counts": dict(sorted(counts.items())),
+        "attempts": rows,
+        "findings": {
+            "cold_boot_flag": "0x7f",
+            "explicit_enrollment_flag": "0xff",
+            "white_led_is_assignment_proof": False,
+            "stored_identity_can_survive_battery_removal": any(
+                item["classification"] == "retained_association_rejoin"
+                for item in rows
+            ),
+        },
+    }
+
+
+def _ordered_frames(
+    events: Iterable[dict[str, Any]],
+) -> list[tuple[dict[str, Any], datetime, bytes]]:
+    rows = []
+    for event in events:
+        frame = _frame(event)
+        observed_at = _timestamp(event.get("observed_at"))
+        if frame is not None and observed_at is not None:
+            rows.append((event, observed_at, frame))
+    rows.sort(key=lambda row: (int(row[0].get("event_id", 0)), row[1].timestamp()))
+    return rows
+
+
+def _htv405_command_zone(frame: bytes) -> tuple[int | None, str | None]:
+    local_zone = frame[17] & 0x7F
+    if frame[16] == 0x80 and 1 <= local_zone <= 4:
+        return local_zone, "selector2_local"
+    if (frame[17] & 0x7F) == 1:
+        branch_zone = 2 * (frame[16] & 0x7F) + ((frame[17] >> 7) & 1)
+        if 1 <= branch_zone <= 4:
+            return branch_zone, "selector6_stock"
+    return None, None
+
+
+def _decode_valve_frame(
+    frame: bytes,
+    *,
+    model: str,
+    controller: bytes,
+    valve: bytes,
+    companion: bytes | None,
+) -> dict[str, Any] | None:
+    source = frame[5:9]
+    destination = frame[9:13]
+    if model == "HTV145FRF":
+        if (
+            (source, destination) == (controller, valve)
+            and 0x80 <= frame[13] <= 0x9F
+            and frame[14] in {0x10, 0x90}
+            and frame[15] in {0x81, 0x82}
+            and frame[16] == 0x80
+            and frame[17] == 0x81
+        ):
+            watering = frame[14] == 0x10
+            duration = None
+            if watering:
+                duration = ((frame[19] & 0x7F) | (frame[20] << 8)) * 2
+            return {
+                "role": "command",
+                "sequence": frame[13],
+                "action": "open" if watering else "close",
+                "watering": watering,
+                "zone": 1,
+                "duration_seconds": duration,
+            }
+        if (
+            (source, destination) == (valve, controller)
+            and 0x80 <= frame[13] <= 0x9F
+            and frame[14] in {0x50, 0xD0}
+            and frame[15] == 0x86
+            and frame[16] == 0x80
+        ):
+            return {
+                "role": "response",
+                "sequence": frame[13],
+                "watering": frame[14] == 0x50,
+                "zone": 1,
+            }
+        if (
+            (source, destination) == (valve, controller)
+            and frame[15] == 0x07
+            and frame[16] == 0x85
+            and frame[14] in {0x01, 0x81}
+            and (frame[20] & 0x7F) == 0x4F
+        ):
+            return {
+                "role": "state",
+                "sequence": frame[13],
+                "watering": bool(frame[20] & 0x80),
+                "zone": 1,
+            }
+        return None
+
+    if model != "HTV405FRF" or companion is None:
+        raise ValueError("unsupported valve model or missing HTV405 companion")
+    if (
+        (source, destination) == (valve, companion)
+        and frame[14] in {0x10, 0x90}
+        and frame[15] in {0x81, 0x82}
+    ):
+        zone, packing = _htv405_command_zone(frame)
+        if zone is None:
+            return None
+        # HTV405 operation lives at offset 15. Offset 14's high bit is an
+        # observed repeat/phase bit and valid opens can carry 0x10 or 0x90.
+        watering = frame[15] == 0x82
+        duration = None
+        if watering:
+            duration = ((frame[19] & 0x7F) | (frame[20] << 8)) * 2
+        return {
+            "role": "command",
+            "sequence": frame[13] & 0x1F,
+            "action": "open" if watering else "close",
+            "watering": watering,
+            "zone": zone,
+            "zone_packing": packing,
+            "duration_seconds": duration,
+        }
+    if (
+        (source, destination) == (controller, valve)
+        and frame[14] in {0x50, 0xD0}
+        and frame[15] == 0x86
+        and (frame[18] & 0x7F) == 0x4F
+        and 1 <= (frame[17] >> 4) <= 4
+    ):
+        return {
+            "role": "response",
+            "sequence": frame[13] & 0x1F,
+            "watering": bool(frame[18] & 0x80),
+            "zone": frame[17] >> 4,
+        }
+    if (
+        (source, destination) == (controller, valve)
+        and frame[15] == 0x07
+        and (frame[20] & 0x7F) == 0x4F
+    ):
+        zone = (frame[19] & 0x70) >> 4
+        watering = bool(frame[20] & 0x80) and 1 <= zone <= 4
+        return {
+            "role": "state",
+            "sequence": frame[13] & 0x1F,
+            "watering": watering,
+            "zone": zone if watering else None,
+        }
+    return None
+
+
+def analyze_valve_transactions(
+    events: list[dict[str, Any]],
+    *,
+    model: str,
+    controller_endpoint: str,
+    valve_endpoint: str,
+    companion_endpoint: str | None = None,
+    retry_window_seconds: float = 2.1,
+) -> dict[str, Any]:
+    """Correlate logical commands, RF attempts, responses, and state reports."""
+    controller = bytes.fromhex(controller_endpoint)
+    valve = bytes.fromhex(valve_endpoint)
+    companion = bytes.fromhex(companion_endpoint) if companion_endpoint else None
+    decoded_rows = []
+    for event, observed_at, frame in _ordered_frames(events):
+        decoded = _decode_valve_frame(
+            frame,
+            model=model,
+            controller=controller,
+            valve=valve,
+            companion=companion,
+        )
+        if decoded is not None:
+            decoded_rows.append((event, observed_at, frame, decoded))
+
+    transactions: list[dict[str, Any]] = []
+    for event, observed_at, frame, decoded in decoded_rows:
+        if decoded["role"] != "command":
+            continue
+        if transactions:
+            previous = transactions[-1]
+            elapsed = (observed_at - previous["_first_at"]).total_seconds()
+            if frame.hex() == previous["command_frame"] and elapsed <= retry_window_seconds:
+                previous["attempt_event_ids"].append(event.get("event_id"))
+                previous["attempt_offsets_ms"].append(round(elapsed * 1_000, 3))
+                previous["attempt_count"] += 1
+                previous["_last_at"] = observed_at
+                continue
+        transactions.append(
+            {
+                "model": model,
+                "action": decoded["action"],
+                "zone": decoded["zone"],
+                "zone_packing": decoded.get("zone_packing"),
+                "duration_seconds": decoded.get("duration_seconds"),
+                "command_sequence": decoded["sequence"],
+                "command_frame": frame.hex(),
+                "attempt_count": 1,
+                "attempt_event_ids": [event.get("event_id")],
+                "attempt_offsets_ms": [0.0],
+                "response_event_id": None,
+                "response_latency_ms": None,
+                "state_event_id": None,
+                "state_watering": None,
+                "state_sequence": None,
+                "_first_at": observed_at,
+                "_last_at": observed_at,
+            }
+        )
+
+    unassigned_states = 0
+    for event, observed_at, _frame_bytes, decoded in decoded_rows:
+        if decoded["role"] == "command":
+            continue
+        candidate = next(
+            (
+                row for row in reversed(transactions)
+                if row["_last_at"] <= observed_at
+                and (observed_at - row["_last_at"]).total_seconds() <= 30
+                and (
+                    row["zone"] == decoded.get("zone")
+                    or (
+                        decoded["role"] == "state"
+                        and decoded["watering"] is False
+                        and row["action"] == "close"
+                    )
+                )
+                and row["action"] == ("open" if decoded["watering"] else "close")
+            ),
+            None,
+        )
+        if candidate is None:
+            if decoded["role"] == "state":
+                unassigned_states += 1
+            continue
+        if decoded["role"] == "response" and candidate["response_event_id"] is None:
+            if decoded["sequence"] == candidate["command_sequence"]:
+                candidate["response_event_id"] = event.get("event_id")
+                candidate["response_latency_ms"] = round(
+                    (observed_at - candidate["_last_at"]).total_seconds() * 1_000,
+                    3,
+                )
+        elif decoded["role"] == "state" and candidate["state_event_id"] is None:
+            candidate["state_event_id"] = event.get("event_id")
+            candidate["state_watering"] = decoded["watering"]
+            candidate["state_sequence"] = decoded["sequence"]
+
+    transitions: Counter[int] = Counter()
+    for previous, current in zip(transactions, transactions[1:]):
+        transitions[(current["command_sequence"] - previous["command_sequence"]) & 0x1F] += 1
+    for row in transactions:
+        row.pop("_first_at")
+        row.pop("_last_at")
+        row["positive_evidence"] = (
+            row["response_event_id"] is not None or row["state_event_id"] is not None
+        )
+    return {
+        "model": model,
+        "logical_command_count": len(transactions),
+        "rf_attempt_count": sum(row["attempt_count"] for row in transactions),
+        "confirmed_logical_command_count": sum(
+            row["positive_evidence"] for row in transactions
+        ),
+        "unassigned_state_report_count": unassigned_states,
+        "command_sequence_delta_counts": {
+            str(delta): count for delta, count in sorted(transitions.items())
+        },
+        "transactions": transactions,
+        "counter_warning": (
+            "Only command sequences advance the outbound command stream; "
+            "state-report sequences are independent telemetry."
         ),
     }
 
@@ -396,3 +731,63 @@ def analyze_zone_matrix(
         and matrix_complete
         and all(item["frame_count"] > 0 for item in action_rows),
     }
+
+
+def _load_json_events(path: Path) -> list[dict[str, Any]]:
+    content = path.read_text(encoding="utf-8")
+    decoder = json.JSONDecoder()
+    offset = 0
+    events: list[dict[str, Any]] = []
+    while offset < len(content):
+        while offset < len(content) and content[offset].isspace():
+            offset += 1
+        if offset >= len(content):
+            break
+        payload, offset = decoder.raw_decode(content, offset)
+        if isinstance(payload, dict) and isinstance(payload.get("events"), list):
+            payload = payload["events"]
+        if isinstance(payload, dict):
+            events.append(payload)
+        elif isinstance(payload, list):
+            events.extend(item for item in payload if isinstance(item, dict))
+        else:
+            raise ValueError("expected event objects, event lists, or API pages")
+    return events
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    transactions = commands.add_parser("transactions")
+    transactions.add_argument("events", type=Path)
+    transactions.add_argument("--model", required=True, choices=("HTV145FRF", "HTV405FRF"))
+    transactions.add_argument("--controller-endpoint", required=True)
+    transactions.add_argument("--valve-endpoint", required=True)
+    transactions.add_argument("--companion-endpoint")
+
+    lifecycle = commands.add_parser("htv405-lifecycle")
+    lifecycle.add_argument("summary", type=Path)
+
+    args = parser.parse_args()
+    if args.command == "transactions":
+        report = analyze_valve_transactions(
+            _load_json_events(args.events),
+            model=args.model,
+            controller_endpoint=args.controller_endpoint,
+            valve_endpoint=args.valve_endpoint,
+            companion_endpoint=args.companion_endpoint,
+        )
+    else:
+        payload = json.loads(args.summary.read_text(encoding="utf-8"))
+        attempts = payload.get("attempts")
+        if not isinstance(attempts, list):
+            raise ValueError("HTV405 lifecycle summary has no attempts list")
+        report = classify_htv405_retained_attempts(attempts)
+    json.dump(report, sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

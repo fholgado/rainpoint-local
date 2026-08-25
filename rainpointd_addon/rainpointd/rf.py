@@ -6,7 +6,15 @@ import binascii
 from typing import Any
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
-from .valve_protocol import decode_duration, decode_htv405_control_frame
+from .valve_protocol import (
+    ValveLink,
+    decode_duration,
+    decode_htv145_command_response,
+    decode_htv145_gateway_command,
+    decode_htv145_state_report,
+    decode_htv145_terminal_idle_report,
+    decode_htv405_control_frame,
+)
 
 
 SYNC = bytes.fromhex("79f4882f28")
@@ -15,7 +23,6 @@ FRAME_BYTES = 38
 # catalog product code 0x48. Canonicalize only identities already established
 # by ordinary telemetry so a marker-like payload cannot create a new device.
 HCS026_PRODUCT_CODE = 0x48
-HCS026_COMPANION_ENDPOINT = "39840280"
 HCS026_FACTORY_BROADCAST = "80000000"
 # Ordinary 38-byte frames use CRC-CCITT (poly 0x1021, init 0) over bytes
 # 0..35. The transmitted trailer differs by one of two unresolved residues.
@@ -81,6 +88,32 @@ def _compact_status_fields(frame: bytes) -> dict[str, Any]:
     return result
 
 
+def _associated_hcs026_fields(frame: bytes) -> dict[str, Any]:
+    """Decode a strict, unassigned controller-relay moisture report.
+
+    The stock installation repeatedly relays one associated HCS026 reading
+    through a valve/controller route rather than the sensor's ordinary RF
+    endpoint.  The relay is useful migration evidence, but the RF envelope
+    alone does not identify which sensor is associated.  Retain the value
+    under an explicitly unassigned key so it cannot update a sensor entity.
+    """
+    if len(frame) != FRAME_BYTES:
+        return {}
+    if _trailer_fields(frame).get("trailer_valid") is not True:
+        return {}
+    if (
+        frame[15:20] != bytes.fromhex("0405818005")
+        or frame[20] & 0x7F != 0x44
+        or frame[22] & 0x7F != 0x70
+        or any(frame[25:36])
+    ):
+        return {}
+    percent = frame[21] * 2 + int(bool(frame[22] & 0x80))
+    if not 0 <= percent <= 100:
+        return {}
+    return {"associated_soil_moisture_percent": percent}
+
+
 def _trailer_fields(frame: bytes) -> dict[str, Any]:
     """Return the observed CRC-CCITT residual for a normalized frame."""
     if len(frame) != FRAME_BYTES:
@@ -108,7 +141,11 @@ def _hcs026_routine_ack_candidate(
     endpoint = frame[5:9].hex()
     if endpoint not in catalog.sensor_endpoints:
         return {}
-    if frame[9:13].hex() != HCS026_COMPANION_ENDPOINT:
+    companion = frame[9:13]
+    if companion[0] & 0x80:
+        return {}
+    controller = (bytes([companion[0] | 0x80]) + companion[1:]).hex()
+    if controller not in catalog.hcs026_pairing_peers:
         return {}
     if (
         frame[14] & 0x7F != 0x41
@@ -124,6 +161,8 @@ def _hcs026_routine_ack_candidate(
         "routine_ack_endpoint": endpoint,
         "routine_ack_message": frame[13] & 0x7F,
         "routine_ack_body_code": status,
+        "routine_ack_controller_endpoint": controller,
+        "routine_ack_companion_endpoint": companion.hex(),
     }
 
 
@@ -222,6 +261,18 @@ def _hcs026_report_fields(
     return {}
 
 
+def _packed_valve_usage_tenths(
+    first: int, second: int, extension: int
+) -> int:
+    """Decode the packed HTV145 last-session usage value."""
+    half_tenths = (
+        ((second & 0x7F) << 8)
+        | (first & 0x7F)
+        | (extension & 0x80)
+    )
+    return half_tenths * 2 + int(bool(second & 0x80))
+
+
 def _valve_fields(
     frame: bytes, catalog: DeviceCatalog
 ) -> dict[str, Any]:
@@ -248,37 +299,101 @@ def _valve_fields(
                 **decoded,
                 "valve_state": "watering" if watering else "idle",
             }
-        # The open/close flag is the high bit of byte 14. Open commands carry
-        # a whole-minute duration at bytes 19-20. The low duration byte has
-        # bit 7 forced on, so decode it with the confirmed minute constraint.
-        if frame[14] & 0x7F != 0x10:
+        link = ValveLink(
+            bytes.fromhex(valve.controller_endpoint),
+            bytes.fromhex(valve.valve_endpoint),
+        )
+        command = decode_htv145_gateway_command(frame, link)
+        if command is None:
             return {}
-        watering = not bool(frame[14] & 0x80)
+        # A controller request is intent, never device state. In particular,
+        # an SDR can hear our own local request even when the valve rejects it.
+        # Retain the request for protocol/counter analysis without publishing
+        # watering state until a valve-originated response or report arrives.
         result: dict[str, Any] = {
-            "is_watering": watering,
-            "valve_state": "watering" if watering else "idle",
+            "valve_command": "open" if command["watering"] else "close",
+            "command_sequence": command["sequence"],
         }
-        if watering:
-            try:
-                duration_seconds = decode_duration(frame[19:21])
-            except ValueError:
-                pass
-            else:
-                result["duration_seconds"] = duration_seconds
+        if command["watering"]:
+            result["requested_duration_seconds"] = command[
+                "duration_seconds"
+            ]
         return result
 
     if (
         endpoint_a == valve.valve_endpoint
         and endpoint_b == valve.controller_endpoint
     ):
+        link = ValveLink(
+            bytes.fromhex(valve.controller_endpoint),
+            bytes.fromhex(valve.valve_endpoint),
+        )
+        command_response = decode_htv145_command_response(frame, link)
+        if command_response is not None:
+            watering = bool(command_response["watering"])
+            result: dict[str, Any] = {
+                "is_watering": watering,
+                "valve_state": "watering" if watering else "idle",
+                "command_response_sequence": command_response["sequence"],
+            }
+            try:
+                duration_seconds = decode_duration(frame[27:29])
+            except ValueError:
+                pass
+            else:
+                result["duration_seconds"] = duration_seconds
+            return result
+
+        # A terminal/summary response family omits the 0x4f marker but carries
+        # the same packed usage value at bytes 24-26.  Bytes 28-29 repeat the
+        # requested duration in two-second units.  Five exact cloud/RF
+        # correlations cover 81.9-106.3 L, including today's low-battery
+        # 600-second run.  Battery is intentionally not decoded here: full and
+        # low cloud states share the stable bytes in this response layout.
+        terminal = decode_htv145_terminal_idle_report(frame, link)
+        if terminal is not None:
+            tenths_liters = _packed_valve_usage_tenths(
+                frame[24], frame[25], frame[26]
+            )
+            if not 0 <= tenths_liters <= 100_000:
+                return {}
+            result = {
+                "is_watering": False,
+                "valve_state": "idle",
+                "last_usage_liters": round(tenths_liters / 10, 1),
+            }
+            result["duration_seconds"] = terminal["duration_seconds"]
+            return result
+
         # 0x4f/0xcf marks last-session usage. The following bytes hold a
         # packed half-value plus an odd-value flag, in tenths of a liter.
-        if frame[20] & 0x7F != 0x4F:
+        state_report = decode_htv145_state_report(frame, link)
+        if state_report is None:
             return {}
-        half_tenths = ((frame[22] & 0x7F) << 8) | (frame[21] & 0x7F)
-        tenths_liters = half_tenths * 2 + int(bool(frame[22] & 0x80))
+        # Bit 7 of the first packed byte is overloaded. Cloud/RF correlation
+        # showed that frame[23] bit 7 selects whether it is value bit 7 or an
+        # overlay flag; frame[22] bit 7 remains the odd-tenths flag.
+        tenths_liters = _packed_valve_usage_tenths(
+            frame[21], frame[22], frame[23]
+        )
         if 0 <= tenths_liters <= 100_000:
-            return {"last_usage_liters": round(tenths_liters / 10, 1)}
+            battery_low = bool(frame[17] & 0x08)
+            watering = bool(state_report["watering"])
+            result = {
+                "is_watering": watering,
+                "valve_state": "watering" if watering else "idle",
+                "last_usage_liters": round(tenths_liters / 10, 1),
+                "battery_low": battery_low,
+                "battery_status": 2 if battery_low else 1,
+                "battery_percent": 10 if battery_low else 100,
+            }
+            try:
+                duration_seconds = decode_duration(frame[29:31])
+            except ValueError:
+                pass
+            else:
+                result["duration_seconds"] = duration_seconds
+            return result
     return {}
 
 
@@ -330,6 +445,7 @@ def normalize_row(
         result["canonical_endpoint_b"] = canonical_endpoint_b
         result["product_code"] = frame[12]
     result.update(_compact_status_fields(frame))
+    result.update(_associated_hcs026_fields(frame))
     result.update(_hcs026_routine_ack_candidate(frame, catalog))
     result.update(_hcs026_pairing_fields(frame, catalog))
     result.update(_hcs026_report_fields(frame, catalog))

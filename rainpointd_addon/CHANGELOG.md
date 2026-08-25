@@ -1,5 +1,124 @@
 # Changelog
 
+## Unreleased
+
+- Attribute retained HTV145 controller requests and valve-originated reports
+  by the transmitting endpoint so requests cannot advance device cadence and
+  valid valve reports can confirm availability.
+- Allow authenticated removal of persisted valve links, suppress forgotten
+  endpoints from RF rediscovery, and cover corrupted phantom-device cleanup
+  with storage and HTTP regressions.
+- Complete HTV405 pairing from a session-scoped, trailer-valid paired-link
+  report after the selected node transmits at least one reply; the 18-row stock
+  transcript remains a traffic model rather than a mandatory completion count.
+- Reject trailer-invalid HTV405 frames from link discovery and preserve the
+  latest definitive watering state across valid phase-only heartbeats.
+- Retain narrowly scoped HTV405 timeout evidence and permit the next explicit
+  bounded open to try only the same or immediately following command counter,
+  after the entire possibly accepted run plus a 15-second guard has elapsed.
+  Unexpected watering, node rejection, dispatch failure, and authenticated
+  response mismatch remain terminal and cancel recovery.
+- Expire an HTV405 command reservation in the gateway when a disconnected,
+  outdated, or interrupted radio node does not return a usable terminal result,
+  preventing one missing node report from wedging all later valve control.
+- Allow the authenticated RF egress node for an idle HTV405 association to be
+  changed independently of the valve/controller identity. The change clears
+  command-counter state and requires fresh synchronization before control.
+- Generate and persist one gateway-wide RF controller/companion identity in
+  SQLite, expose it in diagnostics, and share it across every radio node.
+- Parameterize automatic HCS026 pairing, known-sensor recovery, routine ACKs,
+  and HTV405 pairing with the association's controller identity while
+  preserving all pre-existing assignments as retained stock associations.
+- Require an explicit radio-node firmware capability before a generated
+  identity can be paired or assigned, preventing an older firmware from
+  silently falling back to the stock RainPoint identity.
+
+## 0.33.1 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
+
+- Extend supervised HTV405 opens from the original 1--4 minute pilot boundary
+  to configurable 1--60 whole-minute runs across the gateway, authenticated
+  radio-node command boundary, frame builder, and Home Assistant entities.
+- Add one HA duration number per HTV405 zone. Valve opens consume the selected
+  duration while retaining single-zone exclusivity, durable command
+  reservation, authenticated response matching, and valve-owned automatic
+  stop semantics.
+- Preserve the authenticated response role across radio-node and gateway
+  restart recovery, and normalize mixed legacy SDR timestamps without allowing
+  telemetry to substitute for the independent controller counter.
+- Move the installation example dashboard from the retired HTV145 `valve-1`
+  identity to the currently paired HTV405 Zone 1. HTV405 battery remains
+  unavailable pending an independently correlated RF transition.
+- Record the remaining publication gates explicitly: installed longer-duration
+  field acceptance, battery-cycle rejoin, battery decoding, interrupted OTA,
+  signed releases, and a second valve specimen.
+- Add a disabled, token-protected HTV145 dry-valve acceptance endpoint and
+  command-line runner. It derives the independent command counter from retained
+  stock traffic, enforces controller silence and fresh-idle preflight, permits
+  one bounded open, and passes only on valve-originated active and automatic
+  idle evidence.
+- Derive the HTV145 acceptance carrier from positively confirmed channel-0/11
+  RF evidence, reject low or unknown valve battery state, and prevent stale
+  stock-command evidence from being reused after a local attempt.
+- Keep controller-to-valve requests as retained intent only. They no longer
+  invent watering state or advance valve report/availability metrics when a
+  local receiver hears its own unacknowledged transmission.
+
+## 0.32.0 / Firmware 0.15.0-supervised-beta.1
+
+- Add a disabled-by-default, token-protected HTV405 control API and four Home
+  Assistant valve entities. Every open is limited to 1--4 whole minutes, only
+  one zone may run, and early stop targets only the confirmed active zone.
+- Persist every HTV405 command reservation before RF dispatch. Node rejection,
+  response mismatch, or timeout invalidates the counter and is never retried;
+  HA state changes only after a matching valve response or accepted telemetry.
+- Preserve the authenticated next command counter across a valve's automatic
+  idle report. Unexpected watering invalidates it as possible competing-
+  controller activity.
+- Correlate the stock early-stop exchanges: an accepted open consumes the
+  current command counter, while a confirmed close leaves that counter ready
+  for the next bounded open.
+- Add a disabled, non-public HTV145 dry-valve acceptance harness that selects
+  one node, synchronizes only from passive command evidence, dispatches one
+  bounded logical open, and requires observed open plus automatic idle.
+- Distinguish candidate transmit, receiver, corrupt/foreign-response, missing
+  response/state, gateway-loss, and ambiguous-counter failures in the radio
+  node audit report.
+- Generalize retained transaction analysis across HTV145 and both HTV405 zone
+  layouts, and machine-classify new enrollment versus retained rejoin evidence.
+
+## Research firmware 0.14.0-valve-control-probe.40
+
+- Isolate the unvalidated HTV405 battery-cycle retained-rejoin candidate in a
+  dedicated one-reply state machine. The validated 18-step new-enrollment
+  session no longer contains a rejoin mode, and crossed regression tests prove
+  that each workflow rejects the other's announcement.
+
+## Research firmware 0.14.0-valve-control-probe.39
+
+- Physically validate duration-bounded local opens for HTV405 Zones 2--4 with
+  port-specific authenticated responses, matching lower state reports, and
+  automatic idle reports.
+- Keep selector-`0x07` phase reports from overwriting valve state, decode the
+  locally enrolled port nibble, and clear all mutually exclusive zones when a
+  local idle report omits the previous active port.
+- Retain the fresh-battery boundary comparison without assigning an unsupported
+  battery field; known startup/link families were unchanged, while the changing
+  diagnostic offsets also varied with watering-session state.
+- Keep multi-zone transmit commands compiled out of production firmware and
+  unavailable through public gateway and Home Assistant APIs.
+
+## 0.31.2 / Firmware 0.14.0-valve-control-probe.35
+
+- Persist the start, duration, and expected completion of an authenticated
+  duration-bounded HTV405 research run separately from routine telemetry.
+- Make startup, client loss, missing acknowledgements, and missing telemetry
+  observation-only; none of them emits a valve command.
+- Block control when the authenticated counter is uncertain. Permit exact-
+  counter retries only for an explicit early-stop, and require a fresh overdue
+  watering report before an automatic anomaly close.
+- Keep valve control unavailable through the public gateway and Home Assistant
+  APIs.
+
 ## 0.31.0 / Firmware 0.14.0-combined.1
 
 - Combine the selector-2 HTV405 pairing candidate with authorized paired-state

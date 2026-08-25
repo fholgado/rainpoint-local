@@ -38,6 +38,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         self.config_entry_id = config_entry_id
         self.nodes: dict[str, dict] = {}
         self.receivers: list[dict] = []
+        self.htv405_run_minutes: dict[tuple[str, int], int] = {}
         self._logged_inventory = False
         self._event_cursor = event_cursor
         self._event_long_poll = event_long_poll

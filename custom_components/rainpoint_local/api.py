@@ -26,6 +26,10 @@ class RainPointLocalUnauthorized(RainPointLocalError):
     """The gateway rejected an authenticated operation."""
 
 
+class RainPointLocalCommandRejected(RainPointLocalError):
+    """The gateway safely rejected a valid authenticated command."""
+
+
 class RainPointLocalClient:
     """Small asynchronous client for rainpointd."""
 
@@ -224,6 +228,7 @@ class RainPointLocalClient:
         factory_endpoint: str | None = None,
         valve_route: str | None = None,
         companion_endpoint: str | None = None,
+        known_rejoin: bool = False,
     ) -> dict[str, Any]:
         """Open pairing and arm one authenticated local radio node."""
         payload: dict[str, Any] = {
@@ -237,6 +242,8 @@ class RainPointLocalClient:
             payload["valve_route"] = valve_route
         if companion_endpoint is not None:
             payload["companion_endpoint"] = companion_endpoint
+        if known_rejoin:
+            payload["known_rejoin"] = True
         return await self._post(
             "pairing/start",
             payload,
@@ -265,6 +272,31 @@ class RainPointLocalClient:
         return await self._post(
             "pairing/complete",
             {"endpoint": endpoint, "name": name, "area": area},
+            token,
+        )
+
+    async def open_htv405_zone(
+        self,
+        token: str,
+        *,
+        device_id: str,
+        zone: int,
+        duration_seconds: int,
+    ) -> dict[str, Any]:
+        """Request one duration-bounded four-zone valve run."""
+        return await self._post(
+            f"devices/{device_id}/valve/open",
+            {"zone": zone, "duration_seconds": duration_seconds},
+            token,
+        )
+
+    async def close_htv405_zone(
+        self, token: str, *, device_id: str, zone: int
+    ) -> dict[str, Any]:
+        """Request an early stop for a confirmed active zone."""
+        return await self._post(
+            f"devices/{device_id}/valve/close",
+            {"zone": zone},
             token,
         )
 
@@ -298,13 +330,25 @@ class RainPointLocalClient:
                 ),
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
-                if response.status in {401, 403}:
+                if response.status == 401:
                     raise RainPointLocalUnauthorized(
                         "the gateway rejected the registry token"
                     )
+                if response.status >= 400:
+                    try:
+                        error_payload = await response.json()
+                    except (aiohttp.ContentTypeError, ValueError):
+                        error_payload = {}
+                    detail = error_payload.get("error")
+                    raise RainPointLocalCommandRejected(
+                        str(
+                            detail
+                            or f"gateway rejected command ({response.status})"
+                        )
+                    )
                 response.raise_for_status()
                 result = await response.json()
-        except RainPointLocalUnauthorized:
+        except (RainPointLocalCommandRejected, RainPointLocalUnauthorized):
             raise
         except (aiohttp.ClientError, TimeoutError) as exc:
             raise RainPointLocalCannotConnect(str(exc)) from exc

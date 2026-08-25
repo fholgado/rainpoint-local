@@ -1,0 +1,65 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV145FRF",
+  "scope": "stock-cloud status payloads correlated to trailer-valid original-valve RF reports",
+  "association": {
+    "controller_endpoint": "b42d008f",
+    "valve_endpoint": "b9840280"
+  },
+  "observations": [
+    {
+      "cloud_observed_at": "2026-08-17T22:14:41.823912+00:00",
+      "cloud_payload": "10#E1B500DC01D80020B700000000AD00009F27040000FF0FA923231A",
+      "rf_event_id": 73149,
+      "rf_delta_seconds": -0.121381,
+      "rf_frame": "79f4882f28b9840280b42d008f9f8107858580804f9382000040800056800000000000002aff",
+      "expected": {
+        "battery_status": 1,
+        "battery_percent": 100,
+        "last_usage_liters": 106.3
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-19T17:23:53.690444+00:00",
+      "cloud_payload": "10#E1A600DC01D80020B700000000AD00009FA3030000FF0FF5D5261A",
+      "rf_event_id": 96792,
+      "rf_delta_seconds": -0.102817,
+      "rf_frame": "79f4882f28b9840280b42d008f8e8107858700804fd181800040800056800000000000006b51",
+      "expected": {
+        "battery_status": 1,
+        "battery_percent": 100,
+        "last_usage_liters": 93.1
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-22T12:49:59.232318+00:00",
+      "cloud_payload": "10#E1AC00DC02D80020B700000000AD00009F0E040000FF0F7B8C2C1A",
+      "rf_event_id": 128932,
+      "rf_delta_seconds": -0.11349,
+      "rf_frame": "79f4882f28b9840280b42d008f920107858b00804f8702000040800056800000000000007830",
+      "expected": {
+        "battery_status": 2,
+        "battery_percent": 10,
+        "last_usage_liters": 103.8
+      }
+    },
+    {
+      "cloud_observed_at": "2026-08-24T13:12:30.320798+00:00",
+      "cloud_payload": "10#E1AD00DC02D80020B700000000AD00009F33030000FF0F1E93301A",
+      "rf_event_id": 155265,
+      "rf_delta_seconds": -0.137637,
+      "rf_frame": "79f4882f28b9840280b42d008f970107858b00804f99818000408000568000000000000049ef",
+      "expected": {
+        "battery_status": 2,
+        "battery_percent": 10,
+        "last_usage_liters": 81.9
+      }
+    }
+  ],
+  "findings": [
+    "Bit 0x08 at RF offset 17 was clear in both independently cloud-labeled normal-battery reports and set in both low-battery reports.",
+    "The candidate battery bit began intermittent threshold crossings before becoming continuously set; the next stock-cloud report then changed from battery status 1 to 2.",
+    "RF offset 23 bit 0x80 restores value bit 7 of the first packed usage byte; clearing that first-byte bit unconditionally under-reported 93.1 L as 67.5 L and 81.9 L as 56.3 L.",
+    "RF offset 22 bit 0x80 remains the odd-tenths flag."
+  ]
+}

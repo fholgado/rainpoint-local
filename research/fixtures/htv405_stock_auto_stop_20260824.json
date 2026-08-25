@@ -1,0 +1,113 @@
+{
+  "captured_at": "2026-08-24",
+  "model": "HTV405FRF",
+  "scope": "unattended 60-second dry-bench runs on all four zones through the stock cloud gateway",
+  "association": {
+    "app_device_address": 6,
+    "paired_endpoint": "94a98013",
+    "valve_route": "b9840280"
+  },
+  "cloud_open": {
+    "observed_at": "2026-08-24T15:09:24.929273+00:00",
+    "state": "open"
+  },
+  "active_report": {
+    "event_id": 156343,
+    "observed_at": "2026-08-24T15:09:30.978560+00:00",
+    "frame": "79f4882f28b984028094a9801319010786858090cf80000000409b00569e00000000000034cc"
+  },
+  "idle_report": {
+    "event_id": 156355,
+    "observed_at": "2026-08-24T15:10:26.420245+00:00",
+    "frame": "79f4882f28b984028094a98013198107868580804f8000000040800056800000000000007ad8"
+  },
+  "cloud_close": {
+    "observed_at": "2026-08-24T15:10:26.533087+00:00",
+    "state": "closed"
+  },
+  "followup_status": {
+    "event_id": 156356,
+    "observed_at": "2026-08-24T15:10:26.905750+00:00",
+    "frame": "79f4882f28b984028094a980131a0207868080abd9180d10800000001e0000000000000021b9"
+  },
+  "followup_acknowledgement": {
+    "event_id": 156357,
+    "observed_at": "2026-08-24T15:10:26.982076+00:00",
+    "frame": "79f4882f2894a98013398402809a42008000000000000000000000000000000000000000353a"
+  },
+  "timing_seconds": {
+    "cloud_open_to_active_report": 6.049287,
+    "cloud_open_to_idle_report": 61.490972,
+    "active_report_to_idle_report": 55.441685,
+    "idle_report_to_cloud_close": 0.112842
+  },
+  "additional_zone_runs": [
+    {
+      "zone": 2,
+      "cloud_open": "2026-08-24T15:45:55.943000+00:00",
+      "captured_command": {
+        "event_id": 156666,
+        "observed_at": "2026-08-24T15:45:55.348665+00:00",
+        "frame": "79f4882f2894a98013398402808790828101009e000000000000000000000000000000001080"
+      },
+      "active_report": {
+        "event_id": 156667,
+        "observed_at": "2026-08-24T15:46:01.969781+00:00",
+        "frame": "79f4882f28b984028094a980131c810786858110cf80000000409b00569e0000000000006f66"
+      },
+      "idle_report": {
+        "event_id": 156674,
+        "observed_at": "2026-08-24T15:46:56.890062+00:00",
+        "frame": "79f4882f28b984028094a980131d0107868581004f8000000040800056800000000000004479"
+      },
+      "cloud_open_to_active_report_seconds": 6.026781,
+      "cloud_open_to_idle_report_seconds": 60.947062
+    },
+    {
+      "zone": 3,
+      "cloud_open": "2026-08-24T15:48:39.715000+00:00",
+      "captured_command": null,
+      "active_report": {
+        "event_id": 156691,
+        "observed_at": "2026-08-24T15:48:45.934621+00:00",
+        "frame": "79f4882f28b984028094a980131e010786858190cf80000000409b00569e00000000000067fd"
+      },
+      "idle_report": {
+        "event_id": 156697,
+        "observed_at": "2026-08-24T15:49:40.904180+00:00",
+        "frame": "79f4882f28b984028094a980131e8107868581804f80000000408000568000000000000029e9"
+      },
+      "cloud_open_to_active_report_seconds": 6.219621,
+      "cloud_open_to_idle_report_seconds": 61.18918
+    },
+    {
+      "zone": 4,
+      "cloud_open": "2026-08-24T15:50:43.249000+00:00",
+      "captured_command": {
+        "event_id": 156710,
+        "observed_at": "2026-08-24T15:50:42.680493+00:00",
+        "frame": "79f4882f2894a98013398402808890828201009e000000000000000000000000000000007d7e"
+      },
+      "active_report": {
+        "event_id": 156712,
+        "observed_at": "2026-08-24T15:50:49.407338+00:00",
+        "frame": "79f4882f28b984028094a9801300810786858210cf80000000409b80569e0000000000007ce6"
+      },
+      "idle_report": {
+        "event_id": 156721,
+        "observed_at": "2026-08-24T15:51:44.894337+00:00",
+        "frame": "79f4882f28b984028094a98013010107868582004f800000004080005680000000000000605b"
+      },
+      "cloud_close": "2026-08-24T15:51:45.005000+00:00",
+      "cloud_open_to_active_report_seconds": 6.158338,
+      "cloud_open_to_idle_report_seconds": 61.645337,
+      "idle_report_to_cloud_close_seconds": 0.110663
+    }
+  ],
+  "findings": [
+    "Every zone stopped without an explicit close command and independently emitted matching active and idle RF reports.",
+    "The 60-second session is measured from command acceptance rather than from reception of the delayed active report.",
+    "The active and idle control reports share one telemetry sequence/repeat pair; the later status frame advances separately and receives its own acknowledgement.",
+    "The stock command frame was not received in this run, so no control-counter conclusion is inferred from receive-only silence."
+  ]
+}

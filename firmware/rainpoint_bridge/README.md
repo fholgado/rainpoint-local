@@ -5,18 +5,19 @@ RainPoint Local. One node receives RainPoint RF telemetry, performs bounded
 HCS026 soil-sensor pairing and recovery, sends acknowledgements only for
 gateway-assigned sensors, and installs integrity-checked OTA updates.
 
-It does **not** implement valve control or arbitrary RF transmission. Historical
-pairing captures and experiments live under `research/`; they are protocol
-evidence, not alternative firmware builds.
+The standard build does **not** expose valve control and no build permits
+arbitrary RF transmission. The same source can produce an explicitly gated
+supervised HTV405 build. Its association-specific commands are accepted only
+from an authenticated protocol-v2 gateway with the matching beta enabled and
+the valve assigned to that node.
 
-The standard source tree also contains an experimental HTV405 enrollment
-candidate. It can only run after the authenticated gateway supplies the factory
-endpoint and both association routes, and it matches the captured request
-sequence exactly. The sequence has 18 valve-originated steps and 17 bounded
-gateway replies; one step intentionally advances without transmitting. The
-candidate is not exposed in the Home Assistant pairing UI and must not be used
-on a connected irrigation valve until the isolated hardware-validation plan is
-started explicitly.
+The source tree also contains the physically validated HTV405 enrollment
+implementation. It can run only after the authenticated gateway supplies the
+factory endpoint and both association routes, and it matches the captured
+request sequence exactly. The sequence has 18 valve-originated steps and 17
+bounded gateway replies; one step intentionally advances without transmitting.
+Home Assistant offers this pairing flow only when a compatible supervised node
+is online.
 
 ## Supported hardware and wiring
 
@@ -46,15 +47,38 @@ capacitor across CC1101 VCC/GND when practical.
   scan both channels to broaden passive coverage.
 - Supports the validated HCS026 automatic pairing profile without asking users
   for RF IDs. Unknown sensors require an explicit Home Assistant pairing flow.
-- Compiles the association-specific HTV405 enrollment candidate while keeping
-  every valve-control command absent from the firmware boundary.
-- Includes a hardware-independent HTV405 close-frame builder for the isolated
-  close-first trial. It accepts only explicit association identities and is not
-  connected to the Wi-Fi, serial, Home Assistant, or CC1101 transmit paths.
+- Compiles the association-specific HTV405 enrollment implementation. The
+  supervised build also accepts the bounded `valve_control_tx_candidate`
+  command vocabulary for 1--60 whole-minute opens on Zones 1--4 and Zone 1
+  early-close. One- and two-minute opens are physically validated; longer runs
+  remain a field-acceptance gate. Control requires explicit association
+  identities, a persisted response-authenticated counter, and the calibrated
+  carrier profile.
+- Contains a separate HTV145 single-zone candidate behind both
+  `RAINPOINT_RESEARCH_BENCH=1` and `RAINPOINT_HTV145_TX_CANDIDATE=1`. It uses
+  the retained 1,200-symbol wake and one bounded three-attempt RF burst,
+  accepts only explicit association endpoints/carrier/residue, and advances
+  its command counter only from a matching response or independent state
+  confirmation. The standard image compiles this path out.
+- The HTV145 candidate reports bounded-attempt evidence separately from its
+  verdict: attempts started/sent, matching-route and invalid-trailer frames,
+  classified response/state frames, response and state outcomes, a precise
+  failure class, and whether the command counter is ambiguous. These fields
+  feed the disabled dry-valve acceptance transcript; they are not a public
+  actuator interface.
+- Keeps valve control absent from standard builds. In a supervised build, the
+  gateway/HA boundary is disabled by default, token-protected, and restricted
+  to the assigned HTV405 association. The coordinator spaces operations by at
+  least 15 seconds, never advances state from transmit success, and never emits
+  a speculative startup or counter-recovery command.
 - Recovers a known dormant sensor from its strict factory announcement with one
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated
   local gateway and restores all of them after reconnect or reboot.
+- Accepts an association-specific controller/companion identity from the
+  authenticated gateway for pairing, recovery, and routine ACKs. Firmware with
+  this boundary advertises `configurable_rf_controller_identity`; the gateway
+  refuses to give a custom-identity association to an older node.
 - Starts with RF transmission disarmed and fails closed on timeout, network
   loss, unexpected pairing state, invalid command, or driver failure.
 - Reports radio, heap, reset, temperature, loop-latency, network, Wi-Fi, OTA,
@@ -78,6 +102,29 @@ pio device monitor --baud 115200
 `rainpoint_bridge` is the only PlatformIO environment. CI builds the same image
 and checks that obsolete local RF bench commands are absent while pairing,
 ACK, and OTA capabilities are present.
+
+The default build is production-safe and compiles out all research controls.
+For an explicitly authorized isolated-valve session, build the same environment
+with the research profile enabled:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.3 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+Never publish or OTA-promote that research artifact as a standard release.
+
+The unaccepted HTV145 candidate requires an additional explicit build gate:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_HTV145_TX_CANDIDATE=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.1 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+Do not deploy that artifact before the isolated dry-valve acceptance session.
 
 The generic `esp32dev` board definition matches the tested board. If automatic
 upload reset fails, hold **BOOT**, begin upload, and release it when PlatformIO
@@ -125,7 +172,7 @@ verify the standard artifact manifest with:
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.14.0-combined.1 --environment rainpoint_bridge
+  --version 0.15.0-combined.1 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify
@@ -157,6 +204,10 @@ pairing, acknowledgement, channel, or trailer behavior.
   unavailable to the locally paired sensors.
 - Test ACK-owner reassignment and interrupted/power-loss OTA rollback.
 - Add signed releases and a reviewed secure session transport.
-- Physically validate and generalize the reconstructed HTV405 enrollment
-  candidate, then validate fail-safe close before enabling physical valve
-  control.
+- Retain the installed HTV405 longer-duration result across RF, gateway, Home
+  Assistant completion notification, usage, and watchdog layers.
+- Physically exercise HTV405 early stop on Zones 2--4, battery-cycle rejoin,
+  and a controlled normal-to-low battery transition without changing the
+  validated new-enrollment path.
+- Repeat association and control acceptance on a second HTV405 specimen before
+  promoting supervised control from beta.

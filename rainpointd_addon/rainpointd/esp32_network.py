@@ -10,7 +10,7 @@ import secrets
 import socket
 import threading
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from .esp32 import ESP32SerialTransport
 from .gateway import Gateway
@@ -59,6 +59,9 @@ class ESP32NetworkServer:
         port: int = DEFAULT_NODE_PORT,
         node_tokens: dict[str, str] | None = None,
         deduplication_window_seconds: float = 0.25,
+        htv145_candidate_observer: (
+            Callable[[str, dict[str, Any]], None] | None
+        ) = None,
     ) -> None:
         self.gateway = gateway
         self.host = host
@@ -68,6 +71,7 @@ class ESP32NetworkServer:
         # Retained for constructor compatibility. Deduplication now belongs to
         # the gateway so SDR, serial, and every network node share one boundary.
         self.deduplication_window_seconds = deduplication_window_seconds
+        self.htv145_candidate_observer = htv145_candidate_observer
         self._publisher = ESP32SerialTransport(gateway, device="network")
         self._socket: socket.socket | None = None
         self._thread: threading.Thread | None = None
@@ -137,6 +141,16 @@ class ESP32NetworkServer:
             "firmware_update_start",
             "routine_ack_configure",
             "routine_ack_revoke",
+            "valve_control_configure",
+            "valve_control_sync",
+            "valve_control_open",
+            "valve_control_close",
+            "valve_control_status",
+            "htv145_control_configure",
+            "htv145_control_sync",
+            "htv145_control_open",
+            "htv145_control_close",
+            "htv145_control_status",
         }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
@@ -152,6 +166,10 @@ class ESP32NetworkServer:
             required_capability = "firmware_update_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
+        elif command_type.startswith("htv145_control_"):
+            required_capability = "htv145_control_tx_candidate"
+        elif command_type.startswith("valve_control_"):
+            required_capability = "valve_control_tx_candidate"
         elif (
             command_type == "pairing_start"
             and message.get("profile") == "htv405_auto_candidate_v1"
@@ -337,6 +355,29 @@ class ESP32NetworkServer:
                     self.gateway.notify_node_update(
                         node_id, "radio_node_firmware_update"
                     )
+                if message.get("type") == "htv145_control_candidate":
+                    self.gateway.update_node(
+                        node_id,
+                        htv145_control_candidate_state=message.get("state"),
+                        htv145_control_candidate_configured=(
+                            message.get("configured") is True
+                        ),
+                        htv145_control_candidate_counter_authenticated=(
+                            message.get("counter_authenticated") is True
+                        ),
+                        htv145_control_candidate_pending=(
+                            message.get("pending") is True
+                        ),
+                        htv145_control_candidate_command_id=message.get(
+                            "command_id"
+                        ),
+                        htv145_control_candidate_confirmation=message.get(
+                            "confirmation"
+                        ),
+                    )
+                    observer = self.htv145_candidate_observer
+                    if observer is not None:
+                        observer(node_id, message)
                 if message.get("type") == "command_error":
                     current_node = next(
                         (
@@ -346,7 +387,15 @@ class ESP32NetworkServer:
                         ),
                         {},
                     )
-                    if message.get("command_id") == current_node.get(
+                    if self.gateway.observe_valve_control_error(
+                        node_id, message
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            valve_control_probe_state="failed",
+                            valve_control_probe_detail=message.get("error"),
+                        )
+                    elif message.get("command_id") == current_node.get(
                         "identify_command_id"
                     ):
                         self.gateway.update_node(
@@ -370,6 +419,9 @@ class ESP32NetworkServer:
                             pairing_command_id=message.get("command_id"),
                             pairing_detail=message.get("error"),
                         )
+                    observer = self.htv145_candidate_observer
+                    if observer is not None:
+                        observer(node_id, message)
                 self._publisher.consume_line(
                     json.dumps(message), authenticated_node_id=node_id
                 )
@@ -460,9 +512,12 @@ class ESP32NetworkServer:
                     {
                         "rx",
                         "sensor_pairing_tx",
+                        "configurable_rf_controller_identity",
                         "identify",
                         "routine_sensor_ack_tx",
                         "valve_pairing_tx_candidate",
+                        "valve_control_tx_candidate",
+                        "htv145_control_tx_candidate",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }

@@ -17,8 +17,10 @@ Active migration must not ship until all of these are physically proven:
 
 1. Model-wide sensor pairing across at least two identities.
 2. Repeatable test-valve association without the vendor app.
-3. Close-first valve control with returned-state acknowledgement.
-4. Bounded open, node-local watchdog, client-loss recovery, and repeated close.
+3. Duration-bearing valve control with authenticated command response and
+   independent returned-state acknowledgement.
+4. Valve-owned bounded open, gateway watchdog, client-loss observation, and
+   explicit early-stop recovery without speculative open retries.
 5. Stable local identity and registry restoration across gateway, node, HA, and
    device restarts.
 6. A documented recovery path for every destructive association transition.

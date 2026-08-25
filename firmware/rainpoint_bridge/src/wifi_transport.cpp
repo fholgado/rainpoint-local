@@ -269,6 +269,20 @@ void WifiTransport::handleGatewayLine(const String& line) {
     if (authenticated_ &&
         (type == "pairing_start" || type == "pairing_cancel" ||
          type == "identify_start"
+#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+         || type == "htv145_control_configure" ||
+             type == "htv145_control_sync" ||
+             type == "htv145_control_open" ||
+             type == "htv145_control_close" ||
+             type == "htv145_control_status"
+#endif
+#if RAINPOINT_RESEARCH_BENCH == 1
+         || type == "valve_control_configure" ||
+             type == "valve_control_sync" ||
+             type == "valve_control_open" ||
+             type == "valve_control_close" ||
+             type == "valve_control_status"
+#endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
          || type == "routine_ack_configure" ||
              type == "routine_ack_revoke"
@@ -318,7 +332,14 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"firmware_channel\":\"stable\","
 #endif
         "\"gateway_host\":\"%s\","
-        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
+        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\","
+        "\"configurable_rf_controller_identity\""
+#if RAINPOINT_RESEARCH_BENCH == 1
+        ",\"valve_control_tx_candidate\""
+#endif
+#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+        ",\"htv145_control_tx_candidate\""
+#endif
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         ",\"valve_pairing_tx_candidate\""
 #endif

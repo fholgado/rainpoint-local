@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -17,17 +18,459 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
-from rainpointd.gateway import Gateway
+from rainpointd.gateway import Gateway, _observed_utc
 from rainpointd.http import create_server
+from rainpointd.ingest import FrameIngestor
 from rainpointd.pairing import HCS026EnrollmentManager
 from rainpointd.product_identity import (
     GENERIC_HCS02X_MODEL,
     HCS02X_PROTOCOL,
 )
 from rainpointd.replay import ReplayTransport, load_fixtures
+from rainpointd.valve_protocol import ValveLink, build_open_frame
 
 
 class GatewayTest(unittest.TestCase):
+    HTV405_OPEN_RESPONSE_SEQUENCE_6 = (
+        "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
+        "00000000000000005878"
+    )
+
+    def test_local_rf_controller_identity_is_unique_persistent_and_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(storage_path=str(path))
+            first = gateway.info()["rf_controller_identity"]
+            self.assertTrue(first["persistent"])
+            self.assertEqual(0x80, bytes.fromhex(first["companion_endpoint"])[-1])
+            self.assertFalse(bytes.fromhex(first["companion_endpoint"])[0] & 0x80)
+            self.assertTrue(bytes.fromhex(first["controller_endpoint"])[0] & 0x80)
+            self.assertEqual(
+                bytes.fromhex(first["companion_endpoint"])[1:],
+                bytes.fromhex(first["controller_endpoint"])[1:],
+            )
+            self.assertNotEqual("39840280", first["companion_endpoint"])
+            gateway.close()
+
+            restored = Gateway(storage_path=str(path))
+            second = restored.info()["rf_controller_identity"]
+            self.assertEqual(first["companion_endpoint"], second["companion_endpoint"])
+            self.assertEqual(first["controller_endpoint"], second["controller_endpoint"])
+            self.assertIn(
+                second["controller_endpoint"],
+                restored.catalog.hcs026_pairing_peers,
+            )
+            restored.close()
+
+    def test_timestamp_normalization_portability_matrix(self) -> None:
+        explicit = {
+            "2026-01-15T12:00:00Z": "2026-01-15T12:00:00+00:00",
+            "2026-01-15T12:00:00+05:30": "2026-01-15T06:30:00+00:00",
+            "2026-01-15T12:00:00-08:00": "2026-01-15T20:00:00+00:00",
+            # Both occurrences of the North American repeated fall-back hour.
+            "2026-11-01T01:30:00-04:00": "2026-11-01T05:30:00+00:00",
+            "2026-11-01T01:30:00-05:00": "2026-11-01T06:30:00+00:00",
+            # Both occurrences of the European repeated fall-back hour.
+            "2026-10-25T02:30:00+02:00": "2026-10-25T00:30:00+00:00",
+            "2026-10-25T02:30:00+01:00": "2026-10-25T01:30:00+00:00",
+        }
+        for observed, expected in explicit.items():
+            with self.subTest(observed=observed):
+                self.assertEqual(
+                    datetime.fromisoformat(expected), _observed_utc(observed)
+                )
+
+        previous_timezone = os.environ.get("TZ")
+        try:
+            legacy_local = {
+                ("UTC", "2026-01-15T12:00:00"): "2026-01-15T12:00:00+00:00",
+                ("Asia/Kolkata", "2026-01-15T12:00:00"): "2026-01-15T06:30:00+00:00",
+                ("America/New_York", "2026-01-15T12:00:00"): "2026-01-15T17:00:00+00:00",
+                ("America/New_York", "2026-07-15T12:00:00"): "2026-07-15T16:00:00+00:00",
+                ("Europe/Berlin", "2026-01-15T12:00:00"): "2026-01-15T11:00:00+00:00",
+                ("Europe/Berlin", "2026-07-15T12:00:00"): "2026-07-15T10:00:00+00:00",
+            }
+            for (zone, observed), expected in legacy_local.items():
+                with self.subTest(zone=zone, observed=observed):
+                    os.environ["TZ"] = zone
+                    time.tzset()
+                    self.assertEqual(
+                        datetime.fromisoformat(expected),
+                        _observed_utc(observed),
+                    )
+        finally:
+            if previous_timezone is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = previous_timezone
+            time.tzset()
+
+    @staticmethod
+    def _gateway_with_pending_htv405_open(path: Path) -> Gateway:
+        gateway = Gateway(
+            storage_path=str(path),
+            valve_control_enabled=True,
+        )
+        assert gateway._store is not None
+        gateway._store.upsert_valve_link(
+            controller_endpoint="b9c40280",
+            valve_endpoint="94a98013",
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            area="Garden",
+            accepted_at="2026-08-24T20:00:00+00:00",
+        )
+        gateway._store.update_valve_control_profile(
+            valve_endpoint="94a98013",
+            node_id="rp-001122334455",
+            companion_endpoint="39840280",
+            selector=0x05,
+            frequency_offset_hz=97_154,
+            observed_at="2026-08-24T20:00:01+00:00",
+        )
+        gateway._store.synchronize_htv405_control_counter(
+            valve_endpoint="94a98013",
+            node_id="rp-001122334455",
+            next_sequence=6,
+            source="retained_association_capture",
+            observed_at="2026-08-24T20:00:02+00:00",
+        )
+        gateway._refresh_registry_catalog()
+        gateway._ensure_registered_valve_devices()
+        gateway.update_node(
+            "rp-001122334455",
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "valve_control_tx_candidate"],
+        )
+        gateway.set_node_command_sender(lambda _node_id, _command: None)
+        gateway.request_htv405_control(
+            device_id="htv405-94a98013",
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        return gateway
+
+    def test_authenticated_node_air_response_confirms_pending_open(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = self._gateway_with_pending_htv405_open(
+                Path(temporary_directory) / "rainpoint.sqlite3"
+            )
+            self.assertIsNone(
+                gateway.observe_valve_control_air_response(
+                    "rp-aabbccddeeff",
+                    self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                    observed_at="2026-08-24T20:00:20.900000+00:00",
+                )
+            )
+            pending = gateway._store.valve_registry()[0]
+            self.assertIsNotNone(pending["control_pending_command_id"])
+
+            accepted = gateway.observe_valve_control_air_response(
+                "rp-001122334455",
+                self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                observed_at="2026-08-24T20:00:20.900000+00:00",
+            )
+
+            self.assertIsNotNone(accepted)
+            assert accepted is not None
+            self.assertIsNone(accepted["control_pending_command_id"])
+            self.assertEqual(7, accepted["control_next_sequence"])
+            self.assertTrue(accepted["control_confirmed_watering"])
+            self.assertEqual(1, accepted["control_active_zone"])
+            self.assertEqual(433_518_527, accepted["control_center_hz"])
+            self.assertEqual(
+                "valve_control_confirmed", gateway.events()[-1]["event_type"]
+            )
+            gateway.close()
+
+    def test_restart_recovers_journaled_response_then_later_idle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = self._gateway_with_pending_htv405_open(path)
+            gateway.observe_rf_frame(
+                frame=self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                state={
+                    "rf_receiver_id": "rp-001122334455",
+                    "rf_frame_accepted": True,
+                },
+                observed_at="2026-08-24T20:00:20.900000+00:00",
+                device_id="htv405-94a98013",
+            )
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="idle-after-bounded-run",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:01:21+00:00",
+            )
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="later-ambiguous-heartbeat",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": None,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:02:21+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(
+                storage_path=str(path),
+                valve_control_enabled=True,
+            )
+            assert restored._store is not None
+            registration = restored._store.valve_registry()[0]
+            self.assertIsNone(registration["control_pending_command_id"])
+            self.assertEqual(7, registration["control_next_sequence"])
+            self.assertFalse(registration["control_confirmed_watering"])
+            self.assertIsNone(registration["control_active_zone"])
+            self.assertEqual(
+                "automatic_idle_confirmed_from_telemetry",
+                registration["control_last_result"],
+            )
+            restored_device = next(
+                item
+                for item in restored.devices()
+                if item["device_id"] == "htv405-94a98013"
+            )
+            self.assertFalse(restored_device["state"]["is_watering"])
+            self.assertEqual(
+                "2026-08-24T20:01:21+00:00",
+                restored_device["state_observed_at"],
+            )
+            restored.close()
+
+    def test_phase_only_htv405_report_preserves_definitive_state(self) -> None:
+        gateway = Gateway()
+        gateway.observe_decoded(
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="definitive-idle",
+            state={
+                "rf_endpoint_b": "94a98013",
+                "rf_frame_accepted": True,
+                "is_watering": False,
+                "active_zone": None,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:01:21+00:00",
+        )
+        gateway.observe_decoded(
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="phase-only-heartbeat",
+            state={
+                "rf_endpoint_b": "94a98013",
+                "rf_frame_accepted": True,
+                "is_watering": None,
+                "active_zone": None,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:02:21+00:00",
+        )
+
+        device = gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:02:21+00:00")
+        )[0]
+        self.assertFalse(device["state"]["is_watering"])
+        self.assertEqual(
+            "2026-08-24T20:01:21+00:00", device["state_observed_at"]
+        )
+        self.assertEqual(
+            "2026-08-24T20:02:21+00:00", device["observed_at"]
+        )
+        gateway.close()
+
+    def test_authenticated_network_ingest_confirms_air_response(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = self._gateway_with_pending_htv405_open(
+                Path(temporary_directory) / "rainpoint.sqlite3"
+            )
+            ingestor = FrameIngestor(
+                gateway,
+                receiver_id="rp-001122334455",
+            )
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-24T20:00:20.900000+00:00",
+                    "rows": [
+                        {
+                            "len": len(
+                                self.HTV405_OPEN_RESPONSE_SEQUENCE_6
+                            )
+                            * 4,
+                            "data": self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
+                        }
+                    ],
+                }
+            )
+
+            self.assertEqual(1, published)
+            registration = gateway._store.valve_registry()[0]
+            self.assertIsNone(registration["control_pending_command_id"])
+            self.assertEqual(7, registration["control_next_sequence"])
+            self.assertTrue(registration["control_confirmed_watering"])
+            gateway.close()
+
+    def test_invalid_trailer_cannot_discover_a_phantom_htv405_link(self) -> None:
+        corrupted = (
+            "79f4882f28b984068094a98013108107820580804f80000000408000568"
+            "00000000000000043ed"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            ingestor = FrameIngestor(gateway, receiver_id="rp-001122334455")
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-25T16:34:29.137286+00:00",
+                    "rows": [
+                        {
+                            "len": len(corrupted) * 4,
+                            "data": corrupted,
+                        }
+                    ],
+                }
+            )
+
+            self.assertEqual(1, published)
+            assert gateway._store is not None
+            self.assertEqual([], gateway._store.valve_registry())
+            self.assertEqual([], gateway.devices())
+            event = gateway.events()[-1]
+            self.assertFalse(event["state"]["rf_frame_accepted"])
+            gateway.close()
+
+    def test_forgotten_htv405_link_is_removed_and_suppressed(self) -> None:
+        valid = (
+            "79f4882f28b984028094a98013108107820580804f80000000408000568"
+            "00000000000000043a1"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-08-25T18:00:00+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+
+            forgotten = gateway.forget_registry_device("htv405-94a98013")
+
+            self.assertEqual("94a98013", forgotten["endpoint"])
+            self.assertEqual([], gateway._store.valve_registry())
+            self.assertEqual([], gateway.devices())
+            self.assertTrue(gateway.endpoint_suppressed("94a98013"))
+            self.assertIsNone(
+                gateway.register_observed_htv405_link(
+                    controller_endpoint="b9840280",
+                    valve_endpoint="94a98013",
+                    frame=valid,
+                    observed_at="2026-08-25T18:01:00+00:00",
+                )
+            )
+            self.assertEqual([], gateway._store.valve_registry())
+            gateway.close()
+
+    def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
+        previous_timezone = os.environ.get("TZ")
+        try:
+            os.environ["TZ"] = "America/New_York"
+            time.tzset()
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                gateway = Gateway(
+                    storage_path=str(
+                        Path(temporary_directory) / "rainpoint.sqlite3"
+                    ),
+                    valve_control_enabled=True,
+                )
+                assert gateway._store is not None
+                gateway._store.upsert_valve_link(
+                    controller_endpoint="b9840280",
+                    valve_endpoint="94a98013",
+                    device_id="htv405-94a98013",
+                    name="Test four-zone valve",
+                    model="HTV405FRF",
+                    area="Garden",
+                    accepted_at="2026-08-24T20:00:00+00:00",
+                )
+                gateway._store.update_valve_control_profile(
+                    valve_endpoint="94a98013",
+                    node_id="rp-001122334455",
+                    companion_endpoint="39840280",
+                    selector=0x05,
+                    frequency_offset_hz=97_154,
+                    observed_at="2026-08-24T20:00:01+00:00",
+                )
+                gateway._refresh_registry_catalog()
+                gateway._ensure_registered_valve_devices()
+                gateway.observe_decoded(
+                    device_id="htv405-94a98013",
+                    name="Test four-zone valve",
+                    model="HTV405FRF",
+                    frame="idle",
+                    state={
+                        "rf_endpoint_b": "94a98013",
+                        "is_watering": False,
+                        "valve_state": "idle",
+                    },
+                    observed_at="2026-08-24T16:00:00",
+                )
+
+                synchronized = gateway.synchronize_htv405_control_counter(
+                    device_id="htv405-94a98013",
+                    next_sequence=6,
+                    evidence_source="retained_association_capture",
+                    now=datetime.fromisoformat("2026-08-24T20:00:30+00:00"),
+                )
+
+                self.assertEqual(6, synchronized["control_next_sequence"])
+                self.assertFalse(synchronized["control_confirmed_watering"])
+                self.assertEqual(
+                    "2026-08-24T20:00:30+00:00",
+                    synchronized["control_confirmed_at"],
+                )
+                gateway.close()
+        finally:
+            if previous_timezone is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = previous_timezone
+            time.tzset()
+
     def test_sensor_link_diagnostics_attach_to_endpoint_device(self) -> None:
         gateway = Gateway(transport="rtl433")
         gateway.observe_decoded(
@@ -430,7 +873,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(8, gateway.info()["storage_schema_version"])
+            self.assertEqual(15, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -441,7 +884,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(8, migrated.info()["storage_schema_version"])
+            self.assertEqual(15, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -463,11 +906,158 @@ class GatewayTest(unittest.TestCase):
             }
             connection.close()
             self.assertIn("valve_registry", valve_tables)
+            connection = sqlite3.connect(path)
+            ack_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(hcs026_ack_assignments)"
+                )
+            }
+            connection.close()
+            self.assertTrue(
+                {"controller_endpoint", "companion_endpoint"} <= ack_columns
+            )
+            connection = sqlite3.connect(path)
+            valve_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            connection.close()
+            self.assertTrue(
+                {
+                    "last_sequence",
+                    "last_repeat",
+                    "next_sequence",
+                    "next_repeat",
+                    "last_phase_at",
+                    "last_phase_frame",
+                    "control_node_id",
+                    "control_companion_endpoint",
+                    "control_selector",
+                    "control_frequency_offset_hz",
+                    "control_center_hz",
+                    "control_last_sequence",
+                    "control_next_sequence",
+                    "control_confirmed_watering",
+                    "control_confirmed_at",
+                    "control_response_frame",
+                    "control_active_zone",
+                    "control_run_started_at",
+                    "control_run_duration_seconds",
+                    "control_expected_idle_at",
+                    "control_pending_command_id",
+                    "control_pending_action",
+                    "control_pending_sequence",
+                    "control_pending_zone",
+                    "control_pending_duration_seconds",
+                    "control_pending_started_at",
+                    "control_last_result",
+                }
+                <= valve_columns
+            )
             self.assertEqual(
                 44,
                 migrated.devices()[0]["state"]["soil_moisture_percent"],
             )
             migrated.close()
+
+    def test_restore_redecodes_accepted_htv145_snapshot(self) -> None:
+        low_battery_idle = (
+            "79f4882f28b9840280b42d008f970107858b00804f998180"
+            "00408000568000000000000049ef"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=low_battery_idle,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": True,
+                    "valve_state": "watering",
+                    "last_usage_liters": 0.0,
+                },
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            valve = next(
+                device
+                for device in restored.devices()
+                if device["device_id"] == "valve-1"
+            )
+            self.assertFalse(valve["state"]["is_watering"])
+            self.assertEqual("idle", valve["state"]["valve_state"])
+            self.assertEqual(81.9, valve["state"]["last_usage_liters"])
+            self.assertEqual(10, valve["state"]["battery_percent"])
+            self.assertEqual(2, valve["state"]["battery_status"])
+            restored.close()
+
+    def test_restore_ignores_persisted_htv145_controller_request_state(
+        self,
+    ) -> None:
+        idle = (
+            "79f4882f28b9840280b42d008f970107858b00804f998180"
+            "00408000568000000000000049ef"
+        )
+        request = (
+            "79f4882f28b42d008fb98402808d10828081009e00000000"
+            "000000000000000000000000da7f"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=idle,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "valve_state": "idle",
+                    "battery_low": True,
+                },
+                observed_at="2026-08-25T00:14:55+00:00",
+            )
+            # Freeze the projection produced by the old decoder when it heard
+            # a controller request from our own transmitter.
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=request,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": True,
+                    "valve_state": "watering",
+                    "duration_seconds": 60,
+                },
+                observed_at="2026-08-25T00:20:57+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            valve = next(
+                device
+                for device in restored.devices()
+                if device["device_id"] == "valve-1"
+            )
+            self.assertFalse(valve["state"]["is_watering"])
+            self.assertEqual("idle", valve["state"]["valve_state"])
+            self.assertEqual(idle, valve["state"]["raw"])
+            # Reception cadence remains a separate metric, but device state
+            # must point back to the last valve-originated observation.
+            self.assertEqual(
+                "2026-08-25T00:14:55+00:00",
+                valve["state_observed_at"],
+            )
+            restored.close()
 
     def test_storage_rejects_newer_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -1153,6 +1743,14 @@ class RegistryHTTPAPITest(unittest.TestCase):
         )
         self.assertFalse(forgotten["rf_unpaired"])
 
+    def test_htv405_control_route_is_disabled_by_default(self) -> None:
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                "/api/v1/devices/htv405-test/valve/open",
+                {"zone": 1, "duration_seconds": 60},
+            )
+        self.assertEqual(403, raised.exception.code)
+
     def test_management_token_rotation_revokes_previous_token(self) -> None:
         result = self.post_json("/api/v1/auth/rotate", {})
         replacement = result["registry_write_token"]
@@ -1450,6 +2048,456 @@ class RegistryHTTPAPITest(unittest.TestCase):
         with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
             reset_progress = json.load(response)
         self.assertEqual([], reset_progress["records"])
+
+
+class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
+    """Exercise the private, one-shot HTV145 dry-valve boundary."""
+
+    NODE_ID = "rp-001122334455"
+    CONTROLLER_ENDPOINT = "b42d008f"
+    VALVE_ENDPOINT = "b9840280"
+    IDLE = (
+        "79f4882f28b9840280b42d008f970107858b00804f998180004080005680"
+        "00000000000049ef"
+    )
+    OPEN_RESPONSE = (
+        "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802"
+        "000000000000004bfa"
+    )
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        path = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        gateway = Gateway(
+            storage_path=str(path),
+            registry_token="test-token",
+            htv145_acceptance_enabled=True,
+        )
+        gateway.update_node(
+            self.NODE_ID,
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "htv145_control_tx_candidate"],
+        )
+        self.commands: list[tuple[str, dict]] = []
+        gateway.set_node_command_sender(
+            lambda node_id, command: self.commands.append((node_id, command))
+        )
+        self.server = create_server(gateway, port=0)
+        self.thread = threading.Thread(
+            target=self.server.serve_forever, daemon=True
+        )
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.server.gateway.close()
+        self.thread.join(timeout=2)
+        self.temporary_directory.cleanup()
+
+    def post_json(
+        self, path: str, payload: dict, *, token: str | None = "test-token"
+    ) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        request = Request(
+            f"{self.base}{path}",
+            data=json.dumps(payload).encode(),
+            headers=headers,
+            method="POST",
+        )
+        with urlopen(request, timeout=2) as response:
+            return json.load(response)
+
+    def test_one_shot_open_requires_auth_and_positive_valve_evidence(self) -> None:
+        link = ValveLink(
+            bytes.fromhex(self.CONTROLLER_ENDPOINT),
+            bytes.fromhex(self.VALVE_ENDPOINT),
+        )
+        passive = build_open_frame(link, 0x80, 1_200, 0xC713).hex()
+        payload = {
+            "node_id": self.NODE_ID,
+            "controller_endpoint": self.CONTROLLER_ENDPOINT,
+            "valve_endpoint": self.VALVE_ENDPOINT,
+            "center_hz": 434_239_594,
+            "power_dbm": 10,
+            "invert": False,
+            "trailer_residual": 0xC713,
+            "idle_frame": self.IDLE,
+            "passive_command_frame": passive,
+            "idle_observed_at": "2026-08-25T00:00:00+00:00",
+            "passive_command_observed_at": "2026-08-25T00:00:00+00:00",
+        }
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                "/api/v1/research/htv145-acceptance/prepare",
+                payload,
+                token=None,
+            )
+        self.assertEqual(401, raised.exception.code)
+
+        prepared = self.post_json(
+            "/api/v1/research/htv145-acceptance/prepare", payload
+        )
+        self.assertEqual("prepared_no_actuation", prepared["state"])
+        self.assertEqual(
+            ["htv145_control_configure", "htv145_control_sync"],
+            [command["type"] for _node, command in self.commands],
+        )
+
+        opened = self.post_json(
+            "/api/v1/research/htv145-acceptance/open",
+            {"duration_seconds": 60},
+        )
+        command = opened["command"]
+        self.assertEqual("htv145_control_open", command["type"])
+        self.server.gateway.observe_htv145_acceptance_candidate(
+            self.NODE_ID,
+            {
+                "type": "htv145_control_candidate",
+                "node_id": self.NODE_ID,
+                "state": "confirmed",
+                "command_id": command["command_id"],
+                "frame": self.OPEN_RESPONSE,
+            },
+        )
+        expected_idle_at = datetime.fromisoformat(
+            opened["acceptance"]["expected_idle_at"]
+        )
+        self.server.gateway.observe_decoded(
+            device_id="valve-1",
+            name="Dry one-zone valve",
+            model="HTV145FRF",
+            frame=self.IDLE,
+            state={"model": "HTV145FRF", "is_watering": False},
+            observed_at=expected_idle_at.isoformat(),
+        )
+        status = self.post_json(
+            "/api/v1/research/htv145-acceptance/status", {}
+        )
+        self.assertTrue(status["passed"])
+        self.assertTrue(status["checks"]["one_logical_open_dispatched"])
+        with self.assertRaises(HTTPError) as stale:
+            self.post_json(
+                "/api/v1/research/htv145-acceptance/prepare", payload
+            )
+        self.assertEqual(400, stale.exception.code)
+
+
+class ValveControlHTTPAPITest(unittest.TestCase):
+    """Exercise the authenticated, disabled-by-default HTV405 boundary."""
+
+    NODE_ID = "rp-001122334455"
+    SECOND_NODE_ID = "rp-aabbccddeeff"
+    DEVICE_ID = "htv405-94a98013"
+    VALVE_ENDPOINT = "94a98013"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        path = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        gateway = Gateway(
+            storage_path=str(path),
+            registry_token="test-token",
+            valve_control_enabled=True,
+        )
+        assert gateway._store is not None
+        gateway._store.upsert_valve_link(
+            controller_endpoint="b9840280",
+            valve_endpoint=self.VALVE_ENDPOINT,
+            device_id=self.DEVICE_ID,
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            area="Garden",
+            accepted_at="2026-08-24T20:00:00+00:00",
+        )
+        gateway._store.update_valve_control_profile(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            companion_endpoint="39840280",
+            selector=0x05,
+            frequency_offset_hz=97_154,
+            observed_at="2026-08-24T20:00:01+00:00",
+        )
+        gateway._store.synchronize_htv405_control_counter(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            next_sequence=6,
+            source="retained_association_capture",
+            observed_at="2026-08-24T20:00:02+00:00",
+        )
+        gateway._refresh_registry_catalog()
+        gateway._ensure_registered_valve_devices()
+        gateway.update_node(
+            self.NODE_ID,
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "valve_control_tx_candidate"],
+        )
+        gateway.update_node(
+            self.SECOND_NODE_ID,
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "valve_control_tx_candidate"],
+        )
+        self.commands: list[tuple[str, dict]] = []
+        gateway.set_node_command_sender(
+            lambda node_id, command: self.commands.append((node_id, command))
+        )
+        self.server = create_server(gateway, port=0)
+        self.thread = threading.Thread(
+            target=self.server.serve_forever, daemon=True
+        )
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.server.gateway.close()
+        self.thread.join(timeout=2)
+        self.temporary_directory.cleanup()
+
+    def post_json(
+        self, path: str, payload: dict, *, token: str | None = "test-token"
+    ) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        request = Request(
+            f"{self.base}{path}",
+            data=json.dumps(payload).encode(),
+            headers=headers,
+            method="POST",
+        )
+        with urlopen(request, timeout=2) as response:
+            return json.load(response)
+
+    def test_authenticated_registry_forget_removes_valve_link(self) -> None:
+        result = self.post_json(
+            f"/api/v1/registry/{self.DEVICE_ID}/forget", {}
+        )
+
+        self.assertFalse(result["rf_unpaired"])
+        self.assertEqual(
+            self.VALVE_ENDPOINT, result["forgotten"]["endpoint"]
+        )
+        self.assertEqual([], self.server.gateway._store.valve_registry())
+        self.assertFalse(
+            any(
+                device["device_id"] == self.DEVICE_ID
+                for device in self.server.gateway.devices()
+            )
+        )
+        self.assertTrue(
+            self.server.gateway.endpoint_suppressed(self.VALVE_ENDPOINT)
+        )
+
+    def test_open_is_bounded_reserved_and_node_rejection_is_terminal(self) -> None:
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+                {"zone": 2, "duration_seconds": 60},
+                token=None,
+            )
+        self.assertEqual(401, raised.exception.code)
+
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 2, "duration_seconds": 60},
+        )["control"]
+        self.assertEqual("pending_authenticated_response", result["state"])
+        self.assertEqual(
+            [
+                "valve_control_configure",
+                "valve_control_sync",
+                "valve_control_open",
+            ],
+            [command["type"] for _node, command in self.commands],
+        )
+        self.assertEqual(
+            {result["command_id"]},
+            {command["command_id"] for _node, command in self.commands},
+        )
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+                {"zone": 1, "duration_seconds": 60},
+            )
+        self.assertEqual(400, raised.exception.code)
+
+        self.assertTrue(
+            self.server.gateway.observe_valve_control_error(
+                self.NODE_ID,
+                {
+                    "type": "command_error",
+                    "command_id": result["command_id"],
+                    "error": "invalid_valve_control_open",
+                },
+                observed_at="2026-08-24T20:00:21+00:00",
+            )
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertIsNone(registration["control_pending_command_id"])
+        self.assertIsNone(registration["control_next_sequence"])
+        event = self.server.gateway.events()[-1]
+        self.assertEqual("valve_control_failed", event["event_type"])
+        self.assertEqual("open", event["state"]["action"])
+
+    def test_twenty_minute_open_is_reserved_for_production_schedule(self) -> None:
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 1_200},
+        )["control"]
+
+        self.assertEqual(1_200, result["duration_seconds"])
+        self.assertEqual(
+            1_200,
+            self.commands[-1][1]["duration_seconds"],
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            1_200, registration["control_pending_duration_seconds"]
+        )
+
+    def test_device_poll_expires_a_stale_node_command_reservation(self) -> None:
+        result = self.server.gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+
+        before_deadline = self.server.gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30+00:00")
+        )
+        self.assertTrue(
+            next(
+                item
+                for item in before_deadline
+                if item["device_id"] == self.DEVICE_ID
+            )["state"]["rf_control_command_pending"]
+        )
+
+        after_deadline = self.server.gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30.001000+00:00")
+        )
+        state = next(
+            item
+            for item in after_deadline
+            if item["device_id"] == self.DEVICE_ID
+        )["state"]
+        self.assertFalse(state["rf_control_command_pending"])
+        self.assertEqual(
+            "gateway_command_response_timeout_counter_unsynchronized",
+            state["rf_control_last_result"],
+        )
+        self.assertEqual(6, state["rf_control_recovery_sequence"])
+        self.assertEqual(1, state["rf_control_recovery_attempt"])
+        events = [
+            event
+            for event in self.server.gateway.events()
+            if event["event_type"] == "valve_control_failed"
+        ]
+        self.assertEqual(1, len(events))
+        self.assertEqual("open", events[0]["state"]["action"])
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertNotEqual(
+            result["command_id"],
+            registration["control_pending_command_id"],
+        )
+
+    def test_next_open_recovers_a_matured_bounded_timeout(self) -> None:
+        gateway = self.server.gateway
+        first = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        assert gateway._store is not None
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=first["command_id"],
+            reason=(
+                "gateway_command_response_timeout_counter_unsynchronized"
+            ),
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        with self.assertRaisesRegex(RuntimeError, "not synchronized"):
+            gateway.request_htv405_control(
+                device_id=self.DEVICE_ID,
+                action="open",
+                zone=1,
+                duration_seconds=60,
+                now=datetime.fromisoformat("2026-08-24T20:01:34+00:00"),
+            )
+
+        retry = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:01:35+00:00"),
+        )
+        self.assertEqual("pending_authenticated_response", retry["state"])
+        registration = gateway._store.valve_registry()[0]
+        self.assertEqual(6, registration["control_pending_sequence"])
+        self.assertEqual(1, registration["control_recovery_attempt"])
+
+    def test_control_node_can_move_without_changing_association(self) -> None:
+        before = self.server.gateway._store.valve_registry()[0]
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/node",
+            {"node_id": self.SECOND_NODE_ID},
+        )["control"]
+
+        self.assertEqual(self.SECOND_NODE_ID, result["control_node_id"])
+        self.assertEqual(
+            before["controller_endpoint"], result["controller_endpoint"]
+        )
+        self.assertEqual(
+            before["control_companion_endpoint"],
+            result["control_companion_endpoint"],
+        )
+        self.assertEqual(before["control_selector"], result["control_selector"])
+        self.assertEqual(
+            before["control_frequency_offset_hz"],
+            result["control_frequency_offset_hz"],
+        )
+        self.assertIsNone(result["control_next_sequence"])
+        self.assertEqual(
+            "control_node_updated_counter_required",
+            result["control_last_result"],
+        )
+
+    def test_armed_node_is_never_control_available(self) -> None:
+        self.server.gateway.update_node(self.NODE_ID, tx_armed=True)
+        device = next(
+            item
+            for item in self.server.gateway.devices()
+            if item["device_id"] == self.DEVICE_ID
+        )
+        self.assertFalse(device["state"]["rf_control_available"])
+        self.assertEqual(
+            "radio_node_unavailable",
+            device["state"]["rf_control_unavailable_reason"],
+        )
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+                {"zone": 1, "duration_seconds": 60},
+            )
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual([], self.commands)
 
 
 if __name__ == "__main__":

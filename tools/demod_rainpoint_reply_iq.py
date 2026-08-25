@@ -30,6 +30,7 @@ def demodulate(
     sample_rate: int = 2_000_000,
     capture_center_hz: int = 433_700_000,
     symbol_rate: int = 20_000,
+    channel_center_hz: int | None = None,
 ) -> dict[str, Any]:
     """Return the best exact-sync clock phase and recovered frame bits."""
     if sample_rate % symbol_rate:
@@ -49,12 +50,14 @@ def demodulate(
     for value in frequency:
         cumulative.append(cumulative[-1] + value)
 
-    profile = characterize(
-        path,
-        sample_rate=sample_rate,
-        center_frequency=capture_center_hz,
-    )
-    threshold = profile["channel_center_hz"] - capture_center_hz
+    if channel_center_hz is None:
+        profile = characterize(
+            path,
+            sample_rate=sample_rate,
+            center_frequency=capture_center_hz,
+        )
+        channel_center_hz = int(profile["channel_center_hz"])
+    threshold = channel_center_hz - capture_center_hz
     samples_per_symbol = sample_rate // symbol_rate
     raw_matches: list[dict[str, Any]] = []
     for phase in range(samples_per_symbol):
@@ -74,12 +77,20 @@ def demodulate(
             )
             start = candidate.find(SYNC_BITS)
             while start >= 0:
+                wake_symbols = 0
+                cursor = start - 1
+                next_bit = candidate[start]
+                while cursor >= 0 and candidate[cursor] != next_bit:
+                    wake_symbols += 1
+                    next_bit = candidate[cursor]
+                    cursor -= 1
                 frame = candidate[start : start + 304]
                 raw_matches.append(
                     {
                         "phase_samples": phase,
                         "inverted": inverted,
                         "sync_symbol": start,
+                        "alternating_wake_symbols": wake_symbols,
                         "frame_bits": len(frame),
                         "frame_hex": (
                             int(frame, 2).to_bytes(len(frame) // 8, "big").hex()
@@ -99,10 +110,14 @@ def demodulate(
                 "inverted": match["inverted"],
                 "phase_samples": [],
                 "sync_symbols": [],
+                "alternating_wake_symbols": [],
             },
         )
         item["phase_samples"].append(match["phase_samples"])
         item["sync_symbols"].append(match["sync_symbol"])
+        item["alternating_wake_symbols"].append(
+            match["alternating_wake_symbols"]
+        )
     matches = sorted(
         (
             {
@@ -112,6 +127,9 @@ def demodulate(
                 "phase_min": min(item["phase_samples"]),
                 "phase_max": max(item["phase_samples"]),
                 "sync_symbols": sorted(set(item["sync_symbols"])),
+                "alternating_wake_symbols": sorted(
+                    set(item["alternating_wake_symbols"])
+                ),
             }
             for item in grouped.values()
         ),
@@ -121,7 +139,7 @@ def demodulate(
         "path": str(path),
         "sample_rate_sps": sample_rate,
         "symbol_rate_sps": symbol_rate,
-        "channel_center_hz": profile["channel_center_hz"],
+        "channel_center_hz": channel_center_hz,
         "matches": matches,
     }
 
@@ -131,6 +149,14 @@ def main() -> int:
     parser.add_argument("captures", nargs="+", type=Path)
     parser.add_argument("--sample-rate", type=int, default=2_000_000)
     parser.add_argument("--frequency", type=int, default=433_700_000)
+    parser.add_argument(
+        "--channel-center",
+        type=int,
+        help=(
+            "use this known RF channel center as the FSK decision threshold "
+            "instead of characterizing the strongest signal in the file"
+        ),
+    )
     args = parser.parse_args()
     found = False
     for capture in args.captures:
@@ -138,6 +164,7 @@ def main() -> int:
             capture,
             sample_rate=args.sample_rate,
             capture_center_hz=args.frequency,
+            channel_center_hz=args.channel_center,
         )
         print(json.dumps(result, sort_keys=True))
         found = found or bool(result["matches"])

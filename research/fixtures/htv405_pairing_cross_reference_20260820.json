@@ -1,0 +1,146 @@
+{
+  "captured_at": "2026-08-20",
+  "model": "HTV405FRF",
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "stock_timing_reference": {
+    "capture": "htv405-stock-continuous-20260818.cu8",
+    "factory_request_start_s": 26.9174,
+    "factory_request_end_s": 26.9489,
+    "assignment_start_s": 26.9993,
+    "request_start_to_assignment_start_ms": 81.9,
+    "request_end_to_assignment_start_ms": 50.4,
+    "result": "paired traffic began at 28.5024 seconds"
+  },
+  "attempts": [
+    {
+      "capture": "continuous-iq-20260820-091516",
+      "reported_result": "success",
+      "power_context": "previously associated valve",
+      "factory_flag": "ff",
+      "assignment_observed": false,
+      "paired_traffic_observed": true,
+      "first_paired_request_s": 27.0409,
+      "interpretation": "retained-association rejoin; not evidence of a new assignment"
+    },
+    {
+      "capture": "continuous-iq-20260820-092127",
+      "reported_result": "failure",
+      "factory_flag": "ff",
+      "assignment_observed": false,
+      "paired_traffic_observed": false,
+      "interpretation": "explicit factory sweep continued across channels"
+    },
+    {
+      "capture": "continuous-iq-20260820-093049",
+      "reported_result": "success after battery reinstall",
+      "power_context": "battery reset followed by explicit long press",
+      "factory_flag": "ff",
+      "assignment_observed": false,
+      "paired_traffic_observed": true,
+      "first_paired_request_s": 90.241,
+      "interpretation": "battery reset cleared volatile state while the stored RF association survived"
+    },
+    {
+      "capture": "continuous-iq-20260820-103139",
+      "reported_result": "failure",
+      "power_context": "cold boot",
+      "factory_flag": "7f",
+      "assignment_observed": false,
+      "paired_traffic_observed": false,
+      "interpretation": "cold-boot channel sweep, not an explicit enrollment request"
+    },
+    {
+      "capture": "continuous-iq-20260820-103701",
+      "reported_result": "failure",
+      "power_context": "cold boot",
+      "factory_flag": "7f",
+      "assignment_observed": false,
+      "paired_traffic_observed": false,
+      "interpretation": "cold-boot channel sweep, not an explicit enrollment request"
+    },
+    {
+      "capture": "continuous-iq-20260820-174345",
+      "reported_result": "failure",
+      "factory_flag": "ff",
+      "assignment_observed": true,
+      "request_start_s": 16.3242,
+      "request_end_s": 16.3557,
+      "assignment_or_fallback_start_s": 16.4065,
+      "request_end_gap_ms": 50.8,
+      "paired_traffic_observed": false,
+      "interpretation": "local assignment and the valve fallback copy occupied the same RF interval"
+    },
+    {
+      "capture": "continuous-iq-20260820-175253",
+      "reported_result": "white-flash success",
+      "factory_flag": "ff",
+      "assignment_observed": true,
+      "paired_traffic_observed": true,
+      "first_paired_request_s": 23.35,
+      "interpretation": "retained identity resumed after the factory sweep; assignment acceptance alone is not proven"
+    },
+    {
+      "capture": "continuous-iq-20260820-180326",
+      "reported_result": "white-flash success",
+      "factory_flag": "ff",
+      "assignment_observed": true,
+      "paired_traffic_observed": true,
+      "paired_traffic_before_attempt": true,
+      "first_post_attempt_paired_request_s": 41.1471,
+      "interpretation": "definitive retained-association rejoin; paired traffic was present before and after the explicit sweep"
+    },
+    {
+      "capture": "continuous-iq-20260820-182014",
+      "reported_result": "failure",
+      "factory_flag": "ff",
+      "assignment_observed": true,
+      "request_start_s": 25.5617,
+      "request_end_s": 25.5932,
+      "assignment_or_fallback_start_s": 25.6447,
+      "request_end_gap_ms": 51.5,
+      "paired_traffic_observed": false,
+      "interpretation": "correct-form assignment arrived about 1.1 ms later than stock and collided with the fallback copy"
+    },
+    {
+      "capture": "continuous-iq-20260820-200549",
+      "reported_result": "failure after controlled battery reset",
+      "power_context": "cold boot completed before explicit long press",
+      "factory_flag": "ff",
+      "assignment_observed": false,
+      "paired_traffic_observed": false,
+      "factory_sweep_observed": true,
+      "interpretation": "methodology failure: stopping the authenticated gateway for raw SDR capture cancelled the node session before the long press, so this attempt did not exercise assignment timing"
+    },
+    {
+      "capture": "continuous-iq-20260820-201730",
+      "capture_sha256": "87bc5a080fcafd72f8177f1075c09e59eefb55f483a2fd9a4f9f6e80d8103960",
+      "reported_result": "white-flash success after controlled battery reset",
+      "power_context": "cold boot completed before explicit long press",
+      "factory_flag": "ff",
+      "assignment_observed": true,
+      "assignment_request_start_s": 22.201996,
+      "assignment_reply_start_s": 22.282646,
+      "request_start_to_assignment_start_ms": 80.65,
+      "paired_traffic_observed": true,
+      "first_paired_request_s": 29.31233,
+      "first_paired_request_body_prefix": "02810782258080",
+      "node_completed_steps": 1,
+      "interpretation": "assignment accepted; a later factory-sweep pass resumed the selector-2 initial exchange at 02/81 while the strict node waited for 01/01, proving that bounded forward resynchronization is required"
+    }
+  ],
+  "conclusions": [
+    "Removing the app registration does not erase the valve's RF association.",
+    "Removing batteries resets volatile enrollment state but preserves the paired endpoint and controller identifiers.",
+    "A 0x7f factory frame is a cold-boot sweep; a 0xff frame is the actionable long-press enrollment request.",
+    "White-flash successes with the old controller identifiers are retained-association rejoins and do not by themselves prove that a new assignment frame was accepted.",
+    "The stock assignment begins about 50.4 ms after the request ends; local failures at 50.8-51.5 ms overlap the valve's fallback copy.",
+    "The 20:05 trial proved that network-armed firmware must preserve a bounded valve session while the gateway listener is stopped for raw SDR capture; otherwise the node emits no assignment at all.",
+    "The 20:17 trial proved local assignment acceptance and paired identity transition, but also showed that selector-2 can resume at a later initial counter after a sweep retry; controller initialization must resynchronize forward before returning to exact transcript matching.",
+    "The next isolated firmware test uses a 47 ms software assignment delay, the previously validated selector-2 carrier, and retries on later 0xff sweep frames."
+  ]
+}

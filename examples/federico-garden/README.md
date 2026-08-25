@@ -3,12 +3,14 @@
 This directory is an installation-specific example, not a default dashboard
 or a source of canonical device identities.
 
-`garden-local-dashboard.yaml` is a read-only reliability dashboard for the
-`rainpoint_local` integration. It mirrors the production Garden dashboard but
-uses local RF entities for all RainPoint moisture, valve-state, usage, battery,
-signal, and last-report data.
+`garden-local-dashboard.yaml` is an installation-specific reliability and
+control dashboard for the `rainpoint_local` integration. It mirrors the
+production Garden dashboard while using local RF entities for RainPoint
+moisture, HTV405 Zone 1 state/control, usage, signal, and last-report data.
+HTV405 battery is intentionally shown as unavailable until its RF field is
+independently validated.
 
-Valve control and watering automations deliberately remain on the production
-path until local transmit support is validated. The dashboard is installed as
-the separate `garden-local-dashboard` YAML dashboard, so it does not modify the
-production Garden dashboard.
+The installation's watering scripts and watchdog now target the locally paired
+HTV405 Zone 1. The dashboard is installed as the separate
+`garden-local-dashboard` YAML dashboard, so it does not modify the original
+cloud comparison dashboard.
