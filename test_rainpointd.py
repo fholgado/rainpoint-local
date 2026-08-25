@@ -365,6 +365,96 @@ class GatewayTest(unittest.TestCase):
             self.assertFalse(event["state"]["rf_frame_accepted"])
             gateway.close()
 
+    def test_legacy_invalid_htv405_snapshot_is_removed_by_migration(self) -> None:
+        device_id = "htv405-95a98013"
+        endpoint = "95a98013"
+        event = {
+            "event_id": 1,
+            "event_type": "device_observation",
+            "observed_at": "2026-08-25T09:20:53.097242+00:00",
+            "device_id": device_id,
+            "name": "Legacy phantom valve",
+            "model": "HTV405FRF",
+            "raw": "legacy-corrupted-frame",
+            "state": {
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": endpoint,
+                "rf_trailer_valid": False,
+                "rf_frame_accepted": True,
+            },
+        }
+        payload = json.dumps(event)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(storage_path=str(path))
+            assert gateway._store is not None
+            connection = gateway._store._connection
+            connection.execute(
+                "INSERT INTO events(event_id, observed_at, event_type, payload) "
+                "VALUES (?, ?, ?, ?)",
+                (1, event["observed_at"], event["event_type"], payload),
+            )
+            connection.execute(
+                "INSERT INTO device_snapshots(device_id, event_id, payload) "
+                "VALUES (?, ?, ?)",
+                (device_id, 1, payload),
+            )
+            connection.execute(
+                "INSERT INTO endpoints(endpoint, first_seen, last_seen, "
+                "frame_count, last_frame) VALUES (?, ?, ?, 1, ?)",
+                (endpoint, event["observed_at"], event["observed_at"], event["raw"]),
+            )
+            connection.execute("PRAGMA user_version = 15")
+            connection.commit()
+            gateway.close()
+
+            restored = Gateway(storage_path=str(path))
+            assert restored._store is not None
+            self.assertEqual(16, restored._store.schema_version())
+            self.assertEqual([], restored.devices())
+            self.assertTrue(restored.endpoint_suppressed(endpoint))
+            self.assertNotIn(
+                endpoint,
+                {item["endpoint"] for item in restored.endpoints()},
+            )
+            self.assertEqual(1, len(restored.events()))
+            restored.close()
+
+    def test_observation_only_valve_can_be_forgotten_and_suppressed(self) -> None:
+        device_id = "htv405-94a9a013"
+        endpoint = "94a9a013"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(storage_path=str(path))
+            gateway.observe_decoded(
+                device_id=device_id,
+                name="Observation-only valve",
+                model="HTV405FRF",
+                frame="accepted-evidence",
+                observed_at="2026-08-25T12:00:00+00:00",
+                state={
+                    "rf_endpoint_a": "b9840280",
+                    "rf_endpoint_b": endpoint,
+                    "rf_trailer_valid": True,
+                    "rf_frame_accepted": True,
+                },
+            )
+
+            self.assertIn("forget", gateway.devices()[0]["capabilities"])
+            forgotten = gateway.forget_registry_device(device_id)
+
+            self.assertEqual(endpoint, forgotten["endpoint"])
+            self.assertEqual([], gateway.devices())
+            self.assertTrue(gateway.endpoint_suppressed(endpoint))
+            self.assertEqual(1, len(gateway.events()))
+            gateway.close()
+
+            restored = Gateway(storage_path=str(path))
+            self.assertEqual([], restored.devices())
+            self.assertTrue(restored.endpoint_suppressed(endpoint))
+            self.assertEqual(1, len(restored.events()))
+            restored.close()
+
     def test_forgotten_htv405_link_is_removed_and_suppressed(self) -> None:
         valid = (
             "79f4882f28b984028094a98013108107820580804f80000000408000568"
@@ -387,6 +477,8 @@ class GatewayTest(unittest.TestCase):
             )
             gateway._refresh_registry_catalog()
             gateway._ensure_registered_valve_devices()
+
+            self.assertIn("forget", gateway.devices()[0]["capabilities"])
 
             forgotten = gateway.forget_registry_device("htv405-94a98013")
 
@@ -873,7 +965,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(15, gateway.info()["storage_schema_version"])
+            self.assertEqual(16, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -884,7 +976,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(15, migrated.info()["storage_schema_version"])
+            self.assertEqual(16, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]

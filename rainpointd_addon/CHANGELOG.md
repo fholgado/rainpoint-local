@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.3 / Integration 0.12.1
+
+- Give observation-only valves and durable HTV405 associations the same
+  authenticated, local-only HA forget lifecycle already used by soil sensors.
+- Let HA remove a stale device after a successful gateway inventory proves the
+  backend no longer exposes it.
+- Migrate legacy trailer-invalid HTV405 snapshots, cadence metrics, receiver
+  metrics, and endpoint candidates out of the live device inventory while
+  retaining their raw events as protocol evidence.
+- Make an explicitly invalid HTV405 trailer override the stale positive
+  acceptance projection briefly persisted by gateway 0.33.1.
+
 ## 0.33.2 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.5
 
 - Require a session-scoped, terminal sensor frame addressed to the requested

@@ -173,7 +173,7 @@ async def async_remove_config_entry_device(
     config_entry: ConfigEntry,
     device_entry: DeviceEntry,
 ) -> bool:
-    """Forget one HCS026 sensor selected from its HA device menu."""
+    """Forget one supported local device selected from its HA device menu."""
     local_id = next(
         (
             identifier[1]
@@ -194,7 +194,13 @@ async def async_remove_config_entry_device(
     coordinator = hass.data.get(DOMAIN, {}).get(config_entry.entry_id)
     if not isinstance(coordinator, RainPointLocalCoordinator):
         return False
-    device = coordinator.data.get(local_id, {})
+    device = coordinator.data.get(local_id)
+    if device is None:
+        # A successful gateway inventory that no longer contains the device is
+        # terminal local evidence that it was already forgotten or removed by
+        # a storage migration. Allow HA to clear its stale registry record
+        # without attempting another backend mutation.
+        return coordinator.last_update_success
     if "forget" not in device.get("capabilities", []):
         return False
     try:

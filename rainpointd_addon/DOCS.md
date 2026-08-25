@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.2 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.3 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -16,10 +16,11 @@ the local gateway and supplies it to every radio node. Existing associations
 retain the identity under which they were paired. A node must advertise
 `configurable_rf_controller_identity` before it may pair or acknowledge a
 custom-identity device; older nodes remain usable for retained stock-identity
-associations. Physical custom-identity enrollment remains a release gate.
-Completion requires a terminal sensor frame addressed to the requested
-controller identity; a known sensor's retained-association recovery traffic
-cannot transfer ACK ownership during a custom-identity attempt.
+associations. Physical custom-identity sensor enrollment is confirmed; sustained
+stock/custom cohort coexistence remains a release gate. Completion requires a
+terminal sensor frame addressed to the requested controller identity; a known
+sensor's retained-association recovery traffic cannot transfer ACK ownership
+during a custom-identity attempt.
 HTV405 valve-control POST requests remain rejected unless the explicit
 `supervised_htv405_control` beta option is enabled and the selected
 association-specific radio node advertises its candidate control capability.
@@ -36,6 +37,10 @@ automatic rediscovery; accepting or pairing that endpoint again restores it.
 Physical HCS026 enrollment mappings are stored in the same SQLite database as
 the registry and removal policy. Existing pairing JSON is validated, imported
 once, and retained with a `.migrated` suffix for rollback inspection.
+Observation-only valves and durable HTV405 associations expose the same
+authenticated, local-only forget operation. Legacy trailer-invalid HTV405
+snapshots are removed from derived device state while their raw events remain
+available as protocol evidence.
 
 Exact product names are evidence-based. A newly paired device begins as an
 `HCS02x-compatible soil sensor`; RF product code `0x48` confirms the shared
