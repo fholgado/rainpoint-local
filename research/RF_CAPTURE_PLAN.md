@@ -1,5 +1,8 @@
 # RainPoint RF research capture and validation guide
 
+This is a reusable capture procedure, not a project-status list. Active work is
+tracked only in `../PROJECT_ROADMAP.md`.
+
 ## Minimum hardware
 
 For receive-only discovery and validation:

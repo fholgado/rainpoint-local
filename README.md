@@ -206,12 +206,14 @@ records and protocol/product evidence, not those names or endpoints.
 
 - [PROTOCOL.md](PROTOCOL.md) — supported RF facts, confidence, and unresolved
   fields.
+- [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) — the single source of truth for
+  current status, ordered qualification gates, and backlog.
 - [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) — component and
   transport responsibilities.
 - [CLOUD_TO_LOCAL_MIGRATION.md](CLOUD_TO_LOCAL_MIGRATION.md) — proposed
   cloud-to-local identity-preserving migration.
 - [research/DEVICE_PAIRING_VALIDATION_PLAN.md](research/DEVICE_PAIRING_VALIDATION_PLAN.md)
-  — retained physical evidence and remaining hardware gates.
+  — retained physical evidence and reusable validation procedures.
 - [research/FOUR_ZONE_VALVE_TEST_PLAN.md](research/FOUR_ZONE_VALVE_TEST_PLAN.md)
   — receive-only enrollment and crossed zone/duration capture sequence for the
   isolated four-zone test valve.
@@ -221,43 +223,14 @@ records and protocol/product evidence, not those names or endpoints.
 Cloud-specific investigation is isolated under `research/cloud` and is not a
 runtime dependency.
 
-## Remaining gates
+## Project status
 
-- Accumulate a multi-day unattended sensor reliability baseline and perform a
-  controlled ACK-owner reassignment.
-- Improve final radio-node placement where Wi-Fi or RF margins are weak.
-- Add encrypted node sessions, per-node credential rotation, replay protection,
-  and asymmetric OTA release signatures before treating the trusted-LAN
-  prototype as publishable.
-- Complete the installed HTV405 Zone 1 longer-duration field run and retain its
-  authenticated response, active report, valve-owned automatic stop, usage,
-  Home Assistant completion notification, and watchdog outcome.
-- Physically verify observation-only recovery after gateway and radio-node
-  restarts; the association profile, authenticated controller counter, and
-  expected completion of an active bounded run are stored separately from
-  lower-channel telemetry.
-- Physically exercise explicit local early-stop on Zones 2--4, late-response
-  recovery, and positively observed overdue-run anomaly close while preserving
-  the enforced 15-second hardware command interval.
-- Physically accept the separate HTV145 long-wake path: explicit association
-  residue, one bounded three-attempt burst, immediate-response/state-report
-  fallback, durable command counter, restart without replay, and valve-owned
-  automatic stop. Correct channel-11 transmission is captured; repeat with
-  fresh valve batteries to establish valve acceptance.
-- Validate retained association and authenticated controller-counter recovery
-  across a battery change, and capture an independently known low-battery RF
-  transition before exposing valve battery state.
-- Generalize the local association/control evidence with another valve before
-  beginning cloud-to-local migration work with the existing HomGar integration.
-- Physically validate the staged, durably persisted custom RF controller
-  identity with a disposable sensor, then prove stock/custom device-cohort
-  coexistence before exposing the generalized Home Assistant valve pairing
-  flow. Existing assignments retain their original controller identity; the
-  `39840280` companion route remains retained-association evidence rather than
-  the default for a new local enrollment.
+All active work, completion evidence, phase ordering, and deferred items are
+tracked in [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md). Do not infer current status
+from older research narratives or architecture phases.
 
-Start and finish the sensor reliability gate with persisted snapshots rather
-than screenshots:
+The sensor reliability procedure uses persisted snapshots rather than
+screenshots:
 
 ```bash
 python3 tools/sensor_soak.py prepare \

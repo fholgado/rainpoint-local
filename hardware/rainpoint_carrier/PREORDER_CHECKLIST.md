@@ -1,5 +1,9 @@
 # Revision A preorder checklist
 
+This checklist governs one physical fabrication operation; its boxes do not
+represent overall project status. Carrier work is scheduled only through
+`../../PROJECT_ROADMAP.md`.
+
 Do not upload fabrication files until every required item is checked against
 the same physical modules that will be installed.
 

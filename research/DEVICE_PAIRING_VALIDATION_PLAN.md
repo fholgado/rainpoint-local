@@ -1,5 +1,8 @@
 # Sensor and valve pairing validation plan
 
+This is a retained evidence ledger and reusable physical-test procedure.
+`../PROJECT_ROADMAP.md` is the only live project-status checklist.
+
 This plan separates facts already established from the physical tests still
 needed before RainPoint Local can claim repeatable sensor or valve enrollment.
 Every test must retain raw RF evidence, normalized frames, radio-node logs,
@@ -148,7 +151,7 @@ again:
 - full and low battery states were physically correlated on both test sensors;
 - receive-only discovery cannot complete physical pairing.
 
-## HCS026 sensor: remaining physical tests
+## HCS026 sensor: retained experimental procedures
 
 ### Pending telemetry-channel assignment experiment
 

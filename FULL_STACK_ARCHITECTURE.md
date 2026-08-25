@@ -245,10 +245,9 @@ Deleting an HA entity must never silently transmit an unpair or reset command.
 - One-reply recovery for a known sensor without replacing its HA identity
 - Home Assistant node adoption, Identify, diagnostics, and sensor pairing UI
 
-Remaining release gates are a 72-hour cadence run, deliberate ACK-owner
-reassignment, stock-gateway coexistence, additional hardware-revision evidence,
-and reassociation semantics. These are qualification tasks rather than missing
-protocol-core features.
+Qualification status for cadence, ACK-owner reassignment, coexistence, hardware
+revisions, and reassociation is tracked only in `PROJECT_ROADMAP.md`. These are
+qualification tasks rather than missing protocol-core features.
 
 ### Phase 3 — software publication hardening: in progress
 
@@ -260,8 +259,9 @@ protocol-core features.
 - Transport-neutral protocol package
 - Signed OTA/rollback design and fleet compatibility policy
 
-These tasks can proceed without RF hardware, although OTA requires later
-physical update and recovery qualification.
+The architecture permits these tasks without RF hardware, although OTA still
+requires physical update and recovery qualification. Their scheduling and
+completion status live in `PROJECT_ROADMAP.md`.
 
 ### Phase 4 — bounded valve control: hardware-gated
 

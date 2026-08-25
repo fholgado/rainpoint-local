@@ -1,5 +1,8 @@
 # Four-zone valve evidence plan
 
+This file preserves evidence and repeatable test procedure. Active scheduling
+and completion status live only in `../PROJECT_ROADMAP.md`.
+
 This plan records the evidence gates used for the isolated, unpressurized
 four-zone test valve. Active trials remain confined to explicitly gated
 research firmware; no command builder is connected to production firmware.
@@ -107,7 +110,7 @@ local duration limit; startup and missing telemetry are observation-only, and
 automatic anomaly close requires positive evidence that watering continued
 beyond the expected completion plus grace period.
 
-## Remaining power-cycle and battery validation
+## Unresolved power-cycle and battery evidence
 
 Machine classification of the 11 retained lifecycle attempts found three
 retained-association rejoins, two assignment-followed-by-paired-traffic cases,

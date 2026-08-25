@@ -1,5 +1,8 @@
 # Valve protocol status
 
+This is an evidence ledger, not a project checklist. Active order and
+completion status live only in `../PROJECT_ROADMAP.md`.
+
 This is the concise evidence ledger for the two tested RainPoint valve
 families. `PROTOCOL.md` remains the detailed wire reference; this document
 separates confirmed behavior from the physical gates that keep supervised
@@ -137,7 +140,7 @@ requests are now retained only as command intent and never update valve state,
 availability, or device-report cadence; only reverse-route response or state
 traffic can do so.
 
-## Remaining physical gates
+## Unresolved physical evidence summary
 
 1. Replace the isolated HTV145 batteries, obtain fresh valve-originated idle
    and positively confirmed stock-command evidence, then repeat exactly one

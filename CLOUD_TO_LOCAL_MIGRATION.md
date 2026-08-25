@@ -1,5 +1,9 @@
 # Cloud-to-local migration design
 
+This file defines the deferred provider-migration contract. It does not track
+current implementation work; readiness and scheduling live only in
+`PROJECT_ROADMAP.md`.
+
 ## Product outcome
 
 An existing RainPoint/HomGar Home Assistant user should be able to attach a
@@ -12,6 +16,9 @@ local gateway is a second provider for the same physical-device model, not a
 second permanent integration competing for ownership of the devices.
 
 ## Readiness gates
+
+The following are design constraints. Check their live completion state in
+`PROJECT_ROADMAP.md` rather than updating status here.
 
 Active migration must not ship until all of these are physically proven:
 

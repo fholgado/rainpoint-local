@@ -5,6 +5,9 @@ publication or physical valve control. Historical experiments belong under
 `research/`; normal operators should encounter one gateway, one integration,
 and one radio-node firmware.
 
+This file inventories boundaries; it does not track their implementation
+status. `PROJECT_ROADMAP.md` is the sole ordered checklist.
+
 ## Consolidated in this baseline
 
 - One PlatformIO environment, `rainpoint_bridge`, replaces the receive-only,
@@ -57,9 +60,9 @@ deduplication, and valve safety. Removing these would erase the evidence that
 made consolidation safe. CI therefore builds one firmware image but continues
 running the full protocol and safety regression matrix.
 
-## Next cleanup boundary
+## Cleanup sequencing
 
-Do not perform architecture work intended for the eventual HomGar merge yet.
-First finish the sensor reliability baseline and the end-to-end test-valve
-prototype. After that gate, extract provider-neutral models and coordinate the
-identity/authority migration described in `CLOUD_TO_LOCAL_MIGRATION.md`.
+The active cleanup phase and its exit criteria are maintained in
+`PROJECT_ROADMAP.md`. Provider-neutral extraction and the authority migration
+described in `CLOUD_TO_LOCAL_MIGRATION.md` remain downstream of the physical
+stability gates recorded there.
