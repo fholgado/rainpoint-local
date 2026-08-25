@@ -233,6 +233,9 @@ criterion above without an unexplained recovery intervention.
 - [ ] Finish event-driven HA updates with slow reconciliation fallback.
 - [ ] Remove superseded probes, hard-coded profiles, temporary acceptance
       endpoints, obsolete feature gates, and retired firmware artifacts.
+- [ ] Remove dormant two-radio firmware support, secondary-radio diagnostics,
+      and its compile-time feature gate; support one CC1101 per distributed
+      radio node as the sole production hardware topology.
 - [ ] Keep genuine safety boundaries: scoped authentication, association-bound
       transmission, bounded duration, device-owned confirmation, command
       spacing, at-most-once opens, and rollback.
