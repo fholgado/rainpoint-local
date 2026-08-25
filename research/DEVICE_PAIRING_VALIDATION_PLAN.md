@@ -75,6 +75,53 @@ formerly stock-paired control sensor remains healthy. The result should decide
 whether coexistence needs gateway identity separation, reply arbitration, or a
 documented single-authority limitation.
 
+### Local RF controller identity and migration order
+
+Do not confuse the gateway's API/discovery ID with its RF controller identity.
+The former identifies one `rainpointd` instance to Home Assistant. The latter is
+the four-byte endpoint placed in pairing replies and valve commands.
+
+The prototype currently uses the observed RainPoint companion endpoint
+`39840280`; the corresponding command-response route is `b9840280`. That was
+useful for retained-association takeover, but it deliberately impersonates the
+stock RainPoint gateway and cannot be the default for a coexistence-capable
+release. Existing evidence suggests that the high bit distinguishes companion
+and active-controller forms of one identity, but the permitted generated-value
+space still needs one physical enrollment validation.
+
+Implementation order is therefore fixed:
+
+1. Generate one random RF controller identity per custom local gateway, store
+   it durably, include it in backup/restore and diagnostics, and never change it
+   on restart, OTA, or radio-node replacement. All radio nodes belonging to the
+   gateway share this identity; node selection only chooses the best physical
+   transmitter/ACK owner.
+2. Parameterize HCS026 and HTV405 pairing/control profiles so firmware receives
+   the identity from the authenticated gateway instead of embedding
+   `39840280`.
+3. Validate a disposable sensor enrollment under the generated identity with
+   the stock RainPoint gateway powered, then validate ordinary reports and
+   acknowledgements from both independently owned device cohorts.
+4. Make generated identity the default for new local enrollment. Retained
+   stock-identity takeover remains an explicit migration mode that requires the
+   stock gateway to be off and must warn that the same RF identity cannot safely
+   coexist.
+5. Expose valve pairing in Home Assistant only after the identity boundary is
+   stable, so early adopters are not forced to re-pair devices after an upgrade.
+
+Coexistence does not make one device simultaneously controllable by both RF
+gateways. During migration, the stock RainPoint gateway owns devices not yet
+migrated and the custom local gateway owns devices paired to its generated
+identity. Cloud data may supplement devices that remain stock-owned, but must
+not overwrite locally owned device state.
+
+The Home Assistant valve enrollment flow must require no endpoint entry. It
+should select a radio node by friendly name, detect the factory announcement,
+show exchange and terminal-verification progress, retain the HA device identity
+on re-enrollment, and create the valve only after command-scoped completion plus
+ordinary paired telemetry. HTV405 is the first supported valve family; HTV145
+pairing remains blocked until its local enrollment exchange is reproduced.
+
 ## HCS026 sensor: established evidence
 
 The following tests do not need to be repeated merely to demonstrate them
