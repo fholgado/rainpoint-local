@@ -204,6 +204,10 @@ class Gateway:
         self._active_pairing_confirmed_valve_endpoint: str | None = None
         self._active_pairing_confirmation_observed_at: str | None = None
         self._active_pairing_confirmation_receiver: str | None = None
+        self._active_pairing_confirmed_sensor_endpoint: str | None = None
+        self._active_pairing_sensor_confirmation_observed_at: str | None = None
+        self._active_pairing_sensor_confirmation_receiver: str | None = None
+        self._active_pairing_sensor_identity_mismatch_at: str | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
         self._recover_pending_htv405_air_responses()
@@ -3081,6 +3085,10 @@ class Gateway:
             self._active_pairing_confirmed_valve_endpoint = None
             self._active_pairing_confirmation_observed_at = None
             self._active_pairing_confirmation_receiver = None
+            self._active_pairing_confirmed_sensor_endpoint = None
+            self._active_pairing_sensor_confirmation_observed_at = None
+            self._active_pairing_sensor_confirmation_receiver = None
+            self._active_pairing_sensor_identity_mismatch_at = None
             if node_id is not None:
                 nodes = {item["node_id"]: item for item in self._pairing_nodes()}
                 if node_id not in nodes:
@@ -3327,6 +3335,20 @@ class Gateway:
                     if int(selected_node.get("pairing_completed_steps") or 0) > 0
                     else "transmitter_armed"
                 )
+        sensor_confirmation_required = (
+            selected_node is not None
+            and self._active_pairing_profile_id
+            != AUTOMATIC_HTV405_PROFILE_ID
+        )
+        if sensor_confirmation_required and completed_endpoint is not None:
+            if self._active_pairing_confirmed_sensor_endpoint != completed_endpoint:
+                completed_endpoint = None
+                completed_existing_record = False
+                stage = (
+                    "controller_identity_mismatch"
+                    if self._active_pairing_sensor_identity_mismatch_at is not None
+                    else "waiting_for_controller_confirmation"
+                )
         active_identity = self._active_pairing_rf_identity or {
             "controller_endpoint": self.rf_identity.controller_endpoint,
             "companion_endpoint": self.rf_identity.companion_endpoint,
@@ -3361,6 +3383,15 @@ class Gateway:
             ),
             "valve_confirmation_receiver": (
                 self._active_pairing_confirmation_receiver
+            ),
+            "sensor_confirmation_observed_at": (
+                self._active_pairing_sensor_confirmation_observed_at
+            ),
+            "sensor_confirmation_receiver": (
+                self._active_pairing_sensor_confirmation_receiver
+            ),
+            "sensor_controller_identity_mismatch_observed": (
+                self._active_pairing_sensor_identity_mismatch_at is not None
             ),
             "dry_run_profile": profile,
             **snapshot,
@@ -3400,6 +3431,11 @@ class Gateway:
                 ):
                     raise RuntimeError(
                         "selected radio node has not confirmed pairing completion"
+                    )
+                if self._active_pairing_confirmed_sensor_endpoint != endpoint:
+                    raise RuntimeError(
+                        "paired sensor has not confirmed the active RF "
+                        "controller identity"
                     )
             record = next(
                 (
@@ -3570,6 +3606,40 @@ class Gateway:
         )
         if pairing_state not in {"factory", "paired"}:
             return
+        if (
+            pairing_state == "paired"
+            and self._active_pairing_node_id is not None
+            and self._active_pairing_profile_id
+            != AUTOMATIC_HTV405_PROFILE_ID
+            and self._active_pairing_rf_identity is not None
+        ):
+            observed_controller = state.get("rf_endpoint_a")
+            expected_controller = self._active_pairing_rf_identity.get(
+                "controller_endpoint"
+            )
+            if not isinstance(observed_controller, str) or (
+                observed_controller.strip().lower() != expected_controller
+            ):
+                self._active_pairing_sensor_identity_mismatch_at = timestamp
+                return
+            message_type = state.get(
+                "rf_message_type", state.get("message_type")
+            )
+            if isinstance(message_type, int) and (message_type & 0x7F) == 3:
+                if isinstance(paired, str):
+                    self._active_pairing_confirmed_sensor_endpoint = (
+                        paired.strip().lower()
+                    )
+                    self._active_pairing_sensor_confirmation_observed_at = (
+                        timestamp
+                    )
+                    receiver = state.get(
+                        "rf_receiver_id", state.get("rf_node_id")
+                    )
+                    if isinstance(receiver, str):
+                        self._active_pairing_sensor_confirmation_receiver = (
+                            receiver
+                        )
         fields = {
             "hcs026_pairing_state": pairing_state,
             "hcs026_factory_endpoint": factory,
@@ -3650,6 +3720,10 @@ class Gateway:
         self._active_pairing_confirmed_valve_endpoint = None
         self._active_pairing_confirmation_observed_at = None
         self._active_pairing_confirmation_receiver = None
+        self._active_pairing_confirmed_sensor_endpoint = None
+        self._active_pairing_sensor_confirmation_observed_at = None
+        self._active_pairing_sensor_confirmation_receiver = None
+        self._active_pairing_sensor_identity_mismatch_at = None
 
     def accept_endpoint(
         self,

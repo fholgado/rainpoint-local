@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.33.2 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.5
 
+- Require a session-scoped, terminal sensor frame addressed to the requested
+  RF controller identity before HCS026 pairing may complete or transfer its
+  persistent ACK owner.
+- Preserve a generated controller identity when automatic HCS026 discovery
+  rebuilds its pairing profile in place; the prior aliasing bug silently
+  restored the retained stock identity after a factory announcement.
 - Attribute retained HTV145 controller requests and valve-originated reports
   by the transmitting endpoint so requests cannot advance device cadence and
   valid valve reports can confirm availability.

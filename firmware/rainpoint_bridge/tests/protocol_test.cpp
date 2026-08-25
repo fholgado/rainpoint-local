@@ -742,6 +742,29 @@ int main() {
             localIdentityAutomatic.steps[index].frame, 9, localCompanion
         ));
     }
+    // Automatic discovery rebuilds the active profile in place after the
+    // factory announcement. Exercise that exact aliasing shape so a custom
+    // identity cannot silently fall back to the retained stock endpoints.
+    rainpoint::PairingProfile inPlaceIdentityAutomatic{};
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        detectedFactory, localController, localCompanion,
+        4, inPlaceIdentityAutomatic
+    ));
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        profile.factoryEndpoint,
+        inPlaceIdentityAutomatic.sensorRoute,
+        inPlaceIdentityAutomatic.companionEndpoint,
+        4,
+        inPlaceIdentityAutomatic
+    ));
+    assert(inPlaceIdentityAutomatic.sensorRoute == localController);
+    assert(inPlaceIdentityAutomatic.companionEndpoint == localCompanion);
+    for (std::size_t index = 0;
+         index < inPlaceIdentityAutomatic.stepCount; ++index) {
+        assert(rainpoint::endpointEquals(
+            inPlaceIdentityAutomatic.steps[index].frame, 9, localCompanion
+        ));
+    }
     rainpoint::PairingProfile automaticRejoin{};
     assert(rainpoint::buildAutomaticHcs026RejoinProfile(
         detectedFactory, stockController, stockCompanion, 4, automaticRejoin

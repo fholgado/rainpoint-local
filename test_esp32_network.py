@@ -499,6 +499,49 @@ class ESP32NetworkTest(unittest.TestCase):
             + b"\n"
         )
         deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_state") != "completed":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+
+        # A known sensor can emit a valid recovery sequence for its retained
+        # stock identity while a custom-identity enrollment is active. The
+        # node's completion status alone must not let that unrelated exchange
+        # transfer its persistent ACK owner.
+        stream.write(
+            json.dumps(
+                {
+                    "type": "rainpoint_rf",
+                    "node_id": NODE_A,
+                    "frame": _replace_frame_endpoint(
+                        terminal,
+                        offset=5,
+                        endpoint="b9840280",
+                    ),
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while True:
+            recovered = self.gateway.pairing()
+            if recovered["sensor_controller_identity_mismatch_observed"]:
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertEqual("controller_identity_mismatch", recovered["stage"])
+        self.assertIsNone(recovered["completed_endpoint"])
+        with self.assertRaisesRegex(RuntimeError, "active RF controller"):
+            self.gateway.complete_hcs026_pairing(
+                endpoint="95a98024", name="Test Sensor B", area="Garden"
+            )
+
+        stream.write(
+            json.dumps(
+                {"type": "rainpoint_rf", "node_id": NODE_A, "frame": terminal}
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
         while True:
             recovered = self.gateway.pairing()
             if recovered.get("completed_endpoint"):
