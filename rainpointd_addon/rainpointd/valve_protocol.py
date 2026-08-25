@@ -440,6 +440,34 @@ def decode_htv145_state_report(
     }
 
 
+def decode_htv145_terminal_idle_report(
+    frame: bytes, link: ValveLink
+) -> dict[str, int | bool] | None:
+    """Decode the independently cloud-correlated terminal idle summary."""
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14:19] != bytes.fromhex("8207858080")
+        or frame[23] not in {0x08, 0x10}
+        or frame[26] & 0x7F
+        or frame[27] != 0
+        or any(frame[30:36])
+    ):
+        return None
+    try:
+        duration_seconds = decode_duration(frame[28:30])
+    except ValueError:
+        return None
+    return {
+        "telemetry_sequence": frame[13],
+        "watering": False,
+        "duration_seconds": duration_seconds,
+    }
+
+
 def _finish_frame(payload: bytes, residue: int) -> bytes:
     if len(payload) != FRAME_BYTES - 2:
         raise ValueError("ordinary frame payload must contain 36 bytes")

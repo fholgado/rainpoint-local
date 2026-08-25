@@ -1,10 +1,10 @@
 """Auditable, disabled-by-default HTV145 dry-valve acceptance harness.
 
-The harness is intentionally not connected to HTTP or Home Assistant. An
-isolated caller must inject the authenticated radio-node sender and explicitly
-enable both this harness and :class:`Htv145ControlCoordinator`. It performs
-one duration-bounded logical open, records every decision, and accepts success
-only after positive open evidence followed by an independent idle report.
+The harness is not connected to Home Assistant valve entities. Its private
+research route requires the add-on's management token plus an explicit runtime
+gate. It performs one duration-bounded logical open, records every decision,
+and accepts success only after positive open evidence followed by an
+independent idle report.
 """
 
 from __future__ import annotations
@@ -141,6 +141,12 @@ class Htv145DryValveAcceptance:
         state = self.coordinator.observe_candidate_status(
             self.profile, message, observed_at=observed_at
         )
+        if state is not None:
+            watering = state.get("confirmed_watering")
+            if watering is True:
+                self._open_confirmed_at = observed_at
+            elif watering is False and self._open_confirmed_at is not None:
+                self._idle_confirmed_at = observed_at
         self._record(
             "candidate_status",
             observed_at,

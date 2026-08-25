@@ -97,7 +97,7 @@ class AddonBoundaryTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
-    def test_htv145_control_is_compile_gated_and_has_no_public_api(self) -> None:
+    def test_htv145_acceptance_is_compile_and_research_gated(self) -> None:
         source = (
             ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
         ).read_text()
@@ -114,6 +114,13 @@ class AddonBoundaryTest(unittest.TestCase):
         main_source = (
             ROOT / "rainpointd_addon" / "rainpointd" / "__main__.py"
         ).read_text()
+        config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
+        integration_source = "\n".join(
+            path.read_text()
+            for path in (ROOT / "custom_components" / "rainpoint_local").glob(
+                "*.py"
+            )
+        )
         self.assertIn("RAINPOINT_HTV145_TX_CANDIDATE == 1", source)
         self.assertIn("htv145_control_candidate", source)
         self.assertIn(
@@ -121,9 +128,10 @@ class AddonBoundaryTest(unittest.TestCase):
             "RAINPOINT_RESEARCH_BENCH=1",
             build_profile,
         )
-        self.assertNotIn("htv145_control", http_source)
-        self.assertNotIn("htv145_acceptance", http_source)
-        self.assertNotIn("htv145_acceptance", main_source)
+        self.assertIn("htv145_dry_acceptance: false", config)
+        self.assertIn("/research/htv145-acceptance/", http_source)
+        self.assertIn("--enable-htv145-dry-acceptance", main_source)
+        self.assertNotIn("htv145-acceptance", integration_source)
 
     def test_home_assistant_forms_use_labels_and_native_area_selectors(self) -> None:
         source = (

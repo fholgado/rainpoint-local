@@ -36,6 +36,7 @@ options:
   firmware_catalog_path: "/share/rainpoint-local/firmware/catalog.json"
   event_retention_limit: 100000
   supervised_htv405_control: false
+  htv145_dry_acceptance: false
 schema:
   transport: "list(network|rtl433|esp32_serial)"
   frequency: "int(433000000,435000000)"
@@ -49,3 +50,4 @@ schema:
   firmware_catalog_path: str?
   event_retention_limit: "int(1000,1000000)"
   supervised_htv405_control: bool
+  htv145_dry_acceptance: bool

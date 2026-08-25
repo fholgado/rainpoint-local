@@ -503,6 +503,10 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
         "79f4882f28b9840280b42d008f9b810785898090cf9981800040a90156ac"
         "0100000000003431"
     )
+    TERMINAL_IDLE = bytes.fromhex(
+        "79f4882f28b9840280b42d008f908207858080d0e1930d08d18180002c01"
+        "00000000000063b1"
+    )
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -773,6 +777,56 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
             ],
             [item["event"] for item in report["audit"]],
         )
+
+    def test_terminal_summary_is_independent_automatic_idle_evidence(self) -> None:
+        self.coordinator.request_open(
+            self.profile,
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        self.coordinator.observe_frame(
+            self.profile,
+            self.OPEN_RESPONSE,
+            observed_at="2026-08-24T12:00:22+00:00",
+        )
+        state = self.coordinator.observe_frame(
+            self.profile,
+            self.TERMINAL_IDLE,
+            observed_at="2026-08-24T12:10:20+00:00",
+        )
+        self.assertFalse(state["confirmed_watering"])
+        self.assertEqual(0x82, state["next_sequence"])
+
+    def test_candidate_response_updates_the_acceptance_verdict(self) -> None:
+        harness = Htv145DryValveAcceptance(
+            coordinator=self.coordinator,
+            profile=self.profile,
+            enabled=True,
+        )
+        passive = build_open_frame(
+            self.profile.link, 0x80, 1_200, 0xC713
+        )
+        harness.prepare(
+            idle_frame=self.IDLE,
+            passive_command_frame=passive,
+            observed_at="2026-08-24T12:00:00+00:00",
+        )
+        command = harness.open_once(
+            duration_seconds=600,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        harness.observe_candidate_status(
+            {
+                "type": "htv145_control_candidate",
+                "node_id": self.profile.node_id,
+                "state": "confirmed",
+                "command_id": command["command_id"],
+                "frame": self.OPEN_RESPONSE.hex(),
+            },
+            observed_at="2026-08-24T12:00:22+00:00",
+        )
+        report = harness.report(finished_at="2026-08-24T12:00:23+00:00")
+        self.assertTrue(report["checks"]["open_confirmed_by_valve_evidence"])
 
     def test_dry_acceptance_is_disabled_and_dispatch_is_not_success(self) -> None:
         disabled = Htv145DryValveAcceptance(

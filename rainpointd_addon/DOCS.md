@@ -202,6 +202,13 @@ setting per zone only when supervised control is explicitly enabled; state is
 accepted only from authenticated responses or subsequent valve telemetry.
 HTV145 exposes confirmed watering state, requested duration, and last-session
 water usage but remains receive-only.
+The temporary `htv145_dry_acceptance` option is a research-only physical-test
+gate, not a Home Assistant actuator path. When explicitly enabled it adds a
+token-protected one-shot endpoint for an isolated, unpressurized HTV145 valve.
+The runner requires fresh valve-originated idle evidence, a retained passive
+stock command for counter synchronization, and at least ten minutes without
+stock-controller RF before it can transmit one bounded open. Leave the option
+disabled outside a supervised acceptance session.
 Valid RainPoint frames that do not match the confirmed layouts are retained as
 `rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
 remain research work.

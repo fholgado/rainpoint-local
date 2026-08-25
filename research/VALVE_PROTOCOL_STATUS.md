@@ -83,13 +83,15 @@ their command sequences, confirming that the counters are independent.
 ## Acceptance boundary
 
 `rainpointd.htv145_acceptance.Htv145DryValveAcceptance` is the isolated,
-disabled-by-default acceptance harness. It is not imported by the gateway,
-HTTP server, or Home Assistant integration. An explicit bench caller must
-inject the authenticated selected-node sender, provide a valid passive command
-for counter synchronization, and provide confirmed idle evidence. The harness
-allows exactly one duration-bounded logical open and passes only after positive
-open evidence and an independent automatic-idle report within the expected
-window.
+disabled-by-default acceptance harness. The gateway imports it only when the
+temporary `htv145_dry_acceptance` option is enabled and exposes it through a
+token-protected `/api/v1/research/htv145-acceptance/*` boundary; Home Assistant
+does not expose these controls. `tools/run_htv145_acceptance.py` derives fresh
+idle evidence and the next independent command counter from the retained event
+journal, enforces a stock-controller RF-silence window, and requires an
+explicit `--execute` switch. The harness allows exactly one duration-bounded
+logical open and passes only after positive open evidence and an independent
+automatic-idle report within the expected window.
 
 The candidate node reports enough audit detail to distinguish nothing
 transmitted, response-receiver failure, no matching response, a corrupt or

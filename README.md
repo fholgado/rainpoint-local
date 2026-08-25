@@ -69,6 +69,9 @@ device slots.
 - Separate HTV145 command and telemetry counters, model a stock command as one
   logical operation with a bounded burst of identical RF attempts, and persist
   an at-most-once candidate reservation across gateway restarts.
+- Run the isolated HTV145 one-shot acceptance harness through a separate,
+  disabled-by-default research gate; it is token-protected and intentionally
+  absent from the Home Assistant entity/control model.
 - Correlate local RF valve events with Home Assistant/cloud observations.
 - Exercise a hardware-independent duration-bounded controller: startup and
   client loss are observation-only, missing acknowledgements block further

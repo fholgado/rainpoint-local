@@ -27,6 +27,7 @@ from rainpointd.product_identity import (
     HCS02X_PROTOCOL,
 )
 from rainpointd.replay import ReplayTransport, load_fixtures
+from rainpointd.valve_protocol import ValveLink, build_open_frame
 
 
 class GatewayTest(unittest.TestCase):
@@ -1829,6 +1830,137 @@ class RegistryHTTPAPITest(unittest.TestCase):
         with urlopen(f"{self.base}/api/v1/pairing", timeout=2) as response:
             reset_progress = json.load(response)
         self.assertEqual([], reset_progress["records"])
+
+
+class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
+    """Exercise the private, one-shot HTV145 dry-valve boundary."""
+
+    NODE_ID = "rp-001122334455"
+    CONTROLLER_ENDPOINT = "b42d008f"
+    VALVE_ENDPOINT = "b9840280"
+    IDLE = (
+        "79f4882f28b9840280b42d008f970107858b00804f998180004080005680"
+        "00000000000049ef"
+    )
+    OPEN_RESPONSE = (
+        "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802"
+        "000000000000004bfa"
+    )
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        path = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
+        gateway = Gateway(
+            storage_path=str(path),
+            registry_token="test-token",
+            htv145_acceptance_enabled=True,
+        )
+        gateway.update_node(
+            self.NODE_ID,
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "htv145_control_tx_candidate"],
+        )
+        self.commands: list[tuple[str, dict]] = []
+        gateway.set_node_command_sender(
+            lambda node_id, command: self.commands.append((node_id, command))
+        )
+        self.server = create_server(gateway, port=0)
+        self.thread = threading.Thread(
+            target=self.server.serve_forever, daemon=True
+        )
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.server.gateway.close()
+        self.thread.join(timeout=2)
+        self.temporary_directory.cleanup()
+
+    def post_json(
+        self, path: str, payload: dict, *, token: str | None = "test-token"
+    ) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+        request = Request(
+            f"{self.base}{path}",
+            data=json.dumps(payload).encode(),
+            headers=headers,
+            method="POST",
+        )
+        with urlopen(request, timeout=2) as response:
+            return json.load(response)
+
+    def test_one_shot_open_requires_auth_and_positive_valve_evidence(self) -> None:
+        link = ValveLink(
+            bytes.fromhex(self.CONTROLLER_ENDPOINT),
+            bytes.fromhex(self.VALVE_ENDPOINT),
+        )
+        passive = build_open_frame(link, 0x80, 1_200, 0xC713).hex()
+        payload = {
+            "node_id": self.NODE_ID,
+            "controller_endpoint": self.CONTROLLER_ENDPOINT,
+            "valve_endpoint": self.VALVE_ENDPOINT,
+            "center_hz": 433_920_000,
+            "power_dbm": 10,
+            "invert": False,
+            "trailer_residual": 0xC713,
+            "idle_frame": self.IDLE,
+            "passive_command_frame": passive,
+        }
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                "/api/v1/research/htv145-acceptance/prepare",
+                payload,
+                token=None,
+            )
+        self.assertEqual(401, raised.exception.code)
+
+        prepared = self.post_json(
+            "/api/v1/research/htv145-acceptance/prepare", payload
+        )
+        self.assertEqual("prepared_no_actuation", prepared["state"])
+        self.assertEqual(
+            ["htv145_control_configure", "htv145_control_sync"],
+            [command["type"] for _node, command in self.commands],
+        )
+
+        opened = self.post_json(
+            "/api/v1/research/htv145-acceptance/open",
+            {"duration_seconds": 60},
+        )
+        command = opened["command"]
+        self.assertEqual("htv145_control_open", command["type"])
+        self.server.gateway.observe_htv145_acceptance_candidate(
+            self.NODE_ID,
+            {
+                "type": "htv145_control_candidate",
+                "node_id": self.NODE_ID,
+                "state": "confirmed",
+                "command_id": command["command_id"],
+                "frame": self.OPEN_RESPONSE,
+            },
+        )
+        expected_idle_at = datetime.fromisoformat(
+            opened["acceptance"]["expected_idle_at"]
+        )
+        self.server.gateway.observe_decoded(
+            device_id="valve-1",
+            name="Dry one-zone valve",
+            model="HTV145FRF",
+            frame=self.IDLE,
+            state={"model": "HTV145FRF", "is_watering": False},
+            observed_at=expected_idle_at.isoformat(),
+        )
+        status = self.post_json(
+            "/api/v1/research/htv145-acceptance/status", {}
+        )
+        self.assertTrue(status["passed"])
+        self.assertTrue(status["checks"]["one_logical_open_dispatched"])
 
 
 class ValveControlHTTPAPITest(unittest.TestCase):

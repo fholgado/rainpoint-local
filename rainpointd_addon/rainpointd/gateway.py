@@ -19,6 +19,8 @@ from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .firmware_catalog import FirmwareCatalog
+from .htv145_acceptance import Htv145DryValveAcceptance
+from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv405_control import (
     HTV405_CONTROL_BASE_CENTER_HZ,
     HTV405_RESPONSE_WINDOW_SECONDS,
@@ -117,6 +119,7 @@ class Gateway:
         firmware_catalog: FirmwareCatalog | None = None,
         firmware_public_port: int = 8787,
         valve_control_enabled: bool = False,
+        htv145_acceptance_enabled: bool = False,
     ) -> None:
         self.gateway_id = gateway_id
         self.transport = transport
@@ -131,6 +134,7 @@ class Gateway:
         self._firmware_catalog = firmware_catalog or FirmwareCatalog()
         self._firmware_public_port = firmware_public_port
         self._valve_control_enabled = valve_control_enabled
+        self._htv145_acceptance_enabled = htv145_acceptance_enabled
         self._registry_metadata: dict[str, dict[str, Any]] = {}
         self._suppressed_endpoints: frozenset[str] = frozenset()
         self._devices: dict[str, dict[str, Any]] = {}
@@ -174,6 +178,7 @@ class Gateway:
         self._node_command_sender: (
             Callable[[str, dict[str, Any]], None] | None
         ) = None
+        self._htv145_acceptance: Htv145DryValveAcceptance | None = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
@@ -203,6 +208,7 @@ class Gateway:
                 "transport": self.transport,
                 "read_only": self.read_only,
                 "valve_control_enabled": self._valve_control_enabled,
+                "htv145_acceptance_enabled": self._htv145_acceptance_enabled,
                 "device_count": len(self._devices),
                 "node_count": len(all_node_ids),
                 "connected_node_count": sum(
@@ -348,6 +354,149 @@ class Gateway:
         """Attach the authenticated node command boundary owned by the LAN server."""
         with self._lock:
             self._node_command_sender = sender
+
+    def prepare_htv145_acceptance(
+        self,
+        *,
+        node_id: str,
+        controller_endpoint: str,
+        valve_endpoint: str,
+        center_hz: int,
+        power_dbm: int,
+        invert: bool,
+        trailer_residual: int,
+        idle_frame: str,
+        passive_command_frame: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Prepare one isolated HTV145 dry-valve trial without actuating."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        profile = Htv145ControlProfile(
+            node_id=node_id.strip().lower(),
+            controller_endpoint=controller_endpoint.strip().lower(),
+            valve_endpoint=valve_endpoint.strip().lower(),
+            center_hz=center_hz,
+            power_dbm=power_dbm,
+            invert=invert,
+            trailer_residual=trailer_residual,
+        )
+        try:
+            idle = bytes.fromhex(idle_frame)
+            passive = bytes.fromhex(passive_command_frame)
+        except ValueError as error:
+            raise ValueError("HTV145 evidence frames must be hexadecimal") from error
+        with self._lock:
+            if not self._htv145_acceptance_enabled:
+                raise PermissionError("HTV145 dry-valve acceptance is disabled")
+            if self._store is None or self._node_command_sender is None:
+                raise RuntimeError("HTV145 acceptance transport is unavailable")
+            node = self._nodes.get(profile.node_id, {})
+            if not self._htv145_control_node_ready(node):
+                raise RuntimeError("selected HTV145 radio node is unavailable")
+            coordinator = Htv145ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            harness = Htv145DryValveAcceptance(
+                coordinator=coordinator,
+                profile=profile,
+                enabled=True,
+            )
+            commands = harness.prepare(
+                idle_frame=idle,
+                passive_command_frame=passive,
+                observed_at=timestamp,
+            )
+            self._htv145_acceptance = harness
+            return {
+                "state": "prepared_no_actuation",
+                "selected_node_id": profile.node_id,
+                "node_command_types": [item["type"] for item in commands],
+                "acceptance": harness.report(finished_at=timestamp),
+            }
+
+    def start_htv145_acceptance_open(
+        self,
+        *,
+        duration_seconds: int,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Dispatch the harness's one permitted duration-bounded open."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            harness = self._htv145_acceptance
+            if not self._htv145_acceptance_enabled or harness is None:
+                raise PermissionError("HTV145 dry-valve acceptance is not prepared")
+            node = self._nodes.get(harness.profile.node_id, {})
+            if not self._htv145_control_node_ready(node):
+                raise RuntimeError("selected HTV145 radio node is unavailable")
+            command = harness.open_once(
+                duration_seconds=duration_seconds,
+                started_at=timestamp,
+            )
+            return {
+                "state": "pending_valve_evidence",
+                "command": command,
+                "acceptance": harness.report(finished_at=timestamp),
+            }
+
+    def htv145_acceptance_status(
+        self, *, now: datetime | None = None
+    ) -> dict[str, Any]:
+        """Return the current private acceptance transcript and verdict."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            harness = self._htv145_acceptance
+            if harness is None:
+                return {
+                    "enabled": self._htv145_acceptance_enabled,
+                    "prepared": False,
+                    "passed": False,
+                }
+            report = harness.report(finished_at=timestamp)
+            report["enabled"] = self._htv145_acceptance_enabled
+            report["prepared"] = True
+            if self._store is not None:
+                states = self._store.htv145_control_states(
+                    harness.profile.valve_endpoint
+                )
+                report["coordinator"] = states[0] if states else None
+            return report
+
+    def observe_htv145_acceptance_candidate(
+        self, node_id: str, message: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Feed selected-node response diagnostics into the active trial."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            harness = self._htv145_acceptance
+            if harness is None or harness.profile.node_id != node_id:
+                return None
+            return harness.observe_candidate_status(
+                message, observed_at=timestamp
+            )
+
+    @staticmethod
+    def _htv145_control_node_ready(node: dict[str, Any]) -> bool:
+        return bool(
+            node.get("connected") is True
+            and node.get("authenticated") is True
+            and node.get("tx_armed") is not True
+            and "htv145_control_tx_candidate" in node.get("capabilities", [])
+        )
+
+    def _observe_htv145_acceptance_frame_locked(
+        self, *, frame: str, model: str, observed_at: str
+    ) -> None:
+        harness = self._htv145_acceptance
+        if harness is None or model != HTV145_MODEL:
+            return
+        try:
+            raw = bytes.fromhex(frame)
+            harness.observe_frame(raw, observed_at=observed_at)
+        except (KeyError, RuntimeError, ValueError):
+            return
 
     def request_htv405_control(
         self,
@@ -1193,6 +1342,11 @@ class Gateway:
                     observed_at=timestamp,
                 )
                 self._refresh_registry_catalog()
+            self._observe_htv145_acceptance_frame_locked(
+                frame=frame,
+                model=model,
+                observed_at=timestamp,
+            )
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 
@@ -1238,6 +1392,11 @@ class Gateway:
             else:
                 self._update_memory_reception_metrics(event)
             self._confirm_valve_pairing_locked(frame, decoded, timestamp)
+            self._observe_htv145_acceptance_frame_locked(
+                frame=frame,
+                model=str(decoded.get("model", "")),
+                observed_at=timestamp,
+            )
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 

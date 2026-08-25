@@ -13,6 +13,7 @@ device_catalog_path="$(bashio::config 'device_catalog_path')"
 firmware_catalog_path="$(bashio::config 'firmware_catalog_path')"
 event_retention_limit="$(bashio::config 'event_retention_limit')"
 supervised_htv405_control="$(bashio::config 'supervised_htv405_control')"
+htv145_dry_acceptance="$(bashio::config 'htv145_dry_acceptance')"
 if [[ "${registry_write_token}" == "null" ]]; then
   registry_write_token=""
 fi
@@ -45,6 +46,9 @@ if [[ "${event_retention_limit}" == "null" ]]; then
 fi
 if [[ "${supervised_htv405_control}" == "null" ]]; then
   supervised_htv405_control=false
+fi
+if [[ "${htv145_dry_acceptance}" == "null" ]]; then
+  htv145_dry_acceptance=false
 fi
 export RAINPOINT_REGISTRY_TOKEN="${registry_write_token}"
 export RAINPOINT_NODE_TOKENS="${node_tokens}"
@@ -89,6 +93,11 @@ if bashio::var.true "${supervised_htv405_control}"; then
   gateway_args+=(--enable-supervised-htv405-control)
   bashio::log.warning \
     "Supervised HTV405 control enabled; every open remains duration-bounded"
+fi
+if bashio::var.true "${htv145_dry_acceptance}"; then
+  gateway_args+=(--enable-htv145-dry-acceptance)
+  bashio::log.warning \
+    "HTV145 dry-valve acceptance enabled; only an isolated valve may be tested"
 fi
 if [[ -z "${firmware_catalog_path}" ]]; then
   firmware_catalog_path="/share/rainpoint-local/firmware/catalog.json"

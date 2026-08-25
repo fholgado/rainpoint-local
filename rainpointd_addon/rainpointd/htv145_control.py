@@ -1,9 +1,10 @@
 """Persistent, disabled-by-default HTV145 single-zone control candidate.
 
-This module is deliberately not imported by the Home Assistant or HTTP API.
-It coordinates an explicitly selected research radio node and the compile-time
-gated ESP32 candidate. One gateway command creates one bounded RF burst; a
-restart never replays an unresolved reservation.
+This module is deliberately not imported by the Home Assistant integration.
+The add-on exposes it only through a management-token-protected research route
+behind an explicit runtime gate. It coordinates an explicitly selected radio
+node and the compile-time-gated ESP32 candidate. One gateway command creates
+one bounded RF burst; a restart never replays an unresolved reservation.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from .valve_protocol import (
     decode_htv145_command_response,
     decode_htv145_gateway_command,
     decode_htv145_state_report,
+    decode_htv145_terminal_idle_report,
 )
 
 
@@ -68,9 +70,9 @@ class Htv145ControlProfile:
 class Htv145ControlCoordinator:
     """Persist and confirm at-most-once HTV145 logical commands.
 
-    Transmit is off unless ``enabled=True`` is supplied by an isolated caller.
-    There is intentionally no configuration option or public server route that
-    constructs an enabled instance.
+    Transmit is off unless ``enabled=True`` is supplied by the isolated dry
+    acceptance harness. The ordinary device-control and Home Assistant routes
+    never construct an enabled instance.
     """
 
     def __init__(
@@ -213,6 +215,8 @@ class Htv145ControlCoordinator:
                 frame=frame.hex(),
             )
         report = decode_htv145_state_report(frame, profile.link)
+        if report is None:
+            report = decode_htv145_terminal_idle_report(frame, profile.link)
         if report is None:
             raise ValueError("frame is not matching HTV145 valve evidence")
         watering = bool(report["watering"])

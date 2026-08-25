@@ -18,6 +18,11 @@
 - Record the remaining publication gates explicitly: installed longer-duration
   field acceptance, battery-cycle rejoin, battery decoding, interrupted OTA,
   signed releases, and a second valve specimen.
+- Add a disabled, token-protected HTV145 dry-valve acceptance endpoint and
+  command-line runner. It derives the independent command counter from retained
+  stock traffic, enforces controller silence and fresh-idle preflight, permits
+  one bounded open, and passes only on valve-originated active and automatic
+  idle evidence.
 
 ## 0.32.0 / Firmware 0.15.0-supervised-beta.1
 

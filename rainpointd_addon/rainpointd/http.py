@@ -148,6 +148,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/close")
             or parsed.path.endswith("/valve/synchronize")
         )
+        htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
+        htv145_acceptance_path = parsed.path.startswith(
+            htv145_acceptance_prefix
+        )
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
         node_path = parsed.path.startswith(f"{base}/nodes/")
         if (
@@ -155,6 +159,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             or registry_path
             or device_forget_path
             or valve_control_path
+            or htv145_acceptance_path
             or pairing_path
             or node_path
         ):
@@ -326,6 +331,48 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "transmit_performed": transmit_performed,
                         },
                     )
+                    return
+                if htv145_acceptance_path:
+                    action = parsed.path[len(htv145_acceptance_prefix) :]
+                    if action == "prepare":
+                        result = self.server.gateway.prepare_htv145_acceptance(
+                            node_id=str(body.get("node_id", "")),
+                            controller_endpoint=str(
+                                body.get("controller_endpoint", "")
+                            ),
+                            valve_endpoint=str(
+                                body.get("valve_endpoint", "")
+                            ),
+                            center_hz=int(body.get("center_hz", 0)),
+                            power_dbm=int(body.get("power_dbm", 0)),
+                            invert=body.get("invert", False),
+                            trailer_residual=int(
+                                body.get("trailer_residual", 0)
+                            ),
+                            idle_frame=str(body.get("idle_frame", "")),
+                            passive_command_frame=str(
+                                body.get("passive_command_frame", "")
+                            ),
+                        )
+                        self._json(200, result)
+                        return
+                    if action == "open":
+                        result = (
+                            self.server.gateway.start_htv145_acceptance_open(
+                                duration_seconds=int(
+                                    body.get("duration_seconds", 0)
+                                )
+                            )
+                        )
+                        self._json(202, result)
+                        return
+                    if action == "status":
+                        self._json(
+                            200,
+                            self.server.gateway.htv145_acceptance_status(),
+                        )
+                        return
+                    self._json(404, {"error": "not found"})
                     return
                 if valve_control_path:
                     device_prefix = f"{base}/devices/"
