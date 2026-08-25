@@ -590,13 +590,17 @@ message 01 00 83 82 7f a4 1e 80; endpoint association bit clear; suffix 24
 ```
 
 The standard radio-node firmware implements the model-level profile
-`hcs026_auto_v1`. The gateway supplies no RF identity. During an explicitly
-armed window, the selected node accepts the first trailer-valid announcement
-matching the signature above, derives the paired endpoint by setting the high
-bit of the first endpoint byte, substitutes it into the common reply template,
-assigns shared selector 4, rewrites the trailer, and locks the session to that
-identity. Unrelated frames cannot select a target, and terminal message `03`
-remains mandatory.
+`hcs026_auto_v1`. The authenticated gateway supplies its durable controller and
+companion endpoints; every radio node attached to that gateway uses the same
+pair. During an explicitly armed window, the selected node accepts the first
+trailer-valid announcement matching the signature above, derives the sensor's
+paired endpoint by setting the high bit of the first endpoint byte, substitutes
+the sensor and gateway endpoints into the common reply template, assigns shared
+selector 4, rewrites the trailer, and locks the session to that sensor identity.
+Unrelated frames cannot select a target, and terminal message `03` remains
+mandatory. Older firmware is accepted only for an association that explicitly
+retains the observed stock controller/companion pair; it cannot create or own a
+generated-identity association.
 
 The common path has now completed physical pairing across independent test and
 installed HCS026 identities. Known sensors can also repeat their strict factory

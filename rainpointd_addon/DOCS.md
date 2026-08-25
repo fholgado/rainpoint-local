@@ -11,6 +11,12 @@ one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
 `hcs026_auto_v1`; automatic identity adoption and known-sensor recovery have
 completed physical end-to-end validation across independent identities.
+The staged coexistence release persists one custom RF controller identity for
+the local gateway and supplies it to every radio node. Existing associations
+retain the identity under which they were paired. A node must advertise
+`configurable_rf_controller_identity` before it may pair or acknowledge a
+custom-identity device; older nodes remain usable for retained stock-identity
+associations. Physical custom-identity enrollment remains a release gate.
 HTV405 valve-control POST requests remain rejected unless the explicit
 `supervised_htv405_control` beta option is enabled and the selected
 association-specific radio node advertises its candidate control capability.

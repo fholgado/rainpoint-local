@@ -249,11 +249,12 @@ runtime dependency.
   transition before exposing valve battery state.
 - Generalize the local association/control evidence with another valve before
   beginning cloud-to-local migration work with the existing HomGar integration.
-- Generate and durably persist a custom RF controller identity, parameterize
-  sensor/valve pairing and control to use it across every radio node, and prove
-  stock/custom coexistence before exposing the generalized Home Assistant valve
-  pairing flow. The existing `39840280` companion route is retained-association
-  research evidence, not a production default.
+- Physically validate the staged, durably persisted custom RF controller
+  identity with a disposable sensor, then prove stock/custom device-cohort
+  coexistence before exposing the generalized Home Assistant valve pairing
+  flow. Existing assignments retain their original controller identity; the
+  `39840280` companion route remains retained-association evidence rather than
+  the default for a new local enrollment.
 
 Start and finish the sensor reliability gate with persisted snapshots rather
 than screenshots:

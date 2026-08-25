@@ -75,6 +75,10 @@ capacitor across CC1101 VCC/GND when practical.
   bounded reply and preserves its existing HA identity.
 - Accepts at most eight persistent sensor ACK assignments from the authenticated
   local gateway and restores all of them after reconnect or reboot.
+- Accepts an association-specific controller/companion identity from the
+  authenticated gateway for pairing, recovery, and routine ACKs. Firmware with
+  this boundary advertises `configurable_rf_controller_identity`; the gateway
+  refuses to give a custom-identity association to an older node.
 - Starts with RF transmission disarmed and fails closed on timeout, network
   loss, unexpected pairing state, invalid command, or driver failure.
 - Reports radio, heap, reset, temperature, loop-latency, network, Wi-Fi, OTA,

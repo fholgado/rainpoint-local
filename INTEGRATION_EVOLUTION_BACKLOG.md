@@ -29,14 +29,17 @@ validation.
 
 ## Immediate qualification
 
-1. Accumulate a 72-hour sensor cadence and ACK baseline across the installed
+1. Physically enroll a disposable sensor under the staged persistent custom RF
+   controller identity while the stock gateway remains powered. Verify both
+   stock-owned and locally owned cohorts continue reporting and receiving ACKs.
+2. Accumulate a 72-hour sensor cadence and ACK baseline across the installed
    radio-node layout.
-2. Reassign one test sensor between nodes and prove the old owner is revoked
+3. Reassign one test sensor between nodes and prove the old owner is revoked
    before the new owner transmits.
-3. Measure stock-gateway coexistence after migration pairing and retain any
+4. Measure stock-gateway coexistence after migration pairing and retain any
    competing acknowledgement frames.
-4. Improve final Wi-Fi/RF placement for nodes with weak margins.
-5. Verify reload/restart and HA identity retention after the consolidated
+5. Improve final Wi-Fi/RF placement for nodes with weak margins.
+6. Verify reload/restart and HA identity retention after the consolidated
    firmware and gateway release.
 
 ## HTV405 beta qualification

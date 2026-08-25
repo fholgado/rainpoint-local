@@ -81,25 +81,30 @@ Do not confuse the gateway's API/discovery ID with its RF controller identity.
 The former identifies one `rainpointd` instance to Home Assistant. The latter is
 the four-byte endpoint placed in pairing replies and valve commands.
 
-The prototype currently uses the observed RainPoint companion endpoint
-`39840280`; the corresponding command-response route is `b9840280`. That was
-useful for retained-association takeover, but it deliberately impersonates the
-stock RainPoint gateway and cannot be the default for a coexistence-capable
-release. Existing evidence suggests that the high bit distinguishes companion
-and active-controller forms of one identity, but the permitted generated-value
-space still needs one physical enrollment validation.
+The currently deployed installation uses the observed RainPoint companion
+endpoint `39840280`; the corresponding command-response route is `b9840280`.
+That was useful for retained-association takeover, but it deliberately
+impersonates the stock RainPoint gateway and cannot be the default for a
+coexistence-capable release. The staged implementation now generates a distinct
+gateway-wide identity and parameterizes sensor pairing, sensor ACK/recovery,
+and valve pairing with it. The permitted generated-value space still needs one
+physical enrollment validation before deployment.
 
-Implementation order is therefore fixed:
+Implementation and validation order is therefore fixed:
 
-1. Generate one random RF controller identity per custom local gateway, store
+1. **Implemented, pending deployment:** generate one random RF controller
+   identity per custom local gateway, store
    it durably, include it in backup/restore and diagnostics, and never change it
    on restart, OTA, or radio-node replacement. All radio nodes belonging to the
    gateway share this identity; node selection only chooses the best physical
    transmitter/ACK owner.
-2. Parameterize HCS026 and HTV405 pairing/control profiles so firmware receives
-   the identity from the authenticated gateway instead of embedding
-   `39840280`.
-3. Validate a disposable sensor enrollment under the generated identity with
+2. **Implemented, pending deployment:** parameterize HCS026 and HTV405
+   pairing profiles plus HCS026 recovery/ACK so firmware receives the identity
+   from the authenticated gateway instead of embedding `39840280`. Older node
+   firmware may continue servicing retained stock-identity assignments, but is
+   explicitly rejected for a generated-identity enrollment or ownership.
+3. **Next physical gate:** validate a disposable sensor enrollment under the
+   generated identity with
    the stock RainPoint gateway powered, then validate ordinary reports and
    acknowledgements from both independently owned device cohorts.
 4. Make generated identity the default for new local enrollment. Retained

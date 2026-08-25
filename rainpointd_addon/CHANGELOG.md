@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Generate and persist one gateway-wide RF controller/companion identity in
+  SQLite, expose it in diagnostics, and share it across every radio node.
+- Parameterize automatic HCS026 pairing, known-sensor recovery, routine ACKs,
+  and HTV405 pairing with the association's controller identity while
+  preserving all pre-existing assignments as retained stock associations.
+- Require an explicit radio-node firmware capability before a generated
+  identity can be paired or assigned, preventing an older firmware from
+  silently falling back to the stock RainPoint identity.
+
 ## 0.33.1 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
 
 - Extend supervised HTV405 opens from the original 1--4 minute pilot boundary
