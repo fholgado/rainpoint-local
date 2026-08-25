@@ -793,9 +793,14 @@ class ESP32NetworkTest(unittest.TestCase):
         )
         awaiting_exchange = self.gateway.pairing()
         self.assertEqual(
-            "pairing_exchange_in_progress", awaiting_exchange["stage"]
+            "valve_pairing_completed", awaiting_exchange["stage"]
         )
-        self.assertIsNone(awaiting_exchange["completed_endpoint"])
+        self.assertEqual(
+            "94a98013", awaiting_exchange["completed_endpoint"]
+        )
+        self.assertEqual(
+            "local-sdr", awaiting_exchange["valve_confirmation_receiver"]
+        )
         stream.write(
             json.dumps(
                 {

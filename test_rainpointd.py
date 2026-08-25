@@ -257,6 +257,49 @@ class GatewayTest(unittest.TestCase):
             )
             restored.close()
 
+    def test_phase_only_htv405_report_preserves_definitive_state(self) -> None:
+        gateway = Gateway()
+        gateway.observe_decoded(
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="definitive-idle",
+            state={
+                "rf_endpoint_b": "94a98013",
+                "rf_frame_accepted": True,
+                "is_watering": False,
+                "active_zone": None,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:01:21+00:00",
+        )
+        gateway.observe_decoded(
+            device_id="htv405-94a98013",
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="phase-only-heartbeat",
+            state={
+                "rf_endpoint_b": "94a98013",
+                "rf_frame_accepted": True,
+                "is_watering": None,
+                "active_zone": None,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:02:21+00:00",
+        )
+
+        device = gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:02:21+00:00")
+        )[0]
+        self.assertFalse(device["state"]["is_watering"])
+        self.assertEqual(
+            "2026-08-24T20:01:21+00:00", device["state_observed_at"]
+        )
+        self.assertEqual(
+            "2026-08-24T20:02:21+00:00", device["observed_at"]
+        )
+        gateway.close()
+
     def test_authenticated_network_ingest_confirms_air_response(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = self._gateway_with_pending_htv405_open(
@@ -287,6 +330,39 @@ class GatewayTest(unittest.TestCase):
             self.assertIsNone(registration["control_pending_command_id"])
             self.assertEqual(7, registration["control_next_sequence"])
             self.assertTrue(registration["control_confirmed_watering"])
+            gateway.close()
+
+    def test_invalid_trailer_cannot_discover_a_phantom_htv405_link(self) -> None:
+        corrupted = (
+            "79f4882f28b984068094a98013108107820580804f80000000408000568"
+            "00000000000000043ed"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            ingestor = FrameIngestor(gateway, receiver_id="rp-001122334455")
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-25T16:34:29.137286+00:00",
+                    "rows": [
+                        {
+                            "len": len(corrupted) * 4,
+                            "data": corrupted,
+                        }
+                    ],
+                }
+            )
+
+            self.assertEqual(1, published)
+            assert gateway._store is not None
+            self.assertEqual([], gateway._store.valve_registry())
+            self.assertEqual([], gateway.devices())
+            event = gateway.events()[-1]
+            self.assertFalse(event["state"]["rf_frame_accepted"])
             gateway.close()
 
     def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
@@ -343,6 +419,10 @@ class GatewayTest(unittest.TestCase):
 
                 self.assertEqual(6, synchronized["control_next_sequence"])
                 self.assertFalse(synchronized["control_confirmed_watering"])
+                self.assertEqual(
+                    "2026-08-24T20:00:30+00:00",
+                    synchronized["control_confirmed_at"],
+                )
                 gateway.close()
         finally:
             if previous_timezone is None:

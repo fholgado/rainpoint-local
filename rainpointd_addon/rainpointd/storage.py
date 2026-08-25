@@ -1400,7 +1400,30 @@ class SQLiteEventStore:
         if state["control_pending_command_id"] is not None:
             return state
         if state["control_next_sequence"] is None and not watering:
-            return state
+            self._connection.execute(
+                """
+                UPDATE valve_registry SET
+                    control_confirmed_watering = 0,
+                    control_confirmed_at = ?,
+                    control_active_zone = NULL,
+                    control_run_started_at = NULL,
+                    control_run_duration_seconds = NULL,
+                    control_expected_idle_at = NULL,
+                    control_last_result =
+                        'idle_confirmed_counter_unsynchronized',
+                    updated_at = ?
+                WHERE valve_endpoint = ?
+                  AND control_pending_command_id IS NULL
+                  AND control_next_sequence IS NULL
+                """,
+                (observed_at, observed_at, valve_endpoint),
+            )
+            self._connection.commit()
+            return next(
+                item
+                for item in self.valve_registry()
+                if item["valve_endpoint"] == valve_endpoint
+            )
         confirmed_watering = state["control_confirmed_watering"] in {1, True}
         confirmed_zone = state["control_active_zone"]
         if not watering and confirmed_watering:

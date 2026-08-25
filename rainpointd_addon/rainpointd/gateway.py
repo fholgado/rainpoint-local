@@ -635,7 +635,7 @@ class Gateway:
                 raise KeyError(device_id)
             profile = self._htv405_control_profile(registration)
             device = self._devices.get(device_id, {})
-            reported_at = device.get("observed_at")
+            reported_at = registration.get("control_confirmed_at")
             try:
                 reported = _observed_utc(str(reported_at))
                 current = _observed_utc(current)
@@ -644,7 +644,10 @@ class Gateway:
                 report_age = float("inf")
             if (
                 device.get("available") is not True
-                or device.get("state", {}).get("is_watering") is not False
+                or registration.get("control_confirmed_watering") not in {
+                    0,
+                    False,
+                }
                 or not 0 <= report_age <= 60
             ):
                 raise RuntimeError("HTV405 valve is not freshly confirmed idle")
@@ -1456,14 +1459,37 @@ class Gateway:
                 self._update_memory_metrics(device_id, timestamp)
                 self._update_memory_reception_metrics(event)
             self._confirm_valve_pairing_locked(frame, decoded, timestamp)
+            device_state = copy.deepcopy(decoded)
+            device_observed_at = timestamp
+            if model == "HTV405FRF" and not isinstance(
+                decoded.get("is_watering"), bool
+            ):
+                previous = self._devices.get(device_id, {})
+                previous_state = previous.get("state", {})
+                if isinstance(previous_state.get("is_watering"), bool):
+                    for key, value in previous_state.items():
+                        if key in {
+                            "is_watering",
+                            "active_zone",
+                            "valve_state",
+                            "duration_seconds",
+                            "last_usage_liters",
+                        } or re.fullmatch(
+                            r"zone_[1-4]_(?:is_watering|remaining_seconds|duration_seconds)",
+                            key,
+                        ):
+                            device_state[key] = copy.deepcopy(value)
+                    previous_observed_at = previous.get("observed_at")
+                    if isinstance(previous_observed_at, str):
+                        device_observed_at = previous_observed_at
             device = {
                 "device_id": device_id,
                 "name": name,
                 "model": model,
                 "available": True,
                 "last_event_id": event_id,
-                "observed_at": timestamp,
-                "state": decoded,
+                "observed_at": device_observed_at,
+                "state": device_state,
             }
             if registry_metadata is not None:
                 device["area"] = registry_metadata.get("area")
@@ -1857,6 +1883,34 @@ class Gateway:
                         state["rf_model_code"] = registered["model_code"]
                 if valve_registration := valve_registry.get(device_id):
                     state = device.setdefault("state", {})
+                    confirmed_watering = valve_registration.get(
+                        "control_confirmed_watering"
+                    )
+                    confirmed_at = valve_registration.get(
+                        "control_confirmed_at"
+                    )
+                    if (
+                        not isinstance(state.get("is_watering"), bool)
+                        and confirmed_watering is not None
+                    ):
+                        watering = bool(confirmed_watering)
+                        state.update(
+                            {
+                                "is_watering": watering,
+                                "active_zone": (
+                                    valve_registration.get(
+                                        "control_active_zone"
+                                    )
+                                    if watering
+                                    else None
+                                ),
+                                "valve_state": (
+                                    "watering" if watering else "idle"
+                                ),
+                            }
+                        )
+                        if isinstance(confirmed_at, str):
+                            device["observed_at"] = confirmed_at
                     pending_command = valve_registration.get(
                         "control_pending_command_id"
                     )
@@ -2952,6 +3006,9 @@ class Gateway:
             except ValueError:
                 continue
             if (
+                state.get("rf_trailer_valid") is not True
+                or state.get("rf_frame_accepted") is not True
+                or
                 not is_htv405_link_frame(raw)
                 or not re.fullmatch(
                     r"[89a-f][0-9a-f]{5}13", valve_endpoint.lower()
@@ -3207,12 +3264,14 @@ class Gateway:
             reported_endpoint = selected_node.get("pairing_paired_endpoint")
             # A valve link may already be present from an earlier stock or
             # local association. Its mere presence is not evidence that the
-            # valve accepted this session's assignment; only the selected
-            # node's command-scoped terminal state may complete pairing.
+            # valve accepted this session's assignment.  Once the selected
+            # node has transmitted at least one reply, however, a strict link
+            # frame for the expected paired endpoint is session-scoped proof
+            # of acceptance.  The retained 18-row stock transcript is a model
+            # of post-association traffic, not a minimum completion counter.
             observed_valve_completed = (
                 self._active_pairing_profile_id
                 == AUTOMATIC_HTV405_PROFILE_ID
-                and node_state == "completed"
                 and isinstance(reported_endpoint, str)
                 and self._active_pairing_confirmed_valve_endpoint
                 == reported_endpoint.lower()

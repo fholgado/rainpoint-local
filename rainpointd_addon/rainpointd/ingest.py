@@ -113,7 +113,11 @@ class FrameIngestor:
             control_response = (
                 decode_htv405_gateway_command_response(raw_frame) or {}
             )
-            if is_htv405_link_frame(raw_frame):
+            valid_htv405_link = bool(
+                is_htv405_link_frame(raw_frame)
+                and decoded.get("trailer_valid") is True
+            )
+            if valid_htv405_link:
                 valve_phase = htv405_phase_state(raw_frame)
                 self.gateway.register_observed_htv405_link(
                     controller_endpoint=decoded["endpoint_a"],
@@ -122,7 +126,7 @@ class FrameIngestor:
                     observed_at=observed_at,
                 )
             if valve is None:
-                if is_htv405_link_frame(raw_frame):
+                if valid_htv405_link:
                     valve = self.catalog.valve_link(
                         decoded["endpoint_a"], decoded["endpoint_b"]
                     )
@@ -163,7 +167,21 @@ class FrameIngestor:
                         if key in decoded
                     }
                 )
-            if valve_update:
+                if (
+                    valve.model == "HTV405FRF"
+                    and not isinstance(decoded.get("is_watering"), bool)
+                ):
+                    # Valid phase-only link reports prove reception and advance
+                    # only the independent telemetry phase. They must not
+                    # replace the latest definitive watering/idle state.
+                    for key in (
+                        "valve_state",
+                        "is_watering",
+                        "duration_seconds",
+                        "last_usage_liters",
+                    ):
+                        valve_update.pop(key, None)
+            if valve_update and decoded.get("trailer_valid") is True:
                 if valve is None:
                     continue
                 valve_state = self._valve_states.setdefault(
@@ -255,8 +273,7 @@ class FrameIngestor:
             if moisture is None:
                 valve_originated = bool(
                     valve is not None
-                    and decoded["endpoint_a"] == valve.valve_endpoint
-                    and decoded["endpoint_b"] == valve.controller_endpoint
+                    and decoded["endpoint_b"] == valve.valve_endpoint
                 )
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],
