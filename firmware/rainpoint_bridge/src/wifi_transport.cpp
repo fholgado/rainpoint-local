@@ -276,7 +276,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
              type == "htv145_control_close" ||
              type == "htv145_control_status"
 #endif
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
          || type == "valve_control_configure" ||
              type == "valve_control_sync" ||
              type == "valve_control_open" ||
@@ -334,7 +334,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"gateway_host\":\"%s\","
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\","
         "\"configurable_rf_controller_identity\""
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         ",\"valve_control_tx_candidate\""
 #endif
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
