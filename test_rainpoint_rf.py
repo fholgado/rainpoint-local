@@ -1686,6 +1686,7 @@ class RainPointRFTest(unittest.TestCase):
                     "rf_endpoint_a": "aa110280",
                     "rf_endpoint_b": "a1b2c313",
                     "rf_frame_accepted": True,
+                    "rf_trailer_valid": True,
                 },
             )
             self.assertIsNone(

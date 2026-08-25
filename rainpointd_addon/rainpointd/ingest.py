@@ -273,7 +273,7 @@ class FrameIngestor:
             if moisture is None:
                 valve_originated = bool(
                     valve is not None
-                    and decoded["endpoint_b"] == valve.valve_endpoint
+                    and decoded["endpoint_a"] == valve.valve_endpoint
                 )
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],
