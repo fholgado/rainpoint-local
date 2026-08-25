@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Complete HTV405 pairing from a session-scoped, trailer-valid paired-link
+  report after the selected node transmits at least one reply; the 18-row stock
+  transcript remains a traffic model rather than a mandatory completion count.
+- Reject trailer-invalid HTV405 frames from link discovery and preserve the
+  latest definitive watering state across valid phase-only heartbeats.
 - Retain narrowly scoped HTV405 timeout evidence and permit the next explicit
   bounded open to try only the same or immediately following command counter,
   after the entire possibly accepted run plus a 15-second guard has elapsed.

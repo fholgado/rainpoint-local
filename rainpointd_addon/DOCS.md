@@ -206,6 +206,13 @@ entities, a receive-only HTV145 valve device, and an association-backed HTV405
 four-zone device. HTV405 exposes one bounded-duration control and one duration
 setting per zone only when supervised control is explicitly enabled; state is
 accepted only from authenticated responses or subsequent valve telemetry.
+HTV405 enrollment completes when a trailer-valid paired-link report for the
+expected endpoint is observed after the selected node transmits at least one
+session-scoped reply. The retained 18-row stock exchange describes later
+initialization traffic but is not a required minimum: physical acceptance and
+control have been validated from shorter exchanges. Trailer-invalid frames
+cannot create valve links, and phase-only reports advance reception/phase
+diagnostics without erasing the latest definitive watering state.
 If an authenticated response times out, the app retains only the two smallest
 plausible counter candidates. A later explicit open may use a candidate only
 after the full requested duration plus a 15-second guard has elapsed; it never
