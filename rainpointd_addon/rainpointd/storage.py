@@ -1349,7 +1349,6 @@ class SQLiteEventStore:
                 pending_duration_seconds=NULL,
                 pending_started_at=NULL,
                 expected_idle_at=NULL,
-                last_command_started_at=NULL,
                 confirmed_watering=NULL,
                 confirmed_at=NULL,
                 last_response_frame=NULL,

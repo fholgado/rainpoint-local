@@ -1149,6 +1149,22 @@ against immediately retrying a non-idempotent open command. The two missing
 responses were from the scheduled cycle and are consistent with missed RF
 reception rather than proven valve non-response.
 
+The first isolated local transmit trial on 2026-08-25 confirmed that HTV145
+command traffic for this association uses RainPoint channel 11 at the CC1101
+center 434.239594 MHz. A corrected 60-second candidate was independently
+captured by the SDR and another radio node as three byte-identical, valid
+`0xc713` attempts with the measured 1,200-symbol wake prefix. The valve emitted
+no response or state transition and did not actuate. Its last valve-originated
+report had already asserted the confirmed low-battery flag, after which routine
+heartbeats ceased, so this result is blocked by battery condition rather than
+classified as a protocol rejection. A fresh-battery, freshly synchronized
+repeat remains required.
+
+This negative trial confirms that controller-to-valve requests are intent, not
+state evidence: local receivers hear their own request even when the valve is
+silent. Only valve-to-controller command responses, active/idle marker reports,
+or terminal idle summaries may update valve watering state and report cadence.
+
 ### Last-session water usage
 
 Valve response frames use `0x4f` or `0xcf` as a marker at normalized frame
@@ -1287,9 +1303,10 @@ normalization and confirmed field decoding. Regression examples live in
 
 ## Remaining protocol work
 
-1. Determine by bounded active acceptance testing whether either ordinary
-   trailer residue is accepted for a newly constructed payload, then
-   characterize the compact-frame trailer family.
+1. With fresh valve batteries and newly confirmed stock command-counter
+   evidence, repeat one channel-11 dry-valve acceptance using the explicitly
+   evidenced ordinary trailer residue; then characterize the compact-frame
+   trailer family.
 2. Validate the measured channel, rate, deviation, bandwidth, and sync profile
    on receive-only CC1101 hardware, including both RF channels.
 3. Test whether a captured request is accepted outside its original sequence
@@ -1301,10 +1318,12 @@ normalization and confirmed field decoding. Regression examples live in
    18-step transcript after a `0x7f` boot trigger both failed; keep rejoin
    separate from the validated `0xff` new-enrollment state machine and require
    paired traffic as terminal evidence.
-6. Physically validate the HTV145 one-logical-command/three-attempt bounded
-   burst, matching response, independent state fallback, counter persistence,
-   and positively observed overdue-run handling before enabling Home Assistant
-   control. Explicit early-stop is report-validated on all four HTV405 zones.
+6. Complete physical HTV145 acceptance. The one-logical-command/three-attempt
+   waveform is now independently captured on the correct carrier, but valve
+   response, independent state fallback, automatic stop, counter persistence,
+   and positively observed overdue-run handling remain unaccepted pending a
+   fresh-battery repeat. Explicit early-stop is report-validated on all four
+   HTV405 zones.
 7. Determine whether HTV405 battery status is carried by an RF family not yet
    independently correlated to voltage. HTV145 categorical battery is now
    decoded separately.

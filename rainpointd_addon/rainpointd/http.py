@@ -353,6 +353,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                             passive_command_frame=str(
                                 body.get("passive_command_frame", "")
                             ),
+                            idle_observed_at=str(
+                                body.get("idle_observed_at", "")
+                            ),
+                            passive_command_observed_at=str(
+                                body.get("passive_command_observed_at", "")
+                            ),
                         )
                         self._json(200, result)
                         return

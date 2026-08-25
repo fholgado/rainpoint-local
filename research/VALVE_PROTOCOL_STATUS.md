@@ -99,9 +99,45 @@ foreign matching-route frame, a missed fallback state confirmation, gateway
 loss, and an ambiguous outbound counter. Standard firmware compiles the entire
 HTV145 transmit candidate out.
 
+### First isolated transmit result — 2026-08-25
+
+The first unattended dry-valve trial exposed a carrier-selection defect before
+it exposed a valve result: the retained stock command was explicitly received
+on RainPoint channel 11, whose CC1101 center is 434.239594 MHz, while the first
+runner invocation used a 433.920 MHz default. That attempt produced no valve
+evidence and is discarded as an off-channel trial.
+
+The corrected run inferred channel 11 from the positively confirmed stock
+command and sent one logical 60-second open as three byte-identical attempts.
+Both the SDR and another radio node received the constructed ordinary frame;
+the second node reported approximately -57.5 dBm, the trailer residue was the
+association-evidenced `0xc713`, and the long wake prefix was 1,200 symbols. No
+valve response, active report, physical actuation, or later idle report was
+observed. The selected node had recently received the valve itself around
+-70 dBm, so the run establishes a clean local transmission but not valve
+acceptance.
+
+The valve's last independently confirmed report already carried the categorical
+low-battery flag, and its routine heartbeat then stopped. Battery depletion or
+low-voltage actuator lockout is therefore the leading blocker, but it is not a
+protocol conclusion. Further transmit trials are blocked until fresh batteries
+produce a new valve-originated report and a new stock command is positively
+confirmed by a matching response or state transition. The runner now rejects
+low or unknown battery state, derives the carrier only from retained channel
+evidence, and refuses to reuse command evidence from before a prior local
+attempt.
+
+The trial also proved an important receive-side boundary: a receiver can hear
+the local controller request even when the valve does not accept it. Controller
+requests are now retained only as command intent and never update valve state,
+availability, or device-report cadence; only reverse-route response or state
+traffic can do so.
+
 ## Remaining physical gates
 
-1. Run the HTV145 dry-valve acceptance harness against the isolated valve.
+1. Replace the isolated HTV145 batteries, obtain fresh valve-originated idle
+   and positively confirmed stock-command evidence, then repeat exactly one
+   correct-channel dry-valve acceptance run.
 2. Validate explicit HTV145 early stop and the 15-second hardware interval.
 3. Capture stock battery rejoin for each valve family, then reproduce it
    locally without changing the proven new-enrollment paths.

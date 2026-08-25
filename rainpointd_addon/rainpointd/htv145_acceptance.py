@@ -46,6 +46,8 @@ class Htv145DryValveAcceptance:
         idle_frame: bytes,
         passive_command_frame: bytes,
         observed_at: str,
+        idle_observed_at: str | None = None,
+        passive_command_observed_at: str | None = None,
     ) -> tuple[dict[str, Any], ...]:
         """Select/configure the node and authenticate the outbound counter."""
         self._require_enabled()
@@ -54,11 +56,15 @@ class Htv145DryValveAcceptance:
         configured = self.coordinator.configure(
             self.profile, observed_at=observed_at
         )
+        idle_evidence_at = idle_observed_at or observed_at
+        command_evidence_at = passive_command_observed_at or observed_at
         idle = self.coordinator.observe_frame(
-            self.profile, idle_frame, observed_at=observed_at
+            self.profile, idle_frame, observed_at=idle_evidence_at
         )
         synchronized = self.coordinator.synchronize_from_passive_command(
-            self.profile, passive_command_frame, observed_at=observed_at
+            self.profile,
+            passive_command_frame,
+            observed_at=command_evidence_at,
         )
         node_commands = self.coordinator.start(
             self.profile, observed_at=observed_at
@@ -71,6 +77,8 @@ class Htv145DryValveAcceptance:
             counter_source=synchronized["counter_source"],
             next_sequence=synchronized["next_sequence"],
             confirmed_idle=idle["confirmed_watering"] is False,
+            idle_evidence_at=idle_evidence_at,
+            passive_command_evidence_at=command_evidence_at,
             node_command_types=[item["type"] for item in node_commands],
             profile=configured,
         )

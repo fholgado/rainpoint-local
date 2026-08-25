@@ -6,7 +6,15 @@ import binascii
 from typing import Any
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
-from .valve_protocol import decode_duration, decode_htv405_control_frame
+from .valve_protocol import (
+    ValveLink,
+    decode_duration,
+    decode_htv145_command_response,
+    decode_htv145_gateway_command,
+    decode_htv145_state_report,
+    decode_htv145_terminal_idle_report,
+    decode_htv405_control_frame,
+)
 
 
 SYNC = bytes.fromhex("79f4882f28")
@@ -286,42 +294,59 @@ def _valve_fields(
                 **decoded,
                 "valve_state": "watering" if watering else "idle",
             }
-        # The open/close flag is the high bit of byte 14. Open commands carry
-        # a whole-minute duration at bytes 19-20. The low duration byte has
-        # bit 7 forced on, so decode it with the confirmed minute constraint.
-        if frame[14] & 0x7F != 0x10:
+        link = ValveLink(
+            bytes.fromhex(valve.controller_endpoint),
+            bytes.fromhex(valve.valve_endpoint),
+        )
+        command = decode_htv145_gateway_command(frame, link)
+        if command is None:
             return {}
-        watering = not bool(frame[14] & 0x80)
+        # A controller request is intent, never device state. In particular,
+        # an SDR can hear our own local request even when the valve rejects it.
+        # Retain the request for protocol/counter analysis without publishing
+        # watering state until a valve-originated response or report arrives.
         result: dict[str, Any] = {
-            "is_watering": watering,
-            "valve_state": "watering" if watering else "idle",
+            "valve_command": "open" if command["watering"] else "close",
+            "command_sequence": command["sequence"],
         }
-        if watering:
-            try:
-                duration_seconds = decode_duration(frame[19:21])
-            except ValueError:
-                pass
-            else:
-                result["duration_seconds"] = duration_seconds
+        if command["watering"]:
+            result["requested_duration_seconds"] = command[
+                "duration_seconds"
+            ]
         return result
 
     if (
         endpoint_a == valve.valve_endpoint
         and endpoint_b == valve.controller_endpoint
     ):
+        link = ValveLink(
+            bytes.fromhex(valve.controller_endpoint),
+            bytes.fromhex(valve.valve_endpoint),
+        )
+        command_response = decode_htv145_command_response(frame, link)
+        if command_response is not None:
+            watering = bool(command_response["watering"])
+            result: dict[str, Any] = {
+                "is_watering": watering,
+                "valve_state": "watering" if watering else "idle",
+                "command_response_sequence": command_response["sequence"],
+            }
+            try:
+                duration_seconds = decode_duration(frame[27:29])
+            except ValueError:
+                pass
+            else:
+                result["duration_seconds"] = duration_seconds
+            return result
+
         # A terminal/summary response family omits the 0x4f marker but carries
         # the same packed usage value at bytes 24-26.  Bytes 28-29 repeat the
         # requested duration in two-second units.  Five exact cloud/RF
         # correlations cover 81.9-106.3 L, including today's low-battery
         # 600-second run.  Battery is intentionally not decoded here: full and
         # low cloud states share the stable bytes in this response layout.
-        if (
-            frame[14:19] == bytes.fromhex("8207858080")
-            and frame[23] in {0x08, 0x10}
-            and frame[26] & 0x7F == 0
-            and frame[27] == 0
-            and not any(frame[30:36])
-        ):
+        terminal = decode_htv145_terminal_idle_report(frame, link)
+        if terminal is not None:
             tenths_liters = _packed_valve_usage_tenths(
                 frame[24], frame[25], frame[26]
             )
@@ -332,17 +357,13 @@ def _valve_fields(
                 "valve_state": "idle",
                 "last_usage_liters": round(tenths_liters / 10, 1),
             }
-            try:
-                duration_seconds = decode_duration(frame[28:30])
-            except ValueError:
-                pass
-            else:
-                result["duration_seconds"] = duration_seconds
+            result["duration_seconds"] = terminal["duration_seconds"]
             return result
 
         # 0x4f/0xcf marks last-session usage. The following bytes hold a
         # packed half-value plus an odd-value flag, in tenths of a liter.
-        if frame[20] & 0x7F != 0x4F:
+        state_report = decode_htv145_state_report(frame, link)
+        if state_report is None:
             return {}
         # Bit 7 of the first packed byte is overloaded. Cloud/RF correlation
         # showed that frame[23] bit 7 selects whether it is value bit 7 or an
@@ -352,14 +373,22 @@ def _valve_fields(
         )
         if 0 <= tenths_liters <= 100_000:
             battery_low = bool(frame[17] & 0x08)
-            return {
-                "is_watering": False,
-                "valve_state": "idle",
+            watering = bool(state_report["watering"])
+            result = {
+                "is_watering": watering,
+                "valve_state": "watering" if watering else "idle",
                 "last_usage_liters": round(tenths_liters / 10, 1),
                 "battery_low": battery_low,
                 "battery_status": 2 if battery_low else 1,
                 "battery_percent": 10 if battery_low else 100,
             }
+            try:
+                duration_seconds = decode_duration(frame[29:31])
+            except ValueError:
+                pass
+            else:
+                result["duration_seconds"] = duration_seconds
+            return result
     return {}
 
 

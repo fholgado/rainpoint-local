@@ -71,7 +71,9 @@ device slots.
   an at-most-once candidate reservation across gateway restarts.
 - Run the isolated HTV145 one-shot acceptance harness through a separate,
   disabled-by-default research gate; it is token-protected and intentionally
-  absent from the Home Assistant entity/control model.
+  absent from the Home Assistant entity/control model. Its first correct-
+  channel transmission was independently received but the already-low-battery
+  valve remained silent, so fresh-battery physical acceptance is still open.
 - Correlate local RF valve events with Home Assistant/cloud observations.
 - Exercise a hardware-independent duration-bounded controller: startup and
   client loss are observation-only, missing acknowledgements block further
@@ -240,7 +242,8 @@ runtime dependency.
 - Physically accept the separate HTV145 long-wake path: explicit association
   residue, one bounded three-attempt burst, immediate-response/state-report
   fallback, durable command counter, restart without replay, and valve-owned
-  automatic stop.
+  automatic stop. Correct channel-11 transmission is captured; repeat with
+  fresh valve batteries to establish valve acceptance.
 - Validate retained association and authenticated controller-counter recovery
   across a battery change, and capture an independently known low-battery RF
   transition before exposing valve battery state.

@@ -253,6 +253,11 @@ class FrameIngestor:
                 published += 1
                 continue
             if moisture is None:
+                valve_originated = bool(
+                    valve is not None
+                    and decoded["endpoint_a"] == valve.valve_endpoint
+                    and decoded["endpoint_b"] == valve.controller_endpoint
+                )
                 state: dict[str, Any] = {
                     "raw": decoded["frame_hex"],
                     "rf_endpoint_a": decoded["endpoint_a"],
@@ -265,6 +270,10 @@ class FrameIngestor:
                 for key in ("trailer_residual", "trailer_valid"):
                     state[f"rf_{key}"] = decoded[key]
                 for key in (
+                    "valve_command",
+                    "command_sequence",
+                    "requested_duration_seconds",
+                    "command_response_sequence",
                     "status_soil_moisture_percent",
                     "associated_soil_moisture_percent",
                     "hub_rssi_db",
@@ -290,7 +299,12 @@ class FrameIngestor:
                     frame=decoded["frame_hex"],
                     state=state,
                     observed_at=observed_at,
-                    device_id=valve.device_id if valve else None,
+                    # Controller requests can be heard by our own receivers,
+                    # but they are intent—not a report from the valve. Do not
+                    # let them advance valve cadence or availability metrics.
+                    device_id=(
+                        valve.device_id if valve_originated else None
+                    ),
                 )
                 receiver = receiver_metadata.get("rf_receiver_id")
                 if control_response and isinstance(receiver, str):

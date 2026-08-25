@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -31,8 +32,80 @@ from rainpointd.htv405_control import (  # noqa: E402
 )
 from rainpointd.storage import SQLiteEventStore  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
+    ValveLink,
     build_open_frame,
 )
+from tools.run_htv145_acceptance import _preflight  # noqa: E402
+
+
+class Htv145AcceptanceRunnerPreflightTest(unittest.TestCase):
+    LINK = ValveLink(
+        bytes.fromhex("b42d008f"), bytes.fromhex("b9840280")
+    )
+    RESPONSE = (
+        "79f4882f28b9840280b42d008f8150868010cf8702000040d80256d802"
+        "000000000000004bfa"
+    )
+    IDLE = (
+        "79f4882f28b9840280b42d008f9f8107858580804f938200004080005680"
+        "0000000000002aff"
+    )
+
+    def events(self, *, battery_low: bool) -> list[dict]:
+        now = datetime.now(timezone.utc)
+        stock_at = now - timedelta(minutes=20)
+        command = build_open_frame(self.LINK, 0x81, 1200, 0xC713)
+        unconfirmed_local = build_open_frame(
+            self.LINK, 0x82, 60, 0xC713
+        )
+        return [
+            {
+                "event_id": 1,
+                "observed_at": stock_at.isoformat(),
+                "raw": command.hex(),
+                "state": {"rf_channel": 11},
+            },
+            {
+                "event_id": 2,
+                "observed_at": (stock_at + timedelta(seconds=2)).isoformat(),
+                "raw": self.RESPONSE,
+                "state": {"rf_channel": 11},
+            },
+            {
+                "event_id": 3,
+                "observed_at": (now - timedelta(minutes=11)).isoformat(),
+                "raw": unconfirmed_local.hex(),
+                "state": {"rf_channel": 11},
+            },
+            {
+                "event_id": 4,
+                "observed_at": (now - timedelta(minutes=1)).isoformat(),
+                "raw": self.IDLE,
+                "state": {"battery_low": battery_low, "rf_channel": 0},
+            },
+        ]
+
+    def test_derives_channel_and_ignores_unconfirmed_local_command(self) -> None:
+        result = _preflight(
+            self.events(battery_low=False),
+            link=self.LINK,
+            isolation_seconds=600,
+            maximum_command_age_seconds=86_400,
+            maximum_idle_age_seconds=1_800,
+        )
+        self.assertEqual(11, result["command_rf_channel"])
+        self.assertEqual(434_239_594, result["command_center_hz"])
+        self.assertEqual(0x82, result["next_command_sequence"])
+
+    def test_rejects_confirmed_low_battery(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "battery is confirmed low"):
+            _preflight(
+                self.events(battery_low=True),
+                link=self.LINK,
+                isolation_seconds=600,
+                maximum_command_age_seconds=86_400,
+                maximum_idle_age_seconds=1_800,
+            )
 
 
 class ValveSafetyControllerTest(unittest.TestCase):

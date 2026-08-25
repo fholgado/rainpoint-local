@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.33.0 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
+## 0.33.1 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
 
 - Extend supervised HTV405 opens from the original 1--4 minute pilot boundary
   to configurable 1--60 whole-minute runs across the gateway, authenticated
@@ -23,6 +23,12 @@
   stock traffic, enforces controller silence and fresh-idle preflight, permits
   one bounded open, and passes only on valve-originated active and automatic
   idle evidence.
+- Derive the HTV145 acceptance carrier from positively confirmed channel-0/11
+  RF evidence, reject low or unknown valve battery state, and prevent stale
+  stock-command evidence from being reused after a local attempt.
+- Keep controller-to-valve requests as retained intent only. They no longer
+  invent watering state or advance valve report/availability metrics when a
+  local receiver hears its own unacknowledged transmission.
 
 ## 0.32.0 / Firmware 0.15.0-supervised-beta.1
 

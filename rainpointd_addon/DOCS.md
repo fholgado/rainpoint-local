@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.0 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.1 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -207,8 +207,11 @@ gate, not a Home Assistant actuator path. When explicitly enabled it adds a
 token-protected one-shot endpoint for an isolated, unpressurized HTV145 valve.
 The runner requires fresh valve-originated idle evidence, a retained passive
 stock command for counter synchronization, and at least ten minutes without
-stock-controller RF before it can transmit one bounded open. Leave the option
-disabled outside a supervised acceptance session.
+stock-controller RF before it can transmit one bounded open. It also requires
+a confirmed non-low valve battery report, derives channel 0 or 11 from the
+confirmed command rather than a frequency default, and will not reuse evidence
+that predates an earlier local attempt. Leave the option disabled outside a
+supervised acceptance session.
 Valid RainPoint frames that do not match the confirmed layouts are retained as
 `rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
 remain research work.

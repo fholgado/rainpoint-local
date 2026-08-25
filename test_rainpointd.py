@@ -841,6 +841,67 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(2, valve["state"]["battery_status"])
             restored.close()
 
+    def test_restore_ignores_persisted_htv145_controller_request_state(
+        self,
+    ) -> None:
+        idle = (
+            "79f4882f28b9840280b42d008f970107858b00804f998180"
+            "00408000568000000000000049ef"
+        )
+        request = (
+            "79f4882f28b42d008fb98402808d10828081009e00000000"
+            "000000000000000000000000da7f"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(transport="rtl433", storage_path=str(path))
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=idle,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "valve_state": "idle",
+                    "battery_low": True,
+                },
+                observed_at="2026-08-25T00:14:55+00:00",
+            )
+            # Freeze the projection produced by the old decoder when it heard
+            # a controller request from our own transmitter.
+            gateway.observe_decoded(
+                device_id="valve-1",
+                name="Garden Valve",
+                model="HTV145FRF",
+                frame=request,
+                state={
+                    "rf_frame_accepted": True,
+                    "is_watering": True,
+                    "valve_state": "watering",
+                    "duration_seconds": 60,
+                },
+                observed_at="2026-08-25T00:20:57+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(transport="rtl433", storage_path=str(path))
+            valve = next(
+                device
+                for device in restored.devices()
+                if device["device_id"] == "valve-1"
+            )
+            self.assertFalse(valve["state"]["is_watering"])
+            self.assertEqual("idle", valve["state"]["valve_state"])
+            self.assertEqual(idle, valve["state"]["raw"])
+            # Reception cadence remains a separate metric, but device state
+            # must point back to the last valve-originated observation.
+            self.assertEqual(
+                "2026-08-25T00:14:55+00:00",
+                valve["state_observed_at"],
+            )
+            restored.close()
+
     def test_storage_rejects_newer_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "rainpoint.sqlite3"
@@ -1905,12 +1966,14 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
             "node_id": self.NODE_ID,
             "controller_endpoint": self.CONTROLLER_ENDPOINT,
             "valve_endpoint": self.VALVE_ENDPOINT,
-            "center_hz": 433_920_000,
+            "center_hz": 434_239_594,
             "power_dbm": 10,
             "invert": False,
             "trailer_residual": 0xC713,
             "idle_frame": self.IDLE,
             "passive_command_frame": passive,
+            "idle_observed_at": "2026-08-25T00:00:00+00:00",
+            "passive_command_observed_at": "2026-08-25T00:00:00+00:00",
         }
         with self.assertRaises(HTTPError) as raised:
             self.post_json(
@@ -1961,6 +2024,11 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         )
         self.assertTrue(status["passed"])
         self.assertTrue(status["checks"]["one_logical_open_dispatched"])
+        with self.assertRaises(HTTPError) as stale:
+            self.post_json(
+                "/api/v1/research/htv145-acceptance/prepare", payload
+            )
+        self.assertEqual(400, stale.exception.code)
 
 
 class ValveControlHTTPAPITest(unittest.TestCase):

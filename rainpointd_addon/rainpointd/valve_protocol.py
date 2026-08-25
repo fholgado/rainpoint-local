@@ -357,7 +357,12 @@ def decode_htv145_gateway_command(
     if frame[14] == 0x10:
         if (
             frame[15:19] != bytes.fromhex("82808100")
-            or any(frame[21:36])
+            # Stock HTV145 captures contain both 0x00 and 0x80 at byte 21.
+            # The latter is an observed overlay immediately after the packed
+            # duration, not payload continuation; all remaining reserved
+            # bytes must still be zero for a command to be accepted.
+            or frame[21] not in {0x00, 0x80}
+            or any(frame[22:36])
         ):
             return None
         try:

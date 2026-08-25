@@ -222,11 +222,14 @@ class RainPointRFTest(unittest.TestCase):
         transport = RTL433Transport(gateway, command=["unused"])
         transport.seed()
         valve_b_open = bytearray.fromhex(
-            "79f4882f28b42d008fb98402808110828081009e0000"
-            "000000000000000000000000000000003824"
+            "79f4882f28b9840280b42d008f89810785898090cf870200"
+            "0040d58256d80200000000003fc6"
         )
-        valve_b_open[5:9] = bytes.fromhex("11223344")
-        valve_b_open[9:13] = bytes.fromhex("55667788")
+        valve_b_open[5:9] = bytes.fromhex("55667788")
+        valve_b_open[9:13] = bytes.fromhex("11223344")
+        valve_b_open[29:31] = encode_duration(60)
+        trailer = binascii.crc_hqx(valve_b_open[:-2], 0) ^ 0x4F03
+        valve_b_open[-2:] = trailer.to_bytes(2, "big")
         self.assertEqual(
             1,
             transport.consume_line(
@@ -1009,17 +1012,18 @@ class RainPointRFTest(unittest.TestCase):
         )
         self.assertNotIn("associated_soil_moisture_percent", decoded)
 
-    def test_decodes_valve_duration_and_close_state(self) -> None:
+    def test_decodes_valve_command_intent_without_inventing_state(self) -> None:
         open_frame = bytes.fromhex(
             "79f4882f28b42d008fb9840280811082808100fe0180"
-            "0000000000000000000000000000007669"
+            "00000000000000000000000000007669"
         )
         decoded = normalize_row(
             {"len": len(open_frame) * 8, "data": open_frame.hex()}
         )
-        self.assertTrue(decoded["is_watering"])
-        self.assertEqual("watering", decoded["valve_state"])
-        self.assertEqual(1020, decoded["duration_seconds"])
+        self.assertEqual("open", decoded["valve_command"])
+        self.assertEqual(1020, decoded["requested_duration_seconds"])
+        self.assertNotIn("is_watering", decoded)
+        self.assertNotIn("valve_state", decoded)
 
         four_minute_frame = build_open_frame(
             self.CAPTURED_VALVE_LINK, 0x9B, 240, 0x4F03
@@ -1027,18 +1031,42 @@ class RainPointRFTest(unittest.TestCase):
         decoded = normalize_row(
             {"len": len(four_minute_frame) * 8, "data": four_minute_frame.hex()}
         )
-        self.assertEqual(240, decoded["duration_seconds"])
+        self.assertEqual(240, decoded["requested_duration_seconds"])
 
         close_frame = bytes.fromhex(
             "79f4882f28b42d008fb9840280819081808100000000"
-            "00000000000000000000000000000011a2"
+            "000000000000000000000000000011a2"
         )
         decoded = normalize_row(
             {"len": len(close_frame) * 8, "data": close_frame.hex()}
         )
-        self.assertFalse(decoded["is_watering"])
-        self.assertEqual("idle", decoded["valve_state"])
-        self.assertNotIn("duration_seconds", decoded)
+        self.assertEqual("close", decoded["valve_command"])
+        self.assertNotIn("is_watering", decoded)
+        self.assertNotIn("valve_state", decoded)
+        self.assertNotIn("requested_duration_seconds", decoded)
+
+    def test_htv145_state_requires_valve_originated_evidence(self) -> None:
+        response = bytes.fromhex(
+            "79f4882f28b9840280b42d008f8150868010cf8702000040"
+            "d80256d802000000000000004bfa"
+        )
+        decoded = normalize_row(
+            {"len": len(response) * 8, "data": response.hex()}
+        )
+        self.assertTrue(decoded["is_watering"])
+        self.assertEqual("watering", decoded["valve_state"])
+        self.assertEqual(1200, decoded["duration_seconds"])
+        self.assertEqual(0x81, decoded["command_response_sequence"])
+
+        active_report = bytes.fromhex(
+            "79f4882f28b9840280b42d008f89810785898090cf870200"
+            "0040d58256d80200000000003fc6"
+        )
+        active = normalize_row(
+            {"len": len(active_report) * 8, "data": active_report.hex()}
+        )
+        self.assertTrue(active["is_watering"])
+        self.assertEqual("watering", active["valve_state"])
 
     def test_decodes_crossed_htv405_zone_and_duration_matrix(self) -> None:
         frames = {
@@ -1694,12 +1722,15 @@ class RainPointRFTest(unittest.TestCase):
         )
         for packed, extension, liters in cases:
             with self.subTest(packed=packed):
-                frame = bytes.fromhex(
+                captured = bytes.fromhex(
                     "79f4882f28b9840280b42d008f810107858700904f"
                     + packed
                     + extension
                     + "0040858056fe0180000000002739"
                 )
+                payload = captured[:-2]
+                trailer = binascii.crc_hqx(payload, 0) ^ 0x4F03
+                frame = payload + trailer.to_bytes(2, "big")
                 decoded = normalize_row(
                     {"len": len(frame) * 8, "data": frame.hex()}
                 )
@@ -1806,7 +1837,17 @@ class RainPointRFTest(unittest.TestCase):
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
         transport.seed()
-        frame = "79f4882f28b42d008fb98402808845010001000000000000000000000000000000000000324c"
+        frame_bytes = bytearray.fromhex(
+            "79f4882f28b42d008fb98402808845010001000000000000"
+            "000000000000000000000000324c"
+        )
+        frame_bytes[5:9], frame_bytes[9:13] = (
+            frame_bytes[9:13],
+            frame_bytes[5:9],
+        )
+        trailer = binascii.crc_hqx(frame_bytes[:-2], 0) ^ 0x4F03
+        frame_bytes[-2:] = trailer.to_bytes(2, "big")
+        frame = frame_bytes.hex()
         timestamp = "2026-08-09T18:28:35"
         transport.consume_line(
             json.dumps(
@@ -1937,11 +1978,11 @@ class RainPointRFTest(unittest.TestCase):
         transport.seed()
         open_frame = (
             "79f4882f28b42d008fb9840280811082808100fe0180"
-            "0000000000000000000000000000007669"
+            "00000000000000000000000000007669"
         )
         usage_frame = (
             "79f4882f28b9840280b42d008f810107858700904f"
-            "ec03000040858056fe0180000000002739"
+            "ec03000040858056fe018000000000853c"
         )
         for frame in (open_frame, usage_frame):
             event = {"rows": [{"len": len(frame) * 4, "data": frame}]}
@@ -1957,6 +1998,31 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(100, valve["state"]["battery_percent"])
         self.assertEqual(1, valve["state"]["battery_status"])
         self.assertFalse(valve["state"]["battery_low"])
+
+    def test_controller_request_does_not_mutate_valve_device_state(self) -> None:
+        gateway = Gateway(transport="rtl433")
+        transport = RTL433Transport(gateway, command=["unused"])
+        transport.seed()
+        request = build_open_frame(
+            self.CAPTURED_VALVE_LINK, 0x8D, 60, 0xC713
+        )
+
+        event = {
+            "rows": [{"len": len(request) * 8, "data": request.hex()}]
+        }
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
+
+        valve = next(
+            device
+            for device in gateway.devices()
+            if device["device_id"] == "valve-1"
+        )
+        self.assertIsNone(valve["state"]["is_watering"])
+        self.assertIsNone(valve["state"]["valve_state"])
+        retained = gateway.events()
+        self.assertEqual("rf_frame", retained[-1]["event_type"])
+        self.assertNotIn("device_id", retained[-1])
+        self.assertEqual("open", retained[-1]["state"]["valve_command"])
 
     def test_live_transport_terminal_summary_confirms_valve_closed(self) -> None:
         gateway = Gateway(transport="rtl433")

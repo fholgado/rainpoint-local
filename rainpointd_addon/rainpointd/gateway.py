@@ -367,6 +367,8 @@ class Gateway:
         trailer_residual: int,
         idle_frame: str,
         passive_command_frame: str,
+        idle_observed_at: str,
+        passive_command_observed_at: str,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Prepare one isolated HTV145 dry-valve trial without actuating."""
@@ -383,8 +385,12 @@ class Gateway:
         try:
             idle = bytes.fromhex(idle_frame)
             passive = bytes.fromhex(passive_command_frame)
+            idle_evidence_time = _observed_utc(idle_observed_at)
+            passive_evidence_time = _observed_utc(
+                passive_command_observed_at
+            )
         except ValueError as error:
-            raise ValueError("HTV145 evidence frames must be hexadecimal") from error
+            raise ValueError("invalid HTV145 evidence frame or timestamp") from error
         with self._lock:
             if not self._htv145_acceptance_enabled:
                 raise PermissionError("HTV145 dry-valve acceptance is disabled")
@@ -393,6 +399,18 @@ class Gateway:
             node = self._nodes.get(profile.node_id, {})
             if not self._htv145_control_node_ready(node):
                 raise RuntimeError("selected HTV145 radio node is unavailable")
+            prior_states = self._store.htv145_control_states(
+                profile.valve_endpoint
+            )
+            if prior_states:
+                last_started = prior_states[0].get("last_command_started_at")
+                if isinstance(last_started, str) and (
+                    passive_evidence_time <= _observed_utc(last_started)
+                ):
+                    raise RuntimeError(
+                        "passive HTV145 command evidence does not postdate "
+                        "the previous local attempt"
+                    )
             coordinator = Htv145ControlCoordinator(
                 store=self._store,
                 sender=self._node_command_sender,
@@ -407,6 +425,10 @@ class Gateway:
                 idle_frame=idle,
                 passive_command_frame=passive,
                 observed_at=timestamp,
+                idle_observed_at=idle_evidence_time.isoformat(),
+                passive_command_observed_at=(
+                    passive_evidence_time.isoformat()
+                ),
             )
             self._htv145_acceptance = harness
             return {
@@ -3627,6 +3649,8 @@ class Gateway:
             device_id = str(event["device_id"])
             registry_metadata = self._registry_metadata.get(device_id)
             state = copy.deepcopy(event["state"])
+            restored_event_id = event["event_id"]
+            restored_observed_at = event["observed_at"]
             # Device snapshots retain the decoder projection that was current
             # when the frame arrived. Re-run only accepted HTV145 snapshots so
             # receive-side protocol corrections can clear stale watering state
@@ -3650,6 +3674,41 @@ class Gateway:
                         and valve is not None
                         and valve.device_id == device_id
                     ):
+                        if (
+                            "valve_command" in refreshed
+                            and "is_watering" not in refreshed
+                        ):
+                            # Older decoders persisted controller requests as
+                            # device state. Recover the newest independently
+                            # valve-originated state instead of restoring a
+                            # locally transmitted request as watering proof.
+                            for candidate in reversed(self._events):
+                                if candidate.get("device_id") != device_id:
+                                    continue
+                                candidate_raw = candidate.get("raw")
+                                if not isinstance(candidate_raw, str):
+                                    continue
+                                try:
+                                    candidate_decoded = normalize_row(
+                                        {
+                                            "len": len(candidate_raw) * 4,
+                                            "data": candidate_raw,
+                                        },
+                                        catalog=self.catalog,
+                                    )
+                                except (KeyError, TypeError, ValueError):
+                                    continue
+                                if not isinstance(
+                                    candidate_decoded.get("is_watering"),
+                                    bool,
+                                ):
+                                    continue
+                                state = copy.deepcopy(candidate["state"])
+                                refreshed = candidate_decoded
+                                restored_event_id = candidate["event_id"]
+                                restored_observed_at = candidate["observed_at"]
+                                state["raw"] = candidate_raw
+                                break
                         for key in (
                             "valve_state",
                             "is_watering",
@@ -3670,8 +3729,8 @@ class Gateway:
                 ),
                 "model": event["model"],
                 "available": True,
-                "last_event_id": event["event_id"],
-                "observed_at": event["observed_at"],
+                "last_event_id": restored_event_id,
+                "observed_at": restored_observed_at,
                 "state": state,
             }
             if registry_metadata is not None:
