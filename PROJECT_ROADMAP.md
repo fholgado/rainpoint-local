@@ -51,7 +51,7 @@ until this baseline is clean.
 - [x] Publish one consolidated supervised radio-node image containing the
       validated sensor, custom-identity, OTA, diagnostics, HTV405 pairing, and
       HTV405 control paths without the HTV145 research transmitter.
-- [ ] Upgrade the valve-owning node first and prove its association, command
+- [x] Upgrade the valve-owning node first and prove its association, command
       counter, ACK assignments, and controls survived.
 - [x] Upgrade the remaining nodes one at a time and run the same reconnect,
       receiver, ACK-owner, and diagnostic checks after each update.
