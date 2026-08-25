@@ -65,7 +65,18 @@ jobs:
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json \
-            --version 0.11.0 --environment rainpoint_bridge
+            --version 0.15.0 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify
+      - name: Build the supervised unified firmware
+        run: |
+          pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge --target clean
+          RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
+            pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge
+      - name: Verify the supervised firmware command boundary
+        run: >-
+          python tools/check_firmware_boundaries.py --supervised
+          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

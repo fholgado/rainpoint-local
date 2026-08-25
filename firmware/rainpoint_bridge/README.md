@@ -50,8 +50,8 @@ capacitor across CC1101 VCC/GND when practical.
 - Compiles the association-specific HTV405 enrollment implementation. The
   supervised build also accepts the bounded `valve_control_tx_candidate`
   command vocabulary for 1--60 whole-minute opens on Zones 1--4 and Zone 1
-  early-close. One- and two-minute opens are physically validated; longer runs
-  remain a field-acceptance gate. Control requires explicit association
+  early-close. One- and two-minute opens and a 20-minute Zone 1 run are
+  physically validated. Control requires explicit association
   identities, a persisted response-authenticated counter, and the calibrated
   carrier profile.
 - Contains a separate HTV145 single-zone candidate behind both
@@ -103,17 +103,20 @@ pio device monitor --baud 115200
 and checks that obsolete local RF bench commands are absent while pairing,
 ACK, and OTA capabilities are present.
 
-The default build is production-safe and compiles out all research controls.
-For an explicitly authorized isolated-valve session, build the same environment
-with the research profile enabled:
+The default build is production-safe and compiles out all valve-control
+transmitters and research commands. For an explicitly authorized supervised
+HTV405 node, build the same environment with only the bounded control profile
+enabled:
 
 ```sh
-RAINPOINT_RESEARCH_BENCH=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.3 \
+RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.4 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-Never publish or OTA-promote that research artifact as a standard release.
+This supervised image retains the authenticated, association-specific HTV405
+control boundary without compiling legacy serial RF probes. Keep it on the
+experimental OTA channel until the remaining hardware gates are complete.
 
 The unaccepted HTV145 candidate requires an additional explicit build gate:
 
@@ -172,7 +175,7 @@ verify the standard artifact manifest with:
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.0-combined.1 --environment rainpoint_bridge
+  --version 0.15.0 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify
@@ -204,8 +207,8 @@ pairing, acknowledgement, channel, or trailer behavior.
   unavailable to the locally paired sensors.
 - Test ACK-owner reassignment and interrupted/power-loss OTA rollback.
 - Add signed releases and a reviewed secure session transport.
-- Retain the installed HTV405 longer-duration result across RF, gateway, Home
-  Assistant completion notification, usage, and watchdog layers.
+- Retain additional installed HTV405 longer-duration results across Zones 2--4
+  and the Home Assistant completion-notification, usage, and watchdog layers.
 - Physically exercise HTV405 early stop on Zones 2--4, battery-cycle rejoin,
   and a controlled normal-to-low battery transition without changing the
   validated new-enrollment path.

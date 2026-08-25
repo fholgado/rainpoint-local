@@ -57,7 +57,21 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
+            '"RAINPOINT_SUPERVISED_HTV405_CONTROL", "0"',
+            build_profile,
+        )
+        self.assertIn(
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
+            build_profile,
+        )
+        self.assertIn('standard_version = "0.15.0"', build_profile)
+        self.assertIn(
+            'supervised_version = "0.15.0-supervised-beta.4"',
+            build_profile,
+        )
+        self.assertIn(
+            'htv145_candidate_version = '
+            '"0.15.0-htv145-control-candidate.1"',
             build_profile,
         )
 
@@ -84,12 +98,23 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("kAutomaticHtv405ProfileId", source)
         self.assertIn('\\"valve_control_available\\":false', source)
         self.assertIn("valve_pairing_tx_candidate", transport)
-        self.assertIn("#if RAINPOINT_RESEARCH_BENCH == 1", transport)
+        self.assertIn(
+            "#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1",
+            transport,
+        )
         self.assertIn("valve_control_tx_candidate", transport)
-        self.assertIn("#if RAINPOINT_RESEARCH_BENCH == 1", source)
+        self.assertIn(
+            "#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1",
+            source,
+        )
         self.assertIn('type == "valve_control_open"', source)
         self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
         self.assertIn("supervised_htv405_control: false", addon_config)
+        boundary_check = (
+            ROOT / "tools" / "check_firmware_boundaries.py"
+        ).read_text()
+        self.assertIn("SUPERVISED_VALVE_CONTROL_COMMANDS", boundary_check)
+        self.assertIn('arguments[0] == "--supervised"', boundary_check)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',

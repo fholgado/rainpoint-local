@@ -28,6 +28,10 @@
 #error "RAINPOINT_RESEARCH_BENCH must be 0 or 1"
 #endif
 
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL != 0 && RAINPOINT_SUPERVISED_HTV405_CONTROL != 1
+#error "RAINPOINT_SUPERVISED_HTV405_CONTROL must be 0 or 1"
+#endif
+
 #if RAINPOINT_SENSOR_A_CANDIDATE != 0 && RAINPOINT_SENSOR_A_CANDIDATE != 1
 #error "RAINPOINT_SENSOR_A_CANDIDATE must be 0 or 1"
 #endif
@@ -81,8 +85,8 @@ constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint8_t kHcs026TelemetryChannel = 0;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 constexpr std::uint32_t kIdentifyToggleMs = 250;
-#if RAINPOINT_RESEARCH_BENCH == 1
-// Bench-only HTV405 control probe. This association-normalized selector-2 base
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
+// Supervised HTV405 control. This association-normalized selector-2 base
 // plus the node's pairing calibration (97,154 Hz on the validated bench node)
 // requests 433,518,527 Hz and lands on the accepted ~433.471 MHz carrier.
 // The actual gateway-to-valve command precedes the lower-channel valve state
@@ -105,8 +109,8 @@ constexpr std::uint8_t kValveProbePowerDbm = 10;
 // The valve confirms a command on the control carrier, not its lower idle-
 // report carrier. Listen there briefly, then restore normal telemetry RX.
 constexpr std::uint32_t kValveProbeResponseListenMs = 2'000;
-// Bench-only span covering both the selector-6 and selector-2 gateway
-// carriers. Production pairing calibration remains independently bounded.
+// Bounded span covering both the selector-6 and selector-2 gateway carriers.
+// Pairing calibration remains independently bounded.
 constexpr std::int32_t kValveProbeMaxFrequencyOffsetHz = 1'500'000;
 #endif
 
@@ -186,7 +190,7 @@ std::uint32_t identifyUntilMs = 0;
 std::uint32_t lastIdentifyToggleMs = 0;
 bool identifyLedOn = false;
 
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 struct ValveControlProbe {
     rainpoint::Htv405ValveLink link{};
     rainpoint::Htv405GatewayControlLink gatewayControlLink{};
@@ -842,7 +846,7 @@ void selectChannel(std::uint8_t channel) {
 }
 #endif
 
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 bool parseSignedLongValue(const String& value, long& result) {
     if (value.isEmpty() || value.length() > 11) {
         return false;
@@ -2082,7 +2086,7 @@ void handleNetworkCommand() {
         return;
     }
 #endif
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (type == "valve_control_configure") {
         valveControlProbe.commandId = commandId;
         const String controller = jsonStringField(
@@ -2555,7 +2559,9 @@ void handleSerialCommand() {
             }
             bool handled = false;
 #if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
             handled = handleValveProbeCommand(serialCommand);
+#endif
             if (!handled && serialCommand == "pairing_plan_b") {
                 handled = true;
                 for (std::size_t index = 0;
@@ -2875,7 +2881,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (&radio == &primaryRadio) {
         observeValveProbeFrame(frame, radio, packet.receivedAtMicros);
     }
@@ -3162,8 +3168,8 @@ void setup() {
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
         wifiTransport.nodeId() +
-#if RAINPOINT_RESEARCH_BENCH == 1
-        "\",\"mode\":\"research_bench\",\"local_tx_controls\":true,"
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
+        "\",\"mode\":\"radio_node\",\"local_tx_controls\":true,"
 #else
         "\",\"mode\":\"radio_node\",\"local_tx_controls\":false,"
 #endif
@@ -3179,7 +3185,7 @@ void setup() {
 #else
         "\"htv145_control_candidate\":false,"
 #endif
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         "\"valve_control_probe\":true,"
 #else
         "\"valve_control_probe\":false,"
@@ -3280,7 +3286,7 @@ void loop() {
     handleSerialCommand();
 #if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     pollValveProbeResponseListener();
 #endif
 

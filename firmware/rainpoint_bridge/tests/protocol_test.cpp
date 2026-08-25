@@ -895,6 +895,48 @@ int main() {
         {{0x39, 0x84, 0x02, 0x80}},
         htv405Profile
     ));
+    // Custom gateway identity changes only the association endpoints. Freeze
+    // every timing, channel, and request/reply body from the physically
+    // accepted stock-identity profile so identity rollout cannot silently
+    // perturb the pairing mechanism that succeeded on hardware.
+    rainpoint::Htv405PairingProfile htv405CustomIdentityProfile{};
+    const std::array<std::uint8_t, 4> customController = {
+        {0xe1, 0x23, 0x45, 0x80},
+    };
+    const std::array<std::uint8_t, 4> customCompanion = {
+        {0x61, 0x23, 0x45, 0x80},
+    };
+    assert(rainpoint::validRfControllerIdentity(
+        customController, customCompanion
+    ));
+    assert(rainpoint::buildAutomaticHtv405Profile(
+        htv405FactoryEndpoint,
+        customController,
+        customCompanion,
+        htv405CustomIdentityProfile
+    ));
+    assert(
+        htv405CustomIdentityProfile.factoryEndpoint ==
+        htv405Profile.factoryEndpoint
+    );
+    assert(
+        htv405CustomIdentityProfile.pairedEndpoint ==
+        htv405Profile.pairedEndpoint
+    );
+    assert(htv405CustomIdentityProfile.valveRoute == customController);
+    assert(htv405CustomIdentityProfile.companionEndpoint == customCompanion);
+    for (std::size_t index = 0;
+         index < rainpoint::kHtv405PairingStepCount;
+         ++index) {
+        const auto& retained = htv405Profile.steps[index];
+        const auto& generated = htv405CustomIdentityProfile.steps[index];
+        assert(generated.requestBody == retained.requestBody);
+        assert(generated.replyBody == retained.replyBody);
+        assert(generated.replyExpected == retained.replyExpected);
+        assert(generated.trailerResidual == retained.trailerResidual);
+        assert(generated.channelCenterHz == retained.channelCenterHz);
+        assert(generated.deviationRegister == retained.deviationRegister);
+    }
     assert(htv405Profile.pairedEndpoint[0] == 0x94);
     assert(rainpoint::htv405RequestMatches(
         htv405Profile, 0, htv405Factory
@@ -956,6 +998,31 @@ int main() {
     assert(htv405Reply == fromHex(
         "79f4882f2894a980133984028080c08585030270009d97910d01008000000000000000007447"
     ));
+    std::array<std::uint8_t, rainpoint::kFrameBytes>
+        htv405CustomIdentityReply{};
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405CustomIdentityProfile,
+        0,
+        htv405Clock,
+        htv405CustomIdentityReply
+    ));
+    for (std::size_t index = 0; index < 4; ++index) {
+        assert(
+            htv405CustomIdentityReply[5 + index] ==
+            htv405Profile.pairedEndpoint[index]
+        );
+        assert(
+            htv405CustomIdentityReply[9 + index] == customCompanion[index]
+        );
+    }
+    for (std::size_t index = 13; index < 36; ++index) {
+        assert(htv405CustomIdentityReply[index] == htv405Reply[index]);
+    }
+    assert(rainpoint::hasOrdinaryTrailer(htv405CustomIdentityReply));
+    assert(
+        rainpoint::trailerResidual(htv405CustomIdentityReply) ==
+        rainpoint::kCurrentPairingTrailerResidual
+    );
     assert(!rainpoint::buildHtv405PairingReply(
         htv405Profile, 4, htv405Clock, htv405Reply
     ));
