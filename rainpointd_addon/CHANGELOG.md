@@ -33,6 +33,18 @@
   identity can be paired or assigned, preventing an older firmware from
   silently falling back to the stock RainPoint identity.
 
+## Firmware 0.15.0-supervised-beta.4
+
+- Consolidate the current sensor pairing/recovery, persistent ACK ownership,
+  HTV405 enrollment and supervised control, managed OTA, diagnostics, and
+  configurable RF controller identity into one radio-node artifact.
+- Preserve the physically successful HTV405 enrollment mechanism unchanged:
+  custom identity alters only the association endpoints, while every captured
+  request/reply body, RF channel, deviation, and reply-timing rule remains
+  pinned by the hardware-independent protocol regression.
+- Record the successful installed 20-minute Zone 1 run, including authenticated
+  open confirmation and valve-originated automatic-idle confirmation.
+
 ## 0.33.1 / Integration 0.12.0 / Firmware 0.15.0-supervised-beta.3
 
 - Extend supervised HTV405 opens from the original 1--4 minute pilot boundary
