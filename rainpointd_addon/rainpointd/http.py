@@ -147,6 +147,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             parsed.path.endswith("/valve/open")
             or parsed.path.endswith("/valve/close")
             or parsed.path.endswith("/valve/synchronize")
+            or parsed.path.endswith("/valve/node")
         )
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
         htv145_acceptance_path = parsed.path.startswith(
@@ -390,10 +391,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "open",
                         "close",
                         "synchronize",
+                        "node",
                     }:
                         self._json(404, {"error": "not found"})
                         return
-                    if action == "synchronize":
+                    if action == "node":
+                        result = self.server.gateway.assign_htv405_control_node(
+                            device_id=device_id,
+                            node_id=str(body.get("node_id", "")),
+                        )
+                    elif action == "synchronize":
                         result = (
                             self.server.gateway.synchronize_htv405_control_counter(
                                 device_id=device_id,

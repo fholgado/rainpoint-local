@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -181,6 +181,9 @@ class SQLiteEventStore:
             version = 13
         if version == 13:
             self._migrate_v13_to_v14()
+            version = 14
+        if version == 14:
+            self._migrate_v14_to_v15()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -422,6 +425,28 @@ class SQLiteEventStore:
                 ("b9840280", "39840280"),
             )
             self._connection.execute("PRAGMA user_version = 14")
+
+    def _migrate_v14_to_v15(self) -> None:
+        """Retain bounded HTV405 timeout evidence for guarded recovery."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("control_recovery_sequence", "INTEGER"),
+                ("control_recovery_attempt", "INTEGER NOT NULL DEFAULT 0"),
+                ("control_recovery_not_before", "TEXT"),
+                ("control_recovery_zone", "INTEGER"),
+                ("control_recovery_duration_seconds", "INTEGER"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 15")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -948,6 +973,11 @@ class SQLiteEventStore:
                 control_pending_zone = NULL,
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = NULL,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
                 control_last_result = 'association_updated_counter_required',
                 updated_at = ?
             WHERE valve_endpoint = ?
@@ -963,6 +993,45 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise KeyError(valve_endpoint)
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def assign_htv405_control_node(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Move RF egress to one node without changing the valve association."""
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_node_id = ?, control_last_sequence = NULL,
+                control_next_sequence = NULL,
+                control_confirmed_watering = 0,
+                control_confirmed_at = ?, control_response_frame = NULL,
+                control_active_zone = NULL, control_run_started_at = NULL,
+                control_run_duration_seconds = NULL,
+                control_expected_idle_at = NULL,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_last_result = 'control_node_updated_counter_required',
+                updated_at = ?
+            WHERE valve_endpoint = ?
+              AND control_pending_command_id IS NULL
+            """,
+            (node_id, observed_at, observed_at, valve_endpoint),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 control node update raced")
         self._connection.commit()
         return next(
             item
@@ -1104,6 +1173,11 @@ class SQLiteEventStore:
                 control_run_started_at = NULL,
                 control_run_duration_seconds = NULL,
                 control_expected_idle_at = NULL,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
                 control_last_result = ?, updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
               AND control_pending_command_id IS NULL
@@ -1136,6 +1210,50 @@ class SQLiteEventStore:
         observed_at: str,
     ) -> dict[str, Any]:
         """Fail a reservation and invalidate the unconfirmed counter."""
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        recovery_sequence: int | None = None
+        recovery_attempt = int(state.get("control_recovery_attempt") or 0)
+        recovery_not_before: str | None = None
+        recovery_zone: int | None = None
+        recovery_duration: int | None = None
+        retryable_timeout = (
+            reason == "gateway_command_response_timeout_counter_unsynchronized"
+            and state.get("control_pending_action") == "open"
+            and isinstance(state.get("control_pending_sequence"), int)
+            and isinstance(state.get("control_pending_zone"), int)
+            and isinstance(state.get("control_pending_duration_seconds"), int)
+            and isinstance(state.get("control_pending_started_at"), str)
+        )
+        if retryable_timeout and recovery_attempt < 2:
+            pending_sequence = int(state["control_pending_sequence"])
+            recovery_attempt += 1
+            recovery_sequence = (
+                pending_sequence
+                if recovery_attempt == 1
+                else (pending_sequence + 1) & 0x1F
+            )
+            recovery_zone = int(state["control_pending_zone"])
+            recovery_duration = int(
+                state["control_pending_duration_seconds"]
+            )
+            try:
+                started = datetime.fromisoformat(
+                    str(state["control_pending_started_at"])
+                )
+            except ValueError:
+                recovery_sequence = None
+                recovery_not_before = None
+            else:
+                recovery_not_before = (
+                    started
+                    + timedelta(seconds=recovery_duration + 15)
+                ).isoformat()
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -1146,14 +1264,103 @@ class SQLiteEventStore:
                 control_pending_zone = NULL,
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = NULL,
+                control_recovery_sequence = ?,
+                control_recovery_attempt = ?,
+                control_recovery_not_before = ?,
+                control_recovery_zone = ?,
+                control_recovery_duration_seconds = ?,
                 control_last_result = ?, updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
               AND control_pending_command_id = ?
             """,
-            (reason, observed_at, valve_endpoint, node_id, command_id),
+            (
+                recovery_sequence,
+                recovery_attempt,
+                recovery_not_before,
+                recovery_zone,
+                recovery_duration,
+                reason,
+                observed_at,
+                valve_endpoint,
+                node_id,
+                command_id,
+            ),
         )
         if not cursor.rowcount:
             raise KeyError((valve_endpoint, command_id))
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def recover_htv405_timeout_counter(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        observed_at: str,
+    ) -> dict[str, Any] | None:
+        """Restore the smallest safe candidate after a bounded open timeout.
+
+        Recovery is unavailable until the entire requested run plus a guard
+        interval has elapsed.  This guarantees that even a command whose RF
+        acknowledgement and state report were both missed can no longer be
+        watering before another counter candidate is attempted.
+        """
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        candidate = state.get("control_recovery_sequence")
+        not_before = state.get("control_recovery_not_before")
+        if (
+            state.get("control_node_id") != node_id
+            or state.get("control_pending_command_id") is not None
+            or state.get("control_next_sequence") is not None
+            or not isinstance(candidate, int)
+            or isinstance(candidate, bool)
+            or candidate not in range(0x20)
+            or not isinstance(not_before, str)
+            or state.get("control_confirmed_watering") not in {0, False}
+        ):
+            return None
+        try:
+            available_at = datetime.fromisoformat(not_before)
+            current = datetime.fromisoformat(observed_at)
+            if available_at.tzinfo is None and current.tzinfo is not None:
+                available_at = available_at.replace(tzinfo=current.tzinfo)
+            if current.tzinfo is None and available_at.tzinfo is not None:
+                current = current.replace(tzinfo=available_at.tzinfo)
+        except ValueError:
+            return None
+        if current < available_at:
+            return None
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_next_sequence = ?,
+                control_last_result = 'bounded_timeout_counter_recovered',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+              AND control_next_sequence IS NULL
+              AND control_recovery_sequence = ?
+            """,
+            (
+                candidate,
+                observed_at,
+                valve_endpoint,
+                node_id,
+                candidate,
+            ),
+        )
+        if not cursor.rowcount:
+            return None
         self._connection.commit()
         return next(
             item
@@ -1190,10 +1397,9 @@ class SQLiteEventStore:
         if row is None:
             return None
         state = dict(row)
-        if (
-            state["control_pending_command_id"] is not None
-            or state["control_next_sequence"] is None
-        ):
+        if state["control_pending_command_id"] is not None:
+            return state
+        if state["control_next_sequence"] is None and not watering:
             return state
         confirmed_watering = state["control_confirmed_watering"] in {1, True}
         confirmed_zone = state["control_active_zone"]
@@ -1228,6 +1434,10 @@ class SQLiteEventStore:
                     control_run_started_at = NULL,
                     control_run_duration_seconds = NULL,
                     control_expected_idle_at = NULL,
+                    control_recovery_sequence = NULL,
+                    control_recovery_not_before = NULL,
+                    control_recovery_zone = NULL,
+                    control_recovery_duration_seconds = NULL,
                     control_last_result =
                         'unexpected_watering_counter_unsynchronized',
                     updated_at = ?
@@ -1302,6 +1512,11 @@ class SQLiteEventStore:
                 control_pending_zone = NULL,
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = NULL,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
                 control_last_result = 'authenticated_response_confirmed',
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?

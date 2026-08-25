@@ -753,7 +753,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(14, gateway.info()["storage_schema_version"])
+            self.assertEqual(15, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -764,7 +764,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(14, migrated.info()["storage_schema_version"])
+            self.assertEqual(15, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -2072,6 +2072,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
     """Exercise the authenticated, disabled-by-default HTV405 boundary."""
 
     NODE_ID = "rp-001122334455"
+    SECOND_NODE_ID = "rp-aabbccddeeff"
     DEVICE_ID = "htv405-94a98013"
     VALVE_ENDPOINT = "94a98013"
 
@@ -2112,6 +2113,13 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         gateway._ensure_registered_valve_devices()
         gateway.update_node(
             self.NODE_ID,
+            connected=True,
+            authenticated=True,
+            tx_armed=False,
+            capabilities=["rx", "valve_control_tx_candidate"],
+        )
+        gateway.update_node(
+            self.SECOND_NODE_ID,
             connected=True,
             authenticated=True,
             tx_armed=False,
@@ -2215,6 +2223,120 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         registration = self.server.gateway._store.valve_registry()[0]
         self.assertEqual(
             1_200, registration["control_pending_duration_seconds"]
+        )
+
+    def test_device_poll_expires_a_stale_node_command_reservation(self) -> None:
+        result = self.server.gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+
+        before_deadline = self.server.gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30+00:00")
+        )
+        self.assertTrue(
+            next(
+                item
+                for item in before_deadline
+                if item["device_id"] == self.DEVICE_ID
+            )["state"]["rf_control_command_pending"]
+        )
+
+        after_deadline = self.server.gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30.001000+00:00")
+        )
+        state = next(
+            item
+            for item in after_deadline
+            if item["device_id"] == self.DEVICE_ID
+        )["state"]
+        self.assertFalse(state["rf_control_command_pending"])
+        self.assertEqual(
+            "gateway_command_response_timeout_counter_unsynchronized",
+            state["rf_control_last_result"],
+        )
+        self.assertEqual(6, state["rf_control_recovery_sequence"])
+        self.assertEqual(1, state["rf_control_recovery_attempt"])
+        events = [
+            event
+            for event in self.server.gateway.events()
+            if event["event_type"] == "valve_control_failed"
+        ]
+        self.assertEqual(1, len(events))
+        self.assertEqual("open", events[0]["state"]["action"])
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertNotEqual(
+            result["command_id"],
+            registration["control_pending_command_id"],
+        )
+
+    def test_next_open_recovers_a_matured_bounded_timeout(self) -> None:
+        gateway = self.server.gateway
+        first = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        assert gateway._store is not None
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=first["command_id"],
+            reason=(
+                "gateway_command_response_timeout_counter_unsynchronized"
+            ),
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        with self.assertRaisesRegex(RuntimeError, "not synchronized"):
+            gateway.request_htv405_control(
+                device_id=self.DEVICE_ID,
+                action="open",
+                zone=1,
+                duration_seconds=60,
+                now=datetime.fromisoformat("2026-08-24T20:01:34+00:00"),
+            )
+
+        retry = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:01:35+00:00"),
+        )
+        self.assertEqual("pending_authenticated_response", retry["state"])
+        registration = gateway._store.valve_registry()[0]
+        self.assertEqual(6, registration["control_pending_sequence"])
+        self.assertEqual(1, registration["control_recovery_attempt"])
+
+    def test_control_node_can_move_without_changing_association(self) -> None:
+        before = self.server.gateway._store.valve_registry()[0]
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/node",
+            {"node_id": self.SECOND_NODE_ID},
+        )["control"]
+
+        self.assertEqual(self.SECOND_NODE_ID, result["control_node_id"])
+        self.assertEqual(
+            before["controller_endpoint"], result["controller_endpoint"]
+        )
+        self.assertEqual(
+            before["control_companion_endpoint"],
+            result["control_companion_endpoint"],
+        )
+        self.assertEqual(before["control_selector"], result["control_selector"])
+        self.assertEqual(
+            before["control_frequency_offset_hz"],
+            result["control_frequency_offset_hz"],
+        )
+        self.assertIsNone(result["control_next_sequence"])
+        self.assertEqual(
+            "control_node_updated_counter_required",
+            result["control_last_result"],
         )
 
     def test_armed_node_is_never_control_available(self) -> None:

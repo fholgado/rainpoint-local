@@ -506,6 +506,92 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         self.assertIsNone(state["control_next_sequence"])
         self.assertIsNone(state["control_pending_command_id"])
 
+    def test_bounded_timeout_recovers_two_smallest_counter_candidates(self) -> None:
+        first = self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        failed = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=first["command_id"],
+            reason=(
+                "gateway_command_response_timeout_counter_unsynchronized"
+            ),
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        self.assertIsNone(failed["control_next_sequence"])
+        self.assertEqual(6, failed["control_recovery_sequence"])
+        self.assertEqual(1, failed["control_recovery_attempt"])
+        self.assertEqual(
+            "2026-08-24T20:01:35+00:00",
+            failed["control_recovery_not_before"],
+        )
+        self.assertIsNone(
+            self.store.recover_htv405_timeout_counter(
+                valve_endpoint=self.profile.valve_endpoint,
+                node_id=self.profile.node_id,
+                observed_at="2026-08-24T20:01:34+00:00",
+            )
+        )
+        recovered = self.store.recover_htv405_timeout_counter(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            observed_at="2026-08-24T20:01:35+00:00",
+        )
+        self.assertEqual(6, recovered["control_next_sequence"])
+
+        second = self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:01:36+00:00",
+        )
+        failed_again = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=second["command_id"],
+            reason=(
+                "gateway_command_response_timeout_counter_unsynchronized"
+            ),
+            observed_at="2026-08-24T20:01:38+00:00",
+        )
+        self.assertEqual(7, failed_again["control_recovery_sequence"])
+        self.assertEqual(2, failed_again["control_recovery_attempt"])
+        recovered_again = self.store.recover_htv405_timeout_counter(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            observed_at="2026-08-24T20:02:51+00:00",
+        )
+        self.assertEqual(7, recovered_again["control_next_sequence"])
+
+        self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:02:52+00:00",
+        )
+        self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=7,
+            next_sequence=8,
+            zone=1,
+            watering=True,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:02:53+00:00",
+            frame="00",
+            run_started_at="2026-08-24T20:02:52+00:00",
+            run_duration_seconds=60,
+            expected_idle_at="2026-08-24T20:03:52+00:00",
+        )
+        state = self.store.valve_registry()[0]
+        self.assertEqual(8, state["control_next_sequence"])
+        self.assertIsNone(state["control_recovery_sequence"])
+        self.assertEqual(0, state["control_recovery_attempt"])
+
     def test_automatic_idle_preserves_the_authenticated_next_counter(self) -> None:
         self.coordinator.request_open(
             self.profile,
@@ -556,6 +642,38 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         )
         self.assertTrue(state["control_confirmed_watering"])
         self.assertEqual(2, state["control_active_zone"])
+        self.assertIsNone(state["control_next_sequence"])
+        self.assertEqual(
+            "unexpected_watering_counter_unsynchronized",
+            state["control_last_result"],
+        )
+
+    def test_unexpected_watering_cancels_bounded_timeout_recovery(self) -> None:
+        first = self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        failed = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=first["command_id"],
+            reason=(
+                "gateway_command_response_timeout_counter_unsynchronized"
+            ),
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        self.assertEqual(6, failed["control_recovery_sequence"])
+
+        state = self.store.observe_htv405_state_report(
+            valve_endpoint=self.profile.valve_endpoint,
+            watering=True,
+            zone=1,
+            observed_at="2026-08-24T20:00:30+00:00",
+        )
+        self.assertTrue(state["control_confirmed_watering"])
+        self.assertIsNone(state["control_recovery_sequence"])
         self.assertIsNone(state["control_next_sequence"])
         self.assertEqual(
             "unexpected_watering_counter_unsynchronized",

@@ -92,6 +92,9 @@ FIRMWARE_PUBLIC_HOST = re.compile(
     r"(?=.{1,253}\Z)[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?\Z"
 )
 MAXIMUM_ROUTINE_ACK_ASSIGNMENTS = 8
+HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS = (
+    HTV405_RESPONSE_WINDOW_SECONDS + 5.0
+)
 _UNSET = object()
 
 
@@ -568,6 +571,17 @@ class Gateway:
             node = self._nodes.get(profile.node_id, {})
             if not self._htv405_control_node_ready(node):
                 raise RuntimeError("selected HTV405 radio node is unavailable")
+            if (
+                action == "open"
+                and registration.get("control_next_sequence") is None
+            ):
+                recovered = self._store.recover_htv405_timeout_counter(
+                    valve_endpoint=profile.valve_endpoint,
+                    node_id=profile.node_id,
+                    observed_at=timestamp,
+                )
+                if recovered is not None:
+                    registration = recovered
             coordinator = Htv405ControlCoordinator(
                 store=self._store,
                 sender=self._node_command_sender,
@@ -639,6 +653,43 @@ class Gateway:
                 node_id=profile.node_id,
                 next_sequence=next_sequence,
                 source=evidence_source,
+                observed_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            return result
+
+    def assign_htv405_control_node(
+        self,
+        *,
+        device_id: str,
+        node_id: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Select one capable RF egress node without changing association IDs."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._valve_control_enabled:
+                raise PermissionError("HTV405 supervised control is disabled")
+            if self._store is None:
+                raise RuntimeError("HTV405 control storage is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            node = self._nodes.get(node_id, {})
+            if not self._htv405_control_node_ready(node):
+                raise RuntimeError("selected HTV405 radio node is unavailable")
+            if registration.get("control_confirmed_watering") in {1, True}:
+                raise RuntimeError("HTV405 valve is not confirmed idle")
+            result = self._store.assign_htv405_control_node(
+                valve_endpoint=str(registration["valve_endpoint"]),
+                node_id=node_id,
                 observed_at=timestamp,
             )
             self._refresh_registry_catalog()
@@ -1757,6 +1808,9 @@ class Gateway:
     ) -> list[dict[str, Any]]:
         """Return a stable snapshot of all known devices."""
         with self._lock:
+            self._expire_stale_htv405_commands_locked(
+                now or datetime.now(timezone.utc)
+            )
             metrics = (
                 self._store.device_metrics()
                 if self._store
@@ -1836,7 +1890,14 @@ class Gateway:
                     elif not node_ready:
                         unavailable_reason = "radio_node_unavailable"
                     elif not counter_ready:
-                        unavailable_reason = "control_counter_unsynchronized"
+                        unavailable_reason = (
+                            "bounded_timeout_recovery_wait"
+                            if valve_registration.get(
+                                "control_recovery_sequence"
+                            )
+                            is not None
+                            else "control_counter_unsynchronized"
+                        )
                     elif pending_command is not None:
                         unavailable_reason = "command_pending_response"
                     else:
@@ -1881,6 +1942,22 @@ class Gateway:
                             ),
                             "rf_control_last_result": valve_registration.get(
                                 "control_last_result"
+                            ),
+                            "rf_control_recovery_sequence": (
+                                valve_registration.get(
+                                    "control_recovery_sequence"
+                                )
+                            ),
+                            "rf_control_recovery_attempt": int(
+                                valve_registration.get(
+                                    "control_recovery_attempt"
+                                )
+                                or 0
+                            ),
+                            "rf_control_recovery_not_before": (
+                                valve_registration.get(
+                                    "control_recovery_not_before"
+                                )
                             ),
                         }
                     )
@@ -1945,6 +2022,16 @@ class Gateway:
                             )
                     if (
                         valve_registration.get("control_active_zone")
+                        is not None
+                        and valve_registration.get("control_run_started_at")
+                        is not None
+                        and valve_registration.get(
+                            "control_run_duration_seconds"
+                        )
+                        is not None
+                        and valve_registration.get(
+                            "control_expected_idle_at"
+                        )
                         is not None
                     ):
                         expected_idle_at = valve_registration[
@@ -2026,6 +2113,62 @@ class Gateway:
                     device["available"] = True
                 self._add_reporting_status(device, now)
             return sorted(devices.values(), key=lambda item: item["device_id"])
+
+    def _expire_stale_htv405_commands_locked(
+        self, now: str | datetime
+    ) -> int:
+        """Fail reservations whose node never supplied a usable RF result.
+
+        Radio-node status is the preferred terminal signal.  This daemon-side
+        deadline is the durable fallback for a disconnected, outdated, or
+        interrupted node so one missing report cannot wedge valve control.
+        The exact reservation is failed and the normal bounded counter
+        recovery policy remains responsible for any later retry.
+        """
+        if self._store is None or not self._valve_control_enabled:
+            return 0
+        observed = _observed_utc(now)
+        expired = 0
+        for registration in self._store.valve_registry():
+            command_id = registration.get("control_pending_command_id")
+            node_id = registration.get("control_node_id")
+            started_at = registration.get("control_pending_started_at")
+            if not all(
+                isinstance(value, str)
+                for value in (command_id, node_id, started_at)
+            ):
+                continue
+            try:
+                started = _observed_utc(str(started_at))
+            except (TypeError, ValueError):
+                continue
+            age_seconds = (observed - started).total_seconds()
+            if age_seconds <= HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS:
+                continue
+            action = registration.get("control_pending_action")
+            try:
+                failed = self._store.fail_htv405_command(
+                    valve_endpoint=str(registration["valve_endpoint"]),
+                    node_id=str(node_id),
+                    command_id=str(command_id),
+                    reason=(
+                        "gateway_command_response_timeout_"
+                        "counter_unsynchronized"
+                    ),
+                    observed_at=observed.isoformat(),
+                )
+            except KeyError:
+                continue
+            self._append_valve_control_event_locked(
+                registration=failed,
+                event_type="valve_control_failed",
+                observed_at=observed.isoformat(),
+                action=str(action) if isinstance(action, str) else None,
+            )
+            expired += 1
+        if expired:
+            self._refresh_registry_catalog()
+        return expired
 
     def _update_memory_metrics(self, device_id: str, observed_at: str) -> None:
         """Track cadence for ephemeral replay gateways without SQLite."""
