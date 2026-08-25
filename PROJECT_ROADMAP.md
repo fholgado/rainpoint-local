@@ -1,0 +1,296 @@
+# RainPoint Local project roadmap
+
+Last reviewed: 2026-08-25
+
+This is the single source of truth for active project status, ordering, and
+completion. Architecture documents describe intended boundaries, protocol
+documents record wire evidence, research plans preserve procedures and trial
+history, and hardware checklists remain operational checklists. None of those
+documents independently schedules work.
+
+## Working rules
+
+- Work phases in order unless a later item blocks the active phase.
+- Mark an item complete only when its stated evidence exists. A successful RF
+  transmission is not evidence that a device accepted a command.
+- Update this file in the same commit that completes or changes a tracked gate.
+- A newly discovered issue enters the active phase only when it blocks its exit
+  criteria, invalidates evidence, or protects irrigation safety/reliability.
+  Everything else goes to [Backlog](#backlog).
+- Preserve redacted RF fixtures and concise trial results in `research/`; link
+  them from the relevant task rather than copying research journals here.
+- Use **stock RainPoint gateway** for the vendor hub and **custom local
+  gateway** for `rainpointd` plus its ESP32/CC1101 radio nodes.
+
+## Status-source disposition
+
+| Former source | Role after consolidation |
+|---|---|
+| Root `README.md` remaining gates | Replaced by a link to this roadmap |
+| `INTEGRATION_EVOLUTION_BACKLOG.md` | Absorbed here and removed |
+| `PROTOCOL.md` remaining work | Retained as unscheduled wire-evidence questions |
+| `FULL_STACK_ARCHITECTURE.md` phases | Architecture description only |
+| `HARDENING_INVENTORY.md` | Boundary inventory only |
+| `CLOUD_TO_LOCAL_MIGRATION.md` readiness gates | Deferred product-design constraints only |
+| `research/*PLAN.md` and protocol status | Evidence ledgers and reusable procedures only |
+| Carrier preorder checklist | One physical-operation checklist, not project status |
+
+## Current focus: Phase 0 — one clean baseline
+
+The deployed radio nodes currently span three firmware versions, and historical
+invalid-trailer HTV405 observations left three phantom four-zone devices beside
+the one canonical valve. Further reliability measurements would be ambiguous
+until this baseline is clean.
+
+- [ ] Reject invalid or provisional valve identities before they can create a
+      Home Assistant device.
+- [ ] Remove the three known phantom HTV405 records through the supported
+      lifecycle path; preserve the canonical association and its HA history.
+- [ ] Verify dashboards, automations, notifications, and watchdogs reference
+      only the canonical local valve and local moisture entities.
+- [ ] Publish one consolidated supervised radio-node image containing the
+      validated sensor, custom-identity, OTA, diagnostics, HTV405 pairing, and
+      HTV405 control paths without the HTV145 research transmitter.
+- [ ] Upgrade the valve-owning node first and prove its association, command
+      counter, ACK assignments, and controls survived.
+- [ ] Upgrade the remaining nodes one at a time and run the same reconnect,
+      receiver, ACK-owner, and diagnostic checks after each update.
+- [ ] Reconcile the installed gateway package/version label with the running
+      source and retain one rollback artifact.
+
+Exit criteria: every deployed node runs the same firmware; the existing
+sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
+normal observation window creates no replacement phantoms.
+
+## Phase 1 — Home Assistant device lifecycle
+
+### HCS026-class soil sensors
+
+- [x] Pair independent sensor identities from the HA UI without copied RF IDs,
+      setup tokens, or CLI commands.
+- [x] Auto-advance the pairing flow after physical terminal evidence.
+- [x] Physically enroll a disposable sensor under a generated, persisted custom
+      RF controller identity.
+- [ ] Complete three consecutive pair -> report -> remove -> re-pair cycles on
+      unchanged final firmware, including one installed sensor and both test
+      sensor identities.
+- [ ] Confirm removal clears the device, entities, suppression state, and ACK
+      assignment, and that re-pairing does not leave a duplicate.
+
+### HTV405 four-zone valve
+
+- [x] Reproduce local association and accept paired valve-originated traffic as
+      terminal evidence.
+- [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
+      final firmware.
+- [ ] Pair once under a generated custom controller identity and create exactly
+      one capability-correct HA device.
+- [ ] Confirm HA removal clears all four zone controls, duration entities,
+      association state, and node routing; then re-pair without a duplicate.
+
+### HTV145 single-zone valve
+
+- [x] Decode stock enrollment/control evidence sufficiently to build a bounded,
+      compile-gated candidate.
+- [ ] Implement the generalized HA pairing lifecycle without exposing the
+      unaccepted research transmitter as a production control.
+- [ ] Complete three consecutive local pairings with fresh batteries and
+      valve-originated terminal evidence.
+- [ ] Confirm removal and re-pairing preserve the intended stable physical
+      identity without stale entities.
+
+Exit criteria: a user can pair and remove every supported family entirely from
+HA, each family completes three consecutive final-build trials, and each
+physical device has exactly one HA representation.
+
+## Phase 2 — persistence, recovery, and coexistence
+
+- [x] Persist one sensor ACK owner and restore assignments after ordinary node
+      reconnect, gateway reconnect, and successful OTA.
+- [ ] Battery-cycle each supported sensor family and restore the same HA device,
+      paired identity, and routine reporting without opening pairing.
+- [ ] Capture the stock RainPoint gateway's complete battery-rejoin exchange for
+      each valve family before changing either proven new-enrollment path.
+- [ ] Reproduce retained-association battery rejoin locally for HTV405 and
+      HTV145, including authenticated idle/control traffic as terminal proof.
+- [ ] Restart HA, the custom local gateway, and each assigned node while devices
+      are idle; restore associations, counters, ACK owners, and availability.
+- [ ] Deliberately reassign one sensor ACK owner and prove the old owner is
+      revoked before the new owner can transmit.
+- [ ] With the stock RainPoint gateway powered, prove a custom-identity sensor
+      keeps reporting and receiving only its custom-node acknowledgements while
+      legacy stock-owned devices continue normally.
+- [ ] Repeat coexistence with a custom-identity valve and confirm neither
+      gateway steals the association, controls the other's cohort, or creates
+      duplicate HA devices.
+- [ ] Document the recovery path for every destructive association transition.
+
+Exit criteria: device battery changes and infrastructure restarts do not require
+full re-pairing, and stock-owned and custom-owned device cohorts operate at the
+same time without conflicting authority.
+
+## Phase 3 — reliable valve control
+
+### HTV405
+
+- [x] Confirm one- and two-minute bounded opens on Zones 1--4 with authenticated
+      responses, independent active reports, and valve-owned automatic stops.
+- [x] Confirm local explicit early stop on Zone 1.
+- [x] Complete an installed 20-minute Zone 1 irrigation run with a valve-owned
+      return to idle.
+- [ ] Retain the end-to-end installed result across RF evidence, usage decode,
+      HA completion notification, automation outcome, and watchdog outcome.
+- [ ] Confirm local explicit early stop on Zones 2--4.
+- [ ] Validate control under a generated custom controller identity.
+- [ ] Physically verify gateway/node restart during idle and during a bounded
+      run remains observation-only and reconciles from subsequent valve reports.
+- [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
+      interval, authenticated counter recovery, and positively observed overdue
+      anomaly handling without speculative opens or startup closes.
+- [ ] Repeat association and control acceptance on a second HTV405 specimen or
+      independently evidenced compatible profile.
+
+### HTV145
+
+- [ ] With fresh batteries, obtain new valve-originated idle and positively
+      confirmed stock-command evidence.
+- [ ] Physically accept exactly one bounded local open on its evidenced carrier,
+      with an immediate response or independent active-state fallback.
+- [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware
+      interval, durable counter progression, and restart without command replay.
+- [ ] Promote controls into HA only after the preceding physical gates pass.
+
+### HA and irrigation behavior
+
+- [ ] Confirm HA state changes only from valve responses or independent state
+      telemetry, never from command intent alone.
+- [ ] Validate one-active-zone enforcement, per-zone durations, scheduled local
+      irrigation, completion/failure notifications, and watchdog behavior.
+- [ ] Confirm stale moisture data cannot suppress irrigation indefinitely: use
+      only sufficiently recent readings and follow the documented fallback after
+      the configured 6--8 hour limit.
+- [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
+      addition to the existing UTC/offset/DST software coverage.
+
+Exit criteria: both valve families pair and operate through HA, every accepted
+command has device-owned confirmation, and normal failure modes remain bounded,
+observable, and recoverable.
+
+## Phase 4 — complete field decoding
+
+- [x] Decode HCS026 moisture, categorical full/low battery, report time, RF
+      identity, receiver provenance, and reporting cadence.
+- [x] Decode HTV145 open/idle state, requested and last-session duration, water
+      usage, and categorical normal/low battery.
+- [x] Decode HTV405 zone selection, open/idle state, requested duration, and
+      controller/telemetry counters for the tested association profiles.
+- [ ] Correlate every exposed valve field against the cloud integration over the
+      same timestamped sessions: battery, active zone, requested duration,
+      actual duration, remaining time when transmitted, automatic stop, and
+      water usage.
+- [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
+      battery entity unavailable until RF correlation is repeatable.
+- [ ] Mark each field as confirmed, provisional, categorical-only, or not
+      transmitted locally; never synthesize an unavailable protocol value.
+- [ ] Ensure product/model discovery is capability- and product-code based, not
+      tied to one seller name, household endpoint, or friendly name.
+
+Exit criteria: local valve entities agree with independently timestamped cloud
+or physical observations, and every unsupported value is explicitly unavailable.
+
+## Phase 5 — stability qualification
+
+- [ ] Complete a persisted minimum 72-hour sensor cadence/ACK soak across the
+      installed multi-node layout.
+- [ ] Include a sustained stock/custom coexistence interval in that soak.
+- [ ] Complete at least three scheduled irrigation cycles using only local
+      sensor authority and local valve control.
+- [ ] Include one HA restart, custom gateway restart, node reboot, node OTA, and
+      device battery cycle without identity loss or command replay.
+- [ ] Confirm weak-link placement is adequate or relocate the affected radio
+      node before accepting the soak.
+- [ ] Observe no phantom devices, duplicate ACK owners, false watering states,
+      stale-data decisions, or notification reconnect flapping.
+- [ ] Reject a wrong-checksum OTA artifact, interrupt a download, power-cycle a
+      candidate boot, prove rollback after unhealthy boots, and retain USB
+      recovery.
+
+Exit criteria: the persisted soak report and irrigation evidence meet every
+criterion above without an unexplained recovery intervention.
+
+## Phase 6 — open-source hardening
+
+- [ ] Remove installation-specific IDs, names, paths, allowlists, and behavior
+      from production code; keep deliberate household examples under `examples/`.
+- [ ] Separate protocol/identity models, gateway authority, HA adaptation,
+      firmware transport, and research tools behind reviewed interfaces.
+- [ ] Replace dictionary-heavy runtime boundaries with typed, versioned models
+      and structured errors; add formal HA config-entry/entity migrations.
+- [ ] Finish event-driven HA updates with slow reconciliation fallback.
+- [ ] Remove superseded probes, hard-coded profiles, temporary acceptance
+      endpoints, obsolete feature gates, and retired firmware artifacts.
+- [ ] Keep genuine safety boundaries: scoped authentication, association-bound
+      transmission, bounded duration, device-owned confirmation, command
+      spacing, at-most-once opens, and rollback.
+- [ ] Add encrypted node sessions, integrity/replay protection, credential
+      rotation/revocation review, API resource limits, reproducible packaging,
+      and asymmetric OTA release signatures.
+- [ ] Run CI, security review, redaction checks, and release installation tests
+      from a clean environment.
+
+Exit criteria: a new contributor can build and test one production stack without
+household knowledge, research-only transmit paths cannot enter release builds,
+and publication/security gates are documented and enforced.
+
+## Phase 7 — research infrastructure and documentation
+
+- [ ] Make the receive-only SDR capture/decoder pipeline run as a managed Mac
+      service and optionally forward normalized observations to the custom
+      gateway; production HA operation must not depend on the SDR.
+- [ ] Keep research tooling isolated in this repository while protocol APIs are
+      changing; decide before public release whether its dependencies, raw data,
+      and compile-gated transmit probes warrant a separate
+      `rainpoint-local-research` repository.
+- [ ] If split, keep redacted protocol fixtures and shared typed models with the
+      production protocol package and move raw captures, capture orchestration,
+      and unsafe probes to the research repository.
+- [ ] Rewrite documentation around quick start, supported-device/capability
+      matrix, architecture, pairing/removal, OTA, wiring, protocol confidence,
+      troubleshooting, and contributor research workflow.
+- [ ] Archive narrative journals and superseded plans; retain evidence ledgers
+      and procedural checklists with explicit links back to this roadmap.
+- [ ] Clean merged branches, temporary worktrees, deployment backups, and stale
+      firmware catalogs after preserving the minimum rollback artifacts and
+      redacted fixtures.
+
+Exit criteria: production documentation is concise and user-oriented, research
+work has an explicit boundary, and the Mac can perform future SDR investigations
+without coupling the production stack to the Home Assistant host.
+
+## Deferred integration milestone
+
+Cloud-to-local provider migration and a possible merge with the existing
+HomGar integration remain deferred until Phases 0--5 pass. Design review may
+continue, but no live authority handoff should ship before repeatable local
+pairing, control, recovery, coexistence, and stable identity are proven.
+
+## Backlog
+
+These items are intentionally outside the active stabilization sequence unless
+one becomes a blocker:
+
+- Discover and qualify additional RainPoint sensor and valve families.
+- Determine whether HCS026 P1--P6 soil selection is transmitted, device-local,
+  or cloud metadata.
+- Determine whether any pairing field controls long-term telemetry channel;
+  current evidence says the known selector does not.
+- Optimize multi-node channel scheduling and placement beyond the stability
+  threshold required by Phase 5.
+- Finish carrier-PCB manufacturing and enclosure optimization using the
+  separate physical preorder checklist.
+- Implement cloud-to-local authority migration in coordination with the HomGar
+  maintainers after the deferred milestone opens.
+
+When adding a backlog item, record why it matters and the evidence that would
+promote it into an active phase. Do not implement it merely because it was
+noticed during unrelated work.

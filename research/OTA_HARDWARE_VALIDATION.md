@@ -1,5 +1,8 @@
 # OTA hardware validation
 
+This file preserves OTA trial evidence and recovery procedures. The live gate
+status is tracked only in `../PROJECT_ROADMAP.md`.
+
 Status: successful physical install plus managed local release path; production
 gates remain.
 
@@ -29,7 +32,7 @@ Observed sequence:
 This validates the successful install path only. It does not validate
 asymmetric release authenticity or deliberately failed recovery paths.
 
-## Remaining physical gates
+## Unvalidated recovery scenarios
 
 - Reject an artifact with the wrong SHA-256 without changing boot partition.
 - Recover from an interrupted download and retain the running image.

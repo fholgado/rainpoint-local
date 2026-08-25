@@ -8,6 +8,19 @@
 - Preserve raw RF/IQ captures until their smallest useful exchanges have been
   promoted to redacted regression fixtures and documented.
 
+## Planning and status
+
+- `PROJECT_ROADMAP.md` is the only live project-status checklist. Update it in
+  the same commit that completes, adds, removes, or reorders a project gate.
+- Architecture files describe intended boundaries, protocol/research files
+  preserve evidence and procedures, and hardware checklists govern one physical
+  operation. Do not create another roadmap, backlog, or "remaining work" list
+  in those files; link to the canonical roadmap instead.
+- A newly discovered task interrupts the active phase only when it blocks the
+  phase exit criteria, invalidates evidence, or protects irrigation safety or
+  reliability. Otherwise add it to the roadmap backlog with the evidence that
+  would promote it.
+
 ## Validation
 
 Run the complete Python suite used by CI:

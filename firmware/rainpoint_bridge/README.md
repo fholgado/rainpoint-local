@@ -116,7 +116,8 @@ RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
 
 This supervised image retains the authenticated, association-specific HTV405
 control boundary without compiling legacy serial RF probes. Keep it on the
-experimental OTA channel until the remaining hardware gates are complete.
+experimental OTA channel until the qualification gates in
+`../../PROJECT_ROADMAP.md` are complete.
 
 The unaccepted HTV145 candidate requires an additional explicit build gate:
 
@@ -201,16 +202,8 @@ Captured frames remain in `research/fixtures`. Keep uncertain protocol fields
 explicitly provisional and add a regression fixture before changing any
 pairing, acknowledgement, channel, or trailer behavior.
 
-## Remaining hardware gates
+## Qualification status
 
-- Accumulate at least 72 hours of unattended reporting with the stock gateway
-  unavailable to the locally paired sensors.
-- Test ACK-owner reassignment and interrupted/power-loss OTA rollback.
-- Add signed releases and a reviewed secure session transport.
-- Retain additional installed HTV405 longer-duration results across Zones 2--4
-  and the Home Assistant completion-notification, usage, and watchdog layers.
-- Physically exercise HTV405 early stop on Zones 2--4, battery-cycle rejoin,
-  and a controlled normal-to-low battery transition without changing the
-  validated new-enrollment path.
-- Repeat association and control acceptance on a second HTV405 specimen before
-  promoting supervised control from beta.
+The sole live checklist for firmware, OTA, sensor, and valve hardware gates is
+`../../PROJECT_ROADMAP.md`. This document describes how to build and operate the
+firmware and must not maintain a second completion list.

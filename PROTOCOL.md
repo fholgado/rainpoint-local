@@ -1309,7 +1309,10 @@ python3 tools/characterize_rainpoint_iq.py \
 normalization and confirmed field decoding. Regression examples live in
 `test_rainpoint_rf.py`.
 
-## Remaining protocol work
+## Open protocol questions
+
+These are unresolved wire-evidence questions, not a task tracker. Their priority,
+owner, and completion status are maintained only in `PROJECT_ROADMAP.md`.
 
 1. With fresh valve batteries and newly confirmed stock command-counter
    evidence, repeat one channel-11 dry-valve acceptance using the explicitly
