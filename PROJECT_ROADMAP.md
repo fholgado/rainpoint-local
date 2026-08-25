@@ -42,20 +42,20 @@ invalid-trailer HTV405 observations left three phantom four-zone devices beside
 the one canonical valve. Further reliability measurements would be ambiguous
 until this baseline is clean.
 
-- [ ] Reject invalid or provisional valve identities before they can create a
+- [x] Reject invalid or provisional valve identities before they can create a
       Home Assistant device.
 - [ ] Remove the three known phantom HTV405 records through the supported
       lifecycle path; preserve the canonical association and its HA history.
-- [ ] Verify dashboards, automations, notifications, and watchdogs reference
+- [x] Verify dashboards, automations, notifications, and watchdogs reference
       only the canonical local valve and local moisture entities.
-- [ ] Publish one consolidated supervised radio-node image containing the
+- [x] Publish one consolidated supervised radio-node image containing the
       validated sensor, custom-identity, OTA, diagnostics, HTV405 pairing, and
       HTV405 control paths without the HTV145 research transmitter.
 - [ ] Upgrade the valve-owning node first and prove its association, command
       counter, ACK assignments, and controls survived.
-- [ ] Upgrade the remaining nodes one at a time and run the same reconnect,
+- [x] Upgrade the remaining nodes one at a time and run the same reconnect,
       receiver, ACK-owner, and diagnostic checks after each update.
-- [ ] Reconcile the installed gateway package/version label with the running
+- [x] Reconcile the installed gateway package/version label with the running
       source and retain one rollback artifact.
 
 Exit criteria: every deployed node runs the same firmware; the existing

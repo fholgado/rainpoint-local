@@ -2150,6 +2150,10 @@ class Gateway:
                         state.update(copy.deepcopy(
                             self._sensor_link_diagnostics[endpoint]
                         ))
+                elif device.get("model") in {HTV145_MODEL, "HTV405FRF"}:
+                    device["capabilities"] = sorted(
+                        {*device.get("capabilities", []), "forget"}
+                    )
                 device.update(
                     {
                         key: value
@@ -3848,16 +3852,26 @@ class Gateway:
             try:
                 existing = self._store.registry_device(device_id)
             except KeyError:
-                forgotten_valve = self._store.forget_valve_registry_device(
-                    device_id,
-                    suppressed_at=datetime.now(timezone.utc).isoformat(),
-                )
+                suppressed_at = datetime.now(timezone.utc).isoformat()
+                try:
+                    forgotten_valve = self._store.forget_valve_registry_device(
+                        device_id,
+                        suppressed_at=suppressed_at,
+                    )
+                    result = {
+                        **forgotten_valve,
+                        "endpoint": forgotten_valve["valve_endpoint"],
+                    }
+                except KeyError:
+                    result = self._store.forget_observed_device(
+                        device_id,
+                        suppressed_at=suppressed_at,
+                    )
                 self._refresh_registry_catalog()
                 self._devices.pop(device_id, None)
-                return {
-                    **forgotten_valve,
-                    "endpoint": forgotten_valve["valve_endpoint"],
-                }
+                self._memory_metrics.pop(device_id, None)
+                self._memory_reception_metrics.pop(device_id, None)
+                return result
             endpoint = str(existing["endpoint"])
             sensor = self.catalog.sensor(endpoint)
             resolved_device_id = sensor.device_id if sensor else device_id
@@ -4303,6 +4317,11 @@ class Gateway:
     def _is_restorable_device(self, event: dict[str, Any]) -> bool:
         """Reject obsolete auto-discoveries that predate endpoint validation."""
         if frame_accepted(event) is False:
+            return False
+        if (
+            event.get("model") == "HTV405FRF"
+            and event.get("state", {}).get("rf_trailer_valid") is not True
+        ):
             return False
         if not is_hcs02x_sensor(
             model=event.get("model"),

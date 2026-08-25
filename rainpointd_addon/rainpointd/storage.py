@@ -15,17 +15,24 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
 def frame_accepted(event: dict[str, Any]) -> bool | None:
     """Return the integrity decision while preserving legacy event meaning."""
     state = event.get("state", {})
+    trailer_valid = state.get("rf_trailer_valid")
+    # Gateway 0.33.1 briefly persisted a positive acceptance projection for
+    # structurally decoded HTV405-looking frames even when their ordinary
+    # trailer was explicitly invalid.  The trailer decision is authoritative
+    # for this family and must override that stale derived flag during restore,
+    # inventory rebuild, and metrics backfill.
+    if event.get("model") == "HTV405FRF" and trailer_valid is False:
+        return False
     explicit = state.get("rf_frame_accepted")
     if isinstance(explicit, bool):
         return explicit
-    trailer_valid = state.get("rf_trailer_valid")
     if trailer_valid is True:
         return True
     # Product-code reports and decoded valve transactions predate the ordinary
@@ -184,6 +191,9 @@ class SQLiteEventStore:
             version = 14
         if version == 14:
             self._migrate_v14_to_v15()
+            version = 15
+        if version == 15:
+            self._migrate_v15_to_v16()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -447,6 +457,53 @@ class SQLiteEventStore:
                         f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
                     )
             self._connection.execute("PRAGMA user_version = 15")
+
+    def _migrate_v15_to_v16(self) -> None:
+        """Remove legacy trailer-invalid HTV405 derived device state."""
+        rows = self._connection.execute(
+            "SELECT device_id, payload FROM device_snapshots"
+        ).fetchall()
+        stale: list[tuple[str, str]] = []
+        for row in rows:
+            event = json.loads(row["payload"])
+            state = event.get("state", {})
+            endpoint = state.get("rf_endpoint_b")
+            if (
+                event.get("model") == "HTV405FRF"
+                and state.get("rf_trailer_valid") is False
+                and isinstance(endpoint, str)
+            ):
+                stale.append((str(row["device_id"]), endpoint.lower()))
+        with self._connection:
+            for device_id, endpoint in stale:
+                self._connection.execute(
+                    "DELETE FROM device_snapshots WHERE device_id = ?",
+                    (device_id,),
+                )
+                self._connection.execute(
+                    "DELETE FROM device_metrics WHERE device_id = ?",
+                    (device_id,),
+                )
+                self._connection.execute(
+                    "DELETE FROM device_reception_metrics WHERE device_id = ?",
+                    (device_id,),
+                )
+                self._connection.execute(
+                    "DELETE FROM receiver_metrics WHERE device_id = ?",
+                    (device_id,),
+                )
+                self._connection.execute(
+                    "INSERT OR REPLACE INTO device_suppressions("
+                    "endpoint, suppressed_at) VALUES (?, ?)",
+                    (endpoint, datetime.now().astimezone().isoformat()),
+                )
+            # Rebuild with the corrected integrity precedence so endpoints from
+            # retained legacy events do not survive as discovery candidates.
+            self._connection.execute(
+                "DELETE FROM storage_metadata WHERE key = ?",
+                ("endpoint_inventory_version",),
+            )
+            self._connection.execute("PRAGMA user_version = 16")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -884,6 +941,51 @@ class SQLiteEventStore:
                 (device["valve_endpoint"], suppressed_at),
             )
         return device
+
+    def forget_observed_device(
+        self,
+        device_id: str,
+        *,
+        suppressed_at: str,
+    ) -> dict[str, Any]:
+        """Remove one observation-only device while retaining raw evidence."""
+        row = self._connection.execute(
+            "SELECT payload FROM device_snapshots WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(device_id)
+        event = json.loads(row["payload"])
+        state = event.get("state", {})
+        endpoint = state.get("rf_endpoint") or state.get("rf_endpoint_b")
+        if not isinstance(endpoint, str) or not endpoint:
+            raise ValueError("observed device has no suppressible RF endpoint")
+        endpoint = endpoint.lower()
+        with self._connection:
+            self._connection.execute(
+                "DELETE FROM device_snapshots WHERE device_id = ?", (device_id,)
+            )
+            self._connection.execute(
+                "DELETE FROM device_metrics WHERE device_id = ?", (device_id,)
+            )
+            self._connection.execute(
+                "DELETE FROM device_reception_metrics WHERE device_id = ?",
+                (device_id,),
+            )
+            self._connection.execute(
+                "DELETE FROM receiver_metrics WHERE device_id = ?", (device_id,)
+            )
+            self._connection.execute(
+                "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
+                "VALUES (?, ?)",
+                (endpoint, suppressed_at),
+            )
+        return {
+            "device_id": device_id,
+            "endpoint": endpoint,
+            "model": event.get("model"),
+            "name": event.get("name"),
+        }
 
     def upsert_valve_link(
         self,
@@ -2321,7 +2423,7 @@ class SQLiteEventStore:
                     int("b" in endpoint_roles),
                     int("sensor" in endpoint_roles),
                     state.get("rf_message_type"),
-                    event["raw"],
+                    str(event.get("raw", "")),
                     state.get("rf_rssi_db"),
                 ),
             )
