@@ -1154,11 +1154,15 @@ command traffic for this association uses RainPoint channel 11 at the CC1101
 center 434.239594 MHz. A corrected 60-second candidate was independently
 captured by the SDR and another radio node as three byte-identical, valid
 `0xc713` attempts with the measured 1,200-symbol wake prefix. The valve emitted
-no response or state transition and did not actuate. Its last valve-originated
-report had already asserted the confirmed low-battery flag, after which routine
-heartbeats ceased, so this result is blocked by battery condition rather than
-classified as a protocol rejection. A fresh-battery, freshly synchronized
-repeat remains required.
+no response or state transition and did not actuate. Its last pre-trial report
+had already asserted the confirmed low-battery flag, and routine traffic then
+stopped during the acceptance window. A valid valve-originated idle/low-battery
+report resumed about 26 minutes after the command. That late report proves the
+radio was not completely dead but cannot confirm a 60-second open without an
+immediate response, active state, actuation, or expected automatic-idle timing.
+The result is therefore blocked by likely low-voltage command/actuator lockout
+rather than classified as a protocol rejection. A fresh-battery, freshly
+synchronized repeat remains required.
 
 This negative trial confirms that controller-to-valve requests are intent, not
 state evidence: local receivers hear their own request even when the valve is

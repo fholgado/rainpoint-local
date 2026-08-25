@@ -117,15 +117,19 @@ observed. The selected node had recently received the valve itself around
 -70 dBm, so the run establishes a clean local transmission but not valve
 acceptance.
 
-The valve's last independently confirmed report already carried the categorical
-low-battery flag, and its routine heartbeat then stopped. Battery depletion or
-low-voltage actuator lockout is therefore the leading blocker, but it is not a
-protocol conclusion. Further transmit trials are blocked until fresh batteries
-produce a new valve-originated report and a new stock command is positively
-confirmed by a matching response or state transition. The runner now rejects
-low or unknown battery state, derives the carrier only from retained channel
-evidence, and refuses to reuse command evidence from before a prior local
-attempt.
+The valve's last independently confirmed pre-trial report already carried the
+categorical low-battery flag, and its routine heartbeat stopped during the
+acceptance window. It later resumed valve-originated traffic and produced a
+valid idle/low-battery report about 26 minutes after the corrected command.
+That late idle proves the radio was not completely dead, but it cannot confirm
+an open because there was no immediate response, active report, actuation, or
+expected 60-second idle transition. Low-voltage command/actuator lockout is
+therefore the leading blocker, not a protocol conclusion. Further transmit
+trials are blocked until fresh batteries produce a new valve-originated report
+and a new stock command is positively confirmed by a matching response or
+state transition. The runner now rejects low or unknown battery state, derives
+the carrier only from retained channel evidence, and refuses to reuse command
+evidence from before a prior local attempt.
 
 The trial also proved an important receive-side boundary: a receiver can hear
 the local controller request even when the valve does not accept it. Controller
