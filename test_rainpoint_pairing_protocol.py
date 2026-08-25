@@ -485,10 +485,20 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
                 valve_route="00000000",
                 companion_endpoint="39840280",
             )
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            build_htv405_profile(
+                factory_endpoint="14a98013",
+                valve_route="c1234580",
+                companion_endpoint="39840280",
+            )
         metadata = automatic_htv405_profile_metadata()
         self.assertTrue(metadata["experimental"])
         self.assertTrue(metadata["transmit_enabled"])
         self.assertFalse(metadata["valve_control_enabled"])
+        self.assertEqual(["factory_endpoint"], metadata["association_inputs_required"])
+        self.assertEqual(
+            "persistent_local_gateway", metadata["controller_identity_default"]
+        )
         self.assertEqual(18, metadata["step_count"])
 
     def test_valve_clock_keeps_the_captured_marker_bits(self) -> None:

@@ -73,6 +73,26 @@ constexpr std::uint32_t kPairingChannelBaseHz = 433'031'500;
 constexpr std::uint32_t kPairingChannelSpacingHz = 110'000;
 constexpr std::uint8_t kInitialPairingChannel = 4;
 constexpr const char* kAutomaticHcs026ProfileId = "hcs026_auto_v1";
+
+inline bool validRfControllerIdentity(
+    const std::array<std::uint8_t, 4>& controllerEndpoint,
+    const std::array<std::uint8_t, 4>& companionEndpoint
+) {
+    if ((controllerEndpoint[0] & 0x80U) == 0 ||
+        (companionEndpoint[0] & 0x80U) != 0 ||
+        controllerEndpoint[3] != 0x80 || companionEndpoint[3] != 0x80) {
+        return false;
+    }
+    for (std::size_t index = 0; index < controllerEndpoint.size(); ++index) {
+        const std::uint8_t expected = index == 0
+            ? static_cast<std::uint8_t>(companionEndpoint[index] | 0x80U)
+            : companionEndpoint[index];
+        if (controllerEndpoint[index] != expected) {
+            return false;
+        }
+    }
+    return true;
+}
 constexpr bool validPairingLocalDateTime(const PairingLocalDateTime& value) {
     return value.year >= 2020 && value.year <= 2147 &&
         value.month >= 1 && value.month <= 12 &&
@@ -438,10 +458,13 @@ inline bool hcs026FactoryAnnouncement(
 
 inline bool buildAutomaticHcs026Profile(
     const std::array<std::uint8_t, 4>& factoryEndpoint,
+    const std::array<std::uint8_t, 4>& controllerEndpoint,
+    const std::array<std::uint8_t, 4>& companionEndpoint,
     std::uint8_t channel,
     PairingProfile& profile
 ) {
-    if ((factoryEndpoint[0] & 0x80U) != 0 || factoryEndpoint[3] != 0x24) {
+    if ((factoryEndpoint[0] & 0x80U) != 0 || factoryEndpoint[3] != 0x24 ||
+        !validRfControllerIdentity(controllerEndpoint, companionEndpoint)) {
         return false;
     }
     // The common first-enrollment branch is byte-identical across the two
@@ -456,6 +479,8 @@ inline bool buildAutomaticHcs026Profile(
     profile.factoryEndpoint = factoryEndpoint;
     profile.pairedEndpoint = factoryEndpoint;
     profile.pairedEndpoint[0] |= 0x80U;
+    profile.sensorRoute = controllerEndpoint;
+    profile.companionEndpoint = companionEndpoint;
     profile.steps[3].frame = {{
         0x79, 0xf4, 0x88, 0x2f, 0x28, 0x9b, 0xce, 0x00, 0x24, 0x39,
         0x84, 0x02, 0x80, 0x82, 0xc2, 0x81, 0x00, 0x00, 0x80, 0x00,
@@ -466,6 +491,7 @@ inline bool buildAutomaticHcs026Profile(
         auto& frame = profile.steps[stepIndex].frame;
         for (std::size_t index = 0; index < profile.pairedEndpoint.size(); ++index) {
             frame[5 + index] = profile.pairedEndpoint[index];
+            frame[9 + index] = profile.companionEndpoint[index];
         }
         writeTrailer(frame, kCurrentPairingTrailerResidual);
     }
@@ -474,10 +500,14 @@ inline bool buildAutomaticHcs026Profile(
 
 inline bool buildAutomaticHcs026RejoinProfile(
     const std::array<std::uint8_t, 4>& factoryEndpoint,
+    const std::array<std::uint8_t, 4>& controllerEndpoint,
+    const std::array<std::uint8_t, 4>& companionEndpoint,
     std::uint8_t channel,
     PairingProfile& profile
 ) {
-    if (!buildAutomaticHcs026Profile(factoryEndpoint, channel, profile)) {
+    if (!buildAutomaticHcs026Profile(
+            factoryEndpoint, controllerEndpoint, companionEndpoint,
+            channel, profile)) {
         return false;
     }
     // A known sensor already has its paired identity and only needs the first

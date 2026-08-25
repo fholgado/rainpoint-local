@@ -23,7 +23,6 @@ FRAME_BYTES = 38
 # catalog product code 0x48. Canonicalize only identities already established
 # by ordinary telemetry so a marker-like payload cannot create a new device.
 HCS026_PRODUCT_CODE = 0x48
-HCS026_COMPANION_ENDPOINT = "39840280"
 HCS026_FACTORY_BROADCAST = "80000000"
 # Ordinary 38-byte frames use CRC-CCITT (poly 0x1021, init 0) over bytes
 # 0..35. The transmitted trailer differs by one of two unresolved residues.
@@ -142,7 +141,11 @@ def _hcs026_routine_ack_candidate(
     endpoint = frame[5:9].hex()
     if endpoint not in catalog.sensor_endpoints:
         return {}
-    if frame[9:13].hex() != HCS026_COMPANION_ENDPOINT:
+    companion = frame[9:13]
+    if companion[0] & 0x80:
+        return {}
+    controller = (bytes([companion[0] | 0x80]) + companion[1:]).hex()
+    if controller not in catalog.hcs026_pairing_peers:
         return {}
     if (
         frame[14] & 0x7F != 0x41
@@ -158,6 +161,8 @@ def _hcs026_routine_ack_candidate(
         "routine_ack_endpoint": endpoint,
         "routine_ack_message": frame[13] & 0x7F,
         "routine_ack_body_code": status,
+        "routine_ack_controller_endpoint": controller,
+        "routine_ack_companion_endpoint": companion.hex(),
     }
 
 

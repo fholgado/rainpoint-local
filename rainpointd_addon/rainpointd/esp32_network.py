@@ -512,6 +512,7 @@ class ESP32NetworkServer:
                     {
                         "rx",
                         "sensor_pairing_tx",
+                        "configurable_rf_controller_identity",
                         "identify",
                         "routine_sensor_ack_tx",
                         "valve_pairing_tx_candidate",

@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
+from .rf_identity import controller_endpoint_for
+
 
 SYNC = bytes.fromhex("79f4882f28")
 FRAME_BYTES = 38
@@ -152,6 +154,8 @@ def build_htv405_profile(
         raise ValueError("factory_endpoint is not an observed HTV405 identity")
     if route == bytes(4) or companion == bytes(4):
         raise ValueError("association routes cannot be zero")
+    if route.hex() != controller_endpoint_for(companion.hex()):
+        raise ValueError("valve_route does not match companion_endpoint")
     paired = bytes([factory[0] | 0x80]) + factory[1:]
     return ValvePairingProfile(
         profile_id=AUTOMATIC_HTV405_PROFILE_ID,
@@ -229,11 +233,9 @@ def automatic_htv405_profile_metadata() -> dict[str, Any]:
         "experimental": True,
         "transmit_enabled": True,
         "valve_control_enabled": False,
-        "association_inputs_required": [
-            "factory_endpoint",
-            "valve_route",
-            "companion_endpoint",
-        ],
+        "association_inputs_required": ["factory_endpoint"],
+        "controller_identity_default": "persistent_local_gateway",
+        "retained_association_identity_optional": True,
         "step_count": len(HTV405_STEPS),
         "reply_delay_ms": REPLY_DELAY_MS,
         "calibrated_frequency_offset_hz": CALIBRATED_FREQUENCY_OFFSET_HZ,

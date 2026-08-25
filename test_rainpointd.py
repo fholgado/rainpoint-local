@@ -36,6 +36,32 @@ class GatewayTest(unittest.TestCase):
         "00000000000000005878"
     )
 
+    def test_local_rf_controller_identity_is_unique_persistent_and_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(storage_path=str(path))
+            first = gateway.info()["rf_controller_identity"]
+            self.assertTrue(first["persistent"])
+            self.assertEqual(0x80, bytes.fromhex(first["companion_endpoint"])[-1])
+            self.assertFalse(bytes.fromhex(first["companion_endpoint"])[0] & 0x80)
+            self.assertTrue(bytes.fromhex(first["controller_endpoint"])[0] & 0x80)
+            self.assertEqual(
+                bytes.fromhex(first["companion_endpoint"])[1:],
+                bytes.fromhex(first["controller_endpoint"])[1:],
+            )
+            self.assertNotEqual("39840280", first["companion_endpoint"])
+            gateway.close()
+
+            restored = Gateway(storage_path=str(path))
+            second = restored.info()["rf_controller_identity"]
+            self.assertEqual(first["companion_endpoint"], second["companion_endpoint"])
+            self.assertEqual(first["controller_endpoint"], second["controller_endpoint"])
+            self.assertIn(
+                second["controller_endpoint"],
+                restored.catalog.hcs026_pairing_peers,
+            )
+            restored.close()
+
     def test_timestamp_normalization_portability_matrix(self) -> None:
         explicit = {
             "2026-01-15T12:00:00Z": "2026-01-15T12:00:00+00:00",
@@ -727,7 +753,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(13, gateway.info()["storage_schema_version"])
+            self.assertEqual(14, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -738,7 +764,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(13, migrated.info()["storage_schema_version"])
+            self.assertEqual(14, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -760,6 +786,17 @@ class GatewayTest(unittest.TestCase):
             }
             connection.close()
             self.assertIn("valve_registry", valve_tables)
+            connection = sqlite3.connect(path)
+            ack_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(hcs026_ack_assignments)"
+                )
+            }
+            connection.close()
+            self.assertTrue(
+                {"controller_endpoint", "companion_endpoint"} <= ack_columns
+            )
             connection = sqlite3.connect(path)
             valve_columns = {
                 row[1]

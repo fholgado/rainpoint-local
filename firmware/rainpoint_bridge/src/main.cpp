@@ -2205,6 +2205,14 @@ void handleNetworkCommand() {
         rainpoint::RoutineAckAuthorization authorization{};
         if (currentPairingState() == rainpoint::PairingSessionState::Armed ||
             !parseHexEndpoint(endpointValue, authorization.pairedEndpoint) ||
+            !parseRawHexEndpoint(
+                jsonStringField(command, "controller_endpoint"),
+                authorization.controllerEndpoint
+            ) ||
+            !parseRawHexEndpoint(
+                jsonStringField(command, "companion_endpoint"),
+                authorization.companionEndpoint
+            ) ||
             !jsonLongField(command, "assigned_channel", assignedChannel) ||
             !jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
             !jsonLongField(command, "power_dbm", powerDbm) ||
@@ -2309,6 +2317,7 @@ void handleNetworkCommand() {
     bool requestedValvePairing = false;
     bool requestedValveRejoin = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
+    std::array<std::uint8_t, 4> requestedControllerEndpoint{};
     std::array<std::uint8_t, 4> requestedValveRoute{};
     std::array<std::uint8_t, 4> requestedCompanionEndpoint{};
     bool requestedKnownFactory = false;
@@ -2321,6 +2330,18 @@ void handleNetworkCommand() {
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.data(),
         rainpoint::kValidatedHcs026Profile.factoryEndpoint.size()
     );
+    const bool requestedHcs026ControllerIdentity =
+        parseRawHexEndpoint(
+            jsonStringField(command, "controller_endpoint"),
+            requestedControllerEndpoint
+        ) &&
+        parseRawHexEndpoint(
+            jsonStringField(command, "companion_endpoint"),
+            requestedCompanionEndpoint
+        ) &&
+        rainpoint::validRfControllerIdentity(
+            requestedControllerEndpoint, requestedCompanionEndpoint
+        );
     if (
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         profile == rainpoint::kAutomaticHtv405ProfileId &&
@@ -2338,10 +2359,12 @@ void handleNetworkCommand() {
     ) {
         requestedValvePairing = true;
         jsonBoolField(command, "known_rejoin", requestedValveRejoin);
-    } else if (profile == rainpoint::kAutomaticHcs026ProfileId && factory.isEmpty()) {
+    } else if (profile == rainpoint::kAutomaticHcs026ProfileId &&
+        factory.isEmpty() && requestedHcs026ControllerIdentity) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedAutomaticDiscovery = true;
     } else if (profile == rainpoint::kAutomaticHcs026ProfileId &&
+        requestedHcs026ControllerIdentity &&
         parseHexFactoryEndpoint(factory, requestedFactoryEndpoint)) {
         requestedProfile = &rainpoint::kSensorAHcs026CandidateProfile;
         requestedKnownFactory = true;
@@ -2422,6 +2445,8 @@ void handleNetworkCommand() {
     const bool channelAssigned = requestedAutomaticDiscovery
         ? rainpoint::buildAutomaticHcs026Profile(
             rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint,
+            requestedControllerEndpoint,
+            requestedCompanionEndpoint,
             pairingAssignedChannel,
             activePairingProfile
         )
@@ -2429,11 +2454,15 @@ void handleNetworkCommand() {
             ? (requestedAutomaticRejoin
                 ? rainpoint::buildAutomaticHcs026RejoinProfile(
                     requestedFactoryEndpoint,
+                    requestedControllerEndpoint,
+                    requestedCompanionEndpoint,
                     pairingAssignedChannel,
                     activePairingProfile
                 )
                 : rainpoint::buildAutomaticHcs026Profile(
                     requestedFactoryEndpoint,
+                    requestedControllerEndpoint,
+                    requestedCompanionEndpoint,
                     pairingAssignedChannel,
                     activePairingProfile
                 ))
@@ -2784,6 +2813,8 @@ void reportSensorRecoveryStatus(
 void authorizeRoutineAckFromCompletedPairing() {
     rainpoint::RoutineAckAuthorization authorization{
         activePairingProfile.pairedEndpoint,
+        activePairingProfile.sensorRoute,
+        activePairingProfile.companionEndpoint,
         pairingAssignedChannel,
         pairingFrequencyOffsetHz,
         pairingPowerDbm,
@@ -2943,7 +2974,11 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 return;
             }
             if (!rainpoint::buildAutomaticHcs026Profile(
-                factoryEndpoint, pairingAssignedChannel, activePairingProfile
+                factoryEndpoint,
+                activePairingProfile.sensorRoute,
+                activePairingProfile.companionEndpoint,
+                pairingAssignedChannel,
+                activePairingProfile
             )) {
                 cancelPairing("automatic_profile_build_failed");
                 printPacket(name, frame, packet, radio);

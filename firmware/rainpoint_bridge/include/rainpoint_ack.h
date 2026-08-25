@@ -18,15 +18,10 @@ constexpr std::uint16_t kRoutineAckDeadlineMs = 250;
 constexpr std::uint16_t kKnownSensorRecoveryDelayMs = 10;
 constexpr std::uint16_t kKnownSensorRecoveryDeadlineMs = 250;
 
-constexpr std::array<std::uint8_t, 4> kHcs026SensorRoute = {
-    0xb9, 0x84, 0x02, 0x80,
-};
-constexpr std::array<std::uint8_t, 4> kHcs026CompanionEndpoint = {
-    0x39, 0x84, 0x02, 0x80,
-};
-
 struct RoutineAckAuthorization {
     std::array<std::uint8_t, 4> pairedEndpoint{};
+    std::array<std::uint8_t, 4> controllerEndpoint{};
+    std::array<std::uint8_t, 4> companionEndpoint{};
     std::uint8_t pairingChannel = 0;
     std::int32_t frequencyOffsetHz = 0;
     std::int8_t powerDbm = 0;
@@ -45,6 +40,10 @@ class RoutineAckAuthorizations {
 public:
     bool authorize(const RoutineAckAuthorization& authorization) {
         if (!authorization.active ||
+            !validRfControllerIdentity(
+                authorization.controllerEndpoint,
+                authorization.companionEndpoint
+            ) ||
             (authorization.pairingChannel != 4 &&
              authorization.pairingChannel != 5) ||
             !validPairingPowerDbm(authorization.powerDbm) ||
@@ -122,8 +121,7 @@ inline const RoutineAckAuthorization* authorizedHcs026ControlFrame(
     const RoutineAckAuthorizations& authorizations,
     PairingTrigger& trigger
 ) {
-    if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
-        !endpointEquals(frame, 5, kHcs026SensorRoute)) {
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame)) {
         return nullptr;
     }
     std::array<std::uint8_t, 4> endpoint{};
@@ -131,7 +129,8 @@ inline const RoutineAckAuthorization* authorizedHcs026ControlFrame(
         endpoint[index] = frame[9 + index];
     }
     const auto* authorization = authorizations.find(endpoint);
-    if (authorization == nullptr) {
+    if (authorization == nullptr ||
+        !endpointEquals(frame, 5, authorization->controllerEndpoint)) {
         return nullptr;
     }
     const std::uint8_t message = frame[13] & 0x7fU;
@@ -194,6 +193,7 @@ inline bool buildKnownHcs026RecoveryReply(
     for (std::size_t index = 0;
          index < authorization.pairedEndpoint.size(); ++index) {
         reply[5 + index] = authorization.pairedEndpoint[index];
+        reply[9 + index] = authorization.companionEndpoint[index];
     }
     // The captured message-01 reply uses c713; the two message-02 replies use
     // 4f03. Preserve that phase-specific distinction when substituting IDs.
@@ -210,7 +210,7 @@ inline bool isAuthorizedRoutineHcs026Report(
 ) {
     if (!authorization.active || !hasSync(frame) ||
         !hasOrdinaryTrailer(frame) ||
-        !endpointEquals(frame, 5, kHcs026SensorRoute) ||
+        !endpointEquals(frame, 5, authorization.controllerEndpoint) ||
         !endpointEquals(frame, 9, authorization.pairedEndpoint)) {
         return false;
     }
@@ -236,7 +236,7 @@ inline bool buildRoutineHcs026Acknowledgement(
     for (std::size_t index = 0; index < authorization.pairedEndpoint.size();
          ++index) {
         acknowledgement[5 + index] = authorization.pairedEndpoint[index];
-        acknowledgement[9 + index] = kHcs026CompanionEndpoint[index];
+        acknowledgement[9 + index] = authorization.companionEndpoint[index];
     }
     acknowledgement[13] = report[13] | 0x80U;
     acknowledgement[14] = report[14] | 0x40U;

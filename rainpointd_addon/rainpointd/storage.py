@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -178,6 +178,9 @@ class SQLiteEventStore:
             version = 12
         if version == 12:
             self._migrate_v12_to_v13()
+            version = 13
+        if version == 13:
+            self._migrate_v13_to_v14()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -192,6 +195,21 @@ class SQLiteEventStore:
         """Return the explicit SQLite schema version."""
         row = self._connection.execute("PRAGMA user_version").fetchone()
         return int(row[0])
+
+    def metadata_value(self, key: str) -> str | None:
+        """Return one internal metadata value without exposing SQL details."""
+        row = self._connection.execute(
+            "SELECT value FROM storage_metadata WHERE key = ?", (key,)
+        ).fetchone()
+        return str(row["value"]) if row is not None else None
+
+    def set_metadata_value(self, key: str, value: str) -> None:
+        """Persist one internal metadata value atomically."""
+        self._connection.execute(
+            "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        self._connection.commit()
 
     def _migrate_v1_to_v2(self) -> None:
         """Add durable latest-device snapshots and event query indexes."""
@@ -379,6 +397,31 @@ class SQLiteEventStore:
                 "ON hcs026_ack_assignments(node_id)"
             )
             self._connection.execute("PRAGMA user_version = 7")
+
+    def _migrate_v13_to_v14(self) -> None:
+        """Bind every durable sensor ACK route to its RF controller identity."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(hcs026_ack_assignments)"
+                )
+            }
+            for name in ("controller_endpoint", "companion_endpoint"):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE hcs026_ack_assignments "
+                        f"ADD COLUMN {name} TEXT"
+                    )
+            # Every pre-v14 assignment was created by the retained-association
+            # prototype and therefore belongs to the observed stock identity.
+            self._connection.execute(
+                "UPDATE hcs026_ack_assignments SET "
+                "controller_endpoint = COALESCE(controller_endpoint, ?), "
+                "companion_endpoint = COALESCE(companion_endpoint, ?)",
+                ("b9840280", "39840280"),
+            )
+            self._connection.execute("PRAGMA user_version = 14")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -1839,15 +1882,18 @@ class SQLiteEventStore:
             """
             INSERT INTO hcs026_ack_assignments(
                 paired_endpoint, node_id, assigned_channel,
-                frequency_offset_hz, power_dbm, invert, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                frequency_offset_hz, power_dbm, invert, updated_at,
+                controller_endpoint, companion_endpoint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(paired_endpoint) DO UPDATE SET
                 node_id=excluded.node_id,
                 assigned_channel=excluded.assigned_channel,
                 frequency_offset_hz=excluded.frequency_offset_hz,
                 power_dbm=excluded.power_dbm,
                 invert=excluded.invert,
-                updated_at=excluded.updated_at
+                updated_at=excluded.updated_at,
+                controller_endpoint=excluded.controller_endpoint,
+                companion_endpoint=excluded.companion_endpoint
             """,
             (
                 assignment["paired_endpoint"],
@@ -1857,6 +1903,8 @@ class SQLiteEventStore:
                 assignment["power_dbm"],
                 int(bool(assignment["invert"])),
                 assignment["updated_at"],
+                assignment["controller_endpoint"],
+                assignment["companion_endpoint"],
             ),
         )
         self._connection.commit()

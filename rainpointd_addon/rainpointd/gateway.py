@@ -58,6 +58,13 @@ from .product_identity import (
     product_for_model,
 )
 from .rf import normalize_row
+from .rf_identity import (
+    LEGACY_STOCK_COMPANION_ENDPOINT,
+    LEGACY_STOCK_CONTROLLER_ENDPOINT,
+    LocalRFControllerIdentity,
+    generate_local_rf_identity,
+    load_or_create_local_rf_identity,
+)
 from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
     SQLiteEventStore,
@@ -152,6 +159,11 @@ class Gateway:
             if storage_path
             else None
         )
+        self.rf_identity: LocalRFControllerIdentity = (
+            load_or_create_local_rf_identity(self._store)
+            if self._store is not None
+            else generate_local_rf_identity()
+        )
         self._pairing = (
             HCS026EnrollmentManager(
                 repository=self._store,
@@ -183,6 +195,7 @@ class Gateway:
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
+        self._active_pairing_rf_identity: dict[str, str] | None = None
         self._active_pairing_control_profile: dict[str, Any] | None = None
         self._active_pairing_expected_valve_endpoint: str | None = None
         self._active_pairing_confirmed_valve_endpoint: str | None = None
@@ -205,6 +218,10 @@ class Gateway:
                 "api_version": API_VERSION,
                 "api_versions": [API_VERSION],
                 "gateway_id": self.gateway_id,
+                "rf_controller_identity": {
+                    **self.rf_identity.as_dict(),
+                    "persistent": self._store is not None,
+                },
                 "transport": self.transport,
                 "read_only": self.read_only,
                 "valve_control_enabled": self._valve_control_enabled,
@@ -248,6 +265,7 @@ class Gateway:
                     "radio_node_adoption",
                     "sensor_pairing",
                     "routine_ack_ownership",
+                    "unique_rf_controller_identity",
                     *(
                         ["htv405_supervised_control"]
                         if self._valve_control_enabled
@@ -660,6 +678,22 @@ class Gateway:
             and "valve_control_tx_candidate" in node.get("capabilities", [])
         )
 
+    @staticmethod
+    def _node_supports_rf_controller_identity(
+        node: dict[str, Any],
+        controller_endpoint: str,
+        companion_endpoint: str,
+    ) -> bool:
+        """Allow legacy associations on old firmware, but never new identities."""
+        if (
+            controller_endpoint == LEGACY_STOCK_CONTROLLER_ENDPOINT
+            and companion_endpoint == LEGACY_STOCK_COMPANION_ENDPOINT
+        ):
+            return True
+        return "configurable_rf_controller_identity" in node.get(
+            "capabilities", []
+        )
+
     def restore_radio_node_ack_assignments(self, node_id: str) -> int:
         """Restore gateway-owned ACK routes after a node reconnect or OTA boot."""
         with self._lock:
@@ -671,7 +705,15 @@ class Gateway:
             assignments = self._store.ack_assignments(node_id)
             sender = self._node_command_sender
         restored = 0
+        unsupported = 0
         for assignment in assignments:
+            if not self._node_supports_rf_controller_identity(
+                node,
+                str(assignment["controller_endpoint"]),
+                str(assignment["companion_endpoint"]),
+            ):
+                unsupported += 1
+                continue
             command = self._ack_configuration_command(assignment)
             try:
                 sender(node_id, command)
@@ -685,6 +727,7 @@ class Gateway:
             node_id,
             routine_ack_assigned_sensors=len(assignments),
             routine_ack_restore_requested=restored,
+            routine_ack_restore_unsupported_identity=unsupported,
         )
         return restored
 
@@ -735,15 +778,6 @@ class Gateway:
                 not in {item["paired_endpoint"] for item in owned}
             ):
                 raise ValueError("radio node acknowledgement capacity is full")
-            assignment = {
-                "paired_endpoint": paired_endpoint,
-                "node_id": node_id,
-                "assigned_channel": assigned_channel,
-                "frequency_offset_hz": frequency_offset_hz,
-                "power_dbm": power_dbm,
-                "invert": invert,
-                "updated_at": (now or datetime.now(timezone.utc)).isoformat(),
-            }
             previous = next(
                 (
                     item
@@ -752,6 +786,40 @@ class Gateway:
                 ),
                 None,
             )
+            assignment = {
+                "paired_endpoint": paired_endpoint,
+                "node_id": node_id,
+                "assigned_channel": assigned_channel,
+                "frequency_offset_hz": frequency_offset_hz,
+                "power_dbm": power_dbm,
+                "invert": invert,
+                # Reassigning an ACK owner must never change the sensor's RF
+                # association. Rows created before identity persistence are
+                # explicitly backfilled to the retained stock identity.
+                "controller_endpoint": (
+                    previous.get("controller_endpoint")
+                    if previous is not None
+                    else LEGACY_STOCK_CONTROLLER_ENDPOINT
+                ),
+                "companion_endpoint": (
+                    previous.get("companion_endpoint")
+                    if previous is not None
+                    else LEGACY_STOCK_COMPANION_ENDPOINT
+                ),
+                "updated_at": (now or datetime.now(timezone.utc)).isoformat(),
+            }
+            node = self._nodes.get(node_id, {})
+            if (
+                node.get("connected") is True
+                and not self._node_supports_rf_controller_identity(
+                    node,
+                    str(assignment["controller_endpoint"]),
+                    str(assignment["companion_endpoint"]),
+                )
+            ):
+                raise ValueError(
+                    "selected radio-node firmware cannot own this RF identity"
+                )
             if (
                 previous is not None
                 and previous["node_id"] != node_id
@@ -769,7 +837,6 @@ class Gateway:
                 except (ConnectionError, KeyError, RuntimeError, ValueError):
                     pass
             self._store.upsert_ack_assignment(assignment)
-            node = self._nodes.get(node_id, {})
             if (
                 self._node_command_sender is not None
                 and node.get("connected") is True
@@ -793,6 +860,8 @@ class Gateway:
             "type": "routine_ack_configure",
             "command_id": uuid.uuid4().hex,
             "paired_endpoint": assignment["paired_endpoint"],
+            "controller_endpoint": assignment["controller_endpoint"],
+            "companion_endpoint": assignment["companion_endpoint"],
             "assigned_channel": int(assignment["assigned_channel"]),
             "frequency_offset_hz": int(assignment["frequency_offset_hz"]),
             "power_dbm": int(assignment["power_dbm"]),
@@ -1573,10 +1642,27 @@ class Gateway:
             return result
         node_id = str(assignment["node_id"])
         node = self._nodes.get(node_id, {})
+        if (
+            node.get("connected") is True
+            and node.get("authenticated") is True
+            and "sensor_pairing_tx" in node.get("capabilities", [])
+            and not self._node_supports_rf_controller_identity(
+                node,
+                str(assignment["controller_endpoint"]),
+                str(assignment["companion_endpoint"]),
+            )
+        ):
+            result["reason"] = "ack_owner_firmware_incompatible"
+            return result
         if not (
             node.get("connected") is True
             and node.get("authenticated") is True
             and "sensor_pairing_tx" in node.get("capabilities", [])
+            and self._node_supports_rf_controller_identity(
+                node,
+                str(assignment["controller_endpoint"]),
+                str(assignment["companion_endpoint"]),
+            )
         ):
             result["reason"] = "ack_owner_offline"
             return result
@@ -1589,6 +1675,8 @@ class Gateway:
             "command_id": command_id,
             "profile": AUTOMATIC_HCS026_PROFILE_ID,
             "factory_endpoint": factory.strip().lower(),
+            "controller_endpoint": str(assignment["controller_endpoint"]),
+            "companion_endpoint": str(assignment["companion_endpoint"]),
             "known_rejoin": True,
             "duration_seconds": 60,
             "local_clock": local_clock,
@@ -2786,6 +2874,7 @@ class Gateway:
             self._active_pairing_command_id = None
             self._active_pairing_profile_id = None
             self._active_pairing_ack_parameters = None
+            self._active_pairing_rf_identity = None
             self._active_pairing_control_profile = None
             self._active_pairing_expected_valve_endpoint = None
             self._active_pairing_confirmed_valve_endpoint = None
@@ -2807,12 +2896,24 @@ class Gateway:
                         "known_rejoin is only valid for an HTV405 association"
                     )
                 valve_profile = None
+                selected_controller_endpoint = self.rf_identity.controller_endpoint
+                selected_companion_endpoint = self.rf_identity.companion_endpoint
                 if valve_candidate:
+                    explicit_controller = str(valve_route or "").strip().lower()
+                    explicit_companion = str(companion_endpoint or "").strip().lower()
+                    if bool(explicit_controller) != bool(explicit_companion):
+                        self._pairing.stop()
+                        raise ValueError(
+                            "valve controller and companion endpoints must be supplied together"
+                        )
+                    if explicit_controller:
+                        selected_controller_endpoint = explicit_controller
+                        selected_companion_endpoint = explicit_companion
                     try:
                         valve_profile = build_htv405_profile(
                             factory_endpoint=str(factory_endpoint or ""),
-                            valve_route=str(valve_route or ""),
-                            companion_endpoint=str(companion_endpoint or ""),
+                            valve_route=selected_controller_endpoint,
+                            companion_endpoint=selected_companion_endpoint,
                         )
                     except ValueError:
                         self._pairing.stop()
@@ -2830,7 +2931,19 @@ class Gateway:
                     except KeyError:
                         self._pairing.stop()
                         raise ValueError("unsupported pairing profile") from None
+                    selected_controller_endpoint = LEGACY_STOCK_CONTROLLER_ENDPOINT
+                    selected_companion_endpoint = LEGACY_STOCK_COMPANION_ENDPOINT
                     clock_lead_seconds = profile.clock_lead_seconds
+                if not self._node_supports_rf_controller_identity(
+                    nodes[node_id],
+                    selected_controller_endpoint,
+                    selected_companion_endpoint,
+                ):
+                    self._pairing.stop()
+                    raise ValueError(
+                        "selected radio-node firmware does not support the "
+                        "custom RF controller identity"
+                    )
                 local_clock = (
                     (now or datetime.now().astimezone())
                     + timedelta(seconds=clock_lead_seconds)
@@ -2863,6 +2976,9 @@ class Gateway:
                     )
                     if known_rejoin:
                         command["known_rejoin"] = True
+                elif automatic:
+                    command["controller_endpoint"] = selected_controller_endpoint
+                    command["companion_endpoint"] = selected_companion_endpoint
                 try:
                     self._node_command_sender(node_id, command)
                 except (ConnectionError, KeyError, RuntimeError, ValueError):
@@ -2875,6 +2991,10 @@ class Gateway:
                     "frequency_offset_hz": command["frequency_offset_hz"],
                     "power_dbm": command["power_dbm"],
                     "invert": command["invert"],
+                }
+                self._active_pairing_rf_identity = {
+                    "controller_endpoint": selected_controller_endpoint,
+                    "companion_endpoint": selected_companion_endpoint,
                 }
                 if valve_profile is not None:
                     self._active_pairing_expected_valve_endpoint = (
@@ -3004,6 +3124,10 @@ class Gateway:
                     if int(selected_node.get("pairing_completed_steps") or 0) > 0
                     else "transmitter_armed"
                 )
+        active_identity = self._active_pairing_rf_identity or {
+            "controller_endpoint": self.rf_identity.controller_endpoint,
+            "companion_endpoint": self.rf_identity.companion_endpoint,
+        }
         return {
             "available": True,
             "supported_profiles": [
@@ -3015,6 +3139,15 @@ class Gateway:
             "pairing_nodes": pairing_nodes,
             "selected_node_id": self._active_pairing_node_id,
             "active_profile_id": self._active_pairing_profile_id,
+            "rf_controller_identity": {
+                **active_identity,
+                "mode": (
+                    "generated_local"
+                    if active_identity["companion_endpoint"]
+                    == self.rf_identity.companion_endpoint
+                    else "retained_association"
+                ),
+            },
             "command_id": self._active_pairing_command_id,
             "transmit_performed": self._active_pairing_node_id is not None,
             "stage": stage,
@@ -3140,6 +3273,13 @@ class Gateway:
                     "node_id": self._active_pairing_node_id,
                     "assigned_channel": int(node["pairing_assigned_channel"]),
                     **self._active_pairing_ack_parameters,
+                    **(
+                        self._active_pairing_rf_identity
+                        or {
+                            "controller_endpoint": LEGACY_STOCK_CONTROLLER_ENDPOINT,
+                            "companion_endpoint": LEGACY_STOCK_COMPANION_ENDPOINT,
+                        }
+                    ),
                     "updated_at": timestamp,
                 }
                 self._store.upsert_ack_assignment(assignment)
@@ -3301,6 +3441,7 @@ class Gateway:
         self._active_pairing_command_id = None
         self._active_pairing_profile_id = None
         self._active_pairing_ack_parameters = None
+        self._active_pairing_rf_identity = None
         self._active_pairing_control_profile = None
         self._active_pairing_expected_valve_endpoint = None
         self._active_pairing_confirmed_valve_endpoint = None
@@ -3523,6 +3664,20 @@ class Gateway:
         )
         self.catalog = self._base_catalog.with_registries(
             registrations, valve_registrations
+        )
+        association_peers = {self.rf_identity.controller_endpoint}
+        if self._store is not None:
+            association_peers.update(
+                str(item["controller_endpoint"])
+                for item in self._store.ack_assignments()
+                if item.get("controller_endpoint")
+            )
+        self.catalog = DeviceCatalog(
+            sensors=self.catalog.sensors,
+            valves=self.catalog.valves,
+            hcs026_pairing_peers=(
+                self.catalog.hcs026_pairing_peers | association_peers
+            ),
         )
         metadata: dict[str, dict[str, Any]] = {}
         for registration in registrations:

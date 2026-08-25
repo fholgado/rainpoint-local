@@ -332,7 +332,8 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"firmware_channel\":\"stable\","
 #endif
         "\"gateway_host\":\"%s\","
-        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\""
+        "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\","
+        "\"configurable_rf_controller_identity\""
 #if RAINPOINT_RESEARCH_BENCH == 1
         ",\"valve_control_tx_candidate\""
 #endif

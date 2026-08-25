@@ -383,8 +383,15 @@ int main() {
     const auto capturedRoutineAck = fromHex(
         "79f4882f28ce6280243984028097418100010000000000000000000000000000000000005242"
     );
+    const std::array<std::uint8_t, 4> stockController{{
+        0xb9, 0x84, 0x02, 0x80,
+    }};
+    const std::array<std::uint8_t, 4> stockCompanion{{
+        0x39, 0x84, 0x02, 0x80,
+    }};
     rainpoint::RoutineAckAuthorization routineAuthorization{
-        {{0xce, 0x62, 0x80, 0x24}}, 8, 45'000, 10, false, true,
+        {{0xce, 0x62, 0x80, 0x24}}, stockController, stockCompanion,
+        8, 45'000, 10, false, true,
     };
     std::array<std::uint8_t, rainpoint::kFrameBytes> generatedRoutineAck{};
     assert(rainpoint::isAuthorizedRoutineHcs026Report(
@@ -408,8 +415,34 @@ int main() {
     assert(routineAuthorizations.activeCount() == 0);
     assert(routineAuthorizations.authorize(locallyAssignedAuthorization));
 
+    const std::array<std::uint8_t, 4> localController{{
+        0xc1, 0x23, 0x45, 0x80,
+    }};
+    const std::array<std::uint8_t, 4> localCompanion{{
+        0x41, 0x23, 0x45, 0x80,
+    }};
+    assert(rainpoint::validRfControllerIdentity(
+        localController, localCompanion
+    ));
+    auto localRoutineReport = routineReport;
+    for (std::size_t index = 0; index < localController.size(); ++index) {
+        localRoutineReport[5 + index] = localController[index];
+    }
+    rainpoint::writeTrailer(
+        localRoutineReport, rainpoint::trailerResidual(routineReport)
+    );
+    auto localAuthorization = routineAuthorization;
+    localAuthorization.controllerEndpoint = localController;
+    localAuthorization.companionEndpoint = localCompanion;
+    std::array<std::uint8_t, rainpoint::kFrameBytes> localRoutineAck{};
+    assert(rainpoint::buildRoutineHcs026Acknowledgement(
+        localRoutineReport, localAuthorization, localRoutineAck
+    ));
+    assert(rainpoint::endpointEquals(localRoutineAck, 9, localCompanion));
+
     rainpoint::RoutineAckAuthorization sensorARecoveryAuthorization{
-        {{0x9b, 0xce, 0x00, 0x24}}, 4, 0, 10, false, true,
+        {{0x9b, 0xce, 0x00, 0x24}}, stockController, stockCompanion,
+        4, 0, 10, false, true,
     };
     assert(routineAuthorizations.authorize(sensorARecoveryAuthorization));
     const auto sensorARecoveryMessage1 = fromHex(
@@ -669,10 +702,11 @@ int main() {
     }}));
     rainpoint::PairingProfile automatic{};
     assert(!rainpoint::buildAutomaticHcs026Profile(
-        {{0x92, 0x34, 0x00, 0x24}}, 4, automatic
+        {{0x92, 0x34, 0x00, 0x24}}, stockController, stockCompanion,
+        4, automatic
     ));
     assert(rainpoint::buildAutomaticHcs026Profile(
-        detectedFactory, 4, automatic
+        detectedFactory, stockController, stockCompanion, 4, automatic
     ));
     assert(std::string(automatic.id) == "hcs026_auto_v1");
     assert(automatic.factoryEndpoint == detectedFactory);
@@ -695,9 +729,22 @@ int main() {
         automatic.steps[3].trigger ==
         rainpoint::PairingTrigger::PairedMessage2Short
     );
+    rainpoint::PairingProfile localIdentityAutomatic{};
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        detectedFactory, localController, localCompanion,
+        4, localIdentityAutomatic
+    ));
+    assert(localIdentityAutomatic.sensorRoute == localController);
+    assert(localIdentityAutomatic.companionEndpoint == localCompanion);
+    for (std::size_t index = 0;
+         index < localIdentityAutomatic.stepCount; ++index) {
+        assert(rainpoint::endpointEquals(
+            localIdentityAutomatic.steps[index].frame, 9, localCompanion
+        ));
+    }
     rainpoint::PairingProfile automaticRejoin{};
     assert(rainpoint::buildAutomaticHcs026RejoinProfile(
-        detectedFactory, 4, automaticRejoin
+        detectedFactory, stockController, stockCompanion, 4, automaticRejoin
     ));
     assert(automaticRejoin.stepCount == 1);
     assert(automaticRejoin.completeAfterFinalReply);
@@ -714,7 +761,8 @@ int main() {
     );
     rainpoint::PairingProfile automaticSensorB{};
     assert(rainpoint::buildAutomaticHcs026Profile(
-        profile.factoryEndpoint, 4, automaticSensorB
+        profile.factoryEndpoint, stockController, stockCompanion,
+        4, automaticSensorB
     ));
     rainpoint::PairingSession automaticSensorBSession(automaticSensorB);
     automaticSensorBSession.arm(20'000);

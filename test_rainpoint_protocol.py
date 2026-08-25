@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import json
 import sys
 import unittest
@@ -11,6 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpoint_protocol import decode, parse_tlv  # noqa: E402
+from rainpointd.device_catalog import DeviceCatalog, SensorDefinition  # noqa: E402
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
@@ -21,6 +23,32 @@ from rainpointd.valve_protocol import (  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_generated_controller_identity_decodes_routine_ack(self) -> None:
+        frame = bytearray.fromhex(
+            "79f4882f28ce6280243984028097418100010000000000000000000000000000000000005242"
+        )
+        residue = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+            frame[-2:], "big"
+        )
+        frame[9:13] = bytes.fromhex("41234580")
+        trailer = binascii.crc_hqx(frame[:-2], 0) ^ residue
+        frame[-2:] = trailer.to_bytes(2, "big")
+        decoded = normalize_row(
+            {"len": len(frame) * 8, "data": frame.hex()},
+            catalog=DeviceCatalog(
+                sensors=(
+                    SensorDefinition(
+                        endpoint="ce628024",
+                        device_id="sensor-test",
+                        name="Test sensor",
+                    ),
+                ),
+                hcs026_pairing_peers=frozenset({"c1234580"}),
+            ),
+        )
+        self.assertEqual("c1234580", decoded["routine_ack_controller_endpoint"])
+        self.assertEqual("41234580", decoded["routine_ack_companion_endpoint"])
+
     def test_captured_fixtures(self) -> None:
         fixtures = json.loads(
             (ROOT / "rainpointd_addon" / "fixtures.json").read_text()

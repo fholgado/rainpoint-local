@@ -164,8 +164,7 @@ inline bool buildAutomaticHtv405Profile(
     Htv405PairingProfile& profile
 ) {
     if (factoryEndpoint[0] & 0x80U || factoryEndpoint[3] != 0x13 ||
-        valveRoute == std::array<std::uint8_t, 4>{} ||
-        companionEndpoint == std::array<std::uint8_t, 4>{}) {
+        !validRfControllerIdentity(valveRoute, companionEndpoint)) {
         return false;
     }
     profile.factoryEndpoint = factoryEndpoint;
