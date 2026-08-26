@@ -234,9 +234,13 @@ same time without conflicting authority.
 - [x] Confirm local explicit early stop on Zone 1.
 - [x] Complete an installed 20-minute Zone 1 irrigation run with a valve-owned
       return to idle.
-- [ ] Physically rerun a 15-minute Zone 1 session with the corrected additive
-      duration bias (`42 02` for 900 seconds), and confirm initial remaining
-      time plus the valve-owned idle deadline within protocol tolerance.
+- [ ] Capture stock-gateway commands for durations whose two-second count
+      already contains low-byte bit 7, including five and fifteen minutes,
+      before constructing them locally. The 2026-08-26 guarded trial proved
+      the additive candidates (`16 01` for 300 seconds and, by the same model,
+      `42 02` for 900 seconds) are not accepted command encodings: retained
+      counter `3` rejected the former, then immediately accepted the proven
+      60-second `9e 00` payload and advanced to `4`.
 - [ ] Retain the end-to-end installed result across RF evidence, usage decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
@@ -252,8 +256,10 @@ same time without conflicting authority.
       that the gateway reset its stored counter to `1` even though earlier
       authenticated responses had established `3` as next; sequence `1`, its
       same-counter retry, and the final sequence-`2` recovery all timed out.
-      Distinguish a genuinely new association from a same-identity repair
-      before repeating duration acceptance. Evidence is retained in
+      A guarded discriminator subsequently proved the valve had retained
+      sequence `3`; preserve that authenticated value across a same-identity
+      repair while continuing to initialize a genuinely new association at
+      `1`. Evidence is retained in
       `research/fixtures/htv405_same_identity_repair_counter_20260826.json`.
 - [ ] Physically verify gateway/node restart during idle and during a bounded
       run remains observation-only and reconciles from subsequent valve reports.

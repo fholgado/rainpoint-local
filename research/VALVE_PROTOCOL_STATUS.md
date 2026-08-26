@@ -25,7 +25,7 @@ HTV405 control in disabled-by-default beta and still block HTV145 control.
 | Capability | HTV405FRF four-zone | HTV145FRF single-zone |
 |---|---|---|
 | Receive/state decode | Confirmed | Confirmed |
-| Duration decode | Confirmed two-byte biased requested/remaining counters; corrected 900-second transmit pending physical rerun | Confirmed for whole-minute commands |
+| Duration decode | Confirmed two-byte biased requested/remaining counters; command construction across the low-byte bit-7 boundary remains unresolved | Confirmed for whole-minute commands |
 | Zone selection | Confirmed for Zones 1--4; association-profile-specific packing | One zone |
 | Local new enrollment | 18-step exchange physically reproduced | Not yet reproduced locally |
 | Local bounded open | Physically confirmed on Zones 1--4 | Constructed and compile-tested; physical acceptance pending |
@@ -102,14 +102,20 @@ attempts, immediate responses, and independent state reports for either model.
 It understands both HTV405 command-zone layouts rather than treating the
 association branch as only a frequency choice.
 
-An attempted local 900-second HTV405 Zone 1 run on August 26 resolved the
-duration encoding ambiguity. The former builder ORed `0x80` into the two-second
-counter and sent `c2 01`; the valve reported 644 seconds requested, 638/636
-seconds remaining, and returned to idle 646 seconds after command acceptance.
-The field is a little-endian counter biased by adding `0x80`, so 900 seconds
-must encode as `42 02`. The remaining-time field carries the same bias plus a
-high-byte marker. The corrected command remains pending one physical long-run
-rerun; the failed frame and valve-owned stop are regression-tested.
+An attempted local 900-second HTV405 Zone 1 run on August 26 proved that the
+old transmitter's `c2 01` payload means 644 seconds to the valve: it reported
+638/636 seconds remaining and returned to idle after 646 seconds. That remains
+strong decode evidence, but it did not prove the inverse command encoder.
+
+A later guarded five-minute trial disproved the simple additive inverse. The
+local gateway sent candidate `16 01` with retained command sequences 3, 4, and
+5; the valve returned the same negative `d0/86/83/00` response each time.
+Retrying retained sequence 3 with the previously validated 60-second `9e 00`
+payload immediately received an authenticated open response, active reports,
+and a valve-owned automatic stop. Command construction therefore remains
+unknown when the two-second count already contains low-byte bit 7. A stock
+five- or fifteen-minute command capture is required before another encoder is
+promoted.
 
 The retained HTV145 evidence resolves two logical opens from four RF attempts.
 The 1,200-second open used three identical attempts at offsets 0, 729.210, and

@@ -83,14 +83,53 @@
     "duration_fix_accepted": false,
     "duration_fix_rejected": false
   },
+  "guarded_counter_and_duration_discriminator": {
+    "five_minute_rejections": [
+      {
+        "sequence": 3,
+        "reply_event_id": 187905,
+        "reply_frame": "79f4882f28ee86de8094a9801303d08683004f8000000040800056800000000000000000738e",
+        "failure_event_id": 187907
+      },
+      {
+        "sequence": 4,
+        "reply_event_id": 187965,
+        "reply_frame": "79f4882f28ee86de8094a9801304d08683004f8000000040800056800000000000000000589e",
+        "failure_event_id": 187967
+      },
+      {
+        "sequence": 5,
+        "reply_event_id": 188032,
+        "reply_frame": "79f4882f28ee86de8094a9801305d08683004f80000000408000568000000000000000003d95",
+        "failure_event_id": 188033
+      }
+    ],
+    "known_duration_control": {
+      "sequence": 3,
+      "requested_duration_seconds": 60,
+      "encoded_duration": "9e00",
+      "authenticated_response_event_id": 188110,
+      "authenticated_response_frame": "79f4882f28ee86de8094a9801303d0868010cf80000000409e00569e00000000000000007546",
+      "confirmation_event_id": 188111,
+      "first_active_event_id": 188112,
+      "first_active_remaining_seconds": 54,
+      "automatic_idle_event_id": 188124,
+      "automatic_idle_observed_at": "2026-08-26T16:51:43.250632+00:00",
+      "next_authenticated_sequence": 4
+    },
+    "conclusion": "The valve retained command sequence 3 across the same-identity repair. The rejected five-minute trials were caused by the unvalidated multi-byte duration payload, not by the command counter."
+  },
   "findings": [
     "The five-minute trial did not reach duration acceptance because no authenticated command response or independent watering report was observed.",
     "Before the same-controller re-pair, authenticated responses to command sequences 1 and 2 established 3 as the next command sequence.",
     "The custom gateway unconditionally reset its stored counter to 1 after the same controller, companion, valve, and selector were re-paired.",
     "Both guarded sequence-1 attempts and the final guarded sequence-2 attempt timed out; no sequence beyond the two bounded recovery candidates was guessed.",
-    "The unique sequence-1 reply at event 187419 is structurally different from a positive watering response and remains provisional; it may be a negative or counter-guidance response.",
+    "The sequence-scoped d0/86/83/00 reply family is a valve-originated negative response: it uses the derived controller role as source and the valve endpoint as destination, unlike the outbound gateway command route.",
+    "Sequences 3, 4, and 5 all received that negative response for the additive-encoded five-minute payload. Sequence 3 immediately received an authenticated positive response when retried with the previously validated 60-second 9e00 duration payload.",
+    "The valve therefore retained sequence 3 across the same-identity repair; the gateway reset only its local copy. The five-minute failure independently disproves the additive multi-byte transmit encoding as a complete model.",
     "Selector-0x07 link reports continued through the guard windows, proving the association remained alive but not independently proving valve state.",
-    "A same-association repair must preserve an already authenticated command counter unless wire evidence proves that the valve reset it. A genuinely new association may still initialize sequence 1."
+    "A same-association repair must preserve an already authenticated command counter unless wire evidence proves that the valve reset it. A genuinely new association may still initialize sequence 1.",
+    "Durations whose two-second count already contains low-byte bit 7 require new stock-gateway evidence before local transmission; state decode evidence alone is insufficient to construct that command."
   ],
   "safety": {
     "valve_connected_to_water": true,
@@ -98,6 +137,7 @@
     "full_possible_run_plus_guard_waited_before_each_retry": true,
     "maximum_recovery_candidates_exhausted": true,
     "further_counter_guessing_allowed": false,
+    "authenticated_counter_recovered": 4,
     "watering_state_inferred_from_command_intent": false
   }
 }
