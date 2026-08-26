@@ -55,6 +55,13 @@ node can answer. Both captured CRC residual families occur, while the first
 production candidate uses the captured-valid `0xc713` family pending an
 over-air acceptance/soak result.
 
+The first live candidate transmission completed on 2026-08-26 from the valve's
+persisted control-node owner with one authorized valve, one ACK transmission,
+and zero transmit failures. Restarting the custom local gateway preserved those
+node counters and restored the same single authorization. This confirms the
+bounded transmit and durable-ownership paths; continued valve-originated
+reports across multiple ordinary cycles remain the acceptance/soak gate.
+
 ## HTV405 lifecycle findings
 
 The retained cross-reference contains 11 attempts: three
