@@ -1158,8 +1158,25 @@ class RainPointRFTest(unittest.TestCase):
                 decoded = decode_htv405_control_frame(bytes.fromhex(raw))
                 self.assertEqual(zone, decoded["zone"])
                 self.assertTrue(decoded["is_watering"])
-                self.assertEqual(88, decoded["duration_seconds"])
-                self.assertEqual(88, decoded["remaining_seconds"])
+                self.assertEqual(600, decoded["duration_seconds"])
+                self.assertEqual(600, decoded["remaining_seconds"])
+
+    def test_decodes_locally_enrolled_htv405_fifteen_minute_run(self) -> None:
+        first_report = bytes.fromhex(
+            "79f4882f28ee86de8094a980130c010782058090cf8000000040"
+            "bf8156c20100000000005074"
+        )
+        second_report = bytes.fromhex(
+            "79f4882f28ee86de8094a980130d010782058090cf8000000040"
+            "be8156c20100000000005a3a"
+        )
+
+        first = decode_htv405_control_frame(first_report)
+        second = decode_htv405_control_frame(second_report)
+        self.assertEqual(644, first["duration_seconds"])
+        self.assertEqual(638, first["remaining_seconds"])
+        self.assertEqual(644, second["duration_seconds"])
+        self.assertEqual(636, second["remaining_seconds"])
 
     def test_live_transport_retains_independent_htv405_zone_states(self) -> None:
         catalog = DeviceCatalog(
@@ -1186,7 +1203,7 @@ class RainPointRFTest(unittest.TestCase):
         valve = gateway.devices()[0]
         self.assertTrue(valve["state"]["zone_1_is_watering"])
         self.assertFalse(valve["state"]["zone_2_is_watering"])
-        self.assertEqual(88, valve["state"]["zone_1_remaining_seconds"])
+        self.assertEqual(600, valve["state"]["zone_1_remaining_seconds"])
         self.assertIsNone(valve["state"]["zone_2_remaining_seconds"])
 
     def test_htv405_partial_report_from_second_receiver_preserves_zones(

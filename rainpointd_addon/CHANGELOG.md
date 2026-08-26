@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.10 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
+
+- Resolve the HTV405 long-duration bias from a physical 15-minute trial. The
+  two-second counter adds `0x80`; the former bitwise-OR encoder transmitted 644
+  seconds for a requested 900-second run whenever the counter already had bit
+  7 set.
+- Decode both bytes of HTV405 requested and remaining duration fields, and
+  advance supervised firmware with the corrected additive encoder.
+- Regress the exact valve-originated reports from the failed 15-minute local
+  Zone 1 trial: 644 seconds requested and 638/636 seconds remaining, followed
+  by an automatic idle report 646 seconds after command acceptance.
+
 ## 0.33.9 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.8
 
 - Merge receiver-partial HTV405 zone reports into one canonical valve state, so

@@ -78,7 +78,13 @@ inline bool buildHtv405GatewayOpenFrame(
         frame[9 + index] = link.companionEndpoint[index];
     }
 
-    const std::uint16_t durationUnits = durationSeconds / 2U;
+    // HTV405 stores the duration as a two-byte, two-second counter biased by
+    // 0x80. This must be addition, not a bitwise OR: a 900-second request has
+    // units 0x01c2 and must encode as 0x0242. The former OR encoding produced
+    // 0x01c2, which the valve physically bounded to 644 seconds.
+    const std::uint16_t encodedDuration = static_cast<std::uint16_t>(
+        durationSeconds / 2U + 0x80U
+    );
     frame[13] = static_cast<std::uint8_t>(0x80U | phase.sequence);
     // Gateway control byte 14 is the operation marker, not the
     // primary/repeat bit used by lower-channel valve reports.
@@ -90,10 +96,8 @@ inline bool buildHtv405GatewayOpenFrame(
     // the selector-6 association branch. Do not substitute the state-report
     // selector here; the command marker belongs to the gateway envelope.
     frame[17] = static_cast<std::uint8_t>(0x80U | zone);
-    frame[19] = static_cast<std::uint8_t>(
-        0x80U | (durationUnits & 0xffU)
-    );
-    frame[20] = static_cast<std::uint8_t>(durationUnits >> 8U);
+    frame[19] = static_cast<std::uint8_t>(encodedDuration & 0xffU);
+    frame[20] = static_cast<std::uint8_t>(encodedDuration >> 8U);
     writeTrailer(frame, trailerResidual);
     return true;
 }

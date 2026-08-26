@@ -25,7 +25,7 @@ HTV405 control in disabled-by-default beta and still block HTV145 control.
 | Capability | HTV405FRF four-zone | HTV145FRF single-zone |
 |---|---|---|
 | Receive/state decode | Confirmed | Confirmed |
-| Duration decode | Confirmed | Confirmed for whole-minute commands |
+| Duration decode | Confirmed two-byte biased requested/remaining counters; corrected 900-second transmit pending physical rerun | Confirmed for whole-minute commands |
 | Zone selection | Confirmed for Zones 1--4; association-profile-specific packing | One zone |
 | Local new enrollment | 18-step exchange physically reproduced | Not yet reproduced locally |
 | Local bounded open | Physically confirmed on Zones 1--4 | Constructed and compile-tested; physical acceptance pending |
@@ -101,6 +101,15 @@ python3 tools/valve_trial_analysis.py htv405-lifecycle \
 attempts, immediate responses, and independent state reports for either model.
 It understands both HTV405 command-zone layouts rather than treating the
 association branch as only a frequency choice.
+
+An attempted local 900-second HTV405 Zone 1 run on August 26 resolved the
+duration encoding ambiguity. The former builder ORed `0x80` into the two-second
+counter and sent `c2 01`; the valve reported 644 seconds requested, 638/636
+seconds remaining, and returned to idle 646 seconds after command acceptance.
+The field is a little-endian counter biased by adding `0x80`, so 900 seconds
+must encode as `42 02`. The remaining-time field carries the same bias plus a
+high-byte marker. The corrected command remains pending one physical long-run
+rerun; the failed frame and valve-owned stop are regression-tested.
 
 The retained HTV145 evidence resolves two logical opens from four RF attempts.
 The 1,200-second open used three identical attempts at offsets 0, 729.210, and

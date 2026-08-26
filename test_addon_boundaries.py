@@ -78,7 +78,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn('standard_version = "0.15.2"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.8"',
+            'supervised_version = "0.15.0-supervised-beta.10"',
             build_profile,
         )
         self.assertIn(

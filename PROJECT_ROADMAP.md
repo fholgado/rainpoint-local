@@ -37,10 +37,10 @@ documents independently schedules work.
 
 ## Phase 0 — one clean baseline (complete)
 
-The deployed radio nodes currently span three firmware versions, and historical
-invalid-trailer HTV405 observations left three phantom four-zone devices beside
-the one canonical valve. Further reliability measurements would be ambiguous
-until this baseline is clean.
+Before the baseline cleanup, the deployed radio nodes spanned three firmware
+versions, and historical invalid-trailer HTV405 observations left three phantom
+four-zone devices beside the one canonical valve. Further reliability
+measurements would have been ambiguous until that baseline was clean.
 
 - [x] Reject invalid or provisional valve identities before they can create a
       Home Assistant device.
@@ -61,6 +61,14 @@ until this baseline is clean.
 Exit criteria: every deployed node runs the same firmware; the existing
 sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
 normal observation window creates no replacement phantoms.
+
+On 2026-08-26, all three adopted nodes were upgraded sequentially to the
+unified `0.15.0-supervised-beta.10` image. Each retained its node ID,
+authenticated, returned disarmed, and restored its gateway-owned sensor ACK
+assignments. The canonical HTV405 retained its Vegetable Garden control owner
+and authenticated command-counter state. Front Yard required roughly two
+minutes to reconnect and reported weak Wi-Fi near -90 dBm; placement/network
+quality remains an operational concern, not a firmware-identity failure.
 
 ## Current focus: Phase 1 — Home Assistant device lifecycle
 
@@ -124,6 +132,13 @@ ordinary reports cannot defeat suppression, and an explicit pairing session
 can restore the same stable device ID exactly once. Physical HA removal and
 re-pair evidence is still required before checking the gate.
 
+Two strict generated-identity HA enrollments are retained from 2026-08-25 and
+2026-08-26. Earlier white-flash/local successes used an older copied-identity
+path or were retained-association rejoins, so they do not count toward the
+three-consecutive-new-enrollment gate. The beta.10 duration-only firmware
+change did not alter pairing code, but one further HA-initiated fresh enrollment
+on this consolidated image is still required before checking the gate.
+
 ### HTV145 single-zone valve
 
 - [x] Decode stock enrollment/control evidence sufficiently to build a bounded,
@@ -185,6 +200,9 @@ same time without conflicting authority.
 - [x] Confirm local explicit early stop on Zone 1.
 - [x] Complete an installed 20-minute Zone 1 irrigation run with a valve-owned
       return to idle.
+- [ ] Physically rerun a 15-minute Zone 1 session with the corrected additive
+      duration bias (`42 02` for 900 seconds), and confirm initial remaining
+      time plus the valve-owned idle deadline within protocol tolerance.
 - [ ] Retain the end-to-end installed result across RF evidence, usage decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
@@ -243,8 +261,10 @@ and the validated fresh-association counter-`1` result are frozen in
       identity, receiver provenance, and reporting cadence.
 - [x] Decode HTV145 open/idle state, requested and last-session duration, water
       usage, and categorical normal/low battery.
-- [x] Decode HTV405 zone selection, open/idle state, requested duration, and
-      controller/telemetry counters for the tested association profiles.
+- [x] Decode HTV405 zone selection, open/idle state, the complete two-byte
+      requested/remaining duration fields (including sessions over 254
+      seconds), and controller/telemetry counters for the tested association
+      profiles.
 - [ ] Correlate every exposed valve field against the cloud integration over the
       same timestamped sessions: battery, active zone, requested duration,
       actual duration, remaining time when transmitted, automatic stop, and

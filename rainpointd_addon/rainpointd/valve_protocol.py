@@ -67,6 +67,34 @@ def decode_duration(encoded: bytes) -> int:
     return confirmed[0]
 
 
+def _decode_htv405_duration(encoded: bytes) -> int:
+    """Decode the HTV405 biased two-second duration counter.
+
+    The physical 2026-08-26 long-run trial resolved the former bit-overlay
+    ambiguity: HTV405 adds 0x80 to the two-byte counter. It does not OR 0x80
+    into the low byte. That distinction matters when the counter already has
+    bit 7 set.
+    """
+    if len(encoded) != 2:
+        raise ValueError("HTV405 duration must contain exactly two bytes")
+    raw = int.from_bytes(encoded, "little")
+    if raw <= 0x80:
+        raise ValueError("HTV405 duration is missing its positive counter")
+    duration_seconds = (raw - 0x80) * 2
+    if duration_seconds > 3_600 or duration_seconds % 2:
+        raise ValueError("HTV405 duration is outside validated bounds")
+    return duration_seconds
+
+
+def _decode_htv405_remaining_duration(encoded: bytes) -> int:
+    """Decode HTV405 remaining time after clearing its high-byte marker."""
+    if len(encoded) != 2:
+        raise ValueError("HTV405 remaining duration must contain two bytes")
+    normalized = bytearray(encoded)
+    normalized[1] &= 0x7F
+    return _decode_htv405_duration(bytes(normalized))
+
+
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     """Decode the passively validated HTV405 four-zone control body.
 
@@ -123,12 +151,17 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
         "is_watering": watering,
     }
     if watering:
-        duration_units = frame[29] & 0x7F
-        if duration_units:
-            result["duration_seconds"] = duration_units * 2
-        # Across all eight opens this value was the requested duration minus
-        # the elapsed app-to-radio delay, also in two-second units.
-        result["remaining_seconds"] = (frame[26] & 0x7F) * 2
+        try:
+            duration_seconds = _decode_htv405_duration(frame[29:31])
+            remaining_seconds = _decode_htv405_remaining_duration(frame[26:28])
+        except ValueError:
+            # Watering state and zone remain independently authoritative even
+            # when an as-yet-unseen duration encoding cannot be decoded.
+            pass
+        else:
+            result["duration_seconds"] = duration_seconds
+            if remaining_seconds <= duration_seconds:
+                result["remaining_seconds"] = remaining_seconds
     return result
 
 
