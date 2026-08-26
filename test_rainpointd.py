@@ -497,6 +497,44 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual([], gateway._store.valve_registry())
             gateway.close()
 
+    def test_forgotten_htv145_link_clears_private_control_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            assert gateway._store is not None
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="b42d008f",
+                device_id="htv145-b42d008f",
+                name="Test one-zone valve",
+                model="HTV145FRF",
+                area="Garden",
+                accepted_at="2026-08-25T18:00:00+00:00",
+            )
+            gateway._store.configure_htv145_control(
+                valve_endpoint="b42d008f",
+                controller_endpoint="b9840280",
+                node_id="rp-001122334455",
+                center_hz=433_920_000,
+                power_dbm=10,
+                invert=False,
+                trailer_residual=0xC713,
+                updated_at="2026-08-25T18:00:01+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+
+            forgotten = gateway.forget_registry_device("htv145-b42d008f")
+
+            self.assertEqual("b42d008f", forgotten["endpoint"])
+            self.assertEqual([], gateway._store.valve_registry())
+            self.assertEqual([], gateway._store.htv145_control_states())
+            self.assertTrue(gateway.endpoint_suppressed("b42d008f"))
+            gateway.close()
+
     def test_valve_counter_sync_interprets_naive_rtl433_time_as_local(self) -> None:
         previous_timezone = os.environ.get("TZ")
         try:
@@ -2371,6 +2409,16 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             return json.load(response)
 
     def test_authenticated_registry_forget_removes_valve_link(self) -> None:
+        renamed = self.post_json(
+            f"/api/v1/registry/{self.DEVICE_ID}/rename",
+            {"name": "Renamed four-zone valve", "area": "Back Garden"},
+        )
+        self.assertEqual("Renamed four-zone valve", renamed["device"]["name"])
+        self.assertEqual("Back Garden", renamed["device"]["area"])
+        self.assertEqual(
+            self.NODE_ID, renamed["device"]["control_node_id"]
+        )
+
         result = self.post_json(
             f"/api/v1/registry/{self.DEVICE_ID}/forget", {}
         )

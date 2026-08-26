@@ -38,23 +38,41 @@ SUPERVISED_VALVE_CONTROL_COMMANDS = (
     b"valve_control_tx_candidate",
 )
 
+HTV145_PAIRING_CAPABILITIES = (b"htv145_pairing_tx_candidate",)
+
 
 def main() -> int:
     supervised = False
+    htv145_pairing = False
     arguments = sys.argv[1:]
-    if arguments and arguments[0] == "--supervised":
-        supervised = True
-        arguments = arguments[1:]
+    while arguments and arguments[0].startswith("--"):
+        option = arguments.pop(0)
+        if option == "--supervised":
+            supervised = True
+        elif option == "--htv145-pairing":
+            htv145_pairing = True
+        else:
+            print(f"unknown option: {option}")
+            return 2
     if len(arguments) != 1:
         print(
             "usage: check_firmware_boundaries.py "
-            "[--supervised] FIRMWARE_BIN"
+            "[--supervised] [--htv145-pairing] FIRMWARE_BIN"
         )
         return 2
     firmware = Path(arguments[0]).read_bytes()
-    leaked = [
-        value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware
-    ]
+    # The HTV145 pairing probe still deliberately uses the research build
+    # boundary; production and supervised images must never retain those
+    # serial-only investigation commands.
+    leaked = (
+        []
+        if htv145_pairing
+        else [
+            value.decode()
+            for value in FORBIDDEN_BENCH_COMMANDS
+            if value in firmware
+        ]
+    )
     forbidden_valve_commands = FORBIDDEN_VALVE_CONTROL_COMMANDS + (
         () if supervised else SUPERVISED_VALVE_CONTROL_COMMANDS
     )
@@ -71,6 +89,18 @@ def main() -> int:
             value.decode()
             for value in SUPERVISED_VALVE_CONTROL_COMMANDS
             if value not in firmware
+        )
+    if htv145_pairing:
+        missing.extend(
+            value.decode()
+            for value in HTV145_PAIRING_CAPABILITIES
+            if value not in firmware
+        )
+    else:
+        leaked.extend(
+            value.decode()
+            for value in HTV145_PAIRING_CAPABILITIES
+            if value in firmware
         )
     if leaked:
         print(f"firmware contains forbidden commands: {', '.join(leaked)}")

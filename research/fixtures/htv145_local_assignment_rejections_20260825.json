@@ -1,0 +1,59 @@
+{
+  "model": "HTV145FRF",
+  "firmware_version": "0.15.1-htv145-pairing-probe.3",
+  "node_id": "rp-cc4c05f57630",
+  "association": {
+    "factory_endpoint": "342d008f",
+    "predicted_paired_endpoint": "b42d008f",
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "assignment_selector": 5
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "trigger": "explicit long press",
+      "factory_frames": [
+        {
+          "observed_at": "2026-08-26T00:19:36.007791+00:00",
+          "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+        },
+        {
+          "observed_at": "2026-08-26T00:19:41.586156+00:00",
+          "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+        },
+        {
+          "observed_at": "2026-08-26T00:19:42.976229+00:00",
+          "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+        },
+        {
+          "observed_at": "2026-08-26T00:19:47.586699+00:00",
+          "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+        }
+      ],
+      "node_completed_steps": 1,
+      "terminal_evidence": false
+    },
+    {
+      "attempt": 2,
+      "trigger": "battery reinstall and boot sweep",
+      "factory_frames": [
+        {
+          "observed_at": "2026-08-26T00:22:15.936952+00:00",
+          "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+        },
+        {
+          "observed_at": "2026-08-26T00:22:21.480147+00:00",
+          "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+        },
+        {
+          "observed_at": "2026-08-26T00:22:27.488661+00:00",
+          "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+        }
+      ],
+      "node_completed_steps": 1,
+      "terminal_evidence": false
+    }
+  ],
+  "interpretation": "Both trials reached the node's assignment transmit, but the valve continued its factory 80/82/83 sweep and never emitted the first paired request. Probe .3 had moved the accepted probe-.2 assignment scheduler from 49.5 ms to 49.4 ms while replacing only the later continuation. Probe .4 restores the proven 49.5 ms prefix; the six-stage continuation remains unchanged. A continuous IQ capture of the next local attempt is required to measure actual on-air timing and carrier before any further stage-0 adjustment."
+}

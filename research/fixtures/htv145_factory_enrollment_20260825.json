@@ -1,0 +1,26 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-08-25",
+  "capture_context": "Explicit long-press pairing sweep with the stock RainPoint gateway unplugged",
+  "receiver": "RainPoint radio node ota test",
+  "factory_endpoint": "342d008f",
+  "predicted_paired_endpoint": "b42d008f",
+  "retained_valve_route": "b9840280",
+  "retained_companion_endpoint": "39840280",
+  "frames": [
+    {
+      "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+      "trailer_residual": "c713"
+    },
+    {
+      "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+      "trailer_residual": "4f03"
+    }
+  ],
+  "interpretation": {
+    "first_two_body_bytes": "RF sweep counters; varied while the rest of the request remained stable",
+    "explicit_pairing_marker": "ff",
+    "assignment_reply": "Probe 1 used selector 2. Probe 2 used the now-confirmed selector-5 stock assignment, but then stalled because the remaining controller exchange was incorrectly inherited from HTV405.",
+    "post_assignment_exchange": "Complete six-stage stock transcript captured separately in htv145_gateway_pairing_replies.json; local physical validation remains pending"
+  }
+}

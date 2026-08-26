@@ -60,6 +60,11 @@ capacitor across CC1101 VCC/GND when practical.
   accepts only explicit association endpoints/carrier/residue, and advances
   its command counter only from a matching response or independent state
   confirmation. The standard image compiles this path out.
+- Contains a separately gated HTV145 pairing profile behind
+  `RAINPOINT_HTV145_PAIRING_CANDIDATE=1`. It reproduces the complete captured
+  six-stage enrollment, including the delayed 2,400-symbol controller command
+  and temporary routine-carrier receive window, without changing HTV405
+  enrollment. Keep it on the OTA test node until physical acceptance.
 - The HTV145 candidate reports bounded-attempt evidence separately from its
   verdict: attempts started/sent, matching-route and invalid-trailer frames,
   classified response/state frames, response and state outcomes, a precise
@@ -129,6 +134,18 @@ RAINPOINT_RESEARCH_BENCH=1 \
 ```
 
 Do not deploy that artifact before the isolated dry-valve acceptance session.
+
+The independently gated HTV145 pairing candidate is built with:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.1-htv145-pairing-probe.4 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+Deploy this image only to the designated OTA test node until three consecutive
+pairings satisfy the roadmap's physical acceptance gate.
 
 The generic `esp32dev` board definition matches the tested board. If automatic
 upload reset fails, hold **BOOT**, begin upload, and release it when PlatformIO

@@ -25,10 +25,14 @@ from rainpointd.pairing_protocol import (  # noqa: E402
     pairing_profile_for_factory,
 )
 from rainpointd.valve_pairing_protocol import (  # noqa: E402
+    AUTOMATIC_HTV145_PROFILE_ID,
     AUTOMATIC_HTV405_PROFILE_ID,
+    automatic_htv145_profile_metadata,
     automatic_htv405_profile_metadata,
+    build_htv145_profile,
     build_htv405_profile,
     frame_for_step,
+    htv145_configuration_frame,
     request_matches,
 )
 from tools.demod_rainpoint_reply_iq import demodulate  # noqa: E402
@@ -500,6 +504,70 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             "persistent_local_gateway", metadata["controller_identity_default"]
         )
         self.assertEqual(18, metadata["step_count"])
+
+    def test_htv145_probe_matches_both_captured_factory_sweep_frames(self) -> None:
+        profile = build_htv145_profile(
+            factory_endpoint="342d008f",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+        )
+        self.assertEqual(AUTOMATIC_HTV145_PROFILE_ID, profile.profile_id)
+        self.assertEqual("b42d008f", profile.paired_endpoint)
+        self.assertEqual(6, len(profile.steps))
+        self.assertEqual(0x05, profile.steps[0].reply_body[5])
+        for captured in (
+            "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+            "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+        ):
+            self.assertTrue(request_matches(profile, 0, bytes.fromhex(captured)))
+        cold_boot = bytearray.fromhex(
+            "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+        )
+        cold_boot[17] = 0x7F
+        residual = binascii.crc_hqx(cold_boot[:-2], 0) ^ 0xC713
+        cold_boot[-2:] = residual.to_bytes(2, "big")
+        self.assertFalse(request_matches(profile, 0, cold_boot))
+        assignment = frame_for_step(
+            profile,
+            0,
+            local_clock=datetime(2026, 8, 25, 19, 52, 36),
+        )
+        self.assertEqual(
+            "79f4882f28b42d008f3984028080c0858503057000929e990d"
+            "01008000000000000000005767",
+            assignment.hex(),
+        )
+        self.assertEqual(
+            "79f4882f28b42d008fb9840280819001010000000000000000"
+            "000000000000000000000034d0",
+            htv145_configuration_frame(profile).hex(),
+        )
+        expected_replies = {
+            1: (
+                "79f4882f28b42d008f39840280814101000080000000000000"
+                "00000000000000000000004b67"
+            ),
+            3: (
+                "79f4882f28b42d008fb984028081c287802c0105000f000000"
+                "000000000000000000000076bc"
+            ),
+            4: (
+                "79f4882f28b42d008fb9840280824300800000000000000000"
+                "00000000000000000000007592"
+            ),
+            5: (
+                "79f4882f28b42d008fb984028082ec81801900000000000000"
+                "00000000000000000000007746"
+            ),
+        }
+        for index, expected in expected_replies.items():
+            self.assertEqual(expected, frame_for_step(profile, index).hex())
+        metadata = automatic_htv145_profile_metadata()
+        self.assertTrue(metadata["experimental"])
+        self.assertFalse(metadata["valve_control_enabled"])
+        self.assertEqual(6, metadata["step_count"])
+        self.assertEqual(2_400, metadata["configuration_wake_symbols"])
+        self.assertEqual("retained_association", metadata["controller_identity_default"])
 
     def test_valve_clock_keeps_the_captured_marker_bits(self) -> None:
         profile = build_htv405_profile(

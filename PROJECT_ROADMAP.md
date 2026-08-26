@@ -44,7 +44,7 @@ until this baseline is clean.
 
 - [x] Reject invalid or provisional valve identities before they can create a
       Home Assistant device.
-- [ ] Remove the three known phantom HTV405 records through the supported
+- [x] Remove the three known phantom HTV405 records through the supported
       lifecycle path; preserve the canonical association and its HA history.
 - [x] Verify dashboards, automations, notifications, and watchdogs reference
       only the canonical local valve and local moisture entities.
@@ -63,6 +63,15 @@ sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
 normal observation window creates no replacement phantoms.
 
 ## Phase 1 — Home Assistant device lifecycle
+
+- [ ] After a successful device removal, navigate back to the RainPoint Local
+      device list instead of leaving the user on the deleted device's error
+      page.
+
+Home Assistant's supported integration removal hook controls whether removal
+is allowed but exposes no frontend-navigation callback. Backend removal is now
+family-neutral; the remaining redirect is an upstream HA frontend constraint,
+not a gateway lifecycle mutation.
 
 ### HCS026-class soil sensors
 
@@ -83,17 +92,25 @@ normal observation window creates no replacement phantoms.
       terminal evidence.
 - [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
-- [ ] Pair once under a generated custom controller identity and create exactly
+- [x] Pair once under a generated custom controller identity and create exactly
       one capability-correct HA device.
 - [ ] Confirm HA removal clears all four zone controls, duration entities,
       association state, and node routing; then re-pair without a duplicate.
+
+Software coverage now proves that removal deletes the valve link and routing,
+ordinary reports cannot defeat suppression, and an explicit pairing session
+can restore the same stable device ID exactly once. Physical HA removal and
+re-pair evidence is still required before checking the gate.
 
 ### HTV145 single-zone valve
 
 - [x] Decode stock enrollment/control evidence sufficiently to build a bounded,
       compile-gated candidate.
-- [ ] Implement the generalized HA pairing lifecycle without exposing the
+- [x] Implement the generalized HA pairing lifecycle without exposing the
       unaccepted research transmitter as a production control.
+- [x] Preserve two rejected selector-5 local trials, restore the probe-.2
+      49.5 ms accepted assignment prefix, and require continuous IQ evidence
+      before changing stage 0 again.
 - [ ] Complete three consecutive local pairings with fresh batteries and
       valve-originated terminal evidence.
 - [ ] Confirm removal and re-pairing preserve the intended stable physical
@@ -169,6 +186,11 @@ same time without conflicting authority.
 - [ ] Confirm stale moisture data cannot suppress irrigation indefinitely: use
       only sufficiently recent readings and follow the documented fallback after
       the configured 6--8 hour limit.
+
+The deployed household script now waters from the remaining fresh readings
+when only part of a bed's sensor set is stale, and uses the bounded fallback
+only when no configured reading is fresh. Keep this gate open until a scheduled
+cycle validates both branches.
 - [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
       addition to the existing UTC/offset/DST software coverage.
 
@@ -190,7 +212,7 @@ observable, and recoverable.
       water usage.
 - [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
       battery entity unavailable until RF correlation is repeatable.
-- [ ] Mark each field as confirmed, provisional, categorical-only, or not
+- [x] Mark each field as confirmed, provisional, categorical-only, or not
       transmitted locally; never synthesize an unavailable protocol value.
 - [ ] Ensure product/model discovery is capability- and product-code based, not
       tied to one seller name, household endpoint, or friendly name.
@@ -229,6 +251,9 @@ criterion above without an unexplained recovery intervention.
 - [ ] Finish event-driven HA updates with slow reconciliation fallback.
 - [ ] Remove superseded probes, hard-coded profiles, temporary acceptance
       endpoints, obsolete feature gates, and retired firmware artifacts.
+- [ ] Remove dormant two-radio firmware support, secondary-radio diagnostics,
+      and its compile-time feature gate; support one CC1101 per distributed
+      radio node as the sole production hardware topology.
 - [ ] Keep genuine safety boundaries: scoped authentication, association-bound
       transmission, bounded duration, device-owned confirmation, command
       spacing, at-most-once opens, and rollback.

@@ -343,6 +343,9 @@ void WifiTransport::authenticate(const String& nonce) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         ",\"valve_pairing_tx_candidate\""
 #endif
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        ",\"htv145_pairing_tx_candidate\""
+#endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
 #endif

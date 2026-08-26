@@ -936,6 +936,10 @@ class SQLiteEventStore:
                 "DELETE FROM valve_registry WHERE device_id = ?", (device_id,)
             )
             self._connection.execute(
+                "DELETE FROM htv145_control_state WHERE valve_endpoint = ?",
+                (device["valve_endpoint"],),
+            )
+            self._connection.execute(
                 "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
                 "VALUES (?, ?)",
                 (device["valve_endpoint"], suppressed_at),
@@ -1028,6 +1032,81 @@ class SQLiteEventStore:
             item
             for item in self.valve_registry()
             if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def accept_paired_valve_link(
+        self,
+        *,
+        controller_endpoint: str,
+        valve_endpoint: str,
+        device_id: str,
+        name: str,
+        model: str,
+        area: str | None,
+        accepted_at: str,
+    ) -> dict[str, Any]:
+        """Restore one link proven by an explicit local pairing session.
+
+        Ordinary observations intentionally cannot clear a user's removal.
+        This method is reserved for command-scoped, valve-originated terminal
+        evidence from an explicit pairing flow.
+        """
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO valve_registry(
+                    controller_endpoint, valve_endpoint, device_id, name, model,
+                    area, accepted_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(valve_endpoint) DO UPDATE SET
+                    controller_endpoint=excluded.controller_endpoint,
+                    name=excluded.name,
+                    model=excluded.model,
+                    area=COALESCE(valve_registry.area, excluded.area),
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    controller_endpoint,
+                    valve_endpoint,
+                    device_id,
+                    name,
+                    model,
+                    area,
+                    accepted_at,
+                    accepted_at,
+                ),
+            )
+            self._connection.execute(
+                "DELETE FROM device_suppressions WHERE endpoint = ?",
+                (valve_endpoint,),
+            )
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def update_valve_registry_device(
+        self,
+        device_id: str,
+        *,
+        name: str,
+        area: str | None,
+        updated_at: str,
+    ) -> dict[str, Any]:
+        """Rename or reassign one persistent valve registration."""
+        cursor = self._connection.execute(
+            "UPDATE valve_registry SET name = ?, area = ?, updated_at = ? "
+            "WHERE device_id = ?",
+            (name, area, updated_at, device_id),
+        )
+        if not cursor.rowcount:
+            raise KeyError(device_id)
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["device_id"] == device_id
         )
 
     def update_valve_phase(

@@ -319,7 +319,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     transmit_performed = bool(
                         self.server.gateway.pairing().get("transmit_performed")
                     )
-                    result = self.server.gateway.complete_hcs026_pairing(
+                    result = self.server.gateway.complete_pairing(
                         endpoint=str(body.get("endpoint", "")),
                         name=str(body.get("name", "")),
                         area=body.get("area"),

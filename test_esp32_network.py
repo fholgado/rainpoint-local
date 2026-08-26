@@ -385,7 +385,11 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertTrue(started["transmitter_available"])
         self.assertEqual(NODE_A, started["selected_node_id"])
         self.assertEqual(
-            ["hcs026_auto_v1", "htv405_auto_candidate_v1"],
+            [
+                "hcs026_auto_v1",
+                "htv145_auto_candidate_v1",
+                "htv405_auto_candidate_v1",
+            ],
             [item["profile_id"] for item in started["supported_profiles"]],
         )
         self.assertTrue(started["supported_profiles"][0]["automatic_discovery"])
@@ -645,7 +649,119 @@ class ESP32NetworkTest(unittest.TestCase):
         progress = self.gateway.pairing()
         self.assertEqual("valve_pairing_completed", progress["stage"])
         self.assertEqual("94a98013", progress["completed_endpoint"])
+        registered = self.gateway.complete_pairing(
+            endpoint="94a98013",
+            name="Back garden valve",
+            area="Garden",
+        )
+        self.assertEqual("htv405-94a98013", registered["device_id"])
+        self.assertEqual("Back garden valve", registered["name"])
+        self.assertEqual("Garden", registered["area"])
+        self.assertEqual(1, len(self.gateway._store.valve_registry()))
+        cancel = json.loads(stream.readline())
+        self.assertEqual("pairing_cancel", cancel["type"])
         self.assertEqual([], progress["new_records"])
+        stream.close()
+        connection.close()
+
+    def test_explicit_valve_repair_clears_suppression_without_duplicate(self) -> None:
+        valve_endpoint = "94a98013"
+        valve_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex(valve_endpoint),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.assertIsNotNone(
+            self.gateway.register_observed_htv405_link(
+                controller_endpoint="b9840280",
+                valve_endpoint=valve_endpoint,
+                frame=valve_frame,
+                observed_at="2026-08-25T20:00:00+00:00",
+            )
+        )
+        forgotten = self.gateway.forget_registry_device(
+            f"htv405-{valve_endpoint}"
+        )
+        self.assertEqual(valve_endpoint, forgotten["endpoint"])
+        self.assertTrue(self.gateway.endpoint_suppressed(valve_endpoint))
+
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+            ],
+        )
+        self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+        )
+        command = json.loads(stream.readline())
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "armed",
+                    "completed_steps": 1,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": valve_endpoint,
+                    "tx_armed": True,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_completed_steps") != 1:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+
+        self.gateway.observe_rf_frame(
+            frame=valve_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": valve_endpoint,
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        self.assertEqual(
+            "valve_pairing_completed", self.gateway.pairing()["stage"]
+        )
+        registered = self.gateway.complete_pairing(
+            endpoint=valve_endpoint,
+            name="Repaired valve",
+            area="Vegetable Garden",
+        )
+
+        self.assertFalse(self.gateway.endpoint_suppressed(valve_endpoint))
+        self.assertEqual("htv405-94a98013", registered["device_id"])
+        self.assertEqual("Repaired valve", registered["name"])
+        self.assertEqual(1, len(self.gateway._store.valve_registry()))
+        devices = [
+            device
+            for device in self.gateway.devices()
+            if device["device_id"] == "htv405-94a98013"
+        ]
+        self.assertEqual(1, len(devices))
+        self.assertEqual("Repaired valve", devices[0]["name"])
+        cancel = json.loads(stream.readline())
+        self.assertEqual("pairing_cancel", cancel["type"])
         stream.close()
         connection.close()
 
@@ -680,6 +796,131 @@ class ESP32NetworkTest(unittest.TestCase):
         self.gateway.stop_pairing()
         cancel = json.loads(stream.readline())
         self.assertEqual("pairing_cancel", cancel["type"])
+        stream.close()
+        connection.close()
+
+    def test_valve_confirmation_requires_the_active_controller_identity(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "valve_pairing_tx_candidate",
+                "configurable_rf_controller_identity",
+            ],
+        )
+        self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+            factory_endpoint="14a98013",
+        )
+        command = json.loads(stream.readline())
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "armed",
+                    "completed_steps": 1,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "tx_armed": True,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_completed_steps") != 1:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+
+        stock_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex("b9840280"),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=stock_frame,
+            state={
+                "rf_endpoint_a": "b9840280",
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        self.assertIsNone(self.gateway.pairing()["completed_endpoint"])
+        self.assertEqual([], self.gateway._store.valve_registry())
+
+        local_route = self.gateway.rf_identity.controller_endpoint
+        local_frame = build_htv405_close_frame(
+            ValveLink(
+                controller_endpoint=bytes.fromhex(local_route),
+                valve_endpoint=bytes.fromhex("94a98013"),
+            ),
+            sequence=11,
+            zone=1,
+            selector=0x05,
+            repeat=False,
+            residue=0xC713,
+        ).hex()
+        self.gateway.observe_rf_frame(
+            frame=local_frame,
+            state={
+                "rf_endpoint_a": local_route,
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": "local-sdr",
+            },
+        )
+        self.assertEqual(
+            "94a98013", self.gateway.pairing()["completed_endpoint"]
+        )
+        self.assertEqual(1, len(self.gateway._store.valve_registry()))
+        self.gateway.stop_pairing()
+        cancel = json.loads(stream.readline())
+        self.assertEqual("pairing_cancel", cancel["type"])
+        stream.close()
+        connection.close()
+
+    def test_htv145_pairing_probe_requires_its_distinct_capability(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "htv145_pairing_tx_candidate",
+            ],
+        )
+        started = self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv145_auto_candidate_v1",
+            factory_endpoint="342d008f",
+            valve_route="b9840280",
+            companion_endpoint="39840280",
+        )
+        self.assertEqual(
+            "htv145_auto_candidate_v1", started["active_profile_id"]
+        )
+        command = json.loads(stream.readline())
+        self.assertEqual("htv145_auto_candidate_v1", command["profile"])
+        self.assertEqual("342d008f", command["factory_endpoint"])
+        self.assertEqual("b9840280", command["valve_route"])
+        self.assertEqual("39840280", command["companion_endpoint"])
+        self.assertEqual(97_154, command["frequency_offset_hz"])
+        self.assertNotIn("known_rejoin", command)
         stream.close()
         connection.close()
 

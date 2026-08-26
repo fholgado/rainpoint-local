@@ -114,13 +114,23 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
         self.assertIn("SUPERVISED_VALVE_CONTROL_COMMANDS", boundary_check)
-        self.assertIn('arguments[0] == "--supervised"', boundary_check)
+        self.assertIn('option == "--supervised"', boundary_check)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',
             'type == "watering_start"',
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_ci_builds_and_checks_the_isolated_htv145_pairing_candidate(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        boundary_check = (
+            ROOT / "tools" / "check_firmware_boundaries.py"
+        ).read_text()
+        self.assertIn("RAINPOINT_HTV145_PAIRING_CANDIDATE=1", workflow)
+        self.assertIn("--htv145-pairing", workflow)
+        self.assertIn("HTV145_PAIRING_CAPABILITIES", boundary_check)
+        self.assertIn('option == "--htv145-pairing"', boundary_check)
 
     def test_htv145_acceptance_is_compile_and_research_gated(self) -> None:
         source = (
@@ -165,6 +175,19 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("node.get('name') or node['node_id']", source)
         self.assertEqual(3, source.count("selector.AreaSelector()"))
         self.assertNotIn('vol.Optional("area", default=""): str', source)
+
+    def test_home_assistant_device_removal_uses_family_neutral_registry(self) -> None:
+        integration = (
+            ROOT / "custom_components" / "rainpoint_local" / "__init__.py"
+        ).read_text()
+        client = (
+            ROOT / "custom_components" / "rainpoint_local" / "api.py"
+        ).read_text()
+        self.assertIn("coordinator.client.forget_device(token, local_id)", integration)
+        self.assertNotIn(
+            "coordinator.client.forget_sensor(token, local_id)", integration
+        )
+        self.assertIn('f"registry/{device_id}/forget"', client)
 
     def test_htv405_duration_entities_preserve_the_supervised_boundary(self) -> None:
         const_source = (
