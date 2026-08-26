@@ -204,9 +204,9 @@ async def async_remove_config_entry_device(
     if "forget" not in device.get("capabilities", []):
         return False
     try:
-        await coordinator.client.forget_sensor(token, local_id)
+        await coordinator.client.forget_device(token, local_id)
         await coordinator.async_request_refresh()
     except RainPointLocalError as exc:
-        _LOGGER.warning("Unable to forget RainPoint sensor %s: %s", local_id, exc)
+        _LOGGER.warning("Unable to forget RainPoint device %s: %s", local_id, exc)
         return False
     return True

@@ -68,6 +68,11 @@ normal observation window creates no replacement phantoms.
       device list instead of leaving the user on the deleted device's error
       page.
 
+Home Assistant's supported integration removal hook controls whether removal
+is allowed but exposes no frontend-navigation callback. Backend removal is now
+family-neutral; the remaining redirect is an upstream HA frontend constraint,
+not a gateway lifecycle mutation.
+
 ### HCS026-class soil sensors
 
 - [x] Pair independent sensor identities from the HA UI without copied RF IDs,

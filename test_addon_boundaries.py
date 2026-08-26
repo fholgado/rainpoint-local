@@ -176,6 +176,19 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertEqual(3, source.count("selector.AreaSelector()"))
         self.assertNotIn('vol.Optional("area", default=""): str', source)
 
+    def test_home_assistant_device_removal_uses_family_neutral_registry(self) -> None:
+        integration = (
+            ROOT / "custom_components" / "rainpoint_local" / "__init__.py"
+        ).read_text()
+        client = (
+            ROOT / "custom_components" / "rainpoint_local" / "api.py"
+        ).read_text()
+        self.assertIn("coordinator.client.forget_device(token, local_id)", integration)
+        self.assertNotIn(
+            "coordinator.client.forget_sensor(token, local_id)", integration
+        )
+        self.assertIn('f"registry/{device_id}/forget"', client)
+
     def test_htv405_duration_entities_preserve_the_supervised_boundary(self) -> None:
         const_source = (
             ROOT / "custom_components" / "rainpoint_local" / "const.py"
