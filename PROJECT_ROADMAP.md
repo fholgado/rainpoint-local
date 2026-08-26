@@ -35,7 +35,7 @@ documents independently schedules work.
 | `research/*PLAN.md` and protocol status | Evidence ledgers and reusable procedures only |
 | Carrier preorder checklist | One physical-operation checklist, not project status |
 
-## Current focus: Phase 0 — one clean baseline
+## Phase 0 — one clean baseline (complete)
 
 The deployed radio nodes currently span three firmware versions, and historical
 invalid-trailer HTV405 observations left three phantom four-zone devices beside
@@ -62,7 +62,7 @@ Exit criteria: every deployed node runs the same firmware; the existing
 sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
 normal observation window creates no replacement phantoms.
 
-## Phase 1 — Home Assistant device lifecycle
+## Current focus: Phase 1 — Home Assistant device lifecycle
 
 - [x] Present the custom gateway's user-pairable profiles under Sensors and
       Valves, list supported models beneath each category, and filter radio
@@ -97,6 +97,10 @@ not a gateway lifecycle mutation.
 
 - [x] Reproduce local association and accept paired valve-originated traffic as
       terminal evidence.
+- [x] Merge partial HTV405 zone observations across concurrent SDR and radio
+      node receivers without replacing previously known booleans with unknown.
+      The regression replays the exact 2026-08-26 complete-idle then partial
+      Zone 3 idle sequence that had changed Zone 1 from Off to Unknown in HA.
 - [ ] Let the selected node finish the bounded 18-step HTV405 association
       transcript after HA receives terminal evidence; naming the device must
       not cancel the remaining protocol replies.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.33.9 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.8
+
+- Merge receiver-partial HTV405 zone reports into one canonical valve state, so
+  an SDR report that omits other zones cannot change their HA entities from Off
+  to Unknown after a complete radio-node report.
+- Rebuild canonical four-zone state from the retained observation journal on
+  startup, repairing snapshots already affected by the multi-receiver race
+  without altering the raw protocol evidence.
+- Regress the exact 2026-08-26 complete-idle then partial-Zone-3 frame sequence
+  that exposed the issue.
+
 ## 0.33.8 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.8
 
 - Add association-scoped recurring HTV405 liveness acknowledgements from the

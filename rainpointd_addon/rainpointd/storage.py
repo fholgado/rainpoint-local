@@ -714,6 +714,39 @@ class SQLiteEventStore:
         ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
+    def device_observation_events(self, device_id: str) -> list[dict[str, Any]]:
+        """Return retained observations for one device in event order."""
+        rows = self._connection.execute(
+            "SELECT payload FROM events "
+            "WHERE event_type = 'device_observation' "
+            "AND json_extract(payload, '$.device_id') = ? "
+            "ORDER BY event_id",
+            (device_id,),
+        ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def update_device_snapshot_state(
+        self,
+        event: dict[str, Any],
+        state: dict[str, Any],
+    ) -> None:
+        """Persist a canonical projection without changing the raw event."""
+        device_id = event.get("device_id")
+        if not isinstance(device_id, str):
+            raise ValueError("device snapshot requires a device ID")
+        snapshot = dict(event)
+        snapshot["state"] = state
+        self._connection.execute(
+            "INSERT OR REPLACE INTO device_snapshots("
+            "device_id, event_id, payload) VALUES (?, ?, ?)",
+            (
+                device_id,
+                event["event_id"],
+                json.dumps(snapshot, separators=(",", ":"), sort_keys=True),
+            ),
+        )
+        self._connection.commit()
+
     def events(self, since: int = 0, limit: int = 1_000) -> list[dict[str, Any]]:
         """Return one chronological page newer than an event ID."""
         rows = self._connection.execute(

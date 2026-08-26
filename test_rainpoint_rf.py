@@ -23,6 +23,7 @@ from rainpointd.device_catalog import (  # noqa: E402
     load_catalog,
 )
 from rainpointd.gateway import Gateway  # noqa: E402
+from rainpointd.ingest import FrameIngestor  # noqa: E402
 from rainpointd.product_identity import (  # noqa: E402
     GENERIC_HCS02X_MODEL,
     HCS02X_PROTOCOL,
@@ -1187,6 +1188,87 @@ class RainPointRFTest(unittest.TestCase):
         self.assertFalse(valve["state"]["zone_2_is_watering"])
         self.assertEqual(88, valve["state"]["zone_1_remaining_seconds"])
         self.assertIsNone(valve["state"]["zone_2_remaining_seconds"])
+
+    def test_htv405_partial_report_from_second_receiver_preserves_zones(
+        self,
+    ) -> None:
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "ee86de80",
+                    "94a98013",
+                    "test-four-zone",
+                    "Test Four Zone",
+                    model="HTV405FRF",
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        node = FrameIngestor(
+            gateway,
+            catalog=catalog,
+            receiver_id="rp-001122334455",
+        )
+        sdr = FrameIngestor(
+            gateway,
+            catalog=catalog,
+            receiver_id="local-sdr",
+        )
+        complete_idle = (
+            "79f4882f28ee86de8094a98013038107820580804f80000000408000568000000000000010be"
+        )
+        partial_zone_3_idle = (
+            "79f4882f28ee86de8094a98013060107820581804f800000004080005680000000000000330c"
+        )
+
+        self.assertEqual(
+            1,
+            node.consume_event(
+                {
+                    "time": "2026-08-26T00:25:21.854844+00:00",
+                    "rows": [
+                        {
+                            "len": len(complete_idle) * 4,
+                            "data": complete_idle,
+                        }
+                    ],
+                }
+            ),
+        )
+        self.assertTrue(
+            all(
+                gateway.devices()[0]["state"][
+                    f"zone_{zone}_is_watering"
+                ]
+                is False
+                for zone in range(1, 5)
+            )
+        )
+
+        self.assertEqual(
+            1,
+            sdr.consume_event(
+                {
+                    "time": "2026-08-26T00:25:27.742325+00:00",
+                    "rows": [
+                        {
+                            "len": len(partial_zone_3_idle) * 4,
+                            "data": partial_zone_3_idle,
+                        }
+                    ],
+                }
+            ),
+        )
+        state = gateway.devices()[0]["state"]
+        for zone in range(1, 5):
+            with self.subTest(zone=zone):
+                self.assertIs(
+                    state[f"zone_{zone}_is_watering"],
+                    False,
+                )
+        self.assertIs(state["is_watering"], False)
+        self.assertIsNone(state["active_zone"])
+        self.assertEqual("local-sdr", state["rf_receiver_id"])
 
     def test_htv405_new_open_clears_other_mutually_exclusive_zones(self) -> None:
         catalog = DeviceCatalog(

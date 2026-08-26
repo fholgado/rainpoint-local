@@ -300,6 +300,71 @@ class GatewayTest(unittest.TestCase):
         )
         gateway.close()
 
+    def test_restore_repairs_legacy_partial_htv405_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(storage_path=str(path))
+            common = {
+                "device_id": "htv405-94a98013",
+                "name": "Test four-zone valve",
+                "model": "HTV405FRF",
+            }
+            gateway.observe_decoded(
+                **common,
+                frame="complete-idle",
+                state={
+                    "rf_endpoint_a": "ee86de80",
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "rf_trailer_valid": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                    **{
+                        f"zone_{zone}_is_watering": False
+                        for zone in range(1, 5)
+                    },
+                },
+                observed_at="2026-08-26T00:25:21+00:00",
+            )
+            gateway.observe_decoded(
+                **common,
+                frame="partial-zone-3-idle",
+                state={
+                    "rf_endpoint_a": "ee86de80",
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "rf_trailer_valid": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                    "zone_1_is_watering": None,
+                    "zone_2_is_watering": None,
+                    "zone_3_is_watering": False,
+                    "zone_4_is_watering": None,
+                },
+                observed_at="2026-08-26T00:25:27+00:00",
+            )
+            raw_partial_event = gateway.events()[-1]
+            assert gateway._store is not None
+            gateway._store.update_device_snapshot_state(
+                raw_partial_event,
+                raw_partial_event["state"],
+            )
+            gateway.close()
+
+            restored = Gateway(storage_path=str(path))
+            state = restored.devices()[0]["state"]
+            for zone in range(1, 5):
+                with self.subTest(zone=zone):
+                    self.assertIs(
+                        state[f"zone_{zone}_is_watering"],
+                        False,
+                    )
+            self.assertIs(state["is_watering"], False)
+            self.assertIsNone(state["active_zone"])
+            restored.close()
+
     def test_ingested_htv405_link_report_refreshes_device_activity(self) -> None:
         phase_only = (
             "79f4882f28b984028094a980131c8107820700a0cf80000000408800569"

@@ -113,6 +113,56 @@ def _observed_utc(value: str | datetime) -> datetime:
     return observed.astimezone(timezone.utc)
 
 
+def _merge_htv405_zone_state(
+    current: dict[str, Any],
+    previous: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge a receiver-partial HTV405 projection into canonical state."""
+    merged = copy.deepcopy(current)
+    for zone in range(1, 5):
+        watering_key = f"zone_{zone}_is_watering"
+        if not isinstance(merged.get(watering_key), bool) and isinstance(
+            previous.get(watering_key), bool
+        ):
+            merged[watering_key] = previous[watering_key]
+            for suffix in ("remaining_seconds", "duration_seconds"):
+                detail_key = f"zone_{zone}_{suffix}"
+                if merged.get(detail_key) is None and detail_key in previous:
+                    merged[detail_key] = copy.deepcopy(previous[detail_key])
+
+    zone_states = {
+        zone: merged.get(f"zone_{zone}_is_watering")
+        for zone in range(1, 5)
+    }
+    active_zone = next(
+        (
+            zone
+            for zone, watering in zone_states.items()
+            if watering is True
+        ),
+        None,
+    )
+    if active_zone is not None:
+        merged.update(
+            {
+                "active_zone": active_zone,
+                "is_watering": True,
+                "valve_state": "watering",
+            }
+        )
+    elif all(
+        isinstance(watering, bool) for watering in zone_states.values()
+    ):
+        merged.update(
+            {
+                "active_zone": None,
+                "is_watering": False,
+                "valve_state": "idle",
+            }
+        )
+    return merged
+
+
 class Gateway:
     """Store decoded device state independently of the active radio transport."""
 
@@ -1605,12 +1655,12 @@ class Gateway:
             self._confirm_valve_pairing_locked(frame, decoded, timestamp)
             device_state = copy.deepcopy(decoded)
             device_observed_at = timestamp
-            if model == "HTV405FRF" and not isinstance(
-                decoded.get("is_watering"), bool
-            ):
+            if model == "HTV405FRF":
                 previous = self._devices.get(device_id, {})
                 previous_state = previous.get("state", {})
-                if isinstance(previous_state.get("is_watering"), bool):
+                if not isinstance(decoded.get("is_watering"), bool) and (
+                    isinstance(previous_state.get("is_watering"), bool)
+                ):
                     for key, value in previous_state.items():
                         if key in {
                             "is_watering",
@@ -1626,6 +1676,16 @@ class Gateway:
                     previous_observed_at = previous.get("observed_at")
                     if isinstance(previous_observed_at, str):
                         device_observed_at = previous_observed_at
+                else:
+                    # Every receiver owns a transport-local reducer and may
+                    # hear only one zone from a multi-frame HTV405 status
+                    # burst. An omitted zone is therefore "no update", not a
+                    # reason to erase a boolean already established by another
+                    # receiver.
+                    device_state = _merge_htv405_zone_state(
+                        device_state,
+                        previous_state,
+                    )
             device = {
                 "device_id": device_id,
                 "name": name,
@@ -1638,6 +1698,11 @@ class Gateway:
             if registry_metadata is not None:
                 device["area"] = registry_metadata.get("area")
             self._devices[device_id] = device
+            if self._store is not None and model == "HTV405FRF":
+                self._store.update_device_snapshot_state(
+                    event,
+                    device_state,
+                )
             if (
                 self._store is not None
                 and model == "HTV405FRF"
@@ -4595,6 +4660,31 @@ class Gateway:
                         ):
                             if key in refreshed:
                                 state[key] = refreshed[key]
+            elif event.get("model") == "HTV405FRF":
+                retained = (
+                    self._store.device_observation_events(device_id)
+                    if self._store is not None
+                    else [
+                        candidate
+                        for candidate in self._events
+                        if candidate.get("event_type")
+                        == "device_observation"
+                        and candidate.get("device_id") == device_id
+                    ]
+                )
+                canonical_state: dict[str, Any] = {}
+                for candidate in retained:
+                    if frame_accepted(candidate) is False:
+                        continue
+                    candidate_state = candidate.get("state")
+                    if not isinstance(candidate_state, dict):
+                        continue
+                    canonical_state = _merge_htv405_zone_state(
+                        candidate_state,
+                        canonical_state,
+                    )
+                if canonical_state:
+                    state = canonical_state
             device = {
                 "device_id": event["device_id"],
                 "name": (
@@ -4611,6 +4701,8 @@ class Gateway:
             if registry_metadata is not None:
                 device["area"] = registry_metadata.get("area")
             self._devices[event["device_id"]] = device
+            if self._store is not None and event.get("model") == "HTV405FRF":
+                self._store.update_device_snapshot_state(event, state)
 
     def _ensure_registered_sensor_devices(self) -> None:
         """Expose named sensors even when suppression hid their last report."""
