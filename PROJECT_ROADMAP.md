@@ -259,7 +259,11 @@ same time without conflicting authority.
       A guarded discriminator subsequently proved the valve had retained
       sequence `3`; preserve that authenticated value across a same-identity
       repair while continuing to initialize a genuinely new association at
-      `1`. Evidence is retained in
+      `1`. The subsequent retained sequence-`4` one-minute run also
+      authenticated, advanced to `5`, and stopped itself after 61.414 seconds,
+      proving sequence-`3` acceptance was not an isolated coincidence. A new
+      physical same-identity repair remains the final gate. Evidence is
+      retained in
       `research/fixtures/htv405_same_identity_repair_counter_20260826.json`.
 - [ ] Physically verify gateway/node restart during idle and during a bounded
       run remains observation-only and reconciles from subsequent valve reports.

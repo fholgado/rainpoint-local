@@ -119,6 +119,24 @@
     },
     "conclusion": "The valve retained command sequence 3 across the same-identity repair. The rejected five-minute trials were caused by the unvalidated multi-byte duration payload, not by the command counter."
   },
+  "sequential_counter_confirmation": {
+    "requested_duration_seconds": 60,
+    "encoded_duration": "9e00",
+    "command_sequence": 4,
+    "authenticated_response_event_id": 188301,
+    "authenticated_response_observed_at": "2026-08-26T17:04:40.823212+00:00",
+    "authenticated_response_frame": "79f4882f28ee86de8094a9801304d0868010cf80000000409e00569e00000000000000005e56",
+    "confirmation_event_id": 188302,
+    "first_radio_node_active_event_id": 188307,
+    "first_radio_node_active_observed_at": "2026-08-26T17:04:47.848394+00:00",
+    "first_radio_node_active_remaining_seconds": 52,
+    "automatic_idle_event_id": 188323,
+    "automatic_idle_observed_at": "2026-08-26T17:05:42.237426+00:00",
+    "authenticated_response_to_first_radio_node_active_seconds": 7.025182,
+    "authenticated_response_to_automatic_idle_seconds": 61.414214,
+    "next_authenticated_sequence": 5,
+    "result": "Counter 4 authenticated, independent telemetry confirmed Zone 1 watering, the valve stopped itself, and the gateway retained counter 5."
+  },
   "findings": [
     "The five-minute trial did not reach duration acceptance because no authenticated command response or independent watering report was observed.",
     "Before the same-controller re-pair, authenticated responses to command sequences 1 and 2 established 3 as the next command sequence.",
@@ -129,6 +147,7 @@
     "The valve therefore retained sequence 3 across the same-identity repair; the gateway reset only its local copy. The five-minute failure independently disproves the additive multi-byte transmit encoding as a complete model.",
     "Selector-0x07 link reports continued through the guard windows, proving the association remained alive but not independently proving valve state.",
     "A same-association repair must preserve an already authenticated command counter unless wire evidence proves that the valve reset it. A genuinely new association may still initialize sequence 1.",
+    "A second sequential 60-second open authenticated at retained sequence 4, advanced to 5, and returned to idle 61.414214 seconds after the immediate response; this rejects an accidental one-off sequence-3 acceptance.",
     "Durations whose two-second count already contains low-byte bit 7 require new stock-gateway evidence before local transmission; state decode evidence alone is insufficient to construct that command."
   ],
   "safety": {
