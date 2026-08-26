@@ -246,6 +246,15 @@ same time without conflicting authority.
       counter-`1` response, independent active reports, and a valve-owned
       automatic stop after 60 seconds. Pairing now initializes that counter
       once without waiting for the unrelated routine telemetry sequence.
+- [ ] Preserve an authenticated watering-command counter when an existing
+      valve is re-paired to the unchanged custom controller, companion,
+      selector, and valve route. The guarded 2026-08-26 five-minute trial found
+      that the gateway reset its stored counter to `1` even though earlier
+      authenticated responses had established `3` as next; sequence `1`, its
+      same-counter retry, and the final sequence-`2` recovery all timed out.
+      Distinguish a genuinely new association from a same-identity repair
+      before repeating duration acceptance. Evidence is retained in
+      `research/fixtures/htv405_same_identity_repair_counter_20260826.json`.
 - [ ] Physically verify gateway/node restart during idle and during a bounded
       run remains observation-only and reconciles from subsequent valve reports.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware

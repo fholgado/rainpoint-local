@@ -1,0 +1,103 @@
+{
+  "captured_at": "2026-08-26",
+  "model": "HTV405FRF",
+  "scope": "same-controller re-pair followed by guarded five-minute Zone 1 counter recovery",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "valve_endpoint": "94a98013",
+    "selector": 5,
+    "control_node_id": "rp-f4e5be3b015c"
+  },
+  "prior_authenticated_counter_evidence": [
+    {
+      "command_sequence": 1,
+      "response_event_id": 185665,
+      "response_frame": "79f4882f28ee86de8094a9801301d0868010cf80000000409e00569e00000000000000003740",
+      "result_event_id": 185666,
+      "next_sequence": 2
+    },
+    {
+      "command_sequence": 2,
+      "response_event_id": 185836,
+      "response_frame": "79f4882f28ee86de8094a9801302d0868010cf8000000040c20156c20100000000000000429c",
+      "result_event_id": 185837,
+      "next_sequence": 3
+    }
+  ],
+  "same_identity_repair": {
+    "terminal_observed_at": "2026-08-26T15:19:24.751219+00:00",
+    "controller_identity_changed": false,
+    "gateway_counter_after_pairing": 1,
+    "gateway_result": "counter_synchronized:fresh_generated_identity_pairing"
+  },
+  "five_minute_zone_1_trial": {
+    "requested_duration_seconds": 300,
+    "attempts": [
+      {
+        "command_id": "b3e61011187e4ed1b6c68348eb33fa70",
+        "sequence": 1,
+        "started_at": "2026-08-26T15:55:40.987962+00:00",
+        "failure_event_id": 187420,
+        "failure_observed_at": "2026-08-26T15:55:43.481598+00:00",
+        "result": "gateway_command_response_timeout_counter_unsynchronized",
+        "unclassified_reply_event_id": 187419,
+        "unclassified_reply_frame": "79f4882f28ee86de8094a9801301d08683004f80000000408000568000000000000000003188"
+      },
+      {
+        "command_id": "91e97aceafa849a8a82dbd9b39cb26ab",
+        "sequence": 1,
+        "started_at": "2026-08-26T16:01:29.171478+00:00",
+        "failure_event_id": 187491,
+        "failure_observed_at": "2026-08-26T16:01:31.641453+00:00",
+        "result": "gateway_command_response_timeout_counter_unsynchronized",
+        "candidate_not_before": "2026-08-26T16:00:55.987962+00:00"
+      },
+      {
+        "command_id": "accec353ecc040e7ba48b8fc1e1130c6",
+        "sequence": 2,
+        "started_at": "2026-08-26T16:06:59.808654+00:00",
+        "failure_event_id": 187561,
+        "failure_observed_at": "2026-08-26T16:07:02.299626+00:00",
+        "result": "gateway_command_response_timeout_counter_unsynchronized",
+        "candidate_not_before": "2026-08-26T16:06:44.171478+00:00"
+      }
+    ],
+    "link_only_reports_during_guards": [
+      {
+        "event_id": 187520,
+        "observed_at": "2026-08-26T12:03:40.616783",
+        "frame": "79f4882f28ee86de8094a980130d0107820701004f8000000040800056800000000000003f22"
+      },
+      {
+        "event_id": 187621,
+        "observed_at": "2026-08-26T16:11:46.719621+00:00",
+        "frame": "79f4882f28ee86de8094a980130d8107820701804f80000000408000568000000000000075bf"
+      }
+    ],
+    "final_possible_automatic_stop_at": "2026-08-26T16:11:59.808654+00:00",
+    "monitored_through": "2026-08-26T16:12:13+00:00",
+    "positive_command_response_observed": false,
+    "independent_watering_report_observed": false,
+    "independent_definitive_idle_report_observed": false,
+    "duration_fix_accepted": false,
+    "duration_fix_rejected": false
+  },
+  "findings": [
+    "The five-minute trial did not reach duration acceptance because no authenticated command response or independent watering report was observed.",
+    "Before the same-controller re-pair, authenticated responses to command sequences 1 and 2 established 3 as the next command sequence.",
+    "The custom gateway unconditionally reset its stored counter to 1 after the same controller, companion, valve, and selector were re-paired.",
+    "Both guarded sequence-1 attempts and the final guarded sequence-2 attempt timed out; no sequence beyond the two bounded recovery candidates was guessed.",
+    "The unique sequence-1 reply at event 187419 is structurally different from a positive watering response and remains provisional; it may be a negative or counter-guidance response.",
+    "Selector-0x07 link reports continued through the guard windows, proving the association remained alive but not independently proving valve state.",
+    "A same-association repair must preserve an already authenticated command counter unless wire evidence proves that the valve reset it. A genuinely new association may still initialize sequence 1."
+  ],
+  "safety": {
+    "valve_connected_to_water": true,
+    "minimum_inter_command_seconds": 15,
+    "full_possible_run_plus_guard_waited_before_each_retry": true,
+    "maximum_recovery_candidates_exhausted": true,
+    "further_counter_guessing_allowed": false,
+    "watering_state_inferred_from_command_intent": false
+  }
+}
