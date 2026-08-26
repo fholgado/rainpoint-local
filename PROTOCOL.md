@@ -1182,6 +1182,30 @@ local trial must run with continuous IQ capture so actual reply timing and
 carrier can be measured before any further stage-0 adjustment. The dedicated
 implementation remains research-gated until physical pairing succeeds.
 
+Continuous local IQ on 2026-08-26 subsequently measured the selector-5 reply
+at approximately 433.55675 MHz with approximately 35.0 kHz deviation and the
+expected 320-symbol wake. Its frame was structurally identical to stock after
+substituting the current clock. A model-specific scheduler probe produced a
+later retry approximately 50.70 ms after request end, close to the accepted
+stock 50.55 ms slot, but the valve still continued its factory sweep and never
+emitted stage 1. Moving the valve six to ten feet from the node and assigning
+the generated custom controller/companion identity independently produced the
+same 1/6 result. The generated-identity result is important because that was a
+decisive HTV405 migration discriminator; retained stock-controller collision
+does not explain the HTV145 rejection.
+
+The remaining HTV405-derived lead is branch coherence. Reliable HTV405
+enrollment was not obtained by tuning one reply in isolation: multiple stock
+captures revealed selector-2 and selector-6 branches whose assignment marker,
+request marker, and routine carrier had to move together. Only one complete
+HTV145 stock enrollment is currently retained, using selector `5`. The vendor
+app showed Device Address `6` for the same valve, which is consistent with—but
+does not yet prove—a zero-based selector/address relationship. At least two
+additional complete stock enrollments must correlate the app address,
+selector, assignment carrier, first paired request, and routine carrier before
+another HTV145 stage-0 change. Until then the local probe returns to the shared,
+previously accepted 49.5 ms scheduler prefix.
+
 ### Request and response roles
 
 | Endpoint order | Body byte 1 | Meaning |

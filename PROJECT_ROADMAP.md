@@ -182,6 +182,12 @@ five-minute node window expires.
 - [x] Preserve two rejected selector-5 local trials, restore the probe-.2
       49.5 ms accepted assignment prefix, and require continuous IQ evidence
       before changing stage 0 again.
+- [ ] Capture at least two additional complete stock-gateway HTV145
+      enrollments and record the app Device Address for each. Compare the
+      assignment selector, assignment carrier, first paired request marker,
+      and routine carrier as one coherent branch before changing the local
+      transcript. This repeats the evidence path that exposed the decisive
+      selector-2/selector-6 branches during HTV405 development.
 - [ ] Complete three consecutive local pairings with fresh batteries and
       valve-originated terminal evidence.
 - [ ] Confirm removal and re-pairing preserve the intended stable physical
@@ -190,6 +196,17 @@ five-minute node window expires.
 Exit criteria: a user can pair and remove every supported family entirely from
 HA, each family completes three consecutive final-build trials, and each
 physical device has exactly one HA representation.
+
+The 2026-08-26 HTV145 stage-0 discriminator trials all stopped at 1/6: an
+on-air reply close to the stock 50.55 ms slot, a six-to-ten-foot separation
+trial, and a generated custom controller/companion identity. Continuous IQ
+already shows that the local assignment payload, carrier, deviation, wake, and
+clock structure match the one retained stock success. These negatives make
+small timing, near-field saturation, and retained-controller collision poor
+next hypotheses. Only one successful stock selector (`5`) is retained, while
+HTV405 required multiple stock enrollments to reveal that selector and carrier
+must move together. Preserve the known 49.5 ms prefix until the additional
+HTV145 stock branch matrix exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 
