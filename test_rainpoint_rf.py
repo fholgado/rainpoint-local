@@ -1767,6 +1767,65 @@ class RainPointRFTest(unittest.TestCase):
                 )
                 self.assertTrue(decoded["trailer_valid"])
 
+    def test_htv405_unknown_battery_and_usage_remain_unavailable(self) -> None:
+        """Dynamic HTV405 bytes must not become invented user fields."""
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_battery_transition_20260823.json"
+            ).read_text(encoding="utf-8")
+        )
+        for label, sample in fixture["diagnostic_examples"].items():
+            with self.subTest(label=label):
+                decoded = normalize_row(
+                    {
+                        "len": len(sample["frame"]) * 4,
+                        "data": sample["frame"],
+                    }
+                )
+                for field in (
+                    "battery_low",
+                    "battery_status",
+                    "battery_percent",
+                    "last_usage_liters",
+                ):
+                    self.assertNotIn(field, decoded)
+
+        active_report = (
+            "79f4882f28b984028094a9801309810786058090cf8000000040"
+            "b90056bc0000000000004d64"
+        )
+        catalog = DeviceCatalog(
+            valves=(
+                ValveDefinition(
+                    "b9840280",
+                    "94a98013",
+                    "test-four-zone",
+                    "Test Four Zone",
+                    model="HTV405FRF",
+                ),
+            )
+        )
+        gateway = Gateway(transport="rtl433", catalog=catalog)
+        transport = RTL433Transport(
+            gateway, command=["unused"], catalog=catalog
+        )
+        transport.seed()
+        event = {"rows": [{"len": len(active_report) * 4, "data": active_report}]}
+        self.assertEqual(1, transport.consume_line(json.dumps(event)))
+        valve = next(
+            device
+            for device in gateway.devices()
+            if device["model"] == "HTV405FRF"
+        )
+        self.assertIsNone(valve["state"]["battery_low"])
+        self.assertIsNone(valve["state"]["battery_status"])
+        self.assertIsNone(valve["state"]["battery_percent"])
+        self.assertIsNone(valve["state"]["last_usage_liters"])
+        gateway.close()
+
     def test_live_transport_publishes_confirmed_moisture(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])

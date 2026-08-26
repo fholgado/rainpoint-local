@@ -29,6 +29,39 @@ A 2.0 Msps capture centered at 433.7 MHz has been the most useful general
 receive configuration. Installed-device energy has appeared across roughly
 433.08--434.38 MHz, so narrower captures can miss valid report types.
 
+### Runtime field-confidence contract
+
+The gateway publishes only the following device fields. **Confirmed** means a
+field has been crossed against physical or independently timestamped app/cloud
+behavior. **Categorical only** means RF distinguishes the vendor's named
+states, but does not carry a defensible percentage. **Not transmitted** means
+the known local report families contain no supported value; HA must leave the
+entity unavailable. Provisional bytes stay in research events and cannot
+update device state.
+
+| Family | Field | Status | Runtime behavior |
+|---|---|---|---|
+| HCS02x | Soil moisture | Confirmed | Publish percent from trailer-valid marker-relative reports |
+| HCS02x | Battery | Categorical only | Publish vendor-compatible `100%` for full/normal and `10%` for low; never interpolate |
+| HCS02x | Signal/reception | Confirmed local measurement | Publish per-receiver CC1101/SDR metadata, not the stock gateway's RSSI |
+| HCS02x | Report time and cadence | Confirmed gateway metadata | Publish only from accepted reports |
+| HCS02x | Soil type | Not transmitted in known telemetry | Leave unavailable; the `P1`--`P6` setting remains research work |
+| HTV145 | Watering/idle state | Confirmed | Publish only valve-originated response or telemetry state |
+| HTV145 | Requested/last-session duration | Confirmed | Publish whole-minute duration decoded from accepted valve-originated families |
+| HTV145 | Last-session water usage | Confirmed | Publish tenths of a liter from cloud-correlated terminal/status reports |
+| HTV145 | Battery | Categorical only | Publish vendor-compatible `100%` normal or `10%` low from the confirmed status bit |
+| HTV145 | Remaining time | Not transmitted in a supported state family | Leave unavailable |
+| HTV405 | Active zone and watering/idle state | Confirmed | Publish only authenticated responses or independent lower-channel state reports |
+| HTV405 | Requested duration and transmitted remaining time | Confirmed | Publish the crossed two-second-unit fields when present |
+| HTV405 | Actual session duration | Derived from confirmed transitions, not an RF field | Keep separate from requested duration |
+| HTV405 | Automatic stop | Confirmed event sequence | Confirm from the valve's later idle report; never infer from elapsed command time |
+| HTV405 | Battery | Not transmitted in known families | Keep HA battery unavailable |
+| HTV405 | Water usage | Not transmitted in known families | Keep HA last-usage unavailable |
+
+Raw frames, endpoint/counter diagnostics, and research-only candidates are not
+user measurements. Adding a field to this table requires a redacted fixture
+and a regression test that preserves its evidence boundary.
+
 ### Measured RF parameters
 
 FFT and pulse analysis of 25 clean 2.0 Msps CU8 captures produced:

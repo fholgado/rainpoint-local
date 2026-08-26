@@ -186,6 +186,11 @@ same time without conflicting authority.
 - [ ] Confirm stale moisture data cannot suppress irrigation indefinitely: use
       only sufficiently recent readings and follow the documented fallback after
       the configured 6--8 hour limit.
+
+The deployed household script now waters from the remaining fresh readings
+when only part of a bed's sensor set is stale, and uses the bounded fallback
+only when no configured reading is fresh. Keep this gate open until a scheduled
+cycle validates both branches.
 - [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
       addition to the existing UTC/offset/DST software coverage.
 
@@ -207,7 +212,7 @@ observable, and recoverable.
       water usage.
 - [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
       battery entity unavailable until RF correlation is repeatable.
-- [ ] Mark each field as confirmed, provisional, categorical-only, or not
+- [x] Mark each field as confirmed, provisional, categorical-only, or not
       transmitted locally; never synthesize an unavailable protocol value.
 - [ ] Ensure product/model discovery is capability- and product-code based, not
       tied to one seller name, household endpoint, or friendly name.
