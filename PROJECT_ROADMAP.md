@@ -120,7 +120,7 @@ not a gateway lifecycle mutation.
       continues reporting after association. The validated valve reported on
       the generated route every approximately 40 seconds through the command
       acceptance trial.
-- [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
+- [x] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
 - [x] Pair once under a generated custom controller identity and create exactly
       one capability-correct HA device.
@@ -132,12 +132,22 @@ ordinary reports cannot defeat suppression, and an explicit pairing session
 can restore the same stable device ID exactly once. Physical HA removal and
 re-pair evidence is still required before checking the gate.
 
-Two strict generated-identity HA enrollments are retained from 2026-08-25 and
-2026-08-26. Earlier white-flash/local successes used an older copied-identity
-path or were retained-association rejoins, so they do not count toward the
-three-consecutive-new-enrollment gate. The beta.10 duration-only firmware
-change did not alter pairing code, but one further HA-initiated fresh enrollment
-on this consolidated image is still required before checking the gate.
+Three strict generated-identity HA enrollments are now retained. The third,
+performed on the consolidated beta.10 image on 2026-08-26, produced the physical
+white success flash, reached the accepted `13/2C/99` tail at 16/18, and was
+independently confirmed by another radio receiving ordinary traffic addressed
+to the generated controller. HA reused `htv405-94a98013`, created no duplicate,
+and reset the authenticated command counter to `1`. Earlier copied-identity
+white flashes and retained-association rejoins remain excluded from this count.
+
+- [ ] Once HA accepts command-scoped HTV405 terminal evidence, make the selected
+      node leave the bounded tail in a successful/disarmed diagnostic state.
+      The third accepted trial correctly remained armed so it could answer the
+      optional final stock-tail messages, but when those messages never arrived
+      its local five-minute timer later reported `session_timeout`/`failed` even
+      though HA had already finalized a valid association. Fix this misleading
+      post-success status without sending an RF cancellation or regressing the
+      proven 16/18 completion path.
 
 ### HTV145 single-zone valve
 
