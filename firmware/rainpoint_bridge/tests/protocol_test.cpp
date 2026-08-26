@@ -911,6 +911,27 @@ int main() {
     assert(rainpoint::htv405FactoryAnnouncement(
         htv405Factory, htv405FactoryEndpoint
     ));
+    rainpoint::Htv405PairingProfile discoveredHtv405Profile{};
+    assert(rainpoint::initializeAutomaticHtv405Profile(
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        discoveredHtv405Profile
+    ));
+    assert(discoveredHtv405Profile.factoryEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x00, 0x00, 0x00, 0x00}}));
+    assert(discoveredHtv405Profile.pairedEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x00, 0x00, 0x00, 0x00}}));
+    assert(discoveredHtv405Profile.stepCount ==
+        rainpoint::kHtv405PairingStepCount);
+    assert(rainpoint::adoptAutomaticHtv405FactoryEndpoint(
+        htv405FactoryEndpoint, discoveredHtv405Profile
+    ));
+    assert(discoveredHtv405Profile.factoryEndpoint == htv405FactoryEndpoint);
+    assert(discoveredHtv405Profile.pairedEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x94, 0xa9, 0x80, 0x13}}));
+    assert(rainpoint::htv405RequestMatches(
+        discoveredHtv405Profile, 0, htv405Factory
+    ));
     rainpoint::Htv405PairingProfile htv405Profile{};
     assert(rainpoint::buildAutomaticHtv405Profile(
         htv405FactoryEndpoint,

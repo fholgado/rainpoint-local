@@ -20,6 +20,7 @@ REQUIRED_CAPABILITIES = (
     b"configurable_rf_controller_identity",
     b"routine_sensor_ack_tx",
     b"valve_pairing_tx_candidate",
+    b"htv405_auto_identity_pairing",
     b"firmware_update_start",
     b"firmware_update_trial",
     b"verified_sha256",

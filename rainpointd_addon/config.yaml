@@ -1,7 +1,7 @@
 name: RainPoint Local Gateway
-version: 0.33.5
+version: 0.33.6
 slug: rainpointd
-description: Local RainPoint telemetry and bounded sensor-pairing gateway
+description: Local RainPoint telemetry and bounded device-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
 arch:
   - aarch64

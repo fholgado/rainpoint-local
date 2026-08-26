@@ -2341,6 +2341,7 @@ void handleNetworkCommand() {
     bool requestedAutomaticRejoin = false;
     bool requestedValvePairing = false;
     bool requestedValveRejoin = false;
+    bool requestedValveAutomaticDiscovery = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
     std::array<std::uint8_t, 4> requestedControllerEndpoint{};
     std::array<std::uint8_t, 4> requestedValveRoute{};
@@ -2367,14 +2368,25 @@ void handleNetworkCommand() {
         rainpoint::validRfControllerIdentity(
             requestedControllerEndpoint, requestedCompanionEndpoint
         );
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    const bool requestedHtv405Profile =
+        profile == rainpoint::kAutomaticHtv405ProfileId;
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    const bool requestedHtv145Profile =
+        profile == rainpoint::kAutomaticHtv145ProfileId;
+#else
+    const bool requestedHtv145Profile = false;
+#endif
+    const bool requestedValveFactoryParsed =
+        parseRawHexEndpoint(factory, requestedFactoryEndpoint);
+    requestedValveAutomaticDiscovery =
+        requestedHtv405Profile && factory.isEmpty();
+#endif
     if (
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-        (profile == rainpoint::kAutomaticHtv405ProfileId
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            || profile == rainpoint::kAutomaticHtv145ProfileId
-#endif
-        ) &&
-        parseRawHexEndpoint(factory, requestedFactoryEndpoint) &&
+        (requestedValveAutomaticDiscovery ||
+            ((requestedHtv405Profile || requestedHtv145Profile) &&
+                requestedValveFactoryParsed)) &&
         parseRawHexEndpoint(
             jsonStringField(command, "valve_route"), requestedValveRoute
         ) &&
@@ -2441,8 +2453,9 @@ void handleNetworkCommand() {
         return;
     }
 
-    pairingAutomaticDiscovery = requestedAutomaticDiscovery;
-    pairingFactoryAdopted = !requestedAutomaticDiscovery;
+    pairingAutomaticDiscovery =
+        requestedAutomaticDiscovery || requestedValveAutomaticDiscovery;
+    pairingFactoryAdopted = !pairingAutomaticDiscovery;
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingActive = requestedValvePairing;
     valvePairingKnownRejoin = requestedValvePairing && requestedValveRejoin;
@@ -2462,12 +2475,18 @@ void handleNetworkCommand() {
                 )
                 :
 #endif
-            rainpoint::buildAutomaticHtv405Profile(
-            requestedFactoryEndpoint,
-            requestedValveRoute,
-            requestedCompanionEndpoint,
-            activeValvePairingProfile
-        );
+            (requestedValveAutomaticDiscovery
+                ? rainpoint::initializeAutomaticHtv405Profile(
+                    requestedValveRoute,
+                    requestedCompanionEndpoint,
+                    activeValvePairingProfile
+                )
+                : rainpoint::buildAutomaticHtv405Profile(
+                    requestedFactoryEndpoint,
+                    requestedValveRoute,
+                    requestedCompanionEndpoint,
+                    activeValvePairingProfile
+                ));
         if (!profileBuilt) {
             reportNetworkCommandError(commandId, "valve_association_invalid");
             valvePairingActive = false;
@@ -2935,6 +2954,24 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
+        if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
+            std::array<std::uint8_t, 4> factoryEndpoint{};
+            if (!rainpoint::htv405FactoryAnnouncement(
+                    frame, factoryEndpoint
+                )) {
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            if (!rainpoint::adoptAutomaticHtv405FactoryEndpoint(
+                    factoryEndpoint, activeValvePairingProfile
+                )) {
+                cancelPairing("automatic_valve_profile_build_failed");
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            pairingFactoryAdopted = true;
+            reportPairingStatus("factory_identity_adopted");
+        }
         const std::size_t beforeStep = activeValvePairingCompletedSteps();
         const rainpoint::Htv405PairingStep* step =
             claimActiveValvePairingReply(frame, millis());
@@ -3258,8 +3295,10 @@ void setup() {
         "\"pairing_tx_available\":true,"
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         "\"valve_pairing_tx_candidate\":true,"
+        "\"htv405_auto_identity_pairing\":true,"
 #else
         "\"valve_pairing_tx_candidate\":false,"
+        "\"htv405_auto_identity_pairing\":false,"
 #endif
         "\"valve_control_available\":false,"
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1

@@ -115,7 +115,7 @@ enabled:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.4 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.7 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -140,7 +140,7 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.1-htv145-pairing-probe.4 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.1-htv145-pairing-probe.5 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -189,11 +189,15 @@ After the first OTA-capable image is installed over USB, compatible staged
 releases appear on the radio node’s Home Assistant Update entity. Build and
 verify the standard artifact manifest with:
 
+Production and supervised builds report the `unified` firmware variant.
+Research-only HTV145 probes report a distinct variant and must never be staged
+as compatible with `unified` nodes.
+
 ```sh
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.0 --environment rainpoint_bridge
+  --version 0.15.1 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

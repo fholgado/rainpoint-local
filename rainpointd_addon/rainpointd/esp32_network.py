@@ -174,7 +174,11 @@ class ESP32NetworkServer:
             command_type == "pairing_start"
             and message.get("profile") == "htv405_auto_candidate_v1"
         ):
-            required_capability = "valve_pairing_tx_candidate"
+            required_capability = (
+                "htv405_auto_identity_pairing"
+                if not message.get("factory_endpoint")
+                else "valve_pairing_tx_candidate"
+            )
         elif (
             command_type == "pairing_start"
             and message.get("profile") == "htv145_auto_candidate_v1"
@@ -521,6 +525,7 @@ class ESP32NetworkServer:
                         "identify",
                         "routine_sensor_ack_tx",
                         "valve_pairing_tx_candidate",
+                        "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
                         "valve_control_tx_candidate",
                         "htv145_control_tx_candidate",

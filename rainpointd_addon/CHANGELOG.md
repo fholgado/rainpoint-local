@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased / Firmware 0.15.1-htv145-pairing-probe.4
+## 0.33.6 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
+
+- Present gateway-advertised pairing profiles in Home Assistant under broad
+  Sensors and Valves categories, with supported models listed beneath each.
+- Add HTV405 to the normal HA pairing flow without asking users to copy a
+  factory endpoint, controller route, or companion endpoint.
+- Let a selected radio node adopt the first strict HTV405 factory announcement
+  in its bounded session, while preserving every captured pairing reply,
+  carrier, timing, and generated custom-controller-identity safety check.
+- Select pairing nodes by the chosen model's advertised capability; a node at
+  its sensor ACK capacity remains available for compatible valve enrollment.
+- Advertise automatic HTV405 identity discovery as a distinct node capability,
+  so older explicit-pairing firmware is never offered by the no-ID HA flow.
+- Give research-only HTV145 images a distinct OTA firmware variant so they
+  cannot be offered as upgrades to normal unified garden nodes.
+- Keep the unaccepted HTV145 transmitter out of the normal UI while retaining
+  its research-only profile and build boundary.
+- Advance the isolated HTV145 pairing build to
+  `0.15.1-htv145-pairing-probe.5` because the shared radio-node source changed;
+  its accepted assignment prefix and model-specific continuation are unchanged.
 
 - Make pairing completion and HA device-menu removal work through one
   family-neutral lifecycle for sensors and valves.

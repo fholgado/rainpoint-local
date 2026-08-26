@@ -54,6 +54,11 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertIsNone(profile["paired_endpoint"])
         self.assertTrue(profile["automatic_discovery"])
         self.assertTrue(profile["transmit_enabled"])
+        self.assertEqual("sensor", profile["device_category"])
+        self.assertTrue(profile["user_pairing_supported"])
+        self.assertEqual(
+            "sensor_pairing_tx", profile["required_node_capability"]
+        )
 
     def test_sensor_b_profile_matches_recovered_fixture(self) -> None:
         fixture = json.loads(
@@ -499,11 +504,22 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertTrue(metadata["experimental"])
         self.assertTrue(metadata["transmit_enabled"])
         self.assertFalse(metadata["valve_control_enabled"])
-        self.assertEqual(["factory_endpoint"], metadata["association_inputs_required"])
+        self.assertEqual("valve", metadata["device_category"])
+        self.assertTrue(metadata["user_pairing_supported"])
+        self.assertTrue(metadata["automatic_discovery"])
+        self.assertEqual([], metadata["association_inputs_required"])
+        self.assertEqual(
+            "htv405_auto_identity_pairing",
+            metadata["required_node_capability"],
+        )
         self.assertEqual(
             "persistent_local_gateway", metadata["controller_identity_default"]
         )
         self.assertEqual(18, metadata["step_count"])
+
+        htv145_metadata = automatic_htv145_profile_metadata()
+        self.assertEqual("valve", htv145_metadata["device_category"])
+        self.assertFalse(htv145_metadata["user_pairing_supported"])
 
     def test_htv145_probe_matches_both_captured_factory_sweep_frames(self) -> None:
         profile = build_htv145_profile(

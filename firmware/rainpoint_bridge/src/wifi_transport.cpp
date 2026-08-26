@@ -317,15 +317,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"node_id\":\"%s\",\"firmware_version\":\"%s\","
         "\"mode\":\"local_radio_node\","
         "\"hardware_profile\":\"esp32dev-cc1101-v1\","
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_OTA_CANDIDATE == 1
-        "\"firmware_variant\":\"unified\","
-#elif RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
-        "\"firmware_variant\":\"routine-ack\","
-#elif RAINPOINT_OTA_CANDIDATE == 1
-        "\"firmware_variant\":\"pairing-ota\","
-#else
-        "\"firmware_variant\":\"base\","
-#endif
+        "\"firmware_variant\":\"%s\","
 #if RAINPOINT_OTA_CANDIDATE == 1
         "\"firmware_channel\":\"experimental\","
 #else
@@ -342,6 +334,7 @@ void WifiTransport::authenticate(const String& nonce) {
 #endif
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         ",\"valve_pairing_tx_candidate\""
+        ",\"htv405_auto_identity_pairing\""
 #endif
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
         ",\"htv145_pairing_tx_candidate\""
@@ -357,6 +350,7 @@ void WifiTransport::authenticate(const String& nonce) {
         kProtocolVersion,
         nodeId_.c_str(),
         RAINPOINT_FIRMWARE_VERSION,
+        RAINPOINT_FIRMWARE_VARIANT,
         gatewayHost_.c_str(),
         proof.c_str()
     );

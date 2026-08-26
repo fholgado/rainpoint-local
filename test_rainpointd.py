@@ -781,6 +781,67 @@ class GatewayTest(unittest.TestCase):
             self.assertTrue(pairing_node["managed"])
             gateway.close()
 
+    def test_sensor_ack_capacity_does_not_hide_a_valve_capable_node(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                ),
+            )
+            commands: list[dict] = []
+            gateway.set_node_command_sender(
+                lambda _node_id, command: commands.append(command)
+            )
+            gateway.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                protocol_version=2,
+                capabilities=[
+                    "rx",
+                    "sensor_pairing_tx",
+                    "valve_pairing_tx_candidate",
+                    "htv405_auto_identity_pairing",
+                    "configurable_rf_controller_identity",
+                ],
+            )
+            assert gateway._store is not None
+            for index in range(8):
+                gateway._store.upsert_ack_assignment(
+                    {
+                        "paired_endpoint": f"9bce{index:02x}24",
+                        "node_id": "rp-001122334455",
+                        "assigned_channel": 4,
+                        "frequency_offset_hz": 45_000,
+                        "power_dbm": 10,
+                        "invert": False,
+                        "updated_at": "2026-08-25T00:00:00+00:00",
+                        "controller_endpoint": (
+                            gateway.rf_identity.controller_endpoint
+                        ),
+                        "companion_endpoint": (
+                            gateway.rf_identity.companion_endpoint
+                        ),
+                    }
+                )
+
+            pairing_node = gateway.pairing()["pairing_nodes"][0]
+            self.assertEqual(8, pairing_node["routine_ack_assigned_sensors"])
+            with self.assertRaisesRegex(ValueError, "acknowledgement capacity"):
+                gateway.start_pairing(120, node_id="rp-001122334455")
+            started = gateway.start_pairing(
+                120,
+                node_id="rp-001122334455",
+                profile_id="htv405_auto_candidate_v1",
+            )
+            self.assertEqual(
+                "htv405_auto_candidate_v1", started["active_profile_id"]
+            )
+            self.assertEqual("htv405_auto_candidate_v1", commands[-1]["profile"])
+            self.assertNotIn("factory_endpoint", commands[-1])
+            gateway.close()
+
     def test_ack_assignment_is_single_owner_and_survives_gateway_restart(
         self,
     ) -> None:

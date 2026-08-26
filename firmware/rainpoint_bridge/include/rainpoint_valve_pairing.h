@@ -204,19 +204,15 @@ inline bool htv405FactoryAnnouncement(
     return true;
 }
 
-inline bool buildAutomaticHtv405Profile(
-    const std::array<std::uint8_t, 4>& factoryEndpoint,
+inline bool initializeAutomaticHtv405Profile(
     const std::array<std::uint8_t, 4>& valveRoute,
     const std::array<std::uint8_t, 4>& companionEndpoint,
     Htv405PairingProfile& profile
 ) {
-    if (factoryEndpoint[0] & 0x80U || factoryEndpoint[3] != 0x13 ||
-        !validRfControllerIdentity(valveRoute, companionEndpoint)) {
+    if (!validRfControllerIdentity(valveRoute, companionEndpoint)) {
         return false;
     }
-    profile.factoryEndpoint = factoryEndpoint;
-    profile.pairedEndpoint = factoryEndpoint;
-    profile.pairedEndpoint[0] |= 0x80U;
+    profile = {};
     profile.valveRoute = valveRoute;
     profile.companionEndpoint = companionEndpoint;
     profile.stepCount = kHtv405PairingStepCount;
@@ -240,6 +236,33 @@ inline bool buildAutomaticHtv405Profile(
     // starting 35.95 ms after the request ended. Suppressing it was the
     // reproducible cause of the local 6/18 initialization stall.
     return true;
+}
+
+inline bool adoptAutomaticHtv405FactoryEndpoint(
+    const std::array<std::uint8_t, 4>& factoryEndpoint,
+    Htv405PairingProfile& profile
+) {
+    if (factoryEndpoint[0] & 0x80U || factoryEndpoint[3] != 0x13U ||
+        !validRfControllerIdentity(
+            profile.valveRoute, profile.companionEndpoint
+        )) {
+        return false;
+    }
+    profile.factoryEndpoint = factoryEndpoint;
+    profile.pairedEndpoint = factoryEndpoint;
+    profile.pairedEndpoint[0] |= 0x80U;
+    return true;
+}
+
+inline bool buildAutomaticHtv405Profile(
+    const std::array<std::uint8_t, 4>& factoryEndpoint,
+    const std::array<std::uint8_t, 4>& valveRoute,
+    const std::array<std::uint8_t, 4>& companionEndpoint,
+    Htv405PairingProfile& profile
+) {
+    return initializeAutomaticHtv405Profile(
+        valveRoute, companionEndpoint, profile
+    ) && adoptAutomaticHtv405FactoryEndpoint(factoryEndpoint, profile);
 }
 
 // Research-only HTV145 enrollment. Every populated step comes from the same
