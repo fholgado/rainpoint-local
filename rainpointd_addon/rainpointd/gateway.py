@@ -363,8 +363,76 @@ class Gateway:
         """Update ephemeral diagnostics for one authenticated radio node."""
         with self._lock:
             node = self._nodes.setdefault(node_id, {"node_id": node_id})
-            node.update(copy.deepcopy(fields))
+            normalized = copy.deepcopy(fields)
+            if "pairing_state" in normalized:
+                self._normalize_node_pairing_status_locked(node, normalized)
+            node.update(normalized)
             self._adopt_active_valve_identity_from_node_locked(node_id, node)
+
+    @staticmethod
+    def _normalize_node_pairing_status_locked(
+        node: dict[str, Any], fields: dict[str, Any]
+    ) -> None:
+        """Separate the raw node transcript from the gateway pairing outcome.
+
+        An HTV405 can enter ordinary paired operation before emitting the two
+        optional final rows retained from the stock transcript. Only the
+        gateway can validate that ordinary traffic addresses the active custom
+        controller. Preserve the node's literal tail result for diagnostics,
+        but do not let a later tail timeout overturn that stronger evidence.
+        """
+        raw_state = fields.get("pairing_state")
+        raw_reason = fields.get("pairing_failure_reason")
+        raw_detail = fields.get("pairing_detail")
+        command_id = fields.get("pairing_command_id")
+        fields["pairing_node_state"] = raw_state
+        fields["pairing_node_failure_reason"] = raw_reason
+        fields["pairing_node_detail"] = raw_detail
+
+        accepted_command = node.get("pairing_terminal_accepted_command_id")
+        if (
+            isinstance(command_id, str)
+            and command_id
+            and isinstance(accepted_command, str)
+            and command_id == accepted_command
+        ):
+            fields["pairing_outcome"] = "completed"
+            fields["pairing_completion_source"] = "gateway_terminal_evidence"
+            if raw_state == "armed":
+                fields["pairing_tail_state"] = "active"
+            elif raw_state == "completed":
+                fields["pairing_tail_state"] = "completed"
+            elif raw_state == "failed" and raw_reason == "session_timeout":
+                fields["pairing_tail_state"] = "optional_tail_timeout"
+                fields["pairing_state"] = "completed"
+                fields["pairing_failure_reason"] = "none"
+                fields["pairing_detail"] = (
+                    "gateway_terminal_evidence_accepted_optional_tail_expired"
+                )
+            else:
+                fields["pairing_tail_state"] = "failed_after_terminal_evidence"
+            return
+
+        # A new command starts a distinct outcome. Do not let terminal evidence
+        # from a previous enrollment normalize a later physical attempt.
+        if isinstance(command_id, str) and command_id and raw_state == "armed":
+            for key in (
+                "pairing_terminal_accepted_command_id",
+                "pairing_terminal_accepted_at",
+                "pairing_terminal_accepted_endpoint",
+            ):
+                node.pop(key, None)
+            fields["pairing_outcome"] = "pending"
+            fields["pairing_completion_source"] = None
+            fields["pairing_tail_state"] = "active"
+        elif raw_state == "completed":
+            fields["pairing_outcome"] = "completed"
+            fields["pairing_completion_source"] = "node_transcript"
+            fields["pairing_tail_state"] = "completed"
+        elif raw_state == "failed":
+            fields["pairing_outcome"] = "failed"
+            fields["pairing_completion_source"] = None
+            fields["pairing_tail_state"] = "failed"
 
     def _adopt_active_valve_identity_from_node_locked(
         self, node_id: str, node: dict[str, Any]
@@ -1969,6 +2037,19 @@ class Gateway:
         receiver = state.get("rf_receiver_id")
         self._active_pairing_confirmation_receiver = (
             receiver if isinstance(receiver, str) else None
+        )
+        # The selected node knows only whether it saw every retained transcript
+        # row. The gateway has stronger command-scoped evidence: an ordinary
+        # valve frame addressed to this active controller. Record that outcome
+        # before HA finalizes the flow so a later optional-tail timeout remains
+        # diagnostic detail rather than a false pairing failure.
+        node["pairing_terminal_accepted_command_id"] = command_id
+        node["pairing_terminal_accepted_at"] = observed_at
+        node["pairing_terminal_accepted_endpoint"] = expected
+        node["pairing_outcome"] = "completed"
+        node["pairing_completion_source"] = "gateway_terminal_evidence"
+        node["pairing_tail_state"] = (
+            "active" if node.get("tx_armed") is True else "completed"
         )
 
     def _confirm_sensor_ack_locked(

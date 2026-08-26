@@ -54,6 +54,27 @@ class APIModelsTest(unittest.TestCase):
             ),
         )
 
+    def test_pairing_completion_wins_over_optional_node_tail_timeout(self) -> None:
+        """A later node-tail diagnostic cannot reverse terminal RF evidence."""
+        self.assertEqual(
+            "94a98013",
+            api_models.pairing_completed_endpoint(
+                {
+                    "stage": "valve_pairing_completed",
+                    "completed_endpoint": "94a98013",
+                    "pairing_nodes": [
+                        {
+                            "pairing_state": "completed",
+                            "pairing_outcome": "completed",
+                            "pairing_node_state": "failed",
+                            "pairing_node_failure_reason": "session_timeout",
+                            "pairing_tail_state": "optional_tail_timeout",
+                        }
+                    ],
+                }
+            ),
+        )
+
     def test_pairing_completion_falls_back_to_new_record(self) -> None:
         self.assertEqual(
             "95a98024",

@@ -149,6 +149,30 @@ white flashes and retained-association rejoins remain excluded from this count.
       post-success status without sending an RF cancellation or regressing the
       proven 16/18 completion path.
 
+Success criteria for this diagnostic fix:
+
+1. Only an active-session valve frame addressed to the generated controller
+   may set the authoritative pairing outcome to `completed`.
+2. The selected node remains visibly armed while it can answer optional tail
+   requests; control and unrelated RF commands remain blocked during that time.
+3. If the optional tail expires after accepted terminal evidence, the effective
+   node pairing state is `completed`/disarmed with no pairing failure. The raw
+   node result remains available separately as `failed`/`session_timeout` with
+   tail state `optional_tail_timeout` for protocol research.
+4. A timeout before terminal evidence remains a real failure and the HA flow
+   continues to abort as `pairing_timeout` or `pairing_failed`.
+5. The fix sends no RF cancellation, changes no pairing payload/frequency/
+   timing, creates no duplicate device, and does not reset the authenticated
+   valve command counter after the first accepted terminal frame.
+
+Gateway 0.33.11 implements this effective/raw outcome split and is deployed.
+Automated coverage reproduces both the observed post-terminal 16/18 timeout and
+a real pre-terminal timeout; all 317 Python regressions and the native firmware
+protocol test pass. Leave this physical gate open until one later HTV405 pairing
+shows `pairing_outcome=completed`, raw node `failed`/`session_timeout`, tail
+`optional_tail_timeout`, and an available counter-synchronized valve after the
+five-minute node window expires.
+
 ### HTV145 single-zone valve
 
 - [x] Decode stock enrollment/control evidence sufficiently to build a bounded,

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.11 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
+
+- Treat a strict controller-addressed valve report during the active HTV405
+  session as the authoritative pairing outcome, while leaving the selected
+  node armed for its bounded optional transcript tail.
+- Preserve a later node `failed`/`session_timeout` result as raw protocol
+  diagnostics without allowing that optional-tail timeout to overwrite a
+  completed HA pairing or reset valve control state.
+- Keep pre-terminal node timeouts as real failures and make the effective,
+  raw-node, and optional-tail outcomes independently inspectable through the
+  gateway diagnostics.
+
 ## 0.33.10 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
 
 - Resolve the HTV405 long-duration bias from a physical 15-minute trial. The

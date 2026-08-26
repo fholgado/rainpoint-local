@@ -667,6 +667,14 @@ class ESP32NetworkTest(unittest.TestCase):
         progress = self.gateway.pairing()
         self.assertEqual("valve_pairing_completed", progress["stage"])
         self.assertEqual("94a98013", progress["completed_endpoint"])
+        node = self.gateway.nodes()[0]
+        self.assertEqual("completed", node["pairing_outcome"])
+        self.assertEqual(
+            "gateway_terminal_evidence", node["pairing_completion_source"]
+        )
+        self.assertEqual("active", node["pairing_tail_state"])
+        self.assertEqual("armed", node["pairing_state"])
+        self.assertTrue(node["tx_armed"])
         control = next(
             item
             for item in self.gateway._store.valve_registry()
@@ -714,9 +722,96 @@ class ESP32NetworkTest(unittest.TestCase):
             area="Garden",
         )
         self.assertEqual("htv405-94a98013", registered["device_id"])
+        # This is the exact live beta.10 outcome: the valve has already moved
+        # into authenticated ordinary traffic, while two optional stock-tail
+        # rows never arrive before the node's bounded timer expires. Preserve
+        # the literal node result without exposing it as the pairing outcome.
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "failed",
+                    "completed_steps": 16,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "failure_reason": "session_timeout",
+                    "detail": "state_changed",
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_node_state") != "failed":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        node = self.gateway.nodes()[0]
+        self.assertEqual("completed", node["pairing_state"])
+        self.assertEqual("none", node["pairing_failure_reason"])
+        self.assertEqual("completed", node["pairing_outcome"])
+        self.assertEqual("failed", node["pairing_node_state"])
+        self.assertEqual(
+            "session_timeout", node["pairing_node_failure_reason"]
+        )
+        self.assertEqual("optional_tail_timeout", node["pairing_tail_state"])
+        self.assertFalse(node["tx_armed"])
         connection.settimeout(0.1)
         with self.assertRaises((TimeoutError, socket.timeout)):
             connection.recv(1)
+        stream.close()
+        connection.close()
+
+    def test_preterminal_valve_pairing_timeout_remains_failed(self) -> None:
+        connection, stream, _response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "htv405_auto_identity_pairing",
+                "configurable_rf_controller_identity",
+            ],
+        )
+        self.gateway.start_pairing(
+            120,
+            node_id=NODE_A,
+            profile_id="htv405_auto_candidate_v1",
+        )
+        command = json.loads(stream.readline())
+        stream.write(
+            json.dumps(
+                {
+                    "type": "pairing_tx_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "profile": "htv405_auto_candidate_v1",
+                    "state": "failed",
+                    "completed_steps": 1,
+                    "step_count": 18,
+                    "factory_endpoint": "14a98013",
+                    "paired_endpoint": "94a98013",
+                    "failure_reason": "session_timeout",
+                    "detail": "state_changed",
+                    "tx_armed": False,
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("pairing_state") != "failed":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        node = self.gateway.nodes()[0]
+        self.assertEqual("failed", node["pairing_state"])
+        self.assertEqual("failed", node["pairing_outcome"])
+        self.assertEqual("session_timeout", node["pairing_failure_reason"])
+        self.assertEqual("failed", node["pairing_tail_state"])
+        self.assertFalse(node["tx_armed"])
         stream.close()
         connection.close()
 
