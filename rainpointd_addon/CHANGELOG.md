@@ -1,6 +1,51 @@
 # Changelog
 
-## Unreleased / Firmware 0.15.1-htv145-pairing-probe.4
+## 0.33.8 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.8
+
+- Add association-scoped recurring HTV405 liveness acknowledgements from the
+  valve's single assigned control node. The gateway restores that authorization
+  after node reconnect and OTA, revokes the old owner before reassignment or
+  removal, and never includes zone, duration, or actuation fields.
+- Reproduce the captured stock-gateway endpoint, counter, timing, carrier, and
+  320-symbol wake transform for ordinary idle and watering reports.
+- Decode HTV405 liveness replies independently so an SDR or second radio node
+  can confirm the bridge's transmission over air without treating it as valve
+  state or command success.
+- Advance every shared-source firmware variant so OTA cannot mistake an older
+  binary for this liveness-capable build.
+
+## 0.33.7 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
+
+- Do not cancel the selected HTV405 radio node when HA receives terminal
+  pairing evidence and completes device naming. The node now retains its
+  bounded session long enough to finish the remaining modeled association
+  replies or expire naturally.
+- Associate strict selector-`0x07` HTV405 paired-link reports with the valve
+  device so report time and availability reflect valid RF activity, while
+  preserving the latest definitive zone and watering state.
+- Record the reversible, stepped Add-device wizard as a post-stabilization UX
+  requirement in the canonical roadmap.
+
+## 0.33.6 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
+
+- Present gateway-advertised pairing profiles in Home Assistant under broad
+  Sensors and Valves categories, with supported models listed beneath each.
+- Add HTV405 to the normal HA pairing flow without asking users to copy a
+  factory endpoint, controller route, or companion endpoint.
+- Let a selected radio node adopt the first strict HTV405 factory announcement
+  in its bounded session, while preserving every captured pairing reply,
+  carrier, timing, and generated custom-controller-identity safety check.
+- Select pairing nodes by the chosen model's advertised capability; a node at
+  its sensor ACK capacity remains available for compatible valve enrollment.
+- Advertise automatic HTV405 identity discovery as a distinct node capability,
+  so older explicit-pairing firmware is never offered by the no-ID HA flow.
+- Give research-only HTV145 images a distinct OTA firmware variant so they
+  cannot be offered as upgrades to normal unified garden nodes.
+- Keep the unaccepted HTV145 transmitter out of the normal UI while retaining
+  its research-only profile and build boundary.
+- Advance the isolated HTV145 pairing build to
+  `0.15.1-htv145-pairing-probe.5` because the shared radio-node source changed;
+  its accepted assignment prefix and model-specific continuation are unchanged.
 
 - Make pairing completion and HA device-menu removal work through one
   family-neutral lifecycle for sensors and valves.

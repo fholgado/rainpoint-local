@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "model": "HTV405FRF",
+  "capture_date": "2026-08-24",
+  "purpose": "Freeze recurring stock-gateway liveness replies outside enrollment.",
+  "pairs": [
+    {
+      "state": "watering",
+      "repeat": false,
+      "request_to_reply_ms": 84.474,
+      "report": "79f4882f28b984028094a9801304010786858190cf80000000409b00569e0000000000000db6",
+      "reply": "79f4882f2894a980133984028084410100010000000000000000000000000000000000000c06",
+      "reply_trailer_residual": "c713"
+    },
+    {
+      "state": "idle_repeat",
+      "repeat": true,
+      "request_to_reply_ms": 77.656,
+      "report": "79f4882f28b984028094a98013048107868581804f80000000408000568000000000000043a2",
+      "reply": "79f4882f2894a980133984028084c10100010000000000000000000000000000000000003e83",
+      "reply_trailer_residual": "4f03"
+    }
+  ],
+  "transform": {
+    "route": "valve endpoint to association companion endpoint",
+    "byte_13": "report byte 13 OR 0x80",
+    "byte_14": "report byte 14 OR 0x40",
+    "bytes_15_to_17": "01 00 01",
+    "bytes_18_to_35": "all zero"
+  },
+  "safety": "These replies contain no zone, duration, or actuation marker."
+}

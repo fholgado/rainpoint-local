@@ -70,23 +70,99 @@ class APIModelsTest(unittest.TestCase):
 
     def test_pairing_progress_actions_follow_radio_exchange(self) -> None:
         self.assertEqual(
-            "wait_for_sensor",
+            "wait_for_device",
             api_models.pairing_progress_action(
                 {"stage": "waiting_for_factory_announcement"}
             ),
         )
         self.assertEqual(
-            "exchange_with_sensor",
+            "exchange_with_device",
             api_models.pairing_progress_action(
                 {"stage": "pairing_exchange_in_progress"}
             ),
         )
         self.assertEqual(
-            "confirm_sensor",
+            "confirm_device",
             api_models.pairing_progress_action(
                 {"stage": "waiting_for_terminal_confirmation"}
             ),
         )
+
+    def test_pairing_catalog_parses_categories_and_support_boundaries(self) -> None:
+        profiles = api_models.pairing_profiles(
+            {
+                "supported_profiles": [
+                    {
+                        "profile_id": "hcs026_auto_v1",
+                        "model": "HCS02xRF",
+                        "device_category": "sensor",
+                        "display_name": "HCS02x soil moisture sensor",
+                        "required_node_capability": "sensor_pairing_tx",
+                        "automatic_discovery": True,
+                        "user_pairing_supported": True,
+                    },
+                    {
+                        "profile_id": "htv405_auto_candidate_v1",
+                        "model": "HTV405FRF",
+                        "device_category": "valve",
+                        "display_name": "HTV405 4-zone water timer",
+                        "required_node_capability": (
+                            "htv405_auto_identity_pairing"
+                        ),
+                        "automatic_discovery": True,
+                        "user_pairing_supported": True,
+                    },
+                    {
+                        "profile_id": "htv145_auto_candidate_v1",
+                        "model": "HTV145FRF",
+                        "device_category": "valve",
+                        "display_name": "HTV145 single-zone water timer",
+                        "required_node_capability": (
+                            "htv145_pairing_tx_candidate"
+                        ),
+                        "automatic_discovery": False,
+                        "user_pairing_supported": False,
+                    },
+                ]
+            }
+        )
+        self.assertEqual(
+            ("sensor", "valve", "valve"),
+            tuple(profile.device_category for profile in profiles),
+        )
+        self.assertTrue(profiles[1].automatic_discovery)
+        self.assertFalse(profiles[2].user_pairing_supported)
+
+    def test_pairing_catalog_rejects_invalid_or_duplicate_profiles(self) -> None:
+        profile = {
+            "profile_id": "duplicate",
+            "model": "HCS02xRF",
+            "device_category": "sensor",
+            "display_name": "Soil sensor",
+            "required_node_capability": "sensor_pairing_tx",
+            "automatic_discovery": True,
+            "user_pairing_supported": True,
+        }
+        with self.assertRaises(api_models.APIModelError):
+            api_models.pairing_profiles(
+                {"supported_profiles": [profile, profile.copy()]}
+            )
+        with self.assertRaises(api_models.APIModelError):
+            api_models.pairing_profiles(
+                {
+                    "supported_profiles": [
+                        {**profile, "device_category": "controller"}
+                    ]
+                }
+            )
+        with self.assertRaises(api_models.APIModelError):
+            api_models.pairing_profiles(
+                {
+                    "supported_profiles": [
+                        {**profile, "automatic_discovery": "yes"}
+                    ]
+                }
+            )
 
 
 if __name__ == "__main__":

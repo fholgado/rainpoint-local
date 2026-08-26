@@ -89,6 +89,10 @@ def automatic_hcs026_profile_metadata() -> dict[str, Any]:
     return {
         "profile_id": AUTOMATIC_HCS026_PROFILE_ID,
         "model": HCS026_MODEL,
+        "device_category": "sensor",
+        "display_name": "HCS02x soil moisture sensor",
+        "user_pairing_supported": True,
+        "required_node_capability": "sensor_pairing_tx",
         "factory_endpoint": None,
         "paired_endpoint": None,
         "evidence": (

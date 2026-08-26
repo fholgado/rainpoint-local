@@ -156,6 +156,9 @@ class ESP32SerialTransport:
                 "routine_ack_receive_channel",
                 "routine_ack_transmissions",
                 "routine_ack_failures",
+                "htv405_routine_ack_authorized_valves",
+                "htv405_routine_ack_transmissions",
+                "htv405_routine_ack_failures",
                 "sensor_recovery_transmissions",
                 "sensor_recovery_failures",
                 "sensor_recovery_completions",
@@ -280,6 +283,42 @@ class ESP32SerialTransport:
                     "routine_ack_assigned_channel"
                 ),
             )
+            return 0
+        if message_type == "htv405_routine_ack_status":
+            if authenticated_node_id is None:
+                return 0
+            endpoint = message.get("valve_endpoint")
+            state = message.get("state")
+            if (
+                not isinstance(endpoint, str)
+                or len(endpoint) != 8
+                or not all(
+                    character in "0123456789abcdef" for character in endpoint
+                )
+                or not isinstance(state, str)
+            ):
+                return 0
+            diagnostics: dict[str, Any] = {
+                "htv405_routine_ack_state": state,
+                "htv405_routine_ack_endpoint": endpoint,
+            }
+            for source, target in (
+                (
+                    "authorized_valve_count",
+                    "htv405_routine_ack_authorized_valves",
+                ),
+                ("transmissions", "htv405_routine_ack_transmissions"),
+                ("failures", "htv405_routine_ack_failures"),
+                ("channel_center_hz", "htv405_routine_ack_channel_center_hz"),
+            ):
+                value = message.get(source)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    diagnostics[target] = value
+            self.gateway.update_node(authenticated_node_id, **diagnostics)
             return 0
         if message_type == "valve_control_probe":
             # Research-only status is never an actuator request. Accept

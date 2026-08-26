@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-08-25
+Last reviewed: 2026-08-26
 
 This is the single source of truth for active project status, ordering, and
 completion. Architecture documents describe intended boundaries, protocol
@@ -64,6 +64,13 @@ normal observation window creates no replacement phantoms.
 
 ## Phase 1 — Home Assistant device lifecycle
 
+- [x] Present the custom gateway's user-pairable profiles under Sensors and
+      Valves, list supported models beneath each category, and filter radio
+      nodes by the selected profile's advertised capability.
+- [x] Start HCS026 and HTV405 enrollment from HA without copied RF identities;
+      the selected node adopts the first strict model-specific factory
+      announcement within the bounded session. Physical repetition gates below
+      remain open.
 - [ ] After a successful device removal, navigate back to the RainPoint Local
       device list instead of leaving the user on the deleted device's error
       page.
@@ -90,6 +97,12 @@ not a gateway lifecycle mutation.
 
 - [x] Reproduce local association and accept paired valve-originated traffic as
       terminal evidence.
+- [ ] Let the selected node finish the bounded 18-step HTV405 association
+      transcript after HA receives terminal evidence; naming the device must
+      not cancel the remaining protocol replies.
+- [ ] Count strict selector-`0x07` paired-link reports as device activity without
+      replacing the latest definitive zone/watering state, then prove the valve
+      continues reporting after the complete association transcript.
 - [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
 - [x] Pair once under a generated custom controller identity and create exactly
@@ -124,6 +137,14 @@ physical device has exactly one HA representation.
 
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node
       reconnect, gateway reconnect, and successful OTA.
+- [x] Freeze recurring stock-gateway HTV405 idle/watering reply evidence and
+      implement an association-scoped, non-actuating liveness ACK on the
+      valve's single durable control-node owner.
+- [ ] Complete the HTV405 liveness soak. The first authorization-scoped over-air
+      ACK transmitted successfully on 2026-08-26, and its single-owner
+      assignment survived an immediate custom-gateway restart; prove subsequent
+      routine valve reports continue across multiple cycles and longer node/
+      gateway restarts before closing this gate.
 - [ ] Battery-cycle each supported sensor family and restore the same HA device,
       paired identity, and routine reporting without opening pairing.
 - [ ] Capture the stock RainPoint gateway's complete battery-rejoin exchange for
@@ -311,6 +332,11 @@ one becomes a blocker:
   current evidence says the known selector does not.
 - Optimize multi-node channel scheduling and placement beyond the stability
   threshold required by Phase 5.
+- Treat **Add device** as a reversible stepped wizard (category, model, radio
+  node, physical action, and details) whose language and navigation make Back
+  return exactly one step without abandoning the live session. This matters for
+  recoverable consumer setup; promote it when Phase 1 protocol reliability is
+  no longer the limiting factor and validate it with an end-to-end HA UI trial.
 - Finish carrier-PCB manufacturing and enclosure optimization using the
   separate physical preorder checklist.
 - Implement cloud-to-local authority migration in coordination with the HomGar

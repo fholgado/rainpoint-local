@@ -40,20 +40,25 @@ if htv145_pairing_enabled and not research_enabled:
         "RAINPOINT_HTV145_PAIRING_CANDIDATE requires "
         "RAINPOINT_RESEARCH_BENCH=1"
     )
-standard_version = "0.15.0"
-supervised_version = "0.15.0-supervised-beta.5"
-htv145_candidate_version = "0.15.0-htv145-control-candidate.1"
-htv145_pairing_candidate_version = "0.15.1-htv145-pairing-probe.4"
+standard_version = "0.15.2"
+supervised_version = "0.15.0-supervised-beta.8"
+htv145_candidate_version = "0.15.0-htv145-control-candidate.2"
+htv145_pairing_candidate_version = "0.15.2-htv145-pairing-probe.6"
 if htv145_pairing_enabled:
     default_version = htv145_pairing_candidate_version
+    firmware_variant = "htv145-pairing-probe"
 elif htv145_enabled:
     default_version = htv145_candidate_version
+    firmware_variant = "htv145-control-candidate"
 elif supervised_enabled:
     default_version = supervised_version
+    firmware_variant = "unified"
 elif research_enabled:
     default_version = "0.15.0-research-bench.1"
+    firmware_variant = "research-bench"
 else:
     default_version = standard_version
+    firmware_variant = "unified"
 firmware_version = os.environ.get(
     "RAINPOINT_FIRMWARE_VERSION", default_version
 )
@@ -73,5 +78,6 @@ env.Append(
             int(htv145_pairing_enabled),
         ),
         ("RAINPOINT_FIRMWARE_VERSION", f'\\"{firmware_version}\\"'),
+        ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{firmware_variant}\\"'),
     ]
 )

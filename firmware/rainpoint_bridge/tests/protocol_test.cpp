@@ -60,6 +60,61 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    const rainpoint::Htv405RoutineAckAuthorization htv405AckAuthorization{
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x94, 0xa9, 0x80, 0x13}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        45'000,
+        10,
+        false,
+        true,
+    };
+    rainpoint::Htv405RoutineAckAuthorizations htv405AckAuthorizations;
+    assert(htv405AckAuthorizations.authorize(htv405AckAuthorization));
+    assert(htv405AckAuthorizations.activeCount() == 1);
+    const auto htv405ActiveReport = fromHex(
+        "79f4882f28b984028094a9801304010786858190cf80000000409b00569e0000000000000db6"
+    );
+    const auto htv405IdleRepeatReport = fromHex(
+        "79f4882f28b984028094a98013048107868581804f80000000408000568000000000000043a2"
+    );
+    std::array<std::uint8_t, rainpoint::kFrameBytes> htv405RoutineAck{};
+    assert(
+        htv405AckAuthorizations.match(htv405ActiveReport) != nullptr
+    );
+    assert(rainpoint::buildRoutineHtv405Acknowledgement(
+        htv405ActiveReport,
+        htv405AckAuthorization,
+        0xc713,
+        htv405RoutineAck
+    ));
+    assert(htv405RoutineAck == fromHex(
+        "79f4882f2894a980133984028084410100010000000000000000000000000000000000000c06"
+    ));
+    assert(rainpoint::buildRoutineHtv405Acknowledgement(
+        htv405IdleRepeatReport,
+        htv405AckAuthorization,
+        0x4f03,
+        htv405RoutineAck
+    ));
+    assert(htv405RoutineAck == fromHex(
+        "79f4882f2894a980133984028084c10100010000000000000000000000000000000000003e83"
+    ));
+    auto foreignHtv405Report = htv405ActiveReport;
+    foreignHtv405Report[5] ^= 0x01;
+    rainpoint::writeTrailer(foreignHtv405Report, 0xc713);
+    assert(htv405AckAuthorizations.match(foreignHtv405Report) == nullptr);
+    assert(!rainpoint::buildRoutineHtv405Acknowledgement(
+        foreignHtv405Report,
+        htv405AckAuthorization,
+        0xc713,
+        htv405RoutineAck
+    ));
+    assert(
+        rainpoint::routineHtv405AckCenterHz(htv405AckAuthorization) ==
+        rainpoint::kHtv405RoutineChannelCenterHz + 45'000
+    );
+
     const rainpoint::Htv405ValveLink testValveLink{
         {{0xaa, 0x11, 0x02, 0x80}},
         {{0xa1, 0xb2, 0xc3, 0x13}},
@@ -910,6 +965,27 @@ int main() {
     std::array<std::uint8_t, 4> htv405FactoryEndpoint{};
     assert(rainpoint::htv405FactoryAnnouncement(
         htv405Factory, htv405FactoryEndpoint
+    ));
+    rainpoint::Htv405PairingProfile discoveredHtv405Profile{};
+    assert(rainpoint::initializeAutomaticHtv405Profile(
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        discoveredHtv405Profile
+    ));
+    assert(discoveredHtv405Profile.factoryEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x00, 0x00, 0x00, 0x00}}));
+    assert(discoveredHtv405Profile.pairedEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x00, 0x00, 0x00, 0x00}}));
+    assert(discoveredHtv405Profile.stepCount ==
+        rainpoint::kHtv405PairingStepCount);
+    assert(rainpoint::adoptAutomaticHtv405FactoryEndpoint(
+        htv405FactoryEndpoint, discoveredHtv405Profile
+    ));
+    assert(discoveredHtv405Profile.factoryEndpoint == htv405FactoryEndpoint);
+    assert(discoveredHtv405Profile.pairedEndpoint ==
+        (std::array<std::uint8_t, 4>{{0x94, 0xa9, 0x80, 0x13}}));
+    assert(rainpoint::htv405RequestMatches(
+        discoveredHtv405Profile, 0, htv405Factory
     ));
     rainpoint::Htv405PairingProfile htv405Profile{};
     assert(rainpoint::buildAutomaticHtv405Profile(

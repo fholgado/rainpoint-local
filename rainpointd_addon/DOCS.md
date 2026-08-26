@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.5 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.8 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -24,6 +24,10 @@ during a custom-identity attempt.
 HTV405 valve-control POST requests remain rejected unless the explicit
 `supervised_htv405_control` beta option is enabled and the selected
 association-specific radio node advertises its candidate control capability.
+Completing HTV405 naming in HA leaves the radio node's bounded association
+session running so it can finish every modeled protocol reply. Strict
+selector-`0x07` paired-link reports refresh device availability without
+overwriting the last definitive zone or watering state.
 
 The generalized HCS026 workflow completed isolated local enrollment on both
 test sensors and on installed bed sensors using generated replies, terminal
@@ -192,14 +196,25 @@ observed sending a competing reply even after the sensor was removed from the
 vendor app. The workflow requires the selected node's matching command ID and
 terminal sensor message `03` before Home Assistant may name the device.
 
-The integration uses `hcs026_auto_v1`; users are not asked to identify RF
-endpoints or choose a transcript. The selected node adopts the first strict
-HCS026 factory announcement, derives its paired identity, and locks the window
-to that sensor. The command applies the capture-derived 240-second pairing
-clock lead, 45 kHz radio correction, 10 dBm power, shared selector 4, a common
-four-reply branch, and a strict timeout. Both captured identities support the
-generated payload offline, but the automatic path still requires physical
-validation before it is recommended.
+Home Assistant loads the gateway's pairing catalog and presents supported
+models beneath broad **Sensors** and **Valves** categories. The UI contains no
+installation-specific device IDs and filters radio-node choices by the
+selected model's required capability. Automatic HTV405 identity discovery has
+its own `htv405_auto_identity_pairing` capability, so older firmware that
+supports only explicit valve pairing is not offered by this flow.
+`hcs026_auto_v1` and
+`htv405_auto_candidate_v1` are currently user-pairable; the unaccepted HTV145
+transmitter remains hidden behind its research build.
+
+Users are not asked to identify RF endpoints or choose a transcript. For
+HCS026, the selected node adopts the first strict sensor factory announcement,
+derives its paired identity, and locks the window to that sensor. For HTV405,
+the node similarly adopts the first strict four-zone factory announcement and
+applies the custom local gateway's generated controller identity. The HTV405
+path changes identity discovery only: its physically accepted reply bodies,
+carriers, timing, bounded session, and valve-originated terminal confirmation
+remain unchanged. Keep the stock RainPoint gateway powered off during either
+new-enrollment exchange to avoid competing replies.
 
 ## Home Assistant integration
 

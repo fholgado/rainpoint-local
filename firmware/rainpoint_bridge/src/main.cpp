@@ -179,8 +179,11 @@ bool pairingFactoryAdopted = false;
 String pairingCommandId;
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
 rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
+rainpoint::Htv405RoutineAckAuthorizations htv405RoutineAckAuthorizations;
 std::uint32_t routineAckTransmissions = 0;
 std::uint32_t routineAckFailures = 0;
+std::uint32_t htv405RoutineAckTransmissions = 0;
+std::uint32_t htv405RoutineAckFailures = 0;
 std::uint32_t sensorRecoveryTransmissions = 0;
 std::uint32_t sensorRecoveryFailures = 0;
 std::uint32_t sensorRecoveryCompletions = 0;
@@ -193,6 +196,11 @@ void reportSensorRecoveryStatus(
     const char* state,
     rainpoint::PairingTrigger trigger,
     const rainpoint::RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+);
+void reportHtv405RoutineAckStatus(
+    const char* state,
+    const rainpoint::Htv405RoutineAckAuthorization& authorization,
     const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
 );
 #endif
@@ -605,6 +613,14 @@ void printNodeHealth() {
     line += routineAckTransmissions;
     line += ",\"routine_ack_failures\":";
     line += routineAckFailures;
+    line += ",\"htv405_routine_ack_authorized_valves\":";
+    line += static_cast<unsigned int>(
+        htv405RoutineAckAuthorizations.activeCount()
+    );
+    line += ",\"htv405_routine_ack_transmissions\":";
+    line += htv405RoutineAckTransmissions;
+    line += ",\"htv405_routine_ack_failures\":";
+    line += htv405RoutineAckFailures;
     line += ",\"sensor_recovery_transmissions\":";
     line += sensorRecoveryTransmissions;
     line += ",\"sensor_recovery_failures\":";
@@ -1157,13 +1173,13 @@ bool transmitQueuedValveProbe(
     return true;
 }
 
-void observeValveProbeFrame(
+bool observeValveProbeFrame(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     rainpoint::Cc1101& radio,
     std::uint32_t receivedAtMicros
 ) {
     if (!valveProbeMatchesLink(frame)) {
-        return;
+        return false;
     }
 
     rainpoint::Htv405GatewayCommandResponse response{};
@@ -1172,20 +1188,20 @@ void observeValveProbeFrame(
             reportValveProbeStatus(
                 "unsolicited_gateway_command_response_observed", &frame
             );
-            return;
+            return false;
         }
         if (response.sequence !=
                 valveControlProbe.transmittedPhase.sequence) {
             reportValveProbeStatus(
                 "gateway_command_response_sequence_mismatch", &frame
             );
-            return;
+            return false;
         }
         if (response.zone != valveControlProbe.transmittedZone) {
             reportValveProbeStatus(
                 "gateway_command_response_zone_mismatch", &frame
             );
-            return;
+            return false;
         }
 
         valveControlProbe.commandPendingConfirmation = false;
@@ -1225,12 +1241,12 @@ void observeValveProbeFrame(
             &frame
         );
         valveControlProbe.commandId.clear();
-        return;
+        return false;
     }
 
     rainpoint::Htv405Phase nextPhase{};
     if (!rainpoint::nextHtv405Phase(frame, nextPhase)) {
-        return;
+        return false;
     }
     // Selector 0x05/0x85 is the state-bearing report family. Selector 0x07
     // remains useful for link phase, but its pair/odd-looking fields cycle and
@@ -1270,12 +1286,13 @@ void observeValveProbeFrame(
             radio,
             receivedAtMicros + rainpoint::kHtv405OrdinaryReplyStartDelayUs
         )) {
-        return;
+        return true;
     }
     reportValveProbeStatus(
         stateReport ? "link_state_report_observed" : "link_phase_report_observed",
         &frame
     );
+    return false;
 }
 
 void pollValveProbeResponseListener() {
@@ -2286,6 +2303,72 @@ void handleNetworkCommand() {
         );
         return;
     }
+    if (type == "htv405_routine_ack_configure") {
+        long frequencyOffsetHz = 0;
+        long powerDbm = 0;
+        bool invert = false;
+        rainpoint::Htv405RoutineAckAuthorization authorization{};
+        if (currentPairingState() == rainpoint::PairingSessionState::Armed ||
+            !parseRawHexEndpoint(
+                jsonStringField(command, "controller_endpoint"),
+                authorization.controllerEndpoint
+            ) ||
+            !parseRawHexEndpoint(
+                jsonStringField(command, "valve_endpoint"),
+                authorization.valveEndpoint
+            ) ||
+            !parseRawHexEndpoint(
+                jsonStringField(command, "companion_endpoint"),
+                authorization.companionEndpoint
+            ) ||
+            !jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
+            !jsonLongField(command, "power_dbm", powerDbm) ||
+            !jsonBoolField(command, "invert", invert) ||
+            frequencyOffsetHz < -rainpoint::kMaxPairingFrequencyOffsetHz ||
+            frequencyOffsetHz > rainpoint::kMaxPairingFrequencyOffsetHz ||
+            powerDbm < -128 || powerDbm > 127) {
+            reportNetworkCommandError(
+                commandId, "invalid_htv405_ack_configuration"
+            );
+            return;
+        }
+        authorization.frequencyOffsetHz = static_cast<std::int32_t>(
+            frequencyOffsetHz
+        );
+        authorization.powerDbm = static_cast<std::int8_t>(powerDbm);
+        authorization.invert = invert;
+        authorization.active = true;
+        const std::uint32_t centerHz =
+            rainpoint::routineHtv405AckCenterHz(authorization);
+        const bool radioReady = centerHz >= 433'000'000 &&
+            centerHz <= 435'000'000 && primaryRadio.prepareTransmit() &&
+            primaryRadio.cacheTransmitFrequency(centerHz);
+        const bool authorized = radioReady &&
+            htv405RoutineAckAuthorizations.authorize(authorization);
+        reportHtv405RoutineAckStatus(
+            authorized ? "configured_by_gateway" : "configuration_rejected",
+            authorization
+        );
+        return;
+    }
+    if (type == "htv405_routine_ack_revoke") {
+        rainpoint::Htv405RoutineAckAuthorization authorization{};
+        if (!parseRawHexEndpoint(
+                jsonStringField(command, "valve_endpoint"),
+                authorization.valveEndpoint
+            )) {
+            reportNetworkCommandError(commandId, "invalid_htv405_ack_endpoint");
+            return;
+        }
+        const bool revoked = htv405RoutineAckAuthorizations.revoke(
+            authorization.valveEndpoint
+        );
+        reportHtv405RoutineAckStatus(
+            revoked ? "revoked_by_gateway" : "authorization_not_found",
+            authorization
+        );
+        return;
+    }
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
     if (type == "firmware_update_start") {
@@ -2341,6 +2424,7 @@ void handleNetworkCommand() {
     bool requestedAutomaticRejoin = false;
     bool requestedValvePairing = false;
     bool requestedValveRejoin = false;
+    bool requestedValveAutomaticDiscovery = false;
     std::array<std::uint8_t, 4> requestedFactoryEndpoint{};
     std::array<std::uint8_t, 4> requestedControllerEndpoint{};
     std::array<std::uint8_t, 4> requestedValveRoute{};
@@ -2367,14 +2451,25 @@ void handleNetworkCommand() {
         rainpoint::validRfControllerIdentity(
             requestedControllerEndpoint, requestedCompanionEndpoint
         );
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    const bool requestedHtv405Profile =
+        profile == rainpoint::kAutomaticHtv405ProfileId;
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    const bool requestedHtv145Profile =
+        profile == rainpoint::kAutomaticHtv145ProfileId;
+#else
+    const bool requestedHtv145Profile = false;
+#endif
+    const bool requestedValveFactoryParsed =
+        parseRawHexEndpoint(factory, requestedFactoryEndpoint);
+    requestedValveAutomaticDiscovery =
+        requestedHtv405Profile && factory.isEmpty();
+#endif
     if (
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-        (profile == rainpoint::kAutomaticHtv405ProfileId
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            || profile == rainpoint::kAutomaticHtv145ProfileId
-#endif
-        ) &&
-        parseRawHexEndpoint(factory, requestedFactoryEndpoint) &&
+        (requestedValveAutomaticDiscovery ||
+            ((requestedHtv405Profile || requestedHtv145Profile) &&
+                requestedValveFactoryParsed)) &&
         parseRawHexEndpoint(
             jsonStringField(command, "valve_route"), requestedValveRoute
         ) &&
@@ -2441,8 +2536,9 @@ void handleNetworkCommand() {
         return;
     }
 
-    pairingAutomaticDiscovery = requestedAutomaticDiscovery;
-    pairingFactoryAdopted = !requestedAutomaticDiscovery;
+    pairingAutomaticDiscovery =
+        requestedAutomaticDiscovery || requestedValveAutomaticDiscovery;
+    pairingFactoryAdopted = !pairingAutomaticDiscovery;
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingActive = requestedValvePairing;
     valvePairingKnownRejoin = requestedValvePairing && requestedValveRejoin;
@@ -2462,12 +2558,18 @@ void handleNetworkCommand() {
                 )
                 :
 #endif
-            rainpoint::buildAutomaticHtv405Profile(
-            requestedFactoryEndpoint,
-            requestedValveRoute,
-            requestedCompanionEndpoint,
-            activeValvePairingProfile
-        );
+            (requestedValveAutomaticDiscovery
+                ? rainpoint::initializeAutomaticHtv405Profile(
+                    requestedValveRoute,
+                    requestedCompanionEndpoint,
+                    activeValvePairingProfile
+                )
+                : rainpoint::buildAutomaticHtv405Profile(
+                    requestedFactoryEndpoint,
+                    requestedValveRoute,
+                    requestedCompanionEndpoint,
+                    activeValvePairingProfile
+                ));
         if (!profileBuilt) {
             reportNetworkCommandError(commandId, "valve_association_invalid");
             valvePairingActive = false;
@@ -2825,6 +2927,41 @@ void reportRoutineAckStatus(
     emitLine(line);
 }
 
+void reportHtv405RoutineAckStatus(
+    const char* state,
+    const rainpoint::Htv405RoutineAckAuthorization& authorization,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame
+) {
+    String line = "{\"type\":\"htv405_routine_ack_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"state\":\"";
+    line += state;
+    line += "\",\"valve_endpoint\":\"";
+    line += hexString(
+        authorization.valveEndpoint.data(),
+        authorization.valveEndpoint.size()
+    );
+    line += "\",\"channel_center_hz\":";
+    line += static_cast<unsigned long>(
+        rainpoint::routineHtv405AckCenterHz(authorization)
+    );
+    line += ",\"authorized_valve_count\":";
+    line += static_cast<unsigned int>(
+        htv405RoutineAckAuthorizations.activeCount()
+    );
+    line += ",\"transmissions\":";
+    line += htv405RoutineAckTransmissions;
+    line += ",\"failures\":";
+    line += htv405RoutineAckFailures;
+    if (frame != nullptr) {
+        line += ",\"frame\":\"";
+        line += hexString(frame->data(), frame->size());
+        line += '"';
+    }
+    line += '}';
+    emitLine(line);
+}
+
 void reportSensorRecoveryStatus(
     const char* state,
     rainpoint::PairingTrigger trigger,
@@ -2922,9 +3059,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+    bool valveProbeTransmitted = false;
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (&radio == &primaryRadio) {
-        observeValveProbeFrame(frame, radio, packet.receivedAtMicros);
+        valveProbeTransmitted = observeValveProbeFrame(
+            frame, radio, packet.receivedAtMicros
+        );
     }
 #endif
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
@@ -2935,6 +3075,24 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
+        if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
+            std::array<std::uint8_t, 4> factoryEndpoint{};
+            if (!rainpoint::htv405FactoryAnnouncement(
+                    frame, factoryEndpoint
+                )) {
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            if (!rainpoint::adoptAutomaticHtv405FactoryEndpoint(
+                    factoryEndpoint, activeValvePairingProfile
+                )) {
+                cancelPairing("automatic_valve_profile_build_failed");
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+            pairingFactoryAdopted = true;
+            reportPairingStatus("factory_identity_adopted");
+        }
         const std::size_t beforeStep = activeValvePairingCompletedSteps();
         const rainpoint::Htv405PairingStep* step =
             claimActiveValvePairingReply(frame, millis());
@@ -3202,6 +3360,38 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 );
             }
         }
+        const auto* valveAuthorization =
+            htv405RoutineAckAuthorizations.match(frame);
+        if (valveAuthorization != nullptr && !valveProbeTransmitted) {
+            std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
+            const bool built = rainpoint::buildRoutineHtv405Acknowledgement(
+                frame,
+                *valveAuthorization,
+                rainpoint::kHtv405RoutineAckTrailerResidual,
+                reply
+            );
+            const bool sent = built && radio.transmitAsync(
+                reply,
+                rainpoint::routineHtv405AckCenterHz(*valveAuthorization),
+                rainpoint::kHtv405RoutineAckWakeSymbols,
+                valveAuthorization->invert,
+                rainpoint::pairingPaTableValue(valveAuthorization->powerDbm),
+                rainpoint::kOrdinaryDeviationRegister,
+                packet.receivedAtMicros +
+                    rainpoint::kHtv405OrdinaryReplyStartDelayUs
+            );
+            if (sent) {
+                ++htv405RoutineAckTransmissions;
+            } else {
+                ++htv405RoutineAckFailures;
+            }
+            reportHtv405RoutineAckStatus(
+                sent ? "transmitted" :
+                    (built ? "transmit_failed" : "build_failed"),
+                *valveAuthorization,
+                &reply
+            );
+        }
     }
 #endif
     if (deferReceiveRecovery) {
@@ -3258,8 +3448,10 @@ void setup() {
         "\"pairing_tx_available\":true,"
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         "\"valve_pairing_tx_candidate\":true,"
+        "\"htv405_auto_identity_pairing\":true,"
 #else
         "\"valve_pairing_tx_candidate\":false,"
+        "\"htv405_auto_identity_pairing\":false,"
 #endif
         "\"valve_control_available\":false,"
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
@@ -3276,8 +3468,10 @@ void setup() {
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         "\"routine_ack_candidate\":true,"
         "\"routine_ack_authorization_persistent\":false,"
+        "\"htv405_routine_ack_available\":true,"
 #else
         "\"routine_ack_candidate\":false,"
+        "\"htv405_routine_ack_available\":false,"
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
         "\"ota_trial\":true,"

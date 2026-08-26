@@ -152,6 +152,35 @@ def is_htv405_link_frame(frame: bytes) -> bool:
     )
 
 
+def decode_htv405_routine_ack(frame: bytes) -> dict[str, int | str] | None:
+    """Decode the non-actuating gateway reply to an HTV405 link report."""
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return None
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    companion = frame[9:13]
+    if (
+        residual not in TRAILER_RESIDUES
+        or companion[0] & 0x80
+        or (frame[13] & 0x80) == 0
+        or frame[14] & 0x7F != 0x41
+        or frame[15] != 0x01
+        or frame[16] != 0x00
+        or frame[17] != 0x01
+        or any(frame[18:36])
+    ):
+        return None
+    controller = bytes([companion[0] | 0x80]) + companion[1:]
+    return {
+        "htv405_routine_ack_valve_endpoint": frame[5:9].hex(),
+        "htv405_routine_ack_companion_endpoint": companion.hex(),
+        "htv405_routine_ack_controller_endpoint": controller.hex(),
+        "htv405_routine_ack_sequence": frame[13] & 0x1F,
+        "htv405_routine_ack_repeat": int(bool(frame[14] & 0x80)),
+    }
+
+
 def build_htv405_close_frame(
     link: ValveLink,
     *,

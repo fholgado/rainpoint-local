@@ -300,6 +300,72 @@ class GatewayTest(unittest.TestCase):
         )
         gateway.close()
 
+    def test_ingested_htv405_link_report_refreshes_device_activity(self) -> None:
+        phase_only = (
+            "79f4882f28b984028094a980131c8107820700a0cf80000000408800569"
+            "e0000000000006700"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            assert gateway._store is not None
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-08-24T20:00:00+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="definitive-idle",
+                state={
+                    "rf_endpoint_a": "b9840280",
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:01:21+00:00",
+            )
+            ingestor = FrameIngestor(
+                gateway, receiver_id="rp-001122334455"
+            )
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-24T20:02:21+00:00",
+                    "rows": [{"len": len(phase_only) * 4, "data": phase_only}],
+                }
+            )
+
+            self.assertEqual(1, published)
+            event = gateway.events()[-1]
+            self.assertEqual("rf_frame", event["event_type"])
+            self.assertEqual("htv405-94a98013", event["device_id"])
+            device = gateway.devices(
+                now=datetime.fromisoformat("2026-08-24T20:02:21+00:00")
+            )[0]
+            self.assertFalse(device["state"]["is_watering"])
+            self.assertEqual(
+                "2026-08-24T20:01:21+00:00", device["state_observed_at"]
+            )
+            self.assertEqual(
+                "2026-08-24T20:02:21+00:00", device["observed_at"]
+            )
+            self.assertTrue(device["reporting"])
+            gateway.close()
+
     def test_authenticated_network_ingest_confirms_air_response(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = self._gateway_with_pending_htv405_open(
@@ -781,6 +847,67 @@ class GatewayTest(unittest.TestCase):
             self.assertTrue(pairing_node["managed"])
             gateway.close()
 
+    def test_sensor_ack_capacity_does_not_hide_a_valve_capable_node(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                ),
+            )
+            commands: list[dict] = []
+            gateway.set_node_command_sender(
+                lambda _node_id, command: commands.append(command)
+            )
+            gateway.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                protocol_version=2,
+                capabilities=[
+                    "rx",
+                    "sensor_pairing_tx",
+                    "valve_pairing_tx_candidate",
+                    "htv405_auto_identity_pairing",
+                    "configurable_rf_controller_identity",
+                ],
+            )
+            assert gateway._store is not None
+            for index in range(8):
+                gateway._store.upsert_ack_assignment(
+                    {
+                        "paired_endpoint": f"9bce{index:02x}24",
+                        "node_id": "rp-001122334455",
+                        "assigned_channel": 4,
+                        "frequency_offset_hz": 45_000,
+                        "power_dbm": 10,
+                        "invert": False,
+                        "updated_at": "2026-08-25T00:00:00+00:00",
+                        "controller_endpoint": (
+                            gateway.rf_identity.controller_endpoint
+                        ),
+                        "companion_endpoint": (
+                            gateway.rf_identity.companion_endpoint
+                        ),
+                    }
+                )
+
+            pairing_node = gateway.pairing()["pairing_nodes"][0]
+            self.assertEqual(8, pairing_node["routine_ack_assigned_sensors"])
+            with self.assertRaisesRegex(ValueError, "acknowledgement capacity"):
+                gateway.start_pairing(120, node_id="rp-001122334455")
+            started = gateway.start_pairing(
+                120,
+                node_id="rp-001122334455",
+                profile_id="htv405_auto_candidate_v1",
+            )
+            self.assertEqual(
+                "htv405_auto_candidate_v1", started["active_profile_id"]
+            )
+            self.assertEqual("htv405_auto_candidate_v1", commands[-1]["profile"])
+            self.assertNotIn("factory_endpoint", commands[-1])
+            gateway.close()
+
     def test_ack_assignment_is_single_owner_and_survives_gateway_restart(
         self,
     ) -> None:
@@ -871,6 +998,81 @@ class GatewayTest(unittest.TestCase):
                 (restored_commands[-1][0], restored_commands[-1][1]["type"]),
             )
             restored.close()
+
+    def test_htv405_routine_ack_follows_durable_control_node_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = Gateway(
+                transport="rtl433",
+                storage_path=str(path),
+                valve_control_enabled=True,
+            )
+            assert gateway._store is not None
+            gateway._store.accept_paired_valve_link(
+                controller_endpoint="ee86de80",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Garden Valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-08-26T00:00:00+00:00",
+            )
+            gateway._store.update_valve_control_profile(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                companion_endpoint="6e86de80",
+                selector=5,
+                frequency_offset_hz=97_154,
+                observed_at="2026-08-26T00:00:01+00:00",
+            )
+            commands: list[tuple[str, dict]] = []
+            gateway.set_node_command_sender(
+                lambda node_id, command: commands.append((node_id, command))
+            )
+            for node_id in ("rp-001122334455", "rp-aabbccddeeff"):
+                gateway.update_node(
+                    node_id,
+                    connected=True,
+                    authenticated=True,
+                    tx_armed=False,
+                    capabilities=[
+                        "rx",
+                        "valve_control_tx_candidate",
+                        "htv405_routine_ack_tx",
+                    ],
+                )
+
+            self.assertEqual(
+                1,
+                gateway.restore_radio_node_htv405_ack_assignments(
+                    "rp-001122334455"
+                ),
+            )
+            configured = commands[-1]
+            self.assertEqual("rp-001122334455", configured[0])
+            self.assertEqual(
+                "htv405_routine_ack_configure", configured[1]["type"]
+            )
+            self.assertEqual("ee86de80", configured[1]["controller_endpoint"])
+            self.assertEqual("94a98013", configured[1]["valve_endpoint"])
+            self.assertEqual("6e86de80", configured[1]["companion_endpoint"])
+            self.assertEqual(97_154, configured[1]["frequency_offset_hz"])
+
+            moved = gateway.assign_htv405_control_node(
+                device_id="htv405-94a98013",
+                node_id="rp-aabbccddeeff",
+            )
+            self.assertEqual("rp-aabbccddeeff", moved["control_node_id"])
+            self.assertEqual(
+                [
+                    "htv405_routine_ack_revoke",
+                    "htv405_routine_ack_configure",
+                ],
+                [commands[-2][1]["type"], commands[-1][1]["type"]],
+            )
+            self.assertEqual("rp-001122334455", commands[-2][0])
+            self.assertEqual("rp-aabbccddeeff", commands[-1][0])
+            gateway.close()
 
     def test_claim_and_rotation_persist_and_revoke_old_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

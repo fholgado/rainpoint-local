@@ -69,6 +69,42 @@ class FirmwareCatalogTest(unittest.TestCase):
         self.artifact.write_bytes(self.content + b"tampered")
         self.assertFalse(catalog.artifact_ready(release["release_id"]))
 
+    def test_newer_research_variant_is_not_offered_to_unified_node(self) -> None:
+        research_artifact = self.root / "radio-node-1.0.0-probe.bin"
+        research_artifact.write_bytes(self.content)
+        payload = json.loads(self.catalog_path.read_text(encoding="utf-8"))
+        payload["releases"].append(
+            {
+                "release_id": "esp32dev-ota-1.0.0-probe",
+                "version": "1.0.0-probe.1",
+                "channel": "experimental",
+                "hardware_profile": "esp32dev-cc1101-v1",
+                "firmware_variant": "htv145-pairing-probe",
+                "compatible_variants": ["htv145-pairing-probe"],
+                "required_capability": "firmware_update_trial",
+                "artifact": research_artifact.name,
+                "size_bytes": len(self.content),
+                "sha256": hashlib.sha256(self.content).hexdigest(),
+                "release_summary": "Research-only pairing probe",
+                "release_notes": "Must not reach unified nodes.",
+            }
+        )
+        self.catalog_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        catalog = FirmwareCatalog.load(self.catalog_path)
+        release = catalog.latest_for_node(
+            {
+                "firmware_version": "0.9.0-test.2",
+                "firmware_variant": "unified",
+                "firmware_channel": "experimental",
+                "hardware_profile": "esp32dev-cc1101-v1",
+                "capabilities": ["rx", "firmware_update_trial"],
+            }
+        )
+        self.assertIsNotNone(release)
+        assert release is not None
+        self.assertEqual("esp32dev-ota-0.9.0-test.3", release["release_id"])
+
     def test_gateway_installs_by_release_id_and_serves_verified_artifact(
         self,
     ) -> None:

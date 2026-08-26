@@ -6,6 +6,8 @@
 
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
+#include "rainpoint_valve_control.h"
+#include "rainpoint_valve_pairing.h"
 
 namespace rainpoint {
 
@@ -17,6 +19,12 @@ constexpr std::uint16_t kRoutineAckWakeSymbols = 320;
 constexpr std::uint16_t kRoutineAckDeadlineMs = 250;
 constexpr std::uint16_t kKnownSensorRecoveryDelayMs = 10;
 constexpr std::uint16_t kKnownSensorRecoveryDeadlineMs = 250;
+// Historical stock-gateway exchanges start the HTV405 routine reply about
+// 69--84 ms after the decoder reports the request. Scheduling 49.5 ms from the
+// RX FIFO-complete timestamp reproduces the already validated ordinary pairing
+// slot without blocking the radio loop.
+constexpr std::uint16_t kHtv405RoutineAckWakeSymbols = 320;
+constexpr std::uint16_t kHtv405RoutineAckTrailerResidual = 0xc713;
 
 struct RoutineAckAuthorization {
     std::array<std::uint8_t, 4> pairedEndpoint{};
@@ -115,6 +123,147 @@ private:
     std::array<RoutineAckAuthorization, kMaximumRoutineAckAuthorizations>
         authorizations_{};
 };
+
+struct Htv405RoutineAckAuthorization {
+    std::array<std::uint8_t, 4> controllerEndpoint{};
+    std::array<std::uint8_t, 4> valveEndpoint{};
+    std::array<std::uint8_t, 4> companionEndpoint{};
+    std::int32_t frequencyOffsetHz = 0;
+    std::int8_t powerDbm = 0;
+    bool invert = false;
+    bool active = false;
+};
+
+inline bool isAuthorizedRoutineHtv405Report(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    const Htv405RoutineAckAuthorization& authorization
+) {
+    // Idle/phase reports use 07/82 while definitive watering-state reports
+    // use 07/86. Stock gateway captures acknowledge both with the same
+    // endpoint/counter transform.
+    const bool routineShape = hasSync(frame) && hasOrdinaryTrailer(frame) &&
+        frame[15] == 0x07 &&
+        (frame[16] == 0x82 || frame[16] == 0x86) &&
+        ((frame[17] & 0x7fU) == 0x05 ||
+         (frame[17] & 0x7fU) == 0x07) &&
+        (frame[20] & 0x7fU) == 0x4f && frame[25] == 0x40 &&
+        frame[28] == 0x56;
+    return authorization.active && routineShape &&
+        endpointEquals(frame, 5, authorization.controllerEndpoint) &&
+        endpointEquals(frame, 9, authorization.valveEndpoint);
+}
+
+constexpr std::size_t kMaximumHtv405RoutineAckAuthorizations = 4;
+
+class Htv405RoutineAckAuthorizations {
+public:
+    bool authorize(const Htv405RoutineAckAuthorization& authorization) {
+        if (!authorization.active ||
+            !validRfControllerIdentity(
+                authorization.controllerEndpoint,
+                authorization.companionEndpoint
+            ) ||
+            authorization.valveEndpoint ==
+                std::array<std::uint8_t, 4>{} ||
+            authorization.valveEndpoint ==
+                authorization.controllerEndpoint ||
+            authorization.valveEndpoint ==
+                authorization.companionEndpoint ||
+            !validPairingPowerDbm(authorization.powerDbm) ||
+            authorization.frequencyOffsetHz < -kMaxPairingFrequencyOffsetHz ||
+            authorization.frequencyOffsetHz > kMaxPairingFrequencyOffsetHz) {
+            return false;
+        }
+        Htv405RoutineAckAuthorization* available = nullptr;
+        for (auto& existing : authorizations_) {
+            if (existing.active &&
+                existing.valveEndpoint == authorization.valveEndpoint) {
+                existing = authorization;
+                return true;
+            }
+            if (!existing.active && available == nullptr) {
+                available = &existing;
+            }
+        }
+        if (available == nullptr) {
+            return false;
+        }
+        *available = authorization;
+        return true;
+    }
+
+    const Htv405RoutineAckAuthorization* match(
+        const std::array<std::uint8_t, kFrameBytes>& frame
+    ) const {
+        for (const auto& authorization : authorizations_) {
+            if (isAuthorizedRoutineHtv405Report(frame, authorization)) {
+                return &authorization;
+            }
+        }
+        return nullptr;
+    }
+
+    bool revoke(const std::array<std::uint8_t, 4>& valveEndpoint) {
+        for (auto& authorization : authorizations_) {
+            if (authorization.active &&
+                authorization.valveEndpoint == valveEndpoint) {
+                authorization = Htv405RoutineAckAuthorization{};
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::size_t activeCount() const {
+        std::size_t count = 0;
+        for (const auto& authorization : authorizations_) {
+            count += authorization.active ? 1U : 0U;
+        }
+        return count;
+    }
+
+private:
+    std::array<
+        Htv405RoutineAckAuthorization,
+        kMaximumHtv405RoutineAckAuthorizations
+    > authorizations_{};
+};
+
+inline bool buildRoutineHtv405Acknowledgement(
+    const std::array<std::uint8_t, kFrameBytes>& report,
+    const Htv405RoutineAckAuthorization& authorization,
+    std::uint16_t trailerResidual,
+    std::array<std::uint8_t, kFrameBytes>& acknowledgement
+) {
+    if (!isAuthorizedRoutineHtv405Report(report, authorization) ||
+        (trailerResidual != 0xc713 && trailerResidual != 0x4f03)) {
+        return false;
+    }
+    acknowledgement.fill(0);
+    for (std::size_t index = 0; index < kSync.size(); ++index) {
+        acknowledgement[index] = kSync[index];
+    }
+    for (std::size_t index = 0; index < authorization.valveEndpoint.size();
+         ++index) {
+        acknowledgement[5 + index] = authorization.valveEndpoint[index];
+        acknowledgement[9 + index] = authorization.companionEndpoint[index];
+    }
+    acknowledgement[13] = report[13] | 0x80U;
+    acknowledgement[14] = report[14] | 0x40U;
+    acknowledgement[15] = 0x01;
+    acknowledgement[17] = 0x01;
+    writeTrailer(acknowledgement, trailerResidual);
+    return true;
+}
+
+inline std::uint32_t routineHtv405AckCenterHz(
+    const Htv405RoutineAckAuthorization& authorization
+) {
+    return static_cast<std::uint32_t>(
+        static_cast<std::int64_t>(kHtv405RoutineChannelCenterHz) +
+        authorization.frequencyOffsetHz
+    );
+}
 
 inline const RoutineAckAuthorization* authorizedHcs026ControlFrame(
     const std::array<std::uint8_t, kFrameBytes>& frame,

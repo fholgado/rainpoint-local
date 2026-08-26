@@ -313,6 +313,42 @@ class Gateway:
         with self._lock:
             node = self._nodes.setdefault(node_id, {"node_id": node_id})
             node.update(copy.deepcopy(fields))
+            self._adopt_active_valve_identity_from_node_locked(node_id, node)
+
+    def _adopt_active_valve_identity_from_node_locked(
+        self, node_id: str, node: dict[str, Any]
+    ) -> None:
+        """Accept an automatically discovered HTV405 factory identity."""
+        if (
+            self._active_pairing_profile_id != AUTOMATIC_HTV405_PROFILE_ID
+            or self._active_pairing_node_id != node_id
+            or self._active_pairing_command_id is None
+            or self._active_pairing_expected_valve_endpoint is not None
+            or node.get("pairing_command_id")
+            != self._active_pairing_command_id
+        ):
+            return
+        factory = node.get("pairing_factory_endpoint")
+        paired = node.get("pairing_paired_endpoint")
+        identity = self._active_pairing_rf_identity or {}
+        if not isinstance(factory, str) or not isinstance(paired, str):
+            return
+        try:
+            profile = build_htv405_profile(
+                factory_endpoint=factory.strip().lower(),
+                valve_route=str(identity.get("controller_endpoint", "")),
+                companion_endpoint=str(identity.get("companion_endpoint", "")),
+            )
+        except ValueError:
+            return
+        if profile.paired_endpoint != paired.strip().lower():
+            return
+        self._active_pairing_expected_valve_endpoint = profile.paired_endpoint
+        self._active_pairing_control_profile = {
+            "companion_endpoint": profile.companion_endpoint,
+            "selector": 0x05,
+            "frequency_offset_hz": HTV405_FREQUENCY_OFFSET_HZ,
+        }
 
     def observe_sensor_link_status(
         self, node_id: str, endpoint: str, **fields: Any
@@ -697,11 +733,17 @@ class Gateway:
                 raise RuntimeError("selected HTV405 radio node is unavailable")
             if registration.get("control_confirmed_watering") in {1, True}:
                 raise RuntimeError("HTV405 valve is not confirmed idle")
+            if registration.get("control_node_id") != node_id:
+                self._revoke_htv405_ack_locked(registration)
             result = self._store.assign_htv405_control_node(
                 valve_endpoint=str(registration["valve_endpoint"]),
                 node_id=node_id,
                 observed_at=timestamp,
             )
+            try:
+                self._configure_htv405_ack_locked(result)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                pass
             self._refresh_registry_catalog()
             return result
 
@@ -791,6 +833,101 @@ class Gateway:
             routine_ack_restore_unsupported_identity=unsupported,
         )
         return restored
+
+    def restore_radio_node_htv405_ack_assignments(self, node_id: str) -> int:
+        """Restore one-owner HTV405 liveness replies after reconnect/OTA."""
+        with self._lock:
+            if self._store is None or self._node_command_sender is None:
+                return 0
+            node = self._nodes.get(node_id, {})
+            if "htv405_routine_ack_tx" not in node.get("capabilities", []):
+                return 0
+            registrations = [
+                item
+                for item in self._store.valve_registry()
+                if item.get("model") == "HTV405FRF"
+                and item.get("control_node_id") == node_id
+                and item.get("control_companion_endpoint") is not None
+                and item.get("control_frequency_offset_hz") is not None
+            ]
+            sender = self._node_command_sender
+        restored = 0
+        for registration in registrations:
+            command = self._htv405_ack_configuration_command(registration)
+            try:
+                sender(node_id, command)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                break
+            self.update_node(
+                node_id, htv405_routine_ack_command_id=command["command_id"]
+            )
+            restored += 1
+        self.update_node(
+            node_id,
+            htv405_routine_ack_assigned_valves=len(registrations),
+            htv405_routine_ack_restore_requested=restored,
+        )
+        return restored
+
+    @staticmethod
+    def _htv405_ack_configuration_command(
+        registration: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build a non-actuating ACK authorization from a durable link."""
+        return {
+            "type": "htv405_routine_ack_configure",
+            "command_id": uuid.uuid4().hex,
+            "controller_endpoint": str(registration["controller_endpoint"]),
+            "valve_endpoint": str(registration["valve_endpoint"]),
+            "companion_endpoint": str(
+                registration["control_companion_endpoint"]
+            ),
+            "frequency_offset_hz": int(
+                registration["control_frequency_offset_hz"]
+            ),
+            "power_dbm": 10,
+            "invert": False,
+        }
+
+    def _configure_htv405_ack_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        node_id = registration.get("control_node_id")
+        if not isinstance(node_id, str) or self._node_command_sender is None:
+            return
+        node = self._nodes.get(node_id, {})
+        if (
+            node.get("connected") is not True
+            or "htv405_routine_ack_tx" not in node.get("capabilities", [])
+        ):
+            return
+        command = self._htv405_ack_configuration_command(registration)
+        self._node_command_sender(node_id, command)
+        node["htv405_routine_ack_command_id"] = command["command_id"]
+
+    def _revoke_htv405_ack_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        node_id = registration.get("control_node_id")
+        endpoint = registration.get("valve_endpoint")
+        if (
+            not isinstance(node_id, str)
+            or not isinstance(endpoint, str)
+            or self._node_command_sender is None
+        ):
+            return
+        try:
+            command = {
+                "type": "htv405_routine_ack_revoke",
+                "command_id": uuid.uuid4().hex,
+                "valve_endpoint": endpoint,
+            }
+            self._node_command_sender(node_id, command)
+            self._nodes.setdefault(node_id, {"node_id": node_id})[
+                "htv405_routine_ack_command_id"
+            ] = command["command_id"]
+        except (ConnectionError, KeyError, RuntimeError, ValueError):
+            pass
 
     def assign_radio_node_ack(
         self,
@@ -1677,7 +1814,7 @@ class Gateway:
             and profile is not None
         ):
             try:
-                self._store.update_valve_control_profile(
+                registration = self._store.update_valve_control_profile(
                     valve_endpoint=expected,
                     node_id=node_id,
                     companion_endpoint=str(profile["companion_endpoint"]),
@@ -1690,6 +1827,12 @@ class Gateway:
                 # ingestor before this callback. Refuse to create control
                 # state if that receive-side proof is unexpectedly absent.
                 return
+            try:
+                self._configure_htv405_ack_locked(registration)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                # Persistence is authoritative; reconnect restoration retries
+                # this best-effort live configuration.
+                pass
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
         elif self._store is not None and profile is not None:
@@ -3176,6 +3319,10 @@ class Gateway:
                     self._pairing.stop()
                     raise RuntimeError("radio-node command transport is unavailable")
                 automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
+                automatic_valve = (
+                    profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                    and not str(factory_endpoint or "").strip()
+                )
                 valve_candidate = profile_id in {
                     AUTOMATIC_HTV145_PROFILE_ID,
                     AUTOMATIC_HTV405_PROFILE_ID,
@@ -3199,22 +3346,23 @@ class Gateway:
                     if explicit_controller:
                         selected_controller_endpoint = explicit_controller
                         selected_companion_endpoint = explicit_companion
-                    try:
-                        builder = (
-                            build_htv145_profile
-                            if profile_id == AUTOMATIC_HTV145_PROFILE_ID
-                            else build_htv405_profile
-                        )
-                        valve_profile = builder(
-                            factory_endpoint=str(factory_endpoint or ""),
-                            valve_route=selected_controller_endpoint,
-                            companion_endpoint=selected_companion_endpoint,
-                        )
-                    except ValueError:
-                        self._pairing.stop()
-                        raise ValueError(
-                            "invalid valve association identifiers"
-                        ) from None
+                    if not automatic_valve:
+                        try:
+                            builder = (
+                                build_htv145_profile
+                                if profile_id == AUTOMATIC_HTV145_PROFILE_ID
+                                else build_htv405_profile
+                            )
+                            valve_profile = builder(
+                                factory_endpoint=str(factory_endpoint or ""),
+                                valve_route=selected_controller_endpoint,
+                                companion_endpoint=selected_companion_endpoint,
+                            )
+                        except ValueError:
+                            self._pairing.stop()
+                            raise ValueError(
+                                "invalid valve association identifiers"
+                            ) from None
                     # Continuous stock-gateway captures encode the current
                     # wall clock. The four-minute lead is HCS026-specific.
                     clock_lead_seconds = 0
@@ -3229,6 +3377,27 @@ class Gateway:
                     selected_controller_endpoint = LEGACY_STOCK_CONTROLLER_ENDPOINT
                     selected_companion_endpoint = LEGACY_STOCK_COMPANION_ENDPOINT
                     clock_lead_seconds = profile.clock_lead_seconds
+                required_capability = self._pairing_capability(
+                    profile_id,
+                    automatic_discovery=automatic_valve,
+                )
+                if required_capability not in nodes[node_id].get(
+                    "capabilities", []
+                ):
+                    self._pairing.stop()
+                    raise ValueError(
+                        "selected radio-node firmware does not support this "
+                        "pairing profile"
+                    )
+                if (
+                    required_capability == "sensor_pairing_tx"
+                    and int(nodes[node_id].get("routine_ack_assigned_sensors") or 0)
+                    >= MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
+                ):
+                    self._pairing.stop()
+                    raise ValueError(
+                        "selected radio node has no sensor acknowledgement capacity"
+                    )
                 if not self._node_supports_rf_controller_identity(
                     nodes[node_id],
                     selected_controller_endpoint,
@@ -3258,17 +3427,15 @@ class Gateway:
                     "power_dbm": 10,
                     "invert": False,
                 }
-                if not automatic:
+                if not automatic and not automatic_valve:
                     command["factory_endpoint"] = (
                         valve_profile.factory_endpoint
                         if valve_profile is not None
                         else profile.factory_endpoint
                     )
-                if valve_profile is not None:
-                    command["valve_route"] = valve_profile.valve_route
-                    command["companion_endpoint"] = (
-                        valve_profile.companion_endpoint
-                    )
+                if valve_candidate:
+                    command["valve_route"] = selected_controller_endpoint
+                    command["companion_endpoint"] = selected_companion_endpoint
                     if known_rejoin:
                         command["known_rejoin"] = True
                 elif automatic:
@@ -3291,12 +3458,9 @@ class Gateway:
                     "controller_endpoint": selected_controller_endpoint,
                     "companion_endpoint": selected_companion_endpoint,
                 }
-                if valve_profile is not None:
-                    self._active_pairing_expected_valve_endpoint = (
-                        valve_profile.paired_endpoint
-                    )
+                if valve_candidate:
                     self._active_pairing_control_profile = {
-                        "companion_endpoint": valve_profile.companion_endpoint,
+                        "companion_endpoint": selected_companion_endpoint,
                         # The local association reports selector byte 0x05 on
                         # the selector-2 carrier branch. Store the body value;
                         # the carrier is represented independently.
@@ -3305,6 +3469,10 @@ class Gateway:
                             command["frequency_offset_hz"]
                         ),
                     }
+                if valve_profile is not None:
+                    self._active_pairing_expected_valve_endpoint = (
+                        valve_profile.paired_endpoint
+                    )
             return self._pairing_snapshot(now=now)
 
     def stop_pairing(self) -> dict[str, Any]:
@@ -3715,7 +3883,15 @@ class Gateway:
             if device_id in self._devices:
                 self._devices[device_id]["name"] = name
                 self._devices[device_id]["area"] = area
-            self._cancel_active_pairing_node()
+            if self._active_pairing_profile_id == AUTOMATIC_HTV405_PROFILE_ID:
+                # Terminal valve evidence is sufficient for HA to finish the
+                # naming flow, but the radio node may still owe later replies
+                # in the bounded 18-step association transcript. Release the
+                # gateway session without transmitting a cancellation; the
+                # node will complete or expire its own bounded session.
+                self._release_active_pairing_node()
+            else:
+                self._cancel_active_pairing_node()
             self._pairing.stop()
             return updated
 
@@ -3828,7 +4004,7 @@ class Gateway:
         self._pairing.observe(fields, now=observed)
 
     def _pairing_nodes(self) -> list[dict[str, Any]]:
-        """Return connected protocol-v2 nodes with the narrow pairing capability."""
+        """Return connected protocol-v2 nodes advertising any pairing family."""
         if self._node_command_sender is None:
             return []
         registrations = {
@@ -3841,7 +4017,15 @@ class Gateway:
                 node.get("connected") is True
                 and node.get("authenticated") is True
                 and node.get("protocol_version") == 2
-                and "sensor_pairing_tx" in node.get("capabilities", [])
+                and any(
+                    capability in node.get("capabilities", [])
+                    for capability in (
+                        "sensor_pairing_tx",
+                        "valve_pairing_tx_candidate",
+                        "htv405_auto_identity_pairing",
+                        "htv145_pairing_tx_candidate",
+                    )
+                )
             ):
                 continue
             item = copy.deepcopy(node)
@@ -3861,20 +4045,41 @@ class Gateway:
             )
             item["routine_ack_assigned_sensors"] = assigned
             item["routine_ack_capacity"] = MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
-            if (
-                "routine_sensor_ack_tx" in node.get("capabilities", [])
-                and assigned >= MAXIMUM_ROUTINE_ACK_ASSIGNMENTS
-            ):
-                continue
             result.append(item)
         return result
 
+    @staticmethod
+    def _pairing_capability(
+        profile_id: str, *, automatic_discovery: bool = False
+    ) -> str:
+        """Map a pairing profile to the node capability that contains it."""
+        if profile_id == AUTOMATIC_HTV405_PROFILE_ID:
+            if automatic_discovery:
+                return "htv405_auto_identity_pairing"
+            return "valve_pairing_tx_candidate"
+        if profile_id == AUTOMATIC_HTV145_PROFILE_ID:
+            return "htv145_pairing_tx_candidate"
+        return "sensor_pairing_tx"
+
     def _cancel_active_pairing_node(self) -> None:
         """Best-effort disarm for the node selected by the current session."""
+        self._clear_active_pairing_node(send_cancel=True)
+
+    def _release_active_pairing_node(self) -> None:
+        """Forget gateway ownership while a bounded node session finishes."""
+        self._clear_active_pairing_node(send_cancel=False)
+
+    def _clear_active_pairing_node(self, *, send_cancel: bool) -> None:
+        """Clear gateway pairing state and optionally cancel the node session."""
         node_id = self._active_pairing_node_id
         command_id = self._active_pairing_command_id
         sender = self._node_command_sender
-        if node_id is not None and command_id is not None and sender is not None:
+        if (
+            send_cancel
+            and node_id is not None
+            and command_id is not None
+            and sender is not None
+        ):
             try:
                 sender(
                     node_id,
@@ -4056,6 +4261,16 @@ class Gateway:
             except KeyError:
                 suppressed_at = datetime.now(timezone.utc).isoformat()
                 try:
+                    valve_registration = next(
+                        (
+                            item
+                            for item in self._store.valve_registry()
+                            if item["device_id"] == device_id
+                        ),
+                        None,
+                    )
+                    if valve_registration is not None:
+                        self._revoke_htv405_ack_locked(valve_registration)
                     forgotten_valve = self._store.forget_valve_registry_device(
                         device_id,
                         suppressed_at=suppressed_at,

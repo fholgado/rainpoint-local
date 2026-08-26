@@ -945,6 +945,38 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual("c713", decoded["trailer_residual"])
         self.assertTrue(decoded["trailer_valid"])
 
+    def test_identifies_stock_gateway_htv405_routine_acknowledgements(
+        self,
+    ) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_stock_routine_ack_20260824.json"
+            ).read_text(encoding="utf-8")
+        )
+        for pair in fixture["pairs"]:
+            decoded = normalize_row(
+                {"len": 38 * 8, "data": pair["reply"]}
+            )
+            self.assertEqual(
+                "94a98013", decoded["htv405_routine_ack_valve_endpoint"]
+            )
+            self.assertEqual(
+                "39840280", decoded["htv405_routine_ack_companion_endpoint"]
+            )
+            self.assertEqual(
+                "b9840280", decoded["htv405_routine_ack_controller_endpoint"]
+            )
+            self.assertEqual(4, decoded["htv405_routine_ack_sequence"])
+            self.assertEqual(
+                int(pair["repeat"]), decoded["htv405_routine_ack_repeat"]
+            )
+            self.assertEqual(
+                pair["reply_trailer_residual"], decoded["trailer_residual"]
+            )
+
     def test_marks_known_crc_residue_and_special_frame_separately(self) -> None:
         open_frame = bytes.fromhex(
             "79f4882f28b42d008fb9840280811082808100fe0180"

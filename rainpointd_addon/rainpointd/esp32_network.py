@@ -141,6 +141,8 @@ class ESP32NetworkServer:
             "firmware_update_start",
             "routine_ack_configure",
             "routine_ack_revoke",
+            "htv405_routine_ack_configure",
+            "htv405_routine_ack_revoke",
             "valve_control_configure",
             "valve_control_sync",
             "valve_control_open",
@@ -166,6 +168,11 @@ class ESP32NetworkServer:
             required_capability = "firmware_update_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
+        elif command_type in {
+            "htv405_routine_ack_configure",
+            "htv405_routine_ack_revoke",
+        }:
+            required_capability = "htv405_routine_ack_tx"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -174,7 +181,11 @@ class ESP32NetworkServer:
             command_type == "pairing_start"
             and message.get("profile") == "htv405_auto_candidate_v1"
         ):
-            required_capability = "valve_pairing_tx_candidate"
+            required_capability = (
+                "htv405_auto_identity_pairing"
+                if not message.get("factory_endpoint")
+                else "valve_pairing_tx_candidate"
+            )
         elif (
             command_type == "pairing_start"
             and message.get("profile") == "htv145_auto_candidate_v1"
@@ -291,6 +302,7 @@ class ESP32NetworkServer:
             )
             self.gateway.notify_node_update(node_id, "radio_node_connected")
             self.gateway.restore_radio_node_ack_assignments(node_id)
+            self.gateway.restore_radio_node_htv405_ack_assignments(node_id)
             received_frames = 0
             invalid_messages = 0
             while not self._stop.is_set():
@@ -416,6 +428,14 @@ class ESP32NetworkServer:
                             routine_ack_state="failed",
                             routine_ack_detail=message.get("error"),
                         )
+                    elif message.get("command_id") == current_node.get(
+                        "htv405_routine_ack_command_id"
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            htv405_routine_ack_state="failed",
+                            htv405_routine_ack_detail=message.get("error"),
+                        )
                     else:
                         self.gateway.update_node(
                             node_id,
@@ -520,7 +540,9 @@ class ESP32NetworkServer:
                         "configurable_rf_controller_identity",
                         "identify",
                         "routine_sensor_ack_tx",
+                        "htv405_routine_ack_tx",
                         "valve_pairing_tx_candidate",
+                        "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
                         "valve_control_tx_candidate",
                         "htv145_control_tx_candidate",

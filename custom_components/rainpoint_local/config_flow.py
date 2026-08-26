@@ -21,6 +21,7 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from .api import (
     RainPointLocalCannotConnect,
     RainPointLocalClient,
+    RainPointLocalCommandRejected,
     RainPointLocalInvalidResponse,
     RainPointNodeCommissioningClient,
     RainPointLocalUnauthorized,
@@ -28,7 +29,9 @@ from .api import (
 from .api_models import (
     APIModelError,
     GatewayMetadata,
+    PairingProfileMetadata,
     pairing_completed_endpoint,
+    pairing_profiles,
     pairing_progress_action,
 )
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
@@ -278,6 +281,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
             except (
                 RainPointLocalCannotConnect,
+                RainPointLocalCommandRejected,
                 RainPointLocalInvalidResponse,
                 RainPointLocalUnauthorized,
             ):
@@ -448,7 +452,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
-    """Manage validated local sensor pairing for an existing gateway."""
+    """Manage supported local devices for an existing gateway."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
@@ -456,12 +460,14 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, ""))
         )
         self._paired_endpoint: str | None = None
+        self._pairing_profiles: dict[str, PairingProfileMetadata] = {}
+        self._pairing_profile: PairingProfileMetadata | None = None
         self._pairing_nodes: dict[str, str] = {}
         self._pairing_task: asyncio.Task[None] | None = None
         self._pairing_error: str | None = None
         self._pairing_node_name = "local radio node"
         self._pairing_duration_seconds = 120
-        self._pairing_progress_action = "wait_for_sensor"
+        self._pairing_progress_action = "wait_for_device"
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -487,7 +493,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 },
             )
         menu_options = (
-            ["pair_sensor", "add_radio_node", "remove_radio_node"]
+            ["add_device", "add_radio_node", "remove_radio_node"]
             if self._token
             else ["authenticate_gateway"]
         )
@@ -514,6 +520,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_auth"
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"
+            except RainPointLocalCommandRejected:
+                errors["base"] = "invalid_response"
             except RainPointLocalInvalidResponse:
                 errors["base"] = "invalid_response"
             else:
@@ -566,6 +574,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_auth"
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"
+            except RainPointLocalCommandRejected:
+                errors["base"] = "invalid_response"
             except RainPointLocalInvalidResponse:
                 errors["base"] = "invalid_response"
             else:
@@ -610,7 +620,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     self._entry,
                     data={**self._entry.data, CONF_TOKEN: token},
                 )
-                return await self.async_step_pair_sensor()
+                return await self.async_step_add_device()
         return self.async_show_form(
             step_id="authenticate_gateway",
             data_schema=vol.Schema(
@@ -622,29 +632,130 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
+    async def _async_load_pairing_profiles(self) -> None:
+        """Load the gateway-owned pairing catalog for this flow."""
+        progress = await self._client().pairing()
+        profiles = pairing_profiles(progress)
+        self._pairing_profiles = {
+            profile.profile_id: profile
+            for profile in profiles
+            if profile.user_pairing_supported
+        }
+
+    async def async_step_add_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Choose a broad device category before selecting a model."""
+        if not self._token:
+            return await self.async_step_authenticate_gateway()
+        try:
+            await self._async_load_pairing_profiles()
+        except RainPointLocalCannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except (APIModelError, RainPointLocalInvalidResponse):
+            return self.async_abort(reason="invalid_response")
+        categories = {
+            profile.device_category for profile in self._pairing_profiles.values()
+        }
+        menu_options = [
+            step for step in ("add_sensor", "add_valve")
+            if step.removeprefix("add_") in categories
+        ]
+        if not menu_options:
+            return self.async_abort(reason="no_supported_devices")
+        return self.async_show_menu(
+            step_id="add_device", menu_options=menu_options
+        )
+
+    async def _async_select_pairing_profile(
+        self,
+        category: str,
+        step_id: str,
+        user_input: dict[str, Any] | None,
+    ) -> FlowResult:
+        """Select one gateway-advertised model from a device category."""
+        if not self._pairing_profiles:
+            try:
+                await self._async_load_pairing_profiles()
+            except RainPointLocalCannotConnect:
+                return self.async_abort(reason="cannot_connect")
+            except (APIModelError, RainPointLocalInvalidResponse):
+                return self.async_abort(reason="invalid_response")
+        choices = {
+            profile.profile_id: profile.display_name
+            for profile in self._pairing_profiles.values()
+            if profile.device_category == category
+        }
+        if not choices:
+            return self.async_abort(reason="no_supported_devices")
+        if user_input is not None:
+            profile_id = str(user_input.get("profile_id", ""))
+            if profile_id not in choices:
+                return self.async_abort(reason="invalid_response")
+            self._pairing_profile = self._pairing_profiles[profile_id]
+            return await self.async_step_pair_device()
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=vol.Schema(
+                {vol.Required("profile_id"): vol.In(choices)}
+            ),
+        )
+
+    async def async_step_add_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select a supported sensor model."""
+        return await self._async_select_pairing_profile(
+            "sensor", "add_sensor", user_input
+        )
+
+    async def async_step_add_valve(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select a supported valve model."""
+        return await self._async_select_pairing_profile(
+            "valve", "add_valve", user_input
+        )
+
     async def async_step_pair_sensor(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        if not self._token:
-            return await self.async_step_authenticate_gateway()
+        """Retain compatibility with an in-flight legacy sensor flow."""
+        return await self.async_step_add_sensor(user_input)
+
+    async def async_step_pair_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Choose a capable nearby radio node and start model pairing."""
+        if self._pairing_profile is None:
+            return await self.async_step_add_device()
         errors: dict[str, str] = {}
         try:
             progress = await self._client().pairing()
         except RainPointLocalCannotConnect:
             errors["base"] = "cannot_connect"
+            progress = {}
         except RainPointLocalInvalidResponse:
             errors["base"] = "invalid_response"
-        else:
-            self._pairing_nodes = {
-                str(node["node_id"]): (
-                    f"{node.get('name') or node['node_id']} "
-                    f"({node.get('firmware_version') or 'unknown firmware'})"
-                )
-                for node in progress.get("pairing_nodes", [])
-                if isinstance(node, dict) and isinstance(node.get("node_id"), str)
-            }
-            if not self._pairing_nodes:
-                errors["base"] = "no_pairing_node"
+            progress = {}
+        capability = self._pairing_profile.required_node_capability
+        self._pairing_nodes = {
+            str(node["node_id"]): (
+                f"{node.get('name') or node['node_id']} "
+                f"({node.get('firmware_version') or 'unknown firmware'})"
+            )
+            for node in progress.get("pairing_nodes", [])
+            if isinstance(node, dict)
+            and isinstance(node.get("node_id"), str)
+            and capability in node.get("capabilities", [])
+            and not (
+                self._pairing_profile.device_category == "sensor"
+                and int(node.get("routine_ack_assigned_sensors") or 0)
+                >= int(node.get("routine_ack_capacity") or 0)
+            )
+        }
+        if not self._pairing_nodes and not errors:
+            errors["base"] = "no_pairing_node"
         if user_input is not None:
             node_id = str(user_input.get("node_id", ""))
             if node_id not in self._pairing_nodes:
@@ -656,18 +767,22 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         self._token,
                         duration_seconds,
                         node_id=node_id,
+                        profile_id=self._pairing_profile.profile_id,
                     )
                 except RainPointLocalUnauthorized:
                     errors["base"] = "invalid_auth"
                 except RainPointLocalCannotConnect:
                     errors["base"] = "cannot_connect"
+                except RainPointLocalCommandRejected:
+                    errors["base"] = "pairing_failed"
                 except RainPointLocalInvalidResponse:
                     errors["base"] = "invalid_response"
                 else:
                     self._pairing_node_name = self._pairing_nodes[node_id]
                     self._pairing_duration_seconds = duration_seconds
+                    self._pairing_progress_action = "wait_for_device"
                     self._pairing_task = self.hass.async_create_task(
-                        self._async_wait_for_sensor()
+                        self._async_wait_for_device()
                     )
                     return await self.async_step_pairing_progress()
 
@@ -677,7 +792,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         default_node = next(iter(node_choices))
 
         return self.async_show_form(
-            step_id="pair_sensor",
+            step_id="pair_device",
             data_schema=vol.Schema(
                 {
                     vol.Required("node_id", default=default_node): vol.In(
@@ -689,6 +804,9 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
+            description_placeholders={
+                "device_name": self._pairing_profile.display_name
+            },
         )
 
     async def async_step_pairing_progress(
@@ -700,7 +818,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             if self._paired_endpoint is not None or self._pairing_error is not None:
                 return self.async_show_progress_done(next_step_id="pairing_result")
             self._pairing_task = self.hass.async_create_task(
-                self._async_wait_for_sensor()
+                self._async_wait_for_device()
             )
         return self.async_show_progress(
             step_id="pairing_progress",
@@ -709,11 +827,16 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "node_name": self._pairing_node_name,
                 "duration_seconds": str(self._pairing_duration_seconds),
+                "device_name": (
+                    self._pairing_profile.display_name
+                    if self._pairing_profile is not None
+                    else "RainPoint device"
+                ),
             },
         )
 
-    async def _async_wait_for_sensor(self) -> None:
-        """Poll pairing state until the selected sensor finishes enrollment."""
+    async def _async_wait_for_device(self) -> None:
+        """Poll pairing state until the selected device finishes enrollment."""
         try:
             while True:
                 try:
@@ -761,9 +884,9 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         """Advance automatically after the pairing progress task completes."""
         if self._pairing_error is not None:
             return self.async_abort(reason=self._pairing_error)
-        return await self.async_step_sensor_details()
+        return await self.async_step_device_details()
 
-    async def async_step_sensor_details(
+    async def async_step_device_details(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         if self._paired_endpoint is None:
@@ -783,6 +906,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_auth"
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"
+            except RainPointLocalCommandRejected:
+                errors["base"] = "pairing_failed"
             except RainPointLocalInvalidResponse:
                 errors["base"] = "invalid_response"
             else:
@@ -804,18 +929,34 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                             name=name,
                             area_id=area_id,
                         )
-                return self.async_create_entry(title="Sensor paired", data={})
+                return self.async_create_entry(title="Device paired", data={})
+
+        display_name = (
+            self._pairing_profile.display_name
+            if self._pairing_profile is not None
+            else "RainPoint device"
+        )
 
         return self.async_show_form(
-            step_id="sensor_details",
+            step_id="device_details",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        "name", default=f"RainPoint Sensor {self._paired_endpoint[-4:]}"
+                        "name",
+                        default=f"{display_name} {self._paired_endpoint[-4:]}",
                     ): str,
                     vol.Optional("area"): selector.AreaSelector(),
                 }
             ),
             errors=errors,
-            description_placeholders={"endpoint": self._paired_endpoint},
+            description_placeholders={
+                "endpoint": self._paired_endpoint,
+                "device_name": display_name,
+            },
         )
+
+    async def async_step_sensor_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Retain compatibility with an in-flight legacy details form."""
+        return await self.async_step_device_details(user_input)
