@@ -274,7 +274,7 @@ class RainPointLocalClient:
         name: str,
         area: str | None,
     ) -> dict[str, Any]:
-        """Persist human-facing metadata for a proven paired sensor."""
+        """Persist human-facing metadata for a proven paired device."""
         return await self._post(
             "pairing/complete",
             {"endpoint": endpoint, "name": name, "area": area},

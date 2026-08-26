@@ -64,6 +64,13 @@ normal observation window creates no replacement phantoms.
 
 ## Phase 1 — Home Assistant device lifecycle
 
+- [x] Present the custom gateway's user-pairable profiles under Sensors and
+      Valves, list supported models beneath each category, and filter radio
+      nodes by the selected profile's advertised capability.
+- [x] Start HCS026 and HTV405 enrollment from HA without copied RF identities;
+      the selected node adopts the first strict model-specific factory
+      announcement within the bounded session. Physical repetition gates below
+      remain open.
 - [ ] After a successful device removal, navigate back to the RainPoint Local
       device list instead of leaving the user on the deleted device's error
       page.

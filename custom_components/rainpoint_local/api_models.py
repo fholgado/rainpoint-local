@@ -10,6 +10,70 @@ class APIModelError(ValueError):
     """A gateway payload does not satisfy the advertised API contract."""
 
 
+PAIRING_DEVICE_CATEGORIES = frozenset({"sensor", "valve"})
+
+
+@dataclass(frozen=True)
+class PairingProfileMetadata:
+    """One gateway-advertised pairing profile suitable for HA presentation."""
+
+    profile_id: str
+    model: str
+    device_category: str
+    display_name: str
+    required_node_capability: str
+    automatic_discovery: bool
+    user_pairing_supported: bool
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PairingProfileMetadata:
+        values = {
+            key: payload.get(key)
+            for key in (
+                "profile_id",
+                "model",
+                "device_category",
+                "display_name",
+                "required_node_capability",
+            )
+        }
+        if not all(isinstance(value, str) and value for value in values.values()):
+            raise APIModelError("pairing profile identity metadata is incomplete")
+        category = str(values["device_category"])
+        if category not in PAIRING_DEVICE_CATEGORIES:
+            raise APIModelError("pairing profile device category is unsupported")
+        automatic = payload.get("automatic_discovery")
+        supported = payload.get("user_pairing_supported")
+        if not isinstance(automatic, bool) or not isinstance(supported, bool):
+            raise APIModelError("pairing profile support flags must be booleans")
+        return cls(
+            profile_id=str(values["profile_id"]),
+            model=str(values["model"]),
+            device_category=category,
+            display_name=str(values["display_name"]),
+            required_node_capability=str(values["required_node_capability"]),
+            automatic_discovery=automatic,
+            user_pairing_supported=supported,
+        )
+
+
+def pairing_profiles(payload: dict[str, Any]) -> tuple[PairingProfileMetadata, ...]:
+    """Validate the gateway's advertised model/category pairing catalog."""
+    values = payload.get("supported_profiles")
+    if not isinstance(values, list):
+        raise APIModelError("supported_profiles response is not a list")
+    profiles = tuple(
+        PairingProfileMetadata.from_payload(item)
+        for item in values
+        if isinstance(item, dict)
+    )
+    if len(profiles) != len(values):
+        raise APIModelError("supported_profiles contains a non-object")
+    if len({profile.profile_id for profile in profiles}) != len(profiles):
+        raise APIModelError("supported_profiles contains duplicate profile IDs")
+    return profiles
+
+
 @dataclass(frozen=True)
 class GatewayMetadata:
     """Stable gateway identity, compatibility, and optional capabilities."""
@@ -86,11 +150,11 @@ def pairing_progress_action(payload: dict[str, Any]) -> str:
         "factory_detected_transmitter_required",
         "pairing_exchange_in_progress",
     }:
-        return "exchange_with_sensor"
+        return "exchange_with_device"
     if stage in {
         "waiting_for_terminal_confirmation",
         "terminal_confirmation_processing",
         "paired_identity_observed",
     }:
-        return "confirm_sensor"
-    return "wait_for_sensor"
+        return "confirm_device"
+    return "wait_for_device"

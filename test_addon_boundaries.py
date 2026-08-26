@@ -52,6 +52,13 @@ class AddonBoundaryTest(unittest.TestCase):
             / "tools"
             / "build_profile.py"
         ).read_text()
+        wifi_source = (
+            ROOT
+            / "firmware"
+            / "rainpoint_bridge"
+            / "src"
+            / "wifi_transport.cpp"
+        ).read_text()
         self.assertIn(
             'os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")',
             build_profile,
@@ -64,9 +71,9 @@ class AddonBoundaryTest(unittest.TestCase):
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
             build_profile,
         )
-        self.assertIn('standard_version = "0.15.0"', build_profile)
+        self.assertIn('standard_version = "0.15.1"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.5"',
+            'supervised_version = "0.15.0-supervised-beta.7"',
             build_profile,
         )
         self.assertIn(
@@ -74,6 +81,18 @@ class AddonBoundaryTest(unittest.TestCase):
             '"0.15.0-htv145-control-candidate.1"',
             build_profile,
         )
+        self.assertIn(
+            'htv145_pairing_candidate_version = '
+            '"0.15.1-htv145-pairing-probe.5"',
+            build_profile,
+        )
+        self.assertIn('firmware_variant = "unified"', build_profile)
+        self.assertIn(
+            'firmware_variant = "htv145-pairing-probe"',
+            build_profile,
+        )
+        self.assertIn("RAINPOINT_FIRMWARE_VARIANT", build_profile)
+        self.assertIn("RAINPOINT_FIRMWARE_VARIANT", wifi_source)
 
     def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
         source = (
@@ -98,6 +117,7 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("kAutomaticHtv405ProfileId", source)
         self.assertIn('\\"valve_control_available\\":false', source)
         self.assertIn("valve_pairing_tx_candidate", transport)
+        self.assertIn("htv405_auto_identity_pairing", transport)
         self.assertIn(
             "#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1",
             transport,
@@ -175,6 +195,33 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("node.get('name') or node['node_id']", source)
         self.assertEqual(3, source.count("selector.AreaSelector()"))
         self.assertNotIn('vol.Optional("area", default=""): str', source)
+
+    def test_home_assistant_pairing_ui_uses_gateway_device_catalog(self) -> None:
+        source = (
+            ROOT / "custom_components" / "rainpoint_local" / "config_flow.py"
+        ).read_text()
+        models = (
+            ROOT / "custom_components" / "rainpoint_local" / "api_models.py"
+        ).read_text()
+        strings = json.loads(
+            (
+                ROOT / "custom_components" / "rainpoint_local" / "strings.json"
+            ).read_text()
+        )["options"]
+        self.assertIn("pairing_profiles(progress)", source)
+        self.assertIn('("add_sensor", "add_valve")', source)
+        self.assertIn('vol.Required("profile_id")', source)
+        self.assertIn("profile.required_node_capability", source)
+        self.assertNotIn('vol.Required("factory_endpoint")', source)
+        self.assertIn('frozenset({"sensor", "valve"})', models)
+        self.assertEqual(
+            {"add_sensor", "add_valve"},
+            set(strings["step"]["add_device"]["menu_options"]),
+        )
+        self.assertIn("add_sensor", strings["step"])
+        self.assertIn("add_valve", strings["step"])
+        self.assertIn("pair_device", strings["step"])
+        self.assertIn("device_details", strings["step"])
 
     def test_home_assistant_device_removal_uses_family_neutral_registry(self) -> None:
         integration = (

@@ -51,16 +51,15 @@
   },
   "options": {
     "progress": {
-      "wait_for_sensor": "Listening on {node_name} for up to {duration_seconds} seconds. Hold the sensor button through its LED sequence.",
-      "exchange_with_sensor": "Sensor request detected. {node_name} is exchanging the four pairing messages; keep the sensor near the node and wait for its LED sequence to finish.",
-      "confirm_sensor": "Pairing messages were sent. Waiting for the sensor's terminal confirmation and first verified report."
+      "wait_for_device": "Listening on {node_name} for {device_name} for up to {duration_seconds} seconds. Start pairing on the device and keep it near the radio node.",
+      "exchange_with_device": "A {device_name} request was detected. {node_name} is completing the model-specific pairing exchange; keep the device nearby until its LED sequence finishes.",
+      "confirm_device": "Pairing messages were sent. Waiting for {device_name} to confirm its assigned local identity."
     },
     "step": {
       "init": {
         "title": "Manage RainPoint Local",
         "menu_options": {
-          "pair_sensor": "Pair a validated HCS026 test sensor",
-          "forget_sensor": "Forget a local sensor",
+          "add_device": "Add a RainPoint device",
           "add_radio_node": "Add with setup code (advanced)",
           "remove_radio_node": "Remove a radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
@@ -91,9 +90,30 @@
           "node_id": "Radio node"
         }
       },
-      "pair_sensor": {
-        "title": "Pair a validated HCS026 test sensor",
-        "description": "This prototype currently supports only the evidence-backed HCS026 test-sensor profile. Temporarily unplug the original RainPoint gateway, then select the custom local radio node nearest the sensor.",
+      "add_device": {
+        "title": "Add a RainPoint device",
+        "menu_options": {
+          "add_sensor": "Sensors",
+          "add_valve": "Valves"
+        }
+      },
+      "add_sensor": {
+        "title": "Choose a sensor model",
+        "description": "Select one of the sensor families supported by this custom local gateway.",
+        "data": {
+          "profile_id": "Model"
+        }
+      },
+      "add_valve": {
+        "title": "Choose a valve model",
+        "description": "Select one of the valve families supported by this custom local gateway.",
+        "data": {
+          "profile_id": "Model"
+        }
+      },
+      "pair_device": {
+        "title": "Pair {device_name}",
+        "description": "Temporarily unplug the original RainPoint gateway, then select the custom local radio node nearest the device. RainPoint Local discovers the device's radio identity automatically.",
         "data": {
           "node_id": "Local radio node",
           "duration_seconds": "Pairing window (seconds)"
@@ -114,12 +134,12 @@
         }
       },
       "pairing_progress": {
-        "title": "Waiting for sensor",
-        "description": "Keep the original RainPoint gateway unplugged. Pairing can take several seconds after the LED changes because the local radio node must finish and verify the complete exchange. Existing sensors are recovered in place and retain their Home Assistant identity."
+        "title": "Waiting for RainPoint device",
+        "description": "Keep the original RainPoint gateway unplugged. Pairing may continue briefly after the LED changes while the radio node verifies the exchange. A previously known device keeps its Home Assistant identity."
       },
-      "sensor_details": {
-        "title": "Sensor discovered",
-        "description": "The local gateway validated sensor endpoint {endpoint}. Choose its Home Assistant name and area.",
+      "device_details": {
+        "title": "{device_name} discovered",
+        "description": "The custom local gateway validated device endpoint {endpoint}. Choose its Home Assistant name and area.",
         "data": {
           "name": "Name",
           "area": "Area"
@@ -131,12 +151,14 @@
       "invalid_auth": "The gateway registry token is incorrect",
       "invalid_response": "The gateway returned an incompatible response",
       "no_pairing_node": "No authenticated pairing-capable local radio node is connected",
+      "pairing_failed": "The selected radio node could not start this model's pairing exchange",
       "sensor_not_found": "The selected sensor is no longer available",
       "confirmation_required": "Confirm that the physical sensor is not reset by this action"
     },
     "abort": {
-      "pairing_timeout": "The pairing window expired before a sensor completed enrollment",
-      "pairing_failed": "The local radio node could not complete the sensor enrollment exchange",
+      "pairing_timeout": "The pairing window expired before the device completed enrollment",
+      "pairing_failed": "The local radio node could not complete the device enrollment exchange",
+      "no_supported_devices": "This gateway does not currently advertise any user-pairable device models",
       "no_radio_nodes": "No adopted radio nodes are available to remove",
       "no_sensors": "No local HCS026 sensors are available to forget",
       "sensor_not_found": "The selected sensor is no longer available"
