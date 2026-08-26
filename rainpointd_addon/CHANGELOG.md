@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased / Firmware 0.15.1-htv145-pairing-probe.4
+
+- Make pairing completion and HA device-menu removal work through one
+  family-neutral lifecycle for sensors and valves.
+- Restore a deliberately removed valve only after command-scoped,
+  valve-originated terminal evidence, retaining one stable device identity and
+  preventing ordinary reports from bypassing suppression.
+- Require a valve's terminal confirmation to address the active pairing
+  controller identity, so simultaneous stock-gateway traffic cannot confirm a
+  custom-local association.
+- Preserve valve routing across metadata updates and clear private HTV145
+  control state when its association is removed.
+- Preserve both rejected probe-.3 physical trials and distinguish an
+  assignment transmit from valve-originated acceptance.
+- Restore the probe-.2 49.5 ms initial assignment scheduler without changing
+  the recovered six-stage HTV145 continuation. Require continuous IQ evidence
+  before any further stage-0 calibration change.
+
+## 0.33.5 / Integration 0.12.1 / Firmware 0.15.1-htv145-pairing-probe.3
+
+- Replace the HTV145 post-assignment HTV405 hypothesis with the complete
+  six-stage transcript recovered from a successful continuous stock-gateway
+  capture.
+- Reproduce the delayed long-wake controller command, model-specific reply
+  destinations, per-step turnaround slots, and temporary routine-carrier
+  receive window without modifying the physically accepted HTV405 path.
+- Freeze the stock frames, RF centers, wake lengths, and timing evidence in a
+  dedicated regression fixture pending local physical acceptance.
+
+## 0.33.4 / Integration 0.12.1
+
+- Add a research-gated HTV145FRF factory-enrollment profile based on the
+  2026-08-25 explicit long-press capture.
+- Keep HTV145 pairing capability isolated from the validated HTV405 path and
+  require an explicitly compatible radio-node firmware.
+
 ## 0.33.3 / Integration 0.12.1
 
 - Give observation-only valves and durable HTV405 associations the same

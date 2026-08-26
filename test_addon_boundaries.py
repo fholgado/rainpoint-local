@@ -114,13 +114,23 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
         self.assertIn("SUPERVISED_VALVE_CONTROL_COMMANDS", boundary_check)
-        self.assertIn('arguments[0] == "--supervised"', boundary_check)
+        self.assertIn('option == "--supervised"', boundary_check)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',
             'type == "watering_start"',
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_ci_builds_and_checks_the_isolated_htv145_pairing_candidate(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        boundary_check = (
+            ROOT / "tools" / "check_firmware_boundaries.py"
+        ).read_text()
+        self.assertIn("RAINPOINT_HTV145_PAIRING_CANDIDATE=1", workflow)
+        self.assertIn("--htv145-pairing", workflow)
+        self.assertIn("HTV145_PAIRING_CAPABILITIES", boundary_check)
+        self.assertIn('option == "--htv145-pairing"', boundary_check)
 
     def test_htv145_acceptance_is_compile_and_research_gated(self) -> None:
         source = (

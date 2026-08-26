@@ -175,6 +175,11 @@ class ESP32NetworkServer:
             and message.get("profile") == "htv405_auto_candidate_v1"
         ):
             required_capability = "valve_pairing_tx_candidate"
+        elif (
+            command_type == "pairing_start"
+            and message.get("profile") == "htv145_auto_candidate_v1"
+        ):
+            required_capability = "htv145_pairing_tx_candidate"
         else:
             required_capability = "sensor_pairing_tx"
         if required_capability not in session["capabilities"]:
@@ -516,6 +521,7 @@ class ESP32NetworkServer:
                         "identify",
                         "routine_sensor_ack_tx",
                         "valve_pairing_tx_candidate",
+                        "htv145_pairing_tx_candidate",
                         "valve_control_tx_candidate",
                         "htv145_control_tx_candidate",
                         "paired_sensor_recovery_tx",

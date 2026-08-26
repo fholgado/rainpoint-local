@@ -918,6 +918,93 @@ int main() {
         {{0x39, 0x84, 0x02, 0x80}},
         htv405Profile
     ));
+    const auto htv145FactorySweep0 = fromHex(
+        "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+    );
+    const auto htv145FactorySweep3 = fromHex(
+        "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+    );
+    rainpoint::Htv405PairingProfile htv145PairingProbe{};
+    assert(rainpoint::buildAutomaticHtv145Profile(
+        {{0x34, 0x2d, 0x00, 0x8f}},
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        htv145PairingProbe
+    ));
+    assert(htv145PairingProbe.pairedEndpoint ==
+        (std::array<std::uint8_t, 4>{{0xb4, 0x2d, 0x00, 0x8f}}));
+    assert(rainpoint::htv405RequestMatches(
+        htv145PairingProbe, 0, htv145FactorySweep0
+    ));
+    assert(rainpoint::htv405RequestMatches(
+        htv145PairingProbe, 0, htv145FactorySweep3
+    ));
+    assert(
+        htv145PairingProbe.steps[0].requestBody !=
+        htv405Profile.steps[0].requestBody
+    );
+    assert(htv145PairingProbe.steps[0].replyBody[5] == 0x05);
+    assert(htv405Profile.steps[0].replyBody[5] == 0x02);
+    assert(htv405Profile.stepCount == rainpoint::kHtv405PairingStepCount);
+    assert(htv145PairingProbe.stepCount ==
+        rainpoint::kHtv145PairingStepCount);
+    assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 49'500);
+    assert(htv145PairingProbe.steps[3].replyToValveRoute);
+    assert(!htv145PairingProbe.steps[1].replyToValveRoute);
+    const rainpoint::PairingLocalDateTime htv145StockClock{
+        2026, 8, 25, 19, 52, 36,
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> htv145Reply{};
+    assert(rainpoint::buildHtv405PairingReply(
+        htv145PairingProbe, 0, htv145StockClock, htv145Reply
+    ));
+    assert(htv145Reply == fromHex(
+        "79f4882f28b42d008f3984028080c0858503057000929e990d01008000000000000000005767"
+    ));
+    assert(rainpoint::buildHtv145ConfigurationReply(
+        htv145PairingProbe, htv145Reply
+    ));
+    assert(htv145Reply == fromHex(
+        "79f4882f28b42d008fb9840280819001010000000000000000000000000000000000000034d0"
+    ));
+    const auto htv145Request1 = fromHex(
+        "79f4882f28b9840280b42d008f810107822580804f8000000040800056800000000000000855"
+    );
+    const auto htv145ConfigurationResponse = fromHex(
+        "79f4882f28b9840280b42d008f81d00080000000000000000000000000000000000000005dc8"
+    );
+    const auto htv145ShortRequest = fromHex(
+        "79f4882f28b9840280b42d008f818281020080000000000000000000000000000000000063ec"
+    );
+    const auto htv145ControllerRequest = fromHex(
+        "79f4882f28b9840280b42d008f820301820080000000000000000000000000000000000047ab"
+    );
+    const auto htv145ExtendedRequest = fromHex(
+        "79f4882f28b9840280b42d008f82ac8099000000000000000000000000000000000000005423"
+    );
+    rainpoint::Htv405PairingSession htv145Session(htv145PairingProbe);
+    htv145Session.arm(0);
+    assert(htv145Session.claimReply(htv145FactorySweep0, 1) ==
+        &htv145PairingProbe.steps[0]);
+    assert(htv145Session.finishReply(true, 2));
+    assert(htv145Session.claimReply(htv145Request1, 1'000) ==
+        &htv145PairingProbe.steps[1]);
+    assert(htv145Session.finishReply(true, 3'900));
+    assert(htv145Session.claimReply(
+        htv145ConfigurationResponse, 4'200
+    ) == nullptr);
+    assert(htv145Session.completedSteps() == 3);
+    assert(htv145Session.claimReply(htv145ShortRequest, 5'000) ==
+        &htv145PairingProbe.steps[3]);
+    assert(htv145Session.finishReply(true, 5'001));
+    assert(htv145Session.claimReply(htv145ControllerRequest, 6'000) ==
+        &htv145PairingProbe.steps[4]);
+    assert(htv145Session.finishReply(true, 6'001));
+    assert(htv145Session.claimReply(htv145ExtendedRequest, 7'000) ==
+        &htv145PairingProbe.steps[5]);
+    assert(htv145Session.finishReply(true, 7'001));
+    assert(htv145Session.state() ==
+        rainpoint::PairingSessionState::Completed);
     // Custom gateway identity changes only the association endpoints. Freeze
     // every timing, channel, and request/reply body from the physically
     // accepted stock-identity profile so identity rollout cannot silently

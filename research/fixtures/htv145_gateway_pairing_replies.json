@@ -1,0 +1,108 @@
+{
+  "captured_at": "2026-08-25",
+  "model": "HTV145FRF",
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "symbol_rate_sps": 20000,
+  "continuous_capture_sha256": "4200f81fa15a1be574f42f38da5a9656cf86a0b67d1755fb74011017cab0e924",
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280",
+    "assignment_selector": 5
+  },
+  "channels": {
+    "factory_request_hz": 433143000,
+    "initial_assignment_hz": 433556567,
+    "routine_reply_hz": 433471500
+  },
+  "exchanges": [
+    {
+      "step": 0,
+      "request_kind": "factory_announcement",
+      "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+      "request_start_s": 21.357678,
+      "request_end_s": 21.388878,
+      "reply_frame": "79f4882f28b42d008f3984028080c0858503057000929e990d01008000000000000000005767",
+      "reply_start_s": 21.439428,
+      "request_end_to_reply_start_ms": 50.55,
+      "reply_destination": "companion_endpoint",
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": 1,
+      "request_kind": "paired_message_1",
+      "request_frame": "79f4882f28b9840280b42d008f810107822580804f8000000040800056800000000000000855",
+      "request_start_s": 22.829712,
+      "request_end_s": 22.860912,
+      "reply_frame": "79f4882f28b42d008f3984028081410100008000000000000000000000000000000000004b67",
+      "reply_start_s": 22.911312,
+      "request_end_to_reply_start_ms": 50.4,
+      "reply_destination": "companion_endpoint",
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": "1a",
+      "request_kind": "delayed_controller_configuration",
+      "request_frame": null,
+      "reply_frame": "79f4882f28b42d008fb9840280819001010000000000000000000000000000000000000034d0",
+      "reply_start_s": 25.775739,
+      "paired_message_1_end_to_reply_start_ms": 2914.828,
+      "prior_reply_end_to_reply_start_ms": 2833.228,
+      "reply_destination": "valve_route",
+      "reply_wake_symbols": 2400,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": 2,
+      "request_kind": "controller_configuration_response",
+      "request_frame": "79f4882f28b9840280b42d008f81d00080000000000000000000000000000000000000005dc8",
+      "request_start_s": 26.134811,
+      "request_end_s": 26.166011,
+      "reply_expected": false
+    },
+    {
+      "step": 3,
+      "request_kind": "paired_short_message",
+      "request_frame": "79f4882f28b9840280b42d008f818281020080000000000000000000000000000000000063ec",
+      "request_start_s": 27.824691,
+      "request_end_s": 27.855891,
+      "reply_frame": "79f4882f28b42d008fb984028081c287802c0105000f000000000000000000000000000076bc",
+      "reply_start_s": 27.906591,
+      "request_end_to_reply_start_ms": 50.7,
+      "reply_destination": "valve_route",
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": 4,
+      "request_kind": "paired_controller_message",
+      "request_frame": "79f4882f28b9840280b42d008f820301820080000000000000000000000000000000000047ab",
+      "request_start_s": 28.790938,
+      "request_end_s": 28.822138,
+      "reply_frame": "79f4882f28b42d008fb984028082430080000000000000000000000000000000000000007592",
+      "reply_start_s": 28.875488,
+      "request_end_to_reply_start_ms": 53.35,
+      "reply_destination": "valve_route",
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": 5,
+      "request_kind": "paired_extended_message",
+      "request_frame": "79f4882f28b9840280b42d008f82ac8099000000000000000000000000000000000000005423",
+      "request_start_s": 29.849788,
+      "request_end_s": 29.880988,
+      "reply_frame": "79f4882f28b42d008fb984028082ec8180190000000000000000000000000000000000007746",
+      "reply_start_s": 29.926038,
+      "request_end_to_reply_start_ms": 45.05,
+      "reply_destination": "valve_route",
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    }
+  ],
+  "interpretation": "The initial assignment used by local probe 2 was structurally correct. The local attempt stalled because HTV145 does not continue with the HTV405 18-step transcript: after the first ordinary acknowledgement it requires a delayed long-wake controller command, one no-reply confirmation, and three model-specific acknowledgements."
+}

@@ -490,6 +490,19 @@ only three transmitted steps. The successful assignment decoded as:
 79f4882f2894a980133984028080c0858503027000bc8c930d01008000000000000000006d56
 ```
 
+On 2026-08-25 the same physical valve was enrolled under the gateway's
+generated controller `ee86de80` and companion `6e86de80`. It retained paired
+endpoint `94a98013`, gave the white success flash, and emitted a trailer-valid
+new-identity link frame while the selected Vegetable Garden node had completed
+14 of 18 controller replies. The gateway updated the existing
+`htv405-94a98013` registry record and control route rather than creating a new
+device. This physically validates that endpoint identity is stable across a
+stock-style to generated-controller migration. The controller counter remains
+deliberately unavailable until a fresh valve-originated report authenticates
+it; pairing traffic is not used to guess a watering command counter.
+The compact pairing and post-restart report evidence is retained in
+`research/fixtures/htv405_generated_identity_pairing_20260825.json`.
+
 It centered at 433.556537 MHz in the same SDR, only 107 Hz above the accepted
 stock selector-2 reference. The first two local routine replies centered at
 433.476260 MHz and decoded exactly. This proves that the retained 18-row
@@ -1052,6 +1065,47 @@ The gateway currently exposes SDR signal metadata separately as
 `rf_rssi_db`; it must not be presented as the stock hub's RSSI value.
 
 ## HTV145FRF valve protocol
+
+### Enrollment
+
+A successful continuous stock-gateway capture on 2026-08-25 disproved the
+initial hypothesis that HTV145 continues with the HTV405 18-row transcript.
+The two models share the factory identity rule, selector-5 assignment form,
+20 ksymbol/s rate, and ordinary reply waveform, but HTV145 completes a distinct
+six-stage controller exchange:
+
+| Stage | Valve/request body | Gateway action | Destination | Request-end to TX start |
+|---:|---|---|---|---:|
+| 0 | `80 80 84 02 ff 8f 97 ...` | selector-5 assignment | companion | 50.55 ms |
+| 1 | `81 01 07 82 25 ...` | `81 41 01 ...` | companion | 50.40 ms |
+| 1a | none | long-wake `81 90 01 01 ...` | valve route | 2,914.83 ms after stage-1 request end |
+| 2 | `81 d0 00 80 ...` | observe only | none | none |
+| 3 | `81 82 81 02 ...` | `81 c2 87 80 2c 01 05 ...` | valve route | 50.70 ms |
+| 4 | `82 03 01 82 ...` | `82 43 00 80 ...` | valve route | 53.35 ms |
+| 5 | `82 ac 80 99 ...` | `82 ec 81 80 19 ...` | valve route | 45.05 ms |
+
+The stage-1a command has a 2,400-symbol wake; the other replies have 320
+symbols. Stage 2 is transmitted by the valve on the routine reply carrier near
+433.472 MHz, so a single-radio node temporarily listens there after stage 1a,
+then returns to the lower request channel for stages 3--5. All captured gateway
+frames used ordinary trailer residual `0x4f03`. Exact frames, measured centers,
+and continuous-capture offsets are frozen in
+`research/fixtures/htv145_gateway_pairing_replies.json`.
+
+This explains the first two local probes: probe 1 used the wrong selector;
+probe 2 sent a byte-accurate initial assignment but then waited for the
+HTV405 continuation instead of emitting the delayed HTV145 controller command.
+The first two physical trials of the dedicated six-stage probe `.3` both
+transmitted one assignment, after which the valve continued its factory
+`80/82/83` sweep instead of sending the first paired request. The later five
+stages therefore were never exercised. Probe `.3` had changed the otherwise
+accepted probe-`.2` initial scheduling target from 49.5 ms to 49.4 ms; probe
+`.4` restores the 49.5 ms prefix without changing the recovered six-stage
+continuation. The rejected-frame cadence is frozen in
+`research/fixtures/htv145_local_assignment_rejections_20260825.json`. The next
+local trial must run with continuous IQ capture so actual reply timing and
+carrier can be measured before any further stage-0 adjustment. The dedicated
+implementation remains research-gated until physical pairing succeeds.
 
 ### Request and response roles
 

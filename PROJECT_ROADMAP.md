@@ -87,17 +87,25 @@ normal observation window creates no replacement phantoms.
       terminal evidence.
 - [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
-- [ ] Pair once under a generated custom controller identity and create exactly
+- [x] Pair once under a generated custom controller identity and create exactly
       one capability-correct HA device.
 - [ ] Confirm HA removal clears all four zone controls, duration entities,
       association state, and node routing; then re-pair without a duplicate.
+
+Software coverage now proves that removal deletes the valve link and routing,
+ordinary reports cannot defeat suppression, and an explicit pairing session
+can restore the same stable device ID exactly once. Physical HA removal and
+re-pair evidence is still required before checking the gate.
 
 ### HTV145 single-zone valve
 
 - [x] Decode stock enrollment/control evidence sufficiently to build a bounded,
       compile-gated candidate.
-- [ ] Implement the generalized HA pairing lifecycle without exposing the
+- [x] Implement the generalized HA pairing lifecycle without exposing the
       unaccepted research transmitter as a production control.
+- [x] Preserve two rejected selector-5 local trials, restore the probe-.2
+      49.5 ms accepted assignment prefix, and require continuous IQ evidence
+      before changing stage 0 again.
 - [ ] Complete three consecutive local pairings with fresh batteries and
       valve-originated terminal evidence.
 - [ ] Confirm removal and re-pairing preserve the intended stable physical

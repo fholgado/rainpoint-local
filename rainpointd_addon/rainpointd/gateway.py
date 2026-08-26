@@ -34,9 +34,12 @@ from .pairing_protocol import (
     pairing_profile,
 )
 from .valve_pairing_protocol import (
+    AUTOMATIC_HTV145_PROFILE_ID,
     AUTOMATIC_HTV405_PROFILE_ID,
     CALIBRATED_FREQUENCY_OFFSET_HZ as HTV405_FREQUENCY_OFFSET_HZ,
+    automatic_htv145_profile_metadata,
     automatic_htv405_profile_metadata,
+    build_htv145_profile,
     build_htv405_profile,
 )
 from .valve_protocol import (
@@ -1582,8 +1585,12 @@ class Gateway:
         expected = self._active_pairing_expected_valve_endpoint
         node_id = self._active_pairing_node_id
         command_id = self._active_pairing_command_id
+        valve_profile_id = self._active_pairing_profile_id
         if (
-            self._active_pairing_profile_id != AUTOMATIC_HTV405_PROFILE_ID
+            valve_profile_id not in {
+                AUTOMATIC_HTV145_PROFILE_ID,
+                AUTOMATIC_HTV405_PROFILE_ID,
+            }
             or expected is None
             or node_id is None
             or command_id is None
@@ -1598,20 +1605,77 @@ class Gateway:
         endpoint = state.get("rf_endpoint_b")
         if not isinstance(endpoint, str) or endpoint.lower() != expected:
             return
-        try:
-            raw = bytes.fromhex(frame)
-        except ValueError:
-            return
-        if not is_htv405_link_frame(raw):
-            return
-        self._active_pairing_confirmed_valve_endpoint = expected
-        self._active_pairing_confirmation_observed_at = observed_at
-        receiver = state.get("rf_receiver_id")
-        self._active_pairing_confirmation_receiver = (
-            receiver if isinstance(receiver, str) else None
+        controller_endpoint = state.get("rf_endpoint_a")
+        expected_route = (self._active_pairing_rf_identity or {}).get(
+            "controller_endpoint"
         )
+        if (
+            not isinstance(controller_endpoint, str)
+            or controller_endpoint.strip().lower() != expected_route
+        ):
+            return
+        if valve_profile_id == AUTOMATIC_HTV405_PROFILE_ID:
+            try:
+                raw = bytes.fromhex(frame)
+            except ValueError:
+                return
+            if not is_htv405_link_frame(raw):
+                return
+        else:
+            if (
+                state.get("model") != HTV145_MODEL
+                or state.get("rf_trailer_valid") is not True
+                or state.get("rf_frame_accepted") is not True
+            ):
+                return
         profile = self._active_pairing_control_profile
         if self._store is not None and profile is not None:
+            controller_endpoint = controller_endpoint.strip().lower()
+            model = (
+                "HTV405FRF"
+                if valve_profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                else HTV145_MODEL
+            )
+            device_id = (
+                f"htv405-{expected}"
+                if model == "HTV405FRF"
+                else f"htv145-{expected}"
+            )
+            default_name = (
+                f"RainPoint 4-zone valve {expected[-4:]}"
+                if model == "HTV405FRF"
+                else f"RainPoint valve {expected[-4:]}"
+            )
+            existing = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == expected
+                ),
+                None,
+            )
+            self._store.accept_paired_valve_link(
+                controller_endpoint=controller_endpoint,
+                valve_endpoint=expected,
+                device_id=(
+                    str(existing["device_id"])
+                    if existing is not None
+                    else device_id
+                ),
+                name=(
+                    str(existing["name"])
+                    if existing is not None
+                    else default_name
+                ),
+                model=model,
+                area=existing.get("area") if existing is not None else None,
+                accepted_at=observed_at,
+            )
+        if (
+            valve_profile_id == AUTOMATIC_HTV405_PROFILE_ID
+            and self._store is not None
+            and profile is not None
+        ):
             try:
                 self._store.update_valve_control_profile(
                     valve_endpoint=expected,
@@ -1627,6 +1691,16 @@ class Gateway:
                 # state if that receive-side proof is unexpectedly absent.
                 return
             self._refresh_registry_catalog()
+            self._ensure_registered_valve_devices()
+        elif self._store is not None and profile is not None:
+            self._refresh_registry_catalog()
+            self._ensure_registered_valve_devices()
+        self._active_pairing_confirmed_valve_endpoint = expected
+        self._active_pairing_confirmation_observed_at = observed_at
+        receiver = state.get("rf_receiver_id")
+        self._active_pairing_confirmation_receiver = (
+            receiver if isinstance(receiver, str) else None
+        )
 
     def _confirm_sensor_ack_locked(
         self, state: dict[str, Any], observed_at: str
@@ -3102,8 +3176,11 @@ class Gateway:
                     self._pairing.stop()
                     raise RuntimeError("radio-node command transport is unavailable")
                 automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
-                valve_candidate = profile_id == AUTOMATIC_HTV405_PROFILE_ID
-                if known_rejoin and not valve_candidate:
+                valve_candidate = profile_id in {
+                    AUTOMATIC_HTV145_PROFILE_ID,
+                    AUTOMATIC_HTV405_PROFILE_ID,
+                }
+                if known_rejoin and profile_id != AUTOMATIC_HTV405_PROFILE_ID:
                     self._pairing.stop()
                     raise ValueError(
                         "known_rejoin is only valid for an HTV405 association"
@@ -3123,7 +3200,12 @@ class Gateway:
                         selected_controller_endpoint = explicit_controller
                         selected_companion_endpoint = explicit_companion
                     try:
-                        valve_profile = build_htv405_profile(
+                        builder = (
+                            build_htv145_profile
+                            if profile_id == AUTOMATIC_HTV145_PROFILE_ID
+                            else build_htv405_profile
+                        )
+                        valve_profile = builder(
                             factory_endpoint=str(factory_endpoint or ""),
                             valve_route=selected_controller_endpoint,
                             companion_endpoint=selected_companion_endpoint,
@@ -3131,7 +3213,7 @@ class Gateway:
                     except ValueError:
                         self._pairing.stop()
                         raise ValueError(
-                            "invalid HTV405 association identifiers"
+                            "invalid valve association identifiers"
                         ) from None
                     # Continuous stock-gateway captures encode the current
                     # wall clock. The four-minute lead is HCS026-specific.
@@ -3259,6 +3341,10 @@ class Gateway:
         else:
             stage = "inactive"
         pairing_nodes = self._pairing_nodes()
+        valve_pairing_active = self._active_pairing_profile_id in {
+            AUTOMATIC_HTV145_PROFILE_ID,
+            AUTOMATIC_HTV405_PROFILE_ID,
+        }
         selected_node = next(
             (
                 item
@@ -3283,8 +3369,7 @@ class Gateway:
             # of acceptance.  The retained 18-row stock transcript is a model
             # of post-association traffic, not a minimum completion counter.
             observed_valve_completed = (
-                self._active_pairing_profile_id
-                == AUTOMATIC_HTV405_PROFILE_ID
+                valve_pairing_active
                 and isinstance(reported_endpoint, str)
                 and self._active_pairing_confirmed_valve_endpoint
                 == reported_endpoint.lower()
@@ -3297,10 +3382,11 @@ class Gateway:
                 stage = "transmitter_failed"
             elif node_state == "completed":
                 if (
-                    self._active_pairing_profile_id
-                    == AUTOMATIC_HTV405_PROFILE_ID
+                    valve_pairing_active
                     and isinstance(reported_endpoint, str)
-                    and re.fullmatch(r"[89a-f][0-9a-f]{5}13", reported_endpoint)
+                    and re.fullmatch(
+                        r"[89a-f][0-9a-f]{5}(?:13|8f)", reported_endpoint
+                    )
                 ):
                     stage = "waiting_for_terminal_confirmation"
                 elif isinstance(reported_endpoint, str):
@@ -3320,8 +3406,7 @@ class Gateway:
                             for item in new_records
                         )
                 if (
-                    self._active_pairing_profile_id
-                    != AUTOMATIC_HTV405_PROFILE_ID
+                    not valve_pairing_active
                     and stage != "valve_pairing_completed"
                 ):
                     stage = (
@@ -3341,8 +3426,7 @@ class Gateway:
                 )
         sensor_confirmation_required = (
             selected_node is not None
-            and self._active_pairing_profile_id
-            != AUTOMATIC_HTV405_PROFILE_ID
+            and not valve_pairing_active
         )
         if sensor_confirmation_required and completed_endpoint is not None:
             if self._active_pairing_confirmed_sensor_endpoint != completed_endpoint:
@@ -3361,6 +3445,7 @@ class Gateway:
             "available": True,
             "supported_profiles": [
                 automatic_hcs026_profile_metadata(),
+                automatic_htv145_profile_metadata(),
                 automatic_htv405_profile_metadata(),
             ],
             "transmitter_available": bool(pairing_nodes),
@@ -3551,6 +3636,89 @@ class Gateway:
             self._pairing.stop()
             return registered
 
+    def complete_pairing(
+        self,
+        *,
+        endpoint: str,
+        name: str,
+        area: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Persist metadata for the device proven by the active RF session."""
+        with self._lock:
+            valve_profile = self._active_pairing_profile_id in {
+                AUTOMATIC_HTV145_PROFILE_ID,
+                AUTOMATIC_HTV405_PROFILE_ID,
+            }
+        if not valve_profile:
+            return self.complete_hcs026_pairing(
+                endpoint=endpoint,
+                name=name,
+                area=area,
+                now=now,
+            )
+        return self._complete_valve_pairing(
+            endpoint=endpoint,
+            name=name,
+            area=area,
+            now=now,
+        )
+
+    def _complete_valve_pairing(
+        self,
+        *,
+        endpoint: str,
+        name: str,
+        area: str | None,
+        now: datetime | None,
+    ) -> dict[str, Any]:
+        """Name a valve after command-scoped valve-originated confirmation."""
+        endpoint = endpoint.strip().lower()
+        name = _clean_label(name, "name")
+        area = _clean_optional_label(area, "area")
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if self._pairing is None or self._store is None:
+                raise RuntimeError("persistent pairing state is unavailable")
+            if self._active_pairing_profile_id not in {
+                AUTOMATIC_HTV145_PROFILE_ID,
+                AUTOMATIC_HTV405_PROFILE_ID,
+            }:
+                raise RuntimeError("active pairing session is not for a valve")
+            if (
+                endpoint != self._active_pairing_expected_valve_endpoint
+                or endpoint != self._active_pairing_confirmed_valve_endpoint
+                or self._active_pairing_confirmation_observed_at is None
+            ):
+                raise RuntimeError(
+                    "paired valve has not confirmed the active RF controller identity"
+                )
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == endpoint
+                ),
+                None,
+            )
+            if registration is None:
+                raise KeyError(endpoint)
+            updated = self._store.update_valve_registry_device(
+                str(registration["device_id"]),
+                name=name,
+                area=area,
+                updated_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            self._ensure_registered_valve_devices()
+            device_id = str(updated["device_id"])
+            if device_id in self._devices:
+                self._devices[device_id]["name"] = name
+                self._devices[device_id]["area"] = area
+            self._cancel_active_pairing_node()
+            self._pairing.stop()
+            return updated
+
     def confirm_product_identity(
         self,
         *,
@@ -3614,7 +3782,7 @@ class Gateway:
             pairing_state == "paired"
             and self._active_pairing_node_id is not None
             and self._active_pairing_profile_id
-            != AUTOMATIC_HTV405_PROFILE_ID
+            not in {AUTOMATIC_HTV145_PROFILE_ID, AUTOMATIC_HTV405_PROFILE_ID}
             and self._active_pairing_rf_identity is not None
         ):
             observed_controller = state.get("rf_endpoint_a")
@@ -3822,7 +3990,41 @@ class Gateway:
         with self._lock:
             if not self._store:
                 raise RuntimeError("persistent registry is unavailable")
-            existing = self._store.registry_device(device_id)
+            try:
+                existing = self._store.registry_device(device_id)
+            except KeyError:
+                valve = next(
+                    (
+                        item
+                        for item in self._store.valve_registry()
+                        if item["device_id"] == device_id
+                    ),
+                    None,
+                )
+                if valve is None:
+                    raise
+                next_name = (
+                    str(valve["name"])
+                    if name is None
+                    else _clean_label(name, "name")
+                )
+                next_area = (
+                    valve["area"]
+                    if area is _UNSET
+                    else _clean_optional_label(area, "area")
+                )
+                timestamp = (now or datetime.now(timezone.utc)).isoformat()
+                updated = self._store.update_valve_registry_device(
+                    device_id,
+                    name=next_name,
+                    area=next_area,
+                    updated_at=timestamp,
+                )
+                self._refresh_registry_catalog()
+                if device_id in self._devices:
+                    self._devices[device_id]["name"] = updated["name"]
+                    self._devices[device_id]["area"] = updated["area"]
+                return updated
             next_name = existing["name"] if name is None else _clean_label(name, "name")
             next_area = (
                 existing["area"]

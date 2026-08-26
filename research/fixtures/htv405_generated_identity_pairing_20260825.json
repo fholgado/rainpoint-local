@@ -1,0 +1,44 @@
+{
+  "model": "HTV405FRF",
+  "physical_result": "white_success_flash",
+  "association": {
+    "factory_endpoint": "14a98013",
+    "paired_endpoint": "94a98013",
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "controller_identity_mode": "generated_local",
+    "pairing_node_id": "rp-f4e5be3b015c",
+    "pairing_node_name": "Vegetable Garden Radio"
+  },
+  "completion": {
+    "observed_at": "2026-08-25T20:25:32.289612-04:00",
+    "receiver": "local-sdr",
+    "node_completed_steps_at_terminal_evidence": 14,
+    "profile_step_count": 18,
+    "stable_device_id": "htv405-94a98013",
+    "duplicate_device_created": false
+  },
+  "selected_valve_originated_frames": [
+    {
+      "observed_at": "2026-08-25T20:25:19.697942-04:00",
+      "frame": "79f4882f28ee86de8094a98013028107822580804f800000004080005680000000000000150f"
+    },
+    {
+      "observed_at": "2026-08-25T20:25:23.285277-04:00",
+      "frame": "79f4882f28ee86de8094a98013040107820581004f8000000040800056800000000000000912"
+    },
+    {
+      "observed_at": "2026-08-25T20:25:32.289612-04:00",
+      "frame": "79f4882f28ee86de8094a98013080107820582004f8000000040800056800000000000001d46"
+    },
+    {
+      "observed_at": "2026-08-25T20:26:29.186015-04:00",
+      "frame": "79f4882f28ee86de8094a98013138107820700804f8000000040800056800000000000006bc8"
+    },
+    {
+      "observed_at": "2026-08-25T20:34:29.009899-04:00",
+      "frame": "79f4882f28ee86de8094a98013198107820700804f80000000408000568000000000000031f5"
+    }
+  ],
+  "interpretation": "The physical valve retained endpoint 94a98013 while moving from the stock-style controller route to the generated local controller. It continued valve-originated reports for at least nine minutes after pairing and survived a gateway restart. Pairing traffic intentionally did not invent a control counter; supervised watering remains unavailable until an authenticated command response establishes that independent state."
+}
