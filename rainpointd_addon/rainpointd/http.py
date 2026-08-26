@@ -410,6 +410,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 evidence_source=str(
                                     body.get("evidence_source", "")
                                 ),
+                                guard_duration_seconds=(
+                                    int(body["guard_duration_seconds"])
+                                    if body.get("guard_duration_seconds")
+                                    is not None
+                                    else None
+                                ),
                             )
                         )
                     else:

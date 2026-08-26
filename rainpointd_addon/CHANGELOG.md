@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.33.12 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
+
+- Add a management-authenticated, supervised HTV405 counter probe for an
+  exhausted timeout recovery. It accepts one explicit candidate only after the
+  previous bounded run duration plus the 15-second hardware guard has elapsed,
+  the valve remains linked and canonically idle, and no command is pending.
+- Keep the guarded probe outside ordinary Home Assistant valve controls; it is
+  an evidence-recovery primitive for determining the retained counter without
+  weakening normal command-counter synchronization.
+- Use that probe to prove a same-identity valve retained counter `3`: additive
+  five-minute payloads were negatively acknowledged at counters 3--5, while
+  counter 3 with the known `9e 00` one-minute payload authenticated, watered,
+  advanced to 4, and stopped automatically. Multi-byte duration construction
+  across the low-byte bit-7 boundary is therefore unresolved rather than
+  promoted as an additive inverse.
+
 ## 0.33.11 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
 
 - Treat a strict controller-addressed valve report during the active HTV405

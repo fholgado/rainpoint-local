@@ -2987,6 +2987,78 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual(6, registration["control_pending_sequence"])
         self.assertEqual(1, registration["control_recovery_attempt"])
 
+    def test_guarded_operator_probe_requires_complete_possible_run(self) -> None:
+        gateway = self.server.gateway
+        gateway.observe_decoded(
+            device_id=self.DEVICE_ID,
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="idle",
+            state={
+                "rf_endpoint_b": self.VALVE_ENDPOINT,
+                "is_watering": False,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:00:10+00:00",
+        )
+        gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=300,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30.001000+00:00")
+        )
+        gateway.observe_decoded(
+            device_id=self.DEVICE_ID,
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="idle-after-timeout",
+            state={
+                "rf_endpoint_b": self.VALVE_ENDPOINT,
+                "is_watering": False,
+                "valve_state": "idle",
+            },
+            observed_at="2026-08-24T20:02:00+00:00",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "possible-run guard"):
+            gateway.synchronize_htv405_control_counter(
+                device_id=self.DEVICE_ID,
+                next_sequence=9,
+                evidence_source="operator_guarded_counter_probe",
+                guard_duration_seconds=300,
+                now=datetime.fromisoformat(
+                    "2026-08-24T20:05:45+00:00"
+                ),
+            )
+
+        synchronized = gateway.synchronize_htv405_control_counter(
+            device_id=self.DEVICE_ID,
+            next_sequence=9,
+            evidence_source="operator_guarded_counter_probe",
+            guard_duration_seconds=300,
+            now=datetime.fromisoformat("2026-08-24T20:05:45.001000+00:00"),
+        )
+
+        self.assertEqual(9, synchronized["control_next_sequence"])
+        self.assertEqual(
+            "counter_synchronized:operator_guarded_counter_probe",
+            synchronized["control_last_result"],
+        )
+
+    def test_guarded_operator_probe_rejects_invalid_duration(self) -> None:
+        with self.assertRaisesRegex(ValueError, "whole-minute duration"):
+            self.server.gateway.synchronize_htv405_control_counter(
+                device_id=self.DEVICE_ID,
+                next_sequence=9,
+                evidence_source="operator_guarded_counter_probe",
+                guard_duration_seconds=30,
+                now=datetime.fromisoformat("2026-08-24T20:05:45+00:00"),
+            )
+
     def test_control_node_can_move_without_changing_association(self) -> None:
         before = self.server.gateway._store.valve_registry()[0]
         result = self.post_json(

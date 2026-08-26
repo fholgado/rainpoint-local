@@ -99,6 +99,7 @@ HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS = (
     HTV405_RESPONSE_WINDOW_SECONDS + 5.0
 )
 HTV405_FRESH_PAIRING_COUNTER_WINDOW_SECONDS = 15 * 60
+HTV405_GUARDED_COUNTER_PROBE_SECONDS = 15
 _UNSET = object()
 
 
@@ -775,6 +776,7 @@ class Gateway:
         device_id: str,
         next_sequence: int,
         evidence_source: str,
+        guard_duration_seconds: int | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Restore a supervised counter from explicit association evidence."""
@@ -826,7 +828,69 @@ class Gateway:
                     raise RuntimeError(
                         "HTV405 generated-identity pairing is not fresh and idle"
                     )
+            elif evidence_source == "operator_guarded_counter_probe":
+                if (
+                    guard_duration_seconds is None
+                    or isinstance(guard_duration_seconds, bool)
+                    or guard_duration_seconds not in range(60, 3_601)
+                    or guard_duration_seconds % 60
+                ):
+                    raise ValueError(
+                        "guarded HTV405 counter probe requires the previous "
+                        "60-3600 second whole-minute duration"
+                    )
+                last_failure = next(
+                    (
+                        event
+                        for event in reversed(self._events)
+                        if event.get("event_type") == "valve_control_failed"
+                        and event.get("device_id") == device_id
+                        and event.get("state", {}).get("result")
+                        == (
+                            "gateway_command_response_timeout_"
+                            "counter_unsynchronized"
+                        )
+                    ),
+                    None,
+                )
+                try:
+                    failed_at = _observed_utc(
+                        str(last_failure["observed_at"])
+                    )
+                    current = _observed_utc(current)
+                except (KeyError, TypeError, ValueError):
+                    failed_at = current
+                safe_at = failed_at + timedelta(
+                    seconds=(
+                        guard_duration_seconds
+                        + HTV405_GUARDED_COUNTER_PROBE_SECONDS
+                    )
+                )
+                if (
+                    registration.get("control_last_result")
+                    not in {
+                        "gateway_command_response_timeout_"
+                        "counter_unsynchronized",
+                        "idle_confirmed_counter_unsynchronized",
+                    }
+                    or registration.get("control_pending_command_id")
+                    is not None
+                    or registration.get("control_next_sequence") is not None
+                    or registration.get("control_confirmed_watering")
+                    not in {0, False}
+                    or device.get("available") is not True
+                    or device_state.get("is_watering") is not False
+                    or current < safe_at
+                ):
+                    raise RuntimeError(
+                        "HTV405 counter probe is not past its complete "
+                        "possible-run guard"
+                    )
             else:
+                if guard_duration_seconds is not None:
+                    raise ValueError(
+                        "guard duration is only valid for a guarded counter probe"
+                    )
                 reported_at = registration.get("control_confirmed_at")
                 try:
                     reported = _observed_utc(str(reported_at))
@@ -1973,6 +2037,26 @@ class Gateway:
                 ),
                 None,
             )
+            same_authenticated_control_route = bool(
+                valve_profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                and existing is not None
+                and existing.get("controller_endpoint")
+                == controller_endpoint
+                and existing.get("control_node_id") == node_id
+                and existing.get("control_companion_endpoint")
+                == str(profile["companion_endpoint"])
+                and existing.get("control_selector")
+                == int(profile["selector"])
+                and existing.get("control_frequency_offset_hz")
+                == int(profile["frequency_offset_hz"])
+                and isinstance(existing.get("control_next_sequence"), int)
+                and not isinstance(
+                    existing.get("control_next_sequence"), bool
+                )
+                and existing.get("control_next_sequence") in range(0x20)
+                and existing.get("control_pending_command_id") is None
+                and existing.get("control_confirmed_watering") in {0, False}
+            )
             self._store.accept_paired_valve_link(
                 controller_endpoint=controller_endpoint,
                 valve_endpoint=expected,
@@ -1995,32 +2079,41 @@ class Gateway:
             and self._store is not None
             and profile is not None
         ):
-            try:
-                registration = self._store.update_valve_control_profile(
-                    valve_endpoint=expected,
-                    node_id=node_id,
-                    companion_endpoint=str(profile["companion_endpoint"]),
-                    selector=int(profile["selector"]),
-                    frequency_offset_hz=int(profile["frequency_offset_hz"]),
-                    observed_at=observed_at,
+            if same_authenticated_control_route:
+                registration = next(
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == expected
                 )
-            except KeyError:
-                # The structural link should have been registered by the
-                # ingestor before this callback. Refuse to create control
-                # state if that receive-side proof is unexpectedly absent.
-                return
-            if controller_endpoint == self.rf_identity.controller_endpoint:
-                # A physically validated fresh generated-identity association
-                # initializes the independent watering-command counter at 1.
-                # This is association evidence; it does not depend on the
-                # unrelated routine telemetry sequence.
-                registration = self._store.synchronize_htv405_control_counter(
-                    valve_endpoint=expected,
-                    node_id=node_id,
-                    next_sequence=1,
-                    source="fresh_generated_identity_pairing",
-                    observed_at=observed_at,
-                )
+            else:
+                try:
+                    registration = self._store.update_valve_control_profile(
+                        valve_endpoint=expected,
+                        node_id=node_id,
+                        companion_endpoint=str(profile["companion_endpoint"]),
+                        selector=int(profile["selector"]),
+                        frequency_offset_hz=int(profile["frequency_offset_hz"]),
+                        observed_at=observed_at,
+                    )
+                except KeyError:
+                    # The structural link should have been registered by the
+                    # ingestor before this callback. Refuse to create control
+                    # state if that receive-side proof is unexpectedly absent.
+                    return
+                if controller_endpoint == self.rf_identity.controller_endpoint:
+                    # A physically validated fresh generated-identity
+                    # association initializes the independent watering-command
+                    # counter at 1. An exact same-route repair above preserves
+                    # the already authenticated counter instead.
+                    registration = (
+                        self._store.synchronize_htv405_control_counter(
+                            valve_endpoint=expected,
+                            node_id=node_id,
+                            next_sequence=1,
+                            source="fresh_generated_identity_pairing",
+                            observed_at=observed_at,
+                        )
+                    )
             try:
                 self._configure_htv405_ack_locked(registration)
             except (ConnectionError, KeyError, RuntimeError, ValueError):
