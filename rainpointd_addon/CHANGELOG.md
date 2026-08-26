@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.7 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
+
+- Do not cancel the selected HTV405 radio node when HA receives terminal
+  pairing evidence and completes device naming. The node now retains its
+  bounded session long enough to finish the remaining modeled association
+  replies or expire naturally.
+- Associate strict selector-`0x07` HTV405 paired-link reports with the valve
+  device so report time and availability reflect valid RF activity, while
+  preserving the latest definitive zone and watering state.
+- Record the reversible, stepped Add-device wizard as a post-stabilization UX
+  requirement in the canonical roadmap.
+
 ## 0.33.6 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
 
 - Present gateway-advertised pairing profiles in Home Assistant under broad

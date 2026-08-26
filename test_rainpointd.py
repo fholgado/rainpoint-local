@@ -300,6 +300,72 @@ class GatewayTest(unittest.TestCase):
         )
         gateway.close()
 
+    def test_ingested_htv405_link_report_refreshes_device_activity(self) -> None:
+        phase_only = (
+            "79f4882f28b984028094a980131c8107820700a0cf80000000408800569"
+            "e0000000000006700"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                )
+            )
+            assert gateway._store is not None
+            gateway._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-08-24T20:00:00+00:00",
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="definitive-idle",
+                state={
+                    "rf_endpoint_a": "b9840280",
+                    "rf_endpoint_b": "94a98013",
+                    "rf_frame_accepted": True,
+                    "is_watering": False,
+                    "active_zone": None,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-24T20:01:21+00:00",
+            )
+            ingestor = FrameIngestor(
+                gateway, receiver_id="rp-001122334455"
+            )
+
+            published = ingestor.consume_event(
+                {
+                    "time": "2026-08-24T20:02:21+00:00",
+                    "rows": [{"len": len(phase_only) * 4, "data": phase_only}],
+                }
+            )
+
+            self.assertEqual(1, published)
+            event = gateway.events()[-1]
+            self.assertEqual("rf_frame", event["event_type"])
+            self.assertEqual("htv405-94a98013", event["device_id"])
+            device = gateway.devices(
+                now=datetime.fromisoformat("2026-08-24T20:02:21+00:00")
+            )[0]
+            self.assertFalse(device["state"]["is_watering"])
+            self.assertEqual(
+                "2026-08-24T20:01:21+00:00", device["state_observed_at"]
+            )
+            self.assertEqual(
+                "2026-08-24T20:02:21+00:00", device["observed_at"]
+            )
+            self.assertTrue(device["reporting"])
+            gateway.close()
+
     def test_authenticated_network_ingest_confirms_air_response(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = self._gateway_with_pending_htv405_open(

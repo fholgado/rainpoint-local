@@ -3776,7 +3776,15 @@ class Gateway:
             if device_id in self._devices:
                 self._devices[device_id]["name"] = name
                 self._devices[device_id]["area"] = area
-            self._cancel_active_pairing_node()
+            if self._active_pairing_profile_id == AUTOMATIC_HTV405_PROFILE_ID:
+                # Terminal valve evidence is sufficient for HA to finish the
+                # naming flow, but the radio node may still owe later replies
+                # in the bounded 18-step association transcript. Release the
+                # gateway session without transmitting a cancellation; the
+                # node will complete or expire its own bounded session.
+                self._release_active_pairing_node()
+            else:
+                self._cancel_active_pairing_node()
             self._pairing.stop()
             return updated
 
@@ -3948,10 +3956,23 @@ class Gateway:
 
     def _cancel_active_pairing_node(self) -> None:
         """Best-effort disarm for the node selected by the current session."""
+        self._clear_active_pairing_node(send_cancel=True)
+
+    def _release_active_pairing_node(self) -> None:
+        """Forget gateway ownership while a bounded node session finishes."""
+        self._clear_active_pairing_node(send_cancel=False)
+
+    def _clear_active_pairing_node(self, *, send_cancel: bool) -> None:
+        """Clear gateway pairing state and optionally cancel the node session."""
         node_id = self._active_pairing_node_id
         command_id = self._active_pairing_command_id
         sender = self._node_command_sender
-        if node_id is not None and command_id is not None and sender is not None:
+        if (
+            send_cancel
+            and node_id is not None
+            and command_id is not None
+            and sender is not None
+        ):
             try:
                 sender(
                     node_id,

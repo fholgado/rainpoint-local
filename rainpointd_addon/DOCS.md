@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.6 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.7 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -24,6 +24,10 @@ during a custom-identity attempt.
 HTV405 valve-control POST requests remain rejected unless the explicit
 `supervised_htv405_control` beta option is enabled and the selected
 association-specific radio node advertises its candidate control capability.
+Completing HTV405 naming in HA leaves the radio node's bounded association
+session running so it can finish every modeled protocol reply. Strict
+selector-`0x07` paired-link reports refresh device availability without
+overwriting the last definitive zone or watering state.
 
 The generalized HCS026 workflow completed isolated local enrollment on both
 test sensors and on installed bed sensors using generated replies, terminal

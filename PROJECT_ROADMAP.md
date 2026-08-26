@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-08-25
+Last reviewed: 2026-08-26
 
 This is the single source of truth for active project status, ordering, and
 completion. Architecture documents describe intended boundaries, protocol
@@ -97,6 +97,12 @@ not a gateway lifecycle mutation.
 
 - [x] Reproduce local association and accept paired valve-originated traffic as
       terminal evidence.
+- [ ] Let the selected node finish the bounded 18-step HTV405 association
+      transcript after HA receives terminal evidence; naming the device must
+      not cancel the remaining protocol replies.
+- [ ] Count strict selector-`0x07` paired-link reports as device activity without
+      replacing the latest definitive zone/watering state, then prove the valve
+      continues reporting after the complete association transcript.
 - [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
 - [x] Pair once under a generated custom controller identity and create exactly
@@ -318,6 +324,11 @@ one becomes a blocker:
   current evidence says the known selector does not.
 - Optimize multi-node channel scheduling and placement beyond the stability
   threshold required by Phase 5.
+- Treat **Add device** as a reversible stepped wizard (category, model, radio
+  node, physical action, and details) whose language and navigation make Back
+  return exactly one step without abandoning the live session. This matters for
+  recoverable consumer setup; promote it when Phase 1 protocol reliability is
+  no longer the limiting factor and validate it with an end-to-end HA UI trial.
 - Finish carrier-PCB manufacturing and enclosure optimization using the
   separate physical preorder checklist.
 - Implement cloud-to-local authority migration in coordination with the HomGar

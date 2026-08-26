@@ -647,8 +647,9 @@ class ESP32NetworkTest(unittest.TestCase):
             area="Garden",
         )
         self.assertEqual("htv405-94a98013", registered["device_id"])
-        cancel = json.loads(stream.readline())
-        self.assertEqual("pairing_cancel", cancel["type"])
+        connection.settimeout(0.1)
+        with self.assertRaises((TimeoutError, socket.timeout)):
+            connection.recv(1)
         stream.close()
         connection.close()
 
@@ -751,8 +752,9 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("Back garden valve", registered["name"])
         self.assertEqual("Garden", registered["area"])
         self.assertEqual(1, len(self.gateway._store.valve_registry()))
-        cancel = json.loads(stream.readline())
-        self.assertEqual("pairing_cancel", cancel["type"])
+        connection.settimeout(0.1)
+        with self.assertRaises((TimeoutError, socket.timeout)):
+            connection.recv(1)
         self.assertEqual([], progress["new_records"])
         stream.close()
         connection.close()
@@ -853,8 +855,9 @@ class ESP32NetworkTest(unittest.TestCase):
         ]
         self.assertEqual(1, len(devices))
         self.assertEqual("Repaired valve", devices[0]["name"])
-        cancel = json.loads(stream.readline())
-        self.assertEqual("pairing_cancel", cancel["type"])
+        connection.settimeout(0.1)
+        with self.assertRaises((TimeoutError, socket.timeout)):
+            connection.recv(1)
         stream.close()
         connection.close()
 
