@@ -732,6 +732,124 @@ class GatewayTest(unittest.TestCase):
                 os.environ["TZ"] = previous_timezone
             time.tzset()
 
+    def test_fresh_generated_identity_pairing_initializes_counter_one(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                ),
+                valve_control_enabled=True,
+            )
+            assert gateway._store is not None
+            identity = gateway.info()["rf_controller_identity"]
+            paired_at = "2026-08-26T13:30:00+00:00"
+            gateway._store.upsert_valve_link(
+                controller_endpoint=identity["controller_endpoint"],
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at=paired_at,
+            )
+            gateway._store.update_valve_control_profile(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                companion_endpoint=identity["companion_endpoint"],
+                selector=0x05,
+                frequency_offset_hz=97_154,
+                observed_at=paired_at,
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="idle",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "is_watering": False,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-26T13:30:01+00:00",
+            )
+
+            synchronized = gateway.synchronize_htv405_control_counter(
+                device_id="htv405-94a98013",
+                next_sequence=1,
+                evidence_source="fresh_generated_identity_pairing",
+                now=datetime.fromisoformat("2026-08-26T13:30:30+00:00"),
+            )
+
+            self.assertEqual(1, synchronized["control_next_sequence"])
+            self.assertEqual(
+                "counter_synchronized:fresh_generated_identity_pairing",
+                synchronized["control_last_result"],
+            )
+            gateway.close()
+
+    def test_fresh_pairing_counter_sync_rejects_wrong_counter_and_stale_link(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = Gateway(
+                storage_path=str(
+                    Path(temporary_directory) / "rainpoint.sqlite3"
+                ),
+                valve_control_enabled=True,
+            )
+            assert gateway._store is not None
+            identity = gateway.info()["rf_controller_identity"]
+            paired_at = "2026-08-26T13:30:00+00:00"
+            gateway._store.upsert_valve_link(
+                controller_endpoint=identity["controller_endpoint"],
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at=paired_at,
+            )
+            gateway._store.update_valve_control_profile(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                companion_endpoint=identity["companion_endpoint"],
+                selector=0x05,
+                frequency_offset_hz=97_154,
+                observed_at=paired_at,
+            )
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            gateway.observe_decoded(
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                frame="idle",
+                state={
+                    "rf_endpoint_b": "94a98013",
+                    "is_watering": False,
+                    "valve_state": "idle",
+                },
+                observed_at="2026-08-26T13:30:01+00:00",
+            )
+
+            with self.assertRaisesRegex(ValueError, "sequence 1"):
+                gateway.synchronize_htv405_control_counter(
+                    device_id="htv405-94a98013",
+                    next_sequence=2,
+                    evidence_source="fresh_generated_identity_pairing",
+                    now=datetime.fromisoformat("2026-08-26T13:30:30+00:00"),
+                )
+            with self.assertRaisesRegex(RuntimeError, "not fresh and idle"):
+                gateway.synchronize_htv405_control_counter(
+                    device_id="htv405-94a98013",
+                    next_sequence=1,
+                    evidence_source="fresh_generated_identity_pairing",
+                    now=datetime.fromisoformat("2026-08-26T13:46:00+00:00"),
+                )
+            gateway.close()
+
     def test_sensor_link_diagnostics_attach_to_endpoint_device(self) -> None:
         gateway = Gateway(transport="rtl433")
         gateway.observe_decoded(
@@ -1107,6 +1225,15 @@ class GatewayTest(unittest.TestCase):
                     ],
                 )
 
+            gateway.update_node("rp-001122334455", tx_armed=True)
+            self.assertEqual(
+                0,
+                gateway.restore_radio_node_htv405_ack_assignments(
+                    "rp-001122334455"
+                ),
+            )
+            self.assertEqual([], commands)
+            gateway.update_node("rp-001122334455", tx_armed=False)
             self.assertEqual(
                 1,
                 gateway.restore_radio_node_htv405_ack_assignments(

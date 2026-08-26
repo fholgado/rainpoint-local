@@ -1397,6 +1397,7 @@ class SQLiteEventStore:
         if source not in {
             "retained_association_capture",
             "authenticated_command_response",
+            "fresh_generated_identity_pairing",
         }:
             raise ValueError("unsupported HTV405 counter evidence source")
         cursor = self._connection.execute(

@@ -101,12 +101,17 @@ not a gateway lifecycle mutation.
       node receivers without replacing previously known booleans with unknown.
       The regression replays the exact 2026-08-26 complete-idle then partial
       Zone 3 idle sequence that had changed Zone 1 from Off to Unknown in HA.
-- [ ] Let the selected node finish the bounded 18-step HTV405 association
-      transcript after HA receives terminal evidence; naming the device must
-      not cancel the remaining protocol replies.
-- [ ] Count strict selector-`0x07` paired-link reports as device activity without
+- [x] Let the selected node finish its bounded HTV405 association work after HA
+      receives terminal evidence; naming the device must not cancel remaining
+      protocol replies. The 2026-08-26 generated-identity validation reached
+      the `13/2C/99` tail and then transitioned directly into ordinary paired
+      reports. The stock transcript's later `9A` rows are not a universal
+      completion requirement.
+- [x] Count strict selector-`0x07` paired-link reports as device activity without
       replacing the latest definitive zone/watering state, then prove the valve
-      continues reporting after the complete association transcript.
+      continues reporting after association. The validated valve reported on
+      the generated route every approximately 40 seconds through the command
+      acceptance trial.
 - [ ] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
 - [x] Pair once under a generated custom controller identity and create exactly
@@ -183,7 +188,12 @@ same time without conflicting authority.
 - [ ] Retain the end-to-end installed result across RF evidence, usage decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
-- [ ] Validate control under a generated custom controller identity.
+- [x] Validate control under a generated custom controller identity. A fresh
+      generated-identity association initializes the independent command
+      counter at `1`: the 2026-08-26 Zone 1 command received an authenticated
+      counter-`1` response, independent active reports, and a valve-owned
+      automatic stop after 60 seconds. Pairing now initializes that counter
+      once without waiting for the unrelated routine telemetry sequence.
 - [ ] Physically verify gateway/node restart during idle and during a bounded
       run remains observation-only and reconciles from subsequent valve reports.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
@@ -222,6 +232,10 @@ cycle validates both branches.
 Exit criteria: both valve families pair and operate through HA, every accepted
 command has device-owned confirmation, and normal failure modes remain bounded,
 observable, and recoverable.
+
+The exact generated-identity tail, four incomplete-association negative trials,
+and the validated fresh-association counter-`1` result are frozen in
+`research/fixtures/htv405_generated_identity_control_gap_20260826.json`.
 
 ## Phase 4 — complete field decoding
 

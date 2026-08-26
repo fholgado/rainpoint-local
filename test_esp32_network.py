@@ -345,6 +345,11 @@ class ESP32NetworkTest(unittest.TestCase):
                     "state": "armed",
                     "completed_steps": 1,
                     "assigned_channel": 5,
+                    "counter_offset": 1,
+                    "counter_offset_known": True,
+                    "selector2_configuration_transmitted": True,
+                    "selector2_configuration_sequence": 3,
+                    "reply_marker_repeat": True,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -359,6 +364,27 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
         self.assertEqual(
             5, self.gateway.nodes()[0]["pairing_assigned_channel"]
+        )
+        self.assertEqual(1, self.gateway.nodes()[0]["pairing_counter_offset"])
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0]["pairing_counter_offset_known"],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0][
+                "pairing_selector2_configuration_transmitted"
+            ],
+        )
+        self.assertEqual(
+            3,
+            self.gateway.nodes()[0][
+                "pairing_selector2_configuration_sequence"
+            ],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0]["pairing_reply_marker_repeat"],
         )
         stream.close()
         connection.close()
@@ -641,6 +667,47 @@ class ESP32NetworkTest(unittest.TestCase):
         progress = self.gateway.pairing()
         self.assertEqual("valve_pairing_completed", progress["stage"])
         self.assertEqual("94a98013", progress["completed_endpoint"])
+        control = next(
+            item
+            for item in self.gateway._store.valve_registry()
+            if item["valve_endpoint"] == "94a98013"
+        )
+        self.assertEqual(1, control["control_next_sequence"])
+        self.assertEqual(
+            "counter_synchronized:fresh_generated_identity_pairing",
+            control["control_last_result"],
+        )
+        self.gateway._store.synchronize_htv405_control_counter(
+            valve_endpoint="94a98013",
+            node_id=NODE_A,
+            next_sequence=2,
+            source="authenticated_command_response",
+            observed_at=datetime.now().astimezone().isoformat(),
+        )
+        self.gateway.observe_rf_frame(
+            frame=build_htv405_close_frame(
+                ValveLink(
+                    controller_endpoint=bytes.fromhex(local_route),
+                    valve_endpoint=bytes.fromhex("94a98013"),
+                ),
+                sequence=12,
+                zone=1,
+                selector=0x05,
+                repeat=False,
+                residue=0xC713,
+            ).hex(),
+            state={
+                "rf_endpoint_a": local_route,
+                "rf_endpoint_b": "94a98013",
+                "rf_receiver_id": NODE_A,
+            },
+        )
+        control = next(
+            item
+            for item in self.gateway._store.valve_registry()
+            if item["valve_endpoint"] == "94a98013"
+        )
+        self.assertEqual(2, control["control_next_sequence"])
         registered = self.gateway.complete_pairing(
             endpoint="94a98013",
             name="Automatically discovered valve",

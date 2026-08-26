@@ -335,6 +335,21 @@ class ESP32NetworkServer:
                             "assigned_channel"
                         ),
                         pairing_step_count=message.get("step_count"),
+                        pairing_counter_offset=message.get("counter_offset"),
+                        pairing_counter_offset_known=message.get(
+                            "counter_offset_known"
+                        ),
+                        pairing_selector2_configuration_transmitted=(
+                            message.get(
+                                "selector2_configuration_transmitted"
+                            )
+                        ),
+                        pairing_selector2_configuration_sequence=(
+                            message.get("selector2_configuration_sequence")
+                        ),
+                        pairing_reply_marker_repeat=message.get(
+                            "reply_marker_repeat"
+                        ),
                         pairing_factory_endpoint=message.get(
                             "factory_endpoint"
                         ),
@@ -345,6 +360,14 @@ class ESP32NetworkServer:
                             message.get("awaiting_terminal_confirmation") is True
                         ),
                     )
+                    # Pairing and routine HTV405 ACK transmission share one
+                    # radio. A newly accepted valve link may be persisted well
+                    # before the bounded 18-step node session ends. Defer ACK
+                    # restoration until the node itself reports TX disarmed.
+                    if message.get("tx_armed") is not True:
+                        self.gateway.restore_radio_node_htv405_ack_assignments(
+                            node_id
+                        )
                 if message.get("type") == "identify_status":
                     self.gateway.update_node(
                         node_id,

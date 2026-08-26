@@ -98,6 +98,7 @@ MAXIMUM_ROUTINE_ACK_ASSIGNMENTS = 8
 HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS = (
     HTV405_RESPONSE_WINDOW_SECONDS + 5.0
 )
+HTV405_FRESH_PAIRING_COUNTER_WINDOW_SECONDS = 15 * 60
 _UNSET = object()
 
 
@@ -708,7 +709,7 @@ class Gateway:
         evidence_source: str,
         now: datetime | None = None,
     ) -> dict[str, Any]:
-        """Restore a supervised counter from a named retained capture."""
+        """Restore a supervised counter from explicit association evidence."""
         current = now or datetime.now(timezone.utc)
         timestamp = current.isoformat()
         with self._lock:
@@ -728,22 +729,54 @@ class Gateway:
                 raise KeyError(device_id)
             profile = self._htv405_control_profile(registration)
             device = self._devices.get(device_id, {})
-            reported_at = registration.get("control_confirmed_at")
-            try:
-                reported = _observed_utc(str(reported_at))
-                current = _observed_utc(current)
-                report_age = (current - reported).total_seconds()
-            except (TypeError, ValueError):
-                report_age = float("inf")
-            if (
-                device.get("available") is not True
-                or registration.get("control_confirmed_watering") not in {
-                    0,
-                    False,
-                }
-                or not 0 <= report_age <= 60
-            ):
-                raise RuntimeError("HTV405 valve is not freshly confirmed idle")
+            device_state = device.get("state", {})
+            if evidence_source == "fresh_generated_identity_pairing":
+                if next_sequence != 1:
+                    raise ValueError(
+                        "fresh HTV405 pairing initializes command sequence 1"
+                    )
+                try:
+                    paired_at = _observed_utc(str(registration["updated_at"]))
+                    current = _observed_utc(current)
+                    pairing_age = (current - paired_at).total_seconds()
+                except (KeyError, TypeError, ValueError):
+                    pairing_age = float("inf")
+                if (
+                    registration.get("controller_endpoint")
+                    != self.rf_identity.controller_endpoint
+                    or registration.get("control_last_result")
+                    not in {
+                        "association_updated_counter_required",
+                        "idle_confirmed_counter_unsynchronized",
+                    }
+                    or not 0
+                    <= pairing_age
+                    <= HTV405_FRESH_PAIRING_COUNTER_WINDOW_SECONDS
+                    or device.get("available") is not True
+                    or device_state.get("is_watering") is not False
+                ):
+                    raise RuntimeError(
+                        "HTV405 generated-identity pairing is not fresh and idle"
+                    )
+            else:
+                reported_at = registration.get("control_confirmed_at")
+                try:
+                    reported = _observed_utc(str(reported_at))
+                    current = _observed_utc(current)
+                    report_age = (current - reported).total_seconds()
+                except (TypeError, ValueError):
+                    report_age = float("inf")
+                if (
+                    device.get("available") is not True
+                    or registration.get("control_confirmed_watering") not in {
+                        0,
+                        False,
+                    }
+                    or not 0 <= report_age <= 60
+                ):
+                    raise RuntimeError(
+                        "HTV405 valve is not freshly confirmed idle"
+                    )
             result = self._store.synchronize_htv405_control_counter(
                 valve_endpoint=profile.valve_endpoint,
                 node_id=profile.node_id,
@@ -890,7 +923,11 @@ class Gateway:
             if self._store is None or self._node_command_sender is None:
                 return 0
             node = self._nodes.get(node_id, {})
-            if "htv405_routine_ack_tx" not in node.get("capabilities", []):
+            if (
+                node.get("tx_armed") is True
+                or "htv405_routine_ack_tx"
+                not in node.get("capabilities", [])
+            ):
                 return 0
             registrations = [
                 item
@@ -904,13 +941,16 @@ class Gateway:
         restored = 0
         for registration in registrations:
             command = self._htv405_ack_configuration_command(registration)
+            # Publish the correlation identifier before the command can elicit
+            # a synchronous error from the node. Otherwise the listener may
+            # misclassify that error as a pairing failure.
+            self.update_node(
+                node_id, htv405_routine_ack_command_id=command["command_id"]
+            )
             try:
                 sender(node_id, command)
             except (ConnectionError, KeyError, RuntimeError, ValueError):
                 break
-            self.update_node(
-                node_id, htv405_routine_ack_command_id=command["command_id"]
-            )
             restored += 1
         self.update_node(
             node_id,
@@ -948,12 +988,16 @@ class Gateway:
         node = self._nodes.get(node_id, {})
         if (
             node.get("connected") is not True
+            or node.get("tx_armed") is True
             or "htv405_routine_ack_tx" not in node.get("capabilities", [])
         ):
             return
         command = self._htv405_ack_configuration_command(registration)
-        self._node_command_sender(node_id, command)
+        # Set the identifier before dispatch so a fast command error is still
+        # attributed to the ACK configuration rather than the active pairing
+        # transaction.
         node["htv405_routine_ack_command_id"] = command["command_id"]
+        self._node_command_sender(node_id, command)
 
     def _revoke_htv405_ack_locked(
         self, registration: dict[str, Any]
@@ -1798,6 +1842,11 @@ class Gateway:
             or command_id is None
         ):
             return
+        # A pairing window may observe many routine link reports after the
+        # valve has accepted the new controller. Complete the association only
+        # once so later reports cannot reset an authenticated command counter.
+        if self._active_pairing_confirmed_valve_endpoint == expected:
+            return
         node = self._nodes.get(node_id, {})
         if (
             node.get("pairing_command_id") != command_id
@@ -1892,6 +1941,18 @@ class Gateway:
                 # ingestor before this callback. Refuse to create control
                 # state if that receive-side proof is unexpectedly absent.
                 return
+            if controller_endpoint == self.rf_identity.controller_endpoint:
+                # A physically validated fresh generated-identity association
+                # initializes the independent watering-command counter at 1.
+                # This is association evidence; it does not depend on the
+                # unrelated routine telemetry sequence.
+                registration = self._store.synchronize_htv405_control_counter(
+                    valve_endpoint=expected,
+                    node_id=node_id,
+                    next_sequence=1,
+                    source="fresh_generated_identity_pairing",
+                    observed_at=observed_at,
+                )
             try:
                 self._configure_htv405_ack_locked(registration)
             except (ConnectionError, KeyError, RuntimeError, ValueError):

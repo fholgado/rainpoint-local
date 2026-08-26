@@ -530,11 +530,53 @@ new-identity link frame while the selected Vegetable Garden node had completed
 14 of 18 controller replies. The gateway updated the existing
 `htv405-94a98013` registry record and control route rather than creating a new
 device. This physically validates that endpoint identity is stable across a
-stock-style to generated-controller migration. The controller counter remains
-deliberately unavailable until a fresh valve-originated report authenticates
-it; pairing traffic is not used to guess a watering command counter.
+stock-style to generated-controller migration. Retained-association traffic
+does not reveal the watering-command counter; it remains unavailable unless a
+command response authenticates it or a fresh local association initializes it
+as described below.
 The compact pairing and post-restart report evidence is retained in
 `research/fixtures/htv405_generated_identity_pairing_20260825.json`.
+
+A later inspection of that generated-controller association recovered the
+post-acceptance tail in full. The valve progressed through the ordinary/short
+families and then emitted `11/2C/99`, `11/AC/99`, `12/2C/99`, `12/AC/99`, and
+`13/2C/99`; it never emitted the stock transcript's final `08/AC/9A` and
+`09/2C/9A` requests. Four bounded Zone 1 commands using candidate command
+sequences 0 through 3 subsequently produced neither an authenticated
+high-carrier response nor an independent active report. Those trials belonged
+to an incomplete earlier association. The early selector-2 configuration
+sequence and the routine telemetry sequence are not sources for the independent
+watering-command counter.
+
+The comparison exposed a specific state-machine ambiguity after logical step
+15. In this position, `AC/99` follows `2C/99` as the repeat half of the same
+advancing transaction; matching it to the earlier stock row with the same
+marker replays the older `19/06` reply body and regresses the association. The
+validated pairing path preserves step 15's `19/86` body and toggles only
+the reply marker from `6C` to `EC`, mirroring the proven short-form repeat
+pattern. A physical re-pair reached `13/2C/99`, then transitioned directly into
+ordinary selector-`0x07` paired-link reports approximately every 40 seconds.
+The valve never emitted `9A`, yet retained the generated identity and accepted
+control; the stock transcript's `9A` tail is therefore not a universal
+completion requirement.
+
+That fresh association supplied the missing command-counter rule. The gateway
+initialized the independent command counter to `1` without waiting for a
+periodic report and sent one duration-bounded 60-second Zone 1 command. The
+valve returned the authenticated counter-`1` response:
+
+```text
+79f4882f28ee86de8094a9801301d0868010cf80000000409e00569e00000000000000003740
+```
+
+Independent active reports followed with Zone 1 and 60 seconds, then the valve
+reported idle at `2026-08-26T13:49:59.406493+00:00`. This proves the command
+counter resets/initializes at `1` for a fresh generated-identity association.
+The implementation applies that initialization once per confirmed pairing;
+later paired reports cannot reset an already authenticated counter. The exact
+frames, earlier negative trials, authenticated response, and automatic-stop
+evidence are frozen in
+`research/fixtures/htv405_generated_identity_control_gap_20260826.json`.
 
 It centered at 433.556537 MHz in the same SDR, only 107 Hz above the accepted
 stock selector-2 reference. The first two local routine replies centered at
@@ -1425,6 +1467,9 @@ owner, and completion status are maintained only in `PROJECT_ROADMAP.md`.
 7. Determine whether HTV405 battery status is carried by an RF family not yet
    independently correlated to voltage. HTV145 categorical battery is now
    decoded separately.
+8. Repeat the fresh-association counter-`1` result on a second HTV405 specimen
+   or independently evidenced compatible product profile before generalizing
+   it beyond the validated model family.
 
 ## Safety boundary
 
