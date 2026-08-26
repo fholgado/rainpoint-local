@@ -707,7 +707,7 @@ rainpoint::PairingFailureReason currentPairingFailureReason() {
 
 void reportPairingStatus(const char* detail = nullptr) {
     String line;
-    line.reserve(320);
+    line.reserve(416);
     line += "{\"type\":\"pairing_tx_status\",\"node_id\":\"";
     line += wifiTransport.nodeId();
     line += "\",\"profile\":\"";
@@ -767,6 +767,23 @@ void reportPairingStatus(const char* detail = nullptr) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     line += ",\"retained_association_rejoin\":";
     line += valvePairingActive && valvePairingKnownRejoin ? "true" : "false";
+    if (valvePairingActive) {
+        line += ",\"counter_offset\":";
+        line += static_cast<unsigned int>(
+            valvePairingSession.counterOffset()
+        );
+        line += ",\"counter_offset_known\":";
+        line += valvePairingSession.counterOffsetKnown() ? "true" : "false";
+        line += ",\"selector2_configuration_transmitted\":";
+        line += valvePairingSession.selector2ConfigurationTransmitted()
+            ? "true" : "false";
+        line += ",\"selector2_configuration_sequence\":";
+        line += static_cast<unsigned int>(
+            valvePairingSession.selector2ConfigurationSequence()
+        );
+        line += ",\"reply_marker_repeat\":";
+        line += valvePairingSession.replyMarkerRepeat() ? "true" : "false";
+    }
 #endif
     line += ",\"factory_adopted\":";
     line += pairingFactoryAdopted ? "true" : "false";
@@ -3033,8 +3050,24 @@ std::uint8_t activeValvePairingReplyCounterOffset() {
     return valvePairingSession.replyCounterOffset();
 }
 
+bool activeValvePairingIsSelector2ConfigurationStep(
+    std::size_t replyStep
+) {
+    return valvePairingSession.isSelector2ConfigurationStep(replyStep);
+}
+
+void markActiveValvePairingSelector2ConfigurationTransmitted(
+    std::uint8_t sequence
+) {
+    valvePairingSession.markSelector2ConfigurationTransmitted(sequence);
+}
+
 std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
     return valvePairingSession.replyStartDelayOverrideUs();
+}
+
+bool activeValvePairingReplyMarkerRepeat() {
+    return valvePairingSession.replyMarkerRepeat();
 }
 
 bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
@@ -3115,6 +3148,14 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     replyFrame,
                     activeValvePairingReplyCounterOffset()
                 );
+            if (built && activeValvePairingReplyMarkerRepeat()) {
+                replyFrame[14] = static_cast<std::uint8_t>(
+                    replyFrame[14] | 0x80U
+                );
+                rainpoint::writeTrailer(
+                    replyFrame, step->trailerResidual
+                );
+            }
             const std::uint32_t replyStartDelayOverrideUs =
                 activeValvePairingReplyStartDelayOverrideUs();
             const std::uint32_t replyStartDelayUs =
@@ -3169,10 +3210,15 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
                 !valvePairingHtv145 &&
 #endif
-                replyStep ==
-                    rainpoint::kHtv405Selector2ConfigurationStepIndex) {
+                activeValvePairingIsSelector2ConfigurationStep(replyStep)) {
                 std::array<std::uint8_t, rainpoint::kFrameBytes>
                     configurationFrame{};
+                // The long-wake controller configuration shares the shifted
+                // transaction counter of the immediate 82/41 acknowledgement.
+                // Retain that exact sequence in diagnostics. Live trials on
+                // 2026-08-26 ruled out treating it as a watering-command
+                // counter: fresh pairing independently initialized that
+                // counter at 1 and received an authenticated response.
                 sent = rainpoint::buildHtv405Selector2ConfigurationReply(
                     activeValvePairingProfile,
                     configurationFrame,
@@ -3188,6 +3234,11 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                         rainpoint::
                             kHtv405Selector2ConfigurationReplyStartDelayUs
                 );
+                if (sent) {
+                    markActiveValvePairingSelector2ConfigurationTransmitted(
+                        configurationFrame[13] & 0x7fU
+                    );
+                }
             }
             finishActiveValvePairingReply(sent, millis());
             reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");

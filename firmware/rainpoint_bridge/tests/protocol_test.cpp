@@ -1256,6 +1256,62 @@ int main() {
     assert(htv405Reply == fromHex(
         "79f4882f2894a980133984028085100101000000000000000000000000000000000000000f75"
     ));
+    // A later-sweep assignment can first expose the repeated 02/81 request.
+    // The session re-anchors it as shifted step 2, then answers 03/01 as
+    // shifted step 3. The immediate 83/41 acknowledgement and long-wake
+    // 83/10 configuration must share sequence 3. Preserve it as association
+    // diagnostics; it is not sufficient evidence to initialize the distinct
+    // watering-command counter.
+    rainpoint::Htv405PairingSession shiftedConfigurationSession(
+        htv405Profile
+    );
+    shiftedConfigurationSession.arm(17'000);
+    assert(shiftedConfigurationSession.claimReply(
+        htv405Factory, 17'050
+    ) == &htv405Profile.steps[0]);
+    assert(shiftedConfigurationSession.finishReply(true, 17'060));
+    auto shiftedInitialRepeat = htv405Request(htv405Profile, 2, 1);
+    assert(shiftedConfigurationSession.claimReply(
+        shiftedInitialRepeat, 17'100
+    ) == &htv405Profile.steps[2]);
+    assert(!shiftedConfigurationSession.isSelector2ConfigurationStep(2));
+    assert(shiftedConfigurationSession.finishReply(true, 17'110));
+    auto shiftedConfigurationTrigger = htv405Request(htv405Profile, 3, 1);
+    assert(shiftedConfigurationSession.claimReply(
+        shiftedConfigurationTrigger, 17'200
+    ) == &htv405Profile.steps[3]);
+    assert(shiftedConfigurationSession.replyCounterOffset() == 1);
+    assert(shiftedConfigurationSession.isSelector2ConfigurationStep(3));
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        3,
+        htv405Clock,
+        htv405Reply,
+        shiftedConfigurationSession.replyCounterOffset()
+    ));
+    assert(htv405Reply[13] == 0x83);
+    const std::uint8_t shiftedConfigurationOffset =
+        static_cast<std::uint8_t>(
+            ((htv405Reply[13] & 0x7fU) - 0x02U) & 0x7fU
+        );
+    assert(rainpoint::buildHtv405Selector2ConfigurationReply(
+        htv405Profile,
+        htv405Reply,
+        shiftedConfigurationOffset
+    ));
+    assert(htv405Reply[13] == 0x83);
+    shiftedConfigurationSession.markSelector2ConfigurationTransmitted(
+        htv405Reply[13]
+    );
+    assert(
+        shiftedConfigurationSession.selector2ConfigurationTransmitted()
+    );
+    assert(
+        shiftedConfigurationSession.selector2ConfigurationSequence() == 3
+    );
+    // Marking diagnostics must not suppress retransmission handling.
+    assert(shiftedConfigurationSession.isSelector2ConfigurationStep(3));
+    assert(shiftedConfigurationSession.finishReply(true, 17'210));
     auto laterHtv405Factory = htv405Factory;
     laterHtv405Factory[13] = 0x02;
     laterHtv405Factory[14] = 0x00;
@@ -1762,17 +1818,36 @@ int main() {
     );
     assert(htv405LateRetrySession.claimReply(
         htv405ObservedEarlierExtendedRepeat, 30'500
-    ) == &htv405Profile.steps[14]);
-    assert(htv405LateRetrySession.replyCounterOffset() == 11);
+    ) == &htv405Profile.steps[15]);
+    assert(htv405LateRetrySession.replyCounterOffset() == 10);
+    assert(htv405LateRetrySession.replyMarkerRepeat());
+    assert(rainpoint::buildHtv405PairingReply(
+        htv405Profile,
+        15,
+        htv405Clock,
+        htv405Reply,
+        htv405LateRetrySession.replyCounterOffset()
+    ));
+    htv405Reply[14] = static_cast<std::uint8_t>(
+        htv405Reply[14] | 0x80U
+    );
+    rainpoint::writeTrailer(
+        htv405Reply, htv405Profile.steps[15].trailerResidual
+    );
+    assert(htv405Reply[13] == 0x92);
+    assert(htv405Reply[14] == 0xec);
+    assert(htv405Reply[18] == 0x86);
+    assert(rainpoint::hasOrdinaryTrailer(htv405Reply));
     assert(htv405LateRetrySession.finishReply(true, 30'510));
     assert(htv405LateRetrySession.completedSteps() == 16);
-    auto htv405ExtendedPhaseTwo = htv405Request(htv405Profile, 16, 11);
+    auto htv405ExtendedPhaseTwo = htv405Request(htv405Profile, 16, 10);
     assert(htv405LateRetrySession.claimReply(
         htv405ExtendedPhaseTwo, 30'600
     ) == &htv405Profile.steps[16]);
+    assert(!htv405LateRetrySession.replyMarkerRepeat());
     assert(htv405LateRetrySession.finishReply(true, 30'610));
     assert(htv405LateRetrySession.completedSteps() == 17);
-    auto htv405ExtendedFinal = htv405Request(htv405Profile, 17, 11);
+    auto htv405ExtendedFinal = htv405Request(htv405Profile, 17, 10);
     htv405ExtendedFinal[17] = 0x00;
     rainpoint::writeTrailer(htv405ExtendedFinal, 0xc713);
     assert(htv405LateRetrySession.claimReply(

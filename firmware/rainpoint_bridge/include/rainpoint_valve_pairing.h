@@ -522,6 +522,9 @@ public:
         counterOffset_ = 0;
         replyCounterOffset_ = 0;
         counterOffsetKnown_ = false;
+        selector2ConfigurationTransmitted_ = false;
+        selector2ConfigurationSequence_ = 0;
+        replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         expiresAtMs_ = nowMs + durationMs;
         failureReason_ = PairingFailureReason::None;
@@ -536,6 +539,9 @@ public:
         counterOffset_ = 0;
         replyCounterOffset_ = 0;
         counterOffsetKnown_ = false;
+        selector2ConfigurationTransmitted_ = false;
+        selector2ConfigurationSequence_ = 0;
+        replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         failureReason_ = PairingFailureReason::None;
     }
@@ -548,6 +554,7 @@ public:
         if (state_ != PairingSessionState::Armed || pending_) {
             return nullptr;
         }
+        replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         // Step zero may be retransmitted with a later sweep counter. Once an
         // assignment has been sent, retry it until paired traffic proves that
@@ -715,6 +722,48 @@ public:
                 }
             }
         }
+        // Once logical step 15 has advanced, an AC/99 request is ambiguous:
+        // it has the marker of stock step 14, but it can also be the repeat
+        // half of the immediately preceding 2C/99 transaction. The generated-
+        // identity capture proved the latter sequence (2C/99 -> AC/99).
+        // Preserve step 15's advancing 19/86 reply body and toggle only its
+        // repeat marker, just as the captured short-form 42/C2 pairs do. The
+        // 2026-08-26 physical validation retained the generated association,
+        // continued into ordinary link reports, and accepted command counter
+        // 1 after this response path.
+        if (step_ >= 16 &&
+            profile_.stepCount == kHtv405PairingStepCount &&
+            frame[14] == 0xacU && hasOrdinaryTrailer(frame)) {
+            auto normalized = frame;
+            const std::uint16_t residual = trailerResidual(frame);
+            normalized[14] = static_cast<std::uint8_t>(
+                normalized[14] & 0x7fU
+            );
+            writeTrailer(normalized, residual);
+            if (htv405RequestMatches(
+                    profile_, 15, normalized, 0, true
+                )) {
+                constexpr std::size_t repeatedStep = 15;
+                const std::uint8_t expected = static_cast<std::uint8_t>(
+                    profile_.steps[repeatedStep].requestBody[0] & 0x7fU
+                );
+                const std::uint8_t observed = static_cast<std::uint8_t>(
+                    frame[13] & 0x7fU
+                );
+                if (observed >= expected && observed - expected <= 15) {
+                    counterOffset_ = static_cast<std::uint8_t>(
+                        observed - expected
+                    );
+                    counterOffsetKnown_ = true;
+                    pending_ = true;
+                    pendingAdvances_ = false;
+                    replyCounterOffset_ = counterOffset_;
+                    replyMarkerRepeat_ = true;
+                    claimedAtMs_ = nowMs;
+                    return &profile_.steps[repeatedStep];
+                }
+            }
+        }
         // Once the final extended phase begins, a missed acknowledgement can
         // make the valve repeat any already-completed 99/9A request with a
         // newer counter. Answer only earlier rows from this exact four-row
@@ -857,6 +906,21 @@ public:
     std::uint8_t counterOffset() const { return counterOffset_; }
     std::uint8_t replyCounterOffset() const { return replyCounterOffset_; }
     bool counterOffsetKnown() const { return counterOffsetKnown_; }
+    bool isSelector2ConfigurationStep(std::size_t replyStep) const {
+        return profile_.stepCount == kHtv405PairingStepCount &&
+            replyStep == kHtv405Selector2ConfigurationStepIndex;
+    }
+    void markSelector2ConfigurationTransmitted(std::uint8_t sequence) {
+        selector2ConfigurationTransmitted_ = true;
+        selector2ConfigurationSequence_ = sequence & 0x7fU;
+    }
+    bool selector2ConfigurationTransmitted() const {
+        return selector2ConfigurationTransmitted_;
+    }
+    std::uint8_t selector2ConfigurationSequence() const {
+        return selector2ConfigurationSequence_;
+    }
+    bool replyMarkerRepeat() const { return replyMarkerRepeat_; }
     std::uint32_t replyStartDelayOverrideUs() const {
         return replyStartDelayOverrideUs_;
     }
@@ -869,6 +933,9 @@ private:
         counterOffset_ = 0;
         replyCounterOffset_ = 0;
         counterOffsetKnown_ = false;
+        selector2ConfigurationTransmitted_ = false;
+        selector2ConfigurationSequence_ = 0;
+        replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         failureReason_ = reason;
     }
@@ -884,6 +951,9 @@ private:
     std::uint8_t counterOffset_ = 0;
     std::uint8_t replyCounterOffset_ = 0;
     bool counterOffsetKnown_ = false;
+    bool selector2ConfigurationTransmitted_ = false;
+    std::uint8_t selector2ConfigurationSequence_ = 0;
+    bool replyMarkerRepeat_ = false;
     std::uint32_t replyStartDelayOverrideUs_ = 0;
     bool acceptColdBootStart_ = false;
 };
