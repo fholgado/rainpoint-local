@@ -733,11 +733,17 @@ class Gateway:
                 raise RuntimeError("selected HTV405 radio node is unavailable")
             if registration.get("control_confirmed_watering") in {1, True}:
                 raise RuntimeError("HTV405 valve is not confirmed idle")
+            if registration.get("control_node_id") != node_id:
+                self._revoke_htv405_ack_locked(registration)
             result = self._store.assign_htv405_control_node(
                 valve_endpoint=str(registration["valve_endpoint"]),
                 node_id=node_id,
                 observed_at=timestamp,
             )
+            try:
+                self._configure_htv405_ack_locked(result)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                pass
             self._refresh_registry_catalog()
             return result
 
@@ -827,6 +833,101 @@ class Gateway:
             routine_ack_restore_unsupported_identity=unsupported,
         )
         return restored
+
+    def restore_radio_node_htv405_ack_assignments(self, node_id: str) -> int:
+        """Restore one-owner HTV405 liveness replies after reconnect/OTA."""
+        with self._lock:
+            if self._store is None or self._node_command_sender is None:
+                return 0
+            node = self._nodes.get(node_id, {})
+            if "htv405_routine_ack_tx" not in node.get("capabilities", []):
+                return 0
+            registrations = [
+                item
+                for item in self._store.valve_registry()
+                if item.get("model") == "HTV405FRF"
+                and item.get("control_node_id") == node_id
+                and item.get("control_companion_endpoint") is not None
+                and item.get("control_frequency_offset_hz") is not None
+            ]
+            sender = self._node_command_sender
+        restored = 0
+        for registration in registrations:
+            command = self._htv405_ack_configuration_command(registration)
+            try:
+                sender(node_id, command)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                break
+            self.update_node(
+                node_id, htv405_routine_ack_command_id=command["command_id"]
+            )
+            restored += 1
+        self.update_node(
+            node_id,
+            htv405_routine_ack_assigned_valves=len(registrations),
+            htv405_routine_ack_restore_requested=restored,
+        )
+        return restored
+
+    @staticmethod
+    def _htv405_ack_configuration_command(
+        registration: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build a non-actuating ACK authorization from a durable link."""
+        return {
+            "type": "htv405_routine_ack_configure",
+            "command_id": uuid.uuid4().hex,
+            "controller_endpoint": str(registration["controller_endpoint"]),
+            "valve_endpoint": str(registration["valve_endpoint"]),
+            "companion_endpoint": str(
+                registration["control_companion_endpoint"]
+            ),
+            "frequency_offset_hz": int(
+                registration["control_frequency_offset_hz"]
+            ),
+            "power_dbm": 10,
+            "invert": False,
+        }
+
+    def _configure_htv405_ack_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        node_id = registration.get("control_node_id")
+        if not isinstance(node_id, str) or self._node_command_sender is None:
+            return
+        node = self._nodes.get(node_id, {})
+        if (
+            node.get("connected") is not True
+            or "htv405_routine_ack_tx" not in node.get("capabilities", [])
+        ):
+            return
+        command = self._htv405_ack_configuration_command(registration)
+        self._node_command_sender(node_id, command)
+        node["htv405_routine_ack_command_id"] = command["command_id"]
+
+    def _revoke_htv405_ack_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        node_id = registration.get("control_node_id")
+        endpoint = registration.get("valve_endpoint")
+        if (
+            not isinstance(node_id, str)
+            or not isinstance(endpoint, str)
+            or self._node_command_sender is None
+        ):
+            return
+        try:
+            command = {
+                "type": "htv405_routine_ack_revoke",
+                "command_id": uuid.uuid4().hex,
+                "valve_endpoint": endpoint,
+            }
+            self._node_command_sender(node_id, command)
+            self._nodes.setdefault(node_id, {"node_id": node_id})[
+                "htv405_routine_ack_command_id"
+            ] = command["command_id"]
+        except (ConnectionError, KeyError, RuntimeError, ValueError):
+            pass
 
     def assign_radio_node_ack(
         self,
@@ -1713,7 +1814,7 @@ class Gateway:
             and profile is not None
         ):
             try:
-                self._store.update_valve_control_profile(
+                registration = self._store.update_valve_control_profile(
                     valve_endpoint=expected,
                     node_id=node_id,
                     companion_endpoint=str(profile["companion_endpoint"]),
@@ -1726,6 +1827,12 @@ class Gateway:
                 # ingestor before this callback. Refuse to create control
                 # state if that receive-side proof is unexpectedly absent.
                 return
+            try:
+                self._configure_htv405_ack_locked(registration)
+            except (ConnectionError, KeyError, RuntimeError, ValueError):
+                # Persistence is authoritative; reconnect restoration retries
+                # this best-effort live configuration.
+                pass
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
         elif self._store is not None and profile is not None:
@@ -4154,6 +4261,16 @@ class Gateway:
             except KeyError:
                 suppressed_at = datetime.now(timezone.utc).isoformat()
                 try:
+                    valve_registration = next(
+                        (
+                            item
+                            for item in self._store.valve_registry()
+                            if item["device_id"] == device_id
+                        ),
+                        None,
+                    )
+                    if valve_registration is not None:
+                        self._revoke_htv405_ack_locked(valve_registration)
                     forgotten_valve = self._store.forget_valve_registry_device(
                         device_id,
                         suppressed_at=suppressed_at,

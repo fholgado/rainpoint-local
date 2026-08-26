@@ -115,7 +115,7 @@ enabled:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.7 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.8 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -129,7 +129,7 @@ The unaccepted HTV145 candidate requires an additional explicit build gate:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_TX_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.1 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.2 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -140,7 +140,7 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.1-htv145-pairing-probe.5 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.6 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -197,7 +197,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.1 --environment rainpoint_bridge
+  --version 0.15.2 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

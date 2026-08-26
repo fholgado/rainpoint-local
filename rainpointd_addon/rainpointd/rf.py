@@ -14,6 +14,7 @@ from .valve_protocol import (
     decode_htv145_state_report,
     decode_htv145_terminal_idle_report,
     decode_htv405_control_frame,
+    decode_htv405_routine_ack,
 )
 
 
@@ -449,5 +450,8 @@ def normalize_row(
     result.update(_hcs026_routine_ack_candidate(frame, catalog))
     result.update(_hcs026_pairing_fields(frame, catalog))
     result.update(_hcs026_report_fields(frame, catalog))
+    htv405_ack = decode_htv405_routine_ack(frame)
+    if htv405_ack is not None:
+        result.update(htv405_ack)
     result.update(_valve_fields(frame, catalog))
     return result

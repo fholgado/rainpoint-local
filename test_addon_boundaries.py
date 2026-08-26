@@ -34,6 +34,11 @@ class AddonBoundaryTest(unittest.TestCase):
         )[0]
         self.assertIn('type == "routine_ack_configure"', command_boundary)
         self.assertIn('type == "routine_ack_revoke"', command_boundary)
+        self.assertIn(
+            'type == "htv405_routine_ack_configure"', command_boundary
+        )
+        self.assertIn('type == "htv405_routine_ack_revoke"', command_boundary)
+        self.assertIn("htv405_routine_ack_tx", source)
 
     def test_firmware_has_one_standard_build_environment(self) -> None:
         platformio = (
@@ -71,19 +76,19 @@ class AddonBoundaryTest(unittest.TestCase):
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
             build_profile,
         )
-        self.assertIn('standard_version = "0.15.1"', build_profile)
+        self.assertIn('standard_version = "0.15.2"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.7"',
+            'supervised_version = "0.15.0-supervised-beta.8"',
             build_profile,
         )
         self.assertIn(
             'htv145_candidate_version = '
-            '"0.15.0-htv145-control-candidate.1"',
+            '"0.15.0-htv145-control-candidate.2"',
             build_profile,
         )
         self.assertIn(
             'htv145_pairing_candidate_version = '
-            '"0.15.1-htv145-pairing-probe.5"',
+            '"0.15.2-htv145-pairing-probe.6"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)

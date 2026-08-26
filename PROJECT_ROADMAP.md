@@ -137,6 +137,11 @@ physical device has exactly one HA representation.
 
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node
       reconnect, gateway reconnect, and successful OTA.
+- [x] Freeze recurring stock-gateway HTV405 idle/watering reply evidence and
+      implement an association-scoped, non-actuating liveness ACK on the
+      valve's single durable control-node owner.
+- [ ] Confirm the local HTV405 liveness ACK over air, then prove routine valve
+      reports continue through node/gateway restarts and a sustained soak.
 - [ ] Battery-cycle each supported sensor family and restore the same HA device,
       paired identity, and routine reporting without opening pairing.
 - [ ] Capture the stock RainPoint gateway's complete battery-rejoin exchange for

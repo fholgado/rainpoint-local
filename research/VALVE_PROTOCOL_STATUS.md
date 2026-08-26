@@ -36,6 +36,25 @@ HTV405 control in disabled-by-default beta and still block HTV145 control.
 | Battery | Unknown in RF; HA must remain unavailable | Categorical normal/low bit confirmed |
 | Battery-cycle rejoin | Unresolved | Unresolved |
 
+## HTV405 recurring liveness acknowledgement
+
+The stock RainPoint gateway answers ordinary HTV405 paired-link traffic after
+enrollment. Four retained report/reply pairs, including idle and watering
+state, place the reply 69--84 ms after the received report. The gateway reverses
+the route to valve -> association companion, ORs byte 13 with `0x80`, ORs byte
+14 with `0x40`, writes `01 00 01` at bytes 15--17, and clears bytes 18--35.
+The reply has no zone, duration, or operation marker and is therefore a
+non-actuating liveness response, not a control command.
+
+The compact pairs are frozen in
+`fixtures/htv405_stock_routine_ack_20260824.json`. Firmware schedules the reply
+in the ordinary 49.5 ms post-RX slot on the association's selector-2 routine
+carrier with a 320-symbol wake. Authorization is restored only to the durable
+HTV405 control-node owner; reassignment revokes the former node before the new
+node can answer. Both captured CRC residual families occur, while the first
+production candidate uses the captured-valid `0xc713` family pending an
+over-air acceptance/soak result.
+
 ## HTV405 lifecycle findings
 
 The retained cross-reference contains 11 attempts: three

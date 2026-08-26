@@ -285,7 +285,9 @@ void WifiTransport::handleGatewayLine(const String& line) {
 #endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
          || type == "routine_ack_configure" ||
-             type == "routine_ack_revoke"
+             type == "routine_ack_revoke" ||
+             type == "htv405_routine_ack_configure" ||
+             type == "htv405_routine_ack_revoke"
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
          || type == "firmware_update_start"
@@ -341,6 +343,7 @@ void WifiTransport::authenticate(const String& nonce) {
 #endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
+        ",\"htv405_routine_ack_tx\""
 #endif
 #if RAINPOINT_OTA_CANDIDATE == 1
         ",\"firmware_update_trial\""

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.33.8 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.8
+
+- Add association-scoped recurring HTV405 liveness acknowledgements from the
+  valve's single assigned control node. The gateway restores that authorization
+  after node reconnect and OTA, revokes the old owner before reassignment or
+  removal, and never includes zone, duration, or actuation fields.
+- Reproduce the captured stock-gateway endpoint, counter, timing, carrier, and
+  320-symbol wake transform for ordinary idle and watering reports.
+- Decode HTV405 liveness replies independently so an SDR or second radio node
+  can confirm the bridge's transmission over air without treating it as valve
+  state or command success.
+- Advance every shared-source firmware variant so OTA cannot mistake an older
+  binary for this liveness-capable build.
+
 ## 0.33.7 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.7
 
 - Do not cancel the selected HTV405 radio node when HA receives terminal

@@ -1279,6 +1279,7 @@ class ESP32NetworkTest(unittest.TestCase):
                 "sensor_pairing_tx",
                 "identify",
                 "routine_sensor_ack_tx",
+                "htv405_routine_ack_tx",
             ],
         )
         self.assertEqual("node_authenticated", response["type"])
@@ -1302,6 +1303,25 @@ class ESP32NetworkTest(unittest.TestCase):
         }
         self.server.send_command(NODE_A, revoke)
         self.assertEqual(revoke, json.loads(stream.readline()))
+        valve_configure = {
+            "type": "htv405_routine_ack_configure",
+            "command_id": "78" * 16,
+            "controller_endpoint": "ee86de80",
+            "valve_endpoint": "94a98013",
+            "companion_endpoint": "6e86de80",
+            "frequency_offset_hz": 97_154,
+            "power_dbm": 10,
+            "invert": False,
+        }
+        self.server.send_command(NODE_A, valve_configure)
+        self.assertEqual(valve_configure, json.loads(stream.readline()))
+        valve_revoke = {
+            "type": "htv405_routine_ack_revoke",
+            "command_id": "9a" * 16,
+            "valve_endpoint": "94a98013",
+        }
+        self.server.send_command(NODE_A, valve_revoke)
+        self.assertEqual(valve_revoke, json.loads(stream.readline()))
         stream.close()
         connection.close()
 
