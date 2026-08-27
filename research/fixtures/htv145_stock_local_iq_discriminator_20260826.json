@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-08-26",
+  "model": "HTV145FRF",
+  "purpose": "Distinguish an accepted stock assignment from rejected local selector-5 assignments using bounded continuous-IQ analysis.",
+  "analysis_channels_hz": {
+    "lower_request": 433143000,
+    "assignment": 433556567,
+    "configuration_response": 433471500
+  },
+  "stock_accepted": {
+    "capture_sha256": "4200f81fa15a1be574f42f38da5a9656cf86a0b67d1755fb74011017cab0e924",
+    "analysis_window_seconds": [18.0, 34.0],
+    "factory_request_count": 1,
+    "assignment_count": 1,
+    "lower_paired_request_count": 4,
+    "stage_1_request_count": 1,
+    "configuration_response_count": 1,
+    "factory_sweep_counter": 0,
+    "assignment_selector": 5,
+    "request_end_to_assignment_start_ms": 50.6,
+    "stage_1_observed": true
+  },
+  "local_rejected": {
+    "capture_sha256": "f50b173e18ea7d2a5e7480f8b262cd9b989a5de39432a6cb4e8e51e41b84b3a6",
+    "analysis_window_seconds": [22.0, 42.0],
+    "factory_request_count": 2,
+    "assignment_count": 3,
+    "lower_paired_request_count": 0,
+    "stage_1_request_count": 0,
+    "configuration_response_count": 0,
+    "matched_trials": [
+      {
+        "factory_sweep_counter": 0,
+        "assignment_selector": 5,
+        "request_end_to_assignment_start_ms": 51.25,
+        "stage_1_observed": false
+      },
+      {
+        "factory_sweep_counter": 3,
+        "assignment_selector": 5,
+        "request_end_to_assignment_start_ms": 50.7,
+        "stage_1_observed": false
+      }
+    ]
+  },
+  "interpretation": "The corrected analyzer listens for stages 1 and 3-5 on the lower request carrier and reserves the routine response carrier for stage 2. It recovers the accepted stock continuation but no paired request from the rejected local trials. The local stall is therefore valve-side rejection of stage 0, not a radio-node receive-channel miss."
+}

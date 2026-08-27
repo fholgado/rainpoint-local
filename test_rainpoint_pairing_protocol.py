@@ -42,6 +42,12 @@ from tools.analyze_htv405_pairing_iq import (  # noqa: E402
     DEFAULT_ROUTINE_CENTER_HZ,
     analyze_pairing_capture,
 )
+from tools.analyze_htv145_pairing_iq import (  # noqa: E402
+    DEFAULT_ASSIGNMENT_CENTER_HZ as HTV145_ASSIGNMENT_CENTER_HZ,
+    DEFAULT_REQUEST_CENTER_HZ as HTV145_REQUEST_CENTER_HZ,
+    DEFAULT_RESPONSE_CENTER_HZ as HTV145_RESPONSE_CENTER_HZ,
+    analyze as analyze_htv145_pairing_capture,
+)
 from tools.generate_rainpoint_iq import generate_command  # noqa: E402
 
 
@@ -226,6 +232,82 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(
             trial["paired_link_observed_before_next_factory_request"]
         )
+
+    def test_htv145_iq_analyzer_keeps_request_and_response_legs_distinct(
+        self,
+    ) -> None:
+        factory_request = bytes.fromhex(
+            "79f4882f2880000000342d008f80808402ff8f970080bf060000"
+            "000000000000000000007ccf"
+        )
+        assignment = bytes.fromhex(
+            "79f4882f28b42d008f3984028080c0858503057000929e990d"
+            "01008000000000000000005767"
+        )
+        stage_1_request = bytes.fromhex(
+            "79f4882f28b9840280b42d008f810107822580804f8000000040"
+            "800056800000000000000855"
+        )
+        configuration_response = bytes.fromhex(
+            "79f4882f28b9840280b42d008f81d000800000000000000000"
+            "00000000000000000000005dc8"
+        )
+        request_iq, _ = generate_command(
+            factory_request,
+            wake_symbols=320,
+            channel_center_hz=HTV145_REQUEST_CENTER_HZ,
+            leading_silence_ms=5,
+            trailing_silence_ms=50,
+        )
+        assignment_iq, _ = generate_command(
+            assignment,
+            wake_symbols=320,
+            channel_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=500,
+        )
+        stage_1_iq, _ = generate_command(
+            stage_1_request,
+            wake_symbols=320,
+            channel_center_hz=HTV145_REQUEST_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=500,
+        )
+        configuration_iq, _ = generate_command(
+            configuration_response,
+            wake_symbols=320,
+            channel_center_hz=HTV145_RESPONSE_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=5,
+        )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(
+                request_iq + assignment_iq + stage_1_iq + configuration_iq
+            )
+            capture.flush()
+            result = analyze_htv145_pairing_capture(
+                Path(capture.name),
+                factory_endpoint=bytes.fromhex("342d008f"),
+                paired_endpoint=bytes.fromhex("b42d008f"),
+                companion_endpoint=bytes.fromhex("39840280"),
+                controller_endpoint=bytes.fromhex("b9840280"),
+                origin_seconds=0,
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+                request_center_hz=HTV145_REQUEST_CENTER_HZ,
+                assignment_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+                response_center_hz=HTV145_RESPONSE_CENTER_HZ,
+            )
+
+        self.assertEqual(1, result["request_count"])
+        self.assertEqual(1, result["assignment_count"])
+        self.assertEqual(1, result["lower_paired_request_count"])
+        self.assertEqual(1, result["stage_1_request_count"])
+        self.assertEqual(1, result["configuration_response_count"])
+        trial = result["trials"][0]
+        self.assertEqual(5, trial["assignment_selector"])
+        self.assertEqual(50.0, trial["request_end_to_assignment_start_ms"])
+        self.assertTrue(trial["stage_1_observed"])
 
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:
         controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
