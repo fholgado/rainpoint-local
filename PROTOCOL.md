@@ -392,9 +392,21 @@ promoted as battery. The comparison and representative frames are retained in
 analysis is `tools/analyze_htv405_battery_events.py`.
 
 The cloud catalog confirms a port-0 `STA_BAT` semantic value, but it does not
-locate that value in RF. No HTV405 battery percentage or categorical flag is
-exposed locally yet. A controlled normal-to-low voltage transition with an
-independent LCD or app observation remains required.
+locate that value in RF. A cross-family comparison now gives one bounded
+candidate: HTV145 independently maps absolute offset 17 mask `0x08` to low
+battery in its valve-originated status family, and HTV405 uses the equivalent
+status structure. All 34 strictly decoded fresh-cell HTV405 stock-route status
+frames kept that bit clear while the cloud reported 100 percent. Home
+Assistant recorder history could not label the weak-cell side because the
+cloud battery entity was unavailable until after the fresh cells were
+installed.
+
+Offset 17 mask `0x08` is therefore a **provisional candidate**, not a decoded
+field. No HTV405 battery percentage or categorical flag is exposed locally
+yet. A controlled normal-to-low voltage transition with an independent LCD or
+app observation remains required. The analyzer now retains the status family
+and accepts `--probe-bit 17:0x08` so that transition can be evaluated without
+changing the runtime decoder.
 
 ### HTV405FRF enrollment exchange
 

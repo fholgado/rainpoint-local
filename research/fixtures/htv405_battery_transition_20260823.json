@@ -36,6 +36,33 @@
       "interpretation": "Both offsets are already crossed against zone selection and watering countdown; neither is a battery candidate."
     }
   },
+  "home_assistant_cloud_history": {
+    "entity_id": "sensor.williams_hcs026frf_battery_level",
+    "entity_naming_note": "The historical entity ID retained an earlier model name, but its friendly name was HTV405FRF Battery Level and its attributes reported firmware version 123.",
+    "weak_cell_period": "unavailable",
+    "first_numeric_state": {
+      "state": 100,
+      "device_timestamp": "2026-08-24T13:38:41.014000+00:00",
+      "battery_context": "fresh alkaline set"
+    },
+    "interpretation": "Recorder history does not independently label the pre-replacement RF frames as low battery. The first retained numeric cloud value occurred after replacement and confirms only the normal/full side."
+  },
+  "cross_family_status_candidate": {
+    "candidate_absolute_offset": 17,
+    "candidate_mask": "0x08",
+    "basis": [
+      "HTV145FRF independently maps offset 17 mask 0x08 to categorical low battery in its valve-originated status family.",
+      "HTV405FRF uses the same frame-15 0x07 valve-originated status structure, with its model/profile discriminator at offset 16.",
+      "All 34 strictly decoded fresh-cell HTV405FRF stock-route status frames from events 155189 through 158819 kept offset 17 mask 0x08 clear while the cloud reported 100 percent."
+    ],
+    "normal_offset_17_values": {
+      "0x85": 34
+    },
+    "clear_count": 34,
+    "set_count": 0,
+    "status": "provisional location; no HTV405 low-battery frame has been observed",
+    "predicted_test": "A controlled low-battery transition should set offset 17 mask 0x08 in otherwise comparable valve-originated status reports and agree with the app or physical display."
+  },
   "diagnostic_examples": {
     "old_battery_period": {
       "event_id": 144203,
@@ -53,6 +80,8 @@
   "conclusions": [
     "No ordinary paired-link, startup, or factory field is presently supported as HTV405 battery state.",
     "The diagnostic family changed across the battery replacement, but the same offsets changed again after bounded watering while the fresh batteries were unchanged. Those offsets encode dynamic device/session data and cannot be promoted as battery.",
+    "Offset 17 mask 0x08 is now the leading candidate because it is the confirmed HTV145FRF low-battery flag at the equivalent status-family location and remained clear in every retained fresh-cell HTV405FRF status report.",
+    "Home Assistant recorder history cannot validate the old-cell side: the HTV405FRF cloud battery entity was unavailable then and first reported 100 percent only after fresh batteries were installed.",
     "The cloud catalog's port-0 STA_BAT declaration establishes the semantic feature but does not locate it in the RF frame.",
     "A controlled normal-to-low voltage transition with an independently observed LCD or app state is still required. Until then Home Assistant must report HTV405 battery as unavailable rather than invent a percentage."
   ]

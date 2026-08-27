@@ -345,6 +345,11 @@ and the validated fresh-association counter-`1` result are frozen in
       water usage.
 - [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
       battery entity unavailable until RF correlation is repeatable.
+      Offset 17 mask `0x08` is the leading bounded candidate: the equivalent
+      HTV145 status bit is independently confirmed, and it remained clear in
+      all 34 strictly decoded fresh-cell HTV405 stock-route status frames while
+      the cloud reported 100%. Historical HA data cannot label the weak-cell
+      side because that cloud entity was unavailable until after replacement.
 - [x] Mark each field as confirmed, provisional, categorical-only, or not
       transmitted locally; never synthesize an unavailable protocol value.
 - [ ] Ensure product/model discovery is capability- and product-code based, not
