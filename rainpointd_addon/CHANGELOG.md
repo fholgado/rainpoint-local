@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.13 / Integration 0.13.1 / Firmware 0.15.0-supervised-beta.10
+
+- Promote an already-selected HTV405 timeout-recovery counter automatically
+  after the complete possible run plus safety guard elapses, so HA control no
+  longer remains recovery-blocked until a hidden direct API call is attempted.
+- Accept an exact, in-window valve command response received by any
+  authenticated radio node while retaining the association owner as the sole
+  transmitter. This adds receiver diversity without broadening RF authority or
+  accepting command intent as state.
+- Expose bounded recovery timing and attempt diagnostics on the HA zone
+  entities so irrigation logic can wait safely before a limited retry.
+
 ## 0.33.12 / Integration 0.13.0 / Firmware 0.15.0-supervised-beta.10
 
 - Add a management-authenticated, supervised HTV405 counter probe for an

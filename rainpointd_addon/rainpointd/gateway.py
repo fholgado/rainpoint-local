@@ -2355,9 +2355,9 @@ class Gateway:
     ) -> list[dict[str, Any]]:
         """Return a stable snapshot of all known devices."""
         with self._lock:
-            self._expire_stale_htv405_commands_locked(
-                now or datetime.now(timezone.utc)
-            )
+            observed = now or datetime.now(timezone.utc)
+            self._expire_stale_htv405_commands_locked(observed)
+            self._recover_matured_htv405_timeout_counters_locked(observed)
             metrics = (
                 self._store.device_metrics()
                 if self._store
@@ -2749,6 +2749,43 @@ class Gateway:
             self._refresh_registry_catalog()
         return expired
 
+    def _recover_matured_htv405_timeout_counters_locked(
+        self, now: str | datetime
+    ) -> int:
+        """Make a bounded timeout candidate usable once its guard matures.
+
+        The recovery candidate was already chosen when the command timed out;
+        this step never guesses a new counter.  Promoting it during the normal
+        device refresh is important because Home Assistant otherwise keeps
+        showing the valve as recovery-blocked indefinitely and no later caller
+        can discover that the guard has elapsed without attempting a command.
+        """
+        if self._store is None or not self._valve_control_enabled:
+            return 0
+        observed = _observed_utc(now).isoformat()
+        recovered = 0
+        for registration in self._store.valve_registry():
+            node_id = registration.get("control_node_id")
+            if not isinstance(node_id, str):
+                continue
+            result = self._store.recover_htv405_timeout_counter(
+                valve_endpoint=str(registration["valve_endpoint"]),
+                node_id=node_id,
+                observed_at=observed,
+            )
+            if result is None:
+                continue
+            self._append_valve_control_event_locked(
+                registration=result,
+                event_type="valve_control_recovered",
+                observed_at=observed,
+                action="open",
+            )
+            recovered += 1
+        if recovered:
+            self._refresh_registry_catalog()
+        return recovered
+
     def _update_memory_metrics(self, device_id: str, observed_at: str) -> None:
         """Track cadence for ephemeral replay gateways without SQLite."""
         metric = self._memory_metrics.get(device_id)
@@ -2967,12 +3004,14 @@ class Gateway:
         *,
         observed_at: str | None = None,
     ) -> dict[str, Any] | None:
-        """Confirm a pending command from one authenticated node's RF frame.
+        """Confirm a pending command from an authenticated node's RF frame.
 
         The network listener supplies ``node_id`` only after authenticating
         the radio node. The gateway independently validates the frame,
         durable association, reserved counter, zone, action, and short
-        response window before advancing control state.
+        response window before advancing control state.  The response may be
+        received by any authenticated radio node: only the association owner
+        transmits, but receiver diversity must not discard valve-owned proof.
         """
         if (
             self._store is None
@@ -3021,8 +3060,7 @@ class Gateway:
             except ValueError:
                 return None
             if (
-                registration.get("control_node_id") != node_id
-                or response_endpoint != expected_response_endpoint
+                response_endpoint != expected_response_endpoint
                 or not isinstance(
                     registration.get("control_pending_command_id"), str
                 )
@@ -3070,7 +3108,7 @@ class Gateway:
             try:
                 accepted = self._store.confirm_valve_control_response(
                     valve_endpoint=valve_endpoint,
-                    node_id=node_id,
+                    node_id=str(registration["control_node_id"]),
                     sequence=sequence,
                     next_sequence=next_sequence,
                     zone=zone,

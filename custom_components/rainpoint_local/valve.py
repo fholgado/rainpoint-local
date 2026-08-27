@@ -117,6 +117,15 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
                 "rf_control_command_pending"
             ),
             "last_result": self.decoded_state.get("rf_control_last_result"),
+            "recovery_sequence": self.decoded_state.get(
+                "rf_control_recovery_sequence"
+            ),
+            "recovery_attempt": self.decoded_state.get(
+                "rf_control_recovery_attempt"
+            ),
+            "recovery_not_before": self.decoded_state.get(
+                "rf_control_recovery_not_before"
+            ),
             "confirmed_at": self.decoded_state.get(
                 "rf_control_confirmed_at"
             ),

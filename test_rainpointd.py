@@ -155,14 +155,14 @@ class GatewayTest(unittest.TestCase):
         )
         return gateway
 
-    def test_authenticated_node_air_response_confirms_pending_open(self) -> None:
+    def test_authenticated_receiver_diversity_confirms_pending_open(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway = self._gateway_with_pending_htv405_open(
                 Path(temporary_directory) / "rainpoint.sqlite3"
             )
             self.assertIsNone(
                 gateway.observe_valve_control_air_response(
-                    "rp-aabbccddeeff",
+                    "local-sdr",
                     self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
                     observed_at="2026-08-24T20:00:20.900000+00:00",
                 )
@@ -171,7 +171,7 @@ class GatewayTest(unittest.TestCase):
             self.assertIsNotNone(pending["control_pending_command_id"])
 
             accepted = gateway.observe_valve_control_air_response(
-                "rp-001122334455",
+                "rp-aabbccddeeff",
                 self.HTV405_OPEN_RESPONSE_SEQUENCE_6,
                 observed_at="2026-08-24T20:00:20.900000+00:00",
             )
@@ -3104,6 +3104,44 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             )
         self.assertEqual(400, raised.exception.code)
         self.assertEqual([], self.commands)
+
+    def test_device_poll_recovers_a_matured_bounded_timeout(self) -> None:
+        gateway = self.server.gateway
+        gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        gateway.devices(
+            now=datetime.fromisoformat("2026-08-24T20:00:30.001000+00:00")
+        )
+
+        before = next(
+            item
+            for item in gateway.devices(
+                now=datetime.fromisoformat("2026-08-24T20:01:34+00:00")
+            )
+            if item["device_id"] == self.DEVICE_ID
+        )
+        self.assertFalse(before["state"]["rf_control_available"])
+
+        after = next(
+            item
+            for item in gateway.devices(
+                now=datetime.fromisoformat("2026-08-24T20:01:35+00:00")
+            )
+            if item["device_id"] == self.DEVICE_ID
+        )
+        self.assertTrue(after["state"]["rf_control_available"])
+        self.assertEqual(
+            "bounded_timeout_counter_recovered",
+            after["state"]["rf_control_last_result"],
+        )
+        self.assertEqual(
+            "valve_control_recovered", gateway.events()[-1]["event_type"]
+        )
 
 
 if __name__ == "__main__":

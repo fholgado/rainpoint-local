@@ -291,6 +291,16 @@ same time without conflicting authority.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
+
+The 2026-08-27 scheduled 15-minute run reached the selected Vegetable Garden
+radio with the authenticated next counter `5`, but no command response was
+received and the valve remained idle. Gateway 0.33.13 closes two recovery gaps
+exposed by that safe failure: any authenticated node may now contribute the
+exact valve response during the pending command window, and the already-chosen
+bounded retry candidate becomes available automatically after the complete
+possible run plus guard interval. Keep this gate open until a scheduled retry
+recovers without manual counter synchronization and obtains valve-owned open
+and automatic-idle evidence.
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 
@@ -317,7 +327,10 @@ same time without conflicting authority.
 The deployed household script now waters from the remaining fresh readings
 when only part of a bed's sensor set is stale, and uses the bounded fallback
 only when no configured reading is fresh. Keep this gate open until a scheduled
-cycle validates both branches.
+cycle validates both branches. Its valve path also waits through the daemon's
+bounded timeout guard and retries a failed open at most twice; each retry still
+requires an authenticated valve response, and a final failure remains a
+critical notification.
 - [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
       addition to the existing UTC/offset/DST software coverage.
 

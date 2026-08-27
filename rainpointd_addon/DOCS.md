@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.12 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.13 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -237,9 +237,11 @@ control have been validated from shorter exchanges. Trailer-invalid frames
 cannot create valve links, and phase-only reports advance reception/phase
 diagnostics without erasing the latest definitive watering state.
 If an authenticated response times out, the app retains only the two smallest
-plausible counter candidates. A later explicit open may use a candidate only
-after the full requested duration plus a 15-second guard has elapsed; it never
-replays the timed-out command immediately. Unexpected watering or any explicit
+plausible counter candidates. A candidate becomes available only after the full
+requested duration plus a 15-second guard has elapsed; the app never replays
+the timed-out command immediately. An exact in-window valve response received
+by any authenticated radio node can confirm the command, while only the
+association owner may transmit it. Unexpected watering or any explicit
 node/response failure cancels this recovery path.
 The gateway also applies its own response deadline. If a radio node never
 returns a usable terminal status, routine device polling fails the exact
