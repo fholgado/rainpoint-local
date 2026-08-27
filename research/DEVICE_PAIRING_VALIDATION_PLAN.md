@@ -511,6 +511,26 @@ identity-derived, session-generated, counters, timestamps, or random material.
 Record whether app deletion itself emits RF and whether reboot uses a shorter
 rejoin exchange.
 
+For the two remaining HTV145 stock branch captures, use continuous IQ from
+before the pairing gesture through at least 15 seconds after the white success
+flash. After each accepted enrollment, record the app's Device Address before
+deleting or renaming the device. Analyze a bounded window with:
+
+```sh
+python3 tools/analyze_htv145_pairing_iq.py CAPTURE.cu8 \
+  --factory-endpoint FACTORY \
+  --paired-endpoint PAIRED \
+  --companion-endpoint COMPANION \
+  --controller-endpoint CONTROLLER \
+  --start-seconds WINDOW_START \
+  --duration-seconds WINDOW_DURATION
+```
+
+Correlate the Device Address, assignment selector, assignment carrier, first
+paired request marker, and routine carrier as one branch. Do not change the
+local stage-0 reply from one isolated field: HTV405 required selector and
+carrier to change coherently before enrollment became reliable.
+
 After enrollment is stable, capture dry actions for zones 1 through 4
 separately using the same duration. Then repeat zone 1 with a different
 duration. This separates zone selection from duration, sequence, and trailer

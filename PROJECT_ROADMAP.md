@@ -205,8 +205,12 @@ clock structure match the one retained stock success. These negatives make
 small timing, near-field saturation, and retained-controller collision poor
 next hypotheses. Only one successful stock selector (`5`) is retained, while
 HTV405 required multiple stock enrollments to reveal that selector and carrier
-must move together. Preserve the known 49.5 ms prefix until the additional
-HTV145 stock branch matrix exists.
+must move together. Corrected bounded-IQ analysis recovered all four
+lower-channel paired requests and the controller-configuration response from
+the stock success, but zero paired requests after the rejected local
+assignments; the stall is valve-side rejection, not a node receive-channel
+miss. Preserve the known 49.5 ms prefix until the additional HTV145 stock
+branch matrix exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 

@@ -1194,6 +1194,19 @@ same 1/6 result. The generated-identity result is important because that was a
 decisive HTV405 migration discriminator; retained stock-controller collision
 does not explain the HTV145 rejection.
 
+A corrected bounded-IQ analyzer now keeps the enrollment receive legs
+separate: the factory request and paired stages 1 and 3--5 use the lower
+request carrier near 433.143 MHz, while only the stage-2 controller-
+configuration response uses the routine response carrier near 433.472 MHz.
+Applied to the accepted stock capture, it recovers the selector-5 assignment,
+four lower-channel paired requests, and the stage-2 response. Applied to the
+rejected local capture, it finds selector-5 assignments at 51.25 and 50.70 ms
+after decoded factory requests but zero paired requests on the lower carrier.
+The local 1/6 stall is therefore valve-side rejection of the assignment, not a
+radio-node receive-channel miss. The compact comparison is retained in
+`research/fixtures/htv145_stock_local_iq_discriminator_20260826.json`; future
+captures can be evaluated with `tools/analyze_htv145_pairing_iq.py`.
+
 The remaining HTV405-derived lead is branch coherence. Reliable HTV405
 enrollment was not obtained by tuning one reply in isolation: multiple stock
 captures revealed selector-2 and selector-6 branches whose assignment marker,

@@ -95,6 +95,25 @@ python3 tools/valve_trial_analysis.py htv405-lifecycle \
   research/fixtures/htv405_pairing_cross_reference_20260820.json
 ```
 
+## Cross-model enrollment evidence
+
+The HTV405 investigation is useful to HTV145 only where the observation is
+model-independent. The current comparison is:
+
+| Discriminator | HTV405 result | HTV145 result | Consequence |
+|---|---|---|---|
+| Reply timing from received frame | Moving the deadline anchor past radio preparation removed scheduler error | Accepted stock is 50.55 ms; rejected local replies are already within 0.70 ms | Preserve the proven scheduling path; do not tune stage 0 blindly |
+| Assignment waveform and carrier | Carrier calibration was required before protocol comparison | Local wake, deviation, carrier, and structural payload match stock | Basic RF generation is no longer the leading cause |
+| Controller identity | Generated identity removed a retained-association ambiguity | Stock-derived and generated identities both stop at 1/6 | Retained stock-controller collision is not the blocker |
+| Selector branch | Multiple stock captures exposed coherent selector-2 and selector-6 assignment/request/carrier branches | Only one accepted selector-5 stock branch is retained | Capture more stock enrollments before changing selector or later carriers |
+| Valve continuation | Accepted assignment caused model-specific addressed requests | Corrected IQ analysis sees zero paired requests after local assignments | The valve rejects stage 0; the node is not merely missing stage 1 |
+| Receive-carrier transition | Each transcript changes carriers only at evidenced stages | Stages 1 and 3--5 are lower-channel; only stage 2 is on the response carrier | Current single-radio receive transition is consistent with stock evidence |
+| Completion | Valve-originated paired traffic, not reply count or LED, proves acceptance | Local attempts have no valve-originated paired traffic | Keep HTV145 pairing and control research-gated |
+
+This comparison narrows the next experiment to the missing stock branch matrix.
+It does not justify importing HTV405's 18-row tail or treating the app Device
+Address as a selector until repeated HTV145 captures prove that relationship.
+
 ## Transaction evidence
 
 `tools/valve_trial_analysis.py transactions` correlates commands, bounded RF
