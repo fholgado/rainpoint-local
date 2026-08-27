@@ -8,6 +8,11 @@ import json
 import unittest
 
 from tools.analyze_rainpoint_events import analyze, fetch_events, load_events
+from tools.analyze_htv405_battery_events import (
+    family as htv405_battery_family,
+    probe_bit,
+    summarize_group as summarize_htv405_battery_group,
+)
 
 
 class FakeResponse(io.StringIO):
@@ -50,6 +55,31 @@ class RainPointEventAnalysisTest(unittest.TestCase):
         self.assertEqual([1, 2, 3], [event["event_id"] for event in events])
         self.assertEqual(3, len(requested))
         self.assertTrue(all(timeout == 4.5 for _, timeout in requested))
+
+    def test_htv405_battery_analysis_retains_status_family_and_probes_bits(
+        self,
+    ) -> None:
+        normal = bytes.fromhex(
+            "79f4882f28b984028094a980130e0107868580804f800000004080005680"
+            "000000000000533b"
+        )
+        synthetic_low = bytearray(normal)
+        synthetic_low[17] |= 0x08
+        controller = bytes.fromhex("b9840280")
+        paired = bytes.fromhex("94a98013")
+        factory = bytes.fromhex("14a98013")
+
+        self.assertEqual(
+            "paired_status_86",
+            htv405_battery_family(normal, controller, paired, factory),
+        )
+        summary = summarize_htv405_battery_group(
+            [normal, bytes(synthetic_low)], [(17, 0x08)]
+        )
+        self.assertEqual(
+            {"clear": 1, "set": 1}, summary["probed_bits"]["17:0x08"]
+        )
+        self.assertEqual((17, 0x08), probe_bit("17:0x08"))
 
     def test_rejects_stalled_cursor(self) -> None:
         def open_page(url, *, timeout):

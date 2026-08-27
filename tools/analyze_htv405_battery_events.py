@@ -28,6 +28,24 @@ def endpoint(value: str) -> bytes:
     return result
 
 
+def probe_bit(value: str) -> tuple[int, int]:
+    try:
+        offset_text, mask_text = value.split(":", 1)
+        offset = int(offset_text, 0)
+        mask = int(mask_text, 0)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "probe bit must use OFFSET:MASK, for example 17:0x08"
+        ) from error
+    if not 0 <= offset < FRAME_BYTES:
+        raise argparse.ArgumentTypeError(
+            f"probe offset must be between 0 and {FRAME_BYTES - 1}"
+        )
+    if mask <= 0 or mask > 0x80 or mask & (mask - 1):
+        raise argparse.ArgumentTypeError("probe mask must contain exactly one bit")
+    return offset, mask
+
+
 def event_frame(event: dict[str, Any]) -> bytes | None:
     raw = event.get("raw") or (event.get("state") or {}).get("raw")
     if not isinstance(raw, str) or len(raw) != FRAME_BYTES * 2:
@@ -38,11 +56,42 @@ def event_frame(event: dict[str, Any]) -> bytes | None:
         return None
 
 
+def looks_like_htv405_status(frame: bytes) -> bool:
+    """Recognize state reports while allowing the candidate battery bit."""
+    if (
+        frame[15] != 0x07
+        or not frame[16] & 0x80
+        or not frame[16] & 0x7F
+        # Ignore only the cross-family battery candidate while validating the
+        # otherwise proven selector. This is analysis-only; the production
+        # decoder remains strict until a real HTV405 low transition exists.
+        or frame[17] & 0x77 != 0x05
+        or frame[20] & 0x7F != 0x4F
+        or frame[25] != 0x40
+        or frame[28] != 0x56
+    ):
+        return False
+
+    watering = bool(frame[20] & 0x80)
+    direct_local_layout = (
+        not frame[17] & 0x80
+        and frame[19] & 0x0F == 0
+        and (watering or (frame[18] == 0x80 and frame[19] == 0x80))
+    )
+    if direct_local_layout:
+        zone = (frame[19] & 0x70) >> 4
+    else:
+        zone = (frame[18] & 0x7F) * 2 + int(bool(frame[19] & 0x80))
+    return zone in range(1, 5) or (zone == 0 and not watering)
+
+
 def family(frame: bytes, controller: bytes, paired: bytes, factory: bytes) -> str:
     if frame[5:9] == bytes.fromhex("80000000") and frame[9:13] == factory:
         return "factory_announcement"
     if frame[5:9] != controller or frame[9:13] != paired:
         return "other_route"
+    if looks_like_htv405_status(frame):
+        return f"paired_status_{frame[16]:02x}"
     if frame[15] == 0x07 and frame[16] == 0x82:
         selector = frame[17] & 0x7F
         if selector in {0x05, 0x07}:
@@ -77,7 +126,9 @@ def value_sets(frames: list[bytes]) -> dict[int, list[int]]:
     return result
 
 
-def summarize_group(frames: list[bytes]) -> dict[str, Any]:
+def summarize_group(
+    frames: list[bytes], probes: list[tuple[int, int]]
+) -> dict[str, Any]:
     signatures = Counter(normalized(frame).hex() for frame in frames)
     return {
         "count": len(frames),
@@ -89,6 +140,13 @@ def summarize_group(frames: list[bytes]) -> dict[str, Any]:
         "byte_values": {
             str(index): [f"0x{value:02x}" for value in values]
             for index, values in value_sets(frames).items()
+        },
+        "probed_bits": {
+            f"{offset}:0x{mask:02x}": {
+                "clear": sum(not (frame[offset] & mask) for frame in frames),
+                "set": sum(bool(frame[offset] & mask) for frame in frames),
+            }
+            for offset, mask in probes
         },
     }
 
@@ -106,6 +164,13 @@ def main() -> int:
     parser.add_argument("--controller", type=endpoint, required=True)
     parser.add_argument("--paired", type=endpoint, required=True)
     parser.add_argument("--factory", type=endpoint, required=True)
+    parser.add_argument(
+        "--probe-bit",
+        action="append",
+        default=[],
+        type=probe_bit,
+        help="report clear/set counts for OFFSET:MASK; may be repeated",
+    )
     args = parser.parse_args()
 
     controller = args.controller
@@ -146,8 +211,8 @@ def main() -> int:
             if before_values[index] != after_values[index]
         }
         families[name] = {
-            "before": summarize_group(sides["before"]),
-            "after": summarize_group(sides["after"]),
+            "before": summarize_group(sides["before"], args.probe_bit),
+            "after": summarize_group(sides["after"], args.probe_bit),
             "changed_byte_value_sets": changed_positions,
         }
 
