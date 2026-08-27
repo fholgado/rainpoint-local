@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.33.14 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.10
+
+- Reject unvalidated HTV405 command durations before reserving a counter or
+  sending anything to a radio node. The current physical acceptance set is 1,
+  2, and 20 minutes.
+- Expose that acceptance set on HA duration entities. This prevents a 5- or
+  15-minute value from reusing the disproven additive encoder and presenting a
+  protocol rejection as an RF/counter timeout.
+
 ## 0.33.13 / Integration 0.13.1 / Firmware 0.15.0-supervised-beta.10
 
 - Promote an already-selected HTV405 timeout-recovery counter automatically

@@ -506,6 +506,20 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         self.assertIsNone(state["control_next_sequence"])
         self.assertIsNone(state["control_pending_command_id"])
 
+    def test_unvalidated_duration_is_never_reserved_or_transmitted(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not physically validated"):
+            self.coordinator.request_open(
+                self.profile,
+                zone=1,
+                duration_seconds=900,
+                started_at="2026-08-24T20:00:20+00:00",
+            )
+
+        state = self.store.valve_registry()[0]
+        self.assertEqual(6, state["control_next_sequence"])
+        self.assertIsNone(state["control_pending_command_id"])
+        self.assertEqual([], self.sent)
+
     def test_bounded_timeout_recovers_two_smallest_counter_candidates(self) -> None:
         first = self.coordinator.request_open(
             self.profile,

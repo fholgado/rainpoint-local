@@ -15,6 +15,7 @@ from .entity import RainPointLocalEntity
 
 DEFAULT_RUN_MINUTES = 1
 MAXIMUM_RUN_MINUTES = 60
+VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})
 
 
 async def async_setup_entry(
@@ -85,11 +86,24 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
         )
 
     async def async_set_native_value(self, value: float) -> None:
-        """Store one whole-minute duration in coordinator memory."""
+        """Store one physically validated whole-minute duration."""
         minutes = int(value)
-        if value != minutes or not 1 <= minutes <= MAXIMUM_RUN_MINUTES:
-            raise ValueError("duration must be 1-60 whole minutes")
+        if value != minutes or minutes not in VALIDATED_RUN_MINUTES:
+            supported = ", ".join(
+                str(item) for item in sorted(VALIDATED_RUN_MINUTES)
+            )
+            raise ValueError(
+                "duration is not physically validated; supported minute "
+                f"values are {supported}"
+            )
         self.coordinator.htv405_run_minutes[
             (self.device_id, self._zone)
         ] = minutes
         self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose the evidence-bounded duration choices."""
+        return {
+            "validated_duration_minutes": sorted(VALIDATED_RUN_MINUTES)
+        }

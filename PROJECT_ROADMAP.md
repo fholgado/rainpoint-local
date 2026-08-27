@@ -261,7 +261,9 @@ same time without conflicting authority.
       the additive candidates (`16 01` for 300 seconds and, by the same model,
       `42 02` for 900 seconds) are not accepted command encodings: retained
       counter `3` rejected the former, then immediately accepted the proven
-      60-second `9e 00` payload and advanced to `4`.
+      60-second `9e 00` payload and advanced to `4`. Gateway 0.33.14 now
+      rejects every duration outside the physically accepted 1-, 2-, and
+      20-minute set before reserving a counter or dispatching RF.
 - [ ] Retain the end-to-end installed result across RF evidence, usage decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
@@ -292,15 +294,16 @@ same time without conflicting authority.
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
 
-The 2026-08-27 scheduled 15-minute run reached the selected Vegetable Garden
-radio with the authenticated next counter `5`, but no command response was
-received and the valve remained idle. Gateway 0.33.13 closes two recovery gaps
-exposed by that safe failure: any authenticated node may now contribute the
-exact valve response during the pending command window, and the already-chosen
-bounded retry candidate becomes available automatically after the complete
-possible run plus guard interval. Keep this gate open until a scheduled retry
-recovers without manual counter synchronization and obtains valve-owned open
-and automatic-idle evidence.
+The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
+the disproven additive `42 02` duration payload received no positive response
+and the valve remained idle. A same-counter retry failed identically. That
+isolates unsupported duration construction—not counter progression—as the
+failure cause. Gateway 0.33.13 still closes two recovery gaps exposed during
+the postmortem: any authenticated node may contribute the exact valve response
+during a pending window, and an already-chosen bounded retry candidate becomes
+available automatically after its safety guard. Keep this gate open until a
+scheduled run uses a validated duration and obtains valve-owned open and
+automatic-idle evidence without manual synchronization.
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 

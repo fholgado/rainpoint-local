@@ -15,6 +15,10 @@ _ENDPOINT = re.compile(r"[0-9a-f]{8}\Z")
 _NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 HTV405_CONTROL_BASE_CENTER_HZ = 433_421_373
 HTV405_RESPONSE_WINDOW_SECONDS = 5.0
+# Physical valve-owned responses currently validate only these command
+# durations. Other whole-minute values may decode correctly in telemetry but
+# do not yet have a proven inverse command encoding.
+HTV405_VALIDATED_OPEN_DURATIONS_SECONDS = frozenset({60, 120, 1_200})
 
 
 @dataclass(frozen=True)
@@ -104,6 +108,21 @@ class Htv405ControlCoordinator:
     ) -> dict[str, Any]:
         self._require_enabled()
         self._require_profile(profile)
+        if (
+            action == "open"
+            and duration_seconds
+            not in HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
+        ):
+            supported = ", ".join(
+                str(value // 60)
+                for value in sorted(
+                    HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
+                )
+            )
+            raise ValueError(
+                "HTV405 duration is not physically validated; supported "
+                f"whole-minute values are {supported}"
+            )
         command_id = uuid.uuid4().hex
         reservation = self.store.reserve_htv405_command(
             valve_endpoint=profile.valve_endpoint,

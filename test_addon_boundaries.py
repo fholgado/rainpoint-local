@@ -256,6 +256,10 @@ class AddonBoundaryTest(unittest.TestCase):
         ).read_text()
         self.assertIn('"number"', const_source)
         self.assertIn("MAXIMUM_RUN_MINUTES = 60", number_source)
+        self.assertIn(
+            "VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})",
+            number_source,
+        )
         self.assertIn("_attr_native_min_value = 1", number_source)
         self.assertIn("htv405_run_minutes", coordinator_source)
         self.assertIn("run_minutes * 60", valve_source)

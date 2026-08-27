@@ -2899,6 +2899,21 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             1_200, registration["control_pending_duration_seconds"]
         )
 
+    def test_unvalidated_fifteen_minute_open_is_rejected_before_dispatch(
+        self,
+    ) -> None:
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+                {"zone": 1, "duration_seconds": 900},
+            )
+
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual([], self.commands)
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(6, registration["control_next_sequence"])
+        self.assertIsNone(registration["control_pending_command_id"])
+
     def test_device_poll_expires_a_stale_node_command_reservation(self) -> None:
         result = self.server.gateway.request_htv405_control(
             device_id=self.DEVICE_ID,
@@ -3005,7 +3020,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             device_id=self.DEVICE_ID,
             action="open",
             zone=1,
-            duration_seconds=300,
+            duration_seconds=120,
             now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
         )
         gateway.devices(
@@ -3029,9 +3044,9 @@ class ValveControlHTTPAPITest(unittest.TestCase):
                 device_id=self.DEVICE_ID,
                 next_sequence=9,
                 evidence_source="operator_guarded_counter_probe",
-                guard_duration_seconds=300,
+                guard_duration_seconds=120,
                 now=datetime.fromisoformat(
-                    "2026-08-24T20:05:45+00:00"
+                    "2026-08-24T20:02:45+00:00"
                 ),
             )
 
@@ -3039,8 +3054,8 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             device_id=self.DEVICE_ID,
             next_sequence=9,
             evidence_source="operator_guarded_counter_probe",
-            guard_duration_seconds=300,
-            now=datetime.fromisoformat("2026-08-24T20:05:45.001000+00:00"),
+            guard_duration_seconds=120,
+            now=datetime.fromisoformat("2026-08-24T20:02:45.001000+00:00"),
         )
 
         self.assertEqual(9, synchronized["control_next_sequence"])

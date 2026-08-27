@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.13 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.14 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -247,6 +247,11 @@ The gateway also applies its own response deadline. If a radio node never
 returns a usable terminal status, routine device polling fails the exact
 durable reservation and enters the same bounded recovery policy rather than
 leaving control stuck pending.
+Open commands are currently limited to the physically accepted 1-, 2-, and
+20-minute payloads. Five- and fifteen-minute values cross an unresolved
+duration-encoding boundary and are rejected before counter reservation or RF
+dispatch; telemetry decode alone is not evidence that the inverse command
+encoding is valid.
 The selected HTV405 RF egress node is routing metadata, not part of the valve's
 controller identity. It may be moved to another connected, capable node while
 idle; doing so preserves the association parameters but deliberately clears the
