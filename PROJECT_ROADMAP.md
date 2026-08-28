@@ -235,9 +235,14 @@ continuous high mark before the normal 320-symbol alternating wake, producing
 after the request ends. Evidence is frozen in
 `research/fixtures/htv145_first_branch_local_rejection_20260828.json`. Probe
 `.10` adds only this lead-in and advances RF start 12.8 ms to preserve the
-proven sync instant. Physically validate that single-variable change before
-altering payload, carrier, or branch selection. Keep fresh identity allocation
-gated until one more stock enrollment exists.
+proven sync instant. The 2026-08-28 physical `.10` trial remained at step 1/6:
+the selected node heard the factory sweep, transmitted its reply, then observed
+the valve fall through to counter `3` without any paired continuation. The
+recovered leading mark is therefore not sufficient by itself. Before changing
+payload, carrier, timing, or branch selection again, record the `.10` reply with
+continuous IQ and compare its actual on-air mark polarity, length, wake, sync,
+and envelope directly with the accepted stock counter-0 exchange. Keep fresh
+identity allocation gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 
