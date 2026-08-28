@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.9
+## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.10
+
+- Recovered the previously invisible 256-symbol continuous-mark lead-in on
+  accepted HTV145 counter-0 assignments. The isolated probe now starts that
+  lead-in 12.8 ms earlier while preserving the packet sync instant, decoded
+  payload, frequency, deviation, and ordinary alternating wake.
+- Froze the complete failed probe-.9 IQ exchange and its progressively shorter
+  counter-0/2/3 fallback sequence as a regression fixture.
 
 - Preserve the HTV145 factory-sweep diagnostics already emitted by the
   isolated radio-node probe: whether a sweep was observed, the last observed

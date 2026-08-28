@@ -190,23 +190,35 @@ constexpr std::uint8_t pairingPaTableValue(std::int8_t powerDbm) {
         : 0x60;
 }
 
-constexpr std::size_t rainpointSymbolCount(std::uint16_t wakeSymbols) {
-    return wakeSymbols + kFrameBytes * 8;
+constexpr std::size_t rainpointSymbolCount(
+    std::uint16_t wakeSymbols,
+    std::uint16_t leadingMarkSymbols = 0
+) {
+    return leadingMarkSymbols + wakeSymbols + kFrameBytes * 8;
 }
 
 inline std::uint8_t rainpointSymbol(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint16_t wakeSymbols,
     std::size_t index,
-    bool invert = false
+    bool invert = false,
+    std::uint16_t leadingMarkSymbols = 0
 ) {
     std::uint8_t value;
-    if (index < wakeSymbols) {
+    if (index < leadingMarkSymbols) {
+        // The accepted HTV145 selector-5 assignment starts with a continuous
+        // high FSK mark before its ordinary alternating wake. Keep this
+        // explicit instead of misclassifying it as a longer alternating wake.
+        value = 1;
+    } else if (index - leadingMarkSymbols < wakeSymbols) {
         // Stock gateway captures start the alternating wake low. The frame
         // that follows retains its ordinary, non-inverted bit polarity.
-        value = static_cast<std::uint8_t>(index & 1U);
+        value = static_cast<std::uint8_t>(
+            (index - leadingMarkSymbols) & 1U
+        );
     } else {
-        const std::size_t frameIndex = index - wakeSymbols;
+        const std::size_t frameIndex =
+            index - leadingMarkSymbols - wakeSymbols;
         value = (frame[frameIndex / 8] >> (7 - frameIndex % 8)) & 1U;
     }
     return invert ? value ^ 1U : value;

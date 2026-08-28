@@ -406,10 +406,12 @@ bool Cc1101::transmitAsync(
     bool invert,
     std::uint8_t paTableValue,
     std::uint8_t deviationRegister,
-    std::uint32_t startAtMicros
+    std::uint32_t startAtMicros,
+    std::uint16_t leadingMarkSymbols
 ) {
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
-        wakeSymbols > 2'400 || centerFrequencyHz < 433'000'000 ||
+        wakeSymbols > 2'400 || leadingMarkSymbols > 2'400 ||
+        centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
         (deviationRegister != kOrdinaryDeviationRegister &&
          deviationRegister != kHtv405InitialDeviationRegister)) {
@@ -461,10 +463,14 @@ bool Cc1101::transmitAsync(
         writeRegister(kMainStateMachine0, 0x18);
     }
 
-    const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols);
+    const std::size_t symbolCount = rainpointSymbolCount(
+        wakeSymbols, leadingMarkSymbols
+    );
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
     const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
-        return rainpointSymbol(frame, wakeSymbols, index, invert);
+        return rainpointSymbol(
+            frame, wakeSymbols, index, invert, leadingMarkSymbols
+        );
     };
     for (std::size_t index = 0; index < items.size(); ++index) {
         const std::size_t first = index * 2;

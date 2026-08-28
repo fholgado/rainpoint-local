@@ -3209,6 +3209,14 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz;
+            const std::uint16_t leadingMarkSymbols =
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+                valvePairingHtv145 && replyStep == 0 &&
+                    !activeValvePairingHtv145LaterSweepBranch()
+                    ? rainpoint::kHtv145Counter0AssignmentLeadMarkSymbols
+                    :
+#endif
+                0;
             bool sent = built && radio.transmitAsync(
                 replyFrame,
                 static_cast<std::uint32_t>(adjustedFrequency),
@@ -3216,7 +3224,8 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 pairingInvert,
                 rainpoint::pairingPaTableValue(pairingPowerDbm),
                 step->deviationRegister,
-                packet.receivedAtMicros + replyStartDelayUs
+                packet.receivedAtMicros + replyStartDelayUs,
+                leadingMarkSymbols
             );
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
             if (sent && valvePairingHtv145 && replyStep == 1) {

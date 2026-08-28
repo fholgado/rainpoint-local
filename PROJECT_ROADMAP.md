@@ -220,14 +220,24 @@ transmit step; the valve emitted no paired continuation. That result proves
 the failed trial was not an operator timing miss and rejects the hypothesis
 that the captured counter-3 frame alone is sufficient in every retained
 state. The event journal retains counter `0` from the SDR, counter `2` from the
-selected node, and counter `3` from a second node. The next trial must expose
-the node's sweep-branch diagnostics through the gateway, prefer the already
-locally accepted counter-0/selector-5 prefix when the local gateway is armed
-before the physical gesture, and independently record the transmitted reply
-before changing payload or scheduler timing. Keep fresh identity allocation
-gated until one more stock enrollment exists. Probe `.9` implements only that
-branch-selection correction: it answers the first complete captured branch
-observed after arming and leaves both branch-specific RF profiles unchanged.
+selected node, and counter `3` from a second node. Probe `.9` then answered the
+first evidenced selector-5 branch while a full IQ recording independently
+captured the result. The valve rejected it, fell through counters `2` and `3`,
+and the node also emitted the exact selector-6 reply; neither branch produced
+paired traffic. The progressively shorter visible phases therefore represent
+a bounded fallback sequence, and the missing factory counter `1` is consistent
+with the paired continuation that never occurred. The counter-0 local waveform
+matches the accepted stock assignment within 122 Hz, with identical deviation,
+packet-sync timing, static payload, and valid current packed clock. Raw-envelope
+comparison then exposed what frame decoding hid: stock places a 256-symbol
+continuous high mark before the normal 320-symbol alternating wake, producing
+43.8 ms total RF versus 31.3 ms locally. Both sync words arrive about 66.6 ms
+after the request ends. Evidence is frozen in
+`research/fixtures/htv145_first_branch_local_rejection_20260828.json`. Probe
+`.10` adds only this lead-in and advances RF start 12.8 ms to preserve the
+proven sync instant. Physically validate that single-variable change before
+altering payload, carrier, or branch selection. Keep fresh identity allocation
+gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 

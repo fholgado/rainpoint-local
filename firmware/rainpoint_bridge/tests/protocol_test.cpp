@@ -1036,7 +1036,16 @@ int main() {
     assert(htv405Profile.stepCount == rainpoint::kHtv405PairingStepCount);
     assert(htv145PairingProbe.stepCount ==
         rainpoint::kHtv145PairingStepCount);
-    assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 49'500);
+    assert(
+        rainpoint::kHtv145Counter0AssignmentLeadMarkSymbols == 256
+    );
+    assert(
+        rainpoint::rainpointSymbolCount(
+            320, rainpoint::kHtv145Counter0AssignmentLeadMarkSymbols
+        ) == 880
+    );
+    assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 36'700);
+    assert(rainpoint::htv145PairingReplyStartDelayUs(0, true) == 54'300);
     assert(htv145PairingProbe.steps[3].replyToValveRoute);
     assert(!htv145PairingProbe.steps[1].replyToValveRoute);
     const rainpoint::PairingLocalDateTime htv145StockClock{
@@ -2056,6 +2065,19 @@ int main() {
             profile.steps[0].frame, 320, index
         ) == static_cast<std::uint8_t>(index & 1U));
     }
+    for (std::size_t index = 0; index < 256; ++index) {
+        assert(rainpoint::rainpointSymbol(
+            profile.steps[0].frame, 320, index, false, 256
+        ) == 1);
+    }
+    for (std::size_t index = 0; index < 320; ++index) {
+        assert(rainpoint::rainpointSymbol(
+            profile.steps[0].frame, 320, 256 + index, false, 256
+        ) == static_cast<std::uint8_t>(index & 1U));
+    }
+    assert(rainpoint::rainpointSymbol(
+        profile.steps[0].frame, 320, 576, false, 256
+    ) == 0);
     for (std::size_t byteIndex = 0;
          byteIndex < rainpoint::kFrameBytes;
          ++byteIndex) {

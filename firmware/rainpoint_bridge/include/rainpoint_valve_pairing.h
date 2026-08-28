@@ -79,6 +79,17 @@ constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 constexpr std::uint32_t kHtv145ConfigurationReplyStartDelayUs = 2'913'700;
 constexpr std::uint16_t kHtv145ConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kHtv145ConfigurationReplyDeadlineMs = 4'000;
+// Raw RF-envelope comparison exposed 256 high-mark symbols before the normal
+// 320-symbol alternating wake in the accepted selector-5 assignment. The
+// decoder reported only the alternating suffix, which made the accepted and
+// rejected packets appear waveform-identical. Begin this mark 12.8 ms earlier
+// so the sync and frame retain their already matched on-air instant.
+constexpr std::uint16_t kHtv145Counter0AssignmentLeadMarkSymbols = 256;
+constexpr std::uint32_t kHtv145Counter0AssignmentLeadMarkDurationUs =
+    kHtv145Counter0AssignmentLeadMarkSymbols * 50U;
+constexpr std::uint32_t kHtv145Counter0AssignmentReplyStartDelayUs =
+    kHtv405AssignmentReplyStartDelayUs -
+    kHtv145Counter0AssignmentLeadMarkDurationUs;
 // Freeze the initial assignment at the setting that has repeatedly produced a
 // physical white-flash transition and, most recently, advanced this valve to
 // paired step 6. Later controller-initialization experiments must not change
@@ -148,12 +159,10 @@ constexpr std::uint32_t htv145PairingReplyStartDelayUs(
             ? kHtv145LaterSweepStep5ReplyStartDelayUs
             : kHtv405OrdinaryReplyStartDelayUs;
     }
-    // Keep step 0 byte-for-byte and timing-for-timing aligned with probe .2,
-    // which advanced into paired traffic. Two probe-.3 trials that moved only
-    // this initial scheduler target 100 us earlier were rejected before the
-    // valve emitted its first paired request. Later HTV145 timing slots remain
-    // derived from the continuous stock capture.
-    return stepIndex == 0 ? kHtv405AssignmentReplyStartDelayUs
+    // Preserve the proven sync instant while reproducing the newly recovered
+    // selector-5 leading mark. Later timing slots remain derived from the
+    // continuous stock capture.
+    return stepIndex == 0 ? kHtv145Counter0AssignmentReplyStartDelayUs
         : stepIndex == 1 ? 49'250
         : stepIndex == 3 ? 49'550
         : stepIndex == 4 ? 52'200

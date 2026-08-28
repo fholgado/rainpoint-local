@@ -38,7 +38,8 @@ public:
         bool invert = false,
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45,
-        std::uint32_t startAtMicros = 0
+        std::uint32_t startAtMicros = 0,
+        std::uint16_t leadingMarkSymbols = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();

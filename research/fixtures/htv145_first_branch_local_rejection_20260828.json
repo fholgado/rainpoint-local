@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-08-28T16:28:27-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Correlate the visible progressively shortening enrollment phases with the complete local RF exchange after probe .9 answered the first evidenced branch.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260828-162827/continuous_433.7M_2000k.cu8",
+    "sha256": "7569002ab29e8e4aac627a6e91202e61702935956d3a557851a04b21ce7d0c74",
+    "size_bytes": 720000000,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 180
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "factory_sweep": [
+    {
+      "counter": 0,
+      "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+      "request_start_seconds": 24.8645,
+      "request_end_seconds": 24.8957,
+      "assignment_frame": "79f4882f28b42d008f3984028080c08585030570009a839c0d01008000000000000000009bb4",
+      "assignment_start_seconds": 24.9463,
+      "request_end_to_assignment_start_ms": 50.6,
+      "assignment_selector": 5,
+      "paired_continuation_observed": false
+    },
+    {
+      "counter": 2,
+      "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+      "request_start_seconds": 30.3558,
+      "request_end_seconds": 30.387,
+      "assignment_frame": null,
+      "paired_continuation_observed": false
+    },
+    {
+      "counter": 3,
+      "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+      "request_start_seconds": 36.3126,
+      "request_end_seconds": 36.3438,
+      "assignment_frame": "79f4882f28b42d008fb984028083c085850086f000a1031c0d0280800000000000000000a278",
+      "assignment_start_seconds": 36.39875,
+      "request_end_to_assignment_start_ms": 54.95,
+      "assignment_selector": 6,
+      "paired_continuation_observed": false
+    }
+  ],
+  "counter_0_stock_local_comparison": {
+    "accepted_stock_frame": "79f4882f28b42d008f3984028080c0858503057000929e990d01008000000000000000005767",
+    "rejected_local_frame": "79f4882f28b42d008f3984028080c08585030570009a839c0d01008000000000000000009bb4",
+    "differing_payload_indexes": [21, 22, 23],
+    "stock_packed_local_datetime": "2026-08-25T19:48:36-04:00",
+    "local_packed_local_datetime": "2026-08-28T16:28:52-04:00",
+    "stock_center_hz": 433556567,
+    "local_center_hz": 433556689,
+    "center_delta_hz": 122,
+    "stock_deviation_hz": 35004,
+    "local_deviation_hz": 35004,
+    "stock_wake_symbols": 320,
+    "local_wake_symbols": 320,
+    "stock_request_end_to_assignment_start_ms": 50.55,
+    "local_request_end_to_assignment_start_ms": 50.6,
+    "stock_total_rf_duration_ms": 43.8,
+    "local_total_rf_duration_ms": 31.3,
+    "stock_leading_mark_symbols": 256,
+    "local_leading_mark_symbols": 0,
+    "stock_alternating_wake_symbols": 320,
+    "local_alternating_wake_symbols": 320,
+    "stock_request_end_to_sync_ms": 66.55,
+    "local_request_end_to_sync_ms": 66.6
+  },
+  "result": {
+    "node_completed_steps": 1,
+    "node_failure_reason": "session_timeout",
+    "valve_emitted_paired_continuation": false,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "The visible shortening phases are a bounded fallback state machine, not repeated equivalent pairing attempts.",
+    "Counter 1 is absent from the factory family because it is the paired continuation that should follow an accepted counter-0 assignment; after rejecting step 0 the valve fell through to factory counters 2 and 3.",
+    "Probe .9 transmitted evidence-exact selector-5 and selector-6 assignments after counters 0 and 3. Neither produced paired traffic, so waiting for one particular sweep counter is not the root cause.",
+    "The accepted stock and rejected local counter-0 assignments match in carrier, deviation, 320-symbol alternating wake suffix, packet-sync timing, all static payload bytes, and clock encoding. Only the expected current packed date/time bytes and their CRC differ at the decoded packet layer.",
+    "Raw RF-envelope comparison exposes the missing discriminator: stock transmits a 256-symbol continuous high mark before the ordinary alternating wake, for about 43.8 ms total RF versus 31.3 ms locally. Both packet sync words still arrive about 66.6 ms after the request ends, so the local implementation matched sync timing while omitting the valve wake-up lead-in.",
+    "Probe .10 must add only that 256-symbol mark and advance RF start by 12.8 ms, preserving the existing sync instant, payload, carrier, deviation, and alternating wake."
+  ]
+}
