@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.33.15 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.7
+## 0.33.15 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.8
 
 - Decode HTV145 open and close actions from the stable command-body byte
   rather than the association-specific high marker. The newly captured
@@ -12,6 +12,8 @@
   are little-endian two-second units, including values above one byte.
 - Add the complete counter-3, selector-6 HTV145 enrollment branch to the
   isolated pairing probe while leaving the earlier counter-0 branch intact.
+- Let the isolated probe observe factory counters 0--2 silently and answer
+  counter 3 automatically, removing human/app timing from the branch trial.
 
 ## 0.33.14 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.10
 

@@ -214,8 +214,11 @@ analysis recovered all four
 lower-channel paired requests and the controller-configuration response from
 each stock success, but zero paired requests after the rejected local
 assignments; the stall is valve-side rejection, not a node receive-channel
-miss. Probe `.7` may exercise only the exact retained selector-6 branch; keep
-fresh identity allocation gated until one more stock enrollment exists.
+miss. Probe `.8` now observes factory counters `0`--`2` without transmitting
+and automatically answers the exact retained counter-`3`/selector-`6` branch,
+removing operator/app timing from the experiment while preserving the earlier
+counter-`0` implementation and regressions. Keep fresh identity allocation
+gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 

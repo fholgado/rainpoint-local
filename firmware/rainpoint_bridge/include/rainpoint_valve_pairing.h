@@ -601,7 +601,8 @@ public:
     void arm(
         std::uint32_t nowMs,
         std::uint32_t durationMs = 120'000,
-        bool acceptColdBootStart = false
+        bool acceptColdBootStart = false,
+        bool preferHtv145LaterSweepBranch = false
     ) {
         state_ = PairingSessionState::Armed;
         step_ = 0;
@@ -616,6 +617,9 @@ public:
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         htv145LaterSweepBranch_ = false;
+        preferHtv145LaterSweepBranch_ = preferHtv145LaterSweepBranch;
+        htv145FactorySweepObserved_ = false;
+        htv145LastFactorySweepCounter_ = 0;
         expiresAtMs_ = nowMs + durationMs;
         failureReason_ = PairingFailureReason::None;
     }
@@ -634,6 +638,9 @@ public:
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         htv145LaterSweepBranch_ = false;
+        preferHtv145LaterSweepBranch_ = false;
+        htv145FactorySweepObserved_ = false;
+        htv145LastFactorySweepCounter_ = 0;
         failureReason_ = PairingFailureReason::None;
     }
 
@@ -660,9 +667,18 @@ public:
                 const std::uint8_t sweepCounter = static_cast<std::uint8_t>(
                     frame[13] & 0x7fU
                 );
+                htv145FactorySweepObserved_ = true;
+                htv145LastFactorySweepCounter_ = sweepCounter;
                 // Only the counter-0 selector-5 and counter-3 selector-6
                 // branches are complete stock evidence. Ignore intermediate
                 // sweeps rather than constructing an unobserved hybrid.
+                // The isolated later-sweep probe deliberately observes 0--2
+                // without transmitting and answers counter 3 automatically;
+                // this removes human/app timing from the physical trial.
+                if (preferHtv145LaterSweepBranch_ &&
+                    sweepCounter != kHtv145LaterSweepCounter) {
+                    return nullptr;
+                }
                 if (sweepCounter != 0 &&
                     sweepCounter != kHtv145LaterSweepCounter) {
                     return nullptr;
@@ -1030,6 +1046,12 @@ public:
     bool htv145LaterSweepBranch() const {
         return htv145LaterSweepBranch_;
     }
+    bool htv145FactorySweepObserved() const {
+        return htv145FactorySweepObserved_;
+    }
+    std::uint8_t htv145LastFactorySweepCounter() const {
+        return htv145LastFactorySweepCounter_;
+    }
     std::uint32_t replyStartDelayOverrideUs() const {
         return replyStartDelayOverrideUs_;
     }
@@ -1047,6 +1069,9 @@ private:
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
         htv145LaterSweepBranch_ = false;
+        preferHtv145LaterSweepBranch_ = false;
+        htv145FactorySweepObserved_ = false;
+        htv145LastFactorySweepCounter_ = 0;
         failureReason_ = reason;
     }
 
@@ -1066,6 +1091,9 @@ private:
     bool replyMarkerRepeat_ = false;
     std::uint32_t replyStartDelayOverrideUs_ = 0;
     bool htv145LaterSweepBranch_ = false;
+    bool preferHtv145LaterSweepBranch_ = false;
+    bool htv145FactorySweepObserved_ = false;
+    std::uint8_t htv145LastFactorySweepCounter_ = 0;
     bool acceptColdBootStart_ = false;
 };
 

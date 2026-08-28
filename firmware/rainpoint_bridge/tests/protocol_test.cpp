@@ -1173,6 +1173,37 @@ int main() {
         rainpoint::PairingSessionState::Completed);
     assert(rainpoint::htv145PairingReplyStartDelayUs(0, true) == 54'300);
     assert(rainpoint::htv145PairingReplyStartDelayUs(1, true) == 74'100);
+
+    // The research probe owns the sweep timing: it observes counters 0--2
+    // without transmitting and automatically claims the captured counter-3
+    // branch. The default session above still preserves counter-0 behavior.
+    rainpoint::Htv405PairingSession htv145AutomaticLaterSweepSession(
+        htv145LaterSweepProbe
+    );
+    htv145AutomaticLaterSweepSession.arm(0, 120'000, false, true);
+    auto htv145FactorySweep1 = htv145FactorySweep0;
+    htv145FactorySweep1[13] = 0x81;
+    rainpoint::writeTrailer(htv145FactorySweep1, 0xc713);
+    auto htv145FactorySweep2 = htv145FactorySweep0;
+    htv145FactorySweep2[13] = 0x82;
+    rainpoint::writeTrailer(htv145FactorySweep2, 0xc713);
+    assert(htv145AutomaticLaterSweepSession.claimReply(
+        htv145FactorySweep0, 1
+    ) == nullptr);
+    assert(htv145AutomaticLaterSweepSession.htv145FactorySweepObserved());
+    assert(htv145AutomaticLaterSweepSession.htv145LastFactorySweepCounter() == 0);
+    assert(htv145AutomaticLaterSweepSession.claimReply(
+        htv145FactorySweep1, 2
+    ) == nullptr);
+    assert(htv145AutomaticLaterSweepSession.htv145LastFactorySweepCounter() == 1);
+    assert(htv145AutomaticLaterSweepSession.claimReply(
+        htv145FactorySweep2, 3
+    ) == nullptr);
+    assert(htv145AutomaticLaterSweepSession.htv145LastFactorySweepCounter() == 2);
+    assert(htv145AutomaticLaterSweepSession.claimReply(
+        htv145FactorySweep3, 4
+    ) == &htv145LaterSweepProbe.steps[0]);
+    assert(htv145AutomaticLaterSweepSession.htv145LaterSweepBranch());
     // Custom gateway identity changes only the association endpoints. Freeze
     // every timing, channel, and request/reply body from the physically
     // accepted stock-identity profile so identity rollout cannot silently

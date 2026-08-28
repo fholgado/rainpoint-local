@@ -786,6 +786,13 @@ void reportPairingStatus(const char* detail = nullptr) {
         line += ",\"htv145_later_sweep_branch\":";
         line += valvePairingSession.htv145LaterSweepBranch()
             ? "true" : "false";
+        line += ",\"htv145_factory_sweep_observed\":";
+        line += valvePairingSession.htv145FactorySweepObserved()
+            ? "true" : "false";
+        line += ",\"htv145_last_factory_sweep_counter\":";
+        line += static_cast<unsigned int>(
+            valvePairingSession.htv145LastFactorySweepCounter()
+        );
     }
 #endif
     line += ",\"factory_adopted\":";
@@ -2680,8 +2687,15 @@ void handleNetworkCommand() {
     if (valvePairingActive) {
         const auto durationMs =
             static_cast<std::uint32_t>(durationSeconds) * 1'000U;
+        const bool preferHtv145LaterSweepBranch =
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            valvePairingHtv145;
+#else
+            false;
+#endif
         valvePairingSession.arm(
-            millis(), durationMs, requestedValveRejoin
+            millis(), durationMs, requestedValveRejoin,
+            preferHtv145LaterSweepBranch
         );
     } else
 #endif
