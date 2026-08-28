@@ -350,6 +350,15 @@ class ESP32NetworkServer:
                         pairing_reply_marker_repeat=message.get(
                             "reply_marker_repeat"
                         ),
+                        pairing_htv145_later_sweep_branch=message.get(
+                            "htv145_later_sweep_branch"
+                        ),
+                        pairing_htv145_factory_sweep_observed=message.get(
+                            "htv145_factory_sweep_observed"
+                        ),
+                        pairing_htv145_last_factory_sweep_counter=message.get(
+                            "htv145_last_factory_sweep_counter"
+                        ),
                         pairing_factory_endpoint=message.get(
                             "factory_endpoint"
                         ),

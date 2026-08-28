@@ -350,6 +350,9 @@ class ESP32NetworkTest(unittest.TestCase):
                     "selector2_configuration_transmitted": True,
                     "selector2_configuration_sequence": 3,
                     "reply_marker_repeat": True,
+                    "htv145_later_sweep_branch": True,
+                    "htv145_factory_sweep_observed": True,
+                    "htv145_last_factory_sweep_counter": 3,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -385,6 +388,22 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertIs(
             True,
             self.gateway.nodes()[0]["pairing_reply_marker_repeat"],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0]["pairing_htv145_later_sweep_branch"],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0][
+                "pairing_htv145_factory_sweep_observed"
+            ],
+        )
+        self.assertEqual(
+            3,
+            self.gateway.nodes()[0][
+                "pairing_htv145_last_factory_sweep_counter"
+            ],
         )
         stream.close()
         connection.close()

@@ -214,10 +214,17 @@ analysis recovered all four
 lower-channel paired requests and the controller-configuration response from
 each stock success, but zero paired requests after the rejected local
 assignments; the stall is valve-side rejection, not a node receive-channel
-miss. Probe `.8` now observes factory counters `0`--`2` without transmitting
-and automatically answers the exact retained counter-`3`/selector-`6` branch,
-removing operator/app timing from the experiment while preserving the earlier
-counter-`0` implementation and regressions. Keep fresh identity allocation
+miss. Probe `.8` observed the August 28 physical sweep through counters `0`,
+`2`, and `3`, automatically answered counter `3`, and reported one completed
+transmit step; the valve emitted no paired continuation. That result proves
+the failed trial was not an operator timing miss and rejects the hypothesis
+that the captured counter-3 frame alone is sufficient in every retained
+state. The event journal retains counter `0` from the SDR, counter `2` from the
+selected node, and counter `3` from a second node. The next trial must expose
+the node's sweep-branch diagnostics through the gateway, prefer the already
+locally accepted counter-0/selector-5 prefix when the local gateway is armed
+before the physical gesture, and independently record the transmitted reply
+before changing payload or scheduler timing. Keep fresh identity allocation
 gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence

@@ -110,10 +110,18 @@ model-independent. The current comparison is:
 | Receive-carrier transition | Each transcript changes carriers only at evidenced stages | Stages 1 and 3--5 are lower-channel; only stage 2 is on the response carrier | Current single-radio receive transition is consistent with stock evidence |
 | Completion | Valve-originated paired traffic, not reply count or LED, proves acceptance | Local attempts have no valve-originated paired traffic | Keep HTV145 pairing and control research-gated |
 
-The 2026-08-28 retained-association capture narrows the next experiment to an
-exact counter-3/selector-6 branch replay. It does not justify importing
+The 2026-08-28 retained-association capture justified one exact
+counter-3/selector-6 branch replay. The timing-free local probe observed the
+factory sweep and transmitted that assignment, but the valve emitted no
+paired continuation. The counter-3 frame is therefore a valid stock branch,
+not a universally sufficient assignment. It does not justify importing
 HTV405's 18-row tail. The app reported Device Address `1` for RF selector `6`,
-which directly disproves treating that UI address as the selector.
+which directly disproves treating that UI address as the selector. The
+operator ordering and accepted stock captures instead support a narrower
+hypothesis: the stock gateway answers the first valid solicitation it hears
+after its own pairing mode becomes active, then constructs the coherent branch
+for that solicitation and retained state. This remains a hypothesis until a
+fresh-identity stock capture and an independently recorded local reply exist.
 
 ## Transaction evidence
 
