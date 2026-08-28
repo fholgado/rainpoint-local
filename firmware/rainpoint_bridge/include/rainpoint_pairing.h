@@ -192,9 +192,9 @@ constexpr std::uint8_t pairingPaTableValue(std::int8_t powerDbm) {
 
 constexpr std::size_t rainpointSymbolCount(
     std::uint16_t wakeSymbols,
-    std::uint16_t leadingMarkSymbols = 0
+    std::uint16_t leadingPreludeSymbols = 0
 ) {
-    return leadingMarkSymbols + wakeSymbols + kFrameBytes * 8;
+    return leadingPreludeSymbols + wakeSymbols + kFrameBytes * 8;
 }
 
 inline std::uint8_t rainpointSymbol(
@@ -202,23 +202,24 @@ inline std::uint8_t rainpointSymbol(
     std::uint16_t wakeSymbols,
     std::size_t index,
     bool invert = false,
-    std::uint16_t leadingMarkSymbols = 0
+    std::uint16_t leadingPreludeSymbols = 0
 ) {
     std::uint8_t value;
-    if (index < leadingMarkSymbols) {
-        // The accepted HTV145 selector-5 assignment starts with a continuous
-        // high FSK mark before its ordinary alternating wake. Keep this
-        // explicit instead of misclassifying it as a longer alternating wake.
-        value = 1;
-    } else if (index - leadingMarkSymbols < wakeSymbols) {
+    if (index < leadingPreludeSymbols) {
+        // Some controller frames start with a distinct alternating RF prelude
+        // before the ordinary wake. The radio driver may give this prefix a
+        // separate frequency offset and deviation while preserving one
+        // continuous symbol stream.
+        value = static_cast<std::uint8_t>(index & 1U);
+    } else if (index - leadingPreludeSymbols < wakeSymbols) {
         // Stock gateway captures start the alternating wake low. The frame
         // that follows retains its ordinary, non-inverted bit polarity.
         value = static_cast<std::uint8_t>(
-            (index - leadingMarkSymbols) & 1U
+            (index - leadingPreludeSymbols) & 1U
         );
     } else {
         const std::size_t frameIndex =
-            index - leadingMarkSymbols - wakeSymbols;
+            index - leadingPreludeSymbols - wakeSymbols;
         value = (frame[frameIndex / 8] >> (7 - frameIndex % 8)) & 1U;
     }
     return invert ? value ^ 1U : value;

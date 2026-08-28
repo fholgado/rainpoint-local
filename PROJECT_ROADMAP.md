@@ -241,8 +241,17 @@ the valve fall through to counter `3` without any paired continuation. The
 recovered leading mark is therefore not sufficient by itself. Before changing
 payload, carrier, timing, or branch selection again, record the `.10` reply with
 continuous IQ and compare its actual on-air mark polarity, length, wake, sync,
-and envelope directly with the accepted stock counter-0 exchange. Keep fresh
-identity allocation gated until one more stock enrollment exists.
+and envelope directly with the accepted stock counter-0 exchange. That capture
+showed the earlier decoder description was incomplete: stock uses a
+256-symbol alternating prefix at a shifted center and larger deviation, not a
+constant mark. Probe `.11` successfully changed RF settings within one
+continuous symbol stream while preserving the ordinary wake and assignment,
+but its coarse `+13`/`0x47` settings over-shifted and over-deviated the prefix;
+the valve again stopped at 1/6. Empirical comparison with the accepted stock
+prefix and the known-good ordinary `0x45` HTV405 waveform maps the next bounded
+trial to FSCTRL0 offset `12` and DEVIATN `0x46`. Probe `.12` changes only those
+two prelude registers. Keep fresh identity allocation gated until one more
+stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 

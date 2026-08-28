@@ -407,14 +407,24 @@ bool Cc1101::transmitAsync(
     std::uint8_t paTableValue,
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
-    std::uint16_t leadingMarkSymbols
+    std::uint16_t leadingPreludeSymbols,
+    std::int8_t leadingFrequencyOffsetRegister,
+    std::uint8_t leadingDeviationRegister
 ) {
+    const bool hasLeadingPrelude = leadingPreludeSymbols != 0;
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
-        wakeSymbols > 2'400 || leadingMarkSymbols > 2'400 ||
+        wakeSymbols > 2'400 || leadingPreludeSymbols > 2'400 ||
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
         (deviationRegister != kOrdinaryDeviationRegister &&
-         deviationRegister != kHtv405InitialDeviationRegister)) {
+         deviationRegister != kHtv405InitialDeviationRegister) ||
+        (hasLeadingPrelude &&
+         (startAtMicros == 0 || leadingFrequencyOffsetRegister == 0 ||
+          leadingDeviationRegister !=
+              kHtv145Counter0AssignmentPreludeDeviationRegister)) ||
+        (!hasLeadingPrelude &&
+         (leadingFrequencyOffsetRegister != 0 ||
+          leadingDeviationRegister != 0))) {
         return false;
     }
 
@@ -431,7 +441,16 @@ bool Cc1101::transmitAsync(
     writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);
-    writeRegister(kDeviation, deviationRegister);
+    writeRegister(
+        kFrequencySynthControl0,
+        static_cast<std::uint8_t>(
+            hasLeadingPrelude ? leadingFrequencyOffsetRegister : 0
+        )
+    );
+    writeRegister(
+        kDeviation,
+        hasLeadingPrelude ? leadingDeviationRegister : deviationRegister
+    );
     writeBurst(kPaTable, &paTableValue, 1);
 
     const CachedFrequencyCalibration* cachedCalibration = nullptr;
@@ -464,12 +483,12 @@ bool Cc1101::transmitAsync(
     }
 
     const std::size_t symbolCount = rainpointSymbolCount(
-        wakeSymbols, leadingMarkSymbols
+        wakeSymbols, leadingPreludeSymbols
     );
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
     const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
         return rainpointSymbol(
-            frame, wakeSymbols, index, invert, leadingMarkSymbols
+            frame, wakeSymbols, index, invert, leadingPreludeSymbols
         );
     };
     for (std::size_t index = 0; index < items.size(); ++index) {
@@ -526,6 +545,27 @@ bool Cc1101::transmitAsync(
             // state instead of reporting an RMT-only success with no carrier.
             sent = strobe(kEnterTx) != 0xff &&
                 waitForMainState(kMainStateTx, 2'000);
+        }
+        if (sent && hasLeadingPrelude) {
+            // Keep the PA and RMT stream active while changing only FSCTRL0
+            // and DEVIATN at the evidence-derived prelude boundary. This
+            // reproduces the stock gateway's seamless shifted alternating
+            // prefix without incurring a synthesizer restart between it and
+            // the ordinary 320-symbol wake.
+            const std::uint32_t transitionAtMicros = startAtMicros +
+                leadingPreludeSymbols * kSymbolMicros;
+            while (static_cast<std::int32_t>(
+                       transitionAtMicros - micros()
+                   ) > 500) {
+                delayMicroseconds(250);
+            }
+            while (static_cast<std::int32_t>(
+                       transitionAtMicros - micros()
+                   ) > 0) {
+                // Deliberately busy-wait only the final 500 us.
+            }
+            writeRegister(kFrequencySynthControl0, 0);
+            writeRegister(kDeviation, deviationRegister);
         }
         // Ordinary RainPoint frames use a 320-symbol wake and finish in about
         // 31 ms, but the HTV405 selector-2 configuration command uses the

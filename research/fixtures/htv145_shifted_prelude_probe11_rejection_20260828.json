@@ -1,0 +1,54 @@
+{
+  "captured_at": "2026-08-28T19:08:07-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Physically validate the selector-5 shifted alternating prelude introduced by probe .11 and compare it with the accepted stock counter-0 assignment.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260828-190807/continuous_433.7M_2000k.cu8",
+    "sha256": "fa866284112aa531d3da427b40ae64daef01510f694f99a8af795ff01d9cbdb0",
+    "size_bytes": 360000000,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 90
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "counter_0_exchange": {
+    "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "request_start_seconds": 16.8462,
+    "request_end_seconds": 16.8774,
+    "assignment_frame": "79f4882f28b42d008f3984028080c08585030570008c999c0d0100800000000000000000d80b",
+    "ordinary_wake_start_seconds": 16.9281,
+    "request_end_to_ordinary_wake_ms": 50.7,
+    "assignment_selector": 5,
+    "paired_continuation_observed": false
+  },
+  "stock_probe11_prelude_comparison": {
+    "stock_center_shift_hz": 20225,
+    "probe11_center_shift_hz": 21254,
+    "stock_deviation_ratio_to_ordinary": 1.078,
+    "probe11_deviation_ratio_to_ordinary": 1.239,
+    "stock_inferred_frequency_offset_register": 12,
+    "probe11_frequency_offset_register": 13,
+    "stock_inferred_deviation_register": "0x46",
+    "probe11_deviation_register": "0x47",
+    "ordinary_assignment_center_delta_from_stock_hz": 122,
+    "symbol_rate_sps": 20000,
+    "prelude_symbols": 256,
+    "ordinary_wake_symbols": 320
+  },
+  "result": {
+    "node_completed_steps": 1,
+    "valve_emitted_paired_continuation": false,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "Probe .11 proved that the ESP32 and CC1101 can emit one continuous alternating stream while switching frequency offset and deviation at the 256-symbol boundary.",
+    "The ordinary wake, frame carrier, decoded payload, and 50.7 ms request-end timing remained aligned with the accepted stock exchange.",
+    "The shifted prelude was real but over-shifted and over-deviated. Cross-referencing the measured ordinary 0x45 waveform with the accepted HTV405 path maps the stock ratios to FSCTRL0 offset 12 and DEVIATN 0x46.",
+    "Probe .12 must change only those two prelude registers; the ordinary assignment and all later state-machine fields remain frozen."
+  ]
+}

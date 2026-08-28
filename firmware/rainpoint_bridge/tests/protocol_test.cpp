@@ -1037,11 +1037,17 @@ int main() {
     assert(htv145PairingProbe.stepCount ==
         rainpoint::kHtv145PairingStepCount);
     assert(
-        rainpoint::kHtv145Counter0AssignmentLeadMarkSymbols == 256
+        rainpoint::kHtv145Counter0AssignmentPreludeSymbols == 256
+    );
+    assert(
+        rainpoint::kHtv145Counter0AssignmentPreludeFrequencyOffset == 12
+    );
+    assert(
+        rainpoint::kHtv145Counter0AssignmentPreludeDeviationRegister == 0x46
     );
     assert(
         rainpoint::rainpointSymbolCount(
-            320, rainpoint::kHtv145Counter0AssignmentLeadMarkSymbols
+            320, rainpoint::kHtv145Counter0AssignmentPreludeSymbols
         ) == 880
     );
     assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 36'700);
@@ -2068,7 +2074,7 @@ int main() {
     for (std::size_t index = 0; index < 256; ++index) {
         assert(rainpoint::rainpointSymbol(
             profile.steps[0].frame, 320, index, false, 256
-        ) == 1);
+        ) == static_cast<std::uint8_t>(index & 1U));
     }
     for (std::size_t index = 0; index < 320; ++index) {
         assert(rainpoint::rainpointSymbol(

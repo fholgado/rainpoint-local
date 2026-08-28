@@ -79,17 +79,21 @@ constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 constexpr std::uint32_t kHtv145ConfigurationReplyStartDelayUs = 2'913'700;
 constexpr std::uint16_t kHtv145ConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kHtv145ConfigurationReplyDeadlineMs = 4'000;
-// Raw RF-envelope comparison exposed 256 high-mark symbols before the normal
-// 320-symbol alternating wake in the accepted selector-5 assignment. The
-// decoder reported only the alternating suffix, which made the accepted and
-// rejected packets appear waveform-identical. Begin this mark 12.8 ms earlier
-// so the sync and frame retain their already matched on-air instant.
-constexpr std::uint16_t kHtv145Counter0AssignmentLeadMarkSymbols = 256;
-constexpr std::uint32_t kHtv145Counter0AssignmentLeadMarkDurationUs =
-    kHtv145Counter0AssignmentLeadMarkSymbols * 50U;
+// Continuous-IQ comparison exposed a 256-symbol alternating prelude before the
+// normal 320-symbol wake in accepted selector-5 assignments. It is not a
+// constant mark: stock shifts the prelude center about +20 kHz and uses the
+// CC1101's 0x46 deviation before returning to the ordinary assignment settings
+// without interrupting the 20 ksymbol/s stream. Start this 12.8 ms earlier so
+// the ordinary wake, sync, and frame retain their already matched instant.
+constexpr std::uint16_t kHtv145Counter0AssignmentPreludeSymbols = 256;
+constexpr std::int8_t kHtv145Counter0AssignmentPreludeFrequencyOffset = 12;
+constexpr std::uint8_t kHtv145Counter0AssignmentPreludeDeviationRegister =
+    0x46;
+constexpr std::uint32_t kHtv145Counter0AssignmentPreludeDurationUs =
+    kHtv145Counter0AssignmentPreludeSymbols * 50U;
 constexpr std::uint32_t kHtv145Counter0AssignmentReplyStartDelayUs =
     kHtv405AssignmentReplyStartDelayUs -
-    kHtv145Counter0AssignmentLeadMarkDurationUs;
+    kHtv145Counter0AssignmentPreludeDurationUs;
 // Freeze the initial assignment at the setting that has repeatedly produced a
 // physical white-flash transition and, most recently, advanced this valve to
 // paired step 6. Later controller-initialization experiments must not change

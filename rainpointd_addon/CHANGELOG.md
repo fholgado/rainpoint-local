@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.10
+## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.12
+
+- Correct the HTV145 selector-5 prefix from a constant mark to the observed
+  256-symbol alternating prelude, changing CC1101 RF settings without breaking
+  the continuous 20 ksymbol/s stream.
+- Use the probe-.11 continuous-IQ measurement and the accepted HTV405 `0x45`
+  calibration bridge to select FSCTRL0 offset `12` and DEVIATN `0x46` for the
+  isolated probe-.12 prelude. Preserve the decoded assignment, ordinary wake,
+  carrier, and request-relative timing.
+- Freeze the complete rejected probe-.11 capture and its 1/6 terminal result
+  in a redacted protocol fixture.
 
 - Recovered the previously invisible 256-symbol continuous-mark lead-in on
   accepted HTV145 counter-0 assignments. The isolated probe now starts that
