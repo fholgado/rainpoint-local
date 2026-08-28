@@ -105,14 +105,15 @@ model-independent. The current comparison is:
 | Reply timing from received frame | Moving the deadline anchor past radio preparation removed scheduler error | Accepted stock is 50.55 ms; rejected local replies are already within 0.70 ms | Preserve the proven scheduling path; do not tune stage 0 blindly |
 | Assignment waveform and carrier | Carrier calibration was required before protocol comparison | Local wake, deviation, carrier, and structural payload match stock | Basic RF generation is no longer the leading cause |
 | Controller identity | Generated identity removed a retained-association ambiguity | Stock-derived and generated identities both stop at 1/6 | Retained stock-controller collision is not the blocker |
-| Selector branch | Multiple stock captures exposed coherent selector-2 and selector-6 assignment/request/carrier branches | Only one accepted selector-5 stock branch is retained | Capture more stock enrollments before changing selector or later carriers |
+| Selector branch | Multiple stock captures exposed coherent selector-2 and selector-6 assignment/request/carrier branches | Complete selector-5/counter-0 and retained selector-6/counter-3 branches are captured | Test the exact retained branch locally; capture a fresh new-identity branch before generalizing |
 | Valve continuation | Accepted assignment caused model-specific addressed requests | Corrected IQ analysis sees zero paired requests after local assignments | The valve rejects stage 0; the node is not merely missing stage 1 |
 | Receive-carrier transition | Each transcript changes carriers only at evidenced stages | Stages 1 and 3--5 are lower-channel; only stage 2 is on the response carrier | Current single-radio receive transition is consistent with stock evidence |
 | Completion | Valve-originated paired traffic, not reply count or LED, proves acceptance | Local attempts have no valve-originated paired traffic | Keep HTV145 pairing and control research-gated |
 
-This comparison narrows the next experiment to the missing stock branch matrix.
-It does not justify importing HTV405's 18-row tail or treating the app Device
-Address as a selector until repeated HTV145 captures prove that relationship.
+The 2026-08-28 retained-association capture narrows the next experiment to an
+exact counter-3/selector-6 branch replay. It does not justify importing
+HTV405's 18-row tail. The app reported Device Address `1` for RF selector `6`,
+which directly disproves treating that UI address as the selector.
 
 ## Transaction evidence
 
@@ -142,6 +143,16 @@ The 1,200-second open used three identical attempts at offsets 0, 729.210, and
 The 600-second open has no valid captured response but is positively confirmed
 by its independent watering report. Their telemetry sequences differ from
 their command sequences, confirming that the counters are independent.
+
+The 2026-08-28 selector-6 stock capture adds positively answered 300- and
+900-second opens. Their duration fields are `96 00` and `c2 01`, and their
+immediate response latencies were approximately 269 ms. More importantly, the
+association reverses the high command-family marker: open is `90/d0` and close
+is `10/50`, whereas selector 5 used the opposite polarity. Request byte 2
+remains `82` for open and `81` for close; response byte 5 remains `cf` for
+watering and `4f` for idle. Receive decoders now use those stable fields, and
+offline builders expose the marker polarity explicitly. Evidence is frozen in
+`research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`.
 
 ## Acceptance boundary
 

@@ -306,7 +306,89 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertEqual(1, result["configuration_response_count"])
         trial = result["trials"][0]
         self.assertEqual(5, trial["assignment_selector"])
+        self.assertEqual(0, trial["assignment_counter"])
+        self.assertFalse(trial["assignment_to_controller_route"])
+        self.assertTrue(trial["counter_echoed"])
         self.assertEqual(50.0, trial["request_end_to_assignment_start_ms"])
+        self.assertTrue(trial["stage_1_observed"])
+
+    def test_htv145_iq_analyzer_accepts_counter_3_selector_6_branch(
+        self,
+    ) -> None:
+        factory_request = bytes.fromhex(
+            "79f4882f2880000000342d008f83808402ff8f970080bf060000"
+            "000000000000000000005bc2"
+        )
+        assignment = bytes.fromhex(
+            "79f4882f28b42d008fb984028083c085850086f0008c741c0d"
+            "02808000000000000000002de6"
+        )
+        stage_1_request = bytes.fromhex(
+            "79f4882f28b9840280b42d008f84010786a580804f8000000040"
+            "800056800000000000002546"
+        )
+        configuration_response = bytes.fromhex(
+            "79f4882f28b9840280b42d008f815000800000000000000000"
+            "00000000000000000000006f4d"
+        )
+        upper_response_center_hz = 434_461_993
+        request_iq, _ = generate_command(
+            factory_request,
+            wake_symbols=320,
+            channel_center_hz=HTV145_REQUEST_CENTER_HZ,
+            leading_silence_ms=5,
+            trailing_silence_ms=54,
+        )
+        assignment_iq, _ = generate_command(
+            assignment,
+            wake_symbols=320,
+            channel_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=500,
+        )
+        stage_1_iq, _ = generate_command(
+            stage_1_request,
+            wake_symbols=320,
+            channel_center_hz=HTV145_REQUEST_CENTER_HZ,
+            leading_silence_ms=0,
+            trailing_silence_ms=500,
+        )
+        configuration_iq, _ = generate_command(
+            configuration_response,
+            wake_symbols=320,
+            channel_center_hz=upper_response_center_hz,
+            leading_silence_ms=0,
+            trailing_silence_ms=5,
+        )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(
+                request_iq + assignment_iq + stage_1_iq + configuration_iq
+            )
+            capture.flush()
+            result = analyze_htv145_pairing_capture(
+                Path(capture.name),
+                factory_endpoint=bytes.fromhex("342d008f"),
+                paired_endpoint=bytes.fromhex("b42d008f"),
+                companion_endpoint=bytes.fromhex("39840280"),
+                controller_endpoint=bytes.fromhex("b9840280"),
+                origin_seconds=0,
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+                request_center_hz=HTV145_REQUEST_CENTER_HZ,
+                assignment_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+                response_center_hz=upper_response_center_hz,
+            )
+
+        self.assertEqual(1, result["request_count"])
+        self.assertEqual(1, result["assignment_count"])
+        self.assertEqual(1, result["stage_1_request_count"])
+        self.assertEqual(1, result["configuration_response_count"])
+        trial = result["trials"][0]
+        self.assertEqual(3, trial["factory_sweep_counter"])
+        self.assertEqual(3, trial["assignment_counter"])
+        self.assertEqual(6, trial["assignment_selector"])
+        self.assertTrue(trial["assignment_to_controller_route"])
+        self.assertTrue(trial["counter_echoed"])
         self.assertTrue(trial["stage_1_observed"])
 
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:

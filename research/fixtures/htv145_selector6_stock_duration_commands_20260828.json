@@ -1,0 +1,107 @@
+{
+  "captured_at": "2026-08-28T15:20:22-04:00",
+  "model": "HTV145FRF",
+  "scope": "stock-cloud 300- and 900-second commands after retained selector-6 enrollment",
+  "continuous_capture_sha256": "8241fdf614488a2865b17718e7ec2465ca817a1f494898772786965d977ebd59",
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "association": {
+    "controller_endpoint": "b42d008f",
+    "valve_endpoint": "b9840280",
+    "app_device_address": 1,
+    "rf_selector": 6,
+    "command_channel_center_hz": 434461993,
+    "classification": "retained_association_later_sweep"
+  },
+  "operator_sequence": [
+    {
+      "requested_at": "2026-08-28T15:20:50-04:00",
+      "action": "open",
+      "duration_seconds": 300,
+      "cloud_result_code": 0
+    },
+    {
+      "requested_at": "2026-08-28T15:21:11-04:00",
+      "action": "close",
+      "cloud_result_code": 0
+    },
+    {
+      "requested_at": "2026-08-28T15:21:42-04:00",
+      "action": "open",
+      "duration_seconds": 900,
+      "cloud_result_code": 0
+    },
+    {
+      "requested_at": "2026-08-28T15:22:03-04:00",
+      "action": "close",
+      "cloud_result_code": 0
+    }
+  ],
+  "transactions": [
+    {
+      "action": "open",
+      "duration_seconds": 300,
+      "two_second_units": 150,
+      "encoded_duration": "9600",
+      "command_sequence": "81",
+      "request_marker": "90",
+      "request_frames": [
+        {
+          "capture_time_seconds": 26.289591,
+          "raw": "79f4882f28b42d008fb984028081908280810096008000000000000000000000000000002fde"
+        },
+        {
+          "capture_time_seconds": 27.0166025,
+          "raw": "79f4882f28b42d008fb984028081908280810096008000000000000000000000000000002fde"
+        }
+      ],
+      "response_capture_time_seconds": 27.2853845,
+      "response_frame": "79f4882f28b9840280b42d008f81d0868010cf80000000409600d69600800000000000004208",
+      "response_marker": "d0",
+      "response_latency_from_last_request_ms": 268.782
+    },
+    {
+      "action": "close",
+      "command_sequence": "82",
+      "request_marker": "10",
+      "request_capture_time_seconds": 48.0858455,
+      "request_frame": "79f4882f28b42d008fb98402808210818081000000000000000000000000000000000000042a",
+      "response_capture_time_seconds": 48.353195,
+      "response_frame": "79f4882f28b9840280b42d008f82508680104f800000004080005696008000000000000068c5",
+      "response_marker": "50",
+      "response_latency_ms": 267.35
+    },
+    {
+      "action": "open",
+      "duration_seconds": 900,
+      "two_second_units": 450,
+      "encoded_duration": "c201",
+      "command_sequence": "82",
+      "request_marker": "90",
+      "request_capture_time_seconds": 79.117262,
+      "request_frame": "79f4882f28b42d008fb9840280829082808100c2018000000000000000000000000000000d6a",
+      "response_capture_time_seconds": 79.3859815,
+      "response_frame": "79f4882f28b9840280b42d008f82d0868010cf8000000040c201d6c201800000000000000583",
+      "response_marker": "d0",
+      "response_latency_ms": 268.72
+    },
+    {
+      "action": "close",
+      "command_sequence": "83",
+      "request_marker": "10",
+      "request_capture_time_seconds": 100.1243995,
+      "request_frame": "79f4882f28b42d008fb984028083108180810000000000000000000000000000000000006121",
+      "response_capture_time_seconds": 100.3916955,
+      "response_frame": "79f4882f28b9840280b42d008f83508680104f8000000040800056c2018000000000000052c5",
+      "response_marker": "50",
+      "response_latency_ms": 267.296
+    }
+  ],
+  "findings": [
+    "The selector-6 command carrier is 434.461993 MHz, matching the retained enrollment routine carrier rather than the earlier selector-5 command channel.",
+    "Five minutes is encoded as 0x0096 two-second units and fifteen minutes as 0x01c2; the on-air little-endian fields are 96 00 and c2 01.",
+    "Combined with earlier commands whose low-byte bit 7 was originally clear, these captures preserve the HTV145 rule that bit 7 is overlaid with OR rather than added to the two-byte count.",
+    "The selector-6 association reverses the high marker bit on request/response family byte 1: open is 90/d0 and close is 10/50. The stable semantic discriminators are request body byte 2 (82 open, 81 close) and response usage-marker byte 5 (cf watering, 4f idle).",
+    "The command sequence is not a simple increment per cloud API call: the first close and second open both used sequence 82. Counter synchronization must continue to use authenticated observed traffic, not API-call count."
+  ]
+}

@@ -1179,6 +1179,25 @@ frames used ordinary trailer residual `0x4f03`. Exact frames, measured centers,
 and continuous-capture offsets are frozen in
 `research/fixtures/htv145_gateway_pairing_replies.json`.
 
+A second complete stock exchange on 2026-08-28 captured a different, coherent
+retained-association branch. Because the operator began the long press before
+advancing the app, the valve reached explicit factory-sweep counter `3`; stock
+then echoed counter `3`, assigned RF selector `6`, addressed the assignment to
+the retained valve route, and continued on a measured routine carrier of
+434.461993 MHz. Its six-stage continuation used counters `3/4/4/5/5`,
+`81 10 -> 81 50` for the delayed configuration exchange, and trailer residual
+`0xc713` through the first four controller replies before returning to
+`0x4f03`. The assignment and delayed configuration started 54.55 ms and
+3,629.85 ms after their respective valve requests. Exact frames and timing are
+frozen in
+`research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`.
+
+The app displayed Device Address `1` for that selector-`6` exchange. App
+address is therefore not the RF selector and must not be used to derive a
+carrier or pairing branch. The endpoints were retained from the earlier stock
+association, so this capture validates a later-sweep re-association path; it
+does not yet establish how a fresh stock controller allocates a new identity.
+
 This explains the first two local probes: probe 1 used the wrong selector;
 probe 2 sent a byte-accurate initial assignment but then waited for the
 HTV405 continuation instead of emitting the delayed HTV145 controller command.
@@ -1222,23 +1241,26 @@ captures can be evaluated with `tools/analyze_htv145_pairing_iq.py`.
 The remaining HTV405-derived lead is branch coherence. Reliable HTV405
 enrollment was not obtained by tuning one reply in isolation: multiple stock
 captures revealed selector-2 and selector-6 branches whose assignment marker,
-request marker, and routine carrier had to move together. Only one complete
-HTV145 stock enrollment is currently retained, using selector `5`. The vendor
-app showed Device Address `6` for the same valve, which is consistent with—but
-does not yet prove—a zero-based selector/address relationship. At least two
-additional complete stock enrollments must correlate the app address,
-selector, assignment carrier, first paired request, and routine carrier before
-another HTV145 stage-0 change. Until then the local probe returns to the shared,
-previously accepted 49.5 ms scheduler prefix.
+request marker, and routine carrier had to move together. HTV145 now has a
+complete counter-`0`/selector-`5` branch and a complete retained
+counter-`3`/selector-`6` branch. The second capture disproves the earlier
+zero-based app-address hypothesis and supplies an exact additive local probe,
+but one more fresh-association capture is still required before generalizing
+branch selection or new-identity allocation.
 
 ### Request and response roles
 
-| Endpoint order | Body byte 1 | Meaning |
-|---|---:|---|
-| `b42d008f` to `b9840280` | `0x10` | Open request |
-| `b9840280` to `b42d008f` | `0x50` | Open response |
-| `b42d008f` to `b9840280` | `0x90` | Close request |
-| `b9840280` to `b42d008f` | `0xd0` | Close response |
+The high bit of body byte 1 is an association-branch marker, not the action.
+Selector `5` used `10/50` for open and `90/d0` for close; the selector-`6`
+association reverses that bit and uses `90/d0` for open and `10/50` for close.
+The stable semantic fields across both captures are:
+
+| Endpoint order | Stable field | Meaning |
+|---|---|---|
+| controller to valve | body byte 2 = `82` | Open request |
+| controller to valve | body byte 2 = `81` | Close request |
+| valve to controller | body byte 5 = `cf` | Watering response |
+| valve to controller | body byte 5 = `4f` | Idle response |
 
 The first body byte is a transaction sequence. Observed watering cycles
 advanced through `0x9b`, `0x9c`, `0x9d`, `0x9e`, `0x9f`, then `0x80`, strongly
@@ -1247,12 +1269,17 @@ in one cycle echoes the same sequence value.
 
 ### Command bodies
 
-The stable request bodies are:
+The request bodies are therefore written with branch marker `MM`:
 
 ```text
-open:  SS 10 82 80 81 00 DD DD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-close: SS 90 81 80 81 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+open:  SS MM 82 80 81 00 DD DD BB 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+close: SS MM 81 80 81 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 ```
+
+For selector `5`, open uses `MM=10, BB=00` and close uses `MM=90`.
+For the retained selector `6`, open uses `MM=90, BB=80` and close uses
+`MM=10`. Local construction must retain this association property rather than
+hard-coding one marker polarity.
 
 `SS` is the transaction sequence. `DD DD` starts with the watering duration in
 two-second units, little-endian, but bit 7 of the low byte is forced on:
@@ -1275,8 +1302,14 @@ Confirmed duration examples:
 |---|---:|
 | `9e 00` | 60 seconds |
 | `f8 00` | 240 seconds |
+| `96 00` | 300 seconds |
+| `c2 01` | 900 seconds |
 | `fe 01` | 1,020 seconds |
 
+The 300- and 900-second values were captured as stock-cloud commands on the
+selector-`6` association and received immediate valve responses. Exact frames
+are frozen in
+`research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`.
 The 240- and 1,020-second values were independently confirmed in the Home
 Assistant recorder at the corresponding RF timestamps. Treating `f8 00` as a
 plain 16-bit value would incorrectly produce 496 seconds.

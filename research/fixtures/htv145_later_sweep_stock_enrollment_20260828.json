@@ -1,0 +1,112 @@
+{
+  "captured_at": "2026-08-28T14:31:22-04:00",
+  "model": "HTV145FRF",
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "continuous_capture_sha256": "7a6adccdb040fff7bf43e2dccbc4618a08b4f2466f039e555aa99c6356b36343",
+  "operator_sequence": "The valve long press began before the stock app advanced into its pairing step, allowing factory sweep counters 0 through 3 to occur before assignment.",
+  "app_metadata": {
+    "device_address": 1,
+    "product_code_high_byte": "1f",
+    "firmware_version": 126,
+    "rssi_dbm": -43,
+    "device_id_lower_24_bits": "redacted"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "valve_route": "b9840280",
+    "companion_endpoint": "39840280",
+    "factory_sweep_counter": 3,
+    "assignment_counter": 3,
+    "assignment_selector": 6,
+    "assignment_destination": "valve_route",
+    "classification": "retained_association_later_sweep"
+  },
+  "channels": {
+    "factory_request_hz": 433143085,
+    "assignment_hz": 433546985,
+    "selector_6_routine_hz": 434461993
+  },
+  "exchanges": [
+    {
+      "step": 0,
+      "request_kind": "factory_announcement_counter_3",
+      "request_frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+      "request_start_s": 61.36855,
+      "request_end_s": 61.39975,
+      "reply_frame": "79f4882f28b42d008fb984028083c085850086f0008c741c0d02808000000000000000002de6",
+      "reply_start_s": 61.4543,
+      "request_end_to_reply_start_ms": 54.55,
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "c713"
+    },
+    {
+      "step": 1,
+      "request_kind": "paired_message_1_counter_4",
+      "request_frame": "79f4882f28b9840280b42d008f84010786a580804f8000000040800056800000000000002546",
+      "request_start_s": 62.8579,
+      "request_end_s": 62.8891,
+      "reply_frame": "79f4882f28b42d008fb98402808441010000800000000000000000000000000000000000303b",
+      "reply_start_s": 62.96345,
+      "request_end_to_reply_start_ms": 74.35,
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "c713"
+    },
+    {
+      "step": "1a",
+      "request_kind": "delayed_controller_configuration",
+      "reply_frame": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+      "reply_start_s": 66.51895,
+      "paired_message_1_end_to_reply_start_ms": 3629.85,
+      "prior_reply_end_to_reply_start_ms": 3524.3,
+      "reply_wake_symbols": 2400,
+      "reply_trailer_residual": "c713"
+    },
+    {
+      "step": 2,
+      "request_kind": "controller_configuration_response",
+      "request_frame": "79f4882f28b9840280b42d008f81500080000000000000000000000000000000000000006f4d",
+      "request_start_s": 66.8812,
+      "request_end_s": 66.9124,
+      "reply_expected": false
+    },
+    {
+      "step": 3,
+      "request_kind": "paired_short_message_counter_4",
+      "request_frame": "79f4882f28b9840280b42d008f84828106808000000000000000000000000000000000004eff",
+      "request_start_s": 68.36345,
+      "request_end_s": 68.39465,
+      "reply_frame": "79f4882f28b42d008fb984028084c287802c0105000f00000000000000000000000000001faa",
+      "reply_start_s": 68.4343,
+      "request_end_to_reply_start_ms": 39.65,
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "c713"
+    },
+    {
+      "step": 4,
+      "request_kind": "paired_controller_message_counter_5",
+      "request_frame": "79f4882f28b9840280b42d008f850301868080000000000000000000000000000000000028be",
+      "request_start_s": 69.32095,
+      "request_end_s": 69.35215,
+      "reply_frame": "79f4882f28b42d008fb984028085430080000000000000000000000000000000000000005e82",
+      "reply_start_s": 69.4035,
+      "request_end_to_reply_start_ms": 51.35,
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    },
+    {
+      "step": 5,
+      "request_kind": "paired_extended_message_counter_5",
+      "request_frame": "79f4882f28b9840280b42d008f85ac8099000000000000000000000000000000000000007f33",
+      "request_start_s": 70.27595,
+      "request_end_s": 70.30715,
+      "reply_frame": "79f4882f28b42d008fb984028085ec8180190000000000000000000000000000000000005c56",
+      "reply_start_s": 70.35345,
+      "request_end_to_reply_start_ms": 46.3,
+      "reply_wake_symbols": 320,
+      "reply_trailer_residual": "4f03"
+    }
+  ],
+  "interpretation": "This accepted exchange disproves the analyzer's former counter-0/selector-5-only assumption. The stock gateway echoed factory sweep counter 3, addressed the assignment to the retained controller route, selected branch 6, shifted the paired request/reply transaction counters, moved the continuation to the selector-6 upper carrier, and changed the long controller exchange from 81/90 -> 81/D0 to 81/10 -> 81/50. App Device Address 1 does not equal RF selector 6, so app address must not select an RF branch. Because the valve retained its prior RF endpoints, this is retained-association evidence rather than a second generated fresh identity."
+}

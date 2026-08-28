@@ -186,8 +186,12 @@ five-minute node window expires.
       enrollments and record the app Device Address for each. Compare the
       assignment selector, assignment carrier, first paired request marker,
       and routine carrier as one coherent branch before changing the local
-      transcript. This repeats the evidence path that exposed the decisive
-      selector-2/selector-6 branches during HTV405 development.
+      transcript. One of the two is now complete: the 2026-08-28 retained
+      association accepted factory counter `3`, selector `6`, and a
+      434.461993 MHz routine carrier while the app displayed Device Address
+      `1`. That disproves a direct address/selector mapping and is frozen in
+      `research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`.
+      Retain this gate for one fresh new-identity stock association.
 - [ ] Complete three consecutive local pairings with fresh batteries and
       valve-originated terminal evidence.
 - [ ] Confirm removal and re-pairing preserve the intended stable physical
@@ -201,16 +205,17 @@ The 2026-08-26 HTV145 stage-0 discriminator trials all stopped at 1/6: an
 on-air reply close to the stock 50.55 ms slot, a six-to-ten-foot separation
 trial, and a generated custom controller/companion identity. Continuous IQ
 already shows that the local assignment payload, carrier, deviation, wake, and
-clock structure match the one retained stock success. These negatives make
+clock structure match the first retained stock success. These negatives make
 small timing, near-field saturation, and retained-controller collision poor
-next hypotheses. Only one successful stock selector (`5`) is retained, while
-HTV405 required multiple stock enrollments to reveal that selector and carrier
-must move together. Corrected bounded-IQ analysis recovered all four
+next hypotheses. The later 2026-08-28 stock exchange supplies a second
+coherent branch: counter `3`, selector `6`, assignment to the retained valve
+route, and a 434.461993 MHz routine carrier. Corrected bounded-IQ
+analysis recovered all four
 lower-channel paired requests and the controller-configuration response from
-the stock success, but zero paired requests after the rejected local
+each stock success, but zero paired requests after the rejected local
 assignments; the stall is valve-side rejection, not a node receive-channel
-miss. Preserve the known 49.5 ms prefix until the additional HTV145 stock
-branch matrix exists.
+miss. Probe `.7` may exercise only the exact retained selector-6 branch; keep
+fresh identity allocation gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 
@@ -309,6 +314,11 @@ automatic-idle evidence without manual synchronization.
 
 ### HTV145
 
+- [x] Capture and decode stock 300- and 900-second opens on the retained
+      selector-6 association. Both received immediate valve responses; the
+      duration fields are `96 00` and `c2 01`. The capture also proves the
+      command-family high marker reverses by association while request action
+      byte `82/81` and response state marker `cf/4f` remain stable.
 - [ ] With fresh batteries, obtain new valve-originated idle and positively
       confirmed stock-command evidence.
 - [ ] Physically accept exactly one bounded local open on its evidenced carrier,

@@ -140,6 +140,101 @@ def _factory_matches(frame_hex: str, factory_endpoint: bytes) -> bool:
     )
 
 
+def _assignment_matches(
+    frame_hex: str,
+    *,
+    paired_endpoint: bytes,
+    companion_endpoint: bytes,
+    controller_endpoint: bytes,
+) -> bool:
+    """Match either complete stock HTV145 assignment branch.
+
+    Counter-0 selector-5 enrollment addresses the companion endpoint. The
+    accepted counter-3 selector-6 retained-association branch addresses the
+    controller route directly. Requiring the counter, selector, and endpoint
+    from only the first capture made the second accepted exchange invisible.
+    """
+    try:
+        frame = bytes.fromhex(frame_hex)
+    except ValueError:
+        return False
+    return (
+        len(frame) == 38
+        and frame.startswith(bytes.fromhex("79f4882f28"))
+        and frame[5:9] == paired_endpoint
+        and frame[9:13] in {companion_endpoint, controller_endpoint}
+        and frame[13] & 0x80
+        and frame[14:17] == bytes.fromhex("c08585")
+        and frame[18] & 0x7F in {0x05, 0x06}
+        and frame[19] & 0x70 == 0x70
+        and frame[20] == 0x00
+        and (
+            binascii.crc_hqx(frame[:-2], 0)
+            ^ int.from_bytes(frame[-2:], "big")
+        )
+        in {0xC713, 0x4F03}
+    )
+
+
+def _stage_1_matches(
+    frame_hex: str,
+    *,
+    controller_endpoint: bytes,
+    paired_endpoint: bytes,
+) -> bool:
+    try:
+        frame = bytes.fromhex(frame_hex)
+    except ValueError:
+        return False
+    body = frame[13:36]
+    expected_tail = bytes.fromhex(
+        "80804f800000004080005680000000000000"
+    )
+    return (
+        len(frame) == 38
+        and frame.startswith(bytes.fromhex("79f4882f28"))
+        and frame[5:9] == controller_endpoint
+        and frame[9:13] == paired_endpoint
+        and body[0] & 0x80
+        and body[1:3] == bytes.fromhex("0107")
+        and body[3] & 0x7F in {0x02, 0x06}
+        and body[4] & 0x7F == 0x25
+        and body[5:] == expected_tail
+        and (
+            binascii.crc_hqx(frame[:-2], 0)
+            ^ int.from_bytes(frame[-2:], "big")
+        )
+        in {0xC713, 0x4F03}
+    )
+
+
+def _configuration_response_matches(
+    frame_hex: str,
+    *,
+    controller_endpoint: bytes,
+    paired_endpoint: bytes,
+) -> bool:
+    try:
+        frame = bytes.fromhex(frame_hex)
+    except ValueError:
+        return False
+    body = frame[13:36]
+    return (
+        len(frame) == 38
+        and frame.startswith(bytes.fromhex("79f4882f28"))
+        and frame[5:9] == controller_endpoint
+        and frame[9:13] == paired_endpoint
+        and body[0] & 0x7F == 0x01
+        and body[1] & 0x7F == 0x50
+        and body[2:] == bytes.fromhex("0080" + "00" * 19)
+        and (
+            binascii.crc_hqx(frame[:-2], 0)
+            ^ int.from_bytes(frame[-2:], "big")
+        )
+        in {0xC713, 0x4F03}
+    )
+
+
 def _events(
     result: dict[str, Any],
     predicate: Callable[[str], bool],
@@ -212,11 +307,11 @@ def analyze(
     )
     assignments = _events(
         assignment_result,
-        lambda frame: _matches(
+        lambda frame: _assignment_matches(
             frame,
-            endpoint_a=paired_endpoint,
-            endpoint_b=companion_endpoint,
-            body_prefix=bytes.fromhex("80c0858503057000"),
+            paired_endpoint=paired_endpoint,
+            companion_endpoint=companion_endpoint,
+            controller_endpoint=controller_endpoint,
         ),
         origin_seconds=origin_seconds,
     )
@@ -232,21 +327,19 @@ def analyze(
     )
     stage_1_requests = _events(
         request_result,
-        lambda frame: _matches(
+        lambda frame: _stage_1_matches(
             frame,
-            endpoint_a=controller_endpoint,
-            endpoint_b=paired_endpoint,
-            body_prefix=bytes.fromhex("8101078225"),
+            controller_endpoint=controller_endpoint,
+            paired_endpoint=paired_endpoint,
         ),
         origin_seconds=origin_seconds,
     )
     configuration_responses = _events(
         response_result,
-        lambda frame: _matches(
+        lambda frame: _configuration_response_matches(
             frame,
-            endpoint_a=controller_endpoint,
-            endpoint_b=paired_endpoint,
-            body_prefix=bytes.fromhex("81d00080"),
+            controller_endpoint=controller_endpoint,
+            paired_endpoint=paired_endpoint,
         ),
         origin_seconds=origin_seconds,
     )
@@ -293,6 +386,15 @@ def analyze(
                 "request_end_seconds": round(request["end_seconds"], 6),
                 "assignment_frame": assignment["frame"],
                 "assignment_selector": assignment_frame[18] & 0x7F,
+                "assignment_counter": assignment_frame[13] & 0x7F,
+                "assignment_destination": assignment_frame[9:13].hex(),
+                "assignment_to_controller_route": (
+                    assignment_frame[9:13] == controller_endpoint
+                ),
+                "counter_echoed": (
+                    assignment_frame[13] & 0x7F
+                    == request_frame[13] & 0x7F
+                ),
                 "assignment_start_seconds": round(
                     assignment["start_seconds"], 6
                 ),
