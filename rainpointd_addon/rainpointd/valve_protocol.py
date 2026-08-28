@@ -416,7 +416,11 @@ def decode_htv145_gateway_command(
         or frame[13] not in range(0x80, 0xA0)
     ):
         return None
-    if frame[14] == 0x10:
+    # The high bit of byte 14 is an association-branch marker, not the
+    # watering action. Selector-5 used 10=open/90=close, while the captured
+    # selector-6 branch reverses those markers. Body byte 15 remains 82 for
+    # open and 81 for close in both branches.
+    if frame[14] in {0x10, 0x90} and frame[15] == 0x82:
         if (
             frame[15:19] != bytes.fromhex("82808100")
             # Stock HTV145 captures contain both 0x00 and 0x80 at byte 21.
@@ -436,9 +440,10 @@ def decode_htv145_gateway_command(
             "next_sequence": next_sequence(frame[13]),
             "watering": True,
             "duration_seconds": duration_seconds,
+            "command_marker_inverted": frame[14] == 0x90,
         }
     if (
-        frame[14] == 0x90
+        frame[14] in {0x10, 0x90}
         and frame[15:19] == bytes.fromhex("81808100")
         and not any(frame[19:36])
     ):
@@ -446,6 +451,7 @@ def decode_htv145_gateway_command(
             "sequence": frame[13],
             "next_sequence": next_sequence(frame[13]),
             "watering": False,
+            "command_marker_inverted": frame[14] == 0x10,
         }
     return None
 
@@ -466,15 +472,18 @@ def decode_htv145_command_response(
         or frame[17] & 0x0F
         or (frame[18] & 0x7F) != 0x4F
         or frame[23] != 0x40
-        or frame[26] != 0x56
-        or not ((frame[14] ^ frame[18]) & 0x80)
+        or (frame[26] & 0x7F) != 0x56
     ):
         return None
-    watering = frame[14] == 0x50
+    # Offset 18's high bit is the stable valve-state bit across both captured
+    # marker polarities: cf=watering and 4f=idle. Offset 14 flips between the
+    # selector-5 and selector-6 associations and must not define state.
+    watering = bool(frame[18] & 0x80)
     result: dict[str, int | bool] = {
         "sequence": frame[13],
         "next_sequence": next_sequence(frame[13]),
         "watering": watering,
+        "command_marker_inverted": bool(frame[14] & 0x80) == watering,
     }
     return result
 
@@ -545,39 +554,88 @@ def _finish_frame(payload: bytes, residue: int) -> bytes:
 
 
 def build_open_frame(
-    link: ValveLink, sequence: int, duration_seconds: int, residue: int
+    link: ValveLink,
+    sequence: int,
+    duration_seconds: int,
+    residue: int,
+    *,
+    command_marker_inverted: bool = False,
 ) -> bytes:
     """Build one offline HTV145 open-command candidate."""
     _validate_sequence(sequence)
-    body = bytes((sequence, 0x10, 0x82, 0x80, 0x81, 0x00))
+    body = bytes((
+        sequence,
+        0x90 if command_marker_inverted else 0x10,
+        0x82,
+        0x80,
+        0x81,
+        0x00,
+    ))
     body += encode_duration(duration_seconds)
-    body += bytes(15)
+    # The selector-6 branch carries the same high marker polarity into the
+    # byte immediately following the duration field.
+    body += bytes((0x80 if command_marker_inverted else 0x00,))
+    body += bytes(14)
     return _finish_frame(
         SYNC + link.controller_endpoint + link.valve_endpoint + body, residue
     )
 
 
-def build_close_frame(link: ValveLink, sequence: int, residue: int) -> bytes:
+def build_close_frame(
+    link: ValveLink,
+    sequence: int,
+    residue: int,
+    *,
+    command_marker_inverted: bool = False,
+) -> bytes:
     """Build one offline HTV145 close-command candidate."""
     _validate_sequence(sequence)
-    body = bytes((sequence, 0x90, 0x81, 0x80, 0x81, 0x00)) + bytes(17)
+    body = bytes((
+        sequence,
+        0x10 if command_marker_inverted else 0x90,
+        0x81,
+        0x80,
+        0x81,
+        0x00,
+    )) + bytes(17)
     return _finish_frame(
         SYNC + link.controller_endpoint + link.valve_endpoint + body, residue
     )
 
 
 def open_candidates(
-    link: ValveLink, sequence: int, duration_seconds: int
+    link: ValveLink,
+    sequence: int,
+    duration_seconds: int,
+    *,
+    command_marker_inverted: bool = False,
 ) -> tuple[bytes, bytes]:
     """Return both unresolved trailer candidates without transmitting either."""
     return tuple(
-        build_open_frame(link, sequence, duration_seconds, residue)
+        build_open_frame(
+            link,
+            sequence,
+            duration_seconds,
+            residue,
+            command_marker_inverted=command_marker_inverted,
+        )
         for residue in TRAILER_RESIDUES
     )
 
 
-def close_candidates(link: ValveLink, sequence: int) -> tuple[bytes, bytes]:
+def close_candidates(
+    link: ValveLink,
+    sequence: int,
+    *,
+    command_marker_inverted: bool = False,
+) -> tuple[bytes, bytes]:
     """Return both unresolved trailer candidates without transmitting either."""
     return tuple(
-        build_close_frame(link, sequence, residue) for residue in TRAILER_RESIDUES
+        build_close_frame(
+            link,
+            sequence,
+            residue,
+            command_marker_inverted=command_marker_inverted,
+        )
+        for residue in TRAILER_RESIDUES
     )

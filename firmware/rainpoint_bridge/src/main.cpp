@@ -783,6 +783,9 @@ void reportPairingStatus(const char* detail = nullptr) {
         );
         line += ",\"reply_marker_repeat\":";
         line += valvePairingSession.replyMarkerRepeat() ? "true" : "false";
+        line += ",\"htv145_later_sweep_branch\":";
+        line += valvePairingSession.htv145LaterSweepBranch()
+            ? "true" : "false";
     }
 #endif
     line += ",\"factory_adopted\":";
@@ -3070,6 +3073,10 @@ bool activeValvePairingReplyMarkerRepeat() {
     return valvePairingSession.replyMarkerRepeat();
 }
 
+bool activeValvePairingHtv145LaterSweepBranch() {
+    return valvePairingSession.htv145LaterSweepBranch();
+}
+
 bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
     return valvePairingSession.finishReply(success, nowMs);
 }
@@ -3130,6 +3137,19 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         const rainpoint::Htv405PairingStep* step =
             claimActiveValvePairingReply(frame, millis());
         if (step != nullptr) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            if (valvePairingHtv145 &&
+                activeValvePairingHtv145LaterSweepBranch() &&
+                !rainpoint::applyHtv145LaterSweepProfile(
+                    activeValvePairingProfile
+                )) {
+                finishActiveValvePairingReply(false, millis());
+                reportPairingStatus("later_sweep_profile_build_failed");
+                restoreScanningAfterPairing();
+                printPacket(name, frame, packet, radio);
+                return;
+            }
+#endif
             auto replyDateTime = pairingLocalDateTime;
             const bool pairingClockValid =
                 rainpoint::advancePairingLocalDateTime(
@@ -3164,7 +3184,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 :
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
                 valvePairingHtv145
-                    ? rainpoint::htv145PairingReplyStartDelayUs(replyStep)
+                    ? rainpoint::htv145PairingReplyStartDelayUs(
+                        replyStep,
+                        activeValvePairingHtv145LaterSweepBranch()
+                    )
                     :
 #endif
                 rainpoint::htv405PairingReplyStartDelayUs(replyStep);
@@ -3187,7 +3210,8 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 sent = rainpoint::buildHtv145ConfigurationReply(
                     activeValvePairingProfile,
                     configurationFrame,
-                    activeValvePairingReplyCounterOffset()
+                    activeValvePairingReplyCounterOffset(),
+                    activeValvePairingHtv145LaterSweepBranch()
                 ) && radio.transmitAsync(
                     configurationFrame,
                     static_cast<std::uint32_t>(adjustedFrequency),
@@ -3196,7 +3220,11 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     rainpoint::pairingPaTableValue(pairingPowerDbm),
                     step->deviationRegister,
                     packet.receivedAtMicros +
-                        rainpoint::kHtv145ConfigurationReplyStartDelayUs
+                        (activeValvePairingHtv145LaterSweepBranch()
+                            ? rainpoint::
+                                kHtv145LaterSweepConfigurationReplyStartDelayUs
+                            : rainpoint::
+                                kHtv145ConfigurationReplyStartDelayUs)
                 );
                 // The valve confirms this long controller command on the
                 // routine reply carrier before returning to its lower request

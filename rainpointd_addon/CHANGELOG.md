@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.33.15 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.7
+
+- Decode HTV145 open and close actions from the stable command-body byte
+  rather than the association-specific high marker. The newly captured
+  selector-6 association reverses the selector-5 marker polarity while
+  preserving the open/close body values.
+- Decode valve state from the stable response status byte and accept the
+  selector-6 response overlay without weakening HTV405 validation.
+- Preserve exact 5- and 15-minute stock-command evidence: HTV145 durations
+  are little-endian two-second units, including values above one byte.
+- Add the complete counter-3, selector-6 HTV145 enrollment branch to the
+  isolated pairing probe while leaving the earlier counter-0 branch intact.
+
 ## 0.33.14 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.10
 
 - Reject unvalidated HTV405 command durations before reserving a counter or

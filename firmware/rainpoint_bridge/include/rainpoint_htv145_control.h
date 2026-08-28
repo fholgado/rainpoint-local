@@ -80,7 +80,8 @@ inline bool buildHtv145OpenFrame(
     std::uint8_t sequence,
     std::uint32_t durationSeconds,
     std::uint16_t trailerResidual,
-    std::array<std::uint8_t, kFrameBytes>& frame
+    std::array<std::uint8_t, kFrameBytes>& frame,
+    bool commandMarkerInverted = false
 ) {
     std::array<std::uint8_t, 2> duration{};
     if (!validHtv145Link(link) || !validHtv145Sequence(sequence) ||
@@ -97,12 +98,13 @@ inline bool buildHtv145OpenFrame(
         frame[9 + index] = link.valveEndpoint[index];
     }
     frame[13] = sequence;
-    frame[14] = 0x10;
+    frame[14] = commandMarkerInverted ? 0x90 : 0x10;
     frame[15] = 0x82;
     frame[16] = 0x80;
     frame[17] = 0x81;
     frame[19] = duration[0];
     frame[20] = duration[1];
+    frame[21] = commandMarkerInverted ? 0x80 : 0x00;
     writeTrailer(frame, trailerResidual);
     return true;
 }
@@ -111,7 +113,8 @@ inline bool buildHtv145CloseFrame(
     const Htv145Link& link,
     std::uint8_t sequence,
     std::uint16_t trailerResidual,
-    std::array<std::uint8_t, kFrameBytes>& frame
+    std::array<std::uint8_t, kFrameBytes>& frame,
+    bool commandMarkerInverted = false
 ) {
     if (!validHtv145Link(link) || !validHtv145Sequence(sequence) ||
         (trailerResidual != 0xc713 && trailerResidual != 0x4f03)) {
@@ -126,7 +129,7 @@ inline bool buildHtv145CloseFrame(
         frame[9 + index] = link.valveEndpoint[index];
     }
     frame[13] = sequence;
-    frame[14] = 0x90;
+    frame[14] = commandMarkerInverted ? 0x10 : 0x90;
     frame[15] = 0x81;
     frame[16] = 0x80;
     frame[17] = 0x81;
@@ -148,12 +151,13 @@ inline bool decodeHtv145CommandResponse(
         frame[15] != 0x86 || frame[16] != 0x80 ||
         (frame[17] & 0x0fU) != 0 ||
         (frame[18] & 0x7fU) != 0x4f ||
-        ((frame[14] ^ frame[18]) & 0x80U) == 0 ||
-        frame[23] != 0x40 || frame[26] != 0x56) {
+        frame[23] != 0x40 || (frame[26] & 0x7fU) != 0x56) {
         return false;
     }
     response.sequence = frame[13];
-    response.watering = frame[14] == 0x50;
+    // Offset 14's high marker flips between the selector-5 and selector-6
+    // associations. Offset 18 remains cf=watering and 4f=idle in both.
+    response.watering = (frame[18] & 0x80U) != 0;
     return true;
 }
 

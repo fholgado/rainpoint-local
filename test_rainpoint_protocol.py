@@ -16,6 +16,8 @@ from rainpointd.device_catalog import DeviceCatalog, SensorDefinition  # noqa: E
 from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
+    build_close_frame,
+    build_open_frame,
     decode_htv145_command_response,
     decode_htv145_gateway_command,
     decode_htv145_state_report,
@@ -233,6 +235,65 @@ class RainPointProtocolTest(unittest.TestCase):
                 int(transaction["command_sequence"], 16),
                 report["telemetry_sequence"],
             )
+
+    def test_htv145_selector_6_marker_and_duration_fixture(self) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv145_selector6_stock_duration_commands_20260828.json"
+            ).read_text()
+        )
+        link = ValveLink(
+            bytes.fromhex(fixture["association"]["controller_endpoint"]),
+            bytes.fromhex(fixture["association"]["valve_endpoint"]),
+        )
+        for transaction in fixture["transactions"]:
+            request_hex = (
+                transaction["request_frames"][0]["raw"]
+                if "request_frames" in transaction
+                else transaction["request_frame"]
+            )
+            request = bytes.fromhex(request_hex)
+            decoded = decode_htv145_gateway_command(request, link)
+            self.assertIsNotNone(decoded)
+            self.assertEqual(
+                transaction["action"] == "open", decoded["watering"]
+            )
+            self.assertTrue(decoded["command_marker_inverted"])
+            residual = binascii.crc_hqx(request[:-2], 0) ^ int.from_bytes(
+                request[-2:], "big"
+            )
+            if transaction["action"] == "open":
+                self.assertEqual(
+                    transaction["duration_seconds"],
+                    decoded["duration_seconds"],
+                )
+                rebuilt = build_open_frame(
+                    link,
+                    int(transaction["command_sequence"], 16),
+                    transaction["duration_seconds"],
+                    residual,
+                    command_marker_inverted=True,
+                )
+            else:
+                rebuilt = build_close_frame(
+                    link,
+                    int(transaction["command_sequence"], 16),
+                    residual,
+                    command_marker_inverted=True,
+                )
+            self.assertEqual(request, rebuilt)
+
+            response = decode_htv145_command_response(
+                bytes.fromhex(transaction["response_frame"]), link
+            )
+            self.assertIsNotNone(response)
+            self.assertEqual(
+                transaction["action"] == "open", response["watering"]
+            )
+            self.assertTrue(response["command_marker_inverted"])
 
     def test_rejects_bad_hex(self) -> None:
         with self.assertRaises(ValueError):

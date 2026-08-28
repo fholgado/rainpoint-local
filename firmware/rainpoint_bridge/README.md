@@ -140,7 +140,7 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.6 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.7 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 

@@ -92,6 +92,27 @@ constexpr std::uint32_t kHtv405InitialChannelCenterHz = 433'511'445;
 // to every selector-2 initialization reply, including the long transition.
 constexpr std::uint32_t kHtv405RoutineChannelCenterHz = 433'421'373;
 
+// A second complete stock HTV145 exchange on 2026-08-28 began after the
+// valve had already reached explicit factory-sweep counter 3. Stock used a
+// coherent selector-6 retained-association branch rather than replaying the
+// selector-5 counter-0 assignment one field at a time. Keep this branch
+// isolated and evidence-exact: the lower factory carrier is unchanged, the
+// assignment is 9.582 kHz below the selector-5 assignment, and every later
+// reply moves 990.493 kHz above the selector-5 routine carrier.
+constexpr std::uint8_t kHtv145LaterSweepCounter = 3;
+constexpr std::uint32_t kHtv145LaterSweepInitialChannelCenterHz =
+    kHtv405InitialChannelCenterHz - 9'582;
+constexpr std::uint32_t kHtv145LaterSweepRoutineChannelCenterHz =
+    kHtv405RoutineChannelCenterHz + 990'493;
+constexpr std::uint32_t kHtv145LaterSweepAssignmentReplyStartDelayUs =
+    54'300;
+constexpr std::uint32_t kHtv145LaterSweepStep1ReplyStartDelayUs = 74'100;
+constexpr std::uint32_t kHtv145LaterSweepConfigurationReplyStartDelayUs =
+    3'629'600;
+constexpr std::uint32_t kHtv145LaterSweepStep3ReplyStartDelayUs = 39'500;
+constexpr std::uint32_t kHtv145LaterSweepStep4ReplyStartDelayUs = 51'200;
+constexpr std::uint32_t kHtv145LaterSweepStep5ReplyStartDelayUs = 46'100;
+
 constexpr std::uint32_t htv405PairingReplyStartDelayUs(
     std::size_t stepIndex
 ) {
@@ -111,8 +132,22 @@ constexpr std::uint32_t htv405PairingReplyStartDelayUs(
 }
 
 constexpr std::uint32_t htv145PairingReplyStartDelayUs(
-    std::size_t stepIndex
+    std::size_t stepIndex,
+    bool laterSweepBranch = false
 ) {
+    if (laterSweepBranch) {
+        return stepIndex == 0
+            ? kHtv145LaterSweepAssignmentReplyStartDelayUs
+            : stepIndex == 1
+            ? kHtv145LaterSweepStep1ReplyStartDelayUs
+            : stepIndex == 3
+            ? kHtv145LaterSweepStep3ReplyStartDelayUs
+            : stepIndex == 4
+            ? kHtv145LaterSweepStep4ReplyStartDelayUs
+            : stepIndex == 5
+            ? kHtv145LaterSweepStep5ReplyStartDelayUs
+            : kHtv405OrdinaryReplyStartDelayUs;
+    }
     // Keep step 0 byte-for-byte and timing-for-timing aligned with probe .2,
     // which advanced into paired traffic. Two probe-.3 trials that moved only
     // this initial scheduler target 100 us earlier were rejected before the
@@ -182,6 +217,20 @@ constexpr std::array<Htv405PairingStep, kHtv145PairingStepCount>
     {{{0x81, 0x82, 0x81, 0x02, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0x03, 0x01, 0x82, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+}};
+
+// Exact selector-6 continuation captured after explicit factory-sweep
+// counter 3. The assignment is addressed directly to the retained controller
+// route, all transaction counters are already shifted, and the long
+// configuration exchange uses 81/10 -> 81/50 rather than 81/90 -> 81/D0.
+constexpr std::array<Htv405PairingStep, kHtv145PairingStepCount>
+    kHtv145LaterSweepPairingTemplate = {{
+    {{{0x83, 0x80, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x83, 0xc0, 0x85, 0x85, 0x00, 0x86, 0xf0, 0x00, 0x8c, 0x74, 0x1c, 0x0d, 0x02, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kHtv145LaterSweepInitialChannelCenterHz, kHtv405InitialDeviationRegister, true},
+    {{{0x84, 0x01, 0x07, 0x86, 0xa5, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x84, 0x41, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kHtv145LaterSweepRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kHtv145LaterSweepRoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
+    {{{0x84, 0x82, 0x81, 0x06, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x84, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kHtv145LaterSweepRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x85, 0x03, 0x01, 0x86, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x85, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145LaterSweepRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x85, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x85, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145LaterSweepRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
 }};
 
 inline bool htv405FactoryAnnouncement(
@@ -287,6 +336,20 @@ inline bool buildAutomaticHtv145Profile(
     profile.steps = {};
     for (std::size_t index = 0; index < kHtv145PairingStepCount; ++index) {
         profile.steps[index] = kHtv145PairingTemplate[index];
+    }
+    return true;
+}
+
+inline bool applyHtv145LaterSweepProfile(Htv405PairingProfile& profile) {
+    if (profile.stepCount != kHtv145PairingStepCount ||
+        !validRfControllerIdentity(
+            profile.valveRoute, profile.companionEndpoint
+        )) {
+        return false;
+    }
+    profile.steps = {};
+    for (std::size_t index = 0; index < kHtv145PairingStepCount; ++index) {
+        profile.steps[index] = kHtv145LaterSweepPairingTemplate[index];
     }
     return true;
 }
@@ -445,10 +508,30 @@ inline bool buildHtv405PairingReply(
             (static_cast<std::uint16_t>(localClock.month) << 5) |
             localClock.day
         );
-        frame[21] = static_cast<std::uint8_t>((packedTime & 0x7fU) | 0x80U);
-        frame[22] = static_cast<std::uint8_t>((packedTime >> 8) | 0x80U);
-        frame[23] = static_cast<std::uint8_t>((packedDate & 0x7fU) | 0x80U);
-        frame[24] = static_cast<std::uint8_t>(packedDate >> 8);
+        // Bit 7 in each packed-clock byte is a branch marker, not part of
+        // the date/time value. Preserve the captured template markers: the
+        // original selector-5 assignment marks the first three bytes, while
+        // the retained selector-6 branch marks only the first. This was
+        // invisible in the earlier evening capture because the hour itself
+        // already set the time-high bit.
+        const auto preserveMarker = [](std::uint8_t value,
+                                       std::uint8_t templateValue) {
+            return static_cast<std::uint8_t>(
+                (value & 0x7fU) | (templateValue & 0x80U)
+            );
+        };
+        frame[21] = preserveMarker(
+            static_cast<std::uint8_t>(packedTime), frame[21]
+        );
+        frame[22] = preserveMarker(
+            static_cast<std::uint8_t>(packedTime >> 8), frame[22]
+        );
+        frame[23] = preserveMarker(
+            static_cast<std::uint8_t>(packedDate), frame[23]
+        );
+        frame[24] = preserveMarker(
+            static_cast<std::uint8_t>(packedDate >> 8), frame[24]
+        );
     }
     writeTrailer(frame, profile.steps[stepIndex].trailerResidual);
     return true;
@@ -457,7 +540,8 @@ inline bool buildHtv405PairingReply(
 inline bool buildHtv145ConfigurationReply(
     const Htv405PairingProfile& profile,
     std::array<std::uint8_t, kFrameBytes>& frame,
-    std::uint8_t counterOffset = 0
+    std::uint8_t counterOffset = 0,
+    bool laterSweepBranch = false
 ) {
     if (profile.stepCount != kHtv145PairingStepCount) {
         return false;
@@ -470,11 +554,16 @@ inline bool buildHtv145ConfigurationReply(
         frame[5 + index] = profile.pairedEndpoint[index];
         frame[9 + index] = profile.valveRoute[index];
     }
-    frame[13] = htv405ShiftedCounter(0x81, counterOffset);
-    frame[14] = 0x90;
+    // The counter-3 selector-6 branch retained the controller command's 81
+    // transaction byte but cleared the repeat marker: 81/10 -> 81/50. The
+    // original counter-0 selector-5 branch remains 81/90 -> 81/D0.
+    frame[13] = laterSweepBranch
+        ? 0x81
+        : htv405ShiftedCounter(0x81, counterOffset);
+    frame[14] = laterSweepBranch ? 0x10 : 0x90;
     frame[15] = 0x01;
     frame[16] = 0x01;
-    writeTrailer(frame, 0x4f03);
+    writeTrailer(frame, laterSweepBranch ? 0xc713 : 0x4f03);
     return true;
 }
 
@@ -526,6 +615,7 @@ public:
         selector2ConfigurationSequence_ = 0;
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
+        htv145LaterSweepBranch_ = false;
         expiresAtMs_ = nowMs + durationMs;
         failureReason_ = PairingFailureReason::None;
     }
@@ -543,6 +633,7 @@ public:
         selector2ConfigurationSequence_ = 0;
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
+        htv145LaterSweepBranch_ = false;
         failureReason_ = PairingFailureReason::None;
     }
 
@@ -564,6 +655,21 @@ public:
         const bool coldBootRequest = acceptColdBootStart_ &&
             htv405RetainedRejoinRequestMatches(profile_, frame);
         if (step_ <= 1 && (assignmentRequest || coldBootRequest)) {
+            if (profile_.stepCount == kHtv145PairingStepCount &&
+                assignmentRequest) {
+                const std::uint8_t sweepCounter = static_cast<std::uint8_t>(
+                    frame[13] & 0x7fU
+                );
+                // Only the counter-0 selector-5 and counter-3 selector-6
+                // branches are complete stock evidence. Ignore intermediate
+                // sweeps rather than constructing an unobserved hybrid.
+                if (sweepCounter != 0 &&
+                    sweepCounter != kHtv145LaterSweepCounter) {
+                    return nullptr;
+                }
+                htv145LaterSweepBranch_ =
+                    sweepCounter == kHtv145LaterSweepCounter;
+            }
             pending_ = true;
             pendingAdvances_ = step_ == 0;
             replyCounterOffset_ = 0;
@@ -921,6 +1027,9 @@ public:
         return selector2ConfigurationSequence_;
     }
     bool replyMarkerRepeat() const { return replyMarkerRepeat_; }
+    bool htv145LaterSweepBranch() const {
+        return htv145LaterSweepBranch_;
+    }
     std::uint32_t replyStartDelayOverrideUs() const {
         return replyStartDelayOverrideUs_;
     }
@@ -937,6 +1046,7 @@ private:
         selector2ConfigurationSequence_ = 0;
         replyMarkerRepeat_ = false;
         replyStartDelayOverrideUs_ = 0;
+        htv145LaterSweepBranch_ = false;
         failureReason_ = reason;
     }
 
@@ -955,6 +1065,7 @@ private:
     std::uint8_t selector2ConfigurationSequence_ = 0;
     bool replyMarkerRepeat_ = false;
     std::uint32_t replyStartDelayOverrideUs_ = 0;
+    bool htv145LaterSweepBranch_ = false;
     bool acceptColdBootStart_ = false;
 };
 

@@ -1093,6 +1093,86 @@ int main() {
     assert(htv145Session.finishReply(true, 7'001));
     assert(htv145Session.state() ==
         rainpoint::PairingSessionState::Completed);
+
+    // The later-sweep selector-6 branch is additive: counter-0 retains the
+    // original selector-5 profile, while counter-3 selects the exact second
+    // complete stock transcript without constructing counter-1/2 hybrids.
+    rainpoint::Htv405PairingProfile htv145LaterSweepProbe{};
+    assert(rainpoint::buildAutomaticHtv145Profile(
+        {{0x34, 0x2d, 0x00, 0x8f}},
+        {{0xb9, 0x84, 0x02, 0x80}},
+        {{0x39, 0x84, 0x02, 0x80}},
+        htv145LaterSweepProbe
+    ));
+    rainpoint::Htv405PairingSession htv145LaterSweepSession(
+        htv145LaterSweepProbe
+    );
+    htv145LaterSweepSession.arm(0);
+    assert(htv145LaterSweepSession.claimReply(
+        htv145FactorySweep3, 1
+    ) == &htv145LaterSweepProbe.steps[0]);
+    assert(htv145LaterSweepSession.htv145LaterSweepBranch());
+    assert(rainpoint::applyHtv145LaterSweepProfile(
+        htv145LaterSweepProbe
+    ));
+    const rainpoint::PairingLocalDateTime htv145LaterSweepClock{
+        2026, 8, 28, 14, 32, 24,
+    };
+    assert(rainpoint::buildHtv405PairingReply(
+        htv145LaterSweepProbe,
+        0,
+        htv145LaterSweepClock,
+        htv145Reply
+    ));
+    assert(htv145Reply == fromHex(
+        "79f4882f28b42d008fb984028083c085850086f0008c741c0d02808000000000000000002de6"
+    ));
+    assert(htv145LaterSweepSession.finishReply(true, 2));
+    const auto htv145LaterSweepRequest1 = fromHex(
+        "79f4882f28b9840280b42d008f84010786a580804f8000000040800056800000000000002546"
+    );
+    assert(htv145LaterSweepSession.claimReply(
+        htv145LaterSweepRequest1, 1'000
+    ) == &htv145LaterSweepProbe.steps[1]);
+    assert(rainpoint::buildHtv145ConfigurationReply(
+        htv145LaterSweepProbe, htv145Reply, 0, true
+    ));
+    assert(htv145Reply == fromHex(
+        "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655"
+    ));
+    assert(htv145LaterSweepSession.finishReply(true, 1'001));
+    const auto htv145LaterSweepConfigurationResponse = fromHex(
+        "79f4882f28b9840280b42d008f81500080000000000000000000000000000000000000006f4d"
+    );
+    assert(htv145LaterSweepSession.claimReply(
+        htv145LaterSweepConfigurationResponse, 2'000
+    ) == nullptr);
+    assert(htv145LaterSweepSession.completedSteps() == 3);
+    const auto htv145LaterSweepShortRequest = fromHex(
+        "79f4882f28b9840280b42d008f84828106808000000000000000000000000000000000004eff"
+    );
+    const auto htv145LaterSweepControllerRequest = fromHex(
+        "79f4882f28b9840280b42d008f850301868080000000000000000000000000000000000028be"
+    );
+    const auto htv145LaterSweepExtendedRequest = fromHex(
+        "79f4882f28b9840280b42d008f85ac8099000000000000000000000000000000000000007f33"
+    );
+    assert(htv145LaterSweepSession.claimReply(
+        htv145LaterSweepShortRequest, 3'000
+    ) == &htv145LaterSweepProbe.steps[3]);
+    assert(htv145LaterSweepSession.finishReply(true, 3'001));
+    assert(htv145LaterSweepSession.claimReply(
+        htv145LaterSweepControllerRequest, 4'000
+    ) == &htv145LaterSweepProbe.steps[4]);
+    assert(htv145LaterSweepSession.finishReply(true, 4'001));
+    assert(htv145LaterSweepSession.claimReply(
+        htv145LaterSweepExtendedRequest, 5'000
+    ) == &htv145LaterSweepProbe.steps[5]);
+    assert(htv145LaterSweepSession.finishReply(true, 5'001));
+    assert(htv145LaterSweepSession.state() ==
+        rainpoint::PairingSessionState::Completed);
+    assert(rainpoint::htv145PairingReplyStartDelayUs(0, true) == 54'300);
+    assert(rainpoint::htv145PairingReplyStartDelayUs(1, true) == 74'100);
     // Custom gateway identity changes only the association endpoints. Freeze
     // every timing, channel, and request/reply body from the physically
     // accepted stock-identity profile so identity rollout cannot silently
@@ -2037,6 +2117,45 @@ int main() {
     ));
     assert(htv145Response.sequence == 0x97);
     assert(htv145Response.watering);
+
+    // The retained selector-6 association reverses the command-family high
+    // marker while preserving byte 2 as the action and offset 18 as the
+    // response state. Its five- and fifteen-minute fields also cross the
+    // formerly untested low-byte-bit-7 boundary.
+    assert(rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x81, 300, 0xc713, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b42d008fb984028081908280810096008000000000000000000000000000002fde"
+    ));
+    const auto htv145Selector6OpenResponse = fromHex(
+        "79f4882f28b9840280b42d008f81d0868010cf80000000409600d69600800000000000004208"
+    );
+    assert(rainpoint::decodeHtv145CommandResponse(
+        htv145Selector6OpenResponse, htv145Link, htv145Response
+    ));
+    assert(htv145Response.sequence == 0x81);
+    assert(htv145Response.watering);
+    assert(rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x82, 900, 0xc713, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b42d008fb9840280829082808100c2018000000000000000000000000000000d6a"
+    ));
+    assert(rainpoint::buildHtv145CloseFrame(
+        htv145Link, 0x83, 0x4f03, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b42d008fb984028083108180810000000000000000000000000000000000006121"
+    ));
+    const auto htv145Selector6CloseResponse = fromHex(
+        "79f4882f28b9840280b42d008f83508680104f8000000040800056c2018000000000000052c5"
+    );
+    assert(rainpoint::decodeHtv145CommandResponse(
+        htv145Selector6CloseResponse, htv145Link, htv145Response
+    ));
+    assert(htv145Response.sequence == 0x83);
+    assert(!htv145Response.watering);
 
     bool htv145Watering = false;
     const auto htv145ActiveState = fromHex(
