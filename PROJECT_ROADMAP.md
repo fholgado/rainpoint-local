@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-08-26
+Last reviewed: 2026-08-28
 
 This is the single source of truth for active project status, ordering, and
 completion. Architecture documents describe intended boundaries, protocol
@@ -225,8 +225,10 @@ first evidenced selector-5 branch while a full IQ recording independently
 captured the result. The valve rejected it, fell through counters `2` and `3`,
 and the node also emitted the exact selector-6 reply; neither branch produced
 paired traffic. The progressively shorter visible phases therefore represent
-a bounded fallback sequence, and the missing factory counter `1` is consistent
-with the paired continuation that never occurred. The counter-0 local waveform
+a bounded fallback sequence. A symbol-resolved re-analysis of probe `.12`
+corrected the former claim that factory counter `1` was missing: the valve sent
+counter `1` on an alternate 433.363 MHz solicitation carrier, which the
+single-center analyzer did not inspect. The counter-0 local waveform
 matches the accepted stock assignment within 122 Hz, with identical deviation,
 packet-sync timing, static payload, and valid current packed clock. Raw-envelope
 comparison then exposed what frame decoding hid: stock places a 256-symbol
@@ -248,10 +250,28 @@ constant mark. Probe `.11` successfully changed RF settings within one
 continuous symbol stream while preserving the ordinary wake and assignment,
 but its coarse `+13`/`0x47` settings over-shifted and over-deviated the prefix;
 the valve again stopped at 1/6. Empirical comparison with the accepted stock
-prefix and the known-good ordinary `0x45` HTV405 waveform maps the next bounded
-trial to FSCTRL0 offset `12` and DEVIATN `0x46`. Probe `.12` changes only those
-two prelude registers. Keep fresh identity allocation gated until one more
-stock enrollment exists.
+prefix and the known-good ordinary `0x45` HTV405 waveform mapped probe `.12`
+to FSCTRL0 offset `12` and DEVIATN `0x46`, but that probe still failed. The
+estimator used for that inference excludes frequencies near the SDR's DC
+artifact, and one of the stock prelude tones falls inside the excluded band.
+Direct symbol measurement instead shows stock reversing prelude polarity at
+the ordinary-wake boundary and using about 30.2 kHz deviation, while probe
+`.12` retained the wake polarity and used about 44.4 kHz. Their ordinary wakes
+both measure about 34.8--34.9 kHz. This is a material waveform mismatch, not a
+minor timing or counter failure, and is frozen in
+`research/fixtures/htv145_probe12_prelude_rejection_20260828.json`.
+
+Before another valve trial, keep the proven assignment frame, selector branch,
+ordinary carrier, ordinary wake, sync instant, and response scheduling frozen.
+Add one non-pairing bench probe that emits a small prelude-only calibration
+matrix: reversed prelude polarity, FSCTRL0 offsets `12` and `13`, and DEVIATN
+values `0x41` and `0x42`. Capture all four variants through the SDR and select
+the least-error stock match by center shift, tone separation, polarity,
+boundary continuity, and symbol count. Only that measured winner may enter the
+next automatic pairing image. A live success requires addressed valve-originated
+paired traffic before the next factory fallback frame, followed by the captured
+six-stage HTV145 transcript; neither TX completion nor the white LED is enough.
+Keep fresh identity allocation gated until one more stock enrollment exists.
 
 ## Phase 2 — persistence, recovery, and coexistence
 

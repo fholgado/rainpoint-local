@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-08-28T19:17:36-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Re-evaluate the rejected local selector-5 assignment without relying on the DC-excluding spectral estimator that selected probe .12 parameters.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260828-191736/continuous_433.7M_2000k.cu8",
+    "sha256": "d5aece83731a259828736a49d092b51e90aba63300928ca9d7c55bd97fcbfe2f",
+    "size_bytes": 360000000,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 90
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "factory_fallback_sweep": [
+    {
+      "counter": 0,
+      "marker_byte": "80",
+      "channel_center_hz": 433143024,
+      "start_seconds": 17.9201,
+      "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+    },
+    {
+      "counter": 1,
+      "marker_byte": "80",
+      "channel_center_hz": 433363010,
+      "start_seconds": 21.3335,
+      "frame": "79f4882f2880000000342d008f81808402ff8f970080bf0600000000000000000000000019c4"
+    },
+    {
+      "counter": 2,
+      "marker_byte": "00",
+      "channel_center_hz": 433143008,
+      "start_seconds": 23.4116,
+      "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+    },
+    {
+      "counter": 3,
+      "marker_byte": "00",
+      "channel_center_hz": 433363010,
+      "start_seconds": 27.4115,
+      "frame": "79f4882f2880000000342d008f83008402ff8f970080bf060000000000000000000000006947"
+    },
+    {
+      "counter": 3,
+      "marker_byte": "80",
+      "channel_center_hz": 433143008,
+      "start_seconds": 29.4114,
+      "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+    }
+  ],
+  "probe_12_assignment": {
+    "frame": "79f4882f28b42d008f3984028080c0858503057000bb9a9c0d0100800000000000000000fea1",
+    "assignment_selector": 5,
+    "leading_prelude_symbols": 256,
+    "ordinary_wake_symbols": 320,
+    "prelude_frequency_offset_register": 12,
+    "prelude_deviation_register": "0x46",
+    "paired_continuation_observed": false
+  },
+  "symbol_resolved_stock_probe12_comparison": {
+    "stock_prelude_center_shift_hz": 20280,
+    "probe12_prelude_center_shift_hz": 18992,
+    "stock_prelude_deviation_hz": 30208,
+    "probe12_prelude_deviation_hz": 44432,
+    "stock_ordinary_wake_deviation_hz": 34872,
+    "probe12_ordinary_wake_deviation_hz": 34784,
+    "stock_prelude_to_wake_deviation_ratio": 0.8665,
+    "probe12_prelude_to_wake_deviation_ratio": 1.2774,
+    "stock_prelude_polarity_relative_to_wake": "reversed",
+    "probe12_prelude_polarity_relative_to_wake": "same"
+  },
+  "result": {
+    "node_completed_steps": 1,
+    "valve_emitted_paired_continuation": false,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "The valve did transmit factory counter 1. It used an alternate 433.363 MHz solicitation channel, so the single-center analyzer missed it; its absence was not evidence of paired progression.",
+    "The progressively shortening LED phases correspond to a structured multi-channel fallback sweep after stage-0 rejection, not to unmodeled post-assignment challenges.",
+    "The spectral estimator used to choose probe .12 excludes bins within 100 kHz of the SDR center. One accepted-stock prelude tone falls in that region, invalidating the earlier DEVIATN 0x46 inference.",
+    "Symbol-resolved comparison proves that probe .12 transmitted a much wider prelude than stock and retained the ordinary wake polarity. Stock uses a narrower prelude with polarity reversed at the prelude-to-wake boundary.",
+    "Do not change the ordinary assignment payload, carrier, wake, sync instant, or branch selection. First emit a non-pairing bench matrix with prelude-only inversion and bounded offset/deviation candidates, measure each through the SDR, and select the least-error waveform before another physical valve trial."
+  ]
+}
