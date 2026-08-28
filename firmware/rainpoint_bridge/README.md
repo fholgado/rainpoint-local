@@ -140,13 +140,15 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.8 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.9 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-This isolated probe listens through factory counters 0--2 and automatically
-answers the captured counter-3/selector-6 branch, so the operator does not
-need to time arming against the valve's LED sequence. Deploy this image only
+This isolated probe answers the first complete captured factory branch it
+observes after arming: counter-0/selector-5 or counter-3/selector-6. Arm before
+the physical gesture so normal setup starts with the already locally accepted
+counter-0 prefix; no operator timing against the LED sequence is required.
+Deploy this image only
 to the designated OTA test node until three consecutive
 pairings satisfy the roadmap's physical acceptance gate.
 

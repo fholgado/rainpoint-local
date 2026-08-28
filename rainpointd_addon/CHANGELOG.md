@@ -1,12 +1,16 @@
 # Changelog
 
-## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.8
+## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.9
 
 - Preserve the HTV145 factory-sweep diagnostics already emitted by the
   isolated radio-node probe: whether a sweep was observed, the last observed
   sweep counter, and whether the node selected the later counter-3 branch.
   This distinguishes a missed request from a transmitted-but-rejected
   assignment without inferring success from LED behavior.
+- Stop forcing every HTV145 trial to wait for counter 3. The isolated probe
+  now answers the first complete captured branch observed after arming while
+  preserving the exact counter-0/selector-5 and counter-3/selector-6 payload,
+  carrier, and timing profiles.
 
 ## 0.33.15 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.8
 

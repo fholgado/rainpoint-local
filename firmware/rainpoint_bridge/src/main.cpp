@@ -2687,12 +2687,13 @@ void handleNetworkCommand() {
     if (valvePairingActive) {
         const auto durationMs =
             static_cast<std::uint32_t>(durationSeconds) * 1'000U;
-        const bool preferHtv145LaterSweepBranch =
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            valvePairingHtv145;
-#else
-            false;
-#endif
+        // The timing-free counter-3-only probe disproved that the later stock
+        // branch is sufficient for every retained valve state. Answer the
+        // first complete, evidence-backed HTV145 branch observed after arming:
+        // counter 0/selector 5 or counter 3/selector 6. Normal HA ordering
+        // arms the node before the physical gesture and therefore offers the
+        // already locally accepted counter-0 prefix first.
+        constexpr bool preferHtv145LaterSweepBranch = false;
         valvePairingSession.arm(
             millis(), durationMs, requestedValveRejoin,
             preferHtv145LaterSweepBranch

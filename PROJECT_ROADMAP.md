@@ -225,7 +225,9 @@ the node's sweep-branch diagnostics through the gateway, prefer the already
 locally accepted counter-0/selector-5 prefix when the local gateway is armed
 before the physical gesture, and independently record the transmitted reply
 before changing payload or scheduler timing. Keep fresh identity allocation
-gated until one more stock enrollment exists.
+gated until one more stock enrollment exists. Probe `.9` implements only that
+branch-selection correction: it answers the first complete captured branch
+observed after arming and leaves both branch-specific RF profiles unchanged.
 
 ## Phase 2 — persistence, recovery, and coexistence
 
