@@ -17,12 +17,12 @@ configuration:
   node_tokens:
     name: Wi-Fi node credentials
     description: JSON object mapping each stable node ID to its unique 64-character hexadecimal token
-      supervised_htv405_control:
-        name: Enable supervised four-zone valve control
-        description: Experimental authenticated HTV405 control; every open is duration-bounded and state is confirmed only from valve replies
-      htv145_dry_acceptance:
-        name: Enable isolated one-zone valve acceptance
-        description: Temporary research gate for one audited HTV145 dry-valve test; it is not a Home Assistant control path
+  supervised_htv405_control:
+    name: Enable supervised four-zone valve control
+    description: Experimental authenticated HTV405 control; every open is duration-bounded and state is confirmed only from valve replies
+  htv145_dry_acceptance:
+    name: Enable isolated one-zone valve acceptance
+    description: Temporary research gate for one audited HTV145 dry-valve test; it is not a Home Assistant control path
 network:
   8787/tcp: RainPoint telemetry, registry, and sensor-pairing API
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes

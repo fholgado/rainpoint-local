@@ -14,6 +14,9 @@ class AddonBoundaryTest(unittest.TestCase):
     def test_installable_addon_excludes_research_controls(self) -> None:
         config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
         run_script = (ROOT / "rainpointd_addon" / "run.sh").read_text()
+        translations = (
+            ROOT / "rainpointd_addon" / "translations" / "en.yaml"
+        ).read_text()
         for research_control in (
             "replay_interval",
             "research_capture_minutes",
@@ -24,6 +27,12 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertNotIn("|replay", config)
         self.assertIn("share:ro", config)
         self.assertNotIn("share:rw", config)
+        for option in (
+            "supervised_htv405_control",
+            "htv145_dry_acceptance",
+        ):
+            self.assertIn(f"\n  {option}:\n", translations)
+            self.assertNotIn(f"\n      {option}:\n", translations)
 
     def test_unified_firmware_accepts_gateway_owned_ack_commands(self) -> None:
         source = (
