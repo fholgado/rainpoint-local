@@ -87,7 +87,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn('standard_version = "0.15.2"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.10"',
+            'supervised_version = "0.15.0-supervised-beta.11"',
             build_profile,
         )
         self.assertIn(
@@ -97,7 +97,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn(
             'htv145_pairing_candidate_version = '
-            '"0.15.2-htv145-pairing-probe.10"',
+            '"0.15.2-htv145-pairing-probe.12"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -107,6 +107,15 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn("RAINPOINT_FIRMWARE_VARIANT", build_profile)
         self.assertIn("RAINPOINT_FIRMWARE_VARIANT", wifi_source)
+
+    def test_htv405_control_uses_bounded_identical_frame_retries(self) -> None:
+        source = (
+            ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
+        ).read_text()
+        self.assertIn("kValveProbeRetryDelayMs{{650, 1'450}}", source)
+        self.assertIn("valveControlProbe.commandFrame", source)
+        self.assertIn('"gateway_command_retry_sent"', source)
+        self.assertIn('"gateway_command_rejected"', source)
 
     def test_ack_owner_prioritizes_the_validated_telemetry_channel(self) -> None:
         source = (

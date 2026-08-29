@@ -324,6 +324,20 @@ int main() {
         ) ==
         0x04
     );
+    rainpoint::Htv405GatewayCommandRejection commandRejection{};
+    const auto capturedRejectedCommand = fromHex(
+        "79f4882f28ee86de8094a9801303d08683004f800000004080"
+        "0056800000000000000000738e"
+    );
+    assert(rainpoint::decodeHtv405GatewayCommandRejection(
+        capturedRejectedCommand, commandRejection
+    ));
+    assert(commandRejection.sequence == 0x03);
+    auto corruptRejectedCommand = capturedRejectedCommand;
+    corruptRejectedCommand[16] = 0x80;
+    assert(!rainpoint::decodeHtv405GatewayCommandRejection(
+        corruptRejectedCommand, commandRejection
+    ));
     const auto capturedLocalCloseResponse = fromHex(
         "79f4882f28b984028094a9801304508683104f800000004080"
         "00568000000000000000001e6e"

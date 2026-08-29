@@ -28,6 +28,10 @@ struct Htv405GatewayCommandResponse {
     bool watering;
 };
 
+struct Htv405GatewayCommandRejection {
+    std::uint8_t sequence;
+};
+
 struct Htv405StateReport {
     std::uint8_t zone;
     bool watering;
@@ -238,6 +242,25 @@ inline bool decodeHtv405GatewayCommandResponse(
     response.sequence = static_cast<std::uint8_t>(frame[13] & 0x1fU);
     response.zone = static_cast<std::uint8_t>(frame[17] >> 4U);
     response.watering = (frame[18] & 0x80U) != 0;
+    return true;
+}
+
+inline bool decodeHtv405GatewayCommandRejection(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    Htv405GatewayCommandRejection& rejection
+) {
+    // A syntactically valid command that the valve does not accept receives
+    // this sequence-scoped d0/86/83/00 reply. Captures with both a stale
+    // counter and an unsupported duration share this envelope, so it proves
+    // only rejection (and therefore that watering did not begin), not why the
+    // command was rejected.
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
+        frame[14] != 0xd0 || frame[15] != 0x86 || frame[16] != 0x83 ||
+        frame[17] != 0x00 || frame[18] != 0x4f ||
+        frame[23] != 0x40 || frame[26] != 0x56) {
+        return false;
+    }
+    rejection.sequence = static_cast<std::uint8_t>(frame[13] & 0x1fU);
     return true;
 }
 

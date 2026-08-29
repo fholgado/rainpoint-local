@@ -41,7 +41,7 @@ if htv145_pairing_enabled and not research_enabled:
         "RAINPOINT_RESEARCH_BENCH=1"
     )
 standard_version = "0.15.2"
-supervised_version = "0.15.0-supervised-beta.10"
+supervised_version = "0.15.0-supervised-beta.11"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.2"
 htv145_pairing_candidate_version = "0.15.2-htv145-pairing-probe.12"
 if htv145_pairing_enabled:

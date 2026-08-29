@@ -115,7 +115,7 @@ enabled:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.10 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.11 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 

@@ -119,8 +119,13 @@ constexpr std::uint16_t kValveProbeWakeSymbols = 2'400;
 constexpr std::uint16_t kValveProbeTrailerResidual = 0x4f03;
 constexpr std::uint8_t kValveProbePowerDbm = 10;
 // The valve confirms a command on the control carrier, not its lower idle-
-// report carrier. Listen there briefly, then restore normal telemetry RX.
-constexpr std::uint32_t kValveProbeResponseListenMs = 2'000;
+// report carrier. A single long-wake frame proved vulnerable to an occasional
+// complete RF miss in the installed garden. Repeat the identical idempotent
+// frame twice unless a valve response arrives first, matching the bounded
+// retry shape already validated by the single-zone protocol without changing
+// the reserved counter or requested duration.
+constexpr std::array<std::uint32_t, 2> kValveProbeRetryDelayMs{{650, 1'450}};
+constexpr std::uint32_t kValveProbeResponseListenMs = 3'000;
 // Bounded span covering both the selector-6 and selector-2 gateway carriers.
 // Pairing calibration remains independently bounded.
 constexpr std::int32_t kValveProbeMaxFrequencyOffsetHz = 1'500'000;
@@ -231,7 +236,10 @@ struct ValveControlProbe {
     std::uint16_t openDurationSeconds = 60;
     std::uint32_t phaseObservedAtMs = 0;
     std::uint32_t openSentAtMs = 0;
+    std::uint32_t commandBurstStartedAtMs = 0;
     rainpoint::Htv405Phase transmittedPhase{};
+    std::array<std::uint8_t, rainpoint::kFrameBytes> commandFrame{};
+    std::uint8_t commandAttemptsSent = 0;
     bool configured = false;
     bool phaseValid = false;
     bool manualPhaseConfigured = false;
@@ -1021,6 +1029,8 @@ void reportValveProbeStatus(
         line += ",\"transmitted_zone\":";
         line += valveControlProbe.transmittedZone;
     }
+    line += ",\"command_attempts_sent\":";
+    line += valveControlProbe.commandAttemptsSent;
     line += ",\"confirmed_state_valid\":";
     line += valveControlProbe.confirmedStateValid ? "true" : "false";
     if (valveControlProbe.confirmedStateValid) {
@@ -1164,6 +1174,9 @@ bool transmitQueuedValveProbe(
         reportValveProbeStatus("gateway_link_ack_sent", &frame);
         return true;
     } else {
+        valveControlProbe.commandFrame = frame;
+        valveControlProbe.commandBurstStartedAtMs = millis();
+        valveControlProbe.commandAttemptsSent = 1;
         valveControlProbe.responseListenActive =
             radio.setReceiveFrequency(valveProbeCenterHz());
         valveControlProbe.responseListenUntilMs =
@@ -1271,6 +1284,32 @@ bool observeValveProbeFrame(
         return false;
     }
 
+    rainpoint::Htv405GatewayCommandRejection rejection{};
+    if (rainpoint::decodeHtv405GatewayCommandRejection(frame, rejection)) {
+        if (!valveControlProbe.commandPendingConfirmation ||
+            rejection.sequence !=
+                valveControlProbe.transmittedPhase.sequence) {
+            reportValveProbeStatus(
+                "unsolicited_gateway_command_rejection_observed", &frame
+            );
+            return false;
+        }
+        // Keep the pending fields present in the report so the authenticated
+        // gateway can match this rejection to the exact durable reservation.
+        // The rejection proves the valve stayed idle but does not distinguish
+        // a stale counter from an unsupported payload.
+        reportValveProbeStatus("gateway_command_rejected", &frame);
+        valveControlProbe.commandPendingConfirmation = false;
+        valveControlProbe.responseListenActive = false;
+        valveControlProbe.openSent = false;
+        valveControlProbe.closeSent = false;
+        if (!radio.restoreReceiveChannel(kHcs026TelemetryChannel)) {
+            reportValveProbeError("ordinary_receiver_restore_failed");
+        }
+        valveControlProbe.commandId.clear();
+        return false;
+    }
+
     rainpoint::Htv405Phase nextPhase{};
     if (!rainpoint::nextHtv405Phase(frame, nextPhase)) {
         return false;
@@ -1323,9 +1362,48 @@ bool observeValveProbeFrame(
 }
 
 void pollValveProbeResponseListener() {
-    if (!valveControlProbe.responseListenActive ||
-        static_cast<std::int32_t>(
-            millis() - valveControlProbe.responseListenUntilMs
+    if (!valveControlProbe.responseListenActive) {
+        return;
+    }
+    const std::uint32_t now = millis();
+    if (valveControlProbe.commandPendingConfirmation &&
+        valveControlProbe.commandAttemptsSent >= 1 &&
+        valveControlProbe.commandAttemptsSent <=
+            kValveProbeRetryDelayMs.size()) {
+        const std::size_t retryIndex =
+            valveControlProbe.commandAttemptsSent - 1;
+        if (now - valveControlProbe.commandBurstStartedAtMs >=
+                kValveProbeRetryDelayMs[retryIndex]) {
+            const bool sent = primaryRadio.transmitAsync(
+                valveControlProbe.commandFrame,
+                valveProbeCenterHz(),
+                kValveProbeWakeSymbols,
+                false,
+                rainpoint::pairingPaTableValue(kValveProbePowerDbm),
+                rainpoint::kOrdinaryDeviationRegister
+            );
+            ++valveControlProbe.commandAttemptsSent;
+            const bool listening = sent && primaryRadio.setReceiveFrequency(
+                valveProbeCenterHz()
+            );
+            if (!listening) {
+                reportValveProbeError(
+                    sent ? "control_response_receiver_tune_failed"
+                         : "gateway_command_retry_transmit_failed"
+                );
+                valveControlProbe.commandPendingConfirmation = false;
+                valveControlProbe.responseListenActive = false;
+                valveControlProbe.openSent = false;
+                valveControlProbe.closeSent = false;
+                valveControlProbe.commandId.clear();
+                primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel);
+                return;
+            }
+            reportValveProbeStatus("gateway_command_retry_sent");
+        }
+    }
+    if (static_cast<std::int32_t>(
+            now - valveControlProbe.responseListenUntilMs
         ) < 0) {
         return;
     }
