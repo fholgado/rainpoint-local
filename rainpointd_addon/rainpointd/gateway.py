@@ -43,6 +43,7 @@ from .valve_pairing_protocol import (
     build_htv405_profile,
 )
 from .valve_protocol import (
+    decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
     htv405_command_response_endpoint,
     htv405_phase_state,
@@ -3131,6 +3132,92 @@ class Gateway:
             )
             return accepted
 
+    def observe_valve_control_air_rejection(
+        self,
+        node_id: str,
+        frame: str,
+        *,
+        observed_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Fail a matching command from an authenticated negative reply.
+
+        The strict negative envelope proves the valve received but rejected
+        this counter.  It does not reveal whether the counter or payload was
+        unacceptable, so the durable recovery policy retries the same
+        candidate after the normal command-spacing guard.
+        """
+        if (
+            self._store is None
+            or not self._valve_control_enabled
+            or not RADIO_NODE_ID.fullmatch(node_id)
+        ):
+            return None
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            return None
+        rejection = decode_htv405_gateway_command_rejection(raw)
+        if rejection is None:
+            return None
+        timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+        valve_endpoint = raw[9:13].hex()
+        response_endpoint = raw[5:9].hex()
+        with self._lock:
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == valve_endpoint
+                ),
+                None,
+            )
+            if registration is None:
+                return None
+            pending_started_at = registration.get(
+                "control_pending_started_at"
+            )
+            companion_endpoint = registration.get(
+                "control_companion_endpoint"
+            )
+            try:
+                expected_response_endpoint = (
+                    htv405_command_response_endpoint(
+                        str(companion_endpoint)
+                    )
+                )
+                started = _observed_utc(str(pending_started_at))
+                observed = _observed_utc(timestamp)
+            except (TypeError, ValueError):
+                return None
+            sequence = rejection["rf_control_rejected_sequence"]
+            command_id = registration.get("control_pending_command_id")
+            response_age = (observed - started).total_seconds()
+            if (
+                response_endpoint != expected_response_endpoint
+                or not isinstance(command_id, str)
+                or registration.get("control_pending_sequence") != sequence
+                or not 0 <= response_age <= HTV405_RESPONSE_WINDOW_SECONDS
+            ):
+                return None
+            try:
+                failed = self._store.fail_htv405_command(
+                    valve_endpoint=valve_endpoint,
+                    node_id=str(registration["control_node_id"]),
+                    command_id=command_id,
+                    reason="gateway_command_rejected_counter_unsynchronized",
+                    observed_at=observed.isoformat(),
+                )
+            except (KeyError, ValueError):
+                return None
+            self._refresh_registry_catalog()
+            self._append_valve_control_event_locked(
+                registration=failed,
+                event_type="valve_control_failed",
+                observed_at=observed.isoformat(),
+                action=registration.get("control_pending_action"),
+            )
+            return failed
+
     def _recover_pending_htv405_air_responses(self) -> None:
         """Finish a journaled response interrupted before durable commit."""
         if self._store is None or not self._valve_control_enabled:
@@ -3159,6 +3246,12 @@ class Gateway:
                     str(event["raw"]),
                     observed_at=str(event["observed_at"]),
                 )
+                if accepted is None:
+                    accepted = self.observe_valve_control_air_rejection(
+                        node_id,
+                        str(event["raw"]),
+                        observed_at=str(event["observed_at"]),
+                    )
                 if accepted is not None:
                     break
 
@@ -3244,6 +3337,7 @@ class Gateway:
         """
         status = report.get("state")
         failure_states = {
+            "gateway_command_rejected",
             "gateway_command_response_timeout",
             "gateway_command_response_sequence_mismatch",
             "gateway_command_response_zone_mismatch",

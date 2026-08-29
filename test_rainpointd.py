@@ -35,6 +35,10 @@ class GatewayTest(unittest.TestCase):
         "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
         "00000000000000005878"
     )
+    HTV405_REJECTION_SEQUENCE_6 = (
+        "79f4882f28b984028094a9801306d08683004f800000004080005680"
+        "00000000000000005eb0"
+    )
 
     def test_local_rf_controller_identity_is_unique_persistent_and_separate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -185,6 +189,35 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(433_518_527, accepted["control_center_hz"])
             self.assertEqual(
                 "valve_control_confirmed", gateway.events()[-1]["event_type"]
+            )
+            gateway.close()
+
+    def test_authenticated_negative_reply_fails_pending_open_quickly(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            gateway = self._gateway_with_pending_htv405_open(
+                Path(temporary_directory) / "rainpoint.sqlite3"
+            )
+            assert gateway._store is not None
+            failed = gateway.observe_valve_control_air_rejection(
+                "rp-aabbccddeeff",
+                self.HTV405_REJECTION_SEQUENCE_6,
+                observed_at="2026-08-24T20:00:20.900000+00:00",
+            )
+
+            self.assertIsNotNone(failed)
+            assert failed is not None
+            self.assertIsNone(failed["control_pending_command_id"])
+            self.assertEqual(6, failed["control_recovery_sequence"])
+            self.assertEqual(
+                "2026-08-24T20:00:35.900000+00:00",
+                failed["control_recovery_not_before"],
+            )
+            self.assertEqual(
+                "gateway_command_rejected_counter_unsynchronized",
+                failed["control_last_result"],
+            )
+            self.assertEqual(
+                "valve_control_failed", gateway.events()[-1]["event_type"]
             )
             gateway.close()
 

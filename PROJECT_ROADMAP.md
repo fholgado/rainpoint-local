@@ -365,6 +365,24 @@ during a pending window, and an already-chosen bounded retry candidate becomes
 available automatically after its safety guard. Keep this gate open until a
 scheduled run uses a validated duration and obtains valve-owned open and
 automatic-idle evidence without manual synchronization.
+
+The 2026-08-29 scheduled 20-minute run failed for a distinct transport reason.
+The gateway correctly reserved authenticated counter `7`, but the valve heard
+neither the original one-shot frame nor the same-counter bounded recovery. A
+controlled discriminator then sent the known-good 60-second command twice with
+the same counter and payload: the first transmission timed out, while the
+second was accepted immediately and the valve later returned itself to idle.
+This isolates intermittent one-shot RF delivery from counter progression and
+duration encoding. Firmware beta.11 therefore sends one logical HTV405 command
+as a bounded burst of up to three identical frames at 0, 650, and 1,450 ms,
+cancelling remaining attempts on the first authenticated response. Gateway
+0.33.17 also recognizes the strict `d0/86/83/00` negative reply; because that
+reply proves watering did not begin, it can retry the same counter after the
+15-second hardware interval instead of waiting through the requested run.
+Pairing, association, duration, and counter-advancement rules are unchanged.
+Keep the scheduled-run gate open until beta.11 produces a confirmed installed
+20-minute open and valve-owned automatic idle.
+
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 

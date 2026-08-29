@@ -353,6 +353,36 @@ def decode_htv405_gateway_command_response(
     }
 
 
+def decode_htv405_gateway_command_rejection(
+    frame: bytes,
+) -> dict[str, int] | None:
+    """Decode the sequence-scoped HTV405 negative command reply.
+
+    The same strict ``d0/86/83/00`` envelope was captured for an unsupported
+    duration and for out-of-phase counter candidates. It proves the command
+    was rejected and the valve did not begin watering, but deliberately does
+    not infer the rejection reason or advance the command counter.
+    """
+    if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
+        return None
+    residual = binascii.crc_hqx(frame[:-2], 0) ^ int.from_bytes(
+        frame[-2:], "big"
+    )
+    if residual not in TRAILER_RESIDUES:
+        return None
+    if (
+        frame[14] != 0xD0
+        or frame[15] != 0x86
+        or frame[16] != 0x83
+        or frame[17] != 0x00
+        or frame[18] != 0x4F
+        or frame[23] != 0x40
+        or frame[26] != 0x56
+    ):
+        return None
+    return {"rf_control_rejected_sequence": frame[13] & 0x1F}
+
+
 def htv405_command_response_endpoint(companion_endpoint: str) -> str:
     """Return the over-air response role derived from a paired companion.
 

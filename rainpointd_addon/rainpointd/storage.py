@@ -1449,7 +1449,14 @@ class SQLiteEventStore:
         reason: str,
         observed_at: str,
     ) -> dict[str, Any]:
-        """Fail a reservation and invalidate the unconfirmed counter."""
+        """Fail a reservation and invalidate the unconfirmed counter.
+
+        A response timeout cannot prove whether a bounded open began, so its
+        candidate remains guarded for the entire requested run.  An explicit
+        valve rejection proves that watering did not begin and only needs the
+        valve's normal command-spacing guard before the same candidate can be
+        tried again.
+        """
         row = self._connection.execute(
             "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
             (valve_endpoint,),
@@ -1470,7 +1477,15 @@ class SQLiteEventStore:
             and isinstance(state.get("control_pending_duration_seconds"), int)
             and isinstance(state.get("control_pending_started_at"), str)
         )
-        if retryable_timeout and recovery_attempt < 2:
+        retryable_rejection = (
+            reason == "gateway_command_rejected_counter_unsynchronized"
+            and state.get("control_pending_action") == "open"
+            and isinstance(state.get("control_pending_sequence"), int)
+            and isinstance(state.get("control_pending_zone"), int)
+            and isinstance(state.get("control_pending_duration_seconds"), int)
+            and isinstance(state.get("control_pending_started_at"), str)
+        )
+        if (retryable_timeout or retryable_rejection) and recovery_attempt < 2:
             pending_sequence = int(state["control_pending_sequence"])
             recovery_attempt += 1
             recovery_sequence = (
@@ -1483,16 +1498,24 @@ class SQLiteEventStore:
                 state["control_pending_duration_seconds"]
             )
             try:
-                started = datetime.fromisoformat(
-                    str(state["control_pending_started_at"])
+                recovery_anchor = datetime.fromisoformat(
+                    observed_at
+                    if retryable_rejection
+                    else str(state["control_pending_started_at"])
                 )
             except ValueError:
                 recovery_sequence = None
                 recovery_not_before = None
             else:
                 recovery_not_before = (
-                    started
-                    + timedelta(seconds=recovery_duration + 15)
+                    recovery_anchor
+                    + timedelta(
+                        seconds=(
+                            15
+                            if retryable_rejection
+                            else recovery_duration + 15
+                        )
+                    )
                 ).isoformat()
         cursor = self._connection.execute(
             """

@@ -606,6 +606,40 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         self.assertIsNone(state["control_recovery_sequence"])
         self.assertEqual(0, state["control_recovery_attempt"])
 
+    def test_explicit_rejection_uses_only_command_spacing_guard(self) -> None:
+        pending = self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=1_200,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        failed = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=pending["command_id"],
+            reason="gateway_command_rejected_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        self.assertEqual(6, failed["control_recovery_sequence"])
+        self.assertEqual(1, failed["control_recovery_attempt"])
+        self.assertEqual(
+            "2026-08-24T20:00:37+00:00",
+            failed["control_recovery_not_before"],
+        )
+        self.assertIsNone(
+            self.store.recover_htv405_timeout_counter(
+                valve_endpoint=self.profile.valve_endpoint,
+                node_id=self.profile.node_id,
+                observed_at="2026-08-24T20:00:36+00:00",
+            )
+        )
+        recovered = self.store.recover_htv405_timeout_counter(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            observed_at="2026-08-24T20:00:37+00:00",
+        )
+        self.assertEqual(6, recovered["control_next_sequence"])
+
     def test_automatic_idle_preserves_the_authenticated_next_counter(self) -> None:
         self.coordinator.request_open(
             self.profile,

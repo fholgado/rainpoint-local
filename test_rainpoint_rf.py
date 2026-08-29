@@ -41,6 +41,7 @@ from rainpointd.valve_protocol import (  # noqa: E402
     close_candidates,
     decode_duration,
     decode_htv405_control_frame,
+    decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
     encode_duration,
     next_sequence,
@@ -1411,6 +1412,24 @@ class RainPointRFTest(unittest.TestCase):
         trailer = binascii.crc_hqx(corrupt[:-2], 0) ^ 0x4F03
         corrupt[-2:] = trailer.to_bytes(2, "big")
         self.assertIsNone(decode_htv405_gateway_command_response(bytes(corrupt)))
+
+        rejected = bytes.fromhex(
+            "79f4882f28ee86de8094a9801303d08683004f800000004080"
+            "0056800000000000000000738e"
+        )
+        self.assertEqual(
+            {"rf_control_rejected_sequence": 3},
+            decode_htv405_gateway_command_rejection(rejected),
+        )
+        corrupt_rejection = bytearray(rejected)
+        corrupt_rejection[16] = 0x80
+        trailer = binascii.crc_hqx(corrupt_rejection[:-2], 0) ^ 0x4F03
+        corrupt_rejection[-2:] = trailer.to_bytes(2, "big")
+        self.assertIsNone(
+            decode_htv405_gateway_command_rejection(
+                bytes(corrupt_rejection)
+            )
+        )
 
         for zone, frame_hex in enumerate(
             (

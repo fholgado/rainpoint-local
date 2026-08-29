@@ -10,6 +10,7 @@ from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
 from .valve_protocol import (
     decode_htv405_control_frame,
+    decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
     htv405_phase_state,
     is_htv405_link_frame,
@@ -112,6 +113,9 @@ class FrameIngestor:
                 raw_frame = b""
             control_response = (
                 decode_htv405_gateway_command_response(raw_frame) or {}
+            )
+            control_rejection = (
+                decode_htv405_gateway_command_rejection(raw_frame) or {}
             )
             valid_htv405_link = bool(
                 is_htv405_link_frame(raw_frame)
@@ -286,6 +290,7 @@ class FrameIngestor:
                     "rf_frame_accepted": decoded["trailer_valid"],
                     **valve_phase,
                     **control_response,
+                    **control_rejection,
                 }
                 for key in ("trailer_residual", "trailer_valid"):
                     state[f"rf_{key}"] = decoded[key]
@@ -329,6 +334,12 @@ class FrameIngestor:
                 receiver = receiver_metadata.get("rf_receiver_id")
                 if control_response and isinstance(receiver, str):
                     self.gateway.observe_valve_control_air_response(
+                        receiver,
+                        decoded["frame_hex"],
+                        observed_at=observed_at,
+                    )
+                elif control_rejection and isinstance(receiver, str):
+                    self.gateway.observe_valve_control_air_rejection(
                         receiver,
                         decoded["frame_hex"],
                         observed_at=observed_at,

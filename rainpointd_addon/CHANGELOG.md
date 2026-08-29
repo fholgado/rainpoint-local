@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.33.17 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Repeat an HTV405 control frame at 650 and 1,450 ms only while its original
+  authenticated transaction remains unanswered. All attempts retain the same
+  counter, payload, audit ID, and duration; a matching valve response cancels
+  the remaining burst immediately.
+- Decode the strict HTV405 `d0/86/83/00` negative command response. A rejection
+  now proves that watering did not start and permits same-counter recovery
+  after the 15-second hardware interval instead of waiting through the entire
+  requested irrigation duration.
+- Preserve the validated HTV405 pairing transcript, association identity, and
+  durable counter rules unchanged.
+
 ## 0.33.16 / Integration 0.13.2 / Firmware 0.15.2-htv145-pairing-probe.12
 
 - Correct the HTV145 selector-5 prefix from a constant mark to the observed
