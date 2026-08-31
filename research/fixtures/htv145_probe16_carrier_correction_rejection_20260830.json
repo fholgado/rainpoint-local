@@ -1,0 +1,70 @@
+{
+  "captured_at": "2026-08-30T14:09:09-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Validate the probe-.16 HTV145-only -5.46 kHz carrier experiment while preserving the calibrated probe-.15 waveform and retained stock identity.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260830-140909/continuous_433.7M_2000k.cu8",
+    "sha256": "8ff4afd57a566fab71d893d2596113e3953eba207d50a4abdc549f14275e1997",
+    "size_bytes": 392953856,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "sdr_gain_db": 0.9
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.2-htv145-pairing-probe.16"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "identity_mode": "retained_stock"
+  },
+  "counter_0_exchange": {
+    "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "request_start_seconds": 53.11625,
+    "request_end_seconds": 53.14745,
+    "assignment_frame": "79f4882f28b42d008f3984028080c0858503057000c1f19e0d010080000000000000000037d4",
+    "assignment_start_seconds": 53.19765,
+    "request_end_to_assignment_start_ms": 50.2,
+    "assignment_selector": 5,
+    "paired_continuation_observed": false
+  },
+  "counter_3_fallback_exchange": {
+    "request_frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+    "request_start_seconds": 64.60755,
+    "request_end_seconds": 64.63875,
+    "assignment_frame": "79f4882f28b42d008fb984028083c085850086f000c7711e0d0280800000000000000000cf8d",
+    "assignment_start_seconds": 64.69405,
+    "request_end_to_assignment_start_ms": 55.3,
+    "assignment_selector": 6,
+    "paired_continuation_observed": false
+  },
+  "wake_only_carrier_comparison_hz": {
+    "accepted_stock_factory_request_offset": -557083,
+    "accepted_stock_assignment_offset": -133453,
+    "accepted_stock_assignment_minus_request": 423630,
+    "probe_15_factory_request_offset": -556969,
+    "probe_15_assignment_offset": -133331,
+    "probe_15_assignment_minus_request": 423637,
+    "probe_15_error": 7,
+    "probe_16_factory_request_offset": -556992,
+    "probe_16_assignment_offset": -138931,
+    "probe_16_assignment_minus_request": 418060,
+    "probe_16_error": -5570
+  },
+  "result": {
+    "node_assignment_transmissions": 2,
+    "valve_paired_stage_requests": 0,
+    "operator_window_missed": false,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "The user's pairing gesture occurred well inside both the five-minute node arm window and the continuous SDR capture.",
+    "The node answered counter 0 promptly, but the valve rejected the assignment and continued its factory fallback sweep.",
+    "Whole-frame FSK estimates are biased when the payload contains unequal symbol counts; the alternating wake must be used for carrier comparison.",
+    "Wake-only same-capture normalization shows probe .15 already matched the accepted stock carrier within measurement error, while probe .16 moved about 5.57 kHz low.",
+    "Probe .17 must restore zero HTV145-only correction and preserve every other probe-.15 variable."
+  ]
+}

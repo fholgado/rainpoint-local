@@ -140,15 +140,17 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.12 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.17 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
 This isolated probe answers the first complete captured factory branch it
 observes after arming: counter-0/selector-5 or counter-3/selector-6. The
-counter-0 assignment reproduces the stock gateway's newly recovered 256-symbol
-continuous-mark lead-in before its ordinary alternating wake while preserving
-the already matched packet-sync instant. Arm before the physical gesture so
+counter-0 assignment reproduces the stock gateway's measured 256-symbol
+shifted, reversed-polarity alternating prelude before its ordinary wake. Probe
+`.17` restores the wake-validated common carrier and applies a bounded
+counter-0-only timing probe while leaving the later-sweep branch unchanged.
+Arm before the physical gesture so
 normal setup starts with counter 0; no operator timing against the LED sequence
 is required.
 Deploy this image only

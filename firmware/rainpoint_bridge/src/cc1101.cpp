@@ -409,9 +409,20 @@ bool Cc1101::transmitAsync(
     std::uint32_t startAtMicros,
     std::uint16_t leadingPreludeSymbols,
     std::int8_t leadingFrequencyOffsetRegister,
-    std::uint8_t leadingDeviationRegister
+    std::uint8_t leadingDeviationRegister,
+    bool invertLeadingPrelude
 ) {
     const bool hasLeadingPrelude = leadingPreludeSymbols != 0;
+    const bool validatedLeadingProfile =
+        leadingDeviationRegister ==
+            kHtv145Counter0AssignmentPreludeDeviationRegister
+#if RAINPOINT_RESEARCH_BENCH == 1
+        || ((leadingFrequencyOffsetRegister == 12 ||
+             leadingFrequencyOffsetRegister == 13) &&
+            (leadingDeviationRegister == 0x41 ||
+             leadingDeviationRegister == 0x42))
+#endif
+        ;
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || leadingPreludeSymbols > 2'400 ||
         centerFrequencyHz < 433'000'000 ||
@@ -420,11 +431,14 @@ bool Cc1101::transmitAsync(
          deviationRegister != kHtv405InitialDeviationRegister) ||
         (hasLeadingPrelude &&
          (startAtMicros == 0 || leadingFrequencyOffsetRegister == 0 ||
-          leadingDeviationRegister !=
-              kHtv145Counter0AssignmentPreludeDeviationRegister)) ||
+          !validatedLeadingProfile)) ||
         (!hasLeadingPrelude &&
          (leadingFrequencyOffsetRegister != 0 ||
-          leadingDeviationRegister != 0))) {
+          leadingDeviationRegister != 0 || invertLeadingPrelude)) ||
+#if RAINPOINT_RESEARCH_BENCH != 1
+        invertLeadingPrelude ||
+#endif
+        false) {
         return false;
     }
 
@@ -488,7 +502,12 @@ bool Cc1101::transmitAsync(
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
     const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
         return rainpointSymbol(
-            frame, wakeSymbols, index, invert, leadingPreludeSymbols
+            frame,
+            wakeSymbols,
+            index,
+            invert,
+            leadingPreludeSymbols,
+            invertLeadingPrelude
         );
     };
     for (std::size_t index = 0; index < items.size(); ++index) {

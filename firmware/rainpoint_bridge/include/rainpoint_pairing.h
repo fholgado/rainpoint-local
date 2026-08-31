@@ -202,7 +202,8 @@ inline std::uint8_t rainpointSymbol(
     std::uint16_t wakeSymbols,
     std::size_t index,
     bool invert = false,
-    std::uint16_t leadingPreludeSymbols = 0
+    std::uint16_t leadingPreludeSymbols = 0,
+    bool invertLeadingPrelude = false
 ) {
     std::uint8_t value;
     if (index < leadingPreludeSymbols) {
@@ -210,7 +211,9 @@ inline std::uint8_t rainpointSymbol(
         // before the ordinary wake. The radio driver may give this prefix a
         // separate frequency offset and deviation while preserving one
         // continuous symbol stream.
-        value = static_cast<std::uint8_t>(index & 1U);
+        value = static_cast<std::uint8_t>(
+            (index & 1U) ^ (invertLeadingPrelude ? 1U : 0U)
+        );
     } else if (index - leadingPreludeSymbols < wakeSymbols) {
         // Stock gateway captures start the alternating wake low. The frame
         // that follows retains its ordinary, non-inverted bit polarity.

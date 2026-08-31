@@ -81,19 +81,35 @@ constexpr std::uint16_t kHtv145ConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kHtv145ConfigurationReplyDeadlineMs = 4'000;
 // Continuous-IQ comparison exposed a 256-symbol alternating prelude before the
 // normal 320-symbol wake in accepted selector-5 assignments. It is not a
-// constant mark: stock shifts the prelude center about +20 kHz and uses the
-// CC1101's 0x46 deviation before returning to the ordinary assignment settings
-// without interrupting the 20 ksymbol/s stream. Start this 12.8 ms earlier so
+// constant mark: stock shifts the prelude center about +20.3 kHz, narrows the
+// deviation to about 30.2 kHz, and reverses the alternating polarity relative
+// to the ordinary wake. A four-variant SDR calibration selected FSCTRL0 13 and
+// DEVIATN 0x42 as the closest tested stock match. Start this 12.8 ms earlier so
 // the ordinary wake, sync, and frame retain their already matched instant.
 constexpr std::uint16_t kHtv145Counter0AssignmentPreludeSymbols = 256;
-constexpr std::int8_t kHtv145Counter0AssignmentPreludeFrequencyOffset = 12;
+constexpr std::int8_t kHtv145Counter0AssignmentPreludeFrequencyOffset = 13;
 constexpr std::uint8_t kHtv145Counter0AssignmentPreludeDeviationRegister =
-    0x46;
+    0x42;
 constexpr std::uint32_t kHtv145Counter0AssignmentPreludeDurationUs =
     kHtv145Counter0AssignmentPreludeSymbols * 50U;
+// Accepted stock counter-0 exchanges place the ordinary wake about 50.55 ms
+// after the factory request ends. Calibrated probe .15 measured 49.85 ms and
+// the otherwise unchanged probe .16 measured 50.20 ms. Center that observed
+// scheduler spread with a +500 us counter-0-only adjustment; do not move the
+// independently matched later-sweep branch.
+constexpr std::uint32_t kHtv145Counter0AssignmentTimingCorrectionUs = 500;
 constexpr std::uint32_t kHtv145Counter0AssignmentReplyStartDelayUs =
     kHtv405AssignmentReplyStartDelayUs -
-    kHtv145Counter0AssignmentPreludeDurationUs;
+    kHtv145Counter0AssignmentPreludeDurationUs +
+    kHtv145Counter0AssignmentTimingCorrectionUs;
+// Compare carrier placement only across the alternating wake, where both FSK
+// tones are equally represented. A whole-frame estimator incorrectly reported
+// probe .15 about 5.46 kHz high because its payload contains an uneven symbol
+// distribution. Wake-only normalization put probe .15 within about 7 Hz of
+// the accepted stock assignment. Probe .16's -5.46 kHz experiment consequently
+// measured 5.57 kHz low and was rejected. Preserve the calibrated common
+// carrier here; per-node TX calibration remains separate gateway work.
+constexpr std::int32_t kHtv145PairingTxFrequencyCorrectionHz = 0;
 // Freeze the initial assignment at the setting that has repeatedly produced a
 // physical white-flash transition and, most recently, advanced this valve to
 // paired step 6. Later controller-initialization experiments must not change

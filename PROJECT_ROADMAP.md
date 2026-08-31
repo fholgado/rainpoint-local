@@ -273,6 +273,43 @@ paired traffic before the next factory fallback frame, followed by the captured
 six-stage HTV145 transcript; neither TX completion nor the white LED is enough.
 Keep fresh identity allocation gated until one more stock enrollment exists.
 
+The 2026-08-30 low-gain calibration completed that matrix without transmitting
+an addressed assignment. FSCTRL0 `13`, DEVIATN `0x42`, and prelude-only polarity
+reversal were the closest tested stock match: +20.65 kHz center shift and
+31.77 kHz deviation versus stock's +20.28 kHz and 30.21 kHz, with an unchanged
+34.99 kHz ordinary wake. Probe `.15` then changed only those measured prelude
+settings. A continuous SDR capture proved that the node answered factory
+counter `0` with selector `5`, then answered the later counter `3` fallback with
+selector `6`; the valve emitted no paired-stage traffic after either reply.
+The actual counter-0 prefix measured +20.64 kHz, 31.74 kHz deviation, reversed
+polarity, and 12.67 ms on-air versus stock's approximately 12.45 ms. This is a
+real valve-side rejection, not a missed node transmission or operator window.
+The next trial replayed unchanged probe `.15` with the valve's retained stock
+controller/companion identity. The LED remained in a different blinking
+pattern, but continuous IQ again showed the complete factory fallback sweep,
+counter-0 selector-5 and counter-3 selector-6 local assignments, and zero
+paired-stage traffic. Retained identity is therefore not sufficient. An
+initial whole-frame carrier estimator suggested a common 5.46 kHz-high error,
+but the controlled probe `.16` disproved it. The August 30 `.16` attempt was
+well inside the five-minute arm and SDR windows: the valve's counter-0 request
+started at 53.116 seconds, the node began its reply at 53.184 seconds, and the
+valve continued its fallback sweep with no paired-address traffic. Direct
+comparison of only the alternating wakes removes payload-symbol bias: probe
+`.15` was within about 7 Hz of the accepted stock request-to-assignment delta,
+whereas `.16` moved 5.57 kHz low. Probe `.17` therefore restores the zero
+HTV145-only correction while preserving `.15` modulation, prelude, timing,
+payload, branch selection, and identity handling. Carrier selection is frozen
+again. The next physical probe varies one remaining evidenced discriminator
+relative to `.15`: a counter-0-only +500 us scheduler adjustment, centered on
+the 49.85 and 50.20 ms local observations versus the accepted stock 50.55 ms
+slot. It does not move the independently timed counter-3 fallback branch.
+Evidence is frozen in
+`research/fixtures/htv145_probe15_calibrated_prelude_rejection_20260830.json`
+and
+`research/fixtures/htv145_probe15_retained_identity_rejection_20260830.json`,
+with the estimator correction in
+`research/fixtures/htv145_probe16_carrier_correction_rejection_20260830.json`.
+
 ## Phase 2 — persistence, recovery, and coexistence
 
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node

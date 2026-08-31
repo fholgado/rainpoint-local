@@ -1,0 +1,74 @@
+{
+  "captured_at": "2026-08-30T13:50:32-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Validate the measured prelude winner in a physical enrollment while freezing the proven assignment payload, branch, ordinary carrier, wake, sync, and scheduling.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260830-135032/continuous_433.7M_2000k.cu8",
+    "sha256": "e073d7ca220b288df808e57ea05592bf00dbfc1954ebdc21de386d5c5f32c8cf",
+    "size_bytes": 244056064,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "sdr_gain_db": 0.9
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.2-htv145-pairing-probe.15",
+    "prelude_frequency_offset_register": 13,
+    "prelude_deviation_register": "0x42",
+    "prelude_polarity_relative_to_wake": "reversed"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "identity_mode": "generated_local"
+  },
+  "counter_0_exchange": {
+    "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "request_start_seconds": 30.3697,
+    "request_end_seconds": 30.4009,
+    "assignment_frame": "79f4882f28b42d008f6e86de8080c0858503057000e1ee9e0d01008000000000000000003b08",
+    "assignment_selector": 5,
+    "assignment_start_seconds": 30.451,
+    "request_end_to_assignment_start_ms": 50.1,
+    "paired_continuation_observed": false
+  },
+  "counter_3_fallback_exchange": {
+    "request_frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+    "request_start_seconds": 41.86095,
+    "request_end_seconds": 41.89215,
+    "assignment_frame": "79f4882f28b42d008fee86de8083c085850086f000e76e1e0d0280800000000000000000c351",
+    "assignment_selector": 6,
+    "assignment_start_seconds": 41.9474,
+    "request_end_to_assignment_start_ms": 55.25,
+    "paired_continuation_observed": false
+  },
+  "measured_counter_0_waveform": {
+    "prelude_center_shift_hz": 20641,
+    "prelude_deviation_hz": 31739,
+    "ordinary_wake_deviation_hz": 34907,
+    "prelude_polarity_relative_to_wake": "reversed",
+    "prelude_on_air_ms": 12.67,
+    "total_rf_duration_ms": 44.08
+  },
+  "accepted_stock_reference": {
+    "prelude_center_shift_hz": 20280,
+    "prelude_deviation_hz": 30208,
+    "ordinary_wake_deviation_hz": 34872,
+    "prelude_polarity_relative_to_wake": "reversed",
+    "prelude_on_air_ms": 12.45,
+    "total_rf_duration_ms": 43.73
+  },
+  "result": {
+    "node_assignment_transmissions": 2,
+    "valve_paired_stage_requests": 0,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "The node transmitted both evidenced assignment branches and the valve continued its factory fallback sweep, so this was not an operator timing miss or a node receive-channel miss.",
+    "The prelude-only calibration corrected the material probe-.12 polarity and deviation errors, but that correction was not sufficient for enrollment with the generated local identity.",
+    "Do not modify the probe-.15 waveform before testing the same corrected assignment with the valve's retained stock controller and companion identity.",
+    "If retained identity is also rejected, compare the remaining approximately 0.22 ms prelude-length and 0.45 ms ordinary-wake scheduling differences before changing payload or branch selection."
+  ]
+}

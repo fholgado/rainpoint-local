@@ -41,7 +41,8 @@ public:
         std::uint32_t startAtMicros = 0,
         std::uint16_t leadingPreludeSymbols = 0,
         std::int8_t leadingFrequencyOffsetRegister = 0,
-        std::uint8_t leadingDeviationRegister = 0
+        std::uint8_t leadingDeviationRegister = 0,
+        bool invertLeadingPrelude = false
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();

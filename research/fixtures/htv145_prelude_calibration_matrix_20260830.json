@@ -1,0 +1,69 @@
+{
+  "captured_at": "2026-08-30T13:09:05-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Select the closest CC1101 leading-prelude settings without transmitting an addressed pairing assignment.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260830-130905/continuous_433.7M_2000k.cu8",
+    "sha256": "5d6760089d4081fae83a0dd658342f292ca2bb3d4866a4904a809c7a33383a2a",
+    "size_bytes": 80000000,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "sdr_gain_db": 0.9,
+    "node_power_dbm": 0
+  },
+  "stock_target": {
+    "prelude_center_shift_hz": 20280,
+    "prelude_deviation_hz": 30208,
+    "ordinary_wake_deviation_hz": 34872,
+    "prelude_polarity_relative_to_wake": "reversed"
+  },
+  "variants": [
+    {
+      "variant": 1,
+      "fsctrl0": 12,
+      "deviatn": "0x41",
+      "prelude_center_shift_hz": 19011,
+      "prelude_deviation_hz": 28526,
+      "ordinary_wake_deviation_hz": 34941,
+      "prelude_polarity_relative_to_wake": "reversed"
+    },
+    {
+      "variant": 2,
+      "fsctrl0": 12,
+      "deviatn": "0x42",
+      "prelude_center_shift_hz": 19070,
+      "prelude_deviation_hz": 31740,
+      "ordinary_wake_deviation_hz": 34994,
+      "prelude_polarity_relative_to_wake": "reversed"
+    },
+    {
+      "variant": 3,
+      "fsctrl0": 13,
+      "deviatn": "0x41",
+      "prelude_center_shift_hz": 20613,
+      "prelude_deviation_hz": 28578,
+      "ordinary_wake_deviation_hz": 34994,
+      "prelude_polarity_relative_to_wake": "reversed"
+    },
+    {
+      "variant": 4,
+      "fsctrl0": 13,
+      "deviatn": "0x42",
+      "prelude_center_shift_hz": 20650,
+      "prelude_deviation_hz": 31770,
+      "ordinary_wake_deviation_hz": 34994,
+      "prelude_polarity_relative_to_wake": "reversed"
+    }
+  ],
+  "selection": {
+    "variant": 4,
+    "fsctrl0": 13,
+    "deviatn": "0x42",
+    "reason": "Lowest combined absolute center-shift and deviation error while preserving the stock reversed-polarity continuous transition."
+  },
+  "constraints": [
+    "The synthetic calibration frame used unassigned source and destination endpoints and could not enroll or control a RainPoint device.",
+    "Only the leading prelude varied. The ordinary carrier, wake, frame, timing, and modulation remained fixed.",
+    "The selected settings enter the next bounded physical pairing probe; this calibration alone is not pairing evidence."
+  ]
+}

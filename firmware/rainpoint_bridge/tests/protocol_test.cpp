@@ -1054,17 +1054,21 @@ int main() {
         rainpoint::kHtv145Counter0AssignmentPreludeSymbols == 256
     );
     assert(
-        rainpoint::kHtv145Counter0AssignmentPreludeFrequencyOffset == 12
+        rainpoint::kHtv145Counter0AssignmentPreludeFrequencyOffset == 13
     );
     assert(
-        rainpoint::kHtv145Counter0AssignmentPreludeDeviationRegister == 0x46
+        rainpoint::kHtv145Counter0AssignmentPreludeDeviationRegister == 0x42
+    );
+    assert(rainpoint::kHtv145PairingTxFrequencyCorrectionHz == 0);
+    assert(
+        rainpoint::kHtv145Counter0AssignmentTimingCorrectionUs == 500
     );
     assert(
         rainpoint::rainpointSymbolCount(
             320, rainpoint::kHtv145Counter0AssignmentPreludeSymbols
         ) == 880
     );
-    assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 36'700);
+    assert(rainpoint::htv145PairingReplyStartDelayUs(0) == 37'200);
     assert(rainpoint::htv145PairingReplyStartDelayUs(0, true) == 54'300);
     assert(htv145PairingProbe.steps[3].replyToValveRoute);
     assert(!htv145PairingProbe.steps[1].replyToValveRoute);
@@ -2089,10 +2093,21 @@ int main() {
         assert(rainpoint::rainpointSymbol(
             profile.steps[0].frame, 320, index, false, 256
         ) == static_cast<std::uint8_t>(index & 1U));
+        assert(rainpoint::rainpointSymbol(
+            profile.steps[0].frame, 320, index, false, 256, true
+        ) == static_cast<std::uint8_t>((index & 1U) ^ 1U));
     }
     for (std::size_t index = 0; index < 320; ++index) {
         assert(rainpoint::rainpointSymbol(
             profile.steps[0].frame, 320, 256 + index, false, 256
+        ) == static_cast<std::uint8_t>(index & 1U));
+        assert(rainpoint::rainpointSymbol(
+            profile.steps[0].frame,
+            320,
+            256 + index,
+            false,
+            256,
+            true
         ) == static_cast<std::uint8_t>(index & 1U));
     }
     assert(rainpoint::rainpointSymbol(

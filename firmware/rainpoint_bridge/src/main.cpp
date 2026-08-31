@@ -2739,13 +2739,21 @@ void handleNetworkCommand() {
     pairingLocalDateTimeSet = true;
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
+        const std::int32_t candidateFrequencyCorrectionHz =
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            valvePairingHtv145
+                ? rainpoint::kHtv145PairingTxFrequencyCorrectionHz
+                : 0;
+#else
+            0;
+#endif
         const std::uint32_t initialFrequency = static_cast<std::uint32_t>(
             static_cast<std::int64_t>(activeValvePairingProfile.steps[0].channelCenterHz) +
-            pairingFrequencyOffsetHz
+            pairingFrequencyOffsetHz + candidateFrequencyCorrectionHz
         );
         const std::uint32_t routineFrequency = static_cast<std::uint32_t>(
             static_cast<std::int64_t>(activeValvePairingProfile.steps[1].channelCenterHz) +
-            pairingFrequencyOffsetHz
+            pairingFrequencyOffsetHz + candidateFrequencyCorrectionHz
         );
         if (!primaryRadio.cacheTransmitFrequency(initialFrequency) ||
             !primaryRadio.cacheTransmitFrequency(routineFrequency)) {
@@ -2806,6 +2814,116 @@ void handleNetworkCommand() {
     );
 }
 
+#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+bool handleHtv145PreludeCalibration(const String& command) {
+    const String prefix = "htv145_prelude_calibration ";
+    if (!command.startsWith(prefix)) {
+        return false;
+    }
+    const String offsetValue = command.substring(prefix.length());
+    const long frequencyOffsetHz = offsetValue.toInt();
+    if (offsetValue.isEmpty() || frequencyOffsetHz < -250'000 ||
+        frequencyOffsetHz > 250'000 ||
+        currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_prelude_calibration_invalid\"}"
+        );
+        return true;
+    }
+
+    const std::int64_t adjustedFrequency =
+        static_cast<std::int64_t>(rainpoint::kHtv405InitialChannelCenterHz) +
+        frequencyOffsetHz;
+    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
+        !primaryRadio.prepareTransmit() ||
+        !primaryRadio.cacheTransmitFrequency(
+            static_cast<std::uint32_t>(adjustedFrequency)
+        )) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_prelude_calibration_prepare_failed\"}"
+        );
+        return true;
+    }
+
+    // This deliberately unaddressed frame keeps the ordinary assignment
+    // waveform realistic without enrolling or controlling a RainPoint device.
+    // Only the leading prelude parameters below vary across the four shots.
+    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
+    for (std::size_t index = 0; index < rainpoint::kSync.size(); ++index) {
+        frame[index] = rainpoint::kSync[index];
+    }
+    constexpr std::array<std::uint8_t, 4> source{{0xde, 0xad, 0xc0, 0xde}};
+    constexpr std::array<std::uint8_t, 4> destination{{0xf0, 0x0d, 0xca, 0xfe}};
+    for (std::size_t index = 0; index < source.size(); ++index) {
+        frame[5 + index] = source[index];
+        frame[9 + index] = destination[index];
+    }
+    frame[13] = 0x80;
+    frame[14] = 0xc0;
+    frame[15] = 0x85;
+    frame[16] = 0x85;
+    rainpoint::writeTrailer(frame, 0x4f03);
+
+    struct PreludeVariant {
+        std::int8_t frequencyOffsetRegister;
+        std::uint8_t deviationRegister;
+    };
+    constexpr std::array<PreludeVariant, 4> variants{{
+        {12, 0x41},
+        {12, 0x42},
+        {13, 0x41},
+        {13, 0x42},
+    }};
+    for (std::size_t index = 0; index < variants.size(); ++index) {
+        const auto& variant = variants[index];
+        String line;
+        line.reserve(240);
+        line += "{\"type\":\"htv145_prelude_calibration\",\"variant\":";
+        line += index + 1;
+        line += ",\"state\":\"starting\",\"center_hz\":";
+        line += static_cast<std::uint32_t>(adjustedFrequency);
+        line += ",\"prelude_polarity\":\"reversed\",\"fsctrl0\":";
+        line += static_cast<int>(variant.frequencyOffsetRegister);
+        line += ",\"deviatn\":\"0x";
+        line += variant.deviationRegister == 0x41 ? "41" : "42";
+        line += "\"}";
+        emitLine(line);
+        Serial.flush();
+        delay(250);
+
+        const bool sent = primaryRadio.transmitAsync(
+            frame,
+            static_cast<std::uint32_t>(adjustedFrequency),
+            rainpoint::kPairingWakeSymbols,
+            false,
+            // Keep this near-field measurement below the RTL-SDR's clipping
+            // point. Live pairing retains its separately configured power.
+            rainpoint::pairingPaTableValue(0),
+            rainpoint::kHtv405InitialDeviationRegister,
+            micros() + 20'000,
+            rainpoint::kHtv145Counter0AssignmentPreludeSymbols,
+            variant.frequencyOffsetRegister,
+            variant.deviationRegister,
+            true
+        );
+        line = "{\"type\":\"htv145_prelude_calibration\",\"variant\":";
+        line += index + 1;
+        line += sent
+            ? ",\"state\":\"transmitted\"}"
+            : ",\"state\":\"transmit_failed\"}";
+        emitLine(line);
+        delay(750);
+    }
+    emitLine(
+        "{\"type\":\"htv145_prelude_calibration\","
+        "\"state\":\"complete\"}"
+    );
+    return true;
+}
+#endif
+
 void handleSerialCommand() {
     while (Serial.available()) {
         const char value = static_cast<char>(Serial.read());
@@ -2815,8 +2933,13 @@ void handleSerialCommand() {
             }
             bool handled = false;
 #if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            handled = handleHtv145PreludeCalibration(serialCommand);
+#endif
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
-            handled = handleValveProbeCommand(serialCommand);
+            if (!handled) {
+                handled = handleValveProbeCommand(serialCommand);
+            }
 #endif
             if (!handled && serialCommand == "pairing_plan_b") {
                 handled = true;
@@ -3286,7 +3409,14 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 rainpoint::htv405PairingReplyStartDelayUs(replyStep);
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
-                pairingFrequencyOffsetHz;
+                pairingFrequencyOffsetHz +
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+                (valvePairingHtv145
+                    ? rainpoint::kHtv145PairingTxFrequencyCorrectionHz
+                    : 0);
+#else
+                0;
+#endif
             const std::uint16_t leadingPreludeSymbols =
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
                 valvePairingHtv145 && replyStep == 0 &&
@@ -3311,7 +3441,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 leadingPreludeSymbols != 0
                     ? rainpoint::
                         kHtv145Counter0AssignmentPreludeDeviationRegister
-                    : 0
+                    : 0,
+                // Stock reverses only the HTV145 selector-5 leading prelude;
+                // the ordinary wake and frame retain their proven polarity.
+                leadingPreludeSymbols != 0
             );
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
             if (sent && valvePairingHtv145 && replyStep == 1) {

@@ -1,0 +1,60 @@
+{
+  "captured_at": "2026-08-30T13:58:45-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Test the calibrated probe-.15 waveform with the valve's retained stock controller and companion identity.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260830-135845/continuous_433.7M_2000k.cu8",
+    "sha256": "c8b9ca313ff3118a3a25fa5e73f9a7767895f51390d1f20a4b84834579fdb046",
+    "size_bytes": 354156544,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "sdr_gain_db": 0.9
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.2-htv145-pairing-probe.15"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "identity_mode": "retained_stock"
+  },
+  "counter_0_exchange": {
+    "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "request_end_seconds": 36.9828,
+    "assignment_frame": "79f4882f28b42d008f3984028080c0858503057000ebef9e0d0100800000000000000000e6a7",
+    "assignment_selector": 5,
+    "assignment_start_seconds": 37.03265,
+    "request_end_to_assignment_start_ms": 49.85,
+    "paired_continuation_observed": false,
+    "wake_only_local_assignment_minus_request_hz": 423637,
+    "wake_only_accepted_stock_assignment_minus_request_hz": 423630,
+    "wake_only_carrier_error_hz": 7
+  },
+  "counter_3_fallback_exchange": {
+    "request_frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+    "request_end_seconds": 48.4741,
+    "assignment_frame": "79f4882f28b42d008fb984028083c085850086f000f16f1e0d0280800000000000000000ec83",
+    "assignment_selector": 6,
+    "assignment_start_seconds": 48.529,
+    "request_end_to_assignment_start_ms": 54.9,
+    "paired_continuation_observed": false,
+    "whole_frame_local_assignment_minus_request_hz": 409379,
+    "whole_frame_accepted_stock_assignment_minus_request_hz": 403900,
+    "whole_frame_carrier_error_hz": 5479,
+    "measurement_status": "superseded_by_wake_only_method; selector-6 wake comparison remains to be isolated"
+  },
+  "result": {
+    "node_assignment_transmissions": 2,
+    "valve_paired_stage_requests": 0,
+    "visible_result": "failure_with_different_continuous_blink_pattern"
+  },
+  "interpretation": [
+    "The retained stock identity changed visible LED behavior but did not produce any paired-address RF traffic.",
+    "Generated versus retained controller identity is not the remaining stage-0 discriminator by itself.",
+    "The former whole-frame estimator was biased by unequal payload symbols. Wake-only same-capture normalization puts the counter-0 carrier within about 7 Hz of accepted stock.",
+    "Probe .16's controlled -5.46 kHz experiment was rejected and measured 5.57 kHz low, so probe .17 restores the probe-.15 carrier."
+  ]
+}
