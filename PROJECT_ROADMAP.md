@@ -495,6 +495,21 @@ Keep candidate `9` provisional and the beta.10 baseline installed until a raw
 on-air comparison separates command waveform/delivery from retained valve
 counter state.
 
+The follow-up high-gain raw-IQ capture resolves that discriminator. It decoded
+the exact beta.10 candidate-`9` frame emitted by the closest Vegetable Garden
+Radio: the custom valve and companion route, `89/90/82/80/81`, Zone 1, the
+validated `9e 00` 60-second duration, and a valid trailer all match the gateway
+builder. The measured 433.472690 MHz channel center, 79.865 kHz tone separation,
+and non-inverted polarity are coherent with the calibrated local RainPoint
+waveform. The valve still emitted neither an authenticated response nor a
+strict rejection. This eliminates a missing node transmission, beta.11 burst
+regression, and gross payload/carrier corruption from the leading hypotheses.
+Do not extend the counter search from silence: next determine whether the valve
+retained command state outside `9`--`11` or requires another valve-side control
+acceptance condition that routine linked telemetry does not reveal. Frozen
+evidence is in
+`research/fixtures/htv405_beta10_candidate9_on_air_20260831.json`.
+
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 

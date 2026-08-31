@@ -1,0 +1,52 @@
+{
+  "captured_at": "2026-08-31T16:14:33-04:00",
+  "model": "HTV405FRF",
+  "scope": "installed-valve beta.10 on-air discriminator after beta.11 candidates 9 through 11 were silent",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "valve_endpoint": "94a98013",
+    "selector": 5,
+    "control_node_id": "rp-f4e5be3b015c",
+    "control_node_name": "Vegetable Garden Radio",
+    "control_node_firmware": "0.15.0-supervised-beta.10"
+  },
+  "capture": {
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 30,
+    "tuner_gain_db": 30,
+    "size_bytes": 120000000,
+    "sha256": "fa2571356bf30966bcb3b7ac580189922b7e833c377cdb897cbf8f3f184689fe",
+    "local_ignored_path": "captures/htv405-beta10-candidate9-highgain-20260831/continuous_433.7M_2000k.cu8"
+  },
+  "command": {
+    "command_id": "1f5dcfbef7c74ceaacadbd45860afddf",
+    "candidate_sequence": 9,
+    "zone": 1,
+    "duration_seconds": 60,
+    "encoded_duration": "9e00",
+    "decoded_frame": "79f4882f2894a980136e86de808990828081009e00000000000000000000000000000000a598",
+    "decoded_inverted": false,
+    "decode_phase_count": 88,
+    "measured_channel_center_hz": 433472690,
+    "measured_low_tone_hz": 433432758,
+    "measured_high_tone_hz": 433512622,
+    "measured_tone_separation_hz": 79865,
+    "measured_deviation_hz": 39932
+  },
+  "outcome": {
+    "authenticated_positive_response": false,
+    "strict_negative_response": false,
+    "watering_observed": false,
+    "gateway_result": "guarded_open_probe_timeout",
+    "candidate_promoted": false
+  },
+  "findings": [
+    "The selected closest Vegetable Garden Radio physically emitted the exact candidate-9 command frame built by the gateway.",
+    "The decoded route, companion endpoint, counter, Zone 1 selector, 60-second payload, trailer, polarity, carrier, and FSK separation are internally coherent.",
+    "The same logical candidate was silent on beta.10 as it had been on beta.11, so beta.11's bounded repeated-burst implementation is not the cause.",
+    "This eliminates a missing node transmission and gross on-air payload or carrier corruption from the leading hypotheses.",
+    "The remaining leading explanations are retained valve command state outside candidate 9 through 11, or a valve-side association/control acceptance condition not represented by routine telemetry. Silence is not evidence for advancing the counter."
+  ]
+}
