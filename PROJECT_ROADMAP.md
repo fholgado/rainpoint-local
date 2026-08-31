@@ -482,6 +482,19 @@ operator cancellation for stale provisional recovery. Before extending the
 search, obtain independent evidence that the transmitted high-channel frame is
 on air and matches a retained accepted command waveform.
 
+An August 31 firmware A/B test then rolled only the assigned, closest Vegetable
+Garden Radio from beta.11 back to the integrity-checked beta.10 image. After the
+node completed OTA health confirmation, it transmitted the same guarded Zone 1
+60-second candidate `9`; the valve again returned neither an authenticated open
+nor a strict rejection. Fresh idle telemetry immediately before the test and
+continued healthy node reception rule out a sleeping valve or disconnected
+radio node. Because beta.10 predates the bounded three-frame burst while the
+payload, association, counter candidate, carrier profile, and owning node were
+unchanged, the burst implementation is not the cause of the current silence.
+Keep candidate `9` provisional and the beta.10 baseline installed until a raw
+on-air comparison separates command waveform/delivery from retained valve
+counter state.
+
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 
