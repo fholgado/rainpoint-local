@@ -3109,6 +3109,52 @@ class ValveControlHTTPAPITest(unittest.TestCase):
                 now=datetime.fromisoformat("2026-08-24T20:05:45+00:00"),
             )
 
+    def test_idle_close_probe_route_never_dispatches_an_open(self) -> None:
+        gateway = self.server.gateway
+        assert gateway._store is not None
+        gateway._store.confirm_valve_control_response(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            sequence=6,
+            next_sequence=6,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:02+00:00",
+            frame="00",
+        )
+        pending = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=pending["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        self.commands.clear()
+
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/probe-idle-close",
+            {},
+        )["control"]
+
+        self.assertEqual("idle_close_probe", result["action"])
+        self.assertEqual(
+            [
+                "valve_control_configure",
+                "valve_control_sync",
+                "valve_control_close",
+            ],
+            [command["type"] for _node, command in self.commands],
+        )
+        self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
+
     def test_control_node_can_move_without_changing_association(self) -> None:
         before = self.server.gateway._store.valve_registry()[0]
         result = self.post_json(

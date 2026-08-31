@@ -147,6 +147,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             parsed.path.endswith("/valve/open")
             or parsed.path.endswith("/valve/close")
             or parsed.path.endswith("/valve/synchronize")
+            or parsed.path.endswith("/valve/probe-idle-close")
             or parsed.path.endswith("/valve/node")
         )
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
@@ -391,6 +392,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "open",
                         "close",
                         "synchronize",
+                        "probe-idle-close",
                         "node",
                     }:
                         self._json(404, {"error": "not found"})
@@ -416,6 +418,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                                     is not None
                                     else None
                                 ),
+                            )
+                        )
+                    elif action == "probe-idle-close":
+                        result = (
+                            self.server.gateway.request_htv405_idle_close_probe(
+                                device_id=device_id
                             )
                         )
                     else:

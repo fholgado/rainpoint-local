@@ -97,6 +97,22 @@ class Htv405ControlCoordinator:
             started_at=started_at,
         )
 
+    def request_idle_close_probe(
+        self,
+        profile: Htv405ControlProfile,
+        *,
+        zone: int,
+        started_at: str,
+    ) -> dict[str, Any]:
+        """Send one close-only counter probe while the valve is idle."""
+        return self._reserve_and_send(
+            profile,
+            action="idle_close_probe",
+            zone=zone,
+            duration_seconds=None,
+            started_at=started_at,
+        )
+
     def _reserve_and_send(
         self,
         profile: Htv405ControlProfile,
@@ -124,15 +140,24 @@ class Htv405ControlCoordinator:
                 f"whole-minute values are {supported}"
             )
         command_id = uuid.uuid4().hex
-        reservation = self.store.reserve_htv405_command(
-            valve_endpoint=profile.valve_endpoint,
-            node_id=profile.node_id,
-            command_id=command_id,
-            action=action,
-            zone=zone,
-            duration_seconds=duration_seconds,
-            started_at=started_at,
-        )
+        if action == "idle_close_probe":
+            reservation = self.store.reserve_htv405_idle_close_probe(
+                valve_endpoint=profile.valve_endpoint,
+                node_id=profile.node_id,
+                command_id=command_id,
+                zone=zone,
+                started_at=started_at,
+            )
+        else:
+            reservation = self.store.reserve_htv405_command(
+                valve_endpoint=profile.valve_endpoint,
+                node_id=profile.node_id,
+                command_id=command_id,
+                action=action,
+                zone=zone,
+                duration_seconds=duration_seconds,
+                started_at=started_at,
+            )
         sequence = int(reservation["control_pending_sequence"])
         commands = (
             self._command(
@@ -150,7 +175,9 @@ class Htv405ControlCoordinator:
                 next_sequence=sequence,
             ),
             self._command(
-                f"valve_control_{action}",
+                "valve_control_close"
+                if action == "idle_close_probe"
+                else f"valve_control_{action}",
                 command_id=command_id,
                 zone=zone,
                 expected_sequence=sequence,
@@ -183,6 +210,7 @@ class Htv405ControlCoordinator:
             "command_id": command_id,
             "action": action,
             "zone": zone,
+            "expected_sequence": sequence,
             "duration_seconds": duration_seconds,
             "expected_idle_at": expected_idle_at,
             "state": "pending_authenticated_response",

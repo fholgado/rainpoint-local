@@ -771,6 +771,48 @@ class Gateway:
             self._refresh_registry_catalog()
             return result
 
+    def request_htv405_idle_close_probe(
+        self,
+        *,
+        device_id: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Dispatch one supervised close-only counter probe on Zone 1."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._valve_control_enabled:
+                raise PermissionError("HTV405 supervised control is disabled")
+            if self._store is None or self._node_command_sender is None:
+                raise RuntimeError("HTV405 control transport is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            profile = self._htv405_control_profile(registration)
+            node = self._nodes.get(profile.node_id, {})
+            if not self._htv405_control_node_ready(node):
+                raise RuntimeError("selected HTV405 radio node is unavailable")
+            if registration.get("control_confirmed_watering") not in {0, False}:
+                raise RuntimeError("HTV405 valve is not confirmed idle")
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            result = coordinator.request_idle_close_probe(
+                profile,
+                zone=1,
+                started_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            return result
+
     def synchronize_htv405_control_counter(
         self,
         *,

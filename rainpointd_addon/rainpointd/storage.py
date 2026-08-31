@@ -1414,6 +1414,143 @@ class SQLiteEventStore:
             if item["valve_endpoint"] == valve_endpoint
         )
 
+    def reserve_htv405_idle_close_probe(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        command_id: str,
+        zone: int,
+        started_at: str,
+        minimum_interval_seconds: float = 15.0,
+    ) -> dict[str, Any]:
+        """Reserve one non-actuating close against an unsynchronized counter.
+
+        The first candidate is exactly one step after the last authenticated
+        watering response. A strict rejection may nominate the next candidate;
+        one silent attempt may only repeat the same candidate. This method
+        never creates an open command or exposes a candidate as synchronized.
+        """
+        if zone != 1:
+            raise ValueError("HTV405 idle-close probe is restricted to Zone 1")
+        try:
+            started = datetime.fromisoformat(started_at)
+        except ValueError as error:
+            raise ValueError("invalid HTV405 probe timestamp") from error
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if state.get("control_node_id") != node_id:
+            raise ValueError("HTV405 node differs from durable association")
+        if state.get("control_pending_command_id") is not None:
+            raise RuntimeError("an HTV405 command is already pending")
+        if state.get("control_next_sequence") is not None:
+            raise RuntimeError("HTV405 counter is already synchronized")
+        if state.get("control_confirmed_watering") not in {0, False}:
+            raise RuntimeError("HTV405 valve is not confirmed idle")
+        last_sequence = state.get("control_last_sequence")
+        if not isinstance(last_sequence, int) or isinstance(last_sequence, bool):
+            raise RuntimeError("HTV405 probe lacks a last authenticated counter")
+        baseline = (last_sequence + 1) & 0x1F
+        last_result = str(state.get("control_last_result") or "")
+        if last_result in {
+            "idle_close_probe_timeout_exhausted",
+            "idle_close_probe_search_exhausted",
+        }:
+            raise RuntimeError(
+                "HTV405 idle-close probe is terminal until fresh idle telemetry"
+            )
+        recovery_sequence = state.get("control_recovery_sequence")
+        recovering_probe = last_result.startswith("idle_close_probe_")
+        sequence = (
+            int(recovery_sequence)
+            if recovering_probe
+            and isinstance(recovery_sequence, int)
+            and not isinstance(recovery_sequence, bool)
+            else baseline
+        )
+        if ((sequence - baseline) & 0x1F) > 3:
+            raise RuntimeError("HTV405 idle-close probe search budget exhausted")
+        not_before = state.get("control_recovery_not_before")
+        if recovering_probe and isinstance(not_before, str):
+            try:
+                available = datetime.fromisoformat(not_before)
+                if available.tzinfo is None and started.tzinfo is not None:
+                    available = available.replace(tzinfo=started.tzinfo)
+                if started.tzinfo is None and available.tzinfo is not None:
+                    started = started.replace(tzinfo=available.tzinfo)
+                if started < available:
+                    raise RuntimeError(
+                        "HTV405 idle-close probe interval has not elapsed"
+                    )
+            except ValueError:
+                pass
+        last_at = state.get("control_last_command_started_at")
+        if isinstance(last_at, str):
+            try:
+                previous = datetime.fromisoformat(last_at)
+                if previous.tzinfo is None and started.tzinfo is not None:
+                    previous = previous.replace(tzinfo=started.tzinfo)
+                if started.tzinfo is None and previous.tzinfo is not None:
+                    started = started.replace(tzinfo=previous.tzinfo)
+                if (started - previous).total_seconds() < minimum_interval_seconds:
+                    raise RuntimeError(
+                        "minimum HTV405 command interval has not elapsed"
+                    )
+            except ValueError:
+                pass
+        retry_count = (
+            int(state.get("control_recovery_attempt") or 0)
+            if recovering_probe
+            else 0
+        )
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_pending_command_id = ?,
+                control_pending_action = 'idle_close_probe',
+                control_pending_sequence = ?,
+                control_pending_zone = 1,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = ?,
+                control_last_command_started_at = ?,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = ?,
+                control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_last_result = 'pending_idle_close_probe_response',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+              AND control_next_sequence IS NULL
+              AND control_confirmed_watering = 0
+            """,
+            (
+                command_id,
+                sequence,
+                started_at,
+                started_at,
+                retry_count,
+                started_at,
+                valve_endpoint,
+                node_id,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 idle-close probe reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
     def synchronize_htv405_control_counter(
         self,
         *,
@@ -1517,7 +1654,52 @@ class SQLiteEventStore:
             and isinstance(state.get("control_pending_duration_seconds"), int)
             and isinstance(state.get("control_pending_started_at"), str)
         )
-        if (retryable_timeout or retryable_rejection) and recovery_attempt < 2:
+        idle_close_probe = state.get("control_pending_action") == "idle_close_probe"
+        probe_timeout = idle_close_probe and reason == (
+            "gateway_command_response_timeout_counter_unsynchronized"
+        )
+        probe_rejection = idle_close_probe and reason == (
+            "gateway_command_rejected_counter_unsynchronized"
+        )
+        if probe_timeout or probe_rejection:
+            pending_sequence = int(state["control_pending_sequence"])
+            baseline = (
+                (int(state["control_last_sequence"]) + 1) & 0x1F
+                if isinstance(state.get("control_last_sequence"), int)
+                else pending_sequence
+            )
+            if probe_rejection:
+                next_candidate = (pending_sequence + 1) & 0x1F
+                recovery_attempt = 0
+                reason = "idle_close_probe_rejected"
+            elif recovery_attempt == 0:
+                next_candidate = pending_sequence
+                recovery_attempt = 1
+                reason = "idle_close_probe_timeout_retry"
+            else:
+                next_candidate = None
+                recovery_attempt += 1
+                reason = "idle_close_probe_timeout_exhausted"
+            if (
+                next_candidate is not None
+                and ((next_candidate - baseline) & 0x1F) <= 3
+            ):
+                recovery_sequence = next_candidate
+                recovery_zone = 1
+                try:
+                    recovery_not_before = (
+                        datetime.fromisoformat(observed_at)
+                        + timedelta(seconds=15)
+                    ).isoformat()
+                except ValueError:
+                    recovery_sequence = None
+                    recovery_not_before = None
+            else:
+                recovery_sequence = None
+                recovery_not_before = None
+                if probe_rejection:
+                    reason = "idle_close_probe_search_exhausted"
+        elif (retryable_timeout or retryable_rejection) and recovery_attempt < 2:
             pending_sequence = int(state["control_pending_sequence"])
             recovery_attempt += 1
             # A response timeout is ambiguous, so the first retry reuses the
@@ -1627,6 +1809,10 @@ class SQLiteEventStore:
             or candidate not in range(0x20)
             or not isinstance(not_before, str)
             or state.get("control_confirmed_watering") not in {0, False}
+            or state.get("control_last_result") not in {
+                "gateway_command_response_timeout_counter_unsynchronized",
+                "gateway_command_rejected_counter_unsynchronized",
+            }
         ):
             return None
         try:
@@ -1837,15 +2023,24 @@ class SQLiteEventStore:
         if registration is None:
             raise KeyError(valve_endpoint)
         pending_id = registration.get("control_pending_command_id")
+        pending_action = registration.get("control_pending_action")
+        expected_action = "open" if watering else "close"
+        action_matches = pending_action == expected_action or (
+            not watering and pending_action == "idle_close_probe"
+        )
         if pending_id is not None and any(
             (
                 registration.get("control_pending_sequence") != sequence,
                 registration.get("control_pending_zone") != zone,
-                registration.get("control_pending_action")
-                != ("open" if watering else "close"),
+                not action_matches,
             )
         ):
             raise ValueError("HTV405 response does not match reservation")
+        last_result = (
+            "idle_close_probe_authenticated"
+            if pending_action == "idle_close_probe"
+            else "authenticated_response_confirmed"
+        )
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -1868,7 +2063,7 @@ class SQLiteEventStore:
                 control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
-                control_last_result = 'authenticated_response_confirmed',
+                control_last_result = ?,
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
             """,
@@ -1883,6 +2078,7 @@ class SQLiteEventStore:
                 run_started_at if watering else None,
                 run_duration_seconds if watering else None,
                 expected_idle_at if watering else None,
+                last_result,
                 observed_at,
                 valve_endpoint,
                 node_id,

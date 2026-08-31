@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.33.20 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Preserve the idle-close probe's terminal timeout after its one permitted
+  same-counter retry. Another operator request remains blocked until fresh
+  independent idle telemetry arrives; silence still cannot advance or
+  synchronize the counter.
+
+## 0.33.19 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Add an authenticated, operator-only HTV405 idle-close counter probe. It is
+  restricted to Zone 1, carries no duration, and dispatches only the already
+  validated close frame; it cannot construct or transmit an open command.
+- Start from one step after the last authenticated watering response. A strict
+  rejection may advance one candidate, while silence repeats the same candidate
+  only once. The search is bounded to four adjacent five-bit candidates.
+- Mark the counter synchronized only after the matching authenticated closed
+  response. Probe intent, transmission completion, telemetry, and silence are
+  not accepted as counter evidence.
+
 ## 0.33.18 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
 
 - Retry the same HTV405 command counter after one silent authenticated-response

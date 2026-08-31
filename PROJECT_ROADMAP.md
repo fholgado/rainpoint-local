@@ -437,6 +437,28 @@ so a routine idle report cannot impose a false 15-second command hold. Physical
 validation of the complete recovery path and the non-actuating close probe
 remains open above.
 
+Gateway 0.33.19 implements the close-only side of that physical gate behind an
+authenticated operator endpoint. It is restricted to Zone 1, carries no
+duration, cannot dispatch an open, begins one step after the last authenticated
+watering response, repeats a silent candidate once, advances only after a
+strict rejection, and stops after four adjacent candidates. Only a matching
+authenticated closed response restores the ordinary command counter. Keep the
+roadmap gate open until the installed idle valve physically accepts the probe
+without watering.
+
+The 2026-08-31 physical trial began from last authenticated command sequence
+`8` and therefore tested idle-close candidate `9`. The assigned Vegetable
+Garden Radio accepted the close-only transaction and its bounded identical
+burst, but the valve returned neither a matching authenticated closed response
+nor a strict rejection. One same-candidate retry after the 15-second hardware
+interval produced the same response timeout. All four zones remained confirmed
+idle, no open or duration was transmitted, and the gateway stopped with the
+counter unsynchronized. This validates the probe's fail-closed behavior but
+does not validate idle close as a counter no-op; do not advance to candidate
+`10` from this silence. Gateway 0.33.20 additionally makes that terminal state
+durable until fresh independent idle telemetry arrives, preventing repeated
+operator requests from silently bypassing the one-retry bound.
+
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 
