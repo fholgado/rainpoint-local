@@ -509,6 +509,8 @@ retained command state outside `9`--`11` or requires another valve-side control
 acceptance condition that routine linked telemetry does not reveal. Frozen
 evidence is in
 `research/fixtures/htv405_beta10_candidate9_on_air_20260831.json`.
+After freezing the discriminator, the Vegetable Garden Radio was restored to
+beta.11 and passed its OTA gateway-and-radio health confirmation.
 
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
