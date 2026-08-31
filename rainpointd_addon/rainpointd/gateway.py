@@ -813,6 +813,55 @@ class Gateway:
             self._refresh_registry_catalog()
             return result
 
+    def request_htv405_guarded_open_probe(
+        self,
+        *,
+        device_id: str,
+        candidate_sequence: int | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Dispatch one provisional 60-second Zone 1 synchronization open."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._valve_control_enabled:
+                raise PermissionError("HTV405 supervised control is disabled")
+            if self._store is None or self._node_command_sender is None:
+                raise RuntimeError("HTV405 control transport is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            profile = self._htv405_control_profile(registration)
+            node = self._nodes.get(profile.node_id, {})
+            if not self._htv405_control_node_ready(node):
+                raise RuntimeError("selected HTV405 radio node is unavailable")
+            device = self._devices.get(device_id, {})
+            state = device.get("state", {})
+            if (
+                device.get("available") is not True
+                or state.get("is_watering") is not False
+                or registration.get("control_confirmed_watering") not in {0, False}
+            ):
+                raise RuntimeError("HTV405 valve is not confirmed idle")
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            result = coordinator.request_guarded_open_probe(
+                profile,
+                started_at=timestamp,
+                candidate_sequence=candidate_sequence,
+            )
+            self._refresh_registry_catalog()
+            return result
+
     def synchronize_htv405_control_counter(
         self,
         *,
@@ -957,6 +1006,35 @@ class Gateway:
                 node_id=profile.node_id,
                 next_sequence=next_sequence,
                 source=evidence_source,
+                observed_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            return result
+
+    def cancel_htv405_control_recovery(
+        self,
+        *,
+        device_id: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Cancel one provisional recovery candidate without transmitting."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if self._store is None:
+                raise RuntimeError("HTV405 control storage is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            result = self._store.cancel_htv405_control_recovery(
+                valve_endpoint=str(registration["valve_endpoint"]),
+                node_id=str(registration["control_node_id"]),
                 observed_at=timestamp,
             )
             self._refresh_registry_catalog()

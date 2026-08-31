@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.33.23 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Keep guarded-open timeout or rejection terminal instead of feeding it into
+  ordinary HA counter recovery.
+- Add an authenticated, non-transmitting operator action that can discard an
+  idle provisional recovery candidate without altering the valve association.
+
+## 0.33.22 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Permit the authenticated operator-only Zone 1, 60-second synchronization
+  open to select one of exactly three consecutive provisional counter
+  candidates. No selected candidate becomes ordinary control state until the
+  valve returns its matching authenticated watering response.
+- Reject candidates outside that three-counter budget before RF dispatch.
+
+## 0.33.21 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Add an authenticated operator-only HTV405 synchronization open fixed to
+  Zone 1 and the physically validated 60-second duration.
+- Derive its candidate from the last authenticated watering response without
+  publishing that candidate as synchronized. Only the matching valve-owned
+  watering response restores normal control; rejection and timeout retain the
+  existing bounded recovery policy.
+
 ## 0.33.20 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
 
 - Preserve the idle-close probe's terminal timeout after its one permitted

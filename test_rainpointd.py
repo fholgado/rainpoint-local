@@ -3155,6 +3155,118 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
 
+    def test_guarded_open_probe_route_is_fixed_to_zone_one_and_sixty_seconds(
+        self,
+    ) -> None:
+        gateway = self.server.gateway
+        assert gateway._store is not None
+        gateway._store.confirm_valve_control_response(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            sequence=6,
+            next_sequence=7,
+            zone=1,
+            watering=True,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:02+00:00",
+            frame="00",
+            run_started_at="2026-08-24T20:00:01+00:00",
+            run_duration_seconds=60,
+            expected_idle_at="2026-08-24T20:01:01+00:00",
+        )
+        gateway._store.observe_htv405_state_report(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            watering=False,
+            zone=None,
+            observed_at="2026-08-24T20:01:02+00:00",
+        )
+        failed = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:01:17+00:00"),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=failed["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:01:23+00:00",
+        )
+        gateway._store._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_last_result = 'idle_confirmed_counter_unsynchronized'
+            WHERE valve_endpoint = ?
+            """,
+            (self.VALVE_ENDPOINT,),
+        )
+        gateway._store._connection.commit()
+        gateway.observe_decoded(
+            device_id=self.DEVICE_ID,
+            name="Test four-zone valve",
+            model="HTV405FRF",
+            frame="idle",
+            state={
+                "rf_endpoint_b": self.VALVE_ENDPOINT,
+                "is_watering": False,
+                "valve_state": "idle",
+            },
+            observed_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.commands.clear()
+
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/probe-open",
+            {"candidate_sequence": 8},
+        )["control"]
+
+        self.assertEqual("guarded_open_probe", result["action"])
+        self.assertEqual(1, result["zone"])
+        self.assertEqual(60, result["duration_seconds"])
+        self.assertEqual("valve_control_open", self.commands[-1][1]["type"])
+        self.assertEqual(8, self.commands[-1][1]["expected_sequence"])
+        registration = gateway._store.valve_registry()[0]
+        self.assertIsNone(registration["control_next_sequence"])
+
+    def test_cancel_recovery_route_does_not_transmit(self) -> None:
+        gateway = self.server.gateway
+        assert gateway._store is not None
+        pending = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=pending["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        commands_before_cancel = len(self.commands)
+
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/cancel-recovery",
+            {},
+        )["control"]
+
+        self.assertIsNone(result["control_recovery_sequence"])
+        self.assertIsNone(result["control_next_sequence"])
+        self.assertEqual(
+            "counter_recovery_cancelled_by_operator",
+            result["control_last_result"],
+        )
+        self.assertEqual(commands_before_cancel, len(self.commands))
+
     def test_control_node_can_move_without_changing_association(self) -> None:
         before = self.server.gateway._store.valve_registry()[0]
         result = self.post_json(

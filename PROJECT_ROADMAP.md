@@ -459,6 +459,29 @@ does not validate idle close as a counter no-op; do not advance to candidate
 durable until fresh independent idle telemetry arrives, preventing repeated
 operator requests from silently bypassing the one-retry bound.
 
+Gateway 0.33.21 adds the actuating discriminator requested after that negative
+result. It can begin exactly one Zone 1, 60-second open from the next candidate
+derived from the last authenticated watering response, but does not expose the
+candidate as synchronized before transmission. Only a matching authenticated
+valve-owned watering response restores normal control. Physically test this
+path one candidate at a time; preserve the existing strict-rejection and
+same-candidate timeout bounds.
+
+The 2026-08-31 supervised open trial tested candidates `9`, `10`, and `11`
+from the last authenticated command sequence `8`. Candidate `9` was transmitted
+twice, candidate `10` once, and candidate `11` twice; every logical command used
+Zone 1 and the validated 60-second payload. All attempts were silent: the valve
+returned neither a matching watering response nor a strict rejection, and no
+watering state was observed. Routine valve telemetry continued, including
+fresh idle reports during the trial, proving the valve and receivers remained
+awake but not proving that the high-channel command reached the valve.
+Gateway 0.33.23 therefore keeps all three candidates provisional, caps the
+search at those three values, prevents guarded-probe failure from exposing
+candidate `12` through ordinary HA control, and provides a non-transmitting
+operator cancellation for stale provisional recovery. Before extending the
+search, obtain independent evidence that the transmitted high-channel frame is
+on air and matches a retained accepted command waveform.
+
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
 

@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.20 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.23 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -44,6 +44,13 @@ last authenticated command evidence, repeats silence once, advances only after
 a strict rejection, searches at most four adjacent candidates, and restores
 ordinary control only from a matching authenticated closed response. It is not
 exposed as an end-user HA control while physical acceptance remains open.
+
+An independently authenticated operator endpoint can begin a counter-recovery
+open, but it is deliberately fixed to Zone 1 for 60 seconds. A supervised
+caller may select only one of the first three consecutive candidates. The
+candidate remains provisional and ordinary control stays unavailable until the
+valve returns the matching authenticated watering response. This endpoint is
+also excluded from the end-user HA control surface.
 
 The generalized HCS026 workflow completed isolated local enrollment on both
 test sensors and on installed bed sensors using generated replies, terminal

@@ -148,6 +148,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/close")
             or parsed.path.endswith("/valve/synchronize")
             or parsed.path.endswith("/valve/probe-idle-close")
+            or parsed.path.endswith("/valve/probe-open")
+            or parsed.path.endswith("/valve/cancel-recovery")
             or parsed.path.endswith("/valve/node")
         )
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
@@ -393,6 +395,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "close",
                         "synchronize",
                         "probe-idle-close",
+                        "probe-open",
+                        "cancel-recovery",
                         "node",
                     }:
                         self._json(404, {"error": "not found"})
@@ -423,6 +427,23 @@ class RequestHandler(BaseHTTPRequestHandler):
                     elif action == "probe-idle-close":
                         result = (
                             self.server.gateway.request_htv405_idle_close_probe(
+                                device_id=device_id
+                            )
+                        )
+                    elif action == "probe-open":
+                        result = (
+                            self.server.gateway.request_htv405_guarded_open_probe(
+                                device_id=device_id,
+                                candidate_sequence=(
+                                    int(body["candidate_sequence"])
+                                    if body.get("candidate_sequence") is not None
+                                    else None
+                                ),
+                            )
+                        )
+                    elif action == "cancel-recovery":
+                        result = (
+                            self.server.gateway.cancel_htv405_control_recovery(
                                 device_id=device_id
                             )
                         )

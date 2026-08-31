@@ -113,6 +113,23 @@ class Htv405ControlCoordinator:
             started_at=started_at,
         )
 
+    def request_guarded_open_probe(
+        self,
+        profile: Htv405ControlProfile,
+        *,
+        started_at: str,
+        candidate_sequence: int | None = None,
+    ) -> dict[str, Any]:
+        """Send one provisional Zone 1 open bounded to 60 seconds."""
+        return self._reserve_and_send(
+            profile,
+            action="guarded_open_probe",
+            zone=1,
+            duration_seconds=60,
+            started_at=started_at,
+            candidate_sequence=candidate_sequence,
+        )
+
     def _reserve_and_send(
         self,
         profile: Htv405ControlProfile,
@@ -121,11 +138,12 @@ class Htv405ControlCoordinator:
         zone: int,
         duration_seconds: int | None,
         started_at: str,
+        candidate_sequence: int | None = None,
     ) -> dict[str, Any]:
         self._require_enabled()
         self._require_profile(profile)
         if (
-            action == "open"
+            action in {"open", "guarded_open_probe"}
             and duration_seconds
             not in HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
         ):
@@ -147,6 +165,16 @@ class Htv405ControlCoordinator:
                 command_id=command_id,
                 zone=zone,
                 started_at=started_at,
+            )
+        elif action == "guarded_open_probe":
+            reservation = self.store.reserve_htv405_guarded_open_probe(
+                valve_endpoint=profile.valve_endpoint,
+                node_id=profile.node_id,
+                command_id=command_id,
+                zone=zone,
+                duration_seconds=int(duration_seconds or 0),
+                started_at=started_at,
+                candidate_sequence=candidate_sequence,
             )
         else:
             reservation = self.store.reserve_htv405_command(
@@ -175,9 +203,13 @@ class Htv405ControlCoordinator:
                 next_sequence=sequence,
             ),
             self._command(
-                "valve_control_close"
-                if action == "idle_close_probe"
-                else f"valve_control_{action}",
+                (
+                    "valve_control_close"
+                    if action == "idle_close_probe"
+                    else "valve_control_open"
+                    if action == "guarded_open_probe"
+                    else f"valve_control_{action}"
+                ),
                 command_id=command_id,
                 zone=zone,
                 expected_sequence=sequence,
