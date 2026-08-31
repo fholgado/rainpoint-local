@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-08-28
+Last reviewed: 2026-08-31
 
 This is the single source of truth for active project status, ordering, and
 completion. Architecture documents describe intended boundaries, protocol
@@ -391,6 +391,12 @@ same time without conflicting authority.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
+- [ ] Physically validate bounded counter re-synchronization while the valve is
+      independently confirmed idle. Probe one candidate at a time with an
+      idempotent close/no-op transaction, accept only the matching authenticated
+      valve response, advance only on a strict rejection, repeat a silent
+      candidate at most once, and stop visibly after the bounded search budget.
+      Ordinary open commands must not become counter probes.
 
 The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
 the disproven additive `42 02` duration payload received no positive response
@@ -419,6 +425,17 @@ reply proves watering did not begin, it can retry the same counter after the
 Pairing, association, duration, and counter-advancement rules are unchanged.
 Keep the scheduled-run gate open until beta.11 produces a confirmed installed
 20-minute open and valve-owned automatic idle.
+
+Gateway 0.33.18 removes the requested-duration-length recovery hold that made a
+failed 20-minute request occupy the HA script for 20 minutes. One silent command
+is retried with the same counter after the proven 15-second interval. A strict
+negative reply can move to the next five-bit candidate because it proves the
+valve remained closed; a second silent logical command requires a fresh
+independent idle report before any candidate advance. Silence alone remains
+ambiguous. Command transmission time is now stored separately from report time,
+so a routine idle report cannot impose a false 15-second command hold. Physical
+validation of the complete recovery path and the non-actuating close probe
+remains open above.
 
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
@@ -451,10 +468,14 @@ Keep the scheduled-run gate open until beta.11 produces a confirmed installed
 The deployed household script now waters from the remaining fresh readings
 when only part of a bed's sensor set is stale, and uses the bounded fallback
 only when no configured reading is fresh. Keep this gate open until a scheduled
-cycle validates both branches. Its valve path also waits through the daemon's
-bounded timeout guard and retries a failed open at most twice; each retry still
-requires an authenticated valve response, and a final failure remains a
-critical notification.
+cycle validates both branches. As of 2026-08-31, its valve path accepts only a
+new matching authenticated valve response, never command intent or an unrelated
+physical-open report. It observes short bounded recovery windows rather than
+the requested watering duration, returns immediately after a confirmed bounded
+start, and lets valve-owned idle telemetry finish the run. An exhausted retry
+now fails immediately with the gateway's exact reason. Every iPhone push is
+also mirrored into HA's persistent notification area so the message remains
+reviewable after the mobile banner is opened or dismissed.
 - [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
       addition to the existing UTC/offset/DST software coverage.
 

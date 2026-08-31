@@ -15,7 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 
 
@@ -194,6 +194,9 @@ class SQLiteEventStore:
             version = 15
         if version == 15:
             self._migrate_v15_to_v16()
+            version = 16
+        if version == 16:
+            self._migrate_v16_to_v17()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -504,6 +507,25 @@ class SQLiteEventStore:
                 ("endpoint_inventory_version",),
             )
             self._connection.execute("PRAGMA user_version = 16")
+
+    def _migrate_v16_to_v17(self) -> None:
+        """Track command spacing independently from valve telemetry."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name in (
+                "control_last_command_started_at",
+                "control_recovery_idle_at",
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} TEXT"
+                    )
+            self._connection.execute("PRAGMA user_version = 17")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -1211,9 +1233,11 @@ class SQLiteEventStore:
                 control_pending_zone = NULL,
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = NULL,
+                control_last_command_started_at = NULL,
                 control_recovery_sequence = NULL,
                 control_recovery_attempt = 0,
                 control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_last_result = 'association_updated_counter_required',
@@ -1256,9 +1280,11 @@ class SQLiteEventStore:
                 control_active_zone = NULL, control_run_started_at = NULL,
                 control_run_duration_seconds = NULL,
                 control_expected_idle_at = NULL,
+                control_last_command_started_at = NULL,
                 control_recovery_sequence = NULL,
                 control_recovery_attempt = 0,
                 control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_last_result = 'control_node_updated_counter_required',
@@ -1331,7 +1357,11 @@ class SQLiteEventStore:
             or state["control_active_zone"] != zone
         ):
             raise RuntimeError("HTV405 zone is not confirmed watering")
-        last_at = state["control_confirmed_at"]
+        # Valve reports and command transmissions are independent clocks. An
+        # idle report immediately before a command must not manufacture a new
+        # 15-second hold, while every actual transmission must observe the
+        # hardware's proven command-spacing requirement.
+        last_at = state["control_last_command_started_at"]
         if isinstance(last_at, str):
             try:
                 previous = datetime.fromisoformat(last_at)
@@ -1354,6 +1384,7 @@ class SQLiteEventStore:
                 control_pending_zone = ?,
                 control_pending_duration_seconds = ?,
                 control_pending_started_at = ?,
+                control_last_command_started_at = ?,
                 control_last_result = 'pending_authenticated_response',
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
@@ -1366,6 +1397,7 @@ class SQLiteEventStore:
                 sequence,
                 zone,
                 duration_seconds,
+                started_at,
                 started_at,
                 started_at,
                 valve_endpoint,
@@ -1416,6 +1448,7 @@ class SQLiteEventStore:
                 control_recovery_sequence = NULL,
                 control_recovery_attempt = 0,
                 control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_last_result = ?, updated_at = ?
@@ -1451,11 +1484,10 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Fail a reservation and invalidate the unconfirmed counter.
 
-        A response timeout cannot prove whether a bounded open began, so its
-        candidate remains guarded for the entire requested run.  An explicit
-        valve rejection proves that watering did not begin and only needs the
-        valve's normal command-spacing guard before the same candidate can be
-        tried again.
+        A response timeout cannot prove whether a bounded open began, so the
+        first retry reuses the same candidate after the hardware command
+        interval. An explicit valve rejection proves watering did not begin,
+        allowing the next candidate after that same interval.
         """
         row = self._connection.execute(
             "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
@@ -1488,34 +1520,36 @@ class SQLiteEventStore:
         if (retryable_timeout or retryable_rejection) and recovery_attempt < 2:
             pending_sequence = int(state["control_pending_sequence"])
             recovery_attempt += 1
+            # A response timeout is ambiguous, so the first retry reuses the
+            # exact same counter. The production node already sends a bounded
+            # three-frame RF burst; one later same-counter retry covers a
+            # missed burst without pretending the valve consumed it. A strict
+            # negative response proves this candidate was heard and rejected,
+            # so advancing to the next five-bit candidate is appropriate.
+            # After two silent logical commands, advancing is allowed only
+            # after a fresh idle report (enforced by the recovery method).
             recovery_sequence = (
-                pending_sequence
-                if recovery_attempt == 1
-                else (pending_sequence + 1) & 0x1F
+                (pending_sequence + 1) & 0x1F
+                if retryable_rejection or recovery_attempt > 1
+                else pending_sequence
             )
             recovery_zone = int(state["control_pending_zone"])
             recovery_duration = int(
                 state["control_pending_duration_seconds"]
             )
             try:
-                recovery_anchor = datetime.fromisoformat(
-                    observed_at
-                    if retryable_rejection
-                    else str(state["control_pending_started_at"])
-                )
+                failed_at = datetime.fromisoformat(observed_at)
             except ValueError:
                 recovery_sequence = None
                 recovery_not_before = None
             else:
+                # Every transmitted command observes the valve's proven
+                # 15-second hardware interval. Do not block for the requested
+                # watering duration: a later active report cancels recovery,
+                # while a second silent attempt cannot advance to a new
+                # counter until fresh idle telemetry arrives.
                 recovery_not_before = (
-                    recovery_anchor
-                    + timedelta(
-                        seconds=(
-                            15
-                            if retryable_rejection
-                            else recovery_duration + 15
-                        )
-                    )
+                    failed_at + timedelta(seconds=15)
                 ).isoformat()
         cursor = self._connection.execute(
             """
@@ -1530,6 +1564,7 @@ class SQLiteEventStore:
                 control_recovery_sequence = ?,
                 control_recovery_attempt = ?,
                 control_recovery_not_before = ?,
+                control_recovery_idle_at = NULL,
                 control_recovery_zone = ?,
                 control_recovery_duration_seconds = ?,
                 control_last_result = ?, updated_at = ?
@@ -1567,10 +1602,12 @@ class SQLiteEventStore:
     ) -> dict[str, Any] | None:
         """Restore the smallest safe candidate after a bounded open timeout.
 
-        Recovery is unavailable until the entire requested run plus a guard
-        interval has elapsed.  This guarantees that even a command whose RF
-        acknowledgement and state report were both missed can no longer be
-        watering before another counter candidate is attempted.
+        Recovery always observes the valve's 15-second command interval. A
+        first response timeout retries the same counter, which cannot consume
+        an additional counter candidate. Rejection may advance immediately
+        after that interval because it proves watering did not begin. Only a
+        second silent command may advance to a new candidate, and that path
+        additionally requires a fresh idle report after the interval.
         """
         row = self._connection.execute(
             "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
@@ -1603,6 +1640,18 @@ class SQLiteEventStore:
             return None
         if current < available_at:
             return None
+        requires_fresh_idle = (
+            state.get("control_last_result")
+            == "gateway_command_response_timeout_counter_unsynchronized"
+            and int(state.get("control_recovery_attempt") or 0) > 1
+        )
+        if requires_fresh_idle:
+            # This field can only be populated by an independent idle report
+            # observed after the failed logical command established recovery.
+            # It is therefore stronger evidence than comparing general valve
+            # timestamps, which may predate the command or be overwritten.
+            if not isinstance(state.get("control_recovery_idle_at"), str):
+                return None
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -1663,6 +1712,7 @@ class SQLiteEventStore:
         if state["control_pending_command_id"] is not None:
             return state
         if state["control_next_sequence"] is None and not watering:
+            recovering = state.get("control_recovery_sequence") is not None
             self._connection.execute(
                 """
                 UPDATE valve_registry SET
@@ -1672,14 +1722,27 @@ class SQLiteEventStore:
                     control_run_started_at = NULL,
                     control_run_duration_seconds = NULL,
                     control_expected_idle_at = NULL,
-                    control_last_result =
-                        'idle_confirmed_counter_unsynchronized',
+                    control_last_result = CASE
+                        WHEN ? THEN control_last_result
+                        ELSE 'idle_confirmed_counter_unsynchronized'
+                    END,
+                    control_recovery_idle_at = CASE
+                        WHEN ? THEN ?
+                        ELSE NULL
+                    END,
                     updated_at = ?
                 WHERE valve_endpoint = ?
                   AND control_pending_command_id IS NULL
                   AND control_next_sequence IS NULL
                 """,
-                (observed_at, observed_at, valve_endpoint),
+                (
+                    observed_at,
+                    int(recovering),
+                    int(recovering),
+                    observed_at,
+                    observed_at,
+                    valve_endpoint,
+                ),
             )
             self._connection.commit()
             return next(
@@ -1722,6 +1785,7 @@ class SQLiteEventStore:
                     control_expected_idle_at = NULL,
                     control_recovery_sequence = NULL,
                     control_recovery_not_before = NULL,
+                    control_recovery_idle_at = NULL,
                     control_recovery_zone = NULL,
                     control_recovery_duration_seconds = NULL,
                     control_last_result =
@@ -1801,6 +1865,7 @@ class SQLiteEventStore:
                 control_recovery_sequence = NULL,
                 control_recovery_attempt = 0,
                 control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_last_result = 'authenticated_response_confirmed',

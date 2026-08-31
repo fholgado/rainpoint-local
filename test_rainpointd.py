@@ -207,7 +207,7 @@ class GatewayTest(unittest.TestCase):
             self.assertIsNotNone(failed)
             assert failed is not None
             self.assertIsNone(failed["control_pending_command_id"])
-            self.assertEqual(6, failed["control_recovery_sequence"])
+            self.assertEqual(7, failed["control_recovery_sequence"])
             self.assertEqual(
                 "2026-08-24T20:00:35.900000+00:00",
                 failed["control_recovery_not_before"],
@@ -574,7 +574,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(16, restored._store.schema_version())
+            self.assertEqual(17, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1430,7 +1430,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(16, gateway.info()["storage_schema_version"])
+            self.assertEqual(17, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1441,7 +1441,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(16, migrated.info()["storage_schema_version"])
+            self.assertEqual(17, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -1510,6 +1510,8 @@ class GatewayTest(unittest.TestCase):
                     "control_pending_zone",
                     "control_pending_duration_seconds",
                     "control_pending_started_at",
+                    "control_last_command_started_at",
+                    "control_recovery_idle_at",
                     "control_last_result",
                 }
                 <= valve_columns
@@ -3020,7 +3022,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
                 action="open",
                 zone=1,
                 duration_seconds=60,
-                now=datetime.fromisoformat("2026-08-24T20:01:34+00:00"),
+                now=datetime.fromisoformat("2026-08-24T20:00:36+00:00"),
             )
 
         retry = gateway.request_htv405_control(
@@ -3028,7 +3030,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             action="open",
             zone=1,
             duration_seconds=60,
-            now=datetime.fromisoformat("2026-08-24T20:01:35+00:00"),
+            now=datetime.fromisoformat("2026-08-24T20:00:37+00:00"),
         )
         self.assertEqual("pending_authenticated_response", retry["state"])
         registration = gateway._store.valve_registry()[0]
@@ -3169,7 +3171,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         before = next(
             item
             for item in gateway.devices(
-                now=datetime.fromisoformat("2026-08-24T20:01:34+00:00")
+                now=datetime.fromisoformat("2026-08-24T20:00:45+00:00")
             )
             if item["device_id"] == self.DEVICE_ID
         )
@@ -3178,7 +3180,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         after = next(
             item
             for item in gateway.devices(
-                now=datetime.fromisoformat("2026-08-24T20:01:35+00:00")
+                now=datetime.fromisoformat("2026-08-24T20:00:45.001000+00:00")
             )
             if item["device_id"] == self.DEVICE_ID
         )

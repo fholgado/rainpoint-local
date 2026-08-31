@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.33.18 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
+
+- Retry the same HTV405 command counter after one silent authenticated-response
+  window and the proven 15-second hardware interval; do not wait for the
+  requested watering duration before declaring that attempt unconfirmed.
+- Advance to the next five-bit recovery candidate only after a strict negative
+  valve response, or after a second silent logical attempt plus a fresh
+  independent idle report. Silence alone never proves watering did not start.
+- Track the last command transmission separately from valve telemetry so a
+  routine idle report cannot manufacture a new command-spacing delay.
+- Expose whether recovery is observing the command interval, waiting for fresh
+  idle evidence, or has exhausted its bounded candidates.
+
 ## 0.33.17 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
 
 - Repeat an HTV405 control frame at 650 and 1,450 ms only while its original

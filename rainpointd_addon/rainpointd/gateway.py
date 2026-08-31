@@ -2466,14 +2466,37 @@ class Gateway:
                     elif not node_ready:
                         unavailable_reason = "radio_node_unavailable"
                     elif not counter_ready:
-                        unavailable_reason = (
-                            "bounded_timeout_recovery_wait"
-                            if valve_registration.get(
-                                "control_recovery_sequence"
-                            )
-                            is not None
-                            else "control_counter_unsynchronized"
+                        recovery_sequence = valve_registration.get(
+                            "control_recovery_sequence"
                         )
+                        recovery_attempt = int(
+                            valve_registration.get(
+                                "control_recovery_attempt"
+                            )
+                            or 0
+                        )
+                        recovery_result = valve_registration.get(
+                            "control_last_result"
+                        )
+                        if recovery_sequence is None:
+                            unavailable_reason = (
+                                "control_counter_unsynchronized"
+                            )
+                        elif (
+                            recovery_result
+                            == "gateway_command_response_timeout_"
+                            "counter_unsynchronized"
+                            and recovery_attempt > 1
+                            and valve_registration.get(
+                                "control_recovery_idle_at"
+                            )
+                            is None
+                        ):
+                            unavailable_reason = (
+                                "awaiting_fresh_idle_confirmation"
+                            )
+                        else:
+                            unavailable_reason = "counter_retry_interval"
                     elif pending_command is not None:
                         unavailable_reason = "command_pending_response"
                     else:
