@@ -86,6 +86,12 @@ python3 tools/analyze_htv145_pairing_iq.py CAPTURE.cu8 \
   --companion-endpoint COMPANION --controller-endpoint CONTROLLER
 ```
 
+Use a capture of at least 300 seconds for a stock HTV145 enrollment. A
+controlled 2026-09-01 trial measured the stock gateway's first RF transmission
+at about 179 seconds in an earlier 180-second recording, leaving the successful
+exchange outside the file. The five-minute capture retained the complete reset,
+gateway boot, pairing, and post-enrollment idle tail.
+
 ## Controlled capture sequence
 
 Place the receiver close enough to see both hub and accessories without

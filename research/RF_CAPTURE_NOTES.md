@@ -529,9 +529,11 @@ Reference evidence:
 - The stock RainPoint gateway was off and all three custom radio nodes were
   gateway-verified receive-only. The 180-second, 2.0 Msps capture therefore
   contains no custom or stock gateway replies.
-- Factory counter `0` appeared at 34.580350 seconds and counter `3` at
-  46.080300 seconds. No assignment, paired-route request, or configuration
-  response was recovered anywhere in the continuous capture.
+- Corrected two-carrier analysis recovered a six-frame sweep: counter `0` at
+  34.580350 seconds, counter `1` on the upper carrier at 36.081600, lower and
+  upper variants of counter `2` at 40.080400 and 42.080350, counter `3` at
+  46.080300, and counter `4` on the upper carrier at 47.994300. No assignment,
+  paired-route request, or configuration response followed.
 - The visible LED sweep did not look meaningfully different from ordinary
   pairing, but the absence of retained paired traffic proves that LED behavior
   is not a sufficient lifecycle classifier.
@@ -541,3 +543,27 @@ Reference evidence:
 
 Reference evidence:
 `fixtures/htv145_factory_reset_stock_off_20260901.json`.
+
+### HTV145 fresh counter-2 stock enrollment — 2026-09-01
+
+- The first 180-second attempt retained the reset but ended as the stock
+  gateway emitted its first boot traffic at about 179.05 seconds. The bounded
+  capture utility was extended to five minutes before repeating the trial.
+- After another documented reset, the valve button was held before the stock
+  app advanced into search. The factory sweep transmitted counter `0` on the
+  lower carrier, counter `1` near 434.306 MHz, and counter `2` back on the
+  lower carrier. The former analyzer's lower-carrier-only model had incorrectly
+  hidden counter `1`.
+- The stock gateway accepted counter `2` after 49.65 ms. Selector `6` with its
+  channel high flag clear assigned subchannel `12` at 434.3515 MHz. Four paired
+  lower-carrier requests, five gateway continuations, the long-wake delayed
+  configuration, and the stage-2 valve response were all recovered.
+- The app and white LED reported success. This is a complete physically
+  accepted branch, not a plausible assignment inferred from outbound traffic.
+- The next discriminating trial arms stock app search before the valve long
+  press. Its purpose is to determine whether arming order selects the first
+  observed factory announcement or a particular counter; no counter outcome is
+  assumed in advance.
+
+Reference evidence:
+`fixtures/htv145_counter2_stock_enrollment_20260901.json`.

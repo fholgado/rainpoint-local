@@ -20,7 +20,7 @@
   },
   "analysis": {
     "engine": "numpy_shared_discriminator",
-    "request_count": 2,
+    "request_count": 6,
     "assignment_count": 0,
     "lower_paired_request_count": 0,
     "stage_1_request_count": 0,
@@ -31,16 +31,50 @@
         "end_seconds": 34.61155,
         "phase_count": 97,
         "counter": 0,
+        "center_hz": 433143000,
         "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+      },
+      {
+        "start_seconds": 36.0816,
+        "end_seconds": 36.1128,
+        "phase_count": 44,
+        "counter": 1,
+        "center_hz": 434306001,
+        "frame": "79f4882f2880000000342d008f81008402ff8f970080bf060000000000000000000000002b41"
+      },
+      {
+        "start_seconds": 40.0804,
+        "end_seconds": 40.1116,
+        "phase_count": 96,
+        "counter": 2,
+        "center_hz": 433143000,
+        "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+      },
+      {
+        "start_seconds": 42.08035,
+        "end_seconds": 42.11155,
+        "phase_count": 25,
+        "counter": 2,
+        "center_hz": 434306001,
+        "frame": "79f4882f2880000000342d008f82808402ff8f970080bf060000000000000000000000003ec9"
       },
       {
         "start_seconds": 46.0803,
         "end_seconds": 46.1115,
         "phase_count": 96,
         "counter": 3,
+        "center_hz": 433143000,
         "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+      },
+      {
+        "start_seconds": 47.9943,
+        "end_seconds": 48.0255,
+        "phase_count": 29,
+        "counter": 4,
+        "center_hz": 434306001,
+        "frame": "79f4882f2880000000342d008f84008402ff8f970080bf060000000000000000000000004257"
       }
     ]
   },
-  "conclusion": "The documented reset cleared the retained RF association even though the LED sweep was visually indistinguishable from ordinary pairing."
+  "conclusion": "The documented reset cleared the retained RF association and emitted a six-frame, two-carrier factory sweep even though the LED sequence was visually indistinguishable from ordinary pairing."
 }

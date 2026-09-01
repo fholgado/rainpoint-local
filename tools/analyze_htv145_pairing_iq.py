@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Correlate HTV145 enrollment branches in bounded CU8 IQ captures.
 
-HTV145 uses the lower request carrier for its factory announcement and paired
-requests at stages 1 and 3--5. Only the stage-2 controller-configuration
-response moves to the routine response carrier. Keeping those legs separate is
-essential: searching for stage 1 on the response carrier makes an accepted
-assignment look rejected.
+HTV145 alternates its factory sweep across lower and upper request carriers.
+Paired requests at stages 1 and 3--5 return to the lower carrier, while gateway
+continuations and the stage-2 controller-configuration response move to the
+subchannel selected by the accepted assignment. Keeping those legs separate is
+essential: forcing every accepted branch onto one carrier makes a successful
+enrollment look rejected.
 """
 
 from __future__ import annotations
@@ -29,8 +30,12 @@ WAKE_SYMBOLS = 320
 DEFAULT_SAMPLE_RATE = 2_000_000
 DEFAULT_CAPTURE_CENTER_HZ = 433_700_000
 DEFAULT_REQUEST_CENTER_HZ = 433_143_000
+DEFAULT_UPPER_SWEEP_CENTER_HZ = 434_306_001
 DEFAULT_ASSIGNMENT_CENTER_HZ = 433_556_567
 DEFAULT_RESPONSE_CENTER_HZ = 433_471_500
+PAIRING_CHANNEL_BASE_HZ = 433_031_500
+PAIRING_CHANNEL_SPACING_HZ = 110_000
+RESPONSE_CENTER_TOLERANCE_HZ = 10_000
 
 
 def _endpoint(value: str) -> bytes:
@@ -131,7 +136,8 @@ def _factory_matches(frame_hex: str, factory_endpoint: bytes) -> bool:
         and frame.startswith(bytes.fromhex("79f4882f28"))
         and frame[5:9] == bytes.fromhex("80000000")
         and frame[9:13] == factory_endpoint
-        and frame[14:18] == bytes.fromhex("808402ff")
+        and frame[14] & 0x7F == 0
+        and frame[15:18] == bytes.fromhex("8402ff")
         and (
             binascii.crc_hqx(frame[:-2], 0)
             ^ int.from_bytes(frame[-2:], "big")
@@ -150,9 +156,9 @@ def _assignment_matches(
     """Match either complete stock HTV145 assignment branch.
 
     Counter-0 selector-5 enrollment addresses the companion endpoint. The
-    accepted counter-3 selector-6 retained-association branch addresses the
-    controller route directly. Requiring the counter, selector, and endpoint
-    from only the first capture made the second accepted exchange invisible.
+    accepted counter-2 selector-6 branch addresses the controller route
+    directly. Requiring the counter, selector, and endpoint from only the
+    first capture made the second accepted exchange invisible.
     """
     try:
         frame = bytes.fromhex(frame_hex)
@@ -164,7 +170,8 @@ def _assignment_matches(
         and frame[5:9] == paired_endpoint
         and frame[9:13] in {companion_endpoint, controller_endpoint}
         and frame[13] & 0x80
-        and frame[14:17] == bytes.fromhex("c08585")
+        and frame[14] & 0x7F == 0x40
+        and frame[15:17] == bytes.fromhex("8585")
         and frame[18] & 0x7F in {0x05, 0x06}
         and frame[19] & 0x70 == 0x70
         and frame[20] == 0x00
@@ -196,7 +203,8 @@ def _stage_1_matches(
         and frame[5:9] == controller_endpoint
         and frame[9:13] == paired_endpoint
         and body[0] & 0x80
-        and body[1:3] == bytes.fromhex("0107")
+        and body[1] & 0x7F == 0x01
+        and body[2] == 0x07
         and body[3] & 0x7F in {0x02, 0x06}
         and body[4] & 0x7F == 0x25
         and body[5:] == expected_tail
@@ -205,6 +213,29 @@ def _stage_1_matches(
             ^ int.from_bytes(frame[-2:], "big")
         )
         in {0xC713, 0x4F03}
+    )
+
+
+def _assigned_response_channel(
+    frame_hex: str,
+    *,
+    controller_endpoint: bytes,
+) -> tuple[int, int] | None:
+    """Decode the selector-6 continuation subchannel from an assignment."""
+    try:
+        frame = bytes.fromhex(frame_hex)
+    except ValueError:
+        return None
+    if (
+        len(frame) != 38
+        or frame[9:13] != controller_endpoint
+        or frame[18] & 0x7F != 0x06
+    ):
+        return None
+    channel = 2 * (frame[18] & 0x7F) + bool(frame[19] & 0x80)
+    return (
+        channel,
+        PAIRING_CHANNEL_BASE_HZ + channel * PAIRING_CHANNEL_SPACING_HZ,
     )
 
 
@@ -253,6 +284,7 @@ def _events(
                 {
                     "frame": frame_hex,
                     "phase_count": int(match["phase_count"]),
+                    "center_hz": int(result["channel_center_hz"]),
                     "start_seconds": origin_seconds
                     + (sync_symbol - WAKE_SYMBOLS) / symbol_rate,
                     "end_seconds": origin_seconds
@@ -273,6 +305,25 @@ def _events(
     return deduplicated
 
 
+def _merged_events(groups: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Merge carrier-specific events without duplicating nearby decodes."""
+    ordered = sorted(
+        (event for group in groups for event in group),
+        key=lambda item: item["start_seconds"],
+    )
+    merged = []
+    for event in ordered:
+        if any(
+            candidate["frame"] == event["frame"]
+            and abs(candidate["start_seconds"] - event["start_seconds"])
+            < 0.1
+            for candidate in merged[-3:]
+        ):
+            continue
+        merged.append(event)
+    return merged
+
+
 def analyze(
     path: Path,
     *,
@@ -286,6 +337,7 @@ def analyze(
     request_center_hz: int,
     assignment_center_hz: int,
     response_center_hz: int,
+    upper_sweep_center_hz: int = DEFAULT_UPPER_SWEEP_CENTER_HZ,
 ) -> dict[str, Any]:
     common = {
         "sample_rate": sample_rate,
@@ -295,18 +347,25 @@ def analyze(
         path,
         channel_centers_hz=(
             request_center_hz,
+            upper_sweep_center_hz,
             assignment_center_hz,
             response_center_hz,
         ),
         **common,
     )
     request_result = channels[request_center_hz]
+    upper_sweep_result = channels[upper_sweep_center_hz]
     assignment_result = channels[assignment_center_hz]
-    response_result = channels[response_center_hz]
-    requests = _events(
-        request_result,
-        lambda frame: _factory_matches(frame, factory_endpoint),
-        origin_seconds=origin_seconds,
+    response_results = {response_center_hz: channels[response_center_hz]}
+    requests = _merged_events(
+        [
+            _events(
+                result,
+                lambda frame: _factory_matches(frame, factory_endpoint),
+                origin_seconds=origin_seconds,
+            )
+            for result in (request_result, upper_sweep_result)
+        ]
     )
     assignments = _events(
         assignment_result,
@@ -318,6 +377,35 @@ def analyze(
         ),
         origin_seconds=origin_seconds,
     )
+    assigned_channels = [
+        assigned
+        for assignment in assignments
+        if (
+            assigned := _assigned_response_channel(
+                assignment["frame"],
+                controller_endpoint=controller_endpoint,
+            )
+        )
+        is not None
+    ]
+    additional_centers = sorted(
+        {
+            center
+            for _, center in assigned_channels
+            if all(
+                abs(center - existing) > RESPONSE_CENTER_TOLERANCE_HZ
+                for existing in response_results
+            )
+        }
+    )
+    if additional_centers:
+        response_results.update(
+            demodulate_many(
+                path,
+                channel_centers_hz=additional_centers,
+                **common,
+            )
+        )
     paired_requests = _events(
         request_result,
         lambda frame: _matches(
@@ -337,14 +425,34 @@ def analyze(
         ),
         origin_seconds=origin_seconds,
     )
-    configuration_responses = _events(
-        response_result,
-        lambda frame: _configuration_response_matches(
-            frame,
-            controller_endpoint=controller_endpoint,
-            paired_endpoint=paired_endpoint,
-        ),
-        origin_seconds=origin_seconds,
+    paired_responses = _merged_events(
+        [
+            _events(
+                result,
+                lambda frame: _matches(
+                    frame,
+                    endpoint_a=paired_endpoint,
+                    endpoint_b=controller_endpoint,
+                    body_prefix=b"",
+                ),
+                origin_seconds=origin_seconds,
+            )
+            for result in response_results.values()
+        ]
+    )
+    configuration_responses = _merged_events(
+        [
+            _events(
+                result,
+                lambda frame: _configuration_response_matches(
+                    frame,
+                    controller_endpoint=controller_endpoint,
+                    paired_endpoint=paired_endpoint,
+                ),
+                origin_seconds=origin_seconds,
+            )
+            for result in response_results.values()
+        ]
     )
 
     trials = []
@@ -381,6 +489,10 @@ def analyze(
         )
         assignment_frame = bytes.fromhex(assignment["frame"])
         request_frame = bytes.fromhex(request["frame"])
+        assigned_response = _assigned_response_channel(
+            assignment["frame"],
+            controller_endpoint=controller_endpoint,
+        )
         trials.append(
             {
                 "factory_sweep_counter": request_frame[13] & 0x7F,
@@ -393,6 +505,16 @@ def analyze(
                 "assignment_destination": assignment_frame[9:13].hex(),
                 "assignment_to_controller_route": (
                     assignment_frame[9:13] == controller_endpoint
+                ),
+                "assigned_response_channel": (
+                    assigned_response[0]
+                    if assigned_response is not None
+                    else None
+                ),
+                "assigned_response_center_hz": (
+                    assigned_response[1]
+                    if assigned_response is not None
+                    else response_center_hz
                 ),
                 "counter_echoed": (
                     assignment_frame[13] & 0x7F
@@ -421,15 +543,22 @@ def analyze(
         "assignment_count": len(assignments),
         "lower_paired_request_count": len(paired_requests),
         "stage_1_request_count": len(stage_1_requests),
+        "paired_response_count": len(paired_responses),
         "configuration_response_count": len(configuration_responses),
         "factory_requests": requests,
         "assignments": assignments,
+        "paired_requests": paired_requests,
         "stage_1_requests": stage_1_requests,
+        "paired_responses": paired_responses,
         "configuration_responses": configuration_responses,
+        "assigned_response_centers_hz": sorted(
+            {center for _, center in assigned_channels}
+        ),
         "decision_centers_hz": {
             "lower_request": request_center_hz,
+            "upper_sweep": upper_sweep_center_hz,
             "assignment": assignment_center_hz,
-            "configuration_response": response_center_hz,
+            "configuration_response": sorted(response_results),
         },
         "trials": trials,
     }
@@ -455,6 +584,11 @@ def main() -> int:
         "--assignment-center", type=int, default=DEFAULT_ASSIGNMENT_CENTER_HZ
     )
     parser.add_argument(
+        "--upper-sweep-center",
+        type=int,
+        default=DEFAULT_UPPER_SWEEP_CENTER_HZ,
+    )
+    parser.add_argument(
         "--response-center", type=int, default=DEFAULT_RESPONSE_CENTER_HZ
     )
     args = parser.parse_args()
@@ -476,6 +610,7 @@ def main() -> int:
             request_center_hz=args.request_center,
             assignment_center_hz=args.assignment_center,
             response_center_hz=args.response_center,
+            upper_sweep_center_hz=args.upper_sweep_center,
         )
     result["path"] = str(args.capture)
     result["analysis_window"] = {

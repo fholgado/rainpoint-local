@@ -243,17 +243,25 @@ observation before it changes transmitted firmware.
       controlled lifecycle matrix as separate continuous-IQ trials:
   1. [x] documented factory reset with the stock gateway off and every custom
      node confirmed receive-only;
-     - 2026-09-01: a checksummed 180-second capture recovered factory counters
-       `0` and `3` at 34.580350 and 46.080300 seconds, with no assignment,
-       paired-route request, or configuration response. The reset therefore
-       cleared the retained association even though its LED sequence was not
-       visibly distinct from ordinary pairing.
-  2. [ ] documented factory reset followed by a complete stock enrollment using
+     - 2026-09-01: a checksummed 180-second capture recovered a six-frame,
+       two-carrier factory sweep: counters `0`, `1`, lower/upper variants of
+       `2`, `3`, and `4`. No assignment, paired-route request, or configuration
+       response followed. The reset therefore cleared the retained association
+       even though its LED sequence was not visibly distinct from ordinary
+       pairing.
+  2. [x] documented factory reset followed by a complete stock enrollment using
      the manual's exact button-then-app order;
-  3. [ ] a second documented factory reset and identical complete stock
-     enrollment;
-  4. [ ] ordinary long-press re-pairing without a factory reset;
-  5. [ ] ordinary battery removal/reinstallation while the accepted stock
+     - 2026-09-01: the stock gateway accepted factory counter `2`, completed all
+       six stages, and enrolled successfully. The capture proved that counter
+       `1` is a real upper-carrier factory announcement and that the accepted
+       counter-2 assignment selects response subchannel `12` at 434.3515 MHz.
+  3. [ ] repeat the documented reset with stock app search armed before the
+     valve long press. Compare which factory counter is accepted against the
+     button-first counter-2 transcript without assuming counter `1` wins;
+  4. [ ] a second documented factory reset and identical button-first complete
+     stock enrollment;
+  5. [ ] ordinary long-press re-pairing without a factory reset;
+  6. [ ] ordinary battery removal/reinstallation while the accepted stock
      association remains registered.
 - [ ] For both new complete stock enrollments, retain the full factory sweep,
       the first gateway transmission, every addressed continuation, the first

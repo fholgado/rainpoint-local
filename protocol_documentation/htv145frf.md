@@ -49,14 +49,33 @@ routine carrier near 434.461993 MHz. Its request counters progressed
 about 3.630 seconds after stage 1. The first four replies used residue `0xc713`
 and the last used `0x4f03`.
 
+A fresh reset followed by button-first/app-second enrollment exposed a third
+accepted branch. The valve transmitted factory counters `0`, `1`, and `2` at
+approximately 126.585, 128.087, and 132.085 seconds. Counters `0` and `2` used
+the 433.143 MHz request carrier; counter `1` used a separate carrier near
+434.306 MHz. The gateway accepted counter `2`, selected selector `6` with its
+channel high flag clear, and therefore assigned response subchannel `12`:
+
+```text
+channel = 2 * selector + high_flag = 2 * 6 + 0 = 12
+center = 433.0315 MHz + channel * 110 kHz = 434.3515 MHz
+```
+
+Valve stages 1 and 3--5 remained on the lower request carrier. Gateway replies,
+the delayed stage 1a configuration, and the valve's stage-2 response used the
+assigned 434.3515 MHz carrier. The complete branch finished successfully in the
+stock app. Counter `1` is consequently a real upper-carrier factory sweep
+announcement, not an absent value or a paired continuation.
+
 These are complete association profiles, not interchangeable parameter
 choices. The app Device Address does not identify the selector: an app address
 of `1` has been observed with selector `6`.
 
 ## Local enrollment status
 
-The current local candidate reproduces both captured stock association
-profiles, but no complete local transcript has been physically accepted.
+The current local candidate has not yet reproduced a complete transcript that
+the physical valve accepts. The counter-2/subchannel-12 branch is newly
+captured evidence and is not yet a supported firmware profile.
 
 Therefore:
 
@@ -173,6 +192,8 @@ not exposed as supported functionality.
 - Stock enrollment: `research/fixtures/htv145_gateway_pairing_replies.json`
 - Selector-6 enrollment:
   `research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`
+- Counter-2/subchannel-12 enrollment:
+  `research/fixtures/htv145_counter2_stock_enrollment_20260901.json`
 - Command and duration evidence:
   `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
 - Battery and usage evidence:

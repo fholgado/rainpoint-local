@@ -391,6 +391,109 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(trial["counter_echoed"])
         self.assertTrue(trial["stage_1_observed"])
 
+    def test_htv145_iq_analyzer_derives_counter_2_response_channel(
+        self,
+    ) -> None:
+        upper_factory_request = bytes.fromhex(
+            "79f4882f2880000000342d008f81008402ff8f970080bf060000"
+            "000000000000000000002b41"
+        )
+        factory_request = bytes.fromhex(
+            "79f4882f2880000000342d008f82008402ff8f970080bf060000"
+            "000000000000000000000c4c"
+        )
+        assignment = bytes.fromhex(
+            "79f4882f28b42d008fb9840280824085850086700098e1a10d"
+            "01008000000000000000001133"
+        )
+        stage_1_request = bytes.fromhex(
+            "79f4882f28b9840280b42d008f828107862580804f8000000040"
+            "800056800000000000004301"
+        )
+        stage_1_reply = bytes.fromhex(
+            "79f4882f28b42d008fb984028082c101000080000000000000"
+            "00000000000000000000004ca5"
+        )
+        configuration_response = bytes.fromhex(
+            "79f4882f28b9840280b42d008f815000800000000000000000"
+            "00000000000000000000006f4d"
+        )
+        assigned_response_center_hz = 434_351_500
+        chunks = []
+        for frame, center, wake_symbols, trailing_silence_ms in (
+            (
+                upper_factory_request,
+                434_306_001,
+                320,
+                500,
+            ),
+            (factory_request, HTV145_REQUEST_CENTER_HZ, 320, 54),
+            (assignment, HTV145_ASSIGNMENT_CENTER_HZ, 320, 500),
+            (stage_1_request, HTV145_REQUEST_CENTER_HZ, 320, 50),
+            (stage_1_reply, assigned_response_center_hz, 320, 500),
+            (
+                configuration_response,
+                assigned_response_center_hz,
+                320,
+                5,
+            ),
+        ):
+            command, _ = generate_command(
+                frame,
+                wake_symbols=wake_symbols,
+                channel_center_hz=center,
+                leading_silence_ms=5 if not chunks else 0,
+                trailing_silence_ms=trailing_silence_ms,
+            )
+            chunks.append(command)
+
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(b"".join(chunks))
+            capture.flush()
+            result = analyze_htv145_pairing_capture(
+                Path(capture.name),
+                factory_endpoint=bytes.fromhex("342d008f"),
+                paired_endpoint=bytes.fromhex("b42d008f"),
+                companion_endpoint=bytes.fromhex("39840280"),
+                controller_endpoint=bytes.fromhex("b9840280"),
+                origin_seconds=0,
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+                request_center_hz=HTV145_REQUEST_CENTER_HZ,
+                assignment_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+                response_center_hz=HTV145_RESPONSE_CENTER_HZ,
+            )
+
+        self.assertEqual(2, result["request_count"])
+        self.assertEqual(
+            [1, 2],
+            [
+                bytes.fromhex(request["frame"])[13] & 0x7F
+                for request in result["factory_requests"]
+            ],
+        )
+        self.assertEqual(
+            [434_306_001, HTV145_REQUEST_CENTER_HZ],
+            [request["center_hz"] for request in result["factory_requests"]],
+        )
+        self.assertEqual(1, result["assignment_count"])
+        self.assertEqual(1, result["stage_1_request_count"])
+        self.assertEqual(1, result["configuration_response_count"])
+        self.assertEqual(
+            [assigned_response_center_hz],
+            result["assigned_response_centers_hz"],
+        )
+        trial = result["trials"][0]
+        self.assertEqual(2, trial["factory_sweep_counter"])
+        self.assertEqual(2, trial["assignment_counter"])
+        self.assertEqual(6, trial["assignment_selector"])
+        self.assertEqual(12, trial["assigned_response_channel"])
+        self.assertEqual(
+            assigned_response_center_hz,
+            trial["assigned_response_center_hz"],
+        )
+        self.assertTrue(trial["stage_1_observed"])
+
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:
         controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
         for index, step in enumerate(VALIDATED_HCS026_PROFILE.steps):

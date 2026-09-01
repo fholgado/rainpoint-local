@@ -1,0 +1,118 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "capture_path": "/share/rainpoint-local/htv145-stock-pairing-20260901-121036/continuous_433.7M_2000k.cu8",
+  "capture_sha256": "70c2b374cc7bff8bc0bd02b3094423ea7192836caed672b6be606c11e07e63a9",
+  "capture_bytes": 1200000000,
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "duration_seconds": 300,
+  "lifecycle": {
+    "batteries": "four fresh alkaline cells",
+    "reset": "batteries removed for at least ten seconds; timer button held while reinstalling until rapid red flashing",
+    "stock_gateway": "powered only after the reset sweep completed",
+    "custom_nodes": "all three authenticated nodes verified receive-only",
+    "operator_order": "valve long press first; stock app search advanced after red flashing began",
+    "visible_result": "successful white flash and app enrollment"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "accepted_factory_counter": 2,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "assigned_response_center_hz": 434351500
+  },
+  "factory_sweep": [
+    {
+      "counter": 0,
+      "center_hz": 433143000,
+      "start_seconds": 126.58465,
+      "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+    },
+    {
+      "counter": 1,
+      "center_hz": 434306001,
+      "start_seconds": 128.0868,
+      "frame": "79f4882f2880000000342d008f81008402ff8f970080bf060000000000000000000000002b41"
+    },
+    {
+      "counter": 2,
+      "center_hz": 433143000,
+      "start_seconds": 132.0845,
+      "frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+    }
+  ],
+  "exchanges": [
+    {
+      "stage": 0,
+      "request_end_seconds": 132.1157,
+      "reply_start_seconds": 132.16535,
+      "request_end_to_reply_start_ms": 49.65,
+      "request_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+      "reply_frame": "79f4882f28b42d008fb9840280824085850086700098e1a10d01008000000000000000001133",
+      "reply_center_hz": 433556567
+    },
+    {
+      "stage": 1,
+      "request_end_seconds": 133.5963,
+      "reply_start_seconds": 133.665,
+      "request_end_to_reply_start_ms": 68.7,
+      "request_frame": "79f4882f28b9840280b42d008f828107862580804f8000000040800056800000000000004301",
+      "reply_frame": "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5",
+      "reply_center_hz": 434351500
+    },
+    {
+      "stage": "1a",
+      "reply_start_seconds": 136.54885,
+      "prior_reply_end_to_reply_start_ms": 2852.65,
+      "reply_frame": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+      "reply_center_hz": 434351500,
+      "wake_symbols": 2400
+    },
+    {
+      "stage": 2,
+      "request_start_seconds": 136.8037,
+      "prior_reply_end_to_request_start_ms": 223.65,
+      "request_frame": "79f4882f28b9840280b42d008f81500080000000000000000000000000000000000000006f4d",
+      "request_center_hz": 434351500,
+      "reply_expected": false
+    },
+    {
+      "stage": 3,
+      "request_end_seconds": 138.52205,
+      "reply_start_seconds": 138.57535,
+      "request_end_to_reply_start_ms": 53.3,
+      "request_frame": "79f4882f28b9840280b42d008f83028106008000000000000000000000000000000000004db3",
+      "reply_frame": "79f4882f28b42d008fb9840280834287802c0105000f0000000000000000000000000000063f",
+      "reply_center_hz": 434351500
+    },
+    {
+      "stage": 4,
+      "request_end_seconds": 139.5922,
+      "reply_start_seconds": 139.64475,
+      "request_end_to_reply_start_ms": 52.55,
+      "request_frame": "79f4882f28b9840280b42d008f83830186008000000000000000000000000000000000004ef9",
+      "reply_frame": "79f4882f28b42d008fb984028083c3008000000000000000000000000000000000000000221c",
+      "reply_center_hz": 434351500
+    },
+    {
+      "stage": 5,
+      "request_end_seconds": 140.5472,
+      "reply_start_seconds": 140.5947,
+      "request_end_to_reply_start_ms": 47.5,
+      "request_frame": "79f4882f28b9840280b42d008f842c80990000000000000000000000000000000000000028bd",
+      "reply_frame": "79f4882f28b42d008fb9840280846c8180190000000000000000000000000000000000000bd8",
+      "reply_center_hz": 434351500
+    }
+  ],
+  "interpretation": [
+    "The factory sweep alternates carriers; counter 1 is a real factory announcement near 434.306 MHz and was hidden by the former lower-carrier-only analyzer.",
+    "Button-first/app-second ordering allowed counters 0 and 1 to pass before the stock gateway accepted counter 2.",
+    "The counter-2 selector-6 assignment clears the high flag paired with selector 6, encoding response subchannel 12 as 2 * 6 + 0.",
+    "Valve requests remain on the lower request carrier except for the stage-2 configuration response; gateway continuations use assigned subchannel 12.",
+    "App enrollment success followed the complete six-stage exchange, so this branch is physically accepted stock evidence."
+  ]
+}
