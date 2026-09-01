@@ -915,6 +915,10 @@ and publication/security gates are documented and enforced.
 - [ ] Clean merged branches, temporary worktrees, deployment backups, and stale
       firmware catalogs after preserving the minimum rollback artifacts and
       redacted fixtures.
+  - 2026-09-01: moved three duplicate-slug RainPoint source backups out of the
+    Supervisor-scanned `/addons` directory and removed macOS AppleDouble files
+    that prevented translation parsing. The contributor guide now fixes both
+    deployment rules; broader catalog/backup retention cleanup remains open.
 
 Exit criteria: production documentation is concise and user-oriented, research
 work has an explicit boundary, and the Mac can perform future SDR investigations

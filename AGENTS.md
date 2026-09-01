@@ -91,5 +91,10 @@ variants.
 - Validate add-on or integration changes locally before deployment.
 - Back up live HA configuration before changing it; never commit credentials,
   management tokens, Wi-Fi secrets, databases, or installation-specific IDs.
+- Home Assistant scans every direct child of `/addons` as app source. Keep
+  timestamped source backups under `/share/rainpoint-local/source-backups`, not
+  beside the live app, and run `ha store reload` after source changes.
+- Prevent macOS AppleDouble `._*` files from entering deployed app source; they
+  can be misread as YAML or Python. Verify none exist before rebuilding.
 - Repository examples that intentionally describe one installation belong
   under `examples/` and must be clearly labelled as examples.
