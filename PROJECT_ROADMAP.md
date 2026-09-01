@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-08-31
+Last reviewed: 2026-09-01
 
 This is the single source of truth for active project status, ordering, and
 completion. Architecture documents describe intended boundaries, protocol
@@ -172,6 +172,15 @@ protocol test pass. Leave this physical gate open until one later HTV405 pairing
 shows `pairing_outcome=completed`, raw node `failed`/`session_timeout`, tail
 `optional_tail_timeout`, and an available counter-synchronized valve after the
 five-minute node window expires.
+
+- [ ] Keep the HA pairing wizard in a visible `Finalizing pairing` state while
+      the selected HTV405 node finishes its optional tail. Do not expose a
+      usable Run now action until the node is disarmed and
+      `rf_control_available=true`. The 2026-09-01 pairing was authoritative and
+      ultimately completed with `optional_tail_timeout`, but an immediate Run
+      now attempt failed before RF dispatch with `radio_node_unavailable` while
+      the selected node was still armed. This is a lifecycle/feedback defect,
+      not a pairing or command-counter failure.
 
 ### HTV145 single-zone valve
 
@@ -352,7 +361,10 @@ same time without conflicting authority.
       responses, independent active reports, and valve-owned automatic stops.
 - [x] Confirm local explicit early stop on Zone 1.
 - [x] Complete an installed 20-minute Zone 1 irrigation run with a valve-owned
-      return to idle.
+      return to idle. On 2026-09-01, unified firmware
+      `0.15.0-supervised-beta.11` accepted freshly initialized counter `1`,
+      reported a 1,200-second Zone 1 run, and returned itself to idle after the
+      requested duration.
 - [ ] Capture stock-gateway commands for durations whose two-second count
       already contains low-byte bit 7, including five and fifteen minutes,
       before constructing them locally. The 2026-08-26 guarded trial proved
@@ -423,8 +435,14 @@ cancelling remaining attempts on the first authenticated response. Gateway
 reply proves watering did not begin, it can retry the same counter after the
 15-second hardware interval instead of waiting through the requested run.
 Pairing, association, duration, and counter-advancement rules are unchanged.
-Keep the scheduled-run gate open until beta.11 produces a confirmed installed
-20-minute open and valve-owned automatic idle.
+The 2026-09-01 installed run closes the beta.11 scheduled-run gate: the valve
+authenticated the 20-minute open and later supplied independent automatic-idle
+telemetry. Two subsequent early-stop trials then authenticated open `2` -> next
+`3`, close `3` -> next `3`, open `3` -> next `4`, and close `4` -> next `4`.
+This physically repeats the conditional rule that an accepted open advances
+the session counter while an accepted close leaves that counter available for
+the next open. Exact responses are retained in
+`research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
 
 Gateway 0.33.18 removes the requested-duration-length recovery hold that made a
 failed 20-minute request occupy the HA script for 20 minutes. One silent command

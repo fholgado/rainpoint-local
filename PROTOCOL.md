@@ -590,6 +590,18 @@ frames, earlier negative trials, authenticated response, and automatic-stop
 evidence are frozen in
 `research/fixtures/htv405_generated_identity_control_gap_20260826.json`.
 
+A second generated-identity validation on 2026-09-01 exercised the conditional
+counter rule continuously on unified firmware
+`0.15.0-supervised-beta.11`. Fresh pairing initialized sequence `1`; the valve
+authenticated a 1,200-second open as `1` -> `2` and later reported idle. Two
+early-stop trials then returned open `2` -> `3`, close `3` -> `3`, open `3` ->
+`4`, and close `4` -> `4`. The second open proves that the sequence retained by
+the first close is not merely diagnostic: it is accepted as the next open.
+Consequently, the durable controller must store the valve-reported next
+sequence verbatim rather than incrementing every accepted operation. Exact
+responses and automatic-idle evidence are frozen in
+`research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
+
 It centered at 433.556537 MHz in the same SDR, only 107 Hz above the accepted
 stock selector-2 reference. The first two local routine replies centered at
 433.476260 MHz and decoded exactly. This proves that the retained 18-row
