@@ -23,6 +23,14 @@
 
 ## Validation
 
+Permission preflight: the Python suite opens localhost listeners, so run
+`python3 -m unittest` with localhost-binding permission from the first attempt.
+In Codex, request the required escalation for that command. Treat a bind/listen
+`PermissionError` as an invalid test environment and rerun with the proper
+permission before diagnosing code. PlatformIO builds also need access to the
+configured `~/.platformio` package cache; the native C++ protocol test does not
+need elevated permission.
+
 Run the complete Python suite used by CI:
 
 ```bash
