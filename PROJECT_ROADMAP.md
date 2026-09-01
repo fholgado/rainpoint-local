@@ -319,6 +319,20 @@ and
 with the estimator correction in
 `research/fixtures/htv145_probe16_carrier_correction_rejection_20260830.json`.
 
+Probe `.17` then preserved the probe-`.15` carrier, calibrated prelude,
+payload, selector branches, and retained identity while moving only the
+counter-0 assignment scheduler by `+500 us`. A dedicated continuous IQ capture
+measured the actual selector-5 assignment at `50.800 ms` after the counter-0
+request ended, only about `0.25 ms` later than the accepted stock `50.55 ms`
+observation. The unchanged fallback branch answered counter `3` at `54.800 ms`.
+Both assignments echoed the correct counter and used the correct destination
+and selector, but the valve emitted zero addressed stage-1 requests. This
+rejects the small scheduler mismatch as the missing enrollment discriminator.
+Do not create probe `.18` from another small timing, carrier, or identity guess;
+resume only after a new stock/local discriminator is evidenced. The complete
+result is frozen in
+`research/fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
+
 ## Phase 2 — persistence, recovery, and coexistence
 
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node

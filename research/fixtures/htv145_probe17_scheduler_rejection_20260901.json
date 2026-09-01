@@ -1,0 +1,59 @@
+{
+  "captured_at": "2026-09-01T08:58:36-04:00",
+  "model": "HTV145FRF",
+  "purpose": "Validate the probe-.17 counter-0-only +500 us scheduler experiment while preserving the accepted probe-.15 carrier, calibrated prelude, payload, branch selection, and retained stock identity.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-085836/continuous_433.7M_2000k.cu8",
+    "sha256": "e0441ee926a80878fbd178eed59df8451becb43b36788c09737755bd3e82812a",
+    "size_bytes": 302514176,
+    "center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "sdr_gain_db": 0.9
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.2-htv145-pairing-probe.17"
+  },
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "identity_mode": "retained_stock"
+  },
+  "counter_0_exchange": {
+    "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "request_start_seconds": 19.82095,
+    "request_end_seconds": 19.85215,
+    "assignment_frame": "79f4882f28b42d008f3984028080c0858503057000dcc7a10d0100800000000000000000c184",
+    "assignment_start_seconds": 19.90295,
+    "request_end_to_assignment_start_ms": 50.8,
+    "assignment_selector": 5,
+    "counter_echoed": true,
+    "paired_continuation_observed": false
+  },
+  "counter_3_fallback_exchange": {
+    "request_frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
+    "request_start_seconds": 31.32085,
+    "request_end_seconds": 31.35205,
+    "assignment_frame": "79f4882f28b42d008fb984028083c085850086f000e347210d028080000000000000000063fa",
+    "assignment_start_seconds": 31.40685,
+    "request_end_to_assignment_start_ms": 54.8,
+    "assignment_selector": 6,
+    "counter_echoed": true,
+    "paired_continuation_observed": false
+  },
+  "result": {
+    "node_assignment_transmissions": 2,
+    "valve_paired_stage_requests": 0,
+    "operator_window_missed": false,
+    "visible_result": "failure"
+  },
+  "interpretation": [
+    "The valve gesture occurred inside both the five-minute node arm window and the dedicated continuous IQ capture.",
+    "The selected node heard the factory sweep through counter 3 and transmitted the structurally correct selector-5 and selector-6 assignments.",
+    "The counter-0 assignment began 50.800 ms after the factory request ended, only about 0.25 ms later than the accepted stock 50.55 ms observation.",
+    "The valve emitted no addressed stage-1 request after either assignment and therefore rejected both branches at the first enrollment boundary.",
+    "A small counter-0 scheduler mismatch is no longer a useful leading hypothesis; preserve this evidence and do not create probe .18 without a new discriminator from stock/local comparison."
+  ]
+}

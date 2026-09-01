@@ -1255,6 +1255,17 @@ radio-node receive-channel miss. The compact comparison is retained in
 `research/fixtures/htv145_stock_local_iq_discriminator_20260826.json`; future
 captures can be evaluated with `tools/analyze_htv145_pairing_iq.py`.
 
+The later probe `.17` preserved the calibrated probe-`.15` waveform, payload,
+selector branches, retained association identity, and restored carrier while
+moving only the counter-0 scheduler by `+500 us`. Continuous IQ measured the
+selector-5 assignment at `50.800 ms` after the counter-0 request ended, versus
+approximately `50.55 ms` in the accepted stock exchange. The selector-6
+counter-3 fallback began at `54.800 ms`. Both assignments echoed the request
+counter and used the expected destination and selector, yet the valve emitted
+no addressed stage-1 request after either one. A small scheduler mismatch is
+therefore no longer a leading cause. The capture and bounded decode are frozen
+in `research/fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
+
 The remaining HTV405-derived lead is branch coherence. Reliable HTV405
 enrollment was not obtained by tuning one reply in isolation: multiple stock
 captures revealed selector-2 and selector-6 branches whose assignment marker,
