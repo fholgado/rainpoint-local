@@ -422,10 +422,12 @@ physical device has exactly one HA representation.
 The 2026-08-26 HTV145 stage-0 discriminator trials all stopped at 1/6: an
 on-air reply close to the stock 50.55 ms slot, a six-to-ten-foot separation
 trial, and a generated custom controller/companion identity. Continuous IQ
-already shows that the local assignment payload, carrier, deviation, wake, and
-clock structure match the first retained stock success. These negatives make
-small timing, near-field saturation, and retained-controller collision poor
-next hypotheses. The later 2026-08-28 stock exchange supplies a second
+shows matching decoded payload structure, wake length, and clock construction,
+but the later balanced-wake discriminator proved the carrier normalization and
+deviation did not match. These negatives make blind timing, near-field
+saturation, and retained-controller collision poor next hypotheses while
+leaving probe `.23` as the current evidence-backed PHY test. The later
+2026-08-28 stock exchange supplies a second
 coherent branch: counter `3`, selector `6`, assignment to the retained valve
 route, and a 434.461993 MHz routine carrier. Corrected bounded-IQ
 analysis recovered all four

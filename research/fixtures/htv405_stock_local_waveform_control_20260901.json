@@ -45,7 +45,7 @@
   "interpretation": [
     "The CC1101 radio node can generate a RainPoint enrollment waveform that a physical valve accepts.",
     "The accepted local four-zone reply was about 1.25 ms earlier than the stock reference, so acceptance is not contingent on reproducing the stock start time within 0.30 ms across device families.",
-    "HTV145 probe .22 is only 0.30 ms later than its accepted stock reference while already matching carrier, deviation, symbol rate, wake, decoded structure, selector, and route.",
+    "HTV145 probe .22 is only 0.30 ms later than its accepted stock reference. Its then-reported carrier/deviation match was later superseded by balanced-wake analysis; symbol rate, wake, decoded structure, selector, and route remain matched.",
     "A 300 us HTV145 scheduler adjustment is therefore deferred. The next discriminator should test missing pre-assignment state, lifecycle semantics, or an assignment field not represented by the decoded static transcript."
   ],
   "scope_correction": {
