@@ -14,13 +14,14 @@ namespace htv145 {
 // pairing profile, state machine, calibration, or reply builder.
 constexpr const char* kProfileId = "htv145_auto_candidate_v1";
 constexpr std::size_t kPairingStepCount = 6;
-// Probe .21 requested +45 kHz but the validated OTA bench node landed at
-// 433.504260 MHz, 42.389 kHz below the stock counter-0 assignment. Preserve
-// every other stage-0 field and compensate only that measured node offset.
-constexpr std::int32_t kPairingFrequencyOffsetHz = 87'389;
+// Balanced-wake analysis of unclipped probe .22 and accepted stock IQ showed
+// that the local assignment was 35.370 kHz low relative to the valve's own
+// factory request oscillator. Probe .23 adds only that normalized correction
+// and the independently measured stock initial-deviation profile.
+constexpr std::int32_t kPairingFrequencyOffsetHz = 122'759;
 constexpr std::uint32_t kInitialChannelCenterHz = 433'501'466;
 constexpr std::uint32_t kRoutineChannelCenterHz = 434'306'378;
-constexpr std::uint8_t kInitialDeviationRegister = 0x43;
+constexpr std::uint8_t kInitialDeviationRegister = 0x45;
 constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 // Retained only for the gated SDR calibration command. The live counter-0
 // selector-6 profile does not transmit this older selector-5 prelude.

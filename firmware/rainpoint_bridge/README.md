@@ -146,9 +146,9 @@ Do not deploy that artifact before the isolated dry-valve acceptance session.
 The independently gated HTV145 pairing candidate is built with:
 
 ```sh
-RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.22 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.23 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -160,6 +160,10 @@ stage-1 request before continuing the six-stage exchange. A later factory
 announcement is a terminal stage-0 rejection; it can never trigger a second
 assignment. Arm before the physical gesture so normal setup starts with counter
 0; no operator timing against the LED sequence is required.
+Probe `.23` preserves the counter-0 transcript and scheduler from `.22`, while
+correcting the initial assignment to the stock gateway's balanced-wake
+`0x45` deviation profile and its carrier position relative to the valve's own
+factory request oscillator.
 Deploy this image only
 to the designated OTA test node until three consecutive
 pairings satisfy the roadmap's physical acceptance gate.

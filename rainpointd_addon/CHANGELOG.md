@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.27 / Integration 0.13.3 / Firmware 0.15.3
+
+- Replace payload-biased FFT estimates with balanced-wake measurements for the
+  HTV145 stage-zero assignment. Probe `.23` now uses the accepted stock
+  `0x45` deviation and corrects the assignment carrier relative to the valve's
+  own factory-request oscillator while preserving the proven transcript and
+  scheduler.
+
 ## 0.33.26 / Integration 0.13.3 / Firmware 0.15.3
 
 - Added a bounded, HTV145-only pairing-power override for controlled physical

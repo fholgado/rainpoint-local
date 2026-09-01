@@ -43,7 +43,7 @@ if htv145_pairing_enabled and not research_enabled:
 standard_version = "0.15.3"
 supervised_version = "0.15.0-supervised-beta.12"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
-htv145_pairing_candidate_version = "0.15.3-htv145-pairing-probe.22"
+htv145_pairing_candidate_version = "0.15.3-htv145-pairing-probe.23"
 if htv145_pairing_enabled:
     default_version = htv145_pairing_candidate_version
     firmware_variant = "htv145-pairing-probe"

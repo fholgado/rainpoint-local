@@ -349,12 +349,13 @@ observation before it changes transmitted firmware.
   - 2026-09-01 physical `.22` result: the carrier correction landed at
     `433.546741 MHz`, within `92 Hz` of the accepted stock reference, with the
     same `35.004 kHz` deviation, decoded selector-6 packet, and 320-symbol wake.
-    The valve nevertheless rejected stage zero. Carrier is now closed as the
-    cause. The reply started `52.45 ms` after the request versus stock's
-    `52.15 ms`. An accepted local HTV405 enrollment was about `1.25 ms` earlier
-    than its stock reference, so this smaller delta does not justify another
-    timing-only probe. Keep `.22` frozen and return to missing lifecycle/state
-    or assignment semantics. Fixtures:
+    The valve nevertheless rejected stage zero. These center/deviation values
+    came from unconstrained FFT peaks and are superseded by the balanced-wake
+    analysis below; preserve this attempt as a rejection record, not as proof
+    that the PHY matched. The reply started `52.45 ms` after the request versus
+    stock's `52.15 ms`. An accepted local HTV405 enrollment was about `1.25 ms`
+    earlier than its stock reference, so this smaller delta still does not
+    justify a timing-only probe. Fixtures:
     `research/fixtures/htv145_probe22_calibrated_carrier_rejection_20260901.json`.
     `research/fixtures/htv405_stock_local_waveform_control_20260901.json`.
   - 2026-09-01 physical-layer follow-up: `.22` was about `10.26 dB` stronger
@@ -366,18 +367,33 @@ observation before it changes transmitted firmware.
   - 2026-09-01 reduced-power verdict: unchanged `.22` at `0 dBm` reduced active
     captured magnitude by `12.69 dB` and eliminated ADC-rail clipping, but the
     valve again rejected the counter-0 selector-6 assignment before stage 1.
-    The clean waveform measured `433.546718 MHz`, only `69 Hz` above stock,
-    with the same `35.004 kHz` deviation and a `52.60 ms` response delay.
-    Transmit overload is closed, and the clean control independently validates
-    carrier and deviation. Do not spend another physical trial on power,
-    carrier, deviation, or sub-millisecond timing without new evidence. Next
-    investigate an undiscovered waveform, transmitter state, or assignment
-    semantic. Fixture:
+    Transmit overload is closed, but the clean capture exposed an analyzer
+    error: payload-weighted FFT peaks did not represent the two FSK tones.
+    Decoder-independent balanced-wake analysis recovered all `319` wake
+    transitions. Accepted stock used deviation register `0x45`; local `.22`
+    used `0x43`. Normalizing each assignment against the valve request from the
+    same session placed local `.22` `35.370 kHz` below stock. Full-band energy
+    inventory found no stock-only burst in the `6.82 s` before assignment.
+    Probe `.23` changes only those two independently disproven PHY values:
+    frequency correction `87.389` to `122.759 kHz`, and initial deviation
+    `0x43` to `0x45`. Payload, endpoints, selector, clock builder, wake, timing,
+    power, polarity, and one-shot state remain frozen. If the on-air `.23`
+    waveform matches and stage zero still fails, replay one freshly accepted
+    stock assignment exactly before considering more semantic changes.
+    Fixtures:
     `research/fixtures/htv145_probe22_reduced_power_rejection_20260901.json`.
-- [ ] Keep firmware-catalog staging within the runtime's 32-release bound.
+    `research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`.
+  - 2026-09-01 unattended `.23` preparation: the isolated firmware and gateway
+    metadata now encode the balanced-wake correction, the candidate version is
+    `.23`, and regression tests assert both the `122.759 kHz` node calibration
+    and `0x45` initial deviation. The physical gate remains open until the
+    bounded stage-zero harness records the transmitted waveform and either an
+    addressed stage-1 request or the next factory fallback.
+- [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
-      gateway rejected; add a fail-fast or explicit supersession path before
-      the next catalog cleanup.
+      gateway rejected. The staging tool now refuses overflow before writing
+      an artifact and accepts only explicit, existing, same-variant release
+      IDs for supersession; regression tests cover both outcomes.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,

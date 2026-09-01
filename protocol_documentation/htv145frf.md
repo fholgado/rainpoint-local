@@ -91,11 +91,28 @@ counter-3 selector-6 assignment in one physical attempt. The valve never sent
 an addressed stage-1 request, so that attempt is a rejected multi-assignment
 baseline rather than evidence against the controlled stock transcript.
 
-Probe `.19` is a dedicated one-shot state machine for the controlled app-first
+The current dedicated one-shot candidate implements the controlled app-first
 stock branch: counter 0, selector 6, response subchannel 12, and the exact six
 captured stages. It transmits at most one assignment and treats any subsequent
 factory announcement without the addressed stage-1 request as a terminal
-stage-0 rejection. Physical acceptance is still pending.
+stage-0 rejection.
+
+Decoder-independent balanced-wake measurement of accepted stock and unclipped
+local stage-zero traffic defines the initial reply PHY as follows:
+
+| Property | Current definition |
+|---|---:|
+| Wake | 320 alternating symbols |
+| Symbol rate | 20,000 symbols/s |
+| Initial deviation | CC1101 `0x45` (nominal 41.260 kHz) |
+| Node frequency correction | +122.759 kHz on the validated OTA test node |
+| Reply scheduling offset | 52.150 ms from the request timestamp supplied by the radio path |
+
+The frequency correction is node-calibration evidence, not a universal device
+constant. It results from normalizing the stock and local assignment centers
+against the valve request oscillator in each capture. Probe `.23` applies this
+PHY while preserving every decoded frame and state-machine decision from
+`.22`; physical acceptance is still pending.
 
 Therefore:
 
@@ -216,6 +233,8 @@ not exposed as supported functionality.
   `research/fixtures/htv145_counter2_stock_enrollment_20260901.json`
 - App-first counter-0/subchannel-12 enrollment:
   `research/fixtures/htv145_counter0_app_first_stock_enrollment_20260901.json`
+- Balanced-wake PHY discriminator:
+  `research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`
 - Command and duration evidence:
   `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
 - Battery and usage evidence:

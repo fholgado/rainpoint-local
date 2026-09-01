@@ -1,0 +1,89 @@
+{
+  "model": "HTV145FRF",
+  "analysis_date": "2026-09-01",
+  "purpose": "Measure the accepted stock and rejected local stage-zero PHY without decoded-payload spectral bias, and inventory the complete pre-assignment RF windows without a sync-word filter.",
+  "tool": "tools/analyze_pairing_waveform.py",
+  "method": {
+    "waveform": "Recover the 319 transitions in the 320-symbol alternating wake, then take the median instantaneous frequency from the interior half of every symbol so both FSK tones receive equal weight.",
+    "normalization": "Subtract the valve factory-request center from the assignment center in the same capture session before comparing stock and local transmitters.",
+    "inventory": "Threshold raw complex magnitude across the complete bounded window before the factory request; do not require a RainPoint sync word or decoded frame."
+  },
+  "captures": {
+    "accepted_stock": {
+      "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-124138/continuous_433.7M_2000k.cu8",
+      "sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "adc_rail_fraction": 0.0
+    },
+    "rejected_local_probe_22_at_0_dbm": {
+      "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-162431/continuous_433.7M_2000k.cu8",
+      "sha256": "697e022faddd9ccc2e457dcf5c97248ec8c4b9d13757ce98fcb316bb85633ea8",
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "adc_rail_fraction": 0.0
+    }
+  },
+  "accepted_stock": {
+    "factory_request": {
+      "channel_center_hz": 433146216,
+      "deviation_hz": 38990,
+      "closest_cc1101_deviation_register": "0x45",
+      "symbol_rate_sps": 19998.819,
+      "recovered_wake_transitions": 319
+    },
+    "assignment": {
+      "channel_center_hz": 433581558,
+      "deviation_hz": 40255,
+      "closest_cc1101_deviation_register": "0x45",
+      "symbol_rate_sps": 19998.552,
+      "recovered_wake_transitions": 319
+    },
+    "reply_minus_request_hz": 435342
+  },
+  "rejected_local_probe_22": {
+    "factory_request": {
+      "channel_center_hz": 433141742,
+      "deviation_hz": 39655,
+      "closest_cc1101_deviation_register": "0x45",
+      "symbol_rate_sps": 19998.735,
+      "recovered_wake_transitions": 319
+    },
+    "assignment": {
+      "channel_center_hz": 433541714,
+      "deviation_hz": 34704,
+      "closest_cc1101_deviation_register": "0x43",
+      "symbol_rate_sps": 20001.326,
+      "recovered_wake_transitions": 319
+    },
+    "reply_minus_request_hz": 399972
+  },
+  "normalized_comparison": {
+    "local_minus_stock_hz": -35370,
+    "predicted_probe_23_local_assignment_center_hz": 433577084,
+    "probe_23_frequency_offset_hz": 122759,
+    "probe_23_initial_deviation_register": "0x45"
+  },
+  "pre_assignment_inventory": {
+    "accepted_stock": {
+      "window_start_seconds": 123.0,
+      "window_duration_seconds": 6.82,
+      "magnitude_threshold": 5.0,
+      "burst_count": 0
+    },
+    "rejected_local": {
+      "window_start_seconds": 38.0,
+      "window_duration_seconds": 6.69,
+      "magnitude_threshold": 5.0,
+      "burst_count": 0
+    },
+    "conclusion": "No stock-only unframed transmission was detectable anywhere in the captured 2 MHz band before the accepted assignment."
+  },
+  "interpretation": [
+    "The previous unconstrained FFT comparison selected data-dependent sidebands and incorrectly declared stock and local carrier/deviation equal.",
+    "Accepted stock uses the CC1101 0x45 deviation family for the assignment; rejected local probe .22 used 0x43.",
+    "Local probe .22 was 35.370 kHz low after normalizing against the same valve oscillator, so absolute center comparisons across sessions were not a valid calibration loop.",
+    "Symbol rate, 320-symbol wake length, decoded assignment bytes apart from clock and CRC, endpoints, selector, scheduling, polarity, and one-shot state remain frozen for probe .23.",
+    "If probe .23 still fails stage zero after an on-air waveform check, the next discriminator is exact replay of a freshly accepted stock assignment; do not resume blind timing or field changes."
+  ]
+}

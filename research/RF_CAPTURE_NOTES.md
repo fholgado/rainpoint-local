@@ -610,10 +610,11 @@ Reference evidence:
 - Probe `.22` again accepted the first counter-0 factory announcement and sent
   one selector-6 assignment, but the valve continued its factory sweep without
   an addressed stage-1 request. The node recorded `stage_0_rejected` at `1/6`.
-- Direct IQ characterization measured `433.546741 MHz`, only `92 Hz` above the
-  accepted stock reference. Deviation was the same `35.004 kHz`, and the
-  decoded packet and 320-symbol alternating wake also matched stock. The
-  carrier-only hypothesis is therefore closed.
+- A first direct-FFT pass appeared to place the local signal within `92 Hz` of
+  stock with the same `35.004 kHz` deviation. That conclusion is superseded:
+  the estimator selected data-dependent sidebands rather than equally
+  measuring the two alternating FSK tones. The decoded packet and 320-symbol
+  wake remain valid evidence, but this capture does not close the PHY.
 - The local assignment began `52.45 ms` after the request ended, `0.30 ms`
   later than the accepted stock counter-0 reference. That difference is not a
   sufficient next hypothesis: an accepted local HTV405 enrollment began about
@@ -644,17 +645,22 @@ The four-zone control comparison is preserved in
 - The valve still continued its factory sweep without an addressed stage-1
   request. The node again recorded `stage_0_rejected` at `1/6`; transmit-power
   overload is not the missing enrollment prerequisite.
-- The unclipped assignment measured `433.546718 MHz`, just `69 Hz` above the
-  accepted stock reference, with the same `35.004 kHz` deviation. Its decoded
-  selector-6 frame remained structurally identical apart from clock and CRC,
-  and began `52.60 ms` after the request ended versus stock's `52.15 ms`.
-- Clipping did make prior amplitude, occupied-bandwidth, and unconstrained
-  spectral-peak measurements unsafe. It did not invalidate the exact decoded
-  frame, ordering, or bounded timing evidence, and this clean capture now
-  independently confirms the important carrier/deviation results.
-- Freeze power, carrier, deviation, and scheduler timing. The next experiment
-  must test an undiscovered waveform, transmitter state, or assignment semantic
-  rather than another small physical-layer adjustment.
+- Balanced-wake analysis recovered all `319` transitions from each 320-symbol
+  wake and measured both FSK tones with equal weighting. Accepted stock used
+  the `0x45` deviation profile (`40.255 kHz` measured); rejected local `.22`
+  used `0x43` (`34.704 kHz` measured).
+- Absolute SDR centers from separate sessions were also misleading. Relative
+  to the valve request oscillator in the same capture, stock assignment was
+  `+435.342 kHz` and local was `+399.972 kHz`: local was `35.370 kHz` low.
+- Decoder-independent energy inventory over the complete `6.82 s` stock and
+  `6.69 s` local lead-in windows found no pre-assignment burst anywhere in the
+  captured 2 MHz band. This materially weakens the hidden-waveform hypothesis.
+- Probe `.23` therefore changes the node frequency correction from `87.389` to
+  `122.759 kHz` and initial deviation from `0x43` to `0x45`. The packet,
+  endpoints, selector, wake, scheduler, power, polarity, and one-shot state are
+  frozen. Exact replay of a freshly accepted stock assignment is the next
+  discriminator only if `.23` still fails after its emitted PHY is verified.
 
 Reference evidence:
-`fixtures/htv145_probe22_reduced_power_rejection_20260901.json`.
+`fixtures/htv145_probe22_reduced_power_rejection_20260901.json` and
+`fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`.

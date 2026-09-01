@@ -20,8 +20,8 @@ FRAME_BYTES = 38
 AUTOMATIC_HTV405_PROFILE_ID = "htv405_auto_candidate_v1"
 AUTOMATIC_HTV145_PROFILE_ID = "htv145_auto_candidate_v1"
 CALIBRATED_FREQUENCY_OFFSET_HZ = 97_154
-HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ = 87_389
-HTV145_INITIAL_REPLY_TARGET_HZ = 433_546_649
+HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ = 122_759
+HTV145_INITIAL_REPLY_TARGET_HZ = 433_581_558
 HTV145_ROUTINE_REPLY_TARGET_HZ = 434_351_500
 HTV145_INITIAL_REPLY_CHANNEL_HZ = 433_501_466
 INITIAL_REPLY_TARGET_HZ = 433_556_430
@@ -32,6 +32,7 @@ INITIAL_REPLY_CHANNEL_HZ = 433_511_445
 ROUTINE_REPLY_CHANNEL_HZ = 433_426_408
 INITIAL_DEVIATION_HZ = 35_004
 ROUTINE_DEVIATION_HZ = 41_260
+HTV145_INITIAL_DEVIATION_HZ = ROUTINE_DEVIATION_HZ
 WAKE_SYMBOLS = 320
 SYMBOL_RATE_SPS = 20_000
 # A continuous 2.0 Msps capture measured 50.656 ms of silence between the end
@@ -105,6 +106,7 @@ def _step(
     initial: bool = False,
     reply_to_valve_route: bool = False,
     channel_center_hz: int | None = None,
+    deviation_hz: int | None = None,
 ) -> ValvePairingStep:
     request = bytes.fromhex(request_body)
     reply = bytes.fromhex(reply_body) if reply_body is not None else None
@@ -122,7 +124,13 @@ def _step(
             if initial
             else ROUTINE_REPLY_CHANNEL_HZ
         ),
-        deviation_hz=(INITIAL_DEVIATION_HZ if initial else ROUTINE_DEVIATION_HZ),
+        deviation_hz=(
+            deviation_hz
+            if deviation_hz is not None
+            else INITIAL_DEVIATION_HZ
+            if initial
+            else ROUTINE_DEVIATION_HZ
+        ),
         reply_to_valve_route=reply_to_valve_route,
     )
 
@@ -166,6 +174,7 @@ HTV145_STEPS = (
         initial=True,
         reply_to_valve_route=True,
         channel_center_hz=HTV145_INITIAL_REPLY_CHANNEL_HZ,
+        deviation_hz=HTV145_INITIAL_DEVIATION_HZ,
     ),
     _step(
         "paired_message_1",

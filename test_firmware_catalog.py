@@ -12,10 +12,12 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
+sys.path.insert(0, str(ROOT / "tools"))
 
 from rainpointd.firmware_catalog import FirmwareCatalog
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
+from stage_firmware_release import stage_release
 
 
 class FirmwareCatalogTest(unittest.TestCase):
@@ -104,6 +106,82 @@ class FirmwareCatalogTest(unittest.TestCase):
         self.assertIsNotNone(release)
         assert release is not None
         self.assertEqual("esp32dev-ota-0.9.0-test.3", release["release_id"])
+
+    def test_staging_refuses_catalog_overflow_before_writing_artifact(
+        self,
+    ) -> None:
+        destination = self.root / "bounded"
+        destination.mkdir()
+        releases = [
+            {
+                "release_id": f"old-probe-{index:02d}",
+                "channel": "experimental",
+                "hardware_profile": "esp32dev-cc1101-v1",
+                "firmware_variant": "htv145-pairing-probe",
+            }
+            for index in range(32)
+        ]
+        original_catalog = {
+            "schema_version": 1,
+            "releases": releases,
+        }
+        catalog_path = destination / "catalog.json"
+        catalog_path.write_text(json.dumps(original_catalog), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "exceed 32 releases"):
+            stage_release(
+                self.artifact,
+                destination,
+                release_id="new-probe",
+                version="1.0.0-probe.23",
+                summary="Corrected PHY",
+                notes="Bounded test release",
+                firmware_variant="htv145-pairing-probe",
+            )
+
+        self.assertFalse((destination / "new-probe.bin").exists())
+        self.assertEqual(
+            original_catalog,
+            json.loads(catalog_path.read_text(encoding="utf-8")),
+        )
+
+    def test_staging_can_explicitly_supersede_same_variant_release(self) -> None:
+        destination = self.root / "supersede"
+        destination.mkdir()
+        releases = [
+            {
+                "release_id": f"old-probe-{index:02d}",
+                "channel": "experimental",
+                "hardware_profile": "esp32dev-cc1101-v1",
+                "firmware_variant": "htv145-pairing-probe",
+            }
+            for index in range(32)
+        ]
+        catalog_path = destination / "catalog.json"
+        catalog_path.write_text(
+            json.dumps({"schema_version": 1, "releases": releases}),
+            encoding="utf-8",
+        )
+
+        release = stage_release(
+            self.artifact,
+            destination,
+            release_id="new-probe",
+            version="1.0.0-probe.23",
+            summary="Corrected PHY",
+            notes="Bounded test release",
+            firmware_variant="htv145-pairing-probe",
+            supersede_release_ids=["old-probe-31"],
+        )
+
+        staged = json.loads(catalog_path.read_text(encoding="utf-8"))
+        self.assertEqual(32, len(staged["releases"]))
+        self.assertNotIn(
+            "old-probe-31",
+            {item["release_id"] for item in staged["releases"]},
+        )
+        self.assertEqual(["old-probe-31"], release["supersedes"])
+        self.assertTrue((destination / "new-probe.bin").exists())
 
     def test_gateway_installs_by_release_id_and_serves_verified_artifact(
         self,

@@ -44,16 +44,33 @@
     "frame": "79f4882f28b42d008fb984028080c0858500867000a703210d0100800000000000000000c780",
     "start_seconds": 44.7779,
     "request_end_to_reply_start_ms": 52.6,
-    "measured_center_hz": 433546718,
-    "measured_deviation_hz": 35004,
+    "balanced_wake_center_hz": 433541714,
+    "balanced_wake_deviation_hz": 34704,
+    "closest_cc1101_deviation_register": "0x43",
     "assignment_selector": 6,
     "assigned_response_channel": 12,
     "destination": "b9840280"
   },
   "stock_reference": {
-    "measured_assignment_center_hz": 433546649,
-    "assignment_deviation_hz": 35004,
+    "capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+    "factory_request_center_hz": 433146216,
+    "balanced_wake_assignment_center_hz": 433581558,
+    "balanced_wake_assignment_deviation_hz": 40255,
+    "closest_cc1101_deviation_register": "0x45",
     "request_end_to_reply_start_ms": 52.15
+  },
+  "normalized_phy_comparison": {
+    "local_factory_request_center_hz": 433141742,
+    "stock_reply_minus_request_hz": 435342,
+    "local_reply_minus_request_hz": 399972,
+    "local_minus_stock_hz": -35370,
+    "method": "median instantaneous frequency from the interior half of each recovered alternating wake symbol; reply center is normalized to the valve request from the same session"
+  },
+  "superseded_fft_estimate": {
+    "local_assignment_center_hz": 433546718,
+    "stock_assignment_center_hz": 433546649,
+    "assignment_deviation_hz": 35004,
+    "reason": "An unconstrained FFT selected data-dependent sidebands rather than equally weighting the two alternating FSK tones. These values must not be used for transmitter calibration."
   },
   "power_comparison": {
     "prior_requested_power_dbm": 10,
@@ -67,8 +84,9 @@
   "interpretation": [
     "The 0 dBm override was applied: active captured magnitude fell by 12.69 dB and ADC-rail clipping fell from 45.9 percent to zero.",
     "The valve still rejected the same counter-0 selector-6 assignment before emitting an addressed stage-1 request, so transmit-power overload is not the missing enrollment prerequisite.",
-    "The unclipped assignment measured 433.546718 MHz, only 69 Hz above the accepted stock reference, with the same 35.004 kHz deviation. This independently validates the carrier and deviation conclusions made from the clipped probe-.22 capture.",
-    "Clipping made amplitude, occupied-bandwidth, and unconstrained spectral-peak selection unreliable in the prior local capture, but it did not invalidate the exact decoded frame, protocol ordering, or bounded request/reply timing.",
-    "Do not make another power, carrier, deviation, or sub-millisecond timing iteration. The next pairing hypothesis must concern an undiscovered waveform, transmitter state, or assignment semantic not represented by the decoded 38-byte frame."
+    "Balanced-wake analysis invalidates the earlier FFT carrier/deviation conclusion: stock uses the approximately 41.260 kHz CC1101 0x45 profile, while local probe .22 used the approximately 34.912 kHz 0x43 profile.",
+    "After normalizing each assignment against the valve request oscillator from the same session, local probe .22 was 35.370 kHz below stock. Absolute SDR center comparisons across sessions had hidden this error.",
+    "Clipping made amplitude and unconstrained spectral-peak selection unreliable in the prior local capture, but it did not invalidate the exact decoded frame, protocol ordering, or bounded request/reply timing.",
+    "Probe .23 must change only the independently disproven initial carrier calibration and deviation register. Payload, endpoints, selector, wake, timing, power, polarity, and one-shot state behavior remain frozen."
   ]
 }

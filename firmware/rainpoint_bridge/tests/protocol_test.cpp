@@ -1068,7 +1068,8 @@ int main() {
     assert(htv405Profile.stepCount == rainpoint::kHtv405PairingStepCount);
     assert(htv145PairingProbe.steps.size() ==
         rainpoint::htv145::kPairingStepCount);
-    assert(rainpoint::htv145::kPairingFrequencyOffsetHz == 87'389);
+    assert(rainpoint::htv145::kPairingFrequencyOffsetHz == 122'759);
+    assert(rainpoint::htv145::kInitialDeviationRegister == 0x45);
     assert(
         rainpoint::htv145::kInitialChannelCenterHz ==
         433'501'466

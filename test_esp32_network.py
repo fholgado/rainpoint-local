@@ -1319,7 +1319,7 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("342d008f", command["factory_endpoint"])
         self.assertEqual("b9840280", command["valve_route"])
         self.assertEqual("39840280", command["companion_endpoint"])
-        self.assertEqual(87_389, command["frequency_offset_hz"])
+        self.assertEqual(122_759, command["frequency_offset_hz"])
         self.assertEqual(0, command["power_dbm"])
         self.assertNotIn("known_rejoin", command)
         stream.close()

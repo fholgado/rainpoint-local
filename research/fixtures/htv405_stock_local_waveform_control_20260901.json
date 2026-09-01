@@ -47,5 +47,9 @@
     "The accepted local four-zone reply was about 1.25 ms earlier than the stock reference, so acceptance is not contingent on reproducing the stock start time within 0.30 ms across device families.",
     "HTV145 probe .22 is only 0.30 ms later than its accepted stock reference while already matching carrier, deviation, symbol rate, wake, decoded structure, selector, and route.",
     "A 300 us HTV145 scheduler adjustment is therefore deferred. The next discriminator should test missing pre-assignment state, lifecycle semantics, or an assignment field not represented by the decoded static transcript."
-  ]
+  ],
+  "scope_correction": {
+    "fixture": "research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json",
+    "note": "The accepted HTV405 timing control remains valid. Its former inference that HTV145 probe .22 matched stock carrier and deviation is superseded by balanced-wake analysis and must not be used to close the HTV145 PHY hypothesis."
+  }
 }

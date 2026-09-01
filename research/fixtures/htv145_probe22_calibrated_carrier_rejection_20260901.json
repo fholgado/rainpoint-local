@@ -78,5 +78,9 @@
     "The local assignment began 0.30 ms later than the accepted stock reference. An accepted local HTV405 enrollment was 1.25 ms earlier than its stock reference, so this smaller difference does not justify another timing-only HTV145 probe without model-specific evidence.",
     "No additional exact-sync stock gateway frame was found on six known carriers during the 5.8 seconds before the accepted assignment, reducing but not eliminating the missing-pre-assignment-frame hypothesis.",
     "The local assignment clipped about 45.9 percent of SDR I/Q bytes and was about 10.3 dB stronger than stock at the capture receiver. The next unchanged-.22 discriminator should lower transmit power and capture gain before changing packet or timing semantics."
-  ]
+  ],
+  "superseded_analysis": {
+    "fixture": "research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json",
+    "reason": "The direct FFT carrier/deviation comparison selected data-dependent sidebands. Later balanced-wake analysis on the unclipped reduced-power trial showed that local .22 used deviation register 0x43 and was 35.370 kHz low relative to the valve request, while accepted stock used 0x45. Preserve this fixture as the physical rejection record, but do not use its direct-FFT center as calibration evidence."
+  }
 }
