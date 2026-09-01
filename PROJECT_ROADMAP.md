@@ -227,11 +227,17 @@ observation before it changes transmitted firmware.
     reboot result, and rejected-TX count in HA diagnostics;
   - require the custom local gateway to verify that every adopted node is
     effectively receive-only before declaring a stock capture ready.
-- [ ] Deploy the maintenance-capable image to every adopted radio node and
+- [x] Deploy the maintenance-capable image to every adopted radio node and
       physically verify receive-only entry, capture-readiness blocking,
       automatic normal-mode recovery, explicit restore, and remote reboot.
       Do not begin the controlled stock-gateway capture matrix until this gate
       is complete.
+      - 2026-09-01: all three adopted nodes entered bounded receive-only mode
+        together, aggregate capture readiness returned `ready: true` with no
+        blockers, and all three explicitly returned to normal operation with
+        their sensor/valve ACK assignments intact. Automatic timeout recovery
+        and remote reboot/reconnect were also physically verified on the OTA
+        test node.
 - [ ] Replace the HTV145 test valve's batteries with four fresh alkaline cells,
       leave the stock RainPoint gateway under manual control, and record this
       controlled lifecycle matrix as separate continuous-IQ trials:
