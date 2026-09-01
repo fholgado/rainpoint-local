@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.33.25 / Integration 0.13.3 / Firmware 0.15.3
+
+- Preserve the rejected HTV145 probe `.21` as a checksummed stage-zero fixture.
+  It proved an ordinary long press reaches a clean counter-0 trial without
+  another documented factory reset.
+- Calibrate HTV145 probe `.22` from the measured OTA-node waveform: increase
+  only the single-zone assignment frequency correction by `42.389 kHz` while
+  freezing its payload, selector, wake, deviation, timing, and one-shot state
+  behavior.
+
 ## 0.33.24 / Integration 0.13.3 / Firmware 0.15.3
 
 - Add authenticated, bounded receive-only control for every Wi-Fi radio node.

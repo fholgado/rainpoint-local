@@ -926,7 +926,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual("valve", htv145_metadata["device_category"])
         self.assertFalse(htv145_metadata["user_pairing_supported"])
         self.assertEqual(
-            45_000, htv145_metadata["calibrated_frequency_offset_hz"]
+            87_389, htv145_metadata["calibrated_frequency_offset_hz"]
         )
         self.assertEqual(433_546_649, htv145_metadata["initial_reply_target_hz"])
 
