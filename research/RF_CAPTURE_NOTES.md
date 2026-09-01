@@ -604,3 +604,33 @@ Reference evidence:
 
 Reference evidence:
 `fixtures/htv145_probe21_isolated_carrier_rejection_20260901.json`.
+
+### HTV145 calibrated-carrier stage zero — 2026-09-01
+
+- Probe `.22` again accepted the first counter-0 factory announcement and sent
+  one selector-6 assignment, but the valve continued its factory sweep without
+  an addressed stage-1 request. The node recorded `stage_0_rejected` at `1/6`.
+- Direct IQ characterization measured `433.546741 MHz`, only `92 Hz` above the
+  accepted stock reference. Deviation was the same `35.004 kHz`, and the
+  decoded packet and 320-symbol alternating wake also matched stock. The
+  carrier-only hypothesis is therefore closed.
+- The local assignment began `52.45 ms` after the request ended, `0.30 ms`
+  later than the accepted stock counter-0 reference. That difference is not a
+  sufficient next hypothesis: an accepted local HTV405 enrollment began about
+  `1.25 ms` earlier than its stock reference. Preserve `.22` unchanged and test
+  a missing state or semantic discriminator before revisiting timing.
+- Exact-sync demodulation found no extra stock-gateway frame on the six known
+  pairing/routine carriers during the `5.8 s` before the accepted factory
+  request. A transmission on an unknown carrier remains possible, but the
+  decoded lead-in does not support a missing ordinary RainPoint packet.
+- The `.22` assignment was about `10.26 dB` stronger than stock at the SDR and
+  clipped `45.9%` of capture bytes at an ADC rail; the stock assignment clipped
+  none. Separate geometry means this does not prove overload at the valve, but
+  it invalidates further fine waveform tuning at the current level. The next
+  unchanged-packet test should lower transmit power and capture gain.
+
+Reference evidence:
+`fixtures/htv145_probe22_calibrated_carrier_rejection_20260901.json`.
+
+The four-zone control comparison is preserved in
+`fixtures/htv405_stock_local_waveform_control_20260901.json`.

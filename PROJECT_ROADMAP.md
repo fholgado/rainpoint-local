@@ -346,6 +346,27 @@ observation before it changes transmitted firmware.
     frequency correction from `45.000` to `87.389 kHz`; timing and every frame
     field remain frozen for one discriminating carrier-only trial. Fixture:
     `research/fixtures/htv145_probe21_isolated_carrier_rejection_20260901.json`.
+  - 2026-09-01 physical `.22` result: the carrier correction landed at
+    `433.546741 MHz`, within `92 Hz` of the accepted stock reference, with the
+    same `35.004 kHz` deviation, decoded selector-6 packet, and 320-symbol wake.
+    The valve nevertheless rejected stage zero. Carrier is now closed as the
+    cause. The reply started `52.45 ms` after the request versus stock's
+    `52.15 ms`. An accepted local HTV405 enrollment was about `1.25 ms` earlier
+    than its stock reference, so this smaller delta does not justify another
+    timing-only probe. Keep `.22` frozen and return to missing lifecycle/state
+    or assignment semantics. Fixtures:
+    `research/fixtures/htv145_probe22_calibrated_carrier_rejection_20260901.json`.
+    `research/fixtures/htv405_stock_local_waveform_control_20260901.json`.
+  - 2026-09-01 physical-layer follow-up: `.22` was about `10.26 dB` stronger
+    than stock at the SDR and clipped `45.9%` of captured I/Q bytes while stock
+    clipped none. No additional exact-sync stock frame appeared on six known
+    carriers in the `5.8 s` before assignment. Before changing semantics,
+    repeat unchanged `.22` at reduced TX power with a non-clipping SDR capture;
+    treat valve-receiver overload as a hypothesis, not a conclusion.
+- [ ] Keep firmware-catalog staging within the runtime's 32-release bound.
+      Staging probe `.22` temporarily produced a 33-entry catalog that the
+      gateway rejected; add a fail-fast or explicit supersession path before
+      the next catalog cleanup.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,

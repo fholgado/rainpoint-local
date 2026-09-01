@@ -1,0 +1,51 @@
+{
+  "model": "HTV405FRF",
+  "comparison_date": "2026-09-01",
+  "purpose": "Use physically accepted four-zone enrollment as a control for deciding whether sub-millisecond HTV145 timing changes are evidence-backed.",
+  "sources": [
+    "research/fixtures/htv405_gateway_pairing_replies.json",
+    "research/fixtures/htv405_local_pairing_success.json",
+    "research/fixtures/htv405_pairing_cross_reference_20260820.json",
+    "research/fixtures/htv405_generated_identity_pairing_20260825.json"
+  ],
+  "stock_assignment": {
+    "selector": 2,
+    "measured_center_hz": 433556430,
+    "measured_deviation_hz": 35004,
+    "symbol_rate_sps": 20000,
+    "alternating_wake_symbols": 320,
+    "request_start_to_assignment_start_ms": 81.9,
+    "request_end_to_assignment_start_ms": 50.4,
+    "frame": "79f4882f2894a980133984028080c0858503027000e0ce920d01008000000000000000002d3c"
+  },
+  "accepted_local_assignment": {
+    "selector": 2,
+    "measured_center_hz": 433556537,
+    "carrier_delta_from_stock_hz": 107,
+    "configured_deviation_hz": 35004,
+    "symbol_rate_sps": 20000,
+    "alternating_wake_symbols": 320,
+    "accepted_request_start_to_assignment_start_ms": 80.65,
+    "timing_delta_from_stock_ms": -1.25,
+    "frame": "79f4882f2894a980133984028080c0858503027000bc8c930d01008000000000000000006d56",
+    "physical_evidence": [
+      "white success flash",
+      "paired valve-originated traffic",
+      "later adoption of generated local controller ee86de80"
+    ]
+  },
+  "frame_comparison": {
+    "static_assignment_bytes_match": true,
+    "expected_dynamic_differences": [
+      "packed local time",
+      "packed local date",
+      "CRC"
+    ]
+  },
+  "interpretation": [
+    "The CC1101 radio node can generate a RainPoint enrollment waveform that a physical valve accepts.",
+    "The accepted local four-zone reply was about 1.25 ms earlier than the stock reference, so acceptance is not contingent on reproducing the stock start time within 0.30 ms across device families.",
+    "HTV145 probe .22 is only 0.30 ms later than its accepted stock reference while already matching carrier, deviation, symbol rate, wake, decoded structure, selector, and route.",
+    "A 300 us HTV145 scheduler adjustment is therefore deferred. The next discriminator should test missing pre-assignment state, lifecycle semantics, or an assignment field not represented by the decoded static transcript."
+  ]
+}

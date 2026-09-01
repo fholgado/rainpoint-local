@@ -1,0 +1,82 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Physically test the isolated HTV145 stage-zero assignment after correcting only its measured carrier error.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-155238/continuous_433.7M_2000k.cu8",
+    "sha256": "9b81efe9f7f6e10fa9223b86eb6b2c517ca855e8825c51debb8f99de23aaad4b",
+    "bytes": 369360896,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 92.340224
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.3-htv145-pairing-probe.22",
+    "profile_initial_center_hz": 433501466,
+    "supplied_frequency_offset_hz": 87389,
+    "reported_effective_initial_tx_center_hz": 433588855
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "last_factory_sweep_counter": 2,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "start_seconds": 43.8686,
+    "end_seconds": 43.8998
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c0858500867000ab7e210d0100800000000000000000665f",
+    "start_seconds": 43.95225,
+    "request_end_to_reply_start_ms": 52.45,
+    "measured_center_hz": 433546741,
+    "measured_deviation_hz": 35004,
+    "alternating_wake_symbols": 320,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "destination": "b9840280"
+  },
+  "stock_reference": {
+    "capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+    "direct_fft_assignment_center_hz": 433546649,
+    "assignment_deviation_hz": 35004,
+    "alternating_wake_symbols": 320,
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "lead_in_comparison": {
+    "known_centers_checked_hz": [
+      433143000,
+      433546649,
+      433471500,
+      434306001,
+      434351500,
+      434461993
+    ],
+    "stock_seconds_checked_before_factory_request": 5.8,
+    "additional_stock_gateway_frame_before_assignment": false,
+    "scope": "Exact-sync RainPoint frames on the known pairing and routine centers; this does not exclude an undecoded waveform on another carrier."
+  },
+  "relative_capture_amplitude": {
+    "stock_assignment_snr_proxy_db": 35.32,
+    "local_assignment_snr_proxy_db": 45.58,
+    "local_minus_stock_db": 10.26,
+    "stock_adc_rail_fraction": 0.0,
+    "local_adc_rail_fraction": 0.4587,
+    "caveat": "The captures used the same SDR configuration but separate physical sessions. This proves local-capture clipping, not valve-receiver overload."
+  },
+  "interpretation": [
+    "The isolated node accepted the first counter-0 factory announcement, emitted exactly one selector-6 assignment, and received no addressed stage-1 request before the valve continued its factory sweep.",
+    "The carrier-only correction landed at 433.546741 MHz, only 92 Hz above the directly measured accepted stock assignment. Carrier placement is therefore no longer a credible explanation for stage-zero rejection.",
+    "Deviation, decoded structure, selector, route, and the 320-symbol alternating wake match the accepted stock reference.",
+    "The local assignment began 0.30 ms later than the accepted stock reference. An accepted local HTV405 enrollment was 1.25 ms earlier than its stock reference, so this smaller difference does not justify another timing-only HTV145 probe without model-specific evidence.",
+    "No additional exact-sync stock gateway frame was found on six known carriers during the 5.8 seconds before the accepted assignment, reducing but not eliminating the missing-pre-assignment-frame hypothesis.",
+    "The local assignment clipped about 45.9 percent of SDR I/Q bytes and was about 10.3 dB stronger than stock at the capture receiver. The next unchanged-.22 discriminator should lower transmit power and capture gain before changing packet or timing semantics."
+  ]
+}
