@@ -188,23 +188,94 @@ five-minute node window expires.
       compile-gated candidate.
 - [x] Implement the generalized HA pairing lifecycle without exposing the
       unaccepted research transmitter as a production control.
-- [x] Preserve two rejected selector-5 local trials, restore the probe-.2
-      49.5 ms accepted assignment prefix, and require continuous IQ evidence
-      before changing stage 0 again.
-- [ ] Capture at least two additional complete stock-gateway HTV145
-      enrollments and record the app Device Address for each. Compare the
-      assignment selector, assignment carrier, first paired request marker,
-      and routine carrier as one coherent branch before changing the local
-      transcript. One of the two is now complete: the 2026-08-28 retained
-      association accepted factory counter `3`, selector `6`, and a
-      434.461993 MHz routine carrier while the app displayed Device Address
-      `1`. That disproves a direct address/selector mapping and is frozen in
-      `research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`.
-      Retain this gate for one fresh new-identity stock association.
+- [x] Preserve the rejected local assignment corpus through probe `.17` and
+      establish one explicit red gate: the selected node transmitted two
+      decodable assignments, but the valve emitted zero addressed stage-1
+      requests. Small timing, carrier, prelude, and copied-identity changes are
+      closed as leading hypotheses until new stock evidence exposes another
+      discriminator. The frozen result is
+      `research/fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
+- [x] Confirm the manufacturer's distinct HTV145 lifecycle gestures. Ordinary
+      pairing is a long press followed by starting the app search. A documented
+      timer reset removes the batteries for at least ten seconds, then requires
+      holding the timer button while reinstalling four fresh alkaline cells
+      until the red LED flashes rapidly. A plain battery cycle, a long press
+      after boot, and that reset sequence must not be classified as equivalent.
+
+#### HTV145 controlled rebuild
+
+Complete these gates in order. Do not make another stage-0 RF change until the
+capture matrix has identified one coherent fresh-enrollment branch.
+
+Test the current hypotheses in this order: first, that documented factory
+reset, retained re-pair, and battery rejoin are different valve states; second,
+that the valve accepts at most the first assignment offered during one pairing
+session; third, that another assignment field is session-derived rather than
+static; and fourth, that a stock-only pre-assignment RF event or waveform
+feature is still missing. Each hypothesis must predict a distinguishing
+observation before it changes transmitted firmware.
+
+- [ ] Add authenticated radio-node maintenance controls to HA before the next
+      stock-gateway recording:
+  - enter a bounded **receive-only** mode that keeps RF reception, normalized
+    logging, Wi-Fi, diagnostics, identify, and maintenance traffic available
+    while rejecting every pairing, routine-ACK, and valve-control transmission;
+  - restore normal RF mode explicitly, with automatic timeout recovery so a
+    forgotten experiment cannot leave irrigation radio support disabled;
+  - remotely reboot a node without requiring OTA or physical power removal;
+  - expose requested/effective RF mode, remaining timeout, last mode change,
+    reboot result, and rejected-TX count in HA diagnostics;
+  - require the custom local gateway to verify that every adopted node is
+    effectively receive-only before declaring a stock capture ready.
+- [ ] Replace the HTV145 test valve's batteries with four fresh alkaline cells,
+      leave the stock RainPoint gateway under manual control, and record this
+      controlled lifecycle matrix as separate continuous-IQ trials:
+  1. documented factory reset with the stock gateway off and every custom node
+     confirmed receive-only;
+  2. documented factory reset followed by a complete stock enrollment using
+     the manual's exact button-then-app order;
+  3. a second documented factory reset and identical complete stock enrollment;
+  4. ordinary long-press re-pairing without a factory reset;
+  5. ordinary battery removal/reinstallation while the accepted stock
+     association remains registered.
+- [ ] For both new complete stock enrollments, retain the full factory sweep,
+      the first gateway transmission, every addressed continuation, the first
+      routine report, app Device Address, button/app ordering, and LED result.
+      Classify stable, clock-derived, identity-derived, branch-derived,
+      session-generated, and still-unknown fields. Treat the 2026-08-28
+      counter-3/selector-6 recording as retained-association evidence, not as a
+      universal fresh-enrollment branch.
+- [ ] Extend the IQ analyzer with a stage-0 verdict that fails when an
+      assignment is transmitted without an addressed stage-1 request. The fast
+      fixture replay and raw-IQ replay must report the same red/green result,
+      and each physical attempt must retain the exact assignment plus the
+      following factory fallbacks or paired request.
+- [ ] Replace the shared HTV405 session reuse with a dedicated research-only
+      HTV145 state machine and one canonical transcript definition consumed by
+      the analyzer, gateway tests, and generated firmware table. The initial
+      harness must select one evidence-backed lifecycle/selector branch before
+      arming, transmit at most one assignment, never fall through to a second
+      branch in the same session, and remain receive-only afterward.
+- [ ] Prove and freeze the initial assignment boundary. It passes only when
+      two consecutive unchanged trials produce the expected addressed stage-1
+      valve request. Freeze its request matcher, assignment payload, endpoints,
+      selector, carrier, prelude, deviation, wake, scheduler, clock derivation,
+      and trailer in a regression fixture and a separate commit.
+- [ ] Build the remaining exchange incrementally without modifying a frozen
+      prefix:
+  1. stage-1 ordinary reply plus its coupled delayed long-wake configuration,
+     proven by the valve's configuration response and next addressed request;
+  2. stage-3 reply, proven by the stage-4 request;
+  3. stage-4 reply, proven by the stage-5 request;
+  4. stage-5 reply, proven by ordinary paired telemetry on the new association.
+  Each boundary requires two consecutive unchanged progressions before it is
+  frozen. LED state and transmit completion are supporting observations only.
 - [ ] Complete three consecutive local pairings with fresh batteries and
-      valve-originated terminal evidence.
+      valve-originated terminal evidence on the unchanged final candidate.
 - [ ] Confirm removal and re-pairing preserve the intended stable physical
-      identity without stale entities.
+      identity without stale entities, then implement retained re-pair and
+      battery-rejoin behavior as separate lifecycle paths without reopening the
+      frozen fresh-enrollment transcript.
 
 Exit criteria: a user can pair and remove every supported family entirely from
 HA, each family completes three consecutive final-build trials, and each
