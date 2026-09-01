@@ -1550,6 +1550,145 @@ class ESP32NetworkTest(unittest.TestCase):
         legacy_stream.close()
         legacy_connection.close()
 
+    def test_v2_rf_maintenance_is_bounded_observable_and_rebootable(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "rf_maintenance",
+                "node_reboot",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+
+        requested = self.gateway.set_radio_node_rf_mode(
+            NODE_A, "receive_only", 900
+        )
+        command = json.loads(stream.readline())
+        self.assertEqual("rf_mode_set", command["type"])
+        self.assertEqual("receive_only", command["mode"])
+        self.assertEqual(900, command["duration_seconds"])
+        self.assertEqual(requested["command_id"], command["command_id"])
+        stream.write(
+            json.dumps(
+                {
+                    "type": "rf_maintenance_status",
+                    "node_id": NODE_A,
+                    "command_id": command["command_id"],
+                    "requested_mode": "receive_only",
+                    "effective_mode": "receive_only",
+                    "remaining_seconds": 899,
+                    "changed_uptime_ms": 12_000,
+                    "blocked_transmit_count": 2,
+                    "rejected_command_count": 1,
+                    "reboot_pending": False,
+                    "detail": "receive_only_started",
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("rf_mode") != "receive_only":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        node = self.gateway.nodes()[0]
+        self.assertEqual(899, node["rf_mode_remaining_seconds"])
+        self.assertEqual(2, node["rf_blocked_transmit_count"])
+        self.assertEqual(1, node["rf_rejected_command_count"])
+        first_changed_at = node["rf_mode_changed_at"]
+        stream.write(
+            json.dumps(
+                {
+                    "type": "rf_maintenance_status",
+                    "node_id": NODE_A,
+                    "requested_mode": "receive_only",
+                    "effective_mode": "receive_only",
+                    "remaining_seconds": 898,
+                    "changed_uptime_ms": 12_000,
+                    "blocked_transmit_count": 2,
+                    "rejected_command_count": 1,
+                    "reboot_pending": False,
+                    "detail": "status_replay",
+                }
+            ).encode()
+            + b"\n"
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("rf_mode_remaining_seconds") != 898:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        self.assertEqual(
+            first_changed_at, self.gateway.nodes()[0]["rf_mode_changed_at"]
+        )
+        readiness = self.gateway.radio_node_capture_readiness(60)
+        self.assertFalse(readiness["ready"])
+        self.assertEqual(NODE_B, readiness["blockers"][0]["node_id"])
+        self.assertEqual("offline", readiness["blockers"][0]["reason"])
+        self.gateway.update_node(
+            NODE_B,
+            connected=True,
+            authenticated=True,
+            rf_mode="receive_only",
+            rf_mode_remaining_seconds=899,
+        )
+        self.assertTrue(
+            self.gateway.radio_node_capture_readiness(60)["ready"]
+        )
+
+        reboot = self.gateway.reboot_radio_node(NODE_A)
+        reboot_command = json.loads(stream.readline())
+        self.assertEqual("node_reboot", reboot_command["type"])
+        self.assertEqual(reboot["command_id"], reboot_command["command_id"])
+        self.assertEqual("normal", reboot["rf_mode_after_reboot"])
+        self.assertTrue(self.gateway.nodes()[0]["node_reboot_pending"])
+        stream.close()
+        connection.close()
+
+        replacement, replacement_stream, _ = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "rf_maintenance",
+                "node_reboot",
+            ],
+        )
+        deadline = time.monotonic() + 2
+        while self.gateway.nodes()[0].get("node_last_reboot_result") != (
+            "reconnected"
+        ):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        reconnected_node = self.gateway.nodes()[0]
+        self.assertFalse(reconnected_node["node_reboot_pending"])
+        self.assertIsNotNone(reconnected_node["node_last_reboot_at"])
+        replacement_stream.close()
+        replacement.close()
+
+    def test_rf_maintenance_rejects_invalid_duration_and_missing_capability(
+        self,
+    ) -> None:
+        connection, stream, _ = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2
+        )
+        with self.assertRaisesRegex(ValueError, "between 60 and 3600"):
+            self.gateway.set_radio_node_rf_mode(
+                NODE_A, "receive_only", 59
+            )
+        with self.assertRaisesRegex(ValueError, "RF maintenance"):
+            self.gateway.set_radio_node_rf_mode(
+                NODE_A, "receive_only", 900
+            )
+        with self.assertRaisesRegex(ValueError, "remote reboot"):
+            self.gateway.reboot_radio_node(NODE_A)
+        stream.close()
+        connection.close()
+
     def test_v2_routine_ack_candidate_capability_authenticates(self) -> None:
         connection, stream, response = self._connect(
             NODE_A,

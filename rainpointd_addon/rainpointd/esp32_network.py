@@ -138,6 +138,8 @@ class ESP32NetworkServer:
             "pairing_start",
             "pairing_cancel",
             "identify_start",
+            "rf_mode_set",
+            "node_reboot",
             "firmware_update_start",
             "routine_ack_configure",
             "routine_ack_revoke",
@@ -164,6 +166,10 @@ class ESP32NetworkServer:
         command_type = message.get("type")
         if command_type == "identify_start":
             required_capability = "identify"
+        elif command_type == "rf_mode_set":
+            required_capability = "rf_maintenance"
+        elif command_type == "node_reboot":
+            required_capability = "node_reboot"
         elif command_type == "firmware_update_start":
             required_capability = "firmware_update_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
@@ -280,6 +286,25 @@ class ESP32NetworkServer:
             self._send(stream, authenticated_message)
             self.gateway.complete_radio_node_adoption(node_id)
             now = _timestamp()
+            previous_node = next(
+                (
+                    node
+                    for node in self.gateway.nodes()
+                    if node.get("node_id") == node_id
+                ),
+                {},
+            )
+            reboot_completed = (
+                previous_node.get("node_reboot_pending") is True
+            )
+            connection_diagnostics: dict[str, Any] = {}
+            if reboot_completed:
+                connection_diagnostics.update(
+                    {
+                        "node_last_reboot_result": "reconnected",
+                        "node_last_reboot_at": now,
+                    }
+                )
             self.gateway.update_node(
                 node_id,
                 connected=True,
@@ -299,6 +324,11 @@ class ESP32NetworkServer:
                 received_frames=0,
                 duplicate_frames=0,
                 invalid_messages=0,
+                rf_mode="unknown",
+                rf_mode_requested="unknown",
+                rf_mode_remaining_seconds=0,
+                node_reboot_pending=False,
+                **connection_diagnostics,
             )
             self.gateway.notify_node_update(node_id, "radio_node_connected")
             self.gateway.restore_radio_node_ack_assignments(node_id)
@@ -383,6 +413,65 @@ class ESP32NetworkServer:
                         identify_active=message.get("active") is True,
                         identify_command_id=message.get("command_id"),
                     )
+                if message.get("type") == "rf_maintenance_status":
+                    requested_mode = message.get("requested_mode")
+                    effective_mode = message.get("effective_mode")
+                    remaining_seconds = message.get("remaining_seconds")
+                    changed_uptime_ms = message.get("changed_uptime_ms")
+                    blocked_transmit_count = message.get(
+                        "blocked_transmit_count"
+                    )
+                    rejected_command_count = message.get(
+                        "rejected_command_count"
+                    )
+                    if requested_mode in {"normal", "receive_only"} and (
+                        effective_mode in {"normal", "receive_only"}
+                    ):
+                        current_node = next(
+                            (
+                                node
+                                for node in self.gateway.nodes()
+                                if node.get("node_id") == node_id
+                            ),
+                            {},
+                        )
+                        diagnostics: dict[str, Any] = {
+                            "rf_mode_requested": requested_mode,
+                            "rf_mode": effective_mode,
+                            "rf_mode_command_id": message.get("command_id"),
+                            "rf_mode_detail": message.get("detail"),
+                            "node_reboot_pending": (
+                                message.get("reboot_pending") is True
+                            ),
+                        }
+                        for value, key in (
+                            (remaining_seconds, "rf_mode_remaining_seconds"),
+                            (changed_uptime_ms, "rf_mode_changed_uptime_ms"),
+                            (
+                                blocked_transmit_count,
+                                "rf_blocked_transmit_count",
+                            ),
+                            (
+                                rejected_command_count,
+                                "rf_rejected_command_count",
+                            ),
+                        ):
+                            if (
+                                isinstance(value, int)
+                                and not isinstance(value, bool)
+                                and value >= 0
+                            ):
+                                diagnostics[key] = value
+                        if (
+                            current_node.get("rf_mode") != effective_mode
+                            or current_node.get("rf_mode_changed_uptime_ms")
+                            != diagnostics.get("rf_mode_changed_uptime_ms")
+                        ):
+                            diagnostics["rf_mode_changed_at"] = now
+                        self.gateway.update_node(node_id, **diagnostics)
+                        self.gateway.notify_node_update(
+                            node_id, "radio_node_rf_mode"
+                        )
                 if message.get("type") == "firmware_update_status":
                     self.gateway.update_node(
                         node_id,
@@ -451,6 +540,16 @@ class ESP32NetworkServer:
                             node_id,
                             identify_active=False,
                             identify_detail=message.get("error"),
+                        )
+                    elif message.get("command_id") == current_node.get(
+                        "rf_mode_command_id"
+                    ):
+                        self.gateway.update_node(
+                            node_id,
+                            rf_mode_requested=current_node.get(
+                                "rf_mode", "unknown"
+                            ),
+                            rf_mode_detail=message.get("error"),
                         )
                     elif message.get("command_id") == current_node.get(
                         "routine_ack_command_id"
@@ -571,6 +670,8 @@ class ESP32NetworkServer:
                         "sensor_pairing_tx",
                         "configurable_rf_controller_identity",
                         "identify",
+                        "rf_maintenance",
+                        "node_reboot",
                         "routine_sensor_ack_tx",
                         "htv405_routine_ack_tx",
                         "valve_pairing_tx_candidate",

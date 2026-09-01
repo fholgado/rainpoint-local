@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.33.24 / Integration 0.13.3 / Firmware 0.15.3
+
+- Add authenticated, bounded receive-only control for every Wi-Fi radio node.
+  A driver-level guard blocks pairing, acknowledgement, and valve-control RF
+  transmissions while keeping reception, logging, Wi-Fi, diagnostics,
+  Identify, and maintenance online; normal mode returns automatically.
+- Add remote node reboot plus HA mode, timeout, mode-change, blocked-TX,
+  rejected-command, and reboot diagnostics.
+- Add an aggregate capture-readiness check that refuses to declare a stock
+  recording safe unless every adopted node is online, authenticated, and
+  effectively receive-only.
+- Preserve the validated HTV405 enrollment/control and HTV145 pairing-probe RF
+  sequences unchanged in supervised beta.12 and pairing probe.18.
+
 ## 0.33.23 / Integration 0.13.2 / Firmware 0.15.0-supervised-beta.11
 
 - Keep guarded-open timeout or rejection terminal instead of feeding it into

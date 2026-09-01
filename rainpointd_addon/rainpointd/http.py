@@ -36,6 +36,20 @@ class RequestHandler(BaseHTTPRequestHandler):
         if parsed.path == f"/api/{API_VERSION}/nodes":
             self._json(200, {"nodes": self.server.gateway.nodes()})
             return
+        if parsed.path == f"/api/{API_VERSION}/nodes/rf-capture-readiness":
+            query = parse_qs(parsed.query)
+            try:
+                minimum_remaining_seconds = int(
+                    query.get("minimum_remaining_seconds", ["60"])[0]
+                )
+                readiness = self.server.gateway.radio_node_capture_readiness(
+                    minimum_remaining_seconds
+                )
+            except ValueError as error:
+                self._json(400, {"error": str(error)})
+                return
+            self._json(200, readiness)
+            return
         if parsed.path == f"/api/{API_VERSION}/firmware/releases":
             self._json(
                 200,
@@ -228,6 +242,22 @@ class RequestHandler(BaseHTTPRequestHandler):
                         int(body.get("duration_seconds", 15)),
                     )
                     self._json(200, result)
+                    return
+                if separator and node_action == "rf-mode":
+                    result = self.server.gateway.set_radio_node_rf_mode(
+                        node_id,
+                        str(body.get("mode", "")),
+                        (
+                            int(body["duration_seconds"])
+                            if body.get("duration_seconds") is not None
+                            else None
+                        ),
+                    )
+                    self._json(200, result)
+                    return
+                if separator and node_action == "reboot":
+                    result = self.server.gateway.reboot_radio_node(node_id)
+                    self._json(202, result)
                     return
                 if separator and node_action == "metadata":
                     result = self.server.gateway.update_radio_node_metadata(

@@ -96,6 +96,8 @@ FIRMWARE_PUBLIC_HOST = re.compile(
     r"(?=.{1,253}\Z)[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?\Z"
 )
 MAXIMUM_ROUTINE_ACK_ASSIGNMENTS = 8
+MINIMUM_RF_RECEIVE_ONLY_SECONDS = 60
+MAXIMUM_RF_RECEIVE_ONLY_SECONDS = 3_600
 HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS = (
     HTV405_RESPONSE_WINDOW_SECONDS + 5.0
 )
@@ -1669,6 +1671,145 @@ class Gateway:
                 "duration_seconds": duration_seconds,
                 "command_id": command_id,
             }
+
+    def set_radio_node_rf_mode(
+        self,
+        node_id: str,
+        mode: str,
+        duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Set one node's bounded RF operating mode."""
+        node_id = node_id.strip().lower()
+        if mode not in {"normal", "receive_only"}:
+            raise ValueError("mode must be normal or receive_only")
+        if mode == "receive_only":
+            if (
+                not isinstance(duration_seconds, int)
+                or isinstance(duration_seconds, bool)
+                or not MINIMUM_RF_RECEIVE_ONLY_SECONDS
+                <= duration_seconds
+                <= MAXIMUM_RF_RECEIVE_ONLY_SECONDS
+            ):
+                raise ValueError(
+                    "duration_seconds must be between 60 and 3600"
+                )
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if (
+                node is None
+                or node.get("connected") is not True
+                or node.get("authenticated") is not True
+            ):
+                raise ValueError("radio node is not connected")
+            if "rf_maintenance" not in node.get("capabilities", []):
+                raise ValueError(
+                    "radio node does not support RF maintenance mode"
+                )
+            if self._node_command_sender is None:
+                raise RuntimeError("radio-node command transport is unavailable")
+            command_id = uuid.uuid4().hex
+            command: dict[str, Any] = {
+                "type": "rf_mode_set",
+                "command_id": command_id,
+                "mode": mode,
+            }
+            if mode == "receive_only":
+                command["duration_seconds"] = duration_seconds
+            self._node_command_sender(node_id, command)
+            node.update(
+                {
+                    "rf_mode_requested": mode,
+                    "rf_mode_command_id": command_id,
+                    "rf_mode_detail": "requested",
+                }
+            )
+            return {
+                "node_id": node_id,
+                "requested_mode": mode,
+                "duration_seconds": (
+                    duration_seconds if mode == "receive_only" else None
+                ),
+                "command_id": command_id,
+            }
+
+    def reboot_radio_node(self, node_id: str) -> dict[str, Any]:
+        """Request a deferred reboot; firmware restarts in normal RF mode."""
+        node_id = node_id.strip().lower()
+        with self._lock:
+            node = self._nodes.get(node_id)
+            if (
+                node is None
+                or node.get("connected") is not True
+                or node.get("authenticated") is not True
+            ):
+                raise ValueError("radio node is not connected")
+            if "node_reboot" not in node.get("capabilities", []):
+                raise ValueError("radio node does not support remote reboot")
+            if self._node_command_sender is None:
+                raise RuntimeError("radio-node command transport is unavailable")
+            command_id = uuid.uuid4().hex
+            self._node_command_sender(
+                node_id,
+                {"type": "node_reboot", "command_id": command_id},
+            )
+            node.update(
+                {
+                    "node_reboot_pending": True,
+                    "rf_mode_command_id": command_id,
+                    "rf_mode_detail": "reboot_requested",
+                }
+            )
+            return {
+                "node_id": node_id,
+                "state": "reboot_requested",
+                "command_id": command_id,
+                "rf_mode_after_reboot": "normal",
+            }
+
+    def radio_node_capture_readiness(
+        self, minimum_remaining_seconds: int = 60
+    ) -> dict[str, Any]:
+        """Verify that every adopted node is currently receive-only."""
+        if not (
+            1
+            <= minimum_remaining_seconds
+            <= MAXIMUM_RF_RECEIVE_ONLY_SECONDS
+        ):
+            raise ValueError("minimum_remaining_seconds must be between 1 and 3600")
+        blockers: list[dict[str, Any]] = []
+        managed_nodes = [node for node in self.nodes() if node.get("managed")]
+        for node in managed_nodes:
+            reason: str | None = None
+            if (
+                node.get("connected") is not True
+                or node.get("authenticated") is not True
+            ):
+                reason = "offline"
+            elif node.get("rf_mode") != "receive_only":
+                reason = "not_receive_only"
+            elif (
+                int(node.get("rf_mode_remaining_seconds", 0))
+                < minimum_remaining_seconds
+            ):
+                reason = "timeout_too_short"
+            if reason is not None:
+                blockers.append(
+                    {
+                        "node_id": node["node_id"],
+                        "name": node.get("name", node["node_id"]),
+                        "reason": reason,
+                        "effective_mode": node.get("rf_mode", "unknown"),
+                        "remaining_seconds": node.get(
+                            "rf_mode_remaining_seconds", 0
+                        ),
+                    }
+                )
+        return {
+            "ready": bool(managed_nodes) and not blockers,
+            "managed_node_count": len(managed_nodes),
+            "minimum_remaining_seconds": minimum_remaining_seconds,
+            "blockers": blockers,
+        }
 
     def start_radio_node_firmware_update(
         self,

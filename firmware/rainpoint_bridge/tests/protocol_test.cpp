@@ -10,6 +10,7 @@
 #include "rainpoint_htv145_control.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_ota.h"
+#include "rainpoint_rf_maintenance.h"
 
 namespace {
 
@@ -60,6 +61,22 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    rainpoint::RfMaintenanceState rfMaintenance;
+    assert(rfMaintenance.transmitAllowed());
+    assert(!rfMaintenance.enterReceiveOnly(100, 59));
+    assert(rfMaintenance.enterReceiveOnly(100, 900));
+    assert(!rfMaintenance.transmitAllowed());
+    assert(rfMaintenance.remainingSeconds(100) == 900);
+    assert(rfMaintenance.remainingSeconds(100'100) == 800);
+    assert(!rfMaintenance.tick(900'099));
+    assert(rfMaintenance.tick(900'100));
+    assert(rfMaintenance.transmitAllowed());
+    assert(rfMaintenance.remainingSeconds(900'100) == 0);
+    assert(rfMaintenance.enterReceiveOnly(0xfffffff0U, 60));
+    assert(!rfMaintenance.tick(0x0000'0010U));
+    rfMaintenance.resumeNormal(0x0000'0010U);
+    assert(rfMaintenance.transmitAllowed());
+
     const rainpoint::Htv405RoutineAckAuthorization htv405AckAuthorization{
         {{0xb9, 0x84, 0x02, 0x80}},
         {{0x94, 0xa9, 0x80, 0x13}},

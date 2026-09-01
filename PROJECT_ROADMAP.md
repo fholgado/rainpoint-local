@@ -215,8 +215,8 @@ static; and fourth, that a stock-only pre-assignment RF event or waveform
 feature is still missing. Each hypothesis must predict a distinguishing
 observation before it changes transmitted firmware.
 
-- [ ] Add authenticated radio-node maintenance controls to HA before the next
-      stock-gateway recording:
+- [x] Implement authenticated radio-node maintenance controls in firmware, the
+      local gateway, and HA before the next stock-gateway recording:
   - enter a bounded **receive-only** mode that keeps RF reception, normalized
     logging, Wi-Fi, diagnostics, identify, and maintenance traffic available
     while rejecting every pairing, routine-ACK, and valve-control transmission;
@@ -227,6 +227,11 @@ observation before it changes transmitted firmware.
     reboot result, and rejected-TX count in HA diagnostics;
   - require the custom local gateway to verify that every adopted node is
     effectively receive-only before declaring a stock capture ready.
+- [ ] Deploy the maintenance-capable image to every adopted radio node and
+      physically verify receive-only entry, capture-readiness blocking,
+      automatic normal-mode recovery, explicit restore, and remote reboot.
+      Do not begin the controlled stock-gateway capture matrix until this gate
+      is complete.
 - [ ] Replace the HTV145 test valve's batteries with four fresh alkaline cells,
       leave the stock RainPoint gateway under manual control, and record this
       controlled lifecycle matrix as separate continuous-IQ trials:

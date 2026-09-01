@@ -162,6 +162,10 @@ class ESP32SerialTransport:
                 "sensor_recovery_transmissions",
                 "sensor_recovery_failures",
                 "sensor_recovery_completions",
+                "rf_mode_remaining_seconds",
+                "rf_mode_changed_uptime_ms",
+                "rf_blocked_transmit_count",
+                "rf_rejected_command_count",
             ):
                 value = message.get(key)
                 if (
@@ -170,6 +174,12 @@ class ESP32SerialTransport:
                     and value >= 0
                 ):
                     diagnostics[key] = value
+            rf_mode = message.get("rf_mode")
+            if rf_mode in {"normal", "receive_only"}:
+                diagnostics["rf_mode"] = rf_mode
+            reboot_pending = message.get("node_reboot_pending")
+            if isinstance(reboot_pending, bool):
+                diagnostics["node_reboot_pending"] = reboot_pending
             temperature = message.get("device_temperature_c")
             if (
                 isinstance(temperature, (int, float))

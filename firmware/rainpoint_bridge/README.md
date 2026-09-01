@@ -86,6 +86,14 @@ capacitor across CC1101 VCC/GND when practical.
   refuses to give a custom-identity association to an older node.
 - Starts with RF transmission disarmed and fails closed on timeout, network
   loss, unexpected pairing state, invalid command, or driver failure.
+- Accepts authenticated maintenance commands for a bounded 60--3,600 second
+  receive-only interval. Reception, normalized logging, Wi-Fi, diagnostics,
+  Identify, and maintenance remain active, while a CC1101 driver guard blocks
+  every pairing, acknowledgement, and valve-control transmission. The node
+  automatically restores normal mode when the interval expires.
+- Supports authenticated remote reboot. A reboot intentionally returns to
+  normal RF mode so a forgotten maintenance interval cannot silently disable
+  irrigation support after power recovery.
 - Reports radio, heap, reset, temperature, loop-latency, network, Wi-Fi, OTA,
   pairing, and acknowledgement diagnostics every 30 seconds.
 - Uses a temporary setup access point, Home Assistant discovery, BOOT-button
@@ -115,7 +123,7 @@ enabled:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.11 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.12 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -129,7 +137,7 @@ The unaccepted HTV145 candidate requires an additional explicit build gate:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_TX_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.2 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.0-htv145-control-candidate.3 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -140,7 +148,7 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.17 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.18 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -148,8 +156,9 @@ This isolated probe answers the first complete captured factory branch it
 observes after arming: counter-0/selector-5 or counter-3/selector-6. The
 counter-0 assignment reproduces the stock gateway's measured 256-symbol
 shifted, reversed-polarity alternating prelude before its ordinary wake. Probe
-`.17` restores the wake-validated common carrier and applies a bounded
-counter-0-only timing probe while leaving the later-sweep branch unchanged.
+`.18` adds only authenticated maintenance controls to the `.17` RF candidate;
+it preserves the wake-validated common carrier, bounded counter-0-only timing
+probe, and later-sweep branch unchanged.
 Arm before the physical gesture so
 normal setup starts with counter 0; no operator timing against the LED sequence
 is required.
@@ -207,7 +216,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.2 --environment rainpoint_bridge
+  --version 0.15.3 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

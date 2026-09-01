@@ -40,10 +40,10 @@ if htv145_pairing_enabled and not research_enabled:
         "RAINPOINT_HTV145_PAIRING_CANDIDATE requires "
         "RAINPOINT_RESEARCH_BENCH=1"
     )
-standard_version = "0.15.2"
-supervised_version = "0.15.0-supervised-beta.11"
-htv145_candidate_version = "0.15.0-htv145-control-candidate.2"
-htv145_pairing_candidate_version = "0.15.2-htv145-pairing-probe.17"
+standard_version = "0.15.3"
+supervised_version = "0.15.0-supervised-beta.12"
+htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
+htv145_pairing_candidate_version = "0.15.2-htv145-pairing-probe.18"
 if htv145_pairing_enabled:
     default_version = htv145_pairing_candidate_version
     firmware_variant = "htv145-pairing-probe"

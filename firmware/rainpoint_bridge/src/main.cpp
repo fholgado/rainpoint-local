@@ -13,6 +13,7 @@
 #endif
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
+#include "rainpoint_rf_maintenance.h"
 #include "rainpoint_valve_control.h"
 #include "rainpoint_valve_pairing.h"
 #include "wifi_transport.h"
@@ -217,6 +218,10 @@ String identifyCommandId;
 std::uint32_t identifyUntilMs = 0;
 std::uint32_t lastIdentifyToggleMs = 0;
 bool identifyLedOn = false;
+rainpoint::RfMaintenanceState rfMaintenance;
+String rfMaintenanceCommandId;
+std::uint32_t rfRejectedCommandCount = 0;
+bool nodeRestartPending = false;
 
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 struct ValveControlProbe {
@@ -610,6 +615,20 @@ void printNodeHealth() {
     line += wifiTransport.gatewayConnectAttempts();
     line += ",\"gateway_authentications\":";
     line += wifiTransport.gatewayAuthentications();
+    line += ",\"rf_mode\":\"";
+    line += rfMaintenance.mode() == rainpoint::RfOperatingMode::ReceiveOnly
+        ? "receive_only"
+        : "normal";
+    line += "\",\"rf_mode_remaining_seconds\":";
+    line += rfMaintenance.remainingSeconds(millis());
+    line += ",\"rf_mode_changed_uptime_ms\":";
+    line += rfMaintenance.changedAtMs();
+    line += ",\"rf_blocked_transmit_count\":";
+    line += primaryRadio.blockedTransmitCount();
+    line += ",\"rf_rejected_command_count\":";
+    line += rfRejectedCommandCount;
+    line += ",\"node_reboot_pending\":";
+    line += nodeRestartPending ? "true" : "false";
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     line += ",\"routine_ack_authorized_sensors\":";
     line += static_cast<unsigned int>(routineAckAuthorizations.activeCount());
@@ -858,6 +877,100 @@ void cancelPairing(const char* detail) {
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
     reportPairingStatus(detail);
+}
+
+void setAllRadioTransmitEnabled(bool enabled) {
+    primaryRadio.setTransmitEnabled(enabled);
+#if RAINPOINT_RADIO_COUNT == 2
+    diagnosticRadio.setTransmitEnabled(enabled);
+#endif
+}
+
+const char* rfModeName() {
+    return rfMaintenance.mode() == rainpoint::RfOperatingMode::ReceiveOnly
+        ? "receive_only"
+        : "normal";
+}
+
+void reportRfMaintenanceStatus(const char* detail) {
+    String line = "{\"type\":\"rf_maintenance_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"command_id\":\"";
+    line += rfMaintenanceCommandId;
+    line += "\",\"requested_mode\":\"";
+    line += rfModeName();
+    line += "\",\"effective_mode\":\"";
+    line += rfModeName();
+    line += "\",\"remaining_seconds\":";
+    line += rfMaintenance.remainingSeconds(millis());
+    line += ",\"changed_uptime_ms\":";
+    line += rfMaintenance.changedAtMs();
+    line += ",\"blocked_transmit_count\":";
+    line += primaryRadio.blockedTransmitCount();
+    line += ",\"rejected_command_count\":";
+    line += rfRejectedCommandCount;
+    line += ",\"reboot_pending\":";
+    line += nodeRestartPending ? "true" : "false";
+    line += ",\"detail\":\"";
+    line += detail;
+    line += "\"}";
+    emitLine(line);
+}
+
+bool rfCommandMayTransmit(const String& type) {
+    return type == "pairing_start" ||
+        type == "routine_ack_configure" ||
+        type == "htv405_routine_ack_configure" ||
+        type == "valve_control_open" ||
+        type == "valve_control_close" ||
+        type == "htv145_control_open" ||
+        type == "htv145_control_close" ||
+        type == "firmware_update_start";
+}
+
+void enterRfReceiveOnly(
+    const String& commandId,
+    std::uint32_t durationSeconds
+) {
+    // Disable the physical transmit boundary before cancelling any workflow.
+    setAllRadioTransmitEnabled(false);
+    rfMaintenance.enterReceiveOnly(millis(), durationSeconds);
+    rfMaintenanceCommandId = commandId;
+    if (currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        cancelPairing("rf_receive_only");
+    }
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
+    valveControlProbe.ackQueued = false;
+    valveControlProbe.openQueued = false;
+    valveControlProbe.closeQueued = false;
+    valveControlProbe.commandPendingConfirmation = false;
+    valveControlProbe.responseListenActive = false;
+#endif
+#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+    if (htv145ControlCandidate.pending) {
+        htv145ControlCandidate.pending = false;
+        htv145ControlCandidate.counterAuthenticated = false;
+        htv145ControlCandidate.commandId.clear();
+    }
+#endif
+    primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel);
+    reportRfMaintenanceStatus("receive_only_started");
+}
+
+void resumeRfNormal(const String& commandId, const char* detail) {
+    rfMaintenance.resumeNormal(millis());
+    setAllRadioTransmitEnabled(true);
+    rfMaintenanceCommandId = commandId;
+    reportRfMaintenanceStatus(detail);
+}
+
+void pollRfMaintenance() {
+    if (!rfMaintenance.tick(millis())) {
+        return;
+    }
+    setAllRadioTransmitEnabled(true);
+    rfMaintenanceCommandId.clear();
+    reportRfMaintenanceStatus("receive_only_expired");
 }
 
 #if RAINPOINT_RESEARCH_BENCH == 1
@@ -2101,6 +2214,41 @@ void handleNetworkCommand() {
     const String commandId = jsonStringField(command, "command_id");
     if (!validCommandId(commandId)) {
         reportNetworkCommandError("invalid", "invalid_command_id");
+        return;
+    }
+    if (type == "rf_mode_set") {
+        const String mode = jsonStringField(command, "mode");
+        if (mode == "normal") {
+            resumeRfNormal(commandId, "normal_restored");
+            return;
+        }
+        long durationSeconds = 0;
+        if (mode != "receive_only" ||
+            !jsonLongField(command, "duration_seconds", durationSeconds) ||
+            durationSeconds < static_cast<long>(
+                rainpoint::RfMaintenanceState::kMinimumReceiveOnlySeconds
+            ) ||
+            durationSeconds > static_cast<long>(
+                rainpoint::RfMaintenanceState::kMaximumReceiveOnlySeconds
+            )) {
+            reportNetworkCommandError(commandId, "invalid_rf_mode_request");
+            return;
+        }
+        enterRfReceiveOnly(
+            commandId, static_cast<std::uint32_t>(durationSeconds)
+        );
+        return;
+    }
+    if (type == "node_reboot") {
+        nodeRestartPending = true;
+        rfMaintenanceCommandId = commandId;
+        reportRfMaintenanceStatus("reboot_scheduled");
+        return;
+    }
+    if (!rfMaintenance.transmitAllowed() && rfCommandMayTransmit(type)) {
+        ++rfRejectedCommandCount;
+        reportNetworkCommandError(commandId, "rf_receive_only");
+        reportRfMaintenanceStatus("transmit_command_rejected");
         return;
     }
     if (type == "identify_start") {
@@ -3859,6 +4007,7 @@ void loop() {
         failHtv145Candidate("gateway_connection_lost_counter_unsynchronized");
     }
 #endif
+    pollRfMaintenance();
     handleNetworkCommand();
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     // Pairing status emitted while the gateway was down could not be
@@ -3869,6 +4018,14 @@ void loop() {
         reportPairingStatus("gateway_reconnected");
     }
 #endif
+    if (gatewayReconnected) {
+        reportRfMaintenanceStatus("gateway_reconnected");
+    }
+    if (nodeRestartPending) {
+        delay(250);
+        ESP.restart();
+        return;
+    }
 #if RAINPOINT_OTA_CANDIDATE == 1
     // Restart only after unwinding the authenticated network-command handler.
     // A physical 0.9 -> 0.10 trial reached verified_sha256 but remained inside

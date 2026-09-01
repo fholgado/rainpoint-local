@@ -145,6 +145,25 @@ class RainPointLocalClient:
             token,
         )
 
+    async def set_radio_node_rf_mode(
+        self,
+        token: str,
+        node_id: str,
+        mode: str,
+        duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Set a node to normal or bounded receive-only RF operation."""
+        body: dict[str, Any] = {"mode": mode}
+        if duration_seconds is not None:
+            body["duration_seconds"] = duration_seconds
+        return await self._post(f"nodes/{node_id}/rf-mode", body, token)
+
+    async def reboot_radio_node(
+        self, token: str, node_id: str
+    ) -> dict[str, Any]:
+        """Request a deferred reboot of one authenticated radio node."""
+        return await self._post(f"nodes/{node_id}/reboot", {}, token)
+
     async def update_radio_node_metadata(
         self,
         token: str,

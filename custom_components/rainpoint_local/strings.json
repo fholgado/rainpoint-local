@@ -204,6 +204,15 @@
       "radio_overflows": { "name": "Radio buffer overflows" },
       "wifi_reconnects": { "name": "Wi-Fi reconnects" },
       "gateway_authentications": { "name": "Gateway authentications" },
+      "rf_mode": { "name": "RF operating mode" },
+      "rf_mode_requested": { "name": "Requested RF mode" },
+      "rf_mode_detail": { "name": "RF maintenance status" },
+      "rf_mode_remaining": { "name": "Receive-only time remaining" },
+      "rf_mode_changed": { "name": "RF mode last changed" },
+      "rf_blocked_transmissions": { "name": "Blocked RF transmissions" },
+      "rf_rejected_commands": { "name": "Rejected RF commands" },
+      "node_last_reboot_result": { "name": "Last reboot result" },
+      "node_last_reboot": { "name": "Last remote reboot" },
       "routine_ack_authorized_sensors": { "name": "Acknowledged sensors" },
       "routine_ack_transmissions": { "name": "Sensor acknowledgements sent" },
       "routine_ack_failures": { "name": "Sensor acknowledgement failures" },
@@ -216,10 +225,15 @@
       "zone_watering": { "name": "Zone {zone} watering" },
       "reporting": { "name": "Reporting" },
       "radio_node_connected": { "name": "Connected" },
-      "radio_node_tx_armed": { "name": "Pairing transmitter armed" }
+      "radio_node_tx_armed": { "name": "Pairing transmitter armed" },
+      "radio_node_reboot_pending": { "name": "Reboot pending" }
     },
     "button": {
-      "identify_radio_node": { "name": "Identify" }
+      "identify_radio_node": { "name": "Identify" },
+      "reboot_radio_node": { "name": "Reboot" }
+    },
+    "switch": {
+      "radio_node_rf_transmissions": { "name": "RF transmissions" }
     },
     "number": {
       "htv405_zone_duration": { "name": "Zone {zone} duration" }

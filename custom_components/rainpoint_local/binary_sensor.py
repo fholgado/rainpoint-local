@@ -51,6 +51,12 @@ async def async_setup_entry(
                 entities.append(
                     RainPointRadioNodeTxArmed(coordinator, node_id)
                 )
+            reboot_identity = (f"radio-node:{node_id}", "reboot_pending")
+            if reboot_identity not in known:
+                known.add(reboot_identity)
+                entities.append(
+                    RainPointRadioNodeRebootPending(coordinator, node_id)
+                )
         if entities:
             async_add_entities(entities)
 
@@ -206,3 +212,23 @@ class RainPointRadioNodeTxArmed(RainPointRadioNodeEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return whether bounded pairing transmission is armed."""
         return self.node.get("tx_armed") is True
+
+
+class RainPointRadioNodeRebootPending(
+    RainPointRadioNodeEntity, BinarySensorEntity
+):
+    """Expose whether the node accepted a deferred reboot request."""
+
+    _attr_translation_key = "radio_node_reboot_pending"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, coordinator: RainPointLocalCoordinator, node_id: str
+    ) -> None:
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"radio-node:{node_id}_reboot_pending"
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether a reboot has been scheduled but not observed."""
+        return self.node.get("node_reboot_pending") is True

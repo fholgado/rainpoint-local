@@ -354,6 +354,18 @@ bool Cc1101::prepareTransmit() {
     return transmitPrepared_;
 }
 
+void Cc1101::setTransmitEnabled(bool enabled) {
+    transmitEnabled_ = enabled;
+}
+
+bool Cc1101::transmitEnabled() const {
+    return transmitEnabled_;
+}
+
+std::uint32_t Cc1101::blockedTransmitCount() const {
+    return blockedTransmitCount_;
+}
+
 bool Cc1101::cacheTransmitFrequency(std::uint32_t centerFrequencyHz) {
     if (centerFrequencyHz < 433'000'000 || centerFrequencyHz > 435'000'000) {
         return false;
@@ -412,6 +424,10 @@ bool Cc1101::transmitAsync(
     std::uint8_t leadingDeviationRegister,
     bool invertLeadingPrelude
 ) {
+    if (!transmitEnabled_) {
+        ++blockedTransmitCount_;
+        return false;
+    }
     const bool hasLeadingPrelude = leadingPreludeSymbols != 0;
     const bool validatedLeadingProfile =
         leadingDeviationRegister ==

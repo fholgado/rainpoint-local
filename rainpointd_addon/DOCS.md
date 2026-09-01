@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.23 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.24 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -182,6 +182,18 @@ scoped HTV405 pairing/control capabilities; there is no generic RF-transmit
 API. The app sends a time-limited pairing or valve command only after an
 authenticated Home Assistant request selects the assigned node. Its state,
 command ID, completed reply count, and armed state appear in `/api/v1/nodes`.
+
+Each protocol-v2 node also exposes authenticated maintenance controls in Home
+Assistant. Turning off its **RF transmissions** switch requests a bounded
+30-minute receive-only interval; turning it on restores normal mode. A firmware
+guard rejects all pairing, acknowledgement, and valve-control transmissions
+while reception, Wi-Fi, diagnostics, Identify, and maintenance remain active.
+The interval automatically expires, and the node's Reboot button returns it to
+normal mode. Requested/effective mode, remaining time, last change, blocked
+transmissions, rejected commands, and reboot status are visible on the node
+device. `/api/v1/nodes/rf-capture-readiness` declares a stock-gateway capture
+ready only when every adopted node is authenticated and effectively
+receive-only for the requested minimum time.
 
 ### Event retention
 

@@ -2438,6 +2438,47 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("identify_start", commands[0][1]["type"])
         self.assertNotIn("valve", json.dumps(commands[0][1]))
 
+    def test_rf_maintenance_api_controls_and_verifies_all_nodes(self) -> None:
+        commands: list[tuple[str, dict]] = []
+        node_id = "rp-001122334455"
+        self.server.gateway.update_node(
+            node_id,
+            connected=True,
+            authenticated=True,
+            managed=True,
+            name="Test node",
+            capabilities=["rx", "rf_maintenance", "node_reboot"],
+            rf_mode="normal",
+            rf_mode_remaining_seconds=0,
+        )
+        self.server.gateway.set_node_command_sender(
+            lambda target, message: commands.append((target, message))
+        )
+        requested = self.post_json(
+            f"/api/v1/nodes/{node_id}/rf-mode",
+            {"mode": "receive_only", "duration_seconds": 900},
+        )
+        self.assertEqual("receive_only", requested["requested_mode"])
+        self.assertEqual("rf_mode_set", commands[-1][1]["type"])
+
+        self.server.gateway.update_node(
+            node_id,
+            rf_mode="receive_only",
+            rf_mode_remaining_seconds=899,
+        )
+        with urlopen(
+            f"{self.base}/api/v1/nodes/rf-capture-readiness"
+            "?minimum_remaining_seconds=600",
+            timeout=2,
+        ) as response:
+            readiness = json.load(response)
+        self.assertTrue(readiness["ready"])
+        self.assertEqual([], readiness["blockers"])
+
+        rebooted = self.post_json(f"/api/v1/nodes/{node_id}/reboot", {})
+        self.assertEqual("reboot_requested", rebooted["state"])
+        self.assertEqual("node_reboot", commands[-1][1]["type"])
+
     def test_ota_trial_api_requires_candidate_node_capability(self) -> None:
         commands: list[tuple[str, dict]] = []
         node_id = "rp-001122334455"

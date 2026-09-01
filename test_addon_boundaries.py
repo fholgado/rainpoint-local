@@ -85,19 +85,19 @@ class AddonBoundaryTest(unittest.TestCase):
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
             build_profile,
         )
-        self.assertIn('standard_version = "0.15.2"', build_profile)
+        self.assertIn('standard_version = "0.15.3"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.11"',
+            'supervised_version = "0.15.0-supervised-beta.12"',
             build_profile,
         )
         self.assertIn(
             'htv145_candidate_version = '
-            '"0.15.0-htv145-control-candidate.2"',
+            '"0.15.0-htv145-control-candidate.3"',
             build_profile,
         )
         self.assertIn(
             'htv145_pairing_candidate_version = '
-            '"0.15.2-htv145-pairing-probe.17"',
+            '"0.15.2-htv145-pairing-probe.18"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -294,10 +294,13 @@ class AddonBoundaryTest(unittest.TestCase):
         for entity in (
             "binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering",
             "sensor.rainpoint_4_zone_valve_8013_device_report_time",
-            "sensor.rainpoint_4_zone_valve_8013_last_water_usage",
             "sensor.rainpoint_4_zone_valve_8013_battery",
         ):
             self.assertIn(entity, dashboard)
+        self.assertNotIn(
+            "sensor.rainpoint_4_zone_valve_8013_last_water_usage",
+            dashboard,
+        )
         self.assertIn("Valve Battery (not decoded)", dashboard)
 
     def test_release_versions_are_recorded_in_the_current_changelog(self) -> None:

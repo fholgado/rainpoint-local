@@ -31,6 +31,9 @@ public:
     bool restoreReceiveChannel(std::uint8_t channel);
     bool prepareTransmit();
     bool cacheTransmitFrequency(std::uint32_t centerFrequencyHz);
+    void setTransmitEnabled(bool enabled);
+    bool transmitEnabled() const;
+    std::uint32_t blockedTransmitCount() const;
     bool transmitAsync(
         const std::array<std::uint8_t, kFrameBytes>& frame,
         std::uint32_t centerFrequencyHz,
@@ -95,6 +98,7 @@ private:
     std::uint8_t channel_ = 0;
     bool configurationValid_ = false;
     bool transmitPrepared_ = false;
+    bool transmitEnabled_ = true;
     std::array<
         CachedFrequencyCalibration,
         kMaximumCachedTransmitFrequencies
@@ -102,6 +106,7 @@ private:
     std::uint32_t packetCount_ = 0;
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;
+    std::uint32_t blockedTransmitCount_ = 0;
 };
 
 }  // namespace rainpoint

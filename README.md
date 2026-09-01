@@ -48,6 +48,11 @@ device slots.
 - Each node has an independent credential and makes an outbound authenticated
   connection to the local gateway, allowing nodes to be placed near different
   garden areas.
+- Authenticated HA controls can place every node in a bounded receive-only mode
+  for isolated stock-gateway captures, explicitly restore normal RF operation,
+  identify it, or reboot it without physical access. A driver-level guard and
+  aggregate readiness check prevent an adopted node from transmitting during
+  a declared receive-only capture.
 - OTA images are size/SHA-256 checked, health-confirmed after reboot, and use a
   three-unconfirmed-boot rollback policy.
 
