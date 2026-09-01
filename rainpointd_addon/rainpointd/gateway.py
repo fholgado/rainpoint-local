@@ -37,6 +37,7 @@ from .valve_pairing_protocol import (
     AUTOMATIC_HTV145_PROFILE_ID,
     AUTOMATIC_HTV405_PROFILE_ID,
     CALIBRATED_FREQUENCY_OFFSET_HZ as HTV405_FREQUENCY_OFFSET_HZ,
+    HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ,
     automatic_htv145_profile_metadata,
     automatic_htv405_profile_metadata,
     build_htv145_profile,
@@ -4136,7 +4137,9 @@ class Gateway:
                     "duration_seconds": duration_seconds,
                     "local_clock": local_clock,
                     "frequency_offset_hz": (
-                        HTV405_FREQUENCY_OFFSET_HZ
+                        HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ
+                        if profile_id == AUTOMATIC_HTV145_PROFILE_ID
+                        else HTV405_FREQUENCY_OFFSET_HZ
                         if valve_candidate
                         else 45_000
                     ),

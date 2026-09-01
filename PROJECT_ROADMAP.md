@@ -320,6 +320,21 @@ observation before it changes transmitted firmware.
     deviation, and timing remain frozen until the carrier hypothesis receives
     a physical verdict. This also corrects an analyzer mistake where its
     configured decision center had been recorded as a measured carrier.
+  - 2026-09-01 physical `.20` result: the node again reached `1/6` and failed
+    `stage_0_rejected`, but direct IQ measurement showed that the intended
+    carrier-only experiment never reached RF. The assignment remained at
+    `433.556232 MHz`, about `9.583 kHz` above stock and only normal capture
+    drift from `.19`; timing was `52.5 ms` and deviation remained `35.004 kHz`.
+    The live HTV145 path still shared HTV405 profile/calibration plumbing, so
+    this red result does not reject the corrected-carrier hypothesis. Fixture:
+    `research/fixtures/htv145_probe20_carrier_not_applied_rejection_20260901.json`.
+  - 2026-09-01 probe `.21` separates the live HTV145 pairing module from
+    HTV405: independent profile and step types, matcher, state machine, reply
+    builders, timing, and model-specific `45 kHz` calibration. The four-zone
+    path is unchanged. Node diagnostics now expose the profile initial center,
+    supplied offset, and effective initial TX center so a profile/calibration
+    mismatch is visible before the next RF trial. Native protocol, gateway,
+    and PlatformIO builds pass; physical stage-zero acceptance remains open.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,

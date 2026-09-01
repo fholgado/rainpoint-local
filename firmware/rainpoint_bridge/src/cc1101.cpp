@@ -1,4 +1,5 @@
 #include "cc1101.h"
+#include "rainpoint_htv145_pairing.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
 
@@ -431,7 +432,7 @@ bool Cc1101::transmitAsync(
     const bool hasLeadingPrelude = leadingPreludeSymbols != 0;
     const bool validatedLeadingProfile =
         leadingDeviationRegister ==
-            kHtv145Counter0AssignmentPreludeDeviationRegister
+            htv145::kCounter0AssignmentPreludeDeviationRegister
 #if RAINPOINT_RESEARCH_BENCH == 1
         || ((leadingFrequencyOffsetRegister == 12 ||
              leadingFrequencyOffsetRegister == 13) &&

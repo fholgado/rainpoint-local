@@ -20,6 +20,10 @@ FRAME_BYTES = 38
 AUTOMATIC_HTV405_PROFILE_ID = "htv405_auto_candidate_v1"
 AUTOMATIC_HTV145_PROFILE_ID = "htv145_auto_candidate_v1"
 CALIBRATED_FREQUENCY_OFFSET_HZ = 97_154
+HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ = 45_000
+HTV145_INITIAL_REPLY_TARGET_HZ = 433_546_649
+HTV145_ROUTINE_REPLY_TARGET_HZ = 434_351_500
+HTV145_INITIAL_REPLY_CHANNEL_HZ = 433_501_466
 INITIAL_REPLY_TARGET_HZ = 433_556_430
 ROUTINE_REPLY_TARGET_HZ = 433_471_408
 # These are the evidence-derived profile centers compiled into the node. The
@@ -105,7 +109,7 @@ def _step(
     request = bytes.fromhex(request_body)
     reply = bytes.fromhex(reply_body) if reply_body is not None else None
     if len(request) != 23 or (reply is not None and len(reply) != 23):
-        raise ValueError("HTV405 pairing bodies must contain 23 bytes")
+        raise ValueError("valve pairing bodies must contain 23 bytes")
     return ValvePairingStep(
         request_kind=request_kind,
         request_body=request,
@@ -161,6 +165,7 @@ HTV145_STEPS = (
         0xC713,
         initial=True,
         reply_to_valve_route=True,
+        channel_center_hz=HTV145_INITIAL_REPLY_CHANNEL_HZ,
     ),
     _step(
         "paired_message_1",
@@ -403,9 +408,9 @@ def automatic_htv145_profile_metadata() -> dict[str, Any]:
         "retained_association_identity_optional": False,
         "step_count": len(HTV145_STEPS),
         "reply_delay_ms": REPLY_DELAY_MS,
-        "calibrated_frequency_offset_hz": CALIBRATED_FREQUENCY_OFFSET_HZ,
-        "initial_reply_target_hz": INITIAL_REPLY_TARGET_HZ,
-        "routine_reply_target_hz": ROUTINE_REPLY_TARGET_HZ,
+        "calibrated_frequency_offset_hz": HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ,
+        "initial_reply_target_hz": HTV145_INITIAL_REPLY_TARGET_HZ,
+        "routine_reply_target_hz": HTV145_ROUTINE_REPLY_TARGET_HZ,
         "configuration_start_delay_ms": HTV145_CONFIGURATION_START_DELAY_MS,
         "configuration_wake_symbols": HTV145_CONFIGURATION_WAKE_SYMBOLS,
         "evidence": (

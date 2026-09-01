@@ -11,6 +11,9 @@
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
 #include "rainpoint_htv145_control.h"
 #endif
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#include "rainpoint_htv145_pairing.h"
+#endif
 #include "rainpoint_pairing.h"
 #include "rainpoint_protocol.h"
 #include "rainpoint_rf_maintenance.h"
@@ -165,8 +168,9 @@ rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
 bool valvePairingActive = false;
 bool valvePairingKnownRejoin = false;
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-rainpoint::Htv145PairingSession htv145PairingSession(
-    activeValvePairingProfile
+rainpoint::htv145::PairingProfile activeHtv145PairingProfile{};
+rainpoint::htv145::PairingSession htv145PairingSession(
+    activeHtv145PairingProfile
 );
 bool valvePairingHtv145 = false;
 #endif
@@ -762,7 +766,7 @@ void reportPairingStatus(const char* detail = nullptr) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive ?
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            (valvePairingHtv145 ? rainpoint::kAutomaticHtv145ProfileId :
+            (valvePairingHtv145 ? rainpoint::htv145::kProfileId :
                 rainpoint::kAutomaticHtv405ProfileId) :
 #else
             rainpoint::kAutomaticHtv405ProfileId :
@@ -773,7 +777,14 @@ void reportPairingStatus(const char* detail = nullptr) {
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-            valvePairingActive ? activeValvePairingProfile.factoryEndpoint.data() :
+            valvePairingActive ?
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+                (valvePairingHtv145
+                    ? activeHtv145PairingProfile.factoryEndpoint.data()
+                    : activeValvePairingProfile.factoryEndpoint.data()) :
+#else
+                activeValvePairingProfile.factoryEndpoint.data() :
+#endif
 #endif
             activePairingProfile.factoryEndpoint.data(),
             4
@@ -783,7 +794,14 @@ void reportPairingStatus(const char* detail = nullptr) {
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
-            valvePairingActive ? activeValvePairingProfile.pairedEndpoint.data() :
+            valvePairingActive ?
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+                (valvePairingHtv145
+                    ? activeHtv145PairingProfile.pairedEndpoint.data()
+                    : activeValvePairingProfile.pairedEndpoint.data()) :
+#else
+                activeValvePairingProfile.pairedEndpoint.data() :
+#endif
 #endif
             activePairingProfile.pairedEndpoint.data(),
             4
@@ -803,7 +821,14 @@ void reportPairingStatus(const char* detail = nullptr) {
     line +=
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive
-            ? activeValvePairingProfile.stepCount
+            ?
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+                (valvePairingHtv145
+                    ? activeHtv145PairingProfile.steps.size()
+                    : activeValvePairingProfile.stepCount)
+#else
+                activeValvePairingProfile.stepCount
+#endif
             :
 #endif
         activePairingProfile.stepCount;
@@ -861,16 +886,6 @@ void reportPairingStatus(const char* detail = nullptr) {
         );
         line += ",\"reply_marker_repeat\":";
         line += valvePairingSession.replyMarkerRepeat() ? "true" : "false";
-        line += ",\"htv145_later_sweep_branch\":";
-        line += valvePairingSession.htv145LaterSweepBranch()
-            ? "true" : "false";
-        line += ",\"htv145_factory_sweep_observed\":";
-        line += valvePairingSession.htv145FactorySweepObserved()
-            ? "true" : "false";
-        line += ",\"htv145_last_factory_sweep_counter\":";
-        line += static_cast<unsigned int>(
-            valvePairingSession.htv145LastFactorySweepCounter()
-        );
         }
     }
 #endif
@@ -900,6 +915,22 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += pairingInvert ? "true" : "false";
     line += ",\"frequency_offset_hz\":";
     line += pairingFrequencyOffsetHz;
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
+    if (valvePairingActive) {
+        const std::uint32_t profileCenterHz =
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            valvePairingHtv145
+                ? activeHtv145PairingProfile.steps[0].channelCenterHz
+                :
+#endif
+            activeValvePairingProfile.steps[0].channelCenterHz;
+        line += ",\"profile_initial_center_hz\":";
+        line += profileCenterHz;
+        line += ",\"effective_initial_tx_center_hz\":";
+        line += static_cast<std::int64_t>(profileCenterHz) +
+            pairingFrequencyOffsetHz;
+    }
+#endif
     line += ",\"power_dbm\":";
     line += pairingPowerDbm;
     line += ",\"local_clock_set\":";
@@ -2776,7 +2807,7 @@ void handleNetworkCommand() {
         profile == rainpoint::kAutomaticHtv405ProfileId;
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
     const bool requestedHtv145Profile =
-        profile == rainpoint::kAutomaticHtv145ProfileId;
+        profile == rainpoint::htv145::kProfileId;
 #else
     const bool requestedHtv145Profile = false;
 #endif
@@ -2864,17 +2895,17 @@ void handleNetworkCommand() {
     valvePairingKnownRejoin = requestedValvePairing && requestedValveRejoin;
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
     valvePairingHtv145 = requestedValvePairing &&
-        profile == rainpoint::kAutomaticHtv145ProfileId;
+        profile == rainpoint::htv145::kProfileId;
 #endif
     if (requestedValvePairing) {
         const bool profileBuilt =
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
             valvePairingHtv145
-                ? rainpoint::buildAutomaticHtv145Profile(
+                ? rainpoint::htv145::buildProfile(
                     requestedFactoryEndpoint,
                     requestedValveRoute,
                     requestedCompanionEndpoint,
-                    activeValvePairingProfile
+                    activeHtv145PairingProfile
                 )
                 :
 #endif
@@ -2958,21 +2989,26 @@ void handleNetworkCommand() {
     pairingLocalDateTimeSet = true;
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-        const std::int32_t candidateFrequencyCorrectionHz =
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            valvePairingHtv145
-                ? rainpoint::kHtv145PairingTxFrequencyCorrectionHz
-                : 0;
+        const std::uint32_t initialCenterHz = valvePairingHtv145
+            ? activeHtv145PairingProfile.steps[0].channelCenterHz
+            : activeValvePairingProfile.steps[0].channelCenterHz;
+        const std::uint32_t routineCenterHz = valvePairingHtv145
+            ? activeHtv145PairingProfile.steps[1].channelCenterHz
+            : activeValvePairingProfile.steps[1].channelCenterHz;
 #else
-            0;
+        const std::uint32_t initialCenterHz =
+            activeValvePairingProfile.steps[0].channelCenterHz;
+        const std::uint32_t routineCenterHz =
+            activeValvePairingProfile.steps[1].channelCenterHz;
 #endif
         const std::uint32_t initialFrequency = static_cast<std::uint32_t>(
-            static_cast<std::int64_t>(activeValvePairingProfile.steps[0].channelCenterHz) +
-            pairingFrequencyOffsetHz + candidateFrequencyCorrectionHz
+            static_cast<std::int64_t>(initialCenterHz) +
+            pairingFrequencyOffsetHz
         );
         const std::uint32_t routineFrequency = static_cast<std::uint32_t>(
-            static_cast<std::int64_t>(activeValvePairingProfile.steps[1].channelCenterHz) +
-            pairingFrequencyOffsetHz + candidateFrequencyCorrectionHz
+            static_cast<std::int64_t>(routineCenterHz) +
+            pairingFrequencyOffsetHz
         );
         if (!primaryRadio.cacheTransmitFrequency(initialFrequency) ||
             !primaryRadio.cacheTransmitFrequency(routineFrequency)) {
@@ -3124,7 +3160,7 @@ bool handleHtv145PreludeCalibration(const String& command) {
             rainpoint::pairingPaTableValue(0),
             rainpoint::kHtv405InitialDeviationRegister,
             micros() + 20'000,
-            rainpoint::kHtv145Counter0AssignmentPreludeSymbols,
+            rainpoint::htv145::kCounter0AssignmentPreludeSymbols,
             variant.frequencyOffsetRegister,
             variant.deviationRegister,
             true
@@ -3488,11 +3524,6 @@ const rainpoint::Htv405PairingStep* claimActiveValvePairingReply(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     std::uint32_t nowMs
 ) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-    if (valvePairingHtv145) {
-        return htv145PairingSession.claimReply(frame, nowMs);
-    }
-#endif
     return valvePairingSession.claimReply(frame, nowMs);
 }
 
@@ -3546,11 +3577,6 @@ bool activeValvePairingReplyMarkerRepeat() {
 }
 
 bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-    if (valvePairingHtv145) {
-        return htv145PairingSession.finishReply(success, nowMs);
-    }
-#endif
     return valvePairingSession.finishReply(success, nowMs);
 }
 
@@ -3562,6 +3588,82 @@ void tickActiveValvePairing(std::uint32_t nowMs) {
     }
 #endif
     valvePairingSession.tick(nowMs);
+}
+#endif
+
+#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+void processHtv145PairingFrame(
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
+    const rainpoint::RadioPacket& packet,
+    rainpoint::Cc1101& radio
+) {
+    const std::size_t beforeStep = htv145PairingSession.completedSteps();
+    const rainpoint::htv145::PairingStep* step =
+        htv145PairingSession.claimReply(frame, millis());
+    if (step != nullptr) {
+        auto replyDateTime = pairingLocalDateTime;
+        const bool pairingClockValid =
+            rainpoint::advancePairingLocalDateTime(
+                replyDateTime,
+                (millis() - pairingLocalDateTimeSetAtMs) / 1'000
+            );
+        std::array<std::uint8_t, rainpoint::kFrameBytes> replyFrame{};
+        const std::size_t replyStep = static_cast<std::size_t>(
+            step - activeHtv145PairingProfile.steps.data()
+        );
+        const bool built = pairingClockValid &&
+            rainpoint::htv145::buildReply(
+                activeHtv145PairingProfile,
+                replyStep,
+                replyDateTime,
+                replyFrame
+            );
+        const std::uint32_t transmitCenterHz =
+            static_cast<std::uint32_t>(
+                static_cast<std::int64_t>(step->channelCenterHz) +
+                pairingFrequencyOffsetHz
+            );
+        bool sent = built && radio.transmitAsync(
+            replyFrame,
+            transmitCenterHz,
+            rainpoint::kPairingWakeSymbols,
+            pairingInvert,
+            rainpoint::pairingPaTableValue(pairingPowerDbm),
+            step->deviationRegister,
+            packet.receivedAtMicros +
+                rainpoint::htv145::replyStartDelayUs(replyStep)
+        );
+        if (sent && replyStep == 1) {
+            std::array<std::uint8_t, rainpoint::kFrameBytes>
+                configurationFrame{};
+            sent = rainpoint::htv145::buildConfigurationReply(
+                activeHtv145PairingProfile, configurationFrame
+            ) && radio.transmitAsync(
+                configurationFrame,
+                transmitCenterHz,
+                rainpoint::htv145::kConfigurationWakeSymbols,
+                pairingInvert,
+                rainpoint::pairingPaTableValue(pairingPowerDbm),
+                step->deviationRegister,
+                packet.receivedAtMicros +
+                    rainpoint::htv145::kConfigurationReplyStartDelayUs
+            );
+            // The configuration response is sent on the same routine carrier.
+            sent = sent && radio.setReceiveFrequency(transmitCenterHz);
+        }
+        htv145PairingSession.finishReply(sent, millis());
+        reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
+    } else if (htv145PairingSession.completedSteps() > beforeStep) {
+        if (beforeStep == 2) {
+            radio.restoreReceiveChannel(kHcs026TelemetryChannel);
+        }
+        reportPairingStatus("no_reply_step_observed");
+    }
+    if (htv145PairingSession.state() !=
+        rainpoint::PairingSessionState::Armed) {
+        pairingRequiresNetwork = false;
+        restoreScanningAfterPairing();
+    }
 }
 #endif
 
@@ -3594,6 +3696,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            processHtv145PairingFrame(frame, packet, radio);
+        } else
+#endif
+        {
         if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
             std::array<std::uint8_t, 4> factoryEndpoint{};
             if (!rainpoint::htv405FactoryAnnouncement(
@@ -3647,29 +3755,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             const std::uint32_t replyStartDelayUs =
                 replyStartDelayOverrideUs != 0
                 ? replyStartDelayOverrideUs
-                :
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-                valvePairingHtv145
-                    ? rainpoint::htv145Selector6PairingReplyStartDelayUs(
-                        replyStep
-                    )
-                    :
-#endif
-                rainpoint::htv405PairingReplyStartDelayUs(replyStep);
+                : rainpoint::htv405PairingReplyStartDelayUs(replyStep);
             const std::int64_t adjustedFrequency =
                 static_cast<std::int64_t>(step->channelCenterHz) +
-                pairingFrequencyOffsetHz +
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-                (valvePairingHtv145
-                    ? rainpoint::kHtv145PairingTxFrequencyCorrectionHz
-                    : 0);
-#else
-                0;
-#endif
-            // The controlled selector-6 stock branch uses the ordinary wake.
-            // The former selector-5 prelude remains available only to the
-            // isolated calibration command, never to live pairing.
-            constexpr std::uint16_t leadingPreludeSymbols = 0;
+                pairingFrequencyOffsetHz;
             bool sent = built && radio.transmitAsync(
                 replyFrame,
                 static_cast<std::uint32_t>(adjustedFrequency),
@@ -3677,53 +3766,11 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 pairingInvert,
                 rainpoint::pairingPaTableValue(pairingPowerDbm),
                 step->deviationRegister,
-                packet.receivedAtMicros + replyStartDelayUs,
-                leadingPreludeSymbols,
-                leadingPreludeSymbols != 0
-                    ? rainpoint::
-                        kHtv145Counter0AssignmentPreludeFrequencyOffset
-                    : 0,
-                leadingPreludeSymbols != 0
-                    ? rainpoint::
-                        kHtv145Counter0AssignmentPreludeDeviationRegister
-                    : 0,
-                // Stock reverses only the HTV145 selector-5 leading prelude;
-                // the ordinary wake and frame retain their proven polarity.
-                leadingPreludeSymbols != 0
+                packet.receivedAtMicros + replyStartDelayUs
             );
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            if (sent && valvePairingHtv145 && replyStep == 1) {
-                std::array<std::uint8_t, rainpoint::kFrameBytes>
-                    configurationFrame{};
-                sent = rainpoint::buildHtv145ConfigurationReply(
-                    activeValvePairingProfile,
-                    configurationFrame,
-                    activeValvePairingReplyCounterOffset(),
-                    true
-                ) && radio.transmitAsync(
-                    configurationFrame,
-                    static_cast<std::uint32_t>(adjustedFrequency),
-                    rainpoint::kHtv145ConfigurationWakeSymbols,
-                    pairingInvert,
-                    rainpoint::pairingPaTableValue(pairingPowerDbm),
-                    step->deviationRegister,
-                    packet.receivedAtMicros +
-                        rainpoint::
-                            kHtv145Selector6ConfigurationReplyStartDelayUs
-                );
-                // The valve confirms this long controller command on the
-                // routine reply carrier before returning to its lower request
-                // channel. Listen there only for that evidence-bound step.
-                sent = sent && radio.setReceiveFrequency(
-                    static_cast<std::uint32_t>(adjustedFrequency)
-                );
-            }
-#endif
-            if (sent &&
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-                !valvePairingHtv145 &&
-#endif
-                activeValvePairingIsSelector2ConfigurationStep(replyStep)) {
+            if (sent && activeValvePairingIsSelector2ConfigurationStep(
+                    replyStep
+                )) {
                 std::array<std::uint8_t, rainpoint::kFrameBytes>
                     configurationFrame{};
                 // The long-wake controller configuration shares the shifted
@@ -3756,16 +3803,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             finishActiveValvePairingReply(sent, millis());
             reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
         } else if (activeValvePairingCompletedSteps() > beforeStep) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            if (valvePairingHtv145 && beforeStep == 2) {
-                radio.restoreReceiveChannel(kHcs026TelemetryChannel);
-            }
-#endif
             reportPairingStatus("no_reply_step_observed");
         }
         if (!activeValvePairingArmed()) {
             pairingRequiresNetwork = false;
             restoreScanningAfterPairing();
+        }
         }
     }
 #endif

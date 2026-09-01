@@ -920,10 +920,15 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             "persistent_local_gateway", metadata["controller_identity_default"]
         )
         self.assertEqual(18, metadata["step_count"])
+        self.assertEqual(97_154, metadata["calibrated_frequency_offset_hz"])
 
         htv145_metadata = automatic_htv145_profile_metadata()
         self.assertEqual("valve", htv145_metadata["device_category"])
         self.assertFalse(htv145_metadata["user_pairing_supported"])
+        self.assertEqual(
+            45_000, htv145_metadata["calibrated_frequency_offset_hz"]
+        )
+        self.assertEqual(433_546_649, htv145_metadata["initial_reply_target_hz"])
 
     def test_htv145_probe_matches_both_captured_factory_sweep_frames(self) -> None:
         profile = build_htv145_profile(
@@ -935,6 +940,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual("b42d008f", profile.paired_endpoint)
         self.assertEqual(6, len(profile.steps))
         self.assertEqual(0x06, profile.steps[0].reply_body[5] & 0x7F)
+        self.assertEqual(433_501_466, profile.steps[0].channel_center_hz)
         for captured in (
             "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
             "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",

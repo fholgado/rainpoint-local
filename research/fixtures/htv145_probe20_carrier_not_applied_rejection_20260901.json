@@ -1,0 +1,54 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Verify whether probe .20 moved only the HTV145 counter-0 assignment carrier before changing any other RF field.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-143401/continuous_433.7M_2000k.cu8",
+    "sha256": "767916142e37d6bc1c09afa9dfb9738ab4a0bb3774e5dd56e316e83c9c100e81",
+    "bytes": 467140608,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 116.785152
+  },
+  "firmware": {
+    "version": "0.15.3-htv145-pairing-probe.20",
+    "selected_node_id": "rp-cc4c05f57630",
+    "claimed_change": "HTV145 selector-6 initial profile center lowered by 9,979 Hz; payload, wake, deviation, and timing frozen"
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "measured_center_hz": 433142917,
+    "sync_symbol_in_final_capture_window": 326808,
+    "request_end_seconds_in_final_capture_window": 16.3556
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c0858500867000e974210d01008000000000000000001c26",
+    "measured_center_hz": 433556232,
+    "measured_deviation_hz": 35004,
+    "sync_symbol_in_final_capture_window": 328482,
+    "reply_start_seconds_in_final_capture_window": 16.4081,
+    "request_end_to_reply_start_ms": 52.5
+  },
+  "stock_reference": {
+    "capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+    "direct_fft_assignment_center_hz": 433546649,
+    "assignment_deviation_hz": 35004,
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "interpretation": [
+    "The valve again rejected the only counter-0 assignment and resumed its factory sweep with counters 2 and 3; this is a valid red stage-zero result.",
+    "Probe .20 did not realize its intended carrier-only experiment on air. Its assignment remained about 9.583 kHz above the directly measured stock assignment and only 396 Hz below probe .19, consistent with capture drift rather than the requested 9.979 kHz move.",
+    "The assignment clock bytes changed with wall time as expected; that is not a payload regression.",
+    "Because HTV145 still traversed the shared HTV405 profile/calibration path, changing one profile constant did not provide an observable model-specific transmit contract. Do not interpret this failure as rejecting the corrected carrier hypothesis.",
+    "Probe .21 separates HTV145 profile construction, matching, state, reply building, timing, and calibration from HTV405 and reports both the profile center and effective transmit center before the next physical trial."
+  ]
+}

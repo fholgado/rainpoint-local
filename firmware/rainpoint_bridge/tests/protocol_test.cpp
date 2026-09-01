@@ -5,6 +5,7 @@
 
 #include "rainpoint_protocol.h"
 #include "rainpoint_pairing.h"
+#include "rainpoint_htv145_pairing.h"
 #include "rainpoint_valve_pairing.h"
 #include "rainpoint_valve_control.h"
 #include "rainpoint_htv145_control.h"
@@ -1043,8 +1044,8 @@ int main() {
     const auto htv145FactorySweep3 = fromHex(
         "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
     );
-    rainpoint::Htv405PairingProfile htv145PairingProbe{};
-    assert(rainpoint::buildAutomaticHtv145Profile(
+    rainpoint::htv145::PairingProfile htv145PairingProbe{};
+    assert(rainpoint::htv145::buildProfile(
         {{0x34, 0x2d, 0x00, 0x8f}},
         {{0xb9, 0x84, 0x02, 0x80}},
         {{0x39, 0x84, 0x02, 0x80}},
@@ -1052,10 +1053,10 @@ int main() {
     ));
     assert(htv145PairingProbe.pairedEndpoint ==
         (std::array<std::uint8_t, 4>{{0xb4, 0x2d, 0x00, 0x8f}}));
-    assert(rainpoint::htv405RequestMatches(
+    assert(rainpoint::htv145::requestMatches(
         htv145PairingProbe, 0, htv145FactorySweep0
     ));
-    assert(rainpoint::htv405RequestMatches(
+    assert(rainpoint::htv145::requestMatches(
         htv145PairingProbe, 0, htv145FactorySweep3
     ));
     assert(
@@ -1065,41 +1066,41 @@ int main() {
     assert((htv145PairingProbe.steps[0].replyBody[5] & 0x7fU) == 0x06);
     assert(htv405Profile.steps[0].replyBody[5] == 0x02);
     assert(htv405Profile.stepCount == rainpoint::kHtv405PairingStepCount);
-    assert(htv145PairingProbe.stepCount ==
-        rainpoint::kHtv145PairingStepCount);
-    assert(rainpoint::kHtv145PairingTxFrequencyCorrectionHz == 0);
+    assert(htv145PairingProbe.steps.size() ==
+        rainpoint::htv145::kPairingStepCount);
+    assert(rainpoint::htv145::kPairingFrequencyOffsetHz == 45'000);
     assert(
-        rainpoint::kHtv145Selector6InitialChannelCenterHz ==
+        rainpoint::htv145::kInitialChannelCenterHz ==
         433'501'466
     );
     assert(
         htv145PairingProbe.steps[0].channelCenterHz ==
-        rainpoint::kHtv145Selector6InitialChannelCenterHz
+        rainpoint::htv145::kInitialChannelCenterHz
     );
     assert(
         htv145PairingProbe.steps[0].channelCenterHz !=
         htv405Profile.steps[0].channelCenterHz
     );
-    assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(0) == 52'150);
-    assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(1) == 70'700);
-    assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(3) == 35'750);
-    assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(4) == 52'000);
-    assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(5) == 47'200);
-    assert(htv145PairingProbe.steps[0].replyToValveRoute);
-    assert(htv145PairingProbe.steps[1].replyToValveRoute);
-    assert(htv145PairingProbe.steps[3].replyToValveRoute);
+    assert(rainpoint::htv145::replyStartDelayUs(0) == 52'150);
+    assert(rainpoint::htv145::replyStartDelayUs(1) == 70'700);
+    assert(rainpoint::htv145::replyStartDelayUs(3) == 35'750);
+    assert(rainpoint::htv145::replyStartDelayUs(4) == 52'000);
+    assert(rainpoint::htv145::replyStartDelayUs(5) == 47'200);
+    assert(htv145PairingProbe.steps[0].replyToController);
+    assert(htv145PairingProbe.steps[1].replyToController);
+    assert(htv145PairingProbe.steps[3].replyToController);
     const rainpoint::PairingLocalDateTime htv145StockClock{
         2026, 9, 1, 12, 43, 48,
     };
     std::array<std::uint8_t, rainpoint::kFrameBytes> htv145Reply{};
-    assert(rainpoint::buildHtv405PairingReply(
+    assert(rainpoint::htv145::buildReply(
         htv145PairingProbe, 0, htv145StockClock, htv145Reply
     ));
     assert(htv145Reply == fromHex(
         "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6"
     ));
-    assert(rainpoint::buildHtv145ConfigurationReply(
-        htv145PairingProbe, htv145Reply, 0, true
+    assert(rainpoint::htv145::buildConfigurationReply(
+        htv145PairingProbe, htv145Reply
     ));
     assert(htv145Reply == fromHex(
         "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655"
@@ -1119,7 +1120,7 @@ int main() {
     const auto htv145ExtendedRequest = fromHex(
         "79f4882f28b9840280b42d008f82ac8099000000000000000000000000000000000000005423"
     );
-    rainpoint::Htv145PairingSession htv145Session(htv145PairingProbe);
+    rainpoint::htv145::PairingSession htv145Session(htv145PairingProbe);
     htv145Session.arm(0);
     assert(htv145Session.claimReply(htv145FactorySweep0, 1) ==
         &htv145PairingProbe.steps[0]);
@@ -1148,7 +1149,7 @@ int main() {
     // Once the single assignment has been transmitted, the next factory
     // fallback is explicit stage-0 rejection. It must never cause a second
     // assignment in the same arm window.
-    rainpoint::Htv145PairingSession htv145Rejected(htv145PairingProbe);
+    rainpoint::htv145::PairingSession htv145Rejected(htv145PairingProbe);
     htv145Rejected.arm(0);
     assert(htv145Rejected.claimReply(htv145FactorySweep0, 1) ==
         &htv145PairingProbe.steps[0]);

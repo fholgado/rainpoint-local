@@ -365,6 +365,15 @@ class ESP32NetworkServer:
                             "assigned_channel"
                         ),
                         pairing_step_count=message.get("step_count"),
+                        pairing_frequency_offset_hz=message.get(
+                            "frequency_offset_hz"
+                        ),
+                        pairing_profile_initial_center_hz=message.get(
+                            "profile_initial_center_hz"
+                        ),
+                        pairing_effective_initial_tx_center_hz=message.get(
+                            "effective_initial_tx_center_hz"
+                        ),
                         pairing_counter_offset=message.get("counter_offset"),
                         pairing_counter_offset_known=message.get(
                             "counter_offset_known"

@@ -148,17 +148,18 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.20 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.21 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-This isolated probe implements the controlled app-first stock transcript as a
-one-shot state machine. It answers only factory counter 0, assigns selector 6
-and response subchannel 12, and requires the exact addressed stage-1 request
-before continuing the six-stage exchange. A later factory announcement is a
-terminal stage-0 rejection; it can never trigger a second assignment. Arm
-before the physical gesture so normal setup starts with counter 0; no operator
-timing against the LED sequence is required.
+This isolated probe implements the controlled app-first stock transcript in a
+dedicated HTV145 module with its own profile, matcher, state machine, reply
+builder, timing, and frequency calibration. It answers only factory counter 0,
+assigns selector 6 and response subchannel 12, and requires the exact addressed
+stage-1 request before continuing the six-stage exchange. A later factory
+announcement is a terminal stage-0 rejection; it can never trigger a second
+assignment. Arm before the physical gesture so normal setup starts with counter
+0; no operator timing against the LED sequence is required.
 Deploy this image only
 to the designated OTA test node until three consecutive
 pairings satisfy the roadmap's physical acceptance gate.
