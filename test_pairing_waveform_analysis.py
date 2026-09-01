@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).parent / "tools" / "analyze_pairing_waveform.py"
+FIXTURE_PATH = (
+    Path(__file__).parent
+    / "research"
+    / "fixtures"
+    / "htv145_balanced_wake_phy_discriminator_20260901.json"
+)
 SPEC = importlib.util.spec_from_file_location("analyze_pairing_waveform", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -56,6 +63,40 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
     def test_deviation_register_bounds_are_validated(self) -> None:
         with self.assertRaisesRegex(ValueError, "outside"):
             MODULE.cc1101_deviation_hz(0x80)
+
+    def test_probe_23_correction_is_derived_from_capture_fixture(self) -> None:
+        fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        stock = fixture["accepted_stock"]
+        local = fixture["rejected_local_probe_22"]
+        comparison = MODULE.normalized_phy_comparison(
+            reference_request_center_hz=stock["factory_request"][
+                "channel_center_hz"
+            ],
+            reference_reply_center_hz=stock["assignment"][
+                "channel_center_hz"
+            ],
+            candidate_request_center_hz=local["factory_request"][
+                "channel_center_hz"
+            ],
+            candidate_reply_center_hz=local["assignment"][
+                "channel_center_hz"
+            ],
+        )
+        expected = fixture["normalized_comparison"]
+        self.assertEqual(
+            expected["local_minus_stock_hz"],
+            comparison["candidate_minus_reference_hz"],
+        )
+        self.assertEqual(
+            -expected["local_minus_stock_hz"],
+            expected["probe_23_frequency_offset_hz"] - 87_389,
+        )
+        self.assertEqual(
+            expected["probe_23_initial_deviation_register"],
+            MODULE.closest_deviation_register(
+                stock["assignment"]["deviation_hz"]
+            )["register_hex"],
+        )
 
 
 if __name__ == "__main__":
