@@ -363,6 +363,17 @@ observation before it changes transmitted firmware.
     carriers in the `5.8 s` before assignment. Before changing semantics,
     repeat unchanged `.22` at reduced TX power with a non-clipping SDR capture;
     treat valve-receiver overload as a hypothesis, not a conclusion.
+  - 2026-09-01 reduced-power verdict: unchanged `.22` at `0 dBm` reduced active
+    captured magnitude by `12.69 dB` and eliminated ADC-rail clipping, but the
+    valve again rejected the counter-0 selector-6 assignment before stage 1.
+    The clean waveform measured `433.546718 MHz`, only `69 Hz` above stock,
+    with the same `35.004 kHz` deviation and a `52.60 ms` response delay.
+    Transmit overload is closed, and the clean control independently validates
+    carrier and deviation. Do not spend another physical trial on power,
+    carrier, deviation, or sub-millisecond timing without new evidence. Next
+    investigate an undiscovered waveform, transmitter state, or assignment
+    semantic. Fixture:
+    `research/fixtures/htv145_probe22_reduced_power_rejection_20260901.json`.
 - [ ] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected; add a fail-fast or explicit supersession path before

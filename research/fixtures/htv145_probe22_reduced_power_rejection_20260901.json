@@ -1,0 +1,74 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Test valve-receiver overload and obtain a non-clipping control without changing the probe-.22 HTV145 assignment protocol.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-162431/continuous_433.7M_2000k.cu8",
+    "sha256": "697e022faddd9ccc2e457dcf5c97248ec8c4b9d13757ce98fcb316bb85633ea8",
+    "bytes": 459800576,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 114.950144
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.3-htv145-pairing-probe.22",
+    "requested_power_dbm": 0,
+    "unchanged_from_prior_trial": [
+      "request matcher",
+      "assignment bytes apart from clock and trailer",
+      "endpoints",
+      "selector",
+      "carrier profile and calibration",
+      "deviation",
+      "wake",
+      "scheduler",
+      "polarity"
+    ]
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "start_seconds": 44.6941,
+    "end_seconds": 44.7253
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c0858500867000a703210d0100800000000000000000c780",
+    "start_seconds": 44.7779,
+    "request_end_to_reply_start_ms": 52.6,
+    "measured_center_hz": 433546718,
+    "measured_deviation_hz": 35004,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "destination": "b9840280"
+  },
+  "stock_reference": {
+    "measured_assignment_center_hz": 433546649,
+    "assignment_deviation_hz": 35004,
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "power_comparison": {
+    "prior_requested_power_dbm": 10,
+    "prior_active_byte_rail_fraction": 0.45934,
+    "reduced_power_active_byte_rail_fraction": 0.0,
+    "prior_active_magnitude_median": 142.89,
+    "reduced_power_active_magnitude_median": 33.14,
+    "relative_active_magnitude_db": -12.69,
+    "measurement_note": "Active samples use magnitude greater than 10 ADC units over the assignment burst. The reduced-power burst had no exact 0/255 I/Q samples."
+  },
+  "interpretation": [
+    "The 0 dBm override was applied: active captured magnitude fell by 12.69 dB and ADC-rail clipping fell from 45.9 percent to zero.",
+    "The valve still rejected the same counter-0 selector-6 assignment before emitting an addressed stage-1 request, so transmit-power overload is not the missing enrollment prerequisite.",
+    "The unclipped assignment measured 433.546718 MHz, only 69 Hz above the accepted stock reference, with the same 35.004 kHz deviation. This independently validates the carrier and deviation conclusions made from the clipped probe-.22 capture.",
+    "Clipping made amplitude, occupied-bandwidth, and unconstrained spectral-peak selection unreliable in the prior local capture, but it did not invalidate the exact decoded frame, protocol ordering, or bounded request/reply timing.",
+    "Do not make another power, carrier, deviation, or sub-millisecond timing iteration. The next pairing hypothesis must concern an undiscovered waveform, transmitter state, or assignment semantic not represented by the decoded 38-byte frame."
+  ]
+}

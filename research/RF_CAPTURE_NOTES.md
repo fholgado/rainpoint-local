@@ -634,3 +634,27 @@ Reference evidence:
 
 The four-zone control comparison is preserved in
 `fixtures/htv405_stock_local_waveform_control_20260901.json`.
+
+### HTV145 reduced-power stage-zero control — 2026-09-01
+
+- The unchanged probe `.22` assignment was repeated at `0 dBm`. Its active
+  captured magnitude fell by `12.69 dB`, and exact ADC-rail clipping fell from
+  `45.9%` to zero. The power override therefore produced a valid physical
+  discriminator rather than another nominal-only configuration change.
+- The valve still continued its factory sweep without an addressed stage-1
+  request. The node again recorded `stage_0_rejected` at `1/6`; transmit-power
+  overload is not the missing enrollment prerequisite.
+- The unclipped assignment measured `433.546718 MHz`, just `69 Hz` above the
+  accepted stock reference, with the same `35.004 kHz` deviation. Its decoded
+  selector-6 frame remained structurally identical apart from clock and CRC,
+  and began `52.60 ms` after the request ended versus stock's `52.15 ms`.
+- Clipping did make prior amplitude, occupied-bandwidth, and unconstrained
+  spectral-peak measurements unsafe. It did not invalidate the exact decoded
+  frame, ordering, or bounded timing evidence, and this clean capture now
+  independently confirms the important carrier/deviation results.
+- Freeze power, carrier, deviation, and scheduler timing. The next experiment
+  must test an undiscovered waveform, transmitter state, or assignment semantic
+  rather than another small physical-layer adjustment.
+
+Reference evidence:
+`fixtures/htv145_probe22_reduced_power_rejection_20260901.json`.
