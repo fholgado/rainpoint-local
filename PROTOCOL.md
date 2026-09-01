@@ -601,6 +601,11 @@ Consequently, the durable controller must store the valve-reported next
 sequence verbatim rather than incrementing every accepted operation. Exact
 responses and automatic-idle evidence are frozen in
 `research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
+The same fixture also records an idle custom-gateway restart followed by a
+power cycle of the assigned radio node. Neither restart emitted a command or
+changed counter `4`; the first post-restart open authenticated `4` -> `5` and
+the valve later supplied its automatic-idle report. This physically confirms
+counter persistence across both software and radio-node restart boundaries.
 
 It centered at 433.556537 MHz in the same SDR, only 107 Hz above the accepted
 stock selector-2 reference. The first two local routine replies centered at

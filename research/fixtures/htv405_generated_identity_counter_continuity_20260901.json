@@ -11,7 +11,7 @@
   },
   "result": {
     "final_state": "idle",
-    "final_next_sequence": 4,
+    "final_next_sequence": 5,
     "counter_authenticated": true,
     "rule": "An authenticated open advances the next command sequence; an authenticated close leaves its accepted sequence available for the next open."
   },
@@ -58,12 +58,43 @@
       "sequence": 4,
       "next_sequence": 4,
       "frame": "79f4882f28ee86de8094a9801304508680104f80000000408000569e0000000000000000241a"
+    },
+    {
+      "observed_at": "2026-09-01T12:34:04.240877+00:00",
+      "action": "open_after_gateway_and_node_restart",
+      "zone": 1,
+      "duration_seconds": 60,
+      "sequence": 4,
+      "next_sequence": 5,
+      "frame": "79f4882f28ee86de8094a9801304d0868010cf80000000409e00569e00000000000000005e56"
     }
   ],
+  "restart_validation": {
+    "gateway_version": "0.33.21",
+    "gateway_restart": {
+      "command_replay_observed": false,
+      "restored_next_sequence": 4,
+      "restored_counter_authenticated": true
+    },
+    "radio_node_power_cycle": {
+      "reconnected_at": "2026-09-01T12:32:45.127369+00:00",
+      "firmware_version": "0.15.0-supervised-beta.11",
+      "tx_armed": false,
+      "restored_valve_control_profile": true,
+      "restored_sensor_ack_assignment_count": 3,
+      "command_replay_observed": false
+    }
+  },
   "automatic_idle_evidence": {
     "observed_at": "2026-09-01T11:36:35.295321+00:00",
     "duration_seconds": 1200,
     "state": "idle",
     "frame": "79f4882f28ee86de8094a980130e8107820580804f8000000040800056800000000000006193"
+  },
+  "post_restart_automatic_idle_evidence": {
+    "observed_at": "2026-09-01T12:35:06.222532+00:00",
+    "duration_seconds": 60,
+    "state": "idle",
+    "frame": "79f4882f28ee86de8094a98013158107820580804f8000000040800056800000000000006ed3"
   }
 }

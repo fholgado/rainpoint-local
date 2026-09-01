@@ -399,7 +399,14 @@ same time without conflicting authority.
       retained in
       `research/fixtures/htv405_same_identity_repair_counter_20260826.json`.
 - [ ] Physically verify gateway/node restart during idle and during a bounded
-      run remains observation-only and reconciles from subsequent valve reports.
+      run remains observation-only and reconciles from subsequent valve
+      reports. The idle half passed on 2026-09-01: restarting gateway `0.33.21`
+      emitted no valve command and restored authenticated next counter `4`;
+      power-cycling the assigned beta.11 Vegetable Garden Radio restored its
+      identity, three sensor ACK assignments, HTV405 liveness/control profile,
+      and disarmed state. A subsequent 60-second open authenticated counter
+      `4` -> `5` and ended with valve-owned idle telemetry. Keep this gate open
+      only for restart during an active bounded run.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
