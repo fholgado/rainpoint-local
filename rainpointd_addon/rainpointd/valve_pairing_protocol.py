@@ -36,7 +36,8 @@ SYMBOL_RATE_SPS = 20_000
 # transmit setup, so 49 ms is the closest whole-millisecond firmware target.
 REPLY_DELAY_MS = 49
 REPLY_DEADLINE_MS = 250
-HTV145_CONFIGURATION_START_DELAY_MS = 2_913.7
+HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ = 434_306_378
+HTV145_CONFIGURATION_START_DELAY_MS = 3_054.85
 HTV145_CONFIGURATION_WAKE_SYMBOLS = 2_400
 
 
@@ -99,6 +100,7 @@ def _step(
     *,
     initial: bool = False,
     reply_to_valve_route: bool = False,
+    channel_center_hz: int | None = None,
 ) -> ValvePairingStep:
     request = bytes.fromhex(request_body)
     reply = bytes.fromhex(reply_body) if reply_body is not None else None
@@ -110,7 +112,11 @@ def _step(
         reply_body=reply,
         trailer_residual=residual,
         channel_center_hz=(
-            INITIAL_REPLY_CHANNEL_HZ if initial else ROUTINE_REPLY_CHANNEL_HZ
+            channel_center_hz
+            if channel_center_hz is not None
+            else INITIAL_REPLY_CHANNEL_HZ
+            if initial
+            else ROUTINE_REPLY_CHANNEL_HZ
         ),
         deviation_hz=(INITIAL_DEVIATION_HZ if initial else ROUTINE_DEVIATION_HZ),
         reply_to_valve_route=reply_to_valve_route,
@@ -138,49 +144,54 @@ HTV405_STEPS = (
     _step("paired_message_9_extended", "092c809a80000000000000000000000000000000000000", "896c87801a863232323232323232323232320000000000", 0xC713),
 )
 
-# Complete six-stage transcript recovered from a successful stock-gateway
-# HTV145FRF enrollment on 2026-08-25. The delayed 81/90 controller command
-# between rows one and two is constructed by the radio firmware; the table
-# retains the request/reply observations that bound it.
+# Complete six-stage counter-0/selector-6 transcript from the controlled
+# app-first stock enrollment on 2026-09-01. The delayed 81/10 controller
+# command between rows one and two is constructed by the radio firmware.
 HTV145_FACTORY_REQUEST_BODY = bytes.fromhex(
     "80808402ff8f970080bf06000000000000000000000000"
 )
 HTV145_ASSIGNMENT_REPLY_BODY = bytes.fromhex(
-    "80c0858503057000929e990d0100800000000000000000"
+    "80c0858500867000f865210d0100800000000000000000"
 )
 HTV145_STEPS = (
     _step(
         "factory_announcement",
         HTV145_FACTORY_REQUEST_BODY.hex(),
         HTV145_ASSIGNMENT_REPLY_BODY.hex(),
-        0x4F03,
+        0xC713,
         initial=True,
+        reply_to_valve_route=True,
     ),
     _step(
         "paired_message_1",
-        "810107822580804f800000004080005680000000000000",
+        "810107862580804f800000004080005680000000000000",
         "8141010000800000000000000000000000000000000000",
         0x4F03,
+        reply_to_valve_route=True,
+        channel_center_hz=HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ,
     ),
     _step(
         "controller_configuration_response",
-        "81d0008000000000000000000000000000000000000000",
+        "8150008000000000000000000000000000000000000000",
         None,
         None,
+        channel_center_hz=HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ,
     ),
     _step(
         "paired_short_message",
-        "8182810200800000000000000000000000000000000000",
+        "8182810600800000000000000000000000000000000000",
         "81c287802c0105000f0000000000000000000000000000",
         0x4F03,
         reply_to_valve_route=True,
+        channel_center_hz=HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ,
     ),
     _step(
         "paired_controller_message",
-        "8203018200800000000000000000000000000000000000",
+        "8203018600800000000000000000000000000000000000",
         "8243008000000000000000000000000000000000000000",
         0x4F03,
         reply_to_valve_route=True,
+        channel_center_hz=HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ,
     ),
     _step(
         "paired_extended_message",
@@ -188,6 +199,7 @@ HTV145_STEPS = (
         "82ec818019000000000000000000000000000000000000",
         0x4F03,
         reply_to_valve_route=True,
+        channel_center_hz=HTV145_SELECTOR6_ROUTINE_REPLY_CHANNEL_HZ,
     ),
 )
 
@@ -282,10 +294,19 @@ def frame_for_step(
             | local_clock.month << 5
             | local_clock.day
         )
-        body[8] = (packed_time & 0x7F) | 0x80
-        body[9] = (packed_time >> 8) | 0x80
-        body[10] = (packed_date & 0x7F) | 0x80
-        body[11] = packed_date >> 8
+        def preserve_marker(value: int, template: int) -> int:
+            return (value & 0x7F) | (template & 0x80)
+
+        if profile.profile_id == AUTOMATIC_HTV145_PROFILE_ID:
+            body[8] = preserve_marker(packed_time, body[8])
+            body[9] = preserve_marker(packed_time >> 8, body[9])
+            body[10] = preserve_marker(packed_date, body[10])
+            body[11] = preserve_marker(packed_date >> 8, body[11])
+        else:
+            body[8] = (packed_time & 0x7F) | 0x80
+            body[9] = (packed_time >> 8) | 0x80
+            body[10] = (packed_date & 0x7F) | 0x80
+            body[11] = packed_date >> 8
     payload = SYNC + paired + destination + bytes(body)
     trailer = binascii.crc_hqx(payload, 0) ^ step.trailer_residual
     return payload + trailer.to_bytes(2, "big")
@@ -294,21 +315,21 @@ def frame_for_step(
 def htv145_configuration_frame(
     profile: ValvePairingProfile, *, counter_offset: int = 0
 ) -> bytes:
-    """Construct the delayed, long-wake HTV145 controller command."""
+    """Construct the counter-0/selector-6 long-wake controller command."""
     if profile.profile_id != AUTOMATIC_HTV145_PROFILE_ID:
         raise ValueError("HTV145 configuration requires an HTV145 profile")
     if not 0 <= counter_offset <= 0x7F:
         raise ValueError("counter_offset must fit the seven-bit counter")
     body = bytearray(23)
     body[0] = 0x80 | ((0x81 + counter_offset) & 0x7F)
-    body[1:4] = bytes.fromhex("900101")
+    body[1:4] = bytes.fromhex("100101")
     payload = (
         SYNC
         + bytes.fromhex(profile.paired_endpoint)
         + bytes.fromhex(profile.valve_route)
         + bytes(body)
     )
-    trailer = binascii.crc_hqx(payload, 0) ^ 0x4F03
+    trailer = binascii.crc_hqx(payload, 0) ^ 0xC713
     return payload + trailer.to_bytes(2, "big")
 
 

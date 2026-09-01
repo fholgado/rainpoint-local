@@ -529,6 +529,11 @@ def analyze(
                     3,
                 ),
                 "stage_1_observed": first_paired is not None,
+                "stage_0_verdict": (
+                    "accepted"
+                    if first_paired is not None
+                    else "rejected_assignment_without_stage_1"
+                ),
                 "stage_1_start_seconds": (
                     round(first_paired["start_seconds"], 6)
                     if first_paired is not None
@@ -536,6 +541,18 @@ def analyze(
                 ),
             }
         )
+    stage_0_failures = [
+        trial
+        for trial in trials
+        if trial["stage_0_verdict"] != "accepted"
+    ]
+    stage_0_verdict = (
+        "no_assignment_trial"
+        if not trials
+        else "rejected_assignment_without_stage_1"
+        if stage_0_failures
+        else "accepted"
+    )
     return {
         "path": str(path),
         "origin_seconds": origin_seconds,
@@ -545,6 +562,8 @@ def analyze(
         "stage_1_request_count": len(stage_1_requests),
         "paired_response_count": len(paired_responses),
         "configuration_response_count": len(configuration_responses),
+        "stage_0_verdict": stage_0_verdict,
+        "stage_0_failure_count": len(stage_0_failures),
         "factory_requests": requests,
         "assignments": assignments,
         "paired_requests": paired_requests,
@@ -618,7 +637,7 @@ def main() -> int:
         "duration_seconds": args.duration_seconds,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if result["trials"] else 1
+    return 0 if result["stage_0_verdict"] == "accepted" else 1
 
 
 if __name__ == "__main__":

@@ -85,8 +85,17 @@ of `1` has been observed with selector `6`.
 ## Local enrollment status
 
 The current local candidate has not yet reproduced a complete transcript that
-the physical valve accepts. The counter-2/subchannel-12 branch is newly
-captured evidence and is not yet a supported firmware profile.
+the physical valve accepts. Probe `.18` demonstrated that the former shared
+session could transmit a counter-0 selector-5 assignment and then a second
+counter-3 selector-6 assignment in one physical attempt. The valve never sent
+an addressed stage-1 request, so that attempt is a rejected multi-assignment
+baseline rather than evidence against the controlled stock transcript.
+
+Probe `.19` is a dedicated one-shot state machine for the controlled app-first
+stock branch: counter 0, selector 6, response subchannel 12, and the exact six
+captured stages. It transmits at most one assignment and treats any subsequent
+factory announcement without the addressed stage-1 request as a terminal
+stage-0 rejection. Physical acceptance is still pending.
 
 Therefore:
 

@@ -263,6 +263,15 @@ observation before it changes transmitted firmware.
        selector `6` / response subchannel `12` and completed the same six-stage
        exchange family. The controlled ordering comparison therefore supports
        first-observed sweep acceptance, not a fixed target counter;
+     - 2026-09-01 local timing-only trial: after the same documented reset,
+       the OTA test node was positively confirmed armed before the valve long
+       press. The probe transmitted at least one assignment and remained at
+       step `1/6`; it observed the factory sweep through counter `3`, but no
+       addressed stage-1 valve request or terminal confirmation followed. The
+       current shared session can answer counter `0` with the older selector-5
+       branch and then answer counter `3` again with selector `6`, so this is a
+       rejected multi-assignment baseline rather than evidence against the new
+       stock counter-0/selector-6 transcript. Do not repeat this image.
   4. [ ] a second documented factory reset and identical button-first complete
      stock enrollment;
   5. [ ] ordinary long-press re-pairing without a factory reset;
@@ -286,6 +295,13 @@ observation before it changes transmitted firmware.
       harness must select one evidence-backed lifecycle/selector branch before
       arming, transmit at most one assignment, never fall through to a second
       branch in the same session, and remain receive-only afterward.
+  - 2026-09-01: probe `.19` now isolates HTV145 behind a dedicated one-shot
+    session and the controlled counter-0/selector-6/subchannel-12 transcript.
+    It exposes separate assignment-lock and stage-0 accept/reject diagnostics,
+    and the IQ analyzer now fails an assignment that is not followed by the
+    addressed stage-1 request. Unit, firmware-protocol, and PlatformIO builds
+    pass; this gate remains open until the physical stage-0 boundary and raw-IQ
+    verdict are reproduced twice without changing the frozen prefix.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,

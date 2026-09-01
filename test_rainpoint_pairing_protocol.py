@@ -390,6 +390,68 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(trial["assignment_to_controller_route"])
         self.assertTrue(trial["counter_echoed"])
         self.assertTrue(trial["stage_1_observed"])
+        self.assertEqual("accepted", trial["stage_0_verdict"])
+        self.assertEqual("accepted", result["stage_0_verdict"])
+        self.assertEqual(0, result["stage_0_failure_count"])
+
+    def test_htv145_iq_analyzer_rejects_assignment_without_stage_1(
+        self,
+    ) -> None:
+        factory_request = bytes.fromhex(
+            "79f4882f2880000000342d008f80808402ff8f970080bf060000"
+            "000000000000000000007ccf"
+        )
+        assignment = bytes.fromhex(
+            "79f4882f28b42d008fb984028080c0858500867000f865210d"
+            "010080000000000000000041c6"
+        )
+        factory_fallback = bytes.fromhex(
+            "79f4882f2880000000342d008f83808402ff8f970080bf060000"
+            "000000000000000000005bc2"
+        )
+        chunks = []
+        for frame, trailing_silence_ms in (
+            (factory_request, 54),
+            (assignment, 500),
+            (factory_fallback, 5),
+        ):
+            command, _ = generate_command(
+                frame,
+                wake_symbols=320,
+                channel_center_hz=(
+                    HTV145_ASSIGNMENT_CENTER_HZ
+                    if frame == assignment
+                    else HTV145_REQUEST_CENTER_HZ
+                ),
+                leading_silence_ms=5 if not chunks else 0,
+                trailing_silence_ms=trailing_silence_ms,
+            )
+            chunks.append(command)
+
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(b"".join(chunks))
+            capture.flush()
+            result = analyze_htv145_pairing_capture(
+                Path(capture.name),
+                factory_endpoint=bytes.fromhex("342d008f"),
+                paired_endpoint=bytes.fromhex("b42d008f"),
+                companion_endpoint=bytes.fromhex("39840280"),
+                controller_endpoint=bytes.fromhex("b9840280"),
+                origin_seconds=0,
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+                request_center_hz=HTV145_REQUEST_CENTER_HZ,
+                assignment_center_hz=HTV145_ASSIGNMENT_CENTER_HZ,
+                response_center_hz=HTV145_RESPONSE_CENTER_HZ,
+            )
+
+        self.assertEqual(1, len(result["trials"]))
+        self.assertEqual(0, result["stage_1_request_count"])
+        self.assertEqual(
+            "rejected_assignment_without_stage_1",
+            result["stage_0_verdict"],
+        )
+        self.assertEqual(1, result["stage_0_failure_count"])
 
     def test_htv145_iq_analyzer_derives_counter_2_response_channel(
         self,
@@ -872,7 +934,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertEqual(AUTOMATIC_HTV145_PROFILE_ID, profile.profile_id)
         self.assertEqual("b42d008f", profile.paired_endpoint)
         self.assertEqual(6, len(profile.steps))
-        self.assertEqual(0x05, profile.steps[0].reply_body[5])
+        self.assertEqual(0x06, profile.steps[0].reply_body[5] & 0x7F)
         for captured in (
             "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
             "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2",
@@ -888,22 +950,22 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         assignment = frame_for_step(
             profile,
             0,
-            local_clock=datetime(2026, 8, 25, 19, 52, 36),
+            local_clock=datetime(2026, 9, 1, 12, 43, 48),
         )
         self.assertEqual(
-            "79f4882f28b42d008f3984028080c0858503057000929e990d"
-            "01008000000000000000005767",
+            "79f4882f28b42d008fb984028080c0858500867000f865210d"
+            "010080000000000000000041c6",
             assignment.hex(),
         )
         self.assertEqual(
-            "79f4882f28b42d008fb9840280819001010000000000000000"
-            "000000000000000000000034d0",
+            "79f4882f28b42d008fb9840280811001010000000000000000"
+            "00000000000000000000000655",
             htv145_configuration_frame(profile).hex(),
         )
         expected_replies = {
             1: (
-                "79f4882f28b42d008f39840280814101000080000000000000"
-                "00000000000000000000004b67"
+                "79f4882f28b42d008fb9840280814101000080000000000000"
+                "0000000000000000000000592d"
             ),
             3: (
                 "79f4882f28b42d008fb984028081c287802c0105000f000000"

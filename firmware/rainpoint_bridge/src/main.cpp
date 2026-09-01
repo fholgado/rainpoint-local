@@ -165,6 +165,9 @@ rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
 bool valvePairingActive = false;
 bool valvePairingKnownRejoin = false;
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+rainpoint::Htv145PairingSession htv145PairingSession(
+    activeValvePairingProfile
+);
 bool valvePairingHtv145 = false;
 #endif
 #endif
@@ -697,6 +700,8 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
             return "terminal_confirmation_timeout";
         case rainpoint::PairingFailureReason::UnexpectedTrigger:
             return "unexpected_trigger";
+        case rainpoint::PairingFailureReason::Stage0Rejected:
+            return "stage_0_rejected";
         case rainpoint::PairingFailureReason::ReplyFailed:
             return "reply_failed";
         case rainpoint::PairingFailureReason::ReplyDeadlineMissed:
@@ -708,6 +713,11 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
 rainpoint::PairingSessionState currentPairingState() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            return htv145PairingSession.state();
+        }
+#endif
         return valvePairingSession.state();
     }
 #endif
@@ -717,6 +727,11 @@ rainpoint::PairingSessionState currentPairingState() {
 std::size_t currentPairingCompletedSteps() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            return htv145PairingSession.completedSteps();
+        }
+#endif
         return valvePairingSession.completedSteps();
     }
 #endif
@@ -726,6 +741,11 @@ std::size_t currentPairingCompletedSteps() {
 rainpoint::PairingFailureReason currentPairingFailureReason() {
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            return htv145PairingSession.failureReason();
+        }
+#endif
         return valvePairingSession.failureReason();
     }
 #endif
@@ -795,6 +815,37 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += ",\"retained_association_rejoin\":";
     line += valvePairingActive && valvePairingKnownRejoin ? "true" : "false";
     if (valvePairingActive) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            line += ",\"counter_offset\":0";
+            line += ",\"counter_offset_known\":false";
+            line += ",\"selector2_configuration_transmitted\":false";
+            line += ",\"selector2_configuration_sequence\":0";
+            line += ",\"reply_marker_repeat\":false";
+            line += ",\"htv145_later_sweep_branch\":false";
+            line += ",\"htv145_factory_sweep_observed\":";
+            line += htv145PairingSession.factorySweepObserved()
+                ? "true" : "false";
+            line += ",\"htv145_last_factory_sweep_counter\":";
+            line += static_cast<unsigned int>(
+                htv145PairingSession.lastFactorySweepCounter()
+            );
+            line += ",\"htv145_assignment_locked\":";
+            line += htv145PairingSession.assignmentLocked()
+                ? "true" : "false";
+            line += ",\"htv145_accepted_factory_counter\":";
+            line += static_cast<unsigned int>(
+                htv145PairingSession.acceptedFactoryCounter()
+            );
+            line += ",\"htv145_stage0_accepted\":";
+            line += htv145PairingSession.stage0Accepted()
+                ? "true" : "false";
+            line += ",\"htv145_stage0_rejected\":";
+            line += htv145PairingSession.stage0Rejected()
+                ? "true" : "false";
+        } else
+#endif
+        {
         line += ",\"counter_offset\":";
         line += static_cast<unsigned int>(
             valvePairingSession.counterOffset()
@@ -820,6 +871,7 @@ void reportPairingStatus(const char* detail = nullptr) {
         line += static_cast<unsigned int>(
             valvePairingSession.htv145LastFactorySweepCounter()
         );
+        }
     }
 #endif
     line += ",\"factory_adopted\":";
@@ -873,6 +925,9 @@ void cancelPairing(const char* detail) {
     pairingSession.cancel();
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingSession.cancel();
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    htv145PairingSession.cancel();
+#endif
 #endif
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
@@ -2845,7 +2900,11 @@ void handleNetworkCommand() {
             valvePairingActive = false;
             return;
         }
-        pairingAssignedChannel = 0;
+        pairingAssignedChannel =
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            valvePairingHtv145 ? 12 :
+#endif
+            0;
     } else
 #endif
     {
@@ -2933,17 +2992,19 @@ void handleNetworkCommand() {
     if (valvePairingActive) {
         const auto durationMs =
             static_cast<std::uint32_t>(durationSeconds) * 1'000U;
-        // The timing-free counter-3-only probe disproved that the later stock
-        // branch is sufficient for every retained valve state. Answer the
-        // first complete, evidence-backed HTV145 branch observed after arming:
-        // counter 0/selector 5 or counter 3/selector 6. Normal HA ordering
-        // arms the node before the physical gesture and therefore offers the
-        // already locally accepted counter-0 prefix first.
-        constexpr bool preferHtv145LaterSweepBranch = false;
-        valvePairingSession.arm(
-            millis(), durationMs, requestedValveRejoin,
-            preferHtv145LaterSweepBranch
-        );
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+        if (valvePairingHtv145) {
+            // HTV145 owns an independent one-shot transcript. It must never
+            // inherit HTV405 retries, resynchronization, or retained-rejoin
+            // behavior while the fresh-enrollment prefix is being proven.
+            htv145PairingSession.arm(millis(), durationMs);
+        } else
+#endif
+        {
+            valvePairingSession.arm(
+                millis(), durationMs, requestedValveRejoin
+            );
+        }
     } else
 #endif
     {
@@ -3415,6 +3476,11 @@ bool activeValvePairingArmed() {
 }
 
 std::size_t activeValvePairingCompletedSteps() {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return htv145PairingSession.completedSteps();
+    }
+#endif
     return valvePairingSession.completedSteps();
 }
 
@@ -3422,42 +3488,79 @@ const rainpoint::Htv405PairingStep* claimActiveValvePairingReply(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     std::uint32_t nowMs
 ) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return htv145PairingSession.claimReply(frame, nowMs);
+    }
+#endif
     return valvePairingSession.claimReply(frame, nowMs);
 }
 
 std::uint8_t activeValvePairingReplyCounterOffset() {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return 0;
+    }
+#endif
     return valvePairingSession.replyCounterOffset();
 }
 
 bool activeValvePairingIsSelector2ConfigurationStep(
     std::size_t replyStep
 ) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return false;
+    }
+#endif
     return valvePairingSession.isSelector2ConfigurationStep(replyStep);
 }
 
 void markActiveValvePairingSelector2ConfigurationTransmitted(
     std::uint8_t sequence
 ) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return;
+    }
+#endif
     valvePairingSession.markSelector2ConfigurationTransmitted(sequence);
 }
 
 std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return 0;
+    }
+#endif
     return valvePairingSession.replyStartDelayOverrideUs();
 }
 
 bool activeValvePairingReplyMarkerRepeat() {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return false;
+    }
+#endif
     return valvePairingSession.replyMarkerRepeat();
 }
 
-bool activeValvePairingHtv145LaterSweepBranch() {
-    return valvePairingSession.htv145LaterSweepBranch();
-}
-
 bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        return htv145PairingSession.finishReply(success, nowMs);
+    }
+#endif
     return valvePairingSession.finishReply(success, nowMs);
 }
 
 void tickActiveValvePairing(std::uint32_t nowMs) {
+#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (valvePairingHtv145) {
+        htv145PairingSession.tick(nowMs);
+        return;
+    }
+#endif
     valvePairingSession.tick(nowMs);
 }
 #endif
@@ -3513,19 +3616,6 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         const rainpoint::Htv405PairingStep* step =
             claimActiveValvePairingReply(frame, millis());
         if (step != nullptr) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            if (valvePairingHtv145 &&
-                activeValvePairingHtv145LaterSweepBranch() &&
-                !rainpoint::applyHtv145LaterSweepProfile(
-                    activeValvePairingProfile
-                )) {
-                finishActiveValvePairingReply(false, millis());
-                reportPairingStatus("later_sweep_profile_build_failed");
-                restoreScanningAfterPairing();
-                printPacket(name, frame, packet, radio);
-                return;
-            }
-#endif
             auto replyDateTime = pairingLocalDateTime;
             const bool pairingClockValid =
                 rainpoint::advancePairingLocalDateTime(
@@ -3560,9 +3650,8 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 :
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
                 valvePairingHtv145
-                    ? rainpoint::htv145PairingReplyStartDelayUs(
-                        replyStep,
-                        activeValvePairingHtv145LaterSweepBranch()
+                    ? rainpoint::htv145Selector6PairingReplyStartDelayUs(
+                        replyStep
                     )
                     :
 #endif
@@ -3577,14 +3666,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
 #else
                 0;
 #endif
-            const std::uint16_t leadingPreludeSymbols =
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-                valvePairingHtv145 && replyStep == 0 &&
-                    !activeValvePairingHtv145LaterSweepBranch()
-                    ? rainpoint::kHtv145Counter0AssignmentPreludeSymbols
-                    :
-#endif
-                0;
+            // The controlled selector-6 stock branch uses the ordinary wake.
+            // The former selector-5 prelude remains available only to the
+            // isolated calibration command, never to live pairing.
+            constexpr std::uint16_t leadingPreludeSymbols = 0;
             bool sent = built && radio.transmitAsync(
                 replyFrame,
                 static_cast<std::uint32_t>(adjustedFrequency),
@@ -3614,7 +3699,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     activeValvePairingProfile,
                     configurationFrame,
                     activeValvePairingReplyCounterOffset(),
-                    activeValvePairingHtv145LaterSweepBranch()
+                    true
                 ) && radio.transmitAsync(
                     configurationFrame,
                     static_cast<std::uint32_t>(adjustedFrequency),
@@ -3623,11 +3708,8 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     rainpoint::pairingPaTableValue(pairingPowerDbm),
                     step->deviationRegister,
                     packet.receivedAtMicros +
-                        (activeValvePairingHtv145LaterSweepBranch()
-                            ? rainpoint::
-                                kHtv145LaterSweepConfigurationReplyStartDelayUs
-                            : rainpoint::
-                                kHtv145ConfigurationReplyStartDelayUs)
+                        rainpoint::
+                            kHtv145Selector6ConfigurationReplyStartDelayUs
                 );
                 // The valve confirms this long controller command on the
                 // routine reply carrier before returning to its lower request

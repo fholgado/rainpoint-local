@@ -353,6 +353,10 @@ class ESP32NetworkTest(unittest.TestCase):
                     "htv145_later_sweep_branch": True,
                     "htv145_factory_sweep_observed": True,
                     "htv145_last_factory_sweep_counter": 3,
+                    "htv145_assignment_locked": True,
+                    "htv145_accepted_factory_counter": 0,
+                    "htv145_stage0_accepted": False,
+                    "htv145_stage0_rejected": True,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -384,6 +388,24 @@ class ESP32NetworkTest(unittest.TestCase):
             self.gateway.nodes()[0][
                 "pairing_selector2_configuration_sequence"
             ],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0]["pairing_htv145_assignment_locked"],
+        )
+        self.assertEqual(
+            0,
+            self.gateway.nodes()[0][
+                "pairing_htv145_accepted_factory_counter"
+            ],
+        )
+        self.assertIs(
+            False,
+            self.gateway.nodes()[0]["pairing_htv145_stage0_accepted"],
+        )
+        self.assertIs(
+            True,
+            self.gateway.nodes()[0]["pairing_htv145_stage0_rejected"],
         )
         self.assertIs(
             True,

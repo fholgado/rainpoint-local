@@ -148,20 +148,17 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
 RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.2-htv145-pairing-probe.18 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.19 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-This isolated probe answers the first complete captured factory branch it
-observes after arming: counter-0/selector-5 or counter-3/selector-6. The
-counter-0 assignment reproduces the stock gateway's measured 256-symbol
-shifted, reversed-polarity alternating prelude before its ordinary wake. Probe
-`.18` adds only authenticated maintenance controls to the `.17` RF candidate;
-it preserves the wake-validated common carrier, bounded counter-0-only timing
-probe, and later-sweep branch unchanged.
-Arm before the physical gesture so
-normal setup starts with counter 0; no operator timing against the LED sequence
-is required.
+This isolated probe implements the controlled app-first stock transcript as a
+one-shot state machine. It answers only factory counter 0, assigns selector 6
+and response subchannel 12, and requires the exact addressed stage-1 request
+before continuing the six-stage exchange. A later factory announcement is a
+terminal stage-0 rejection; it can never trigger a second assignment. Arm
+before the physical gesture so normal setup starts with counter 0; no operator
+timing against the LED sequence is required.
 Deploy this image only
 to the designated OTA test node until three consecutive
 pairings satisfy the roadmap's physical acceptance gate.

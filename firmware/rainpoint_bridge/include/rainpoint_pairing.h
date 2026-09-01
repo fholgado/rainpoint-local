@@ -27,6 +27,7 @@ enum class PairingFailureReason : std::uint8_t {
     SessionTimeout,
     TerminalConfirmationTimeout,
     UnexpectedTrigger,
+    Stage0Rejected,
     ReplyFailed,
     ReplyDeadlineMissed,
 };

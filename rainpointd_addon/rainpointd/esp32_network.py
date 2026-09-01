@@ -389,6 +389,18 @@ class ESP32NetworkServer:
                         pairing_htv145_last_factory_sweep_counter=message.get(
                             "htv145_last_factory_sweep_counter"
                         ),
+                        pairing_htv145_assignment_locked=message.get(
+                            "htv145_assignment_locked"
+                        ),
+                        pairing_htv145_accepted_factory_counter=message.get(
+                            "htv145_accepted_factory_counter"
+                        ),
+                        pairing_htv145_stage0_accepted=message.get(
+                            "htv145_stage0_accepted"
+                        ),
+                        pairing_htv145_stage0_rejected=message.get(
+                            "htv145_stage0_rejected"
+                        ),
                         pairing_factory_endpoint=message.get(
                             "factory_endpoint"
                         ),

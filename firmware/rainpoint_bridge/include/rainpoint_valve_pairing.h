@@ -144,6 +144,20 @@ constexpr std::uint32_t kHtv145LaterSweepStep3ReplyStartDelayUs = 39'500;
 constexpr std::uint32_t kHtv145LaterSweepStep4ReplyStartDelayUs = 51'200;
 constexpr std::uint32_t kHtv145LaterSweepStep5ReplyStartDelayUs = 46'100;
 
+// The controlled 2026-09-01 app-first stock enrollment accepted the first
+// factory announcement (counter 0), assigned selector 6 / response channel 12,
+// and addressed every gateway transmission to the controller route.  Keep
+// these timings separate from both rejected selector-5 probes and the older
+// retained counter-3 branch.
+constexpr std::uint32_t kHtv145Selector6RoutineChannelCenterHz = 434'306'378;
+constexpr std::uint32_t kHtv145Selector6AssignmentReplyStartDelayUs = 52'150;
+constexpr std::uint32_t kHtv145Selector6Step1ReplyStartDelayUs = 70'700;
+constexpr std::uint32_t kHtv145Selector6ConfigurationReplyStartDelayUs =
+    3'054'850;
+constexpr std::uint32_t kHtv145Selector6Step3ReplyStartDelayUs = 35'750;
+constexpr std::uint32_t kHtv145Selector6Step4ReplyStartDelayUs = 52'000;
+constexpr std::uint32_t kHtv145Selector6Step5ReplyStartDelayUs = 47'200;
+
 constexpr std::uint32_t htv405PairingReplyStartDelayUs(
     std::size_t stepIndex
 ) {
@@ -187,6 +201,22 @@ constexpr std::uint32_t htv145PairingReplyStartDelayUs(
         : stepIndex == 3 ? 49'550
         : stepIndex == 4 ? 52'200
         : stepIndex == 5 ? 43'900
+        : kHtv405OrdinaryReplyStartDelayUs;
+}
+
+constexpr std::uint32_t htv145Selector6PairingReplyStartDelayUs(
+    std::size_t stepIndex
+) {
+    return stepIndex == 0
+        ? kHtv145Selector6AssignmentReplyStartDelayUs
+        : stepIndex == 1
+        ? kHtv145Selector6Step1ReplyStartDelayUs
+        : stepIndex == 3
+        ? kHtv145Selector6Step3ReplyStartDelayUs
+        : stepIndex == 4
+        ? kHtv145Selector6Step4ReplyStartDelayUs
+        : stepIndex == 5
+        ? kHtv145Selector6Step5ReplyStartDelayUs
         : kHtv405OrdinaryReplyStartDelayUs;
 }
 
@@ -246,6 +276,20 @@ constexpr std::array<Htv405PairingStep, kHtv145PairingStepCount>
     {{{0x81, 0x82, 0x81, 0x02, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0x03, 0x01, 0x82, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv405RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+}};
+
+// Canonical fresh-enrollment transcript from the controlled app-first stock
+// capture on 2026-09-01.  This is the only transcript used by the dedicated
+// local HTV145 session: counter 0, selector 6, response channel 12, and exactly
+// one assignment per arm window.
+constexpr std::array<Htv405PairingStep, kHtv145PairingStepCount>
+    kHtv145Counter0Selector6PairingTemplate = {{
+    {{{0x80, 0x80, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x80, 0xc0, 0x85, 0x85, 0x00, 0x86, 0x70, 0x00, 0xf8, 0x65, 0x21, 0x0d, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kHtv405InitialChannelCenterHz, kHtv405InitialDeviationRegister, true},
+    {{{0x81, 0x01, 0x07, 0x86, 0x25, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0x41, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145Selector6RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kHtv145Selector6RoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
+    {{{0x81, 0x82, 0x81, 0x06, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145Selector6RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x82, 0x03, 0x01, 0x86, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145Selector6RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kHtv145Selector6RoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
 }};
 
 // Exact selector-6 continuation captured after explicit factory-sweep
@@ -344,8 +388,9 @@ inline bool buildAutomaticHtv405Profile(
 }
 
 // Research-only HTV145 enrollment. Every populated step comes from the same
-// successful stock-gateway capture; the unused tail of the fixed-capacity
-// array remains zeroed so the HTV405 transcript cannot leak into this model.
+// controlled 2026-09-01 app-first stock capture. The unused tail of the fixed-
+// capacity array remains zeroed so neither HTV405 nor an older HTV145 branch
+// can leak into this model.
 inline bool buildAutomaticHtv145Profile(
     const std::array<std::uint8_t, 4>& factoryEndpoint,
     const std::array<std::uint8_t, 4>& valveRoute,
@@ -364,7 +409,8 @@ inline bool buildAutomaticHtv145Profile(
     profile.stepCount = kHtv145PairingStepCount;
     profile.steps = {};
     for (std::size_t index = 0; index < kHtv145PairingStepCount; ++index) {
-        profile.steps[index] = kHtv145PairingTemplate[index];
+        profile.steps[index] =
+            kHtv145Counter0Selector6PairingTemplate[index];
     }
     return true;
 }
@@ -621,6 +667,168 @@ inline bool buildHtv405Selector2ConfigurationReply(
     writeTrailer(frame, 0x4f03);
     return true;
 }
+
+// Dedicated research-only HTV145 fresh-enrollment state machine. Its
+// interface deliberately exposes one operation—claim the next evidence-backed
+// reply—while hiding the transcript ordering and one-assignment invariant.
+// The first paired-address request is the only acceptance proof for stage 0;
+// a later factory fallback after transmission is an explicit rejection.
+class Htv145PairingSession {
+public:
+    explicit Htv145PairingSession(const Htv405PairingProfile& profile)
+        : profile_(profile) {}
+
+    void arm(
+        std::uint32_t nowMs,
+        std::uint32_t durationMs = 120'000
+    ) {
+        state_ = PairingSessionState::Armed;
+        failureReason_ = PairingFailureReason::None;
+        step_ = 0;
+        expiresAtMs_ = nowMs + durationMs;
+        claimedAtMs_ = 0;
+        pending_ = false;
+        assignmentLocked_ = false;
+        stage0Accepted_ = false;
+        stage0Rejected_ = false;
+        factorySweepObserved_ = false;
+        lastFactorySweepCounter_ = 0;
+        acceptedFactoryCounter_ = 0;
+    }
+
+    void cancel() {
+        state_ = PairingSessionState::Disarmed;
+        failureReason_ = PairingFailureReason::None;
+        step_ = 0;
+        pending_ = false;
+        assignmentLocked_ = false;
+        stage0Accepted_ = false;
+        stage0Rejected_ = false;
+        factorySweepObserved_ = false;
+        lastFactorySweepCounter_ = 0;
+        acceptedFactoryCounter_ = 0;
+    }
+
+    const Htv405PairingStep* claimReply(
+        const std::array<std::uint8_t, kFrameBytes>& frame,
+        std::uint32_t nowMs
+    ) {
+        tick(nowMs);
+        if (state_ != PairingSessionState::Armed || pending_) {
+            return nullptr;
+        }
+
+        if (htv405RequestMatches(profile_, 0, frame)) {
+            const auto sweepCounter = static_cast<std::uint8_t>(
+                frame[13] & 0x7fU
+            );
+            factorySweepObserved_ = true;
+            lastFactorySweepCounter_ = sweepCounter;
+            if (assignmentLocked_) {
+                if (!stage0Accepted_ && step_ == 1) {
+                    stage0Rejected_ = true;
+                    fail(PairingFailureReason::Stage0Rejected);
+                }
+                return nullptr;
+            }
+            // This first rebuild image is intentionally one coherent branch,
+            // not a dynamic hybrid. The controlled arm-first stock capture
+            // proves counter 0 with selector 6; later counters remain receive-
+            // only evidence until separately generated from their fixtures.
+            if (sweepCounter != 0) {
+                return nullptr;
+            }
+            assignmentLocked_ = true;
+            acceptedFactoryCounter_ = sweepCounter;
+            pending_ = true;
+            claimedAtMs_ = nowMs;
+            return &profile_.steps[0];
+        }
+
+        if (!assignmentLocked_ || step_ == 0 || step_ >= profile_.stepCount) {
+            return nullptr;
+        }
+        if (!htv405RequestMatches(profile_, step_, frame)) {
+            return nullptr;
+        }
+        if (step_ == 1) {
+            stage0Accepted_ = true;
+        }
+        const auto& step = profile_.steps[step_];
+        if (!step.replyExpected) {
+            ++step_;
+            if (step_ == profile_.stepCount) {
+                state_ = PairingSessionState::Completed;
+            }
+            return nullptr;
+        }
+        pending_ = true;
+        claimedAtMs_ = nowMs;
+        return &step;
+    }
+
+    bool finishReply(bool success, std::uint32_t nowMs) {
+        if (state_ != PairingSessionState::Armed || !pending_ || !success) {
+            fail(PairingFailureReason::ReplyFailed);
+            return false;
+        }
+        const std::uint32_t deadlineMs = step_ == 1
+            ? kHtv145ConfigurationReplyDeadlineMs
+            : kPairingReplyDeadlineMs;
+        if (nowMs - claimedAtMs_ > deadlineMs) {
+            fail(PairingFailureReason::ReplyDeadlineMissed);
+            return false;
+        }
+        pending_ = false;
+        ++step_;
+        if (step_ == profile_.stepCount) {
+            state_ = PairingSessionState::Completed;
+        }
+        return true;
+    }
+
+    void tick(std::uint32_t nowMs) {
+        if (state_ == PairingSessionState::Armed &&
+            static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0) {
+            fail(PairingFailureReason::SessionTimeout);
+        }
+    }
+
+    PairingSessionState state() const { return state_; }
+    PairingFailureReason failureReason() const { return failureReason_; }
+    std::size_t completedSteps() const { return step_; }
+    bool assignmentLocked() const { return assignmentLocked_; }
+    bool stage0Accepted() const { return stage0Accepted_; }
+    bool stage0Rejected() const { return stage0Rejected_; }
+    bool factorySweepObserved() const { return factorySweepObserved_; }
+    std::uint8_t lastFactorySweepCounter() const {
+        return lastFactorySweepCounter_;
+    }
+    std::uint8_t acceptedFactoryCounter() const {
+        return acceptedFactoryCounter_;
+    }
+
+private:
+    void fail(PairingFailureReason reason) {
+        state_ = PairingSessionState::Failed;
+        failureReason_ = reason;
+        pending_ = false;
+    }
+
+    const Htv405PairingProfile& profile_;
+    PairingSessionState state_ = PairingSessionState::Disarmed;
+    PairingFailureReason failureReason_ = PairingFailureReason::None;
+    std::size_t step_ = 0;
+    std::uint32_t expiresAtMs_ = 0;
+    std::uint32_t claimedAtMs_ = 0;
+    bool pending_ = false;
+    bool assignmentLocked_ = false;
+    bool stage0Accepted_ = false;
+    bool stage0Rejected_ = false;
+    bool factorySweepObserved_ = false;
+    std::uint8_t lastFactorySweepCounter_ = 0;
+    std::uint8_t acceptedFactoryCounter_ = 0;
+};
 
 class Htv405PairingSession {
 public:
