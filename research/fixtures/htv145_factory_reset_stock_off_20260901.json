@@ -1,0 +1,46 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "capture_path": "/share/rainpoint-local/htv145-stock-pairing-20260901-111306/continuous_433.7M_2000k.cu8",
+  "capture_sha256": "8d8cbaf177929da6f3ab5d63376a2561d7e3da3a701119eba77829f412e03749",
+  "capture_bytes": 720000000,
+  "capture_center_hz": 433700000,
+  "sample_rate_sps": 2000000,
+  "duration_seconds": 180,
+  "factory_endpoint": "342d008f",
+  "paired_endpoint": "b42d008f",
+  "companion_endpoint": "39840280",
+  "controller_endpoint": "b9840280",
+  "lifecycle": {
+    "batteries": "four fresh alkaline cells",
+    "reset": "batteries removed for at least ten seconds; timer button held while reinstalling until rapid red flashing",
+    "stock_gateway": "off",
+    "custom_nodes": "all three authenticated nodes verified receive-only",
+    "led_observation": "no meaningful visible difference from ordinary pairing"
+  },
+  "analysis": {
+    "engine": "numpy_shared_discriminator",
+    "request_count": 2,
+    "assignment_count": 0,
+    "lower_paired_request_count": 0,
+    "stage_1_request_count": 0,
+    "configuration_response_count": 0,
+    "factory_requests": [
+      {
+        "start_seconds": 34.58035,
+        "end_seconds": 34.61155,
+        "phase_count": 97,
+        "counter": 0,
+        "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+      },
+      {
+        "start_seconds": 46.0803,
+        "end_seconds": 46.1115,
+        "phase_count": 96,
+        "counter": 3,
+        "frame": "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
+      }
+    ]
+  },
+  "conclusion": "The documented reset cleared the retained RF association even though the LED sweep was visually indistinguishable from ordinary pairing."
+}

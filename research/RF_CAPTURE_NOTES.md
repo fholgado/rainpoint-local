@@ -520,3 +520,24 @@ Reference evidence:
 Reference evidence:
 `fixtures/htv405_beta10_candidate9_on_air_20260831.json` and
 `fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
+
+### HTV145 documented reset isolation — 2026-09-01
+
+- Four fresh alkaline cells were installed, then removed for more than ten
+  seconds. The timer button was held while the cells were reinstalled until
+  rapid red flashing began, matching the manufacturer's reset gesture.
+- The stock RainPoint gateway was off and all three custom radio nodes were
+  gateway-verified receive-only. The 180-second, 2.0 Msps capture therefore
+  contains no custom or stock gateway replies.
+- Factory counter `0` appeared at 34.580350 seconds and counter `3` at
+  46.080300 seconds. No assignment, paired-route request, or configuration
+  response was recovered anywhere in the continuous capture.
+- The visible LED sweep did not look meaningfully different from ordinary
+  pairing, but the absence of retained paired traffic proves that LED behavior
+  is not a sufficient lifecycle classifier.
+- The shared NumPy discriminator reduced complete three-carrier analysis from
+  a projected 40--50 minutes to about 11 seconds without changing the
+  dependency-free fixture path.
+
+Reference evidence:
+`fixtures/htv145_factory_reset_stock_off_20260901.json`.

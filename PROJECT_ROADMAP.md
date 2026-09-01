@@ -241,13 +241,19 @@ observation before it changes transmitted firmware.
 - [ ] Replace the HTV145 test valve's batteries with four fresh alkaline cells,
       leave the stock RainPoint gateway under manual control, and record this
       controlled lifecycle matrix as separate continuous-IQ trials:
-  1. documented factory reset with the stock gateway off and every custom node
-     confirmed receive-only;
-  2. documented factory reset followed by a complete stock enrollment using
+  1. [x] documented factory reset with the stock gateway off and every custom
+     node confirmed receive-only;
+     - 2026-09-01: a checksummed 180-second capture recovered factory counters
+       `0` and `3` at 34.580350 and 46.080300 seconds, with no assignment,
+       paired-route request, or configuration response. The reset therefore
+       cleared the retained association even though its LED sequence was not
+       visibly distinct from ordinary pairing.
+  2. [ ] documented factory reset followed by a complete stock enrollment using
      the manual's exact button-then-app order;
-  3. a second documented factory reset and identical complete stock enrollment;
-  4. ordinary long-press re-pairing without a factory reset;
-  5. ordinary battery removal/reinstallation while the accepted stock
+  3. [ ] a second documented factory reset and identical complete stock
+     enrollment;
+  4. [ ] ordinary long-press re-pairing without a factory reset;
+  5. [ ] ordinary battery removal/reinstallation while the accepted stock
      association remains registered.
 - [ ] For both new complete stock enrollments, retain the full factory sweep,
       the first gateway transmission, every addressed continuation, the first

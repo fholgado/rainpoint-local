@@ -74,6 +74,18 @@ Keep the raw captures even when a decoded row looks correct. We need IQ/pulse
 data to locate the address and checksum and to distinguish hub commands from
 valve acknowledgements.
 
+The HTV145 and HTV405 enrollment analyzers can share one vectorized frequency
+discriminator across every RF leg when NumPy is installed. This is strongly
+recommended for multi-minute continuous-IQ files; the dependency-free fallback
+remains suitable for small fixtures:
+
+```sh
+python3 -m pip install numpy
+python3 tools/analyze_htv145_pairing_iq.py CAPTURE.cu8 \
+  --factory-endpoint FACTORY --paired-endpoint PAIRED \
+  --companion-endpoint COMPANION --controller-endpoint CONTROLLER
+```
+
 ## Controlled capture sequence
 
 Place the receiver close enough to see both hub and accessories without

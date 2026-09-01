@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from .demod_rainpoint_reply_iq import demodulate
+    from .demod_rainpoint_reply_iq import demodulate_many
 except ImportError:  # Direct script execution.
-    from demod_rainpoint_reply_iq import demodulate
+    from demod_rainpoint_reply_iq import demodulate_many
 
 
 FRAME_SYMBOLS = 38 * 8
@@ -126,15 +126,18 @@ def analyze_pairing_capture(
         "sample_rate": sample_rate,
         "capture_center_hz": capture_center_hz,
     }
-    request_result = demodulate(
-        path, channel_center_hz=request_center_hz, **common
+    channels = demodulate_many(
+        path,
+        channel_centers_hz=(
+            request_center_hz,
+            assignment_center_hz,
+            routine_center_hz,
+        ),
+        **common,
     )
-    assignment_result = demodulate(
-        path, channel_center_hz=assignment_center_hz, **common
-    )
-    routine_result = demodulate(
-        path, channel_center_hz=routine_center_hz, **common
-    )
+    request_result = channels[request_center_hz]
+    assignment_result = channels[assignment_center_hz]
+    routine_result = channels[routine_center_hz]
 
     def request_predicate(frame: str) -> bool:
         return _frame_matches(

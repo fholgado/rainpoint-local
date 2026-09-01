@@ -19,9 +19,9 @@ import tempfile
 from typing import Any, Callable
 
 try:
-    from .demod_rainpoint_reply_iq import demodulate
+    from .demod_rainpoint_reply_iq import demodulate_many
 except ImportError:  # Direct script execution.
-    from demod_rainpoint_reply_iq import demodulate
+    from demod_rainpoint_reply_iq import demodulate_many
 
 
 FRAME_SYMBOLS = 38 * 8
@@ -291,15 +291,18 @@ def analyze(
         "sample_rate": sample_rate,
         "capture_center_hz": capture_center_hz,
     }
-    request_result = demodulate(
-        path, channel_center_hz=request_center_hz, **common
+    channels = demodulate_many(
+        path,
+        channel_centers_hz=(
+            request_center_hz,
+            assignment_center_hz,
+            response_center_hz,
+        ),
+        **common,
     )
-    assignment_result = demodulate(
-        path, channel_center_hz=assignment_center_hz, **common
-    )
-    response_result = demodulate(
-        path, channel_center_hz=response_center_hz, **common
-    )
+    request_result = channels[request_center_hz]
+    assignment_result = channels[assignment_center_hz]
+    response_result = channels[response_center_hz]
     requests = _events(
         request_result,
         lambda frame: _factory_matches(frame, factory_endpoint),
@@ -419,6 +422,10 @@ def analyze(
         "lower_paired_request_count": len(paired_requests),
         "stage_1_request_count": len(stage_1_requests),
         "configuration_response_count": len(configuration_responses),
+        "factory_requests": requests,
+        "assignments": assignments,
+        "stage_1_requests": stage_1_requests,
+        "configuration_responses": configuration_responses,
         "decision_centers_hz": {
             "lower_request": request_center_hz,
             "assignment": assignment_center_hz,
