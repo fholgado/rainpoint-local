@@ -567,3 +567,23 @@ Reference evidence:
 
 Reference evidence:
 `fixtures/htv145_counter2_stock_enrollment_20260901.json`.
+
+### HTV145 app-first counter-0 stock enrollment — 2026-09-01
+
+- The valve was reset with the stock gateway off and all three custom nodes
+  gateway-verified receive-only. After the gateway was fully online, stock app
+  search was visibly armed before the valve long press.
+- The gateway accepted the first new factory announcement, counter `0`, after
+  52.15 ms. It selected selector `6` with the high flag clear, producing the
+  same response subchannel `12` at 434.3515 MHz as the button-first counter-2
+  success.
+- All six stages completed and both the white LED and stock app reported
+  success. The checksummed five-minute capture retained the preceding reset
+  sweep, complete enrollment, and post-enrollment idle tail.
+- Cross-comparison resolves the counter hypothesis: button-first/app-second
+  accepted counter `2` because counters `0` and `1` occurred before search was
+  armed; app-first/button-second accepted the first counter `0`. The accepted
+  value is sweep position, not a fixed device/channel assignment.
+
+Reference evidence:
+`fixtures/htv145_counter0_app_first_stock_enrollment_20260901.json`.

@@ -255,9 +255,14 @@ observation before it changes transmitted firmware.
        six stages, and enrolled successfully. The capture proved that counter
        `1` is a real upper-carrier factory announcement and that the accepted
        counter-2 assignment selects response subchannel `12` at 434.3515 MHz.
-  3. [ ] repeat the documented reset with stock app search armed before the
+  3. [x] repeat the documented reset with stock app search armed before the
      valve long press. Compare which factory counter is accepted against the
      button-first counter-2 transcript without assuming counter `1` wins;
+     - 2026-09-01: the already-searching stock gateway accepted the first new
+       factory announcement, counter `0`, after 52.15 ms. It selected the same
+       selector `6` / response subchannel `12` and completed the same six-stage
+       exchange family. The controlled ordering comparison therefore supports
+       first-observed sweep acceptance, not a fixed target counter;
   4. [ ] a second documented factory reset and identical button-first complete
      stock enrollment;
   5. [ ] ordinary long-press re-pairing without a factory reset;

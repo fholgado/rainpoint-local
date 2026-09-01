@@ -67,6 +67,17 @@ assigned 434.3515 MHz carrier. The complete branch finished successfully in the
 stock app. Counter `1` is consequently a real upper-carrier factory sweep
 announcement, not an absent value or a paired continuation.
 
+A controlled app-first/button-second enrollment then accepted the first new
+factory announcement, counter `0`, after 52.15 ms. The earlier
+button-first/app-second trial accepted counter `2` only after counters `0` and
+`1` had passed before the app entered search. Both trials selected selector
+`6`, response subchannel `12`, and the same six-stage exchange family. In these
+controlled trials the accepted counter is therefore the current factory-sweep
+position echoed at assignment time; it is not the app Device Address or the
+assigned RF subchannel. A local enrollment candidate should respond to the
+first supported factory announcement it observes after arming rather than
+wait for a hard-coded counter.
+
 These are complete association profiles, not interchangeable parameter
 choices. The app Device Address does not identify the selector: an app address
 of `1` has been observed with selector `6`.
@@ -194,6 +205,8 @@ not exposed as supported functionality.
   `research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`
 - Counter-2/subchannel-12 enrollment:
   `research/fixtures/htv145_counter2_stock_enrollment_20260901.json`
+- App-first counter-0/subchannel-12 enrollment:
+  `research/fixtures/htv145_counter0_app_first_stock_enrollment_20260901.json`
 - Command and duration evidence:
   `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
 - Battery and usage evidence:
