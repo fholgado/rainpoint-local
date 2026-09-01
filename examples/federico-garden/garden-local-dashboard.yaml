@@ -144,12 +144,6 @@ views:
             color: blue
             vertical: false
           - type: tile
-            entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
-            name: Last Session
-            icon: mdi:cup-water
-            color: blue
-            vertical: false
-          - type: tile
             entity: sensor.rainpoint_4_zone_valve_8013_reported_duration
             name: Session Duration
             icon: mdi:timer-outline
@@ -159,8 +153,6 @@ views:
             title: Watering Activity
             hours_to_show: 24
             entities:
-              - entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
-                name: Liters
               - entity: binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering
                 name: Zone 1
       - type: grid
@@ -187,8 +179,6 @@ views:
                 name: Valve State
               - entity: sensor.rainpoint_4_zone_valve_8013_reported_duration
                 name: Reported Duration
-              - entity: sensor.rainpoint_4_zone_valve_8013_last_water_usage
-                name: Last Water Usage
           - type: entities
             title: Device Health
             show_header_toggle: false
