@@ -313,9 +313,9 @@ def frame_for_step(
 
         if profile.profile_id == AUTOMATIC_HTV145_PROFILE_ID:
             body[8] = preserve_marker(packed_time, body[8])
-            body[9] = preserve_marker(packed_time >> 8, body[9])
-            body[10] = preserve_marker(packed_date, body[10])
-            body[11] = preserve_marker(packed_date >> 8, body[11])
+            body[9] = packed_time >> 8
+            body[10] = packed_date & 0xFF
+            body[11] = packed_date >> 8
         else:
             body[8] = (packed_time & 0x7F) | 0x80
             body[9] = (packed_time >> 8) | 0x80

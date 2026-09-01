@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.33.28 / Integration 0.13.3 / Firmware 0.15.3
+
+- Give only the isolated HTV145 research profile enough calibration range to
+  apply its capture-derived `122.759 kHz` correction; the validated sensor and
+  HTV405 pairing bound remains unchanged.
+- Correct the HTV145 counter-0 packed clock after physical probe `.24` proved
+  that clearing the time-high bit wrapped 16:00--23:59 into 00:00--07:59.
+  Probe `.25` preserves the verified `.24` RF waveform and every static frame
+  byte.
+
 ## 0.33.27 / Integration 0.13.3 / Firmware 0.15.3
 
 - Replace payload-biased FFT estimates with balanced-wake measurements for the

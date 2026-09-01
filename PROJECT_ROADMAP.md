@@ -389,6 +389,29 @@ observation before it changes transmitted firmware.
     and `0x45` initial deviation. The physical gate remains open until the
     bounded stage-zero harness records the transmitted waveform and either an
     addressed stage-1 request or the next factory fallback.
+  - 2026-09-01 preflight found `.23` could not arm because the shared validated
+    pairing guard rejected its evidence-backed `122.759 kHz` calibration before
+    any RF transmission. Probe `.24` changes no RF field or state-machine
+    behavior; it gives only the gated HTV145 research profile a `150 kHz`
+    calibration bound while retaining the generic `100 kHz` sensor/HTV405
+    boundary. The physical waveform verdict therefore remains a test of the
+    unchanged `.23` RF hypothesis.
+  - 2026-09-01 physical `.24` result: the bounded node again stopped at `1/6`,
+    but the clean IQ capture closed the intended PHY discriminator. Relative
+    to the same valve request, the assignment was only `+354 Hz` from accepted
+    stock, used the same `0x45` deviation family and 320-symbol wake, had no
+    clipping, and started `0.648 ms` later. The decoded frame matched stock in
+    every static byte, but its live clock encoded `17:56` as `01:56`: the
+    HTV145 builder incorrectly cleared the legitimate high-hour bit as though
+    it were a branch marker. Probe `.25` changes only that disproven clock
+    rule. RF profile, static payload, selector, endpoints, wake, scheduler,
+    power, polarity, and one-shot state remain frozen.
+  - 2026-09-01 physical `.25` result: the emitted clock correctly represented
+    `19:13:08`, but the valve still continued its sweep and the node stopped at
+    `1/6` with `stage_0_rejected`. The clock-wrap hypothesis is closed. Freeze
+    `.25`; the next discriminator is exact replay of a freshly accepted stock
+    assignment, captured under the same controlled lifecycle, before changing
+    any further semantic or physical field.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected. The staging tool now refuses overflow before writing

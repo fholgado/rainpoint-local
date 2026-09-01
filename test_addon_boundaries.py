@@ -97,7 +97,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn(
             'htv145_pairing_candidate_version = '
-            '"0.15.3-htv145-pairing-probe.23"',
+            '"0.15.3-htv145-pairing-probe.25"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)

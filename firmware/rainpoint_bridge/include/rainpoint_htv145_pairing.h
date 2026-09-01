@@ -14,11 +14,19 @@ namespace htv145 {
 // pairing profile, state machine, calibration, or reply builder.
 constexpr const char* kProfileId = "htv145_auto_candidate_v1";
 constexpr std::size_t kPairingStepCount = 6;
+// The generic pairing bound remains intentionally narrower for validated
+// sensors and HTV405. HTV145 uses a separately gated research image and its
+// capture-derived node calibration legitimately exceeds that shared bound.
+constexpr std::int32_t kMaximumPairingFrequencyOffsetHz = 150'000;
 // Balanced-wake analysis of unclipped probe .22 and accepted stock IQ showed
 // that the local assignment was 35.370 kHz low relative to the valve's own
 // factory request oscillator. Probe .23 adds only that normalized correction
 // and the independently measured stock initial-deviation profile.
 constexpr std::int32_t kPairingFrequencyOffsetHz = 122'759;
+static_assert(
+    kPairingFrequencyOffsetHz <= kMaximumPairingFrequencyOffsetHz,
+    "HTV145 pairing calibration must remain inside its research-only bound"
+);
 constexpr std::uint32_t kInitialChannelCenterHz = 433'501'466;
 constexpr std::uint32_t kRoutineChannelCenterHz = 434'306'378;
 constexpr std::uint8_t kInitialDeviationRegister = 0x45;
@@ -158,24 +166,17 @@ inline bool buildReply(
             (static_cast<std::uint16_t>(localClock.month) << 5) |
             localClock.day
         );
-        const auto preserveMarker = [](std::uint8_t value,
-                                       std::uint8_t templateValue) {
-            return static_cast<std::uint8_t>(
-                (value & 0x7fU) | (templateValue & 0x80U)
-            );
-        };
-        frame[21] = preserveMarker(
-            static_cast<std::uint8_t>(packedTime), frame[21]
+        // The accepted counter-0 branch forces only bit 7 of the time-low
+        // byte. The remaining three bytes are ordinary FAT/DOS clock data.
+        // Treating every bit 7 as a template marker wrapped 16:xx--23:xx to
+        // 00:xx--07:xx and produced a semantically invalid assignment even
+        // after the RF waveform matched stock.
+        frame[21] = static_cast<std::uint8_t>(
+            (packedTime & 0x7fU) | (frame[21] & 0x80U)
         );
-        frame[22] = preserveMarker(
-            static_cast<std::uint8_t>(packedTime >> 8), frame[22]
-        );
-        frame[23] = preserveMarker(
-            static_cast<std::uint8_t>(packedDate), frame[23]
-        );
-        frame[24] = preserveMarker(
-            static_cast<std::uint8_t>(packedDate >> 8), frame[24]
-        );
+        frame[22] = static_cast<std::uint8_t>(packedTime >> 8);
+        frame[23] = static_cast<std::uint8_t>(packedDate);
+        frame[24] = static_cast<std::uint8_t>(packedDate >> 8);
     }
     writeTrailer(frame, profile.steps[stepIndex].trailerResidual);
     return true;

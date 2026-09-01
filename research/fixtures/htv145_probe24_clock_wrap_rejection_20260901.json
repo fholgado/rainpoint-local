@@ -1,0 +1,83 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Physically test the balanced-wake PHY correction and retain the first post-16:00 counter-0 assignment.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-175604/continuous_433.7M_2000k.cu8",
+    "sha256": "ffdc953c28f178510244a3df1e6b3375e0b5df629d3b63e4207bec645f8920e3",
+    "bytes": 351272960,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 87.81824
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.3-htv145-pairing-probe.24",
+    "requested_power_dbm": 0,
+    "unchanged_rf_from_probe_23": true
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "start_seconds": 44.8858995,
+    "end_seconds": 44.917243,
+    "balanced_wake_center_hz": 433141703,
+    "balanced_wake_deviation_hz": 38543,
+    "symbol_rate_sps": 19999.122,
+    "wake_transitions": 319
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c0858500867000980f210d01008000000000000000005d02",
+    "start_seconds": 44.970041,
+    "request_end_to_reply_start_ms": 52.798,
+    "balanced_wake_center_hz": 433577399,
+    "balanced_wake_deviation_hz": 41084,
+    "closest_cc1101_deviation_register": "0x45",
+    "symbol_rate_sps": 19999.41,
+    "wake_transitions": 319,
+    "adc_rail_fraction": 0.0,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "destination": "b9840280",
+    "clock_bytes": "980f210d",
+    "requested_local_time": "2026-09-01T17:56:48-04:00",
+    "encoded_time_after_marker_mask": "2026-09-01T01:56:48-04:00"
+  },
+  "stock_reference": {
+    "fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
+    "factory_request_center_hz": 433146216,
+    "balanced_wake_assignment_center_hz": 433581558,
+    "balanced_wake_assignment_deviation_hz": 40255,
+    "closest_cc1101_deviation_register": "0x45",
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "normalized_phy_comparison": {
+    "stock_reply_minus_request_hz": 435342,
+    "local_reply_minus_request_hz": 435696,
+    "local_minus_stock_hz": 354
+  },
+  "packet_comparison": {
+    "stock_counter_0_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
+    "different_byte_indexes": [
+      21,
+      22,
+      36,
+      37
+    ],
+    "interpretation": "Only the live packed-clock bytes and their checksum differ from stock; every static byte matches."
+  },
+  "interpretation": [
+    "Probe .24 successfully applied the intended carrier and deviation correction. Residual PHY differences are much smaller than accepted control comparisons and do not justify another RF tweak.",
+    "The HTV145 counter-0 clock builder preserved template bit 7 in every packed byte. At 17:56 this cleared the real high-hour bit and transmitted 01:56.",
+    "The retained stock counter-0 assignment proves only time-low bit 7 is the branch marker. Probe .25 must preserve that marker while retaining the remaining packed time/date bits.",
+    "Probe .25 changes only this disproven clock rule. The RF waveform and all static protocol fields remain frozen."
+  ]
+}

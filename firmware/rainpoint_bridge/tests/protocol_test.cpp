@@ -1069,6 +1069,13 @@ int main() {
     assert(htv145PairingProbe.steps.size() ==
         rainpoint::htv145::kPairingStepCount);
     assert(rainpoint::htv145::kPairingFrequencyOffsetHz == 122'759);
+    assert(
+        rainpoint::htv145::kMaximumPairingFrequencyOffsetHz == 150'000
+    );
+    assert(
+        rainpoint::htv145::kPairingFrequencyOffsetHz <=
+        rainpoint::htv145::kMaximumPairingFrequencyOffsetHz
+    );
     assert(rainpoint::htv145::kInitialDeviationRegister == 0x45);
     assert(
         rainpoint::htv145::kInitialChannelCenterHz ==
@@ -1099,6 +1106,15 @@ int main() {
     ));
     assert(htv145Reply == fromHex(
         "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6"
+    ));
+    const rainpoint::PairingLocalDateTime htv145EveningClock{
+        2026, 9, 1, 17, 56, 48,
+    };
+    assert(rainpoint::htv145::buildReply(
+        htv145PairingProbe, 0, htv145EveningClock, htv145Reply
+    ));
+    assert(htv145Reply == fromHex(
+        "79f4882f28b42d008fb984028080c0858500867000988f210d01008000000000000000000a7c"
     ));
     assert(rainpoint::htv145::buildConfigurationReply(
         htv145PairingProbe, htv145Reply

@@ -664,3 +664,43 @@ The four-zone control comparison is preserved in
 Reference evidence:
 `fixtures/htv145_probe22_reduced_power_rejection_20260901.json` and
 `fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`.
+
+### HTV145 matched-PHY clock-wrap rejection — 2026-09-01
+
+- Probe `.24` accepted factory counter `0`, sent one selector-6 assignment,
+  and stopped at the expected `stage_0_rejected` boundary when the valve
+  continued its factory sweep.
+- Balanced-wake measurement closed the intended PHY test: relative to the
+  valve request oscillator, local assignment was only `+354 Hz` from accepted
+  stock, both mapped to CC1101 deviation `0x45`, all 319 wake transitions were
+  recovered, and the unclipped reply started `0.648 ms` later than stock.
+- The decoded assignment matched every static stock byte. Its clock bytes were
+  `98 0f 21 0d`: the requested `17:56:48` had become `01:56:48` because the
+  builder cleared bit 7 of the packed time-high byte as a presumed marker.
+- Earlier local evidence corroborates the boundary: pre-16:00 probes encoded
+  the correct hour, while the reduced-power `.22` attempt at 16:25 encoded
+  `00:25`. This failure therefore tracks a deterministic clock-wrap bug, not
+  operator timing or another unexplained RF difference.
+- Probe `.25` preserves only the captured marker in bit 7 of time-low and
+  retains all data bits in time-high and both date bytes. No RF or static-frame
+  field changes.
+
+Reference evidence:
+`fixtures/htv145_probe24_clock_wrap_rejection_20260901.json`.
+
+### HTV145 corrected evening clock rejection — 2026-09-01
+
+- Probe `.25` transmitted the same bounded counter-0 selector-6 assignment
+  with a correctly encoded `19:13:08` local clock (`a4 99 21 0d`). The node
+  reached `1/6`; the valve continued its factory sweep and the node recorded
+  `stage_0_rejected`.
+- The assignment retained 319 wake transitions, deviation profile `0x45`, no
+  ADC clipping, and a `52.4025 ms` request-end-to-reply-start interval. Every
+  static packet byte still matches accepted stock; only the live clock and
+  its checksum differ.
+- The clock-wrap hypothesis is closed. Freeze `.25` and capture a fresh,
+  accepted stock assignment for exact replay rather than introducing another
+  inferred field or small RF adjustment.
+
+Reference evidence:
+`fixtures/htv145_probe25_clock_correct_rejection_20260901.json`.

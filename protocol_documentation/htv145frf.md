@@ -108,9 +108,14 @@ local stage-zero traffic defines the initial reply PHY as follows:
 | Node frequency correction | +122.759 kHz on the validated OTA test node |
 | Reply scheduling offset | 52.150 ms from the request timestamp supplied by the radio path |
 
+The counter-0 assignment uses the FAT/DOS packed time/date layout. Only bit 7
+of the time-low byte is forced by the captured branch template. The time-high
+byte must retain bit 7 because it carries the `16` hour bit; clearing it wraps
+16:00--23:59 to 00:00--07:59. Date bytes are ordinary packed data.
+
 The frequency correction is node-calibration evidence, not a universal device
 constant. It results from normalizing the stock and local assignment centers
-against the valve request oscillator in each capture. Probe `.23` applies this
+against the valve request oscillator in each capture. Probe `.25` applies this
 PHY while preserving every decoded frame and state-machine decision from
 `.22`; physical acceptance is still pending.
 

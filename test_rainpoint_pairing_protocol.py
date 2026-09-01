@@ -971,6 +971,17 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
             "010080000000000000000041c6",
             assignment.hex(),
         )
+        evening_assignment = frame_for_step(
+            profile,
+            0,
+            local_clock=datetime(2026, 9, 1, 17, 56, 48),
+        )
+        self.assertEqual(bytes.fromhex("988f210d"), evening_assignment[21:25])
+        self.assertEqual(
+            "79f4882f28b42d008fb984028080c0858500867000988f210d"
+            "01008000000000000000000a7c",
+            evening_assignment.hex(),
+        )
         self.assertEqual(
             "79f4882f28b42d008fb9840280811001010000000000000000"
             "00000000000000000000000655",

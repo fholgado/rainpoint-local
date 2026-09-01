@@ -2767,6 +2767,8 @@ void handleNetworkCommand() {
     const String clock = jsonStringField(command, "local_clock");
     long durationSeconds = 0;
     long frequencyOffsetHz = 0;
+    long maximumPairingFrequencyOffsetHz =
+        rainpoint::kMaxPairingFrequencyOffsetHz;
     long powerDbm = 0;
     bool invert = false;
     rainpoint::PairingLocalDateTime parsedClock{};
@@ -2808,6 +2810,10 @@ void handleNetworkCommand() {
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
     const bool requestedHtv145Profile =
         profile == rainpoint::htv145::kProfileId;
+    if (requestedHtv145Profile) {
+        maximumPairingFrequencyOffsetHz =
+            rainpoint::htv145::kMaximumPairingFrequencyOffsetHz;
+    }
 #else
     const bool requestedHtv145Profile = false;
 #endif
@@ -2870,8 +2876,8 @@ void handleNetworkCommand() {
         return;
     }
     if (!jsonLongField(command, "frequency_offset_hz", frequencyOffsetHz) ||
-        frequencyOffsetHz < -rainpoint::kMaxPairingFrequencyOffsetHz ||
-        frequencyOffsetHz > rainpoint::kMaxPairingFrequencyOffsetHz) {
+        frequencyOffsetHz < -maximumPairingFrequencyOffsetHz ||
+        frequencyOffsetHz > maximumPairingFrequencyOffsetHz) {
         reportNetworkCommandError(commandId, "pairing_offset_out_of_range");
         return;
     }

@@ -1,0 +1,83 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Physically test the corrected post-16:00 counter-0 assignment clock while preserving the probe-.24 RF waveform.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-191221/continuous_433.7M_2000k.cu8",
+    "sha256": "0955b3f315c9a830213b4167ccdec305ba878b2709715e07e7b248b32a9b5995",
+    "bytes": 369098752,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 92.274688
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.3-htv145-pairing-probe.25",
+    "requested_power_dbm": 0,
+    "rf_profile_unchanged_from_probe_24": true
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "start_seconds": 47.1687235,
+    "end_seconds": 47.2000625,
+    "balanced_wake_center_hz": 433146080,
+    "balanced_wake_deviation_hz": 39461,
+    "symbol_rate_sps": 19998.928,
+    "wake_transitions": 319
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c0858500867000a499210d0100800000000000000000a885",
+    "start_seconds": 47.252465,
+    "request_end_to_reply_start_ms": 52.4025,
+    "balanced_wake_center_hz": 433577266,
+    "balanced_wake_deviation_hz": 41441,
+    "closest_cc1101_deviation_register": "0x45",
+    "symbol_rate_sps": 20001.901,
+    "wake_transitions": 319,
+    "adc_rail_fraction": 0.0,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "destination": "b9840280",
+    "clock_bytes": "a499210d",
+    "decoded_local_time": "2026-09-01T19:13:08-04:00"
+  },
+  "stock_reference": {
+    "fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
+    "factory_request_center_hz": 433146216,
+    "balanced_wake_assignment_center_hz": 433581558,
+    "balanced_wake_assignment_deviation_hz": 40255,
+    "closest_cc1101_deviation_register": "0x45",
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "normalized_phy_comparison": {
+    "stock_reply_minus_request_hz": 435342,
+    "local_reply_minus_request_hz": 431186,
+    "local_minus_stock_hz": -4156,
+    "note": "The valve request oscillator moved about 4.4 kHz between local trials while the independent node reply center moved only 133 Hz; this residual is inside the same evidenced channel/deviation profile and does not justify another calibration change."
+  },
+  "packet_comparison": {
+    "stock_counter_0_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
+    "different_byte_indexes": [
+      21,
+      22,
+      36,
+      37
+    ],
+    "interpretation": "Only the correct live packed-clock bytes and their checksum differ from stock; every static byte matches."
+  },
+  "interpretation": [
+    "Probe .25 corrected the deterministic evening-hour wrap. Its assignment carries the valid 19:13:08 local clock.",
+    "The valve still emitted no addressed stage-1 request and continued its factory sweep, so the clock-wrap hypothesis is closed.",
+    "The .25 RF profile, static assignment bytes, and one-shot state remain frozen.",
+    "The next discriminator is exact replay of a freshly accepted stock assignment from a controlled stock-gateway enrollment."
+  ]
+}

@@ -148,7 +148,7 @@ The independently gated HTV145 pairing candidate is built with:
 ```sh
   RAINPOINT_RESEARCH_BENCH=1 \
   RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.23 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.3-htv145-pairing-probe.25 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -160,7 +160,16 @@ stage-1 request before continuing the six-stage exchange. A later factory
 announcement is a terminal stage-0 rejection; it can never trigger a second
 assignment. Arm before the physical gesture so normal setup starts with counter
 0; no operator timing against the LED sequence is required.
-Probe `.23` preserves the counter-0 transcript and scheduler from `.22`, while
+Probe `.25` preserves the `.24` RF waveform and one-shot state machine. It
+corrects the counter-0 packed clock after direct `.24` evidence showed that
+the former marker preservation cleared the FAT/DOS high-hour bit after 4 PM.
+Only bit 7 of the time-low byte is the captured counter-0 branch marker; the
+time-high and date bytes retain their encoded data bits.
+Probe `.24` preserved the `.23` counter-0 transcript, scheduler, calibrated
+carrier, and deviation unchanged. It only applies a dedicated research-profile
+calibration guard so the evidenced `122.759 kHz` correction can pass the node's
+command validation; the generic sensor and HTV405 bound remains unchanged.
+Probe `.23` preserved the counter-0 transcript and scheduler from `.22`, while
 correcting the initial assignment to the stock gateway's balanced-wake
 `0x45` deviation profile and its carrier position relative to the valve's own
 factory request oscillator.
