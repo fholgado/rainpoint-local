@@ -918,14 +918,26 @@ void reportRfMaintenanceStatus(const char* detail) {
 }
 
 bool rfCommandMayTransmit(const String& type) {
-    return type == "pairing_start" ||
+    if (type == "pairing_start" ||
         type == "routine_ack_configure" ||
         type == "htv405_routine_ack_configure" ||
-        type == "valve_control_open" ||
-        type == "valve_control_close" ||
+        type == "firmware_update_start") {
+        return true;
+    }
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
+    if (type == "valve_control_open" || type == "valve_control_close") {
+        return true;
+    }
+#endif
+#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+    if (
         type == "htv145_control_open" ||
-        type == "htv145_control_close" ||
-        type == "firmware_update_start";
+        type == "htv145_control_close"
+    ) {
+        return true;
+    }
+#endif
+    return false;
 }
 
 void enterRfReceiveOnly(
