@@ -302,6 +302,24 @@ observation before it changes transmitted firmware.
     addressed stage-1 request. Unit, firmware-protocol, and PlatformIO builds
     pass; this gate remains open until the physical stage-0 boundary and raw-IQ
     verdict are reproduced twice without changing the frozen prefix.
+  - 2026-09-01 first physical `.19` result: the armed node locked one counter-0
+    assignment, reached `1/6`, then failed `stage_0_rejected` when counter `2`
+    arrived without an addressed stage-1 request. A later ordinary long press
+    happened after that terminal failure and therefore had no armed local
+    transmitter; it is not a second protocol result. Preserve the frozen `.19`
+    prefix and use `tools/run_htv145_stage0_hitl.sh` with bounded continuous IQ
+    before changing any RF field. The redacted diagnostic fixture is
+    `research/fixtures/htv145_probe19_stage0_rejection_20260901.json`.
+  - 2026-09-01 continuous-IQ `.19` result: the red-capable harness reproduced
+    `stage_0_rejected` and captured the assignment on air. Stock and local
+    valve factory carriers differed by only `31 Hz`, but the local assignment
+    was `+9.979 kHz` above the directly measured stock assignment
+    (`433.556628` versus `433.546649 MHz`). Both used `35.004 kHz` deviation;
+    the local reply was also approximately `0.85 ms` late. Probe `.20` changes
+    only the HTV145 selector-6 initial carrier by `-9.979 kHz`; payload, wake,
+    deviation, and timing remain frozen until the carrier hypothesis receives
+    a physical verdict. This also corrects an analyzer mistake where its
+    configured decision center had been recorded as a measured carrier.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,

@@ -1068,6 +1068,18 @@ int main() {
     assert(htv145PairingProbe.stepCount ==
         rainpoint::kHtv145PairingStepCount);
     assert(rainpoint::kHtv145PairingTxFrequencyCorrectionHz == 0);
+    assert(
+        rainpoint::kHtv145Selector6InitialChannelCenterHz ==
+        433'501'466
+    );
+    assert(
+        htv145PairingProbe.steps[0].channelCenterHz ==
+        rainpoint::kHtv145Selector6InitialChannelCenterHz
+    );
+    assert(
+        htv145PairingProbe.steps[0].channelCenterHz !=
+        htv405Profile.steps[0].channelCenterHz
+    );
     assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(0) == 52'150);
     assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(1) == 70'700);
     assert(rainpoint::htv145Selector6PairingReplyStartDelayUs(3) == 35'750);
