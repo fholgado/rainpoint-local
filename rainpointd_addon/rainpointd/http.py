@@ -342,6 +342,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                             else None
                         ),
                         known_rejoin=body.get("known_rejoin") is True,
+                        power_dbm=(
+                            int(body["power_dbm"])
+                            if body.get("power_dbm") is not None
+                            else None
+                        ),
                     )
                     self._json(201, result)
                     return

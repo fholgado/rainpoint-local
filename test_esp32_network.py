@@ -1309,6 +1309,7 @@ class ESP32NetworkTest(unittest.TestCase):
             factory_endpoint="342d008f",
             valve_route="b9840280",
             companion_endpoint="39840280",
+            power_dbm=0,
         )
         self.assertEqual(
             "htv145_auto_candidate_v1", started["active_profile_id"]
@@ -1319,9 +1320,24 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("b9840280", command["valve_route"])
         self.assertEqual("39840280", command["companion_endpoint"])
         self.assertEqual(87_389, command["frequency_offset_hz"])
+        self.assertEqual(0, command["power_dbm"])
         self.assertNotIn("known_rejoin", command)
         stream.close()
         connection.close()
+
+    def test_pairing_power_override_is_research_only_and_bounded(self) -> None:
+        with self.assertRaisesRegex(ValueError, "only valid for HTV145"):
+            self.gateway.start_pairing(
+                120,
+                profile_id="hcs026_auto_v1",
+                power_dbm=0,
+            )
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            self.gateway.start_pairing(
+                120,
+                profile_id="htv145_auto_candidate_v1",
+                power_dbm=1,
+            )
 
     def test_old_node_firmware_rejects_generated_identity_pairing(self) -> None:
         connection, stream, _response = self._connect(

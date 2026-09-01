@@ -4004,11 +4004,19 @@ class Gateway:
         valve_route: str | None = None,
         companion_endpoint: str | None = None,
         known_rejoin: bool = False,
+        power_dbm: int | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Open enrollment and optionally arm one authenticated radio node."""
         if not 10 <= duration_seconds <= 900:
             raise ValueError("duration_seconds must be between 10 and 900")
+        if power_dbm is not None:
+            if profile_id != AUTOMATIC_HTV145_PROFILE_ID:
+                raise ValueError(
+                    "pairing power override is only valid for HTV145 research"
+                )
+            if power_dbm not in {-30, -20, -15, -10, -6, 0, 5, 7, 10}:
+                raise ValueError("pairing power is unsupported")
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
@@ -4143,7 +4151,7 @@ class Gateway:
                         if valve_candidate
                         else 45_000
                     ),
-                    "power_dbm": 10,
+                    "power_dbm": 10 if power_dbm is None else power_dbm,
                     "invert": False,
                 }
                 if not automatic and not automatic_valve:

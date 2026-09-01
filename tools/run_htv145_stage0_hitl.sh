@@ -10,9 +10,10 @@ controller_endpoint=""
 companion_endpoint=""
 arm_seconds=600
 capture_tail_seconds=15
+power_dbm=10
 
 usage() {
-  echo "Usage: $0 --node-id ID --factory-endpoint HEX --controller-endpoint HEX --companion-endpoint HEX [--ssh-host HOST]"
+  echo "Usage: $0 --node-id ID --factory-endpoint HEX --controller-endpoint HEX --companion-endpoint HEX [--power-dbm DBM] [--ssh-host HOST]"
 }
 
 while (($#)); do
@@ -22,6 +23,7 @@ while (($#)); do
     --factory-endpoint) factory_endpoint="${2:?--factory-endpoint requires a value}"; shift 2 ;;
     --controller-endpoint) controller_endpoint="${2:?--controller-endpoint requires a value}"; shift 2 ;;
     --companion-endpoint) companion_endpoint="${2:?--companion-endpoint requires a value}"; shift 2 ;;
+    --power-dbm) power_dbm="${2:?--power-dbm requires a value}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -31,7 +33,8 @@ if [[ ! "${ssh_host}" =~ ^[A-Za-z0-9._-]+$ ]] ||
    [[ ! "${node_id}" =~ ^rp-[0-9a-f]{12}$ ]] ||
    [[ ! "${factory_endpoint}" =~ ^[0-9a-f]{8}$ ]] ||
    [[ ! "${controller_endpoint}" =~ ^[0-9a-f]{8}$ ]] ||
-   [[ ! "${companion_endpoint}" =~ ^[0-9a-f]{8}$ ]]; then
+   [[ ! "${companion_endpoint}" =~ ^[0-9a-f]{8}$ ]] ||
+   [[ ! " ${power_dbm} " =~ ^\ (-30|-20|-15|-10|-6|0|5|7|10)\ $ ]]; then
   usage >&2
   exit 2
 fi
@@ -55,13 +58,15 @@ ssh "${ssh_host}" bash -s -- \
   "${factory_endpoint}" \
   "${controller_endpoint}" \
   "${companion_endpoint}" \
-  "${arm_seconds}" <<'REMOTE'
+  "${arm_seconds}" \
+  "${power_dbm}" <<'REMOTE'
 set -euo pipefail
 node_id="$1"
 factory_endpoint="$2"
 controller_endpoint="$3"
 companion_endpoint="$4"
 arm_seconds="$5"
+power_dbm="$6"
 token="$(jq -r '.data.entries[] | select(.domain == "rainpoint_local") | .data.registry_write_token' /homeassistant/.storage/core.config_entries)"
 api="http://172.30.33.3:8787/api/v1"
 curl --max-time 10 -fsS -X POST \
@@ -75,7 +80,8 @@ payload="$(jq -nc \
   --arg controller_endpoint "${controller_endpoint}" \
   --arg companion_endpoint "${companion_endpoint}" \
   --argjson duration_seconds "${arm_seconds}" \
-  '{duration_seconds:$duration_seconds,node_id:$node_id,profile_id:"htv145_auto_candidate_v1",factory_endpoint:$factory_endpoint,valve_route:$controller_endpoint,companion_endpoint:$companion_endpoint}')"
+  --argjson power_dbm "${power_dbm}" \
+  '{duration_seconds:$duration_seconds,node_id:$node_id,profile_id:"htv145_auto_candidate_v1",factory_endpoint:$factory_endpoint,valve_route:$controller_endpoint,companion_endpoint:$companion_endpoint,power_dbm:$power_dbm}')"
 curl --max-time 10 -fsS -X POST \
   -H "Authorization: Bearer ${token}" \
   -H 'Content-Type: application/json' \

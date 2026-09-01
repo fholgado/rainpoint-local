@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.33.26 / Integration 0.13.3 / Firmware 0.15.3
+
+- Added a bounded, HTV145-only pairing-power override for controlled physical
+  research. Normal Home Assistant pairing remains fixed at the existing power.
+
 ## 0.33.25 / Integration 0.13.3 / Firmware 0.15.3
 
 - Preserve the rejected HTV145 probe `.21` as a checksummed stage-zero fixture.
