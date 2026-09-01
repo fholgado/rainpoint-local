@@ -1,8 +1,9 @@
 # RF capture evidence
 
-This is a concise research record for the conclusions promoted into
-[`../PROTOCOL.md`](../PROTOCOL.md). It intentionally keeps chronology and
-correlation details out of the primary protocol reference.
+This is the chronological research record for conclusions promoted into the
+current definitions under
+[`../protocol_documentation/`](../protocol_documentation/). It intentionally
+keeps chronology and correlation details out of those normative references.
 
 Raw IQ captures are retained locally and are not committed because they can be
 large and may include unrelated nearby traffic.
@@ -80,9 +81,10 @@ The stock app exercised every zone at both 60 and 120 seconds. The retained
 trial contains all eight openings, manual or automatic stops for all four
 zones, and the later closed-state reports. All four ports shared the single
 paired endpoint. The crossed values established the selector and duration
-formulas promoted into `PROTOCOL.md`; notably, byte 14 correlated with zone in
-the opening subset but changed on stop frames and is not part of the stable
-zone formula.
+formulas now defined in
+[`../protocol_documentation/htv405frf.md`](../protocol_documentation/htv405frf.md).
+Notably, byte 14 correlated with zone in the opening subset but changed on stop
+frames and is not part of the stable zone formula.
 
 The first 60-second trials were allowed to time out. Later openings were closed
 after capture. Automatic and manual paths used the same stop-body signature,
@@ -372,7 +374,8 @@ mapped to the controller counter by a fixed offset. The controller counter is
 advanced only by a matching command response. It also proves that operation
 byte `0x90` means open and `0x10` means close; it is not a primary/repeat bit.
 The exact generalized frames and carrier findings are promoted into
-`../PROTOCOL.md` and frozen in firmware protocol tests.
+[`../protocol_documentation/htv405frf.md`](../protocol_documentation/htv405frf.md)
+and frozen in firmware protocol tests.
 
 ### Retained crossed-zone re-audit — 2026-08-23
 
@@ -398,3 +401,122 @@ transmit-enabled command body until a future focused high-carrier capture.
   unrelated irrigation devices so their traffic is not mislabeled.
 - Treat receiver placement and antenna geometry as part of the system; a valid
   packet can be missed even when the protocol decoder is correct.
+
+## Promoted protocol chronology — 2026-08-10 through 2026-09-01
+
+The monolithic protocol reference originally mixed these dated experiments
+with the current wire definition. They are retained here after the normative
+material was split into `protocol_documentation/`. Exact bytes remain in the
+linked fixtures and executable protocol tests.
+
+### HCS02x enrollment, battery, recovery, and ACKs — 2026-08-10 to 2026-08-15
+
+- Two HCS026 test sensors established that a factory endpoint with suffix `24`
+  becomes paired by setting the first-byte high bit. The paired moisture value
+  matched both the sensor LCD and RainPoint app.
+- Repeated stock and local enrollment captures reduced the accepted sensor
+  exchange to three gateway replies followed by a terminal sensor frame. The
+  stock RainPoint gateway had to be powered off to prevent competing replies.
+- A bridged-cell low-voltage experiment changed both the LCD indicator and RF
+  categorical battery bit; restoring normal batteries cleared both. This is
+  the evidence behind the `100%` normal / `10%` low presentation rather than a
+  continuous voltage percentage.
+- Power-cycle and dormant-sensor trials showed that a known sensor can repeat a
+  strict factory announcement or paired recovery sequence without becoming a
+  new logical device. Recovery now preserves its endpoint and ACK owner.
+- Long-running comparison with the stock gateway revealed the missing liveness
+  requirement: routine moisture reports need a device-specific ACK roughly
+  177--188 ms after sync. Once the custom nodes reproduced that ACK, the test
+  sensors continued periodic reporting instead of going dormant.
+
+Reference evidence:
+`fixtures/hcs026_gateway_pairing_replies.json`,
+`fixtures/hcs026_pairing_battery.json`, and the pairing/ACK regression tests.
+
+### Cross-layer metadata and valve-field correlation — 2026-08-24
+
+The RainPoint app and cloud integration were used only as correlation oracles
+while the SDR retained the actual RF frames:
+
+- App Device Address was falsified as a generic RF selector. Observed examples
+  include HCS026 address `2` on selector `4`, HTV405 address `6` on its stock
+  selector-6 profile, and HTV145 address `1` on selector `6`.
+- HCS product code `0x48` was correlated with the shared HCS021/HCS024/HCS026
+  capability family. Routine moisture frames still cannot identify the exact
+  retail model.
+- The HTV145 low-battery valve established its categorical battery bit and the
+  three-byte water-usage formula. Terminal summaries established the final
+  usage and duration offsets but contained no battery field.
+- A cloud-driven HTV405 matrix covered all four zones and timed/early-stop
+  operation. It confirmed mutually exclusive zones, automatic stop, and the
+  distinction between command counters and periodic telemetry counters.
+- Stock HTV405 routine reports and replies established the valve ACK envelope
+  later adopted by the custom node owner.
+
+Reference evidence:
+`fixtures/app_device_metadata_rf_correlation_20260824.json`,
+`fixtures/hcs026_cloud_rf_correlation_20260824.json`,
+`fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`,
+`fixtures/htv145_cloud_rf_terminal_summary_correlation_20260824.json`,
+`fixtures/htv405_stock_cloud_control_matrix_20260824.json`, and
+`fixtures/htv405_stock_routine_ack_20260824.json`.
+
+### Generated custom-gateway identity and valve enrollment — 2026-08-25 to 2026-08-26
+
+- HTV405 was enrolled with a generated custom controller/companion identity
+  while retaining its physical valve endpoint. This proved that copying the
+  stock gateway identity is unnecessary and provided the migration/coexistence
+  identity model.
+- The accepted generated enrollment ended on a strict paired-link frame even
+  when the custom exchange did not observe the stock transcript's final `9a`
+  tail. The command sequence was initialized independently at `1`.
+- Same-identity repair and retained-takeover experiments showed that enrollment
+  sequence bytes do not reveal the next command counter. Control still depends
+  on durable authenticated command responses.
+- Stock HTV145 enrollment was captured as a distinct six-stage exchange plus a
+  delayed long-wake configuration transmission. Reusing HTV405's 18-stage
+  state machine was decisively rejected.
+
+Reference evidence:
+`fixtures/htv405_generated_identity_pairing_20260825.json`,
+`fixtures/htv405_same_identity_repair_counter_20260826.json`,
+`fixtures/htv405_retained_takeover_20260824.json`, and
+`fixtures/htv145_factory_enrollment_20260825.json`.
+
+### HTV145 branch and timing refinement — 2026-08-28 to 2026-09-01
+
+- A second accepted stock HTV145 enrollment exposed a selector-6 branch with a
+  different counter, carrier, delayed-config marker, and residue progression.
+  It proved that branch fields form a coherent profile and cannot be varied
+  independently.
+- Stock control captures established three byte-identical attempts per logical
+  command and confirmed the branch-specific open/close marker inversion.
+- Prelude, retained-identity, carrier-correction, and scheduler probes each
+  improved one measured dimension but were rejected before a complete local
+  association. The final probe-17 assignment was structurally and temporally
+  plausible on both captured branches but still did not elicit stage 1.
+- These negative results are preserved to prevent future work from repeating
+  small timing tweaks without a new discriminating hypothesis.
+
+Reference evidence:
+`fixtures/htv145_later_sweep_stock_enrollment_20260828.json`,
+`fixtures/htv145_selector6_stock_duration_commands_20260828.json`,
+`fixtures/htv145_prelude_calibration_matrix_20260830.json`, and
+`fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
+
+### HTV405 duration and command-counter continuity — 2026-08-31 to 2026-09-01
+
+- Transmitted commands around the low-byte boundary proved that HTV405 duration
+  adds a two-byte `0x80` bias. The earlier bitwise-OR interpretation produced
+  incorrect long watering times and was removed.
+- A generated-identity session then established the response-driven sequence:
+  fresh pairing started at `1`; accepted opens advanced the next value; closes
+  retained it; gateway and node restarts preserved it; and a later open
+  continued from the persisted value.
+- Neither periodic telemetry nor a speculative close supplied the command
+  counter. Missing responses now remain failures rather than optimistic state
+  updates.
+
+Reference evidence:
+`fixtures/htv405_beta10_candidate9_on_air_20260831.json` and
+`fixtures/htv405_generated_identity_counter_continuity_20260901.json`.

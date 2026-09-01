@@ -4,9 +4,11 @@ This is an evidence ledger, not a project checklist. Active order and
 completion status live only in `../PROJECT_ROADMAP.md`.
 
 This is the concise evidence ledger for the two tested RainPoint valve
-families. `PROTOCOL.md` remains the detailed wire reference; this document
-separates confirmed behavior from the physical gates that keep supervised
-HTV405 control in disabled-by-default beta and still block HTV145 control.
+families. The current wire definitions are
+[`../protocol_documentation/htv405frf.md`](../protocol_documentation/htv405frf.md)
+and
+[`../protocol_documentation/htv145frf.md`](../protocol_documentation/htv145frf.md);
+this document preserves the physical evidence behind their support status.
 
 ## Terminology
 

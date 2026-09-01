@@ -1,0 +1,181 @@
+# HTV145FRF single-zone valve protocol
+
+The `HTV145FRF` is a single-zone valve with a pairing and command protocol
+distinct from the HTV405. Receive-side telemetry, duration, water usage, and
+categorical battery state are decoded. Local enrollment and control remain
+research-only because structurally valid local exchanges have not yet been
+accepted reliably by the physical valve.
+
+## Identity
+
+| Property | Definition |
+|---|---|
+| Factory endpoint suffix | `8f` |
+| Factory-derived paired route | Factory endpoint with `0x80` set in its first byte |
+| Logical zones | One |
+| App model | `HTV145FRF` |
+
+The factory-derived route becomes the controller side of accepted stock
+commands. The association also contains a valve route and companion endpoint;
+the companion is commonly the valve route with its first-byte high bit
+cleared. Endpoint A and endpoint B change roles between enrollment, commands,
+and responses and must not be interpreted as fixed source and destination
+fields.
+
+## Stock new-enrollment transcript
+
+The accepted stock association is a six-stage exchange with one delayed
+configuration transmission between stages 1 and 2:
+
+| Stage | Valve request body prefix | Stock gateway behavior |
+|---:|---|---|
+| 0 | `80 80 84 02 ff 8f 97` | Assignment to companion, selector 5, about 50.55 ms |
+| 1 | `81 01 07 82 25` | Reply `81 41 01`, about 50.40 ms |
+| 1a | no request | Long-wake config `81 90 01 01` to valve route, about 2.915 s after stage 1 |
+| 2 | `81 d0 00 80` | Observe only |
+| 3 | `81 82 81 02` | Reply `81 c2 87 80 2c 01 05`, about 50.70 ms |
+| 4 | `82 03 01 82` | Reply `82 43 00 80`, about 53.35 ms |
+| 5 | `82 ac 80 99` | Reply `82 ec 81 80 19`, about 45.05 ms |
+
+Stage 1a uses the 2,400-symbol wake-up form; the remaining replies use the
+320-symbol form. The stage-2 response moves to the routine carrier near
+433.472 MHz. Exact captured endpoints, clocks, trailers, and complete bodies
+are retained in the HTV145 pairing fixtures and the table-driven candidate in
+`valve_pairing_protocol.py`.
+
+A second accepted stock association used counter `3`, selector `6`, and a
+routine carrier near 434.461993 MHz. Its request counters progressed
+`3, 4, 4, 5, 5`; its delayed configuration used `81 10` to `81 50` and arrived
+about 3.630 seconds after stage 1. The first four replies used residue `0xc713`
+and the last used `0x4f03`.
+
+These are complete association profiles, not interchangeable parameter
+choices. The app Device Address does not identify the selector: an app address
+of `1` has been observed with selector `6`.
+
+## Local enrollment status
+
+The current local candidate reproduces both captured stock association
+profiles, but no complete local transcript has been physically accepted.
+
+Therefore:
+
+- no HTV145 local enrollment profile is advertised as supported;
+- a white LED or plausible outbound frame alone is not accepted as completion;
+- HTV405's 18-stage enrollment must not be reused for this model;
+- stock captures are the reference until a complete local transcript is
+  physically reproduced.
+
+## Routine telemetry and state
+
+The status marker is normalized offset `20`:
+
+```text
+frame[20] low 7 bits == 0x4f
+frame[20] == 0xcf -> watering
+frame[20] == 0x4f -> idle
+```
+
+The terminal session summary has normalized bytes `14..18`:
+
+```text
+82 07 85 80 80
+```
+
+It is idle, includes final usage and duration, and does not include a battery
+state.
+
+## Duration
+
+HTV145 duration is a two-byte little-endian count in two-second units, with
+bit `0x80` set in the low byte:
+
+```text
+seconds = (little_endian_u16(encoded) & ~0x0080) * 2
+encoded = little_endian_u16(seconds / 2) with low-byte bit 0x80 set
+```
+
+Validated whole-minute examples include:
+
+| Encoded | Duration |
+|---|---:|
+| `9e 00` | 60 seconds |
+| `f8 00` | 240 seconds |
+| `96 00` | 300 seconds |
+| `c2 01` | 900 seconds |
+| `fe 01` | 1,020 seconds |
+
+This encoding is not the HTV405's additive `0x80` bias and the two must not be
+shared in a generic duration builder.
+
+## Water usage
+
+Usage is encoded in three consecutive bytes. For bytes `first`, `second`, and
+`third`:
+
+```text
+half_tenths = ((second & 0x7f) << 8) | (first & 0x7f) | (third & 0x80)
+tenths_liter = half_tenths * 2 + bool(second & 0x80)
+liters = tenths_liter / 10
+```
+
+Routine status reports store the triplet immediately after the status region;
+terminal summaries use normalized offsets `24..26`. Terminal duration is at
+offsets `28..29`.
+
+## Battery state
+
+Routine usage/status reports carry a categorical battery bit at normalized
+offset `17`:
+
+```text
+bit 0x08 clear  normal/full category -> expose 100%
+bit 0x08 set    low category         -> expose 10%
+```
+
+The terminal session summary does not carry this bit, so it must not overwrite
+the last valid battery category.
+
+## Stock control request
+
+The command body starts with a five-bit command sequence, followed by a branch
+marker and operation:
+
+```text
+body[0] = 0x80 | (sequence & 0x1f)
+body[2] = 0x82 open, 0x81 close
+```
+
+Association branch markers are:
+
+| Profile | Open marker | Close marker |
+|---|---|---|
+| Selector 5 | `0x10`, duration high marker `0x00` | `0x90` |
+| Selector 6 | `0x90`, duration high marker `0x80` | `0x10` |
+
+One logical stock command is three byte-identical RF attempts at approximately
+`0`, `0.729210`, and `1.668479` seconds. The controller waits for a matching
+response; it does not issue repeated logical opens in rapid succession.
+
+The response echoes the command sequence, and the next command advances modulo
+the five-bit field. Only a passive stock command or a matching response to a
+pending local command can synchronize or advance that counter; periodic
+telemetry cannot.
+
+Local commands have not been accepted by the physical valve, so transmit is
+not exposed as supported functionality.
+
+## Evidence and implementation
+
+- Receive decode and research command builder:
+  `rainpointd_addon/rainpointd/valve_protocol.py`
+- Enrollment candidate: `rainpointd_addon/rainpointd/valve_pairing_protocol.py`
+- Stock enrollment: `research/fixtures/htv145_gateway_pairing_replies.json`
+- Selector-6 enrollment:
+  `research/fixtures/htv145_later_sweep_stock_enrollment_20260828.json`
+- Command and duration evidence:
+  `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
+- Battery and usage evidence:
+  `research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`
+- Evidence ledger: [`../research/VALVE_PROTOCOL_STATUS.md`](../research/VALVE_PROTOCOL_STATUS.md)
+- Chronology: [`../research/RF_CAPTURE_NOTES.md`](../research/RF_CAPTURE_NOTES.md)

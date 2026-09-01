@@ -49,9 +49,9 @@ The dependency-light protocol layer:
 - emits typed device events rather than Home Assistant entities, and
 - uses captured fixtures as regression tests.
 
-`rainpointd_addon/rainpointd/rf.py` and `test_rainpoint_rf.py` are the current
-executable specification. Human-readable details are in
-[`PROTOCOL.md`](PROTOCOL.md).
+`rainpointd_addon/rainpointd/rf.py` and its protocol tests are the current
+executable specification. Human-readable shared and per-device definitions are
+in [`protocol_documentation/`](protocol_documentation/).
 
 ### Local gateway service (`rainpointd`)
 

@@ -28,7 +28,7 @@ documents independently schedules work.
 |---|---|
 | Root `README.md` remaining gates | Replaced by a link to this roadmap |
 | `INTEGRATION_EVOLUTION_BACKLOG.md` | Absorbed here and removed |
-| `PROTOCOL.md` remaining work | Retained as unscheduled wire-evidence questions |
+| Monolithic `PROTOCOL.md` | Split into current per-device definitions under `protocol_documentation/`; chronology retained in RF capture notes; open work tracked here |
 | `FULL_STACK_ARCHITECTURE.md` phases | Architecture description only |
 | `HARDENING_INVENTORY.md` | Boundary inventory only |
 | `CLOUD_TO_LOCAL_MIGRATION.md` readiness gates | Deferred product-design constraints only |
@@ -611,10 +611,10 @@ and the validated fresh-association counter-`1` result are frozen in
       requested/remaining duration fields (including sessions over 254
       seconds), and controller/telemetry counters for the tested association
       profiles.
-- [ ] Correlate every exposed valve field against the cloud integration over the
-      same timestamped sessions: battery, active zone, requested duration,
-      actual duration, remaining time when transmitted, automatic stop, and
-      water usage.
+- [ ] Correlate every model-supported valve field against the cloud integration
+      over the same timestamped sessions: battery, active zone, requested
+      duration, actual duration, remaining time when transmitted, automatic
+      stop, and HTV145 water usage. HTV405 declares no water-usage capability.
 - [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
       battery entity unavailable until RF correlation is repeatable.
       Offset 17 mask `0x08` is the leading bounded candidate: the equivalent
@@ -679,6 +679,10 @@ and publication/security gates are documented and enforced.
 
 ## Phase 7 — research infrastructure and documentation
 
+- [x] Split the monolithic protocol journal into concise shared and per-device
+      current definitions under `protocol_documentation/`; retain dated
+      discovery history in `research/RF_CAPTURE_NOTES.md` and exact frames in
+      redacted fixtures.
 - [ ] Make the receive-only SDR capture/decoder pipeline run as a managed Mac
       service and optionally forward normalized observations to the custom
       gateway; production HA operation must not depend on the SDR.
@@ -719,6 +723,12 @@ one becomes a blocker:
   or cloud metadata.
 - Determine whether any pairing field controls long-term telemetry channel;
   current evidence says the known selector does not.
+- Repeat fresh generated-identity HTV405 enrollment and command-counter
+  initialization on a second specimen or independently compatible product
+  before generalizing the profile beyond the tested hardware revision.
+- Characterize the compact product/status-frame integrity family before using
+  it to construct traffic for a newly supported device family; ordinary-frame
+  CRC residues do not prove that separate format.
 - Optimize multi-node channel scheduling and placement beyond the stability
   threshold required by Phase 5.
 - Treat **Add device** as a reversible stepped wizard (category, model, radio

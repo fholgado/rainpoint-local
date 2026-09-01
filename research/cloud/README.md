@@ -55,7 +55,8 @@ this topic did not establish a local control path.
 
 The value beginning with `10#` is a compact TLV stream represented as hex.
 This is an application/cloud representation, not the raw 38-byte over-the-air
-frame described by [`../../PROTOCOL.md`](../../PROTOCOL.md).
+frame described by
+[`../../protocol_documentation/common.md`](../../protocol_documentation/common.md).
 
 Observed TLV fields were:
 

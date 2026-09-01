@@ -204,8 +204,8 @@ Friendly names and dashboards for the original installation live only under
 `examples/federico-garden`. Runtime behavior is driven by persistent registry
 records and protocol/product evidence, not those names or endpoints.
 
-- [PROTOCOL.md](PROTOCOL.md) — supported RF facts, confidence, and unresolved
-  fields.
+- [protocol_documentation/](protocol_documentation/) — current shared and
+  per-device RF protocol definitions.
 - [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) — the single source of truth for
   current status, ordered qualification gates, and backlog.
 - [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) — component and
