@@ -1,0 +1,70 @@
+{
+  "captured_at": "2026-09-01T17:39:16.317078+00:00",
+  "model": "HTV145FRF",
+  "purpose": "Record the first physical verdict from the dedicated one-shot counter-0 selector-6 pairing state machine.",
+  "firmware": {
+    "role": "ota_test_node",
+    "version": "0.15.3-htv145-pairing-probe.19"
+  },
+  "lifecycle": {
+    "first_gesture": "documented factory-reset process",
+    "second_gesture": "ordinary long press",
+    "stock_gateway": "off",
+    "operator_result": "both gestures appeared to fail"
+  },
+  "first_trial": {
+    "node_was_armed": true,
+    "accepted_factory_counter": 0,
+    "assignment_locked": true,
+    "completed_steps": 1,
+    "stage_0_accepted": false,
+    "stage_0_rejected": true,
+    "failure_reason": "stage_0_rejected",
+    "last_factory_counter": 2,
+    "addressed_stage_1_observed": false,
+    "fallback_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+    "fallback_observed_at": "2026-09-01T17:37:44.579884+00:00"
+  },
+  "second_gesture": {
+    "node_was_armed": false,
+    "reason": "the first stage-0 rejection had already failed and disarmed the one-shot session",
+    "observed_factory_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+    "observed_at": "2026-09-01T17:38:19.180407+00:00",
+    "protocol_trial": false
+  },
+  "continuous_iq_trial": {
+    "captured_at": "2026-09-01T17:59:22Z",
+    "capture_path": "/share/rainpoint-local/htv145-stock-pairing-20260901-135922/continuous_433.7M_2000k.cu8",
+    "capture_sha256": "b39ba1d7cdb5747cf01f14c1ce9c348241ab9e321e248bf3260863a88108e946",
+    "capture_bytes": 445120512,
+    "sample_rate_sps": 2000000,
+    "capture_center_hz": 433700000,
+    "gesture": "ordinary long press after the node and SDR capture were both proven armed",
+    "node_verdict": "stage_0_rejected",
+    "completed_steps": 1,
+    "factory_counter_0_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "local_assignment_frame": "79f4882f28b42d008fb984028080c08585008670008270210d010080000000000000000092fe",
+    "later_factory_counter_2_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+    "addressed_stage_1_observed": false,
+    "measured_comparison": {
+      "stock_factory_center_hz": 433142886,
+      "local_factory_center_hz": 433142917,
+      "factory_center_delta_hz": 31,
+      "stock_assignment_center_hz": 433546649,
+      "local_assignment_center_hz": 433556628,
+      "assignment_center_delta_hz": 9979,
+      "stock_assignment_deviation_hz": 35004,
+      "local_assignment_deviation_hz": 35004,
+      "stock_request_end_to_reply_start_ms": 52.15,
+      "local_request_end_to_reply_start_ms": 53.0,
+      "reply_timing_delta_ms": 0.85
+    }
+  },
+  "interpretation": [
+    "The first trial is an unambiguous stage-0 rejection: the node claimed counter 0 and transmitted one assignment, but the valve emitted no addressed stage-1 request before counter 2.",
+    "The second physical gesture is not an independent pairing result because probe .19 intentionally disarms after stage-0 rejection.",
+    "The later continuous-IQ trial independently reproduced the same stage-0 rejection and captured the local assignment on air.",
+    "The stock and local factory carriers differ by only 31 Hz, while the local assignment is 9.979 kHz above the measured stock assignment; this rules out SDR drift and identifies reuse of the HTV405 initial center as the leading cause.",
+    "Assignment deviation and decoded structure match stock. Probe .20 therefore changes only the HTV145 selector-6 initial center by -9.979 kHz; timing remains frozen until that carrier-only hypothesis is tested."
+  ]
+}
