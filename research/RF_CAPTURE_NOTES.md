@@ -587,3 +587,20 @@ Reference evidence:
 
 Reference evidence:
 `fixtures/htv145_counter0_app_first_stock_enrollment_20260901.json`.
+
+### HTV145 isolated local stage zero — 2026-09-01
+
+- Probe `.21` answered a clean counter-0 factory announcement through the new
+  HTV145-only state machine and emitted exactly one selector-6 assignment.
+  The valve rejected it and continued its factory sweep, proving that another
+  documented factory reset is not required merely to reach this boundary.
+- Direct IQ characterization measured the local assignment at
+  `433.504260 MHz`, `42.389 kHz` below the accepted stock assignment at
+  `433.546649 MHz`. Deviation remained `35.004 kHz`; local reply latency was
+  `52.85 ms` versus stock's `52.15 ms`.
+- Probe `.22` applies that measured `+42.389 kHz` correction and freezes every
+  other field. The later timing difference remains deliberately unchanged
+  until the carrier-only hypothesis receives a physical verdict.
+
+Reference evidence:
+`fixtures/htv145_probe21_isolated_carrier_rejection_20260901.json`.

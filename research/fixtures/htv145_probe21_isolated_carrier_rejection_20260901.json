@@ -1,0 +1,58 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-01",
+  "purpose": "Measure the first physical stage-zero result after separating HTV145 pairing from the HTV405 profile and calibration path.",
+  "capture": {
+    "path": "/share/rainpoint-local/htv145-stock-pairing-20260901-152242/continuous_433.7M_2000k.cu8",
+    "sha256": "54750fd6cba0c1fbe2ddb699fddf52a9c5772447c1dcf924180bb01f1b45878c",
+    "bytes": 808189952,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "duration_seconds": 202.047488
+  },
+  "firmware": {
+    "node_id": "rp-cc4c05f57630",
+    "version": "0.15.3-htv145-pairing-probe.21",
+    "profile_initial_center_hz": 433501466,
+    "supplied_frequency_offset_hz": 45000,
+    "reported_effective_initial_tx_center_hz": 433546466
+  },
+  "node_verdict": {
+    "pairing_state": "failed",
+    "pairing_completed_steps": 1,
+    "pairing_failure_reason": "stage_0_rejected",
+    "assignment_locked": true,
+    "accepted_factory_counter": 0,
+    "last_factory_sweep_counter": 2,
+    "stage0_accepted": false,
+    "stage0_rejected": true
+  },
+  "factory_request": {
+    "frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+    "start_seconds": 132.8909,
+    "end_seconds": 132.9221
+  },
+  "local_assignment": {
+    "frame": "79f4882f28b42d008fb984028080c08585008670009b7b210d01008000000000000000003305",
+    "start_seconds": 132.97495,
+    "request_end_to_reply_start_ms": 52.85,
+    "measured_center_hz": 433504260,
+    "measured_deviation_hz": 35004,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12,
+    "destination": "b9840280"
+  },
+  "stock_reference": {
+    "capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+    "direct_fft_assignment_center_hz": 433546649,
+    "assignment_deviation_hz": 35004,
+    "request_end_to_reply_start_ms": 52.15
+  },
+  "interpretation": [
+    "The valve emitted a clean counter-0 factory announcement without another documented factory reset, so reset state was not the missing prerequisite for this attempt.",
+    "The isolated HTV145 state machine transmitted exactly one selector-6 assignment and the valve rejected it by continuing the factory sweep without an addressed stage-1 request.",
+    "Direct IQ characterization placed the local assignment 42389 Hz below the accepted stock assignment even though gateway diagnostics reported the intended nominal center. This is the next single-variable discriminator.",
+    "Probe .22 increases only the HTV145 node frequency correction from 45000 Hz to 87389 Hz. Payload, endpoints, selector, wake, deviation, timing, power, polarity, and one-shot state behavior remain frozen.",
+    "The local reply was 0.70 ms later than stock. Timing remains unchanged in .22 so the carrier hypothesis receives an isolated physical verdict."
+  ]
+}

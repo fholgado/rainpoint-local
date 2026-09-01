@@ -334,7 +334,18 @@ observation before it changes transmitted firmware.
     path is unchanged. Node diagnostics now expose the profile initial center,
     supplied offset, and effective initial TX center so a profile/calibration
     mismatch is visible before the next RF trial. Native protocol, gateway,
-    and PlatformIO builds pass; physical stage-zero acceptance remains open.
+    and PlatformIO builds pass.
+  - 2026-09-01 physical `.21` result: an ordinary long press produced the clean
+    counter-0 factory announcement, the isolated node emitted exactly one
+    selector-6 assignment, and the valve rejected it before stage 1. A fresh
+    documented reset is therefore not required to exercise this boundary.
+    Direct IQ measurement placed the local assignment at `433.504260 MHz`,
+    `42.389 kHz` below the accepted stock assignment, while deviation remained
+    `35.004 kHz`; the reply began `52.85 ms` after the request ended versus
+    stock's `52.15 ms`. Probe `.22` changes only the node-specific HTV145
+    frequency correction from `45.000` to `87.389 kHz`; timing and every frame
+    field remain frozen for one discriminating carrier-only trial. Fixture:
+    `research/fixtures/htv145_probe21_isolated_carrier_rejection_20260901.json`.
 - [ ] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,
