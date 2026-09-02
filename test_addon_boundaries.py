@@ -12,6 +12,32 @@ ROOT = Path(__file__).parent
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_ha_valve_controls_expose_and_guard_synchronized_transactions(
+        self,
+    ) -> None:
+        valve_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "valve.py"
+        ).read_text()
+        sensor_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "sensor.py"
+        ).read_text()
+        button_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "button.py"
+        ).read_text()
+        http_source = (
+            ROOT / "rainpointd_addon" / "rainpointd" / "http.py"
+        ).read_text()
+
+        self.assertIn("request_htv405_synchronized_open", http_source)
+        self.assertIn("rf_control_transaction_active", valve_source)
+        self.assertIn("return ValveEntityFeature(0)", valve_source)
+        self.assertIn("rf_control_start_available", valve_source)
+        self.assertIn("control_transaction_status", sensor_source)
+        self.assertIn(
+            "RainPointHtv405CancelWateringRequestButton", button_source
+        )
+        self.assertIn("cancel_htv405_watering_transaction", button_source)
+
     def test_mac_continuous_iq_capture_is_bounded_and_receive_only(self) -> None:
         script = ROOT / "tools" / "capture_rainpoint_continuous_iq.sh"
         result = subprocess.run(

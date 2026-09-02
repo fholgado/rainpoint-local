@@ -72,6 +72,7 @@ from .rf_identity import (
 )
 from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
+    HTV405_ACTIVE_TRANSACTION_STATES,
     SQLiteEventStore,
     frame_accepted,
     htv405_idle_close_sync_candidates,
@@ -106,6 +107,32 @@ HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS = (
 HTV405_FRESH_PAIRING_COUNTER_WINDOW_SECONDS = 15 * 60
 HTV405_GUARDED_COUNTER_PROBE_SECONDS = 15
 _UNSET = object()
+
+
+def _htv405_transaction_status(
+    state: str | None, *, zone: int | None, error: str | None
+) -> str:
+    """Return a concise user-facing status for one watering request."""
+    zone_name = (
+        f"Zone {zone}"
+        if isinstance(zone, int) and not isinstance(zone, bool) and zone in range(1, 5)
+        else "the valve"
+    )
+    if state == "synchronizing":
+        return "Synchronizing valve control"
+    if state == "waiting_for_command_interval":
+        return f"Waiting to start {zone_name}"
+    if state == "waiting_for_open_confirmation":
+        return f"Waiting for {zone_name} to confirm watering"
+    if state == "watering_confirmed":
+        return f"Watering confirmed for {zone_name}"
+    if state == "failed":
+        detail = (error or "unknown error").replace("_", " ")
+        return f"Watering request failed: {detail}"
+    if state == "cancelled":
+        detail = (error or "cancelled").replace("_", " ")
+        return f"Watering request cancelled: {detail}"
+    return "Ready"
 
 
 def _observed_utc(value: str | datetime) -> datetime:
@@ -250,6 +277,7 @@ class Gateway:
         self._lock = threading.Lock()
         self._event_condition = threading.Condition(self._lock)
         self._htv405_resync_timers: dict[str, threading.Timer] = {}
+        self._htv405_transaction_timers: dict[str, threading.Timer] = {}
         self._transport_healthy = True
         self._transport_error: str | None = None
         self._node_command_sender: (
@@ -274,6 +302,7 @@ class Gateway:
         self._automatic_rejoin_started: dict[str, float] = {}
         self._recover_pending_htv405_air_responses()
         self._reconcile_htv405_control_state_from_events()
+        self._cancel_interrupted_htv405_transactions()
 
     def info(self) -> dict[str, Any]:
         """Return gateway capabilities."""
@@ -358,6 +387,13 @@ class Gateway:
             for timer in self._htv405_resync_timers.values():
                 timer.cancel()
             self._htv405_resync_timers.clear()
+            for timer in self._htv405_transaction_timers.values():
+                timer.cancel()
+            self._htv405_transaction_timers.clear()
+            self._cancel_htv405_transactions_locked(
+                reason="gateway_stopped",
+                observed_at=datetime.now(timezone.utc).isoformat(),
+            )
             if self._store:
                 self._store.close()
                 self._store = None
@@ -381,6 +417,12 @@ class Gateway:
             self._adopt_active_valve_identity_from_node_locked(node_id, node)
             if self._htv405_control_node_ready(node):
                 self._schedule_matured_htv405_resyncs_locked(node_id=node_id)
+            else:
+                self._cancel_htv405_transactions_locked(
+                    node_id=node_id,
+                    reason="radio_node_unavailable",
+                    observed_at=datetime.now(timezone.utc).isoformat(),
+                )
 
     def observe_node_health(self, node_id: str, **fields: Any) -> None:
         """Update node health and retain connection/reboot discriminator events."""
@@ -643,6 +685,13 @@ class Gateway:
                 for timer in self._htv405_resync_timers.values():
                     timer.cancel()
                 self._htv405_resync_timers.clear()
+                for timer in self._htv405_transaction_timers.values():
+                    timer.cancel()
+                self._htv405_transaction_timers.clear()
+                self._cancel_htv405_transactions_locked(
+                    reason="gateway_transport_unavailable",
+                    observed_at=datetime.now(timezone.utc).isoformat(),
+                )
             else:
                 self._schedule_matured_htv405_resyncs_locked()
 
@@ -876,6 +925,244 @@ class Gateway:
                 raise ValueError("HTV405 action must be open or close")
             self._refresh_registry_catalog()
             return result
+
+    def request_htv405_synchronized_open(
+        self,
+        *,
+        device_id: str,
+        zone: int,
+        duration_seconds: int,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Start one safe watering transaction with a fixed counter anchor."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._valve_control_enabled:
+                raise PermissionError("HTV405 supervised control is disabled")
+            if self._store is None or self._node_command_sender is None:
+                raise RuntimeError("HTV405 control transport is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            profile = self._htv405_control_profile(registration)
+            if not self._htv405_control_node_ready(
+                self._nodes.get(profile.node_id, {})
+            ):
+                raise RuntimeError("selected HTV405 radio node is unavailable")
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            result = coordinator.request_synchronized_open(
+                profile,
+                zone=zone,
+                duration_seconds=duration_seconds,
+                started_at=timestamp,
+            )
+            obsolete_resync = self._htv405_resync_timers.pop(
+                profile.valve_endpoint, None
+            )
+            if obsolete_resync is not None:
+                obsolete_resync.cancel()
+            latest = next(
+                item
+                for item in self._store.valve_registry()
+                if item["valve_endpoint"] == profile.valve_endpoint
+            )
+            self._append_valve_control_event_locked(
+                registration=latest,
+                event_type="valve_control_transaction_started",
+                observed_at=timestamp,
+                action="synchronized_open",
+            )
+            self._refresh_registry_catalog()
+            return result
+
+    def advance_htv405_synchronized_opens(
+        self,
+        *,
+        now: datetime | None = None,
+        device_id: str | None = None,
+    ) -> int:
+        """Dispatch queued opens whose authenticated anchor guard matured."""
+        with self._lock:
+            return self._advance_htv405_synchronized_opens_locked(
+                now or datetime.now(timezone.utc), device_id=device_id
+            )
+
+    def _advance_htv405_synchronized_opens_locked(
+        self,
+        now: datetime,
+        *,
+        device_id: str | None = None,
+    ) -> int:
+        if (
+            not self._valve_control_enabled
+            or self._store is None
+            or self._node_command_sender is None
+        ):
+            return 0
+        observed = _observed_utc(now)
+        dispatched = 0
+        for registration in self._store.valve_registry():
+            if device_id is not None and registration.get("device_id") != device_id:
+                continue
+            if (
+                registration.get("control_transaction_state")
+                != "waiting_for_command_interval"
+                or registration.get("control_pending_command_id") is not None
+                or registration.get("control_next_sequence") != 0
+            ):
+                continue
+            not_before = registration.get("control_transaction_not_before")
+            if not isinstance(not_before, str):
+                self._fail_htv405_transaction_locked(
+                    registration,
+                    reason="missing_command_interval_deadline",
+                    observed_at=observed.isoformat(),
+                )
+                continue
+            try:
+                available = _observed_utc(not_before)
+            except (TypeError, ValueError):
+                self._fail_htv405_transaction_locked(
+                    registration,
+                    reason="invalid_command_interval_deadline",
+                    observed_at=observed.isoformat(),
+                )
+                continue
+            if observed < available:
+                continue
+            profile = self._htv405_control_profile(registration)
+            scheduled = self._htv405_transaction_timers.pop(
+                profile.valve_endpoint, None
+            )
+            if scheduled is not None:
+                scheduled.cancel()
+            if not self._htv405_control_node_ready(
+                self._nodes.get(profile.node_id, {})
+            ):
+                self._cancel_htv405_transactions_locked(
+                    node_id=profile.node_id,
+                    reason="radio_node_unavailable",
+                    observed_at=observed.isoformat(),
+                )
+                continue
+            zone = registration.get("control_transaction_zone")
+            duration = registration.get(
+                "control_transaction_duration_seconds"
+            )
+            if (
+                not isinstance(zone, int)
+                or isinstance(zone, bool)
+                or not isinstance(duration, int)
+                or isinstance(duration, bool)
+            ):
+                self._fail_htv405_transaction_locked(
+                    registration,
+                    reason="invalid_queued_watering_request",
+                    observed_at=observed.isoformat(),
+                )
+                continue
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            try:
+                coordinator.request_open(
+                    profile,
+                    zone=zone,
+                    duration_seconds=duration,
+                    started_at=observed.isoformat(),
+                )
+            except (ConnectionError, OSError, RuntimeError, ValueError):
+                latest = next(
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == profile.valve_endpoint
+                )
+                if latest.get("control_transaction_state") in (
+                    HTV405_ACTIVE_TRANSACTION_STATES
+                ):
+                    self._fail_htv405_transaction_locked(
+                        latest,
+                        reason="open_dispatch_failed",
+                        observed_at=observed.isoformat(),
+                    )
+                continue
+            latest = next(
+                item
+                for item in self._store.valve_registry()
+                if item["valve_endpoint"] == profile.valve_endpoint
+            )
+            self._append_valve_control_event_locked(
+                registration=latest,
+                event_type="valve_control_transaction_open_dispatched",
+                observed_at=observed.isoformat(),
+                action="open",
+            )
+            dispatched += 1
+        if dispatched:
+            self._refresh_registry_catalog()
+        return dispatched
+
+    def cancel_htv405_watering_transaction(
+        self,
+        *,
+        device_id: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Cancel a queued open without transmitting another RF command."""
+        observed_at = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if self._store is None:
+                raise RuntimeError("HTV405 control storage is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None:
+                raise KeyError(device_id)
+            if registration.get("control_transaction_state") not in {
+                "synchronizing",
+                "waiting_for_command_interval",
+            }:
+                raise RuntimeError(
+                    "the queued open can no longer be cancelled"
+                )
+            cancelled = self._store.cancel_htv405_transaction(
+                valve_endpoint=str(registration["valve_endpoint"]),
+                reason="cancelled_by_operator",
+                observed_at=observed_at,
+            )
+            if cancelled is None:
+                raise RuntimeError("no HTV405 watering transaction is active")
+            timer = self._htv405_transaction_timers.pop(
+                str(registration["valve_endpoint"]), None
+            )
+            if timer is not None:
+                timer.cancel()
+            self._append_valve_control_event_locked(
+                registration=cancelled,
+                event_type="valve_control_transaction_cancelled",
+                observed_at=observed_at,
+                action="synchronized_open",
+            )
+            self._refresh_registry_catalog()
+            return cancelled
 
     def request_htv405_idle_close_probe(
         self,
@@ -1149,6 +1436,162 @@ class Gateway:
             self._advance_htv405_idle_close_resync_locked(
                 datetime.now(timezone.utc),
                 device_id=device_id,
+            )
+
+    def _cancel_interrupted_htv405_transactions(self) -> None:
+        """Fail closed after restart; queued opens are never replayed."""
+        if self._store is None:
+            return
+        observed_at = datetime.now(timezone.utc).isoformat()
+        for registration in self._store.valve_registry():
+            if registration.get("control_transaction_state") not in (
+                HTV405_ACTIVE_TRANSACTION_STATES
+            ):
+                continue
+            self._store.cancel_htv405_transaction(
+                valve_endpoint=str(registration["valve_endpoint"]),
+                reason="gateway_restarted_before_completion",
+                observed_at=observed_at,
+                terminal_state="cancelled",
+            )
+
+    def _cancel_htv405_transactions_locked(
+        self,
+        *,
+        reason: str,
+        observed_at: str,
+        node_id: str | None = None,
+    ) -> int:
+        if self._store is None:
+            return 0
+        cancelled_count = 0
+        for registration in self._store.valve_registry():
+            if (
+                registration.get("control_transaction_state")
+                not in HTV405_ACTIVE_TRANSACTION_STATES
+                or (
+                    node_id is not None
+                    and registration.get("control_node_id") != node_id
+                )
+            ):
+                continue
+            valve_endpoint = str(registration["valve_endpoint"])
+            timer = self._htv405_transaction_timers.pop(
+                valve_endpoint, None
+            )
+            if timer is not None:
+                timer.cancel()
+            cancelled = self._store.cancel_htv405_transaction(
+                valve_endpoint=valve_endpoint,
+                reason=reason,
+                observed_at=observed_at,
+            )
+            if cancelled is None:
+                continue
+            self._append_valve_control_event_locked(
+                registration=cancelled,
+                event_type="valve_control_transaction_cancelled",
+                observed_at=observed_at,
+                action="synchronized_open",
+            )
+            cancelled_count += 1
+        if cancelled_count:
+            self._refresh_registry_catalog()
+        return cancelled_count
+
+    def _fail_htv405_transaction_locked(
+        self,
+        registration: dict[str, Any],
+        *,
+        reason: str,
+        observed_at: str,
+    ) -> dict[str, Any] | None:
+        if self._store is None:
+            return None
+        valve_endpoint = str(registration["valve_endpoint"])
+        timer = self._htv405_transaction_timers.pop(valve_endpoint, None)
+        if timer is not None:
+            timer.cancel()
+        failed = self._store.cancel_htv405_transaction(
+            valve_endpoint=valve_endpoint,
+            reason=reason,
+            observed_at=observed_at,
+            terminal_state="failed",
+        )
+        if failed is not None:
+            self._append_valve_control_event_locked(
+                registration=failed,
+                event_type="valve_control_transaction_failed",
+                observed_at=observed_at,
+                action="synchronized_open",
+            )
+            self._refresh_registry_catalog()
+        return failed
+
+    def _schedule_htv405_transaction_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        """Schedule the open leg only after authenticated anchor evidence."""
+        valve_endpoint = str(registration.get("valve_endpoint") or "")
+        existing = self._htv405_transaction_timers.pop(
+            valve_endpoint, None
+        )
+        if existing is not None:
+            existing.cancel()
+        if (
+            not valve_endpoint
+            or self._node_command_sender is None
+            or registration.get("control_transaction_state")
+            != "waiting_for_command_interval"
+            or registration.get("control_pending_command_id") is not None
+            or registration.get("control_next_sequence") != 0
+        ):
+            return
+        node_id = str(registration.get("control_node_id") or "")
+        if not self._htv405_control_node_ready(self._nodes.get(node_id, {})):
+            self._cancel_htv405_transactions_locked(
+                node_id=node_id,
+                reason="radio_node_unavailable",
+                observed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            return
+        not_before = registration.get("control_transaction_not_before")
+        if not isinstance(not_before, str):
+            self._fail_htv405_transaction_locked(
+                registration,
+                reason="missing_command_interval_deadline",
+                observed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            return
+        try:
+            available = _observed_utc(not_before)
+        except (TypeError, ValueError):
+            self._fail_htv405_transaction_locked(
+                registration,
+                reason="invalid_command_interval_deadline",
+                observed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            return
+        delay = max(
+            0.0,
+            (available - datetime.now(timezone.utc)).total_seconds(),
+        )
+        timer = threading.Timer(
+            delay,
+            self._run_scheduled_htv405_transaction,
+            args=(str(registration["device_id"]), valve_endpoint),
+        )
+        timer.daemon = True
+        self._htv405_transaction_timers[valve_endpoint] = timer
+        timer.start()
+
+    def _run_scheduled_htv405_transaction(
+        self, device_id: str, valve_endpoint: str
+    ) -> None:
+        with self._lock:
+            self._htv405_transaction_timers.pop(valve_endpoint, None)
+            self._advance_htv405_synchronized_opens_locked(
+                datetime.now(timezone.utc), device_id=device_id
             )
 
     def request_htv405_guarded_open_probe(
@@ -3049,6 +3492,35 @@ class Gateway:
                         valve_registration.get("control_next_sequence")
                         is not None
                     )
+                    transaction_state = valve_registration.get(
+                        "control_transaction_state"
+                    )
+                    transaction_active = transaction_state in (
+                        HTV405_ACTIVE_TRANSACTION_STATES
+                    )
+                    confirmed_idle = confirmed_watering in {0, False}
+                    start_available = bool(
+                        self._valve_control_enabled
+                        and association_complete
+                        and node_ready
+                        and confirmed_idle
+                        and pending_command is None
+                        and not transaction_active
+                    )
+                    if not self._valve_control_enabled:
+                        start_unavailable_reason = "disabled_by_gateway"
+                    elif not association_complete:
+                        start_unavailable_reason = "association_incomplete"
+                    elif not node_ready:
+                        start_unavailable_reason = "radio_node_unavailable"
+                    elif transaction_active:
+                        start_unavailable_reason = str(transaction_state)
+                    elif pending_command is not None:
+                        start_unavailable_reason = "command_pending_response"
+                    elif not confirmed_idle:
+                        start_unavailable_reason = "valve_not_confirmed_idle"
+                    else:
+                        start_unavailable_reason = None
                     control_available = bool(
                         self._valve_control_enabled
                         and association_complete
@@ -3150,6 +3622,10 @@ class Gateway:
                             "rf_control_enabled": self._valve_control_enabled,
                             "rf_control_available": control_available,
                             "rf_control_unavailable_reason": unavailable_reason,
+                            "rf_control_start_available": start_available,
+                            "rf_control_start_unavailable_reason": (
+                                start_unavailable_reason
+                            ),
                             "rf_control_command_pending": (
                                 pending_command is not None
                             ),
@@ -3223,6 +3699,58 @@ class Gateway:
                                 + 1
                                 if isinstance(resync_candidate, int)
                                 else None
+                            ),
+                            "rf_control_transaction_id": (
+                                valve_registration.get(
+                                    "control_transaction_id"
+                                )
+                            ),
+                            "rf_control_transaction_state": transaction_state,
+                            "rf_control_transaction_status": (
+                                _htv405_transaction_status(
+                                    (
+                                        str(transaction_state)
+                                        if isinstance(transaction_state, str)
+                                        else None
+                                    ),
+                                    zone=valve_registration.get(
+                                        "control_transaction_zone"
+                                    ),
+                                    error=valve_registration.get(
+                                        "control_transaction_error"
+                                    ),
+                                )
+                            ),
+                            "rf_control_transaction_active": transaction_active,
+                            "rf_control_transaction_zone": (
+                                valve_registration.get(
+                                    "control_transaction_zone"
+                                )
+                            ),
+                            "rf_control_transaction_duration_seconds": (
+                                valve_registration.get(
+                                    "control_transaction_duration_seconds"
+                                )
+                            ),
+                            "rf_control_transaction_started_at": (
+                                valve_registration.get(
+                                    "control_transaction_started_at"
+                                )
+                            ),
+                            "rf_control_transaction_not_before": (
+                                valve_registration.get(
+                                    "control_transaction_not_before"
+                                )
+                            ),
+                            "rf_control_transaction_error": (
+                                valve_registration.get(
+                                    "control_transaction_error"
+                                )
+                            ),
+                            "rf_control_transaction_updated_at": (
+                                valve_registration.get(
+                                    "control_transaction_updated_at"
+                                )
                             ),
                         }
                     )
@@ -3749,7 +4277,11 @@ class Gateway:
             action_matches = pending_action == action or (
                 not watering
                 and pending_action
-                in {"idle_close_probe", "close_discriminator"}
+                in {
+                    "idle_close_probe",
+                    "close_discriminator",
+                    "synchronized_open_anchor",
+                }
             )
             pending_started_at = registration.get(
                 "control_pending_started_at"
@@ -3835,6 +4367,7 @@ class Gateway:
                 observed_at=observed.isoformat(),
                 action=action,
             )
+            self._schedule_htv405_transaction_locked(accepted)
             return accepted
 
     def observe_valve_control_air_rejection(
@@ -4270,6 +4803,7 @@ class Gateway:
                 observed_at=timestamp,
                 action=pending_action,
             )
+            self._schedule_htv405_transaction_locked(accepted)
             return accepted
 
     def observe_valve_control_error(
@@ -4344,6 +4878,18 @@ class Gateway:
                     else None
                 ),
                 "result": registration.get("control_last_result"),
+                "transaction_state": registration.get(
+                    "control_transaction_state"
+                ),
+                "transaction_zone": registration.get(
+                    "control_transaction_zone"
+                ),
+                "transaction_duration_seconds": registration.get(
+                    "control_transaction_duration_seconds"
+                ),
+                "transaction_error": registration.get(
+                    "control_transaction_error"
+                ),
             },
         }
         self._next_event_id += 1

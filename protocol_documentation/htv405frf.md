@@ -220,12 +220,25 @@ not a candidate check. The synchronization procedure is deterministic:
    response.
 4. Observe the 15-second hardware command interval before an open at `0`.
 
-One silent anchor transmission may be repeated once at the same value to
-tolerate a lost RF exchange. A second silence or a strict negative response
-stops fail-closed; neither dispatch nor silence establishes synchronization.
-Unexpected watering aborts the procedure. The retry state is durable across a
-gateway or assigned-node restart, while pre-0.33.36 multi-candidate recovery
-state is normalized to anchor `0` before any transmission.
+The standalone synchronization diagnostic may repeat one silent anchor once at
+the same value to tolerate a lost RF exchange. A second silence or a strict
+negative response stops fail-closed; neither dispatch nor silence establishes
+synchronization. Its retry state is durable across a gateway or assigned-node
+restart, while pre-0.33.36 multi-candidate recovery state is normalized to
+anchor `0` before any transmission.
+
+An end-user open is a distinct single-attempt transaction:
+
+1. Reserve the requested zone and validated duration.
+2. Send the fixed close-`0` anchor and wait for its authenticated idle response.
+3. Wait until 15 seconds have elapsed from the anchor transmission.
+4. Send the requested open at counter `0`.
+5. Report success only after the matching authenticated watering response.
+
+Duplicate starts are rejected. Timeout, strict rejection, node or transport
+loss, unexpected watering, or gateway restart terminates the transaction and
+clears the queued open. An operator may cancel only before step 4. The gateway
+never restores or replays a queued open after restart.
 
 ## Battery and unsupported water usage
 

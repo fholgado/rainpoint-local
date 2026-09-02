@@ -165,6 +165,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/probe-close-counter")
             or parsed.path.endswith("/valve/probe-open")
             or parsed.path.endswith("/valve/cancel-recovery")
+            or parsed.path.endswith("/valve/cancel-transaction")
             or parsed.path.endswith("/valve/node")
         )
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
@@ -434,6 +435,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "probe-close-counter",
                         "probe-open",
                         "cancel-recovery",
+                        "cancel-transaction",
                         "node",
                     }:
                         self._json(404, {"error": "not found"})
@@ -492,6 +494,21 @@ class RequestHandler(BaseHTTPRequestHandler):
                             self.server.gateway.cancel_htv405_control_recovery(
                                 device_id=device_id
                             )
+                        )
+                    elif action == "cancel-transaction":
+                        result = self.server.gateway.cancel_htv405_watering_transaction(
+                            device_id=device_id
+                        )
+                    elif action == "open":
+                        duration = body.get("duration_seconds")
+                        if duration is None:
+                            raise ValueError(
+                                "HTV405 open requires a bounded duration"
+                            )
+                        result = self.server.gateway.request_htv405_synchronized_open(
+                            device_id=device_id,
+                            zone=int(body.get("zone", 0)),
+                            duration_seconds=int(duration),
                         )
                     else:
                         duration = body.get("duration_seconds")

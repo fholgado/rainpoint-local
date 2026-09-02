@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.37 / Integration 0.13.6 / Firmware 0.15.3
+
+- Make every HTV405 start request one observable transaction: authenticate a
+  fixed close-`0` anchor, wait the valve's 15-second command interval, send the
+  requested open at counter `0`, and require the matching watering response.
+- Expose ready, synchronization, interval, confirmation, success, cancellation,
+  and failure state to Home Assistant. Disable valve actuation while a request
+  is active and offer cancellation only before the open has been transmitted.
+- Reject duplicate requests and fail queued work closed on response timeout,
+  radio-node loss, transport loss, gateway restart, or unexpected watering.
+  Interrupted transactions are never replayed after restart.
+
 ## 0.33.36 / Integration 0.13.5 / Firmware 0.15.3
 
 - Replace the HTV405 close-counter search with the physically validated fixed

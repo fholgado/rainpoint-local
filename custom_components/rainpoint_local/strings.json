@@ -170,6 +170,7 @@
       "battery": { "name": "Battery" },
       "signal_strength": { "name": "Signal strength" },
       "valve_state": { "name": "Valve state" },
+      "control_transaction_status": { "name": "Control request status" },
       "duration": { "name": "Reported duration" },
       "last_usage": { "name": "Last water usage" },
       "report_time": { "name": "Device report time" },
@@ -231,7 +232,8 @@
     "button": {
       "identify_radio_node": { "name": "Identify" },
       "reboot_radio_node": { "name": "Reboot" },
-      "resynchronize_valve_counter": { "name": "Resynchronize control counter" }
+      "resynchronize_valve_counter": { "name": "Resynchronize control counter" },
+      "cancel_watering_request": { "name": "Cancel watering request" }
     },
     "switch": {
       "radio_node_rf_transmissions": { "name": "RF transmissions" }

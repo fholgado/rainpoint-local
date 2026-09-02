@@ -15,10 +15,17 @@ from .product_identity import (
     hcs02x_identity,
 )
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
+HTV405_ACTIVE_TRANSACTION_STATES = frozenset(
+    {
+        "synchronizing",
+        "waiting_for_command_interval",
+        "waiting_for_open_confirmation",
+    }
+)
 
 
 def htv405_idle_close_sync_candidates(last_sequence: int) -> tuple[int, ...]:
@@ -217,6 +224,9 @@ class SQLiteEventStore:
             version = 16
         if version == 16:
             self._migrate_v16_to_v17()
+            version = 17
+        if version == 17:
+            self._migrate_v17_to_v18()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -546,6 +556,31 @@ class SQLiteEventStore:
                         f"ALTER TABLE valve_registry ADD COLUMN {name} TEXT"
                     )
             self._connection.execute("PRAGMA user_version = 17")
+
+    def _migrate_v17_to_v18(self) -> None:
+        """Persist one observable, fail-closed HTV405 watering transaction."""
+        with self._connection:
+            columns = {
+                str(row[1])
+                for row in self._connection.execute(
+                    "PRAGMA table_info(valve_registry)"
+                )
+            }
+            for name, sql_type in (
+                ("control_transaction_id", "TEXT"),
+                ("control_transaction_state", "TEXT"),
+                ("control_transaction_zone", "INTEGER"),
+                ("control_transaction_duration_seconds", "INTEGER"),
+                ("control_transaction_started_at", "TEXT"),
+                ("control_transaction_not_before", "TEXT"),
+                ("control_transaction_error", "TEXT"),
+                ("control_transaction_updated_at", "TEXT"),
+            ):
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
+                    )
+            self._connection.execute("PRAGMA user_version = 18")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -1366,6 +1401,24 @@ class SQLiteEventStore:
             raise ValueError("HTV405 node differs from durable association")
         if state["control_pending_command_id"] is not None:
             raise RuntimeError("an HTV405 command is already pending")
+        transaction_state = state.get("control_transaction_state")
+        transaction_open = (
+            action == "open"
+            and transaction_state == "waiting_for_command_interval"
+        )
+        if transaction_state in HTV405_ACTIVE_TRANSACTION_STATES:
+            if not transaction_open:
+                raise RuntimeError(
+                    "an HTV405 watering transaction is already active"
+                )
+            if (
+                state.get("control_transaction_zone") != zone
+                or state.get("control_transaction_duration_seconds")
+                != duration_seconds
+            ):
+                raise RuntimeError(
+                    "HTV405 open differs from the queued watering request"
+                )
         sequence = state["control_next_sequence"]
         if sequence is None:
             raise RuntimeError("HTV405 control counter is not synchronized")
@@ -1405,6 +1458,9 @@ class SQLiteEventStore:
                 control_pending_duration_seconds = ?,
                 control_pending_started_at = ?,
                 control_last_command_started_at = ?,
+                control_transaction_state = ?,
+                control_transaction_not_before = ?,
+                control_transaction_updated_at = ?,
                 control_last_result = 'pending_authenticated_response',
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
@@ -1419,6 +1475,21 @@ class SQLiteEventStore:
                 duration_seconds,
                 started_at,
                 started_at,
+                (
+                    "waiting_for_open_confirmation"
+                    if transaction_open
+                    else transaction_state
+                ),
+                (
+                    None
+                    if transaction_open
+                    else state.get("control_transaction_not_before")
+                ),
+                (
+                    started_at
+                    if transaction_open
+                    else state.get("control_transaction_updated_at")
+                ),
                 started_at,
                 valve_endpoint,
                 node_id,
@@ -1427,6 +1498,182 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise RuntimeError("HTV405 command reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def reserve_htv405_synchronized_open(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        transaction_id: str,
+        command_id: str,
+        zone: int,
+        duration_seconds: int,
+        started_at: str,
+        minimum_interval_seconds: float = 15.0,
+    ) -> dict[str, Any]:
+        """Atomically queue watering and reserve its non-actuating anchor."""
+        if zone not in range(1, 5):
+            raise ValueError("HTV405 zone must be between 1 and 4")
+        if (
+            duration_seconds not in range(60, 3_601)
+            or duration_seconds % 60
+        ):
+            raise ValueError(
+                "HTV405 open must be 60-3600 seconds in whole minutes"
+            )
+        try:
+            started = datetime.fromisoformat(started_at)
+        except ValueError as error:
+            raise ValueError("invalid HTV405 transaction timestamp") from error
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if state.get("control_node_id") != node_id:
+            raise ValueError("HTV405 node differs from durable association")
+        if state.get("control_pending_command_id") is not None:
+            raise RuntimeError("an HTV405 command is already pending")
+        if state.get("control_transaction_state") in (
+            HTV405_ACTIVE_TRANSACTION_STATES
+        ):
+            raise RuntimeError(
+                "an HTV405 watering transaction is already active"
+            )
+        if state.get("control_confirmed_watering") not in {0, False}:
+            raise RuntimeError("HTV405 valve is not confirmed idle")
+        last_at = state.get("control_last_command_started_at")
+        if isinstance(last_at, str):
+            try:
+                previous = datetime.fromisoformat(last_at)
+                if previous.tzinfo is None and started.tzinfo is not None:
+                    previous = previous.replace(tzinfo=started.tzinfo)
+                if started.tzinfo is None and previous.tzinfo is not None:
+                    started = started.replace(tzinfo=previous.tzinfo)
+                if (started - previous).total_seconds() < minimum_interval_seconds:
+                    raise RuntimeError(
+                        "minimum HTV405 command interval has not elapsed"
+                    )
+            except ValueError:
+                pass
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_next_sequence = NULL,
+                control_pending_command_id = ?,
+                control_pending_action = 'synchronized_open_anchor',
+                control_pending_sequence = ?,
+                control_pending_zone = 1,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = ?,
+                control_last_command_started_at = ?,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_transaction_id = ?,
+                control_transaction_state = 'synchronizing',
+                control_transaction_zone = ?,
+                control_transaction_duration_seconds = ?,
+                control_transaction_started_at = ?,
+                control_transaction_not_before = NULL,
+                control_transaction_error = NULL,
+                control_transaction_updated_at = ?,
+                control_last_result = 'synchronized_open_synchronizing',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+              AND control_confirmed_watering = 0
+            """,
+            (
+                command_id,
+                HTV405_IDLE_CLOSE_SYNC_ANCHOR,
+                started_at,
+                started_at,
+                transaction_id,
+                zone,
+                duration_seconds,
+                started_at,
+                started_at,
+                started_at,
+                valve_endpoint,
+                node_id,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 watering transaction reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def cancel_htv405_transaction(
+        self,
+        *,
+        valve_endpoint: str,
+        reason: str,
+        observed_at: str,
+        terminal_state: str = "cancelled",
+    ) -> dict[str, Any] | None:
+        """Cancel one queued open and make speculative replay impossible."""
+        if terminal_state not in {"cancelled", "failed"}:
+            raise ValueError("invalid HTV405 transaction terminal state")
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if state.get("control_transaction_state") not in (
+            HTV405_ACTIVE_TRANSACTION_STATES
+        ):
+            return None
+        self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_next_sequence = NULL,
+                control_pending_command_id = NULL,
+                control_pending_action = NULL,
+                control_pending_sequence = NULL,
+                control_pending_zone = NULL,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = NULL,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_transaction_state = ?,
+                control_transaction_not_before = NULL,
+                control_transaction_error = ?,
+                control_transaction_updated_at = ?,
+                control_last_result = ?,
+                updated_at = ?
+            WHERE valve_endpoint = ?
+            """,
+            (
+                terminal_state,
+                reason,
+                observed_at,
+                f"synchronized_open_transaction_{terminal_state}:{reason}",
+                observed_at,
+                valve_endpoint,
+            ),
+        )
         self._connection.commit()
         return next(
             item
@@ -1948,6 +2195,23 @@ class SQLiteEventStore:
         if row is None:
             raise KeyError(valve_endpoint)
         state = dict(row)
+        if state.get("control_transaction_state") in (
+            HTV405_ACTIVE_TRANSACTION_STATES
+        ):
+            if (
+                state.get("control_node_id") != node_id
+                or state.get("control_pending_command_id") != command_id
+            ):
+                raise KeyError((valve_endpoint, command_id))
+            failed = self.cancel_htv405_transaction(
+                valve_endpoint=valve_endpoint,
+                reason=reason,
+                observed_at=observed_at,
+                terminal_state="failed",
+            )
+            if failed is None:
+                raise KeyError((valve_endpoint, command_id))
+            return failed
         if state.get("control_pending_action") == "close_discriminator":
             strict_rejection = reason == (
                 "gateway_command_rejected_counter_unsynchronized"
@@ -2314,10 +2578,18 @@ class SQLiteEventStore:
         if row is None:
             return None
         state = dict(row)
-        if (
-            watering
-            and state.get("control_pending_action") == "idle_close_probe"
+        active_transaction = state.get("control_transaction_state") in (
+            HTV405_ACTIVE_TRANSACTION_STATES
+        )
+        if watering and (
+            state.get("control_pending_action") == "idle_close_probe"
+            or active_transaction
         ):
+            result = (
+                "unexpected_watering_aborted_synchronized_open"
+                if active_transaction
+                else "unexpected_watering_aborted_idle_close_resync"
+            )
             self._connection.execute(
                 """
                 UPDATE valve_registry SET
@@ -2340,13 +2612,34 @@ class SQLiteEventStore:
                     control_recovery_idle_at = NULL,
                     control_recovery_zone = NULL,
                     control_recovery_duration_seconds = NULL,
-                    control_last_result =
-                        'unexpected_watering_aborted_idle_close_resync',
+                    control_transaction_state = CASE
+                        WHEN ? THEN 'failed'
+                        ELSE control_transaction_state
+                    END,
+                    control_transaction_not_before = NULL,
+                    control_transaction_error = CASE
+                        WHEN ? THEN 'unexpected_watering'
+                        ELSE control_transaction_error
+                    END,
+                    control_transaction_updated_at = CASE
+                        WHEN ? THEN ?
+                        ELSE control_transaction_updated_at
+                    END,
+                    control_last_result = ?,
                     updated_at = ?
                 WHERE valve_endpoint = ?
-                  AND control_pending_action = 'idle_close_probe'
                 """,
-                (observed_at, zone, observed_at, valve_endpoint),
+                (
+                    observed_at,
+                    zone,
+                    int(active_transaction),
+                    int(active_transaction),
+                    int(active_transaction),
+                    observed_at,
+                    result,
+                    observed_at,
+                    valve_endpoint,
+                ),
             )
             self._connection.commit()
             return next(
@@ -2486,7 +2779,12 @@ class SQLiteEventStore:
         expected_action = "open" if watering else "close"
         action_matches = pending_action == expected_action or (
             not watering
-            and pending_action in {"idle_close_probe", "close_discriminator"}
+            and pending_action
+            in {
+                "idle_close_probe",
+                "close_discriminator",
+                "synchronized_open_anchor",
+            }
         )
         if pending_id is not None and any(
             (
@@ -2496,9 +2794,47 @@ class SQLiteEventStore:
             )
         ):
             raise ValueError("HTV405 response does not match reservation")
+        transaction_state = registration.get("control_transaction_state")
+        transaction_not_before = registration.get(
+            "control_transaction_not_before"
+        )
+        transaction_error = registration.get("control_transaction_error")
+        transaction_updated_at = registration.get(
+            "control_transaction_updated_at"
+        )
+        if pending_action == "synchronized_open_anchor":
+            pending_started_at = registration.get(
+                "control_pending_started_at"
+            )
+            if not isinstance(pending_started_at, str):
+                raise ValueError("HTV405 anchor has no command timestamp")
+            try:
+                transaction_not_before = (
+                    datetime.fromisoformat(pending_started_at)
+                    + timedelta(seconds=15)
+                ).isoformat()
+            except ValueError as error:
+                raise ValueError(
+                    "HTV405 anchor has an invalid command timestamp"
+                ) from error
+            transaction_state = "waiting_for_command_interval"
+            transaction_error = None
+            transaction_updated_at = observed_at
+        elif (
+            pending_action == "open"
+            and watering
+            and transaction_state == "waiting_for_open_confirmation"
+        ):
+            transaction_state = "watering_confirmed"
+            transaction_not_before = None
+            transaction_error = None
+            transaction_updated_at = observed_at
         last_result = {
             "idle_close_probe": "idle_close_probe_authenticated",
             "close_discriminator": "close_discriminator_authenticated",
+            "synchronized_open_anchor": (
+                "synchronized_open_anchor_authenticated"
+            ),
         }.get(pending_action, "authenticated_response_confirmed")
         cursor = self._connection.execute(
             """
@@ -2522,6 +2858,10 @@ class SQLiteEventStore:
                 control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
+                control_transaction_state = ?,
+                control_transaction_not_before = ?,
+                control_transaction_error = ?,
+                control_transaction_updated_at = ?,
                 control_last_result = ?,
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
@@ -2537,6 +2877,10 @@ class SQLiteEventStore:
                 run_started_at if watering else None,
                 run_duration_seconds if watering else None,
                 expected_idle_at if watering else None,
+                transaction_state,
+                transaction_not_before,
+                transaction_error,
+                transaction_updated_at,
                 last_result,
                 observed_at,
                 valve_endpoint,

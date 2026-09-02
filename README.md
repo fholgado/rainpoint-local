@@ -88,7 +88,11 @@ device slots.
 The gateway/HA valve-control boundary rejects all requests unless the explicit
 `supervised_htv405_control` option is enabled. Even then, it requires an
 authenticated candidate node, a complete durable association, an
-evidence-synchronized command counter, and no command already pending.
+independently confirmed-idle valve, and no command already pending. Starting a
+zone performs fixed-anchor counter synchronization, observes the valve's
+15-second command interval, and waits for an authenticated watering response as
+one transaction. Home Assistant displays its progress and terminal result and
+removes actuation controls while it is active, preventing duplicate starts.
 The HTV145 transmitter implementation is compiled out of standard firmware and
 remains undeployed pending supervised acceptance with the isolated dry valve.
 

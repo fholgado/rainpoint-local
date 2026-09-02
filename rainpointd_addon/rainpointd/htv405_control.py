@@ -81,6 +81,23 @@ class Htv405ControlCoordinator:
             started_at=started_at,
         )
 
+    def request_synchronized_open(
+        self,
+        profile: Htv405ControlProfile,
+        *,
+        zone: int,
+        duration_seconds: int,
+        started_at: str,
+    ) -> dict[str, Any]:
+        """Queue one open behind the proven non-actuating counter anchor."""
+        return self._reserve_and_send(
+            profile,
+            action="synchronized_open",
+            zone=zone,
+            duration_seconds=duration_seconds,
+            started_at=started_at,
+        )
+
     def request_close(
         self,
         profile: Htv405ControlProfile,
@@ -160,7 +177,7 @@ class Htv405ControlCoordinator:
         self._require_enabled()
         self._require_profile(profile)
         if (
-            action in {"open", "guarded_open_probe"}
+            action in {"open", "guarded_open_probe", "synchronized_open"}
             and duration_seconds
             not in HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
         ):
@@ -175,7 +192,19 @@ class Htv405ControlCoordinator:
                 f"whole-minute values are {supported}"
             )
         command_id = uuid.uuid4().hex
-        if action == "idle_close_probe":
+        transaction_id: str | None = None
+        if action == "synchronized_open":
+            transaction_id = uuid.uuid4().hex
+            reservation = self.store.reserve_htv405_synchronized_open(
+                valve_endpoint=profile.valve_endpoint,
+                node_id=profile.node_id,
+                transaction_id=transaction_id,
+                command_id=command_id,
+                zone=zone,
+                duration_seconds=int(duration_seconds or 0),
+                started_at=started_at,
+            )
+        elif action == "idle_close_probe":
             reservation = self.store.reserve_htv405_idle_close_probe(
                 valve_endpoint=profile.valve_endpoint,
                 node_id=profile.node_id,
@@ -232,7 +261,12 @@ class Htv405ControlCoordinator:
             self._command(
                 (
                     "valve_control_close"
-                    if action in {"idle_close_probe", "close_discriminator"}
+                    if action
+                    in {
+                        "idle_close_probe",
+                        "close_discriminator",
+                        "synchronized_open",
+                    }
                     else "valve_control_open"
                     if action == "guarded_open_probe"
                     else f"valve_control_{action}"
@@ -260,20 +294,32 @@ class Htv405ControlCoordinator:
             )
             raise
         expected_idle_at = None
-        if duration_seconds is not None:
+        if duration_seconds is not None and action != "synchronized_open":
             expected_idle_at = (
                 datetime.fromisoformat(started_at)
                 + timedelta(seconds=duration_seconds)
             ).isoformat()
-        return {
+        result = {
             "command_id": command_id,
             "action": action,
             "zone": zone,
             "expected_sequence": sequence,
             "duration_seconds": duration_seconds,
             "expected_idle_at": expected_idle_at,
-            "state": "pending_authenticated_response",
+            "state": (
+                "synchronizing"
+                if action == "synchronized_open"
+                else "pending_authenticated_response"
+            ),
         }
+        if transaction_id is not None:
+            result.update(
+                {
+                    "transaction_id": transaction_id,
+                    "transaction_state": "synchronizing",
+                }
+            )
+        return result
 
     def _require_profile(self, profile: Htv405ControlProfile) -> None:
         registration = next(

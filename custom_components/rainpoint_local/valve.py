@@ -83,6 +83,28 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
         )
 
     @property
+    def supported_features(self) -> ValveEntityFeature:
+        """Disable actuation controls while a transaction is in progress."""
+        if (
+            self.decoded_state.get("rf_control_transaction_active") is True
+            or self.decoded_state.get("rf_control_command_pending") is True
+        ):
+            return ValveEntityFeature(0)
+        if self.is_closed is False:
+            return (
+                ValveEntityFeature.CLOSE
+                if self.decoded_state.get("rf_control_available") is True
+                else ValveEntityFeature(0)
+            )
+        if self.is_closed is True:
+            return (
+                ValveEntityFeature.OPEN
+                if self.decoded_state.get("rf_control_start_available") is True
+                else ValveEntityFeature(0)
+            )
+        return ValveEntityFeature(0)
+
+    @property
     def is_closed(self) -> bool | None:
         """Return only valve-originated state, never the requested command."""
         value = self.decoded_state.get(
@@ -116,6 +138,27 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
             "command_pending": self.decoded_state.get(
                 "rf_control_command_pending"
             ),
+            "transaction_state": self.decoded_state.get(
+                "rf_control_transaction_state"
+            ),
+            "transaction_status": self.decoded_state.get(
+                "rf_control_transaction_status"
+            ),
+            "transaction_active": self.decoded_state.get(
+                "rf_control_transaction_active"
+            ),
+            "transaction_zone": self.decoded_state.get(
+                "rf_control_transaction_zone"
+            ),
+            "transaction_duration_seconds": self.decoded_state.get(
+                "rf_control_transaction_duration_seconds"
+            ),
+            "transaction_not_before": self.decoded_state.get(
+                "rf_control_transaction_not_before"
+            ),
+            "transaction_error": self.decoded_state.get(
+                "rf_control_transaction_error"
+            ),
             "last_result": self.decoded_state.get("rf_control_last_result"),
             "recovery_sequence": self.decoded_state.get(
                 "rf_control_recovery_sequence"
@@ -133,9 +176,9 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
 
     async def async_open_valve(self, **kwargs) -> None:
         """Start one duration-bounded supervised run."""
-        if self.decoded_state.get("rf_control_available") is not True:
+        if self.decoded_state.get("rf_control_start_available") is not True:
             raise HomeAssistantError(
-                self.decoded_state.get("rf_control_unavailable_reason")
+                self.decoded_state.get("rf_control_start_unavailable_reason")
                 or "RainPoint valve control is unavailable"
             )
         try:

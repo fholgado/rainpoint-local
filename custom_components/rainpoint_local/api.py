@@ -335,6 +335,16 @@ class RainPointLocalClient:
             token,
         )
 
+    async def cancel_htv405_watering_transaction(
+        self, token: str, *, device_id: str
+    ) -> dict[str, Any]:
+        """Cancel a queued watering request before valve confirmation."""
+        return await self._post(
+            f"devices/{device_id}/valve/cancel-transaction",
+            {},
+            token,
+        )
+
     async def _get(
         self, path: str, *, timeout_seconds: int = 10
     ) -> dict[str, Any]:

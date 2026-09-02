@@ -698,13 +698,22 @@ same time without conflicting authority.
       scan with a fixed close-`0` anchor, repeats only that anchor once after
       silence, stops on a second silence or strict rejection, and normalizes
       persisted legacy scan state before transmitting.
-- [ ] Chain fixed-anchor synchronization and a requested HTV405 open into one
-      explicit, observable transaction. Queue no open until close `0` receives
-      an authenticated idle response and the 15-second command interval has
-      elapsed; cancel the queued open on gateway restart, node loss, rejection,
-      timeout, unexpected watering, or operator cancellation. Expose progress
-      and terminal failure in HA, and cover late response, duplicate request,
-      restart, and missing-RF cases before using it in scheduled irrigation.
+- [x] Implement fixed-anchor synchronization and a requested HTV405 open as one
+      explicit, observable transaction. Gateway 0.33.37 queues no open until
+      close `0` receives an authenticated idle response and the 15-second
+      command interval has elapsed. It cancels or fails queued work on gateway
+      restart, node or transport loss, rejection, timeout, unexpected watering,
+      or operator cancellation, and never replays an open after restart. HA
+      0.13.6 exposes a phase/result sensor, removes valve actuation features
+      while active to prevent duplicate clicks, and permits cancellation only
+      before open dispatch. Regression coverage includes authenticated air and
+      node-reported responses, late replies, duplicate requests, node loss,
+      restart, timeout, unexpected watering, operator cancellation, and the
+      exact 15-second boundary.
+- [ ] Physically validate the one-click synchronized HTV405 start transaction
+      with a 60-second Zone 1 run, including visible HA phase transitions and a
+      valve-originated watering confirmation. Keep scheduled irrigation on its
+      current guarded path until this end-to-end gate passes.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and

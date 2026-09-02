@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.36 supports authenticated network radio nodes, receive-only USB
+Version 0.33.37 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -29,22 +29,32 @@ session running so it can finish every modeled protocol reply. Strict
 selector-`0x07` paired-link reports refresh device availability without
 overwriting the last definitive zone or watering state.
 
-For HTV405 control, a command remains provisional until the valve supplies the
-matching authenticated response. A silent first attempt may repeat the same
-counter after the 15-second hardware interval. A strict negative response may
-advance to the next counter candidate; two silent attempts require a fresh
-independent idle report before any candidate advance. Telemetry report time and
-last command-transmission time are stored independently so routine reports do
-not delay user commands.
+For HTV405 control, one start request is one durable, observable transaction.
+The gateway first transmits a non-actuating close at fixed counter `0`. Only an
+authenticated closed response advances the transaction; the gateway then waits
+the valve's 15-second command interval, transmits the requested open at counter
+`0`, and requires the matching authenticated watering response. Telemetry report
+time and last command-transmission time are stored independently so routine
+reports do not delay user commands.
+
+The transaction fails closed on silence, strict rejection, node or transport
+loss, unexpected watering, or gateway restart. It never replays a queued open
+after restart. Duplicate starts are rejected while the transaction is active.
+Home Assistant keeps the last confirmed valve state visible, removes actuation
+controls while work is active, and exposes a status sensor for synchronization,
+the hardware interval, watering confirmation, success, cancellation, and
+failure. A cancellation button is enabled only before the open has been sent.
 
 When an independently confirmed-idle HTV405 loses command synchronization,
 Home Assistant exposes a configuration action that sends a close-only fixed
 anchor at counter `0`. It sends no duration and cannot construct an open.
 Physical testing proved that every five-bit idle-close value is accepted and
-becomes the next counter, so a scan is neither useful nor required. One silent
-anchor is repeated once after the 15-second valve interval; a second silence
-or strict rejection stops fail-closed. The explicitly started retry is durable
-across gateway and radio-node restarts.
+becomes the next counter, so a scan is neither useful nor required. The
+standalone diagnostic action may repeat one silent anchor once after the
+15-second valve interval; a second silence or strict rejection stops
+fail-closed. Its retry is durable across gateway and radio-node restarts. The
+end-user watering transaction is stricter: it attempts one anchor and never
+restores its queued open across a restart.
 
 Ordinary control is restored only by a matching authenticated closed response,
 whose sequence remains current for the next open. Silence, successful node
@@ -273,6 +283,12 @@ entities, a receive-only HTV145 valve device, and an association-backed HTV405
 four-zone device. HTV405 exposes one bounded-duration control and one duration
 setting per zone only when supervised control is explicitly enabled; state is
 accepted only from authenticated responses or subsequent valve telemetry.
+Starting a zone automatically synchronizes with a fixed close-`0` anchor before
+the requested open. The valve control is disabled while this transaction is in
+progress, and the **Control request status** entity explains whether the gateway
+is synchronizing, waiting for the 15-second interval, waiting for the valve's
+watering response, confirmed, cancelled, or failed. **Cancel watering request**
+is available only until the open is transmitted.
 HTV405 enrollment completes when a trailer-valid paired-link report for the
 expected endpoint is observed after the selected node transmits at least one
 session-scoped reply. The retained 18-row stock exchange describes later
@@ -280,17 +296,11 @@ initialization traffic but is not a required minimum: physical acceptance and
 control have been validated from shorter exchanges. Trailer-invalid frames
 cannot create valve links, and phase-only reports advance reception/phase
 diagnostics without erasing the latest definitive watering state.
-If an authenticated response times out, the app retains only the two smallest
-plausible counter candidates. A candidate becomes available only after the full
-requested duration plus a 15-second guard has elapsed; the app never replays
-the timed-out command immediately. An exact in-window valve response received
-by any authenticated radio node can confirm the command, while only the
-association owner may transmit it. Unexpected watering or any explicit
-node/response failure cancels this recovery path.
-The gateway also applies its own response deadline. If a radio node never
-returns a usable terminal status, routine device polling fails the exact
-durable reservation and enters the same bounded recovery policy rather than
-leaving control stuck pending.
+An exact in-window valve response received by any authenticated radio node can
+confirm the command, while only the association owner may transmit it. If an
+authenticated anchor or open response does not arrive before the gateway
+deadline, the transaction fails, clears its queued work, and reports the reason
+instead of leaving control stuck pending or guessing a counter.
 Open commands are currently limited to the physically accepted 1-, 2-, and
 20-minute payloads. Five- and fifteen-minute values cross an unresolved
 duration-encoding boundary and are rejected before counter reservation or RF

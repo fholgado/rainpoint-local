@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import binascii
 import json
 import os
 import sqlite3
@@ -18,7 +19,11 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
-from rainpointd.gateway import Gateway, _observed_utc
+from rainpointd.gateway import (
+    HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS,
+    Gateway,
+    _observed_utc,
+)
 from rainpointd.http import create_server
 from rainpointd.ingest import FrameIngestor
 from rainpointd.pairing import HCS026EnrollmentManager
@@ -39,6 +44,84 @@ class GatewayTest(unittest.TestCase):
         "79f4882f28b984028094a9801306d08683004f800000004080005680"
         "00000000000000005eb0"
     )
+
+    def test_restart_cancels_queued_htv405_open_without_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            first = Gateway(
+                storage_path=str(path), valve_control_enabled=True
+            )
+            assert first._store is not None
+            first._store.upsert_valve_link(
+                controller_endpoint="b9840280",
+                valve_endpoint="94a98013",
+                device_id="htv405-94a98013",
+                name="Test four-zone valve",
+                model="HTV405FRF",
+                area="Garden",
+                accepted_at="2026-09-02T12:00:00+00:00",
+            )
+            first._store.update_valve_control_profile(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                companion_endpoint="39840280",
+                selector=0x05,
+                frequency_offset_hz=97_154,
+                observed_at="2026-09-02T12:00:01+00:00",
+            )
+            first._store.synchronize_htv405_control_counter(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                next_sequence=6,
+                source="retained_association_capture",
+                observed_at="2026-09-02T12:00:02+00:00",
+            )
+            first._refresh_registry_catalog()
+            first._ensure_registered_valve_devices()
+            first.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                tx_armed=False,
+                capabilities=["rx", "valve_control_tx_candidate"],
+            )
+            first_commands: list[tuple[str, dict]] = []
+            first.set_node_command_sender(
+                lambda node_id, command: first_commands.append(
+                    (node_id, command)
+                )
+            )
+            first.request_htv405_synchronized_open(
+                device_id="htv405-94a98013",
+                zone=1,
+                duration_seconds=60,
+            )
+            self.assertEqual(3, len(first_commands))
+
+            # Simulate an interrupted process rather than graceful close.
+            first._store.close()
+            first._store = None
+            restored = Gateway(
+                storage_path=str(path), valve_control_enabled=True
+            )
+
+            registration = restored._store.valve_registry()[0]
+            self.assertEqual(
+                "cancelled", registration["control_transaction_state"]
+            )
+            self.assertEqual(
+                "gateway_restarted_before_completion",
+                registration["control_transaction_error"],
+            )
+            self.assertIsNone(registration["control_pending_command_id"])
+            restored_commands: list[tuple[str, dict]] = []
+            restored.set_node_command_sender(
+                lambda node_id, command: restored_commands.append(
+                    (node_id, command)
+                )
+            )
+            self.assertEqual([], restored_commands)
+            restored.close()
 
     def test_local_rf_controller_identity_is_unique_persistent_and_separate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -663,7 +746,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(17, restored._store.schema_version())
+            self.assertEqual(18, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1519,7 +1602,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(17, gateway.info()["storage_schema_version"])
+            self.assertEqual(18, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1530,7 +1613,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(17, migrated.info()["storage_schema_version"])
+            self.assertEqual(18, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -2889,6 +2972,21 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         "00000000000000001273"
     )
 
+    @staticmethod
+    def htv405_open_response(*, sequence: int, zone: int) -> str:
+        """Return a structurally valid watering response for one test zone."""
+        raw = bytearray.fromhex(GatewayTest.HTV405_OPEN_RESPONSE_SEQUENCE_6)
+        residual = binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(
+            raw[-2:], "big"
+        )
+        raw[13] = (raw[13] & 0xE0) | sequence
+        raw[17] = zone << 4
+        raw[18] |= 0x80
+        raw[-2:] = (
+            binascii.crc_hqx(raw[:-2], 0) ^ residual
+        ).to_bytes(2, "big")
+        return raw.hex()
+
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         path = Path(self.temporary_directory.name) / "rainpoint.sqlite3"
@@ -3014,12 +3112,12 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
             {"zone": 2, "duration_seconds": 60},
         )["control"]
-        self.assertEqual("pending_authenticated_response", result["state"])
+        self.assertEqual("synchronizing", result["state"])
         self.assertEqual(
             [
                 "valve_control_configure",
                 "valve_control_sync",
-                "valve_control_open",
+                "valve_control_close",
             ],
             [command["type"] for _node, command in self.commands],
         )
@@ -3048,9 +3146,323 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         registration = self.server.gateway._store.valve_registry()[0]
         self.assertIsNone(registration["control_pending_command_id"])
         self.assertIsNone(registration["control_next_sequence"])
+        self.assertEqual("failed", registration["control_transaction_state"])
         event = self.server.gateway.events()[-1]
         self.assertEqual("valve_control_failed", event["event_type"])
-        self.assertEqual("open", event["state"]["action"])
+        self.assertEqual(
+            "synchronized_open_anchor", event["state"]["action"]
+        )
+
+    def test_open_is_one_observable_fixed_anchor_transaction(self) -> None:
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 2, "duration_seconds": 60},
+        )["control"]
+
+        self.assertEqual("synchronizing", result["transaction_state"])
+        self.assertEqual(2, result["zone"])
+        self.assertEqual(60, result["duration_seconds"])
+        self.assertEqual(
+            [
+                "valve_control_configure",
+                "valve_control_sync",
+                "valve_control_close",
+            ],
+            [command["type"] for _node, command in self.commands],
+        )
+        self.assertEqual(0, self.commands[-1][1]["expected_sequence"])
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            "synchronized_open_anchor",
+            registration["control_pending_action"],
+        )
+        self.assertEqual(
+            "synchronizing",
+            registration["control_transaction_state"],
+        )
+        started = datetime.fromisoformat(
+            registration["control_pending_started_at"]
+        )
+
+        accepted = self.server.gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID,
+            self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
+            observed_at=(started + timedelta(milliseconds=900)).isoformat(),
+        )
+
+        self.assertIsNotNone(accepted)
+        assert accepted is not None
+        self.assertEqual(
+            "waiting_for_command_interval",
+            accepted["control_transaction_state"],
+        )
+        self.assertEqual(
+            (started + timedelta(seconds=15)).isoformat(),
+            accepted["control_transaction_not_before"],
+        )
+        self.assertNotIn(
+            "valve_control_open",
+            [command["type"] for _node, command in self.commands],
+        )
+
+        self.assertEqual(
+            0,
+            self.server.gateway.advance_htv405_synchronized_opens(
+                now=started + timedelta(seconds=14, milliseconds=999)
+            ),
+        )
+        self.assertEqual(
+            1,
+            self.server.gateway.advance_htv405_synchronized_opens(
+                now=started + timedelta(seconds=15)
+            ),
+        )
+        self.assertEqual("valve_control_open", self.commands[-1][1]["type"])
+        self.assertEqual(0, self.commands[-1][1]["expected_sequence"])
+        self.assertEqual(2, self.commands[-1][1]["zone"])
+        self.assertEqual(60, self.commands[-1][1]["duration_seconds"])
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            "waiting_for_open_confirmation",
+            registration["control_transaction_state"],
+        )
+        open_started = datetime.fromisoformat(
+            registration["control_pending_started_at"]
+        )
+
+        confirmed = self.server.gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID,
+            self.htv405_open_response(sequence=0, zone=2),
+            observed_at=(
+                open_started + timedelta(milliseconds=900)
+            ).isoformat(),
+        )
+
+        self.assertIsNotNone(confirmed)
+        assert confirmed is not None
+        self.assertEqual(
+            "watering_confirmed",
+            confirmed["control_transaction_state"],
+        )
+        self.assertIsNone(confirmed["control_transaction_error"])
+        self.assertEqual(1, confirmed["control_next_sequence"])
+        snapshot = next(
+            device
+            for device in self.server.gateway.devices()
+            if device["device_id"] == self.DEVICE_ID
+        )["state"]
+        self.assertEqual(
+            "watering_confirmed",
+            snapshot["rf_control_transaction_state"],
+        )
+        self.assertEqual(
+            "Watering confirmed for Zone 2",
+            snapshot["rf_control_transaction_status"],
+        )
+        self.assertFalse(snapshot["rf_control_transaction_active"])
+
+    def test_duplicate_open_is_rejected_while_synchronizing(self) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 60},
+        )
+        command_count = len(self.commands)
+
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+                {"zone": 1, "duration_seconds": 60},
+            )
+
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual(command_count, len(self.commands))
+
+    def test_node_loss_cancels_queued_open_without_actuation(self) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 3, "duration_seconds": 120},
+        )
+        command_count = len(self.commands)
+
+        self.server.gateway.update_node(self.NODE_ID, connected=False)
+
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            "cancelled", registration["control_transaction_state"]
+        )
+        self.assertEqual(
+            "radio_node_unavailable",
+            registration["control_transaction_error"],
+        )
+        self.assertIsNone(registration["control_pending_command_id"])
+        self.assertIsNone(registration["control_next_sequence"])
+        self.assertEqual(command_count, len(self.commands))
+
+    def test_operator_can_cancel_queued_open_without_actuation(self) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 4, "duration_seconds": 120},
+        )
+        command_count = len(self.commands)
+
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/cancel-transaction",
+            {},
+        )["control"]
+
+        self.assertEqual("cancelled", result["control_transaction_state"])
+        self.assertEqual(
+            "cancelled_by_operator", result["control_transaction_error"]
+        )
+        self.assertIsNone(result["control_pending_command_id"])
+        self.assertEqual(command_count, len(self.commands))
+
+    def test_operator_cannot_cancel_after_open_is_dispatched(self) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 4, "duration_seconds": 120},
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        started = datetime.fromisoformat(
+            registration["control_pending_started_at"]
+        )
+        self.assertIsNotNone(
+            self.server.gateway.observe_valve_control_air_response(
+                self.SECOND_NODE_ID,
+                self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
+                observed_at=(
+                    started + timedelta(milliseconds=900)
+                ).isoformat(),
+            )
+        )
+        self.assertEqual(
+            1,
+            self.server.gateway.advance_htv405_synchronized_opens(
+                now=started + timedelta(seconds=15)
+            ),
+        )
+        command_count = len(self.commands)
+
+        with self.assertRaises(HTTPError) as raised:
+            self.post_json(
+                f"/api/v1/devices/{self.DEVICE_ID}/valve/cancel-transaction",
+                {},
+            )
+
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual(command_count, len(self.commands))
+        registration = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual(
+            "waiting_for_open_confirmation",
+            registration["control_transaction_state"],
+        )
+
+    def test_anchor_timeout_fails_transaction_and_late_reply_is_ignored(
+        self,
+    ) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 60},
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        started = datetime.fromisoformat(
+            registration["control_pending_started_at"]
+        )
+
+        self.server.gateway.devices(
+            now=started
+            + timedelta(
+                seconds=HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS,
+                milliseconds=1,
+            )
+        )
+
+        failed = self.server.gateway._store.valve_registry()[0]
+        self.assertEqual("failed", failed["control_transaction_state"])
+        self.assertEqual(
+            "gateway_command_response_timeout_counter_unsynchronized",
+            failed["control_transaction_error"],
+        )
+        self.assertIsNone(failed["control_pending_command_id"])
+        self.assertIsNone(
+            self.server.gateway.observe_valve_control_air_response(
+                self.SECOND_NODE_ID,
+                self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
+                observed_at=(started + timedelta(seconds=11)).isoformat(),
+            )
+        )
+        self.assertNotIn(
+            "valve_control_open",
+            [command["type"] for _node, command in self.commands],
+        )
+
+    def test_unexpected_watering_aborts_transaction_without_queued_open(
+        self,
+    ) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 60},
+        )
+        command_count = len(self.commands)
+
+        result = self.server.gateway._store.observe_htv405_state_report(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            watering=True,
+            zone=4,
+            observed_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual("failed", result["control_transaction_state"])
+        self.assertEqual(
+            "unexpected_watering", result["control_transaction_error"]
+        )
+        self.assertTrue(result["control_confirmed_watering"])
+        self.assertEqual(command_count, len(self.commands))
+
+    def test_node_verified_anchor_response_schedules_same_transaction(
+        self,
+    ) -> None:
+        self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 4, "duration_seconds": 120},
+        )
+        registration = self.server.gateway._store.valve_registry()[0]
+        started = datetime.fromisoformat(
+            registration["control_pending_started_at"]
+        )
+
+        accepted = self.server.gateway.observe_valve_control_probe(
+            self.NODE_ID,
+            {
+                "type": "valve_control_probe",
+                "state": "zone_candidate_closed_response_confirmed",
+                "command_id": registration["control_pending_command_id"],
+                "controller_endpoint": "b9840280",
+                "valve_endpoint": self.VALVE_ENDPOINT,
+                "companion_endpoint": "39840280",
+                "selector": 0x05,
+                "center_hz": 433_518_527,
+                "confirmed_watering": False,
+                "transmitted_zone": 1,
+                "last_confirmed_sequence": 0,
+                "next_sequence": 0,
+                "frame": self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
+            },
+            observed_at=(started + timedelta(milliseconds=800)).isoformat(),
+        )
+
+        self.assertIsNotNone(accepted)
+        assert accepted is not None
+        self.assertEqual(
+            "waiting_for_command_interval",
+            accepted["control_transaction_state"],
+        )
+        self.assertIn(
+            self.VALVE_ENDPOINT,
+            self.server.gateway._htv405_transaction_timers,
+        )
 
     def test_twenty_minute_open_is_reserved_for_production_schedule(self) -> None:
         result = self.post_json(
@@ -3061,12 +3473,13 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual(1_200, result["duration_seconds"])
         self.assertEqual(
             1_200,
-            self.commands[-1][1]["duration_seconds"],
+            result["duration_seconds"],
         )
         registration = self.server.gateway._store.valve_registry()[0]
         self.assertEqual(
-            1_200, registration["control_pending_duration_seconds"]
+            1_200, registration["control_transaction_duration_seconds"]
         )
+        self.assertIsNone(registration["control_pending_duration_seconds"])
 
     def test_unvalidated_fifteen_minute_open_is_rejected_before_dispatch(
         self,

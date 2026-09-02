@@ -142,6 +142,11 @@ DESCRIPTIONS = (
         state_key="valve_state",
     ),
     RainPointSensorDescription(
+        key="control_transaction_status",
+        translation_key="control_transaction_status",
+        state_key="rf_control_transaction_status",
+    ),
+    RainPointSensorDescription(
         key="duration",
         translation_key="duration",
         state_key="duration_seconds",
@@ -602,6 +607,33 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
                     "last_valid_frame_at",
                     "last_invalid_frame_at",
                 )
+            }
+        if self.entity_description.key == "control_transaction_status":
+            return {
+                "state": self.decoded_state.get(
+                    "rf_control_transaction_state"
+                ),
+                "active": self.decoded_state.get(
+                    "rf_control_transaction_active"
+                ),
+                "zone": self.decoded_state.get(
+                    "rf_control_transaction_zone"
+                ),
+                "duration_seconds": self.decoded_state.get(
+                    "rf_control_transaction_duration_seconds"
+                ),
+                "started_at": self.decoded_state.get(
+                    "rf_control_transaction_started_at"
+                ),
+                "not_before": self.decoded_state.get(
+                    "rf_control_transaction_not_before"
+                ),
+                "error": self.decoded_state.get(
+                    "rf_control_transaction_error"
+                ),
+                "updated_at": self.decoded_state.get(
+                    "rf_control_transaction_updated_at"
+                ),
             }
         return None
 

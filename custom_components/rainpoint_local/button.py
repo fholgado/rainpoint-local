@@ -64,6 +64,17 @@ async def async_setup_entry(
                         coordinator, device_id, token
                     )
                 )
+            if (
+                (device_id, "cancel_watering_request") not in known
+                and "bounded_valve_control"
+                in device.get("capabilities", [])
+            ):
+                known.add((device_id, "cancel_watering_request"))
+                entities.append(
+                    RainPointHtv405CancelWateringRequestButton(
+                        coordinator, device_id, token
+                    )
+                )
         if entities:
             async_add_entities(entities)
 
@@ -148,6 +159,8 @@ class RainPointHtv405ResynchronizeCounterButton(
             and self.decoded_state.get("is_watering") is False
             and self.decoded_state.get("rf_next_control_sequence") is None
             and self.decoded_state.get("rf_control_command_pending") is False
+            and self.decoded_state.get("rf_control_transaction_active")
+            is not True
             and self.decoded_state.get("rf_control_resync_state")
             == "ready"
         )
@@ -178,6 +191,61 @@ class RainPointHtv405ResynchronizeCounterButton(
         """Send the anchor; the gateway handles one bounded retry if needed."""
         try:
             await self.coordinator.client.resynchronize_htv405_counter(
+                self._token,
+                device_id=self.device_id,
+            )
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
+        await self.coordinator.async_request_refresh()
+
+
+class RainPointHtv405CancelWateringRequestButton(
+    RainPointLocalEntity, ButtonEntity
+):
+    """Cancel the non-actuating or queued-open portion of a transaction."""
+
+    _attr_translation_key = "cancel_watering_request"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: RainPointLocalCoordinator,
+        device_id: str,
+        token: str,
+    ) -> None:
+        super().__init__(coordinator, device_id)
+        self._token = token
+        self._attr_unique_id = f"{device_id}_cancel_watering_request"
+
+    @property
+    def available(self) -> bool:
+        """Enable cancellation only before watering has been confirmed."""
+        return bool(
+            super().available
+            and self.decoded_state.get("rf_control_transaction_state")
+            in {"synchronizing", "waiting_for_command_interval"}
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Show exactly which queued operation would be cancelled."""
+        return {
+            "transaction_state": self.decoded_state.get(
+                "rf_control_transaction_state"
+            ),
+            "transaction_status": self.decoded_state.get(
+                "rf_control_transaction_status"
+            ),
+            "zone": self.decoded_state.get("rf_control_transaction_zone"),
+            "duration_seconds": self.decoded_state.get(
+                "rf_control_transaction_duration_seconds"
+            ),
+        }
+
+    async def async_press(self) -> None:
+        """Cancel the queued request; this operation never transmits RF."""
+        try:
+            await self.coordinator.client.cancel_htv405_watering_transaction(
                 self._token,
                 device_id=self.device_id,
             )
