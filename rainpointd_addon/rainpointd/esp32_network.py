@@ -698,6 +698,7 @@ class ESP32NetworkServer:
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
+                        "htv145_post_frame_tail_candidate",
                         "valve_control_tx_candidate",
                         "htv145_control_tx_candidate",
                         "paired_sensor_recovery_tx",

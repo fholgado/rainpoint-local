@@ -145,6 +145,22 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_v2_htv145_tail_candidate_capability_authenticates(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A,
+            TOKEN_A,
+            protocol_version=2,
+            capabilities=[
+                "rx",
+                "sensor_pairing_tx",
+                "htv145_pairing_tx_candidate",
+                "htv145_post_frame_tail_candidate",
+            ],
+        )
+        self.assertEqual("node_authenticated", response["type"])
+        stream.close()
+        connection.close()
+
     def test_authenticated_node_publishes_frame_with_provenance(self) -> None:
         connection, stream, response = self._connect(NODE_A, TOKEN_A)
         self.assertEqual("node_authenticated", response["type"])
