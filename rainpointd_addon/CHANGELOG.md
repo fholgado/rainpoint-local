@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.35 / Integration 0.13.5 / Firmware 0.15.3
+
+- Permit the authenticated operator-only close discriminator to select any one
+  five-bit candidate while the HTV405 is confirmed idle, enabling an exhaustive
+  physical acceptance scan without constructing an open command.
+- Keep the prior authenticated counter unpublished after silence and restrict
+  that uncertain state to a single frozen-baseline recheck.
+
 ## 0.33.34 / Integration 0.13.5 / Firmware 0.15.3
 
 - Extend the operator-only HTV405 close discriminator by exactly one counter

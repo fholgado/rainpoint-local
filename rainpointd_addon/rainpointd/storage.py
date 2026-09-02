@@ -1590,12 +1590,12 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Reserve a close-only current-versus-successor discriminator.
 
-        This research operation is deliberately narrower than counter
-        recovery: it requires a synchronized, confirmed-idle HTV405 and only
-        permits the current counter or its immediate successor. A strict
-        negative reply can therefore reject the candidate without erasing the
-        known current counter. Silence remains ambiguous and invalidates that
-        certainty.
+        This research operation requires a synchronized, confirmed-idle
+        HTV405 and permits exactly one five-bit close candidate. It cannot
+        construct an open command. A strict negative reply rejects the
+        candidate without erasing the known current counter. Silence remains
+        ambiguous and invalidates that certainty; only the frozen prior
+        baseline may then be rechecked.
         """
         if (
             not isinstance(candidate_sequence, int)
@@ -1641,11 +1641,7 @@ class SQLiteEventStore:
         allowed = (
             {anchor}
             if baseline_recheck
-            else {
-                anchor,
-                (anchor + 1) & (HTV405_COUNTER_MODULUS - 1),
-                (anchor + 2) & (HTV405_COUNTER_MODULUS - 1),
-            }
+            else set(range(HTV405_COUNTER_MODULUS))
         )
         if candidate_sequence not in allowed:
             raise ValueError(

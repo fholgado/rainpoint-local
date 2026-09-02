@@ -3311,14 +3311,14 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         self.assertFalse(accepted["control_confirmed_watering"])
 
-    def test_close_discriminator_route_is_bounded_to_current_plus_two(
+    def test_close_discriminator_route_is_bounded_to_five_bit_counter(
         self,
     ) -> None:
         with self.assertRaises(HTTPError) as raised:
             self.post_json(
                 f"/api/v1/devices/{self.DEVICE_ID}/valve/"
                 "probe-close-counter",
-                {"candidate_sequence": 9},
+                {"candidate_sequence": 32},
             )
         self.assertEqual(400, raised.exception.code)
         self.assertEqual([], self.commands)
@@ -3326,11 +3326,11 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         result = self.post_json(
             f"/api/v1/devices/{self.DEVICE_ID}/valve/"
             "probe-close-counter",
-            {"candidate_sequence": 8},
+            {"candidate_sequence": 31},
         )["control"]
 
         self.assertEqual("close_discriminator", result["action"])
-        self.assertEqual(8, result["expected_sequence"])
+        self.assertEqual(31, result["expected_sequence"])
         self.assertEqual(
             [
                 "valve_control_configure",

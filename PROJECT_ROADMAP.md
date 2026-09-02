@@ -747,11 +747,14 @@ same time without conflicting authority.
         authenticated idle response, a subsequent 60-second open at `9`
         advanced to `10`, and valve-owned telemetry ended the run. The close
         acceptance window is therefore at least two counters.
-  - [ ] Continue mapping the idle-close acceptance boundary from authenticated
-        counter `10` with one close-only `current + 4` discriminator. If it is
-        accepted, use bounded exponential offsets before concluding that close
-        can select an arbitrary five-bit counter; if it is not accepted,
-        re-authenticate the frozen baseline before ordinary control resumes.
+  - [ ] Exhaustively map idle-close selection from authenticated counter `10`
+        by visiting every five-bit value once in bit-reversed order. Each step
+        must receive an authenticated idle response before continuing; any
+        rejection or silence stops the scan and rechecks only the frozen prior
+        baseline. Finish with an authenticated 60-second open at `31`, prove
+        rollover to `0`, and require valve-owned automatic idle. Gateway
+        0.33.35 exposes this only through the authenticated close-only research
+        discriminator.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in
