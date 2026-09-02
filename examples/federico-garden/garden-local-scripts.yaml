@@ -80,24 +80,40 @@ garden_force_run_zone:
                        | length > 0 }}
               then:
                 - variables:
-                    validated_duration_minutes: >-
+                    duration_min_minutes: >-
                       {{ state_attr(
                            duration_number_entity,
-                           'validated_duration_minutes'
-                         ) | default([], true) }}
+                           'duration_min_minutes'
+                         ) | int(1) }}
+                    duration_max_minutes: >-
+                      {{ state_attr(
+                           duration_number_entity,
+                           'duration_max_minutes'
+                         ) | int(60) }}
+                    duration_step_minutes: >-
+                      {{ state_attr(
+                           duration_number_entity,
+                           'duration_step_minutes'
+                         ) | int(1) }}
                 - if:
                     - condition: template
                       value_template: >-
                         {{ run_minutes != (run_minutes | int)
                            or (run_minutes | int)
-                              not in validated_duration_minutes }}
+                              < (duration_min_minutes | int)
+                           or (run_minutes | int)
+                              > (duration_max_minutes | int)
+                           or ((run_minutes | int)
+                              - (duration_min_minutes | int))
+                              % (duration_step_minutes | int) != 0 }}
                   then:
                     - variables:
                         failure_message: >-
                           Refusing to open {{ valve_entity }} because
-                          {{ run_minutes }} minutes is not in its gateway-
-                          validated duration list:
-                          {{ validated_duration_minutes | join(', ') }}.
+                          {{ run_minutes }} minutes is outside its supported
+                          {{ duration_min_minutes }}–{{ duration_max_minutes }}
+                          minute range in {{ duration_step_minutes }}-minute
+                          steps.
                     - action: input_text.set_value
                       target:
                         entity_id: "{{ last_decision_text_entity }}"

@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.40 supports authenticated network radio nodes, receive-only USB
+Version 0.33.42 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -45,13 +45,11 @@ controls while work is active, and exposes a status sensor for synchronization,
 the hardware interval, watering confirmation, success, cancellation, and
 failure. A cancellation button is enabled only before the open has been sent.
 
-The gateway is the source of truth for physically accepted HTV405 durations
-and publishes that list to Home Assistant. One-, two-, three-, four-, nine-,
-twenty-, and sixty-minute requests have authenticated physical acceptance.
-Five- and fifteen-minute values remain blocked because their two-second count
-crosses the low-byte marker boundary and the simple additive candidates were
-explicitly rejected by the valve. A stock-gateway capture is required before
-that remaining encoding branch can be enabled safely.
+The gateway publishes a continuous HTV405 duration capability to Home
+Assistant: every whole minute from 1 through 60. Duration is a two-second
+counter whose low-byte bit 7 is reserved as a mandatory marker; the displaced
+data bit is carried by the adjacent extension byte. The integration validates
+the range before dispatch and does not maintain a duration preset list.
 
 When an independently confirmed-idle HTV405 loses command synchronization,
 Home Assistant exposes a configuration action that sends a close-only fixed
@@ -311,11 +309,10 @@ confirm the command, while only the association owner may transmit it. If an
 authenticated anchor or open response does not arrive before the gateway
 deadline, the transaction fails, clears its queued work, and reports the reason
 instead of leaving control stuck pending or guessing a counter.
-Open commands are currently limited to the physically accepted 1-, 2-, and
-20-minute payloads. Five- and fifteen-minute values cross an unresolved
-duration-encoding boundary and are rejected before counter reservation or RF
-dispatch; telemetry decode alone is not evidence that the inverse command
-encoding is valid.
+Open commands accept every whole-minute duration from 1 through 60. The packed
+wire codec preserves the counter bit displaced by the mandatory low-byte
+marker in the adjacent extension byte; values outside that continuous range
+are rejected before counter reservation or RF dispatch.
 The selected HTV405 RF egress node is routing metadata, not part of the valve's
 controller identity. It may be moved to another connected, capable node while
 idle; doing so preserves the association parameters but deliberately clears the

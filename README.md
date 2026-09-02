@@ -10,8 +10,8 @@ Supervised HTV405 control is available as a disabled-by-default beta. Local
 enrollment, isolated one- and two-minute opens on all four zones, and Zone 1
 early stop have passed physical validation, including direct valve responses,
 automatic stop, and controller-counter progression. The gateway and HA expose
-the physically accepted one-, two-, three-, four-, nine-, twenty-, and
-sixty-minute runs while the low-byte marker-collision durations remain gated.
+every whole-minute run from 1 through 60 using the decoded packed duration
+field.
 Enabling the beta adds four HA valve entities and four duration controls, and
 requires compatible supervised firmware on the valve's assigned radio node.
 
@@ -63,11 +63,10 @@ device slots.
 - Open every HTV405 zone for physically validated one- and two-minute runs and
   early-close the confirmed active Zone 1 on the enrolled selector-2 carrier,
   accepting state only from the valve's authenticated response or later
-  telemetry. Three-, four-, nine-, twenty-, and sixty-minute Zone 1 requests
-  have the same authenticated acceptance and independent duration reports.
-- Configure the next run independently for each zone using the gateway's
-  published physical-acceptance list. Marker-collision durations remain
-  unavailable until a stock command defines their wire representation.
+  telemetry. The duration codec supports every whole-minute value from 1
+  through 60 rather than a device-preset list.
+- Configure the next 1--60 minute run independently for each zone using the
+  gateway-published continuous range.
 - Track the independent controller command counter from matching valve replies;
   routine telemetry cannot overwrite it.
 - Decode the tested HTV145 frame family, open/closed state, configured duration,

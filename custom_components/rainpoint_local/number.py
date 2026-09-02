@@ -14,8 +14,9 @@ from .entity import RainPointLocalEntity
 
 
 DEFAULT_RUN_MINUTES = 1
+MINIMUM_RUN_MINUTES = 1
 MAXIMUM_RUN_MINUTES = 60
-DEFAULT_VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})
+RUN_MINUTE_STEP = 1
 
 
 async def async_setup_entry(
@@ -56,9 +57,9 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
     """Configure the next bounded run for one valve zone."""
 
     _attr_translation_key = "htv405_zone_duration"
-    _attr_native_min_value = 1
+    _attr_native_min_value = MINIMUM_RUN_MINUTES
     _attr_native_max_value = MAXIMUM_RUN_MINUTES
-    _attr_native_step = 1
+    _attr_native_step = RUN_MINUTE_STEP
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.BOX
 
@@ -86,16 +87,18 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
         )
 
     async def async_set_native_value(self, value: float) -> None:
-        """Store one physically validated whole-minute duration."""
+        """Store one duration inside the gateway-declared continuous range."""
         minutes = int(value)
-        validated_minutes = self._validated_run_minutes()
-        if value != minutes or minutes not in validated_minutes:
-            supported = ", ".join(
-                str(item) for item in sorted(validated_minutes)
-            )
+        minimum, maximum, step = self._duration_range()
+        if (
+            value != minutes
+            or minutes < minimum
+            or minutes > maximum
+            or (minutes - minimum) % step
+        ):
             raise ValueError(
-                "duration is not physically validated; supported minute "
-                f"values are {supported}"
+                "duration must be between "
+                f"{minimum} and {maximum} minutes in {step}-minute steps"
             )
         self.coordinator.htv405_run_minutes[
             (self.device_id, self._zone)
@@ -104,25 +107,34 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Expose the evidence-bounded duration choices."""
+        """Expose the continuous duration capability."""
+        minimum, maximum, step = self._duration_range()
         return {
-            "validated_duration_minutes": sorted(
-                self._validated_run_minutes()
-            )
+            "duration_min_minutes": minimum,
+            "duration_max_minutes": maximum,
+            "duration_step_minutes": step,
         }
 
-    def _validated_run_minutes(self) -> frozenset[int]:
-        """Use the gateway's physical-acceptance gate when available."""
-        raw = self.decoded_state.get(
-            "rf_control_validated_duration_minutes"
+    def _duration_range(self) -> tuple[int, int, int]:
+        """Use a sane gateway range or the integration's bounded fallback."""
+        values = tuple(
+            self.decoded_state.get(key)
+            for key in (
+                "rf_control_duration_min_minutes",
+                "rf_control_duration_max_minutes",
+                "rf_control_duration_step_minutes",
+            )
         )
-        if not isinstance(raw, list):
-            return DEFAULT_VALIDATED_RUN_MINUTES
-        values = frozenset(
-            value
-            for value in raw
-            if isinstance(value, int)
-            and not isinstance(value, bool)
-            and 1 <= value <= MAXIMUM_RUN_MINUTES
-        )
-        return values or DEFAULT_VALIDATED_RUN_MINUTES
+        if (
+            all(
+                isinstance(value, int) and not isinstance(value, bool)
+                for value in values
+            )
+            and MINIMUM_RUN_MINUTES
+            <= values[0]
+            <= values[1]
+            <= MAXIMUM_RUN_MINUTES
+            and 1 <= values[2] <= values[1] - values[0] + 1
+        ):
+            return values
+        return MINIMUM_RUN_MINUTES, MAXIMUM_RUN_MINUTES, RUN_MINUTE_STEP

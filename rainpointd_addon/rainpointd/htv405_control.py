@@ -15,12 +15,9 @@ _ENDPOINT = re.compile(r"[0-9a-f]{8}\Z")
 _NODE_ID = re.compile(r"rp-[0-9a-f]{12}\Z")
 HTV405_CONTROL_BASE_CENTER_HZ = 433_421_373
 HTV405_RESPONSE_WINDOW_SECONDS = 5.0
-# Physical valve-owned responses currently validate only these command
-# durations. Other whole-minute values may decode correctly in telemetry but
-# do not yet have a proven inverse command encoding.
-HTV405_VALIDATED_OPEN_DURATIONS_SECONDS = frozenset(
-    {60, 120, 180, 240, 540, 1_200, 3_600}
-)
+HTV405_OPEN_DURATION_MIN_SECONDS = 60
+HTV405_OPEN_DURATION_MAX_SECONDS = 3_600
+HTV405_OPEN_DURATION_STEP_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -178,20 +175,15 @@ class Htv405ControlCoordinator:
     ) -> dict[str, Any]:
         self._require_enabled()
         self._require_profile(profile)
-        if (
-            action in {"open", "guarded_open_probe", "synchronized_open"}
-            and duration_seconds
-            not in HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
+        if action in {"open", "guarded_open_probe", "synchronized_open"} and (
+            not isinstance(duration_seconds, int)
+            or isinstance(duration_seconds, bool)
+            or duration_seconds < HTV405_OPEN_DURATION_MIN_SECONDS
+            or duration_seconds > HTV405_OPEN_DURATION_MAX_SECONDS
+            or duration_seconds % HTV405_OPEN_DURATION_STEP_SECONDS
         ):
-            supported = ", ".join(
-                str(value // 60)
-                for value in sorted(
-                    HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
-                )
-            )
             raise ValueError(
-                "HTV405 duration is not physically validated; supported "
-                f"whole-minute values are {supported}"
+                "HTV405 duration must be a whole minute between 1 and 60"
             )
         command_id = uuid.uuid4().hex
         transaction_id: str | None = None

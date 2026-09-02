@@ -123,7 +123,7 @@ enabled:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.0-supervised-beta.12 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.5 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -244,7 +244,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.3 --environment rainpoint_bridge
+  --version 0.15.5 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

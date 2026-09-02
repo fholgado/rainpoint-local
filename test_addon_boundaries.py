@@ -146,9 +146,9 @@ class AddonBoundaryTest(unittest.TestCase):
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
             build_profile,
         )
-        self.assertIn('standard_version = "0.15.3"', build_profile)
+        self.assertIn('standard_version = "0.15.5"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.0-supervised-beta.12"',
+            'supervised_version = "0.15.5"',
             build_profile,
         )
         self.assertIn(
@@ -368,15 +368,23 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "custom_components" / "rainpoint_local" / "valve.py"
         ).read_text()
         self.assertIn('"number"', const_source)
+        self.assertIn("MINIMUM_RUN_MINUTES = 1", number_source)
         self.assertIn("MAXIMUM_RUN_MINUTES = 60", number_source)
-        self.assertIn(
-            "DEFAULT_VALIDATED_RUN_MINUTES = frozenset(", number_source
-        )
-        self.assertIn("frozenset({1, 2, 20})", number_source)
-        self.assertIn(
+        self.assertIn("RUN_MINUTE_STEP = 1", number_source)
+        self.assertIn('"rf_control_duration_min_minutes"', number_source)
+        self.assertIn('"rf_control_duration_max_minutes"', number_source)
+        self.assertIn('"rf_control_duration_step_minutes"', number_source)
+        self.assertNotIn("DEFAULT_VALIDATED_RUN_MINUTES", number_source)
+        self.assertNotIn(
             '"rf_control_validated_duration_minutes"', number_source
         )
-        self.assertIn("_attr_native_min_value = 1", number_source)
+        self.assertIn(
+            "_attr_native_min_value = MINIMUM_RUN_MINUTES", number_source
+        )
+        self.assertIn(
+            "_attr_native_max_value = MAXIMUM_RUN_MINUTES", number_source
+        )
+        self.assertIn("_attr_native_step = RUN_MINUTE_STEP", number_source)
         self.assertIn("htv405_run_minutes", coordinator_source)
         self.assertIn("run_minutes * 60", valve_source)
         self.assertNotIn("DEFAULT_BOUNDED_RUN_SECONDS", valve_source)
@@ -423,7 +431,10 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("completed", force_run)
         self.assertIn("failed", force_run)
         self.assertIn("cancelled", force_run)
-        self.assertIn("validated_duration_minutes", force_run)
+        self.assertIn("duration_min_minutes", force_run)
+        self.assertIn("duration_max_minutes", force_run)
+        self.assertIn("duration_step_minutes", force_run)
+        self.assertNotIn("validated_duration_minutes", force_run)
         self.assertNotIn('timeout: "00:00:10"', force_run)
         self.assertNotIn("accepted_command_results", force_run)
 

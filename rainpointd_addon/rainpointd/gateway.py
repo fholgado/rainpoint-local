@@ -23,8 +23,10 @@ from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv405_control import (
     HTV405_CONTROL_BASE_CENTER_HZ,
+    HTV405_OPEN_DURATION_MAX_SECONDS,
+    HTV405_OPEN_DURATION_MIN_SECONDS,
+    HTV405_OPEN_DURATION_STEP_SECONDS,
     HTV405_RESPONSE_WINDOW_SECONDS,
-    HTV405_VALIDATED_OPEN_DURATIONS_SECONDS,
     Htv405ControlCoordinator,
     Htv405ControlProfile,
 )
@@ -3629,12 +3631,15 @@ class Gateway:
                             "rf_control_start_unavailable_reason": (
                                 start_unavailable_reason
                             ),
-                            "rf_control_validated_duration_minutes": [
-                                seconds // 60
-                                for seconds in sorted(
-                                    HTV405_VALIDATED_OPEN_DURATIONS_SECONDS
-                                )
-                            ],
+                            "rf_control_duration_min_minutes": (
+                                HTV405_OPEN_DURATION_MIN_SECONDS // 60
+                            ),
+                            "rf_control_duration_max_minutes": (
+                                HTV405_OPEN_DURATION_MAX_SECONDS // 60
+                            ),
+                            "rf_control_duration_step_minutes": (
+                                HTV405_OPEN_DURATION_STEP_SECONDS // 60
+                            ),
                             "rf_control_command_pending": (
                                 pending_command is not None
                             ),

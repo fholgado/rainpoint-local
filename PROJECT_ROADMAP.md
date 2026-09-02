@@ -640,24 +640,21 @@ same time without conflicting authority.
       `0.15.0-supervised-beta.11` accepted freshly initialized counter `1`,
       reported a 1,200-second Zone 1 run, and returned itself to idle after the
       requested duration.
-- [x] Disprove the old three-value duration preset hypothesis and validate the
-      additive command field across a nonzero high byte and the supported
-      maximum. On 2026-09-02, synchronized 180-, 240-, 540-, and 3,600-second
-      Zone 1 requests each received an authenticated watering response,
-      independent active reports with the exact requested duration and a
-      decreasing remaining counter, an authenticated early stop, and
-      independent idle. Gateway `0.33.40` publishes the accepted 1-, 2-, 3-,
-      4-, 9-, 20-, and 60-minute list to integration `0.13.8` as the single
-      installed validation gate.
-- [ ] Capture stock-gateway commands for durations whose two-second count
-      already contains low-byte bit 7, including five and fifteen minutes,
-      before constructing them locally. The 2026-08-26 guarded trial proved
-      the additive candidates (`16 01` for 300 seconds and, by the same model,
-      `42 02` for 900 seconds) are not accepted command encodings: retained
-      counter `3` rejected the former, then immediately accepted the proven
-      60-second `9e 00` payload and advanced to `4`. Gateway 0.33.40 rejects
-      every duration outside its published physical-acceptance list before
-      reserving a counter or dispatching RF.
+- [x] Disprove the old duration-preset and additive-bias hypotheses and define
+      the shared packed duration scalar. Duration is a two-second counter;
+      low-byte bit 7 is a mandatory marker and its displaced data bit is
+      carried in the adjacent extension byte. This explains every accepted
+      field, the rejected marker-less `16 01`/`42 02` candidates, and the old
+      `c2 01 00` request that the valve decoded as 644 rather than 900 seconds.
+      Exact Python and firmware round trips cover every whole minute 1--60.
+- [x] Physically confirm the resolved displaced-bit branch with synchronized
+      5- and 15-minute HTV405 opens. On 2026-09-02, the valve accepted
+      `96 00 80` and `c2 01 80`, independently reported exactly 300 and 900
+      seconds, completed the five-minute run on its own, and authenticated the
+      15-minute early stop. Gateway `0.33.42`, integration `0.13.9`, and
+      firmware `0.15.5` expose the continuous 1--60 whole-minute capability.
+      The redacted boundary exchange is retained in
+      `research/fixtures/htv405_packed_duration_boundary_20260902.json`.
 - [ ] Retain the end-to-end installed result across RF evidence, duration decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
@@ -736,7 +733,7 @@ same time without conflicting authority.
       terminal failure updates the decision helper, mobile alert, and
       persistent Home Assistant notification within a bounded 40-second
       confirmation window. The installed script now validates the gateway-
-      published duration list up front and no longer adds a redundant
+      published duration range up front and no longer adds a redundant
       ten-second duration-entity polling delay before submitting the request.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
@@ -759,10 +756,10 @@ soak. The retained counter-`3` closed response validates the non-actuating
 probe mechanism independently of that still-unknown reset cause.
 
 The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
-the disproven additive `42 02` duration payload received no positive response
-and the valve remained idle. A same-counter retry failed identically. That
-isolates unsupported duration construction—not counter progression—as the
-failure cause. Gateway 0.33.13 still closes two recovery gaps exposed during
+the disproven additive `42 02 00` duration payload omitted the mandatory
+low-byte marker and received no positive response. A same-counter retry failed
+identically. That isolates malformed duration construction—not counter
+progression—as the failure cause. Gateway 0.33.13 still closes two recovery gaps exposed during
 the postmortem: any authenticated node may contribute the exact valve response
 during a pending window, and an already-chosen bounded retry candidate becomes
 available automatically after its safety guard. Keep this gate open until a

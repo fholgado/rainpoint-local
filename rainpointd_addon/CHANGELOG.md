@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.33.42 / Integration 0.13.9 / Firmware 0.15.5
+
+- Accept the displaced duration bit on HTV405 command-response and routine-link
+  marker bytes. A physical five-minute run proved that those markers become
+  `d6`; requiring exact `56` caused the gateway to miss positive responses and
+  the ACK owner to ignore boundary-duration state reports.
+- Retain the exact accepted five-minute response and independent state report
+  as Python and native firmware regressions.
+
+## 0.33.41 / Integration 0.13.9 / Firmware 0.15.4
+
+- Replace the temporary HTV405 duration allowlist with the decoded continuous
+  whole-minute capability from 1 through 60 minutes.
+- Preserve low-byte duration data bit 7 in the adjacent extension byte shared
+  by HTV405 and HTV145 command frames. This resolves the rejected five- and
+  fifteen-minute candidates and the earlier malformed 15-minute request that
+  the valve interpreted as 644 seconds.
+- Decode the matching extension bits in HTV405 requested- and remaining-time
+  state reports, and exhaustively round-trip all 60 supported values in both
+  the gateway codec and firmware frame builder.
+- Publish minimum, maximum, and step metadata to Home Assistant so duration
+  controls and the Garden Run Now workflow expose a continuous range rather
+  than a release-specific list.
+
 ## 0.33.40 / Integration 0.13.8 / Firmware 0.15.3
 
 - Physically accept synchronized three-, four-, nine-, and sixty-minute HTV405

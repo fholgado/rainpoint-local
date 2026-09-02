@@ -1074,12 +1074,12 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             aborted["control_last_result"],
         )
 
-    def test_unvalidated_duration_is_never_reserved_or_transmitted(self) -> None:
-        with self.assertRaisesRegex(ValueError, "not physically validated"):
+    def test_non_whole_minute_duration_is_never_reserved_or_transmitted(self) -> None:
+        with self.assertRaisesRegex(ValueError, "whole minute"):
             self.coordinator.request_open(
                 self.profile,
                 zone=1,
-                duration_seconds=900,
+                duration_seconds=30,
                 started_at="2026-08-24T20:00:20+00:00",
             )
 
@@ -1087,6 +1087,17 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         self.assertEqual(6, state["control_next_sequence"])
         self.assertIsNone(state["control_pending_command_id"])
         self.assertEqual([], self.sent)
+
+    def test_fifteen_minute_duration_uses_continuous_range(self) -> None:
+        pending = self.coordinator.request_synchronized_open(
+            self.profile,
+            zone=1,
+            duration_seconds=900,
+            started_at="2026-09-02T20:00:20+00:00",
+        )
+
+        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual(900, self.sent[-1][1]["duration_seconds"])
 
     def test_nine_minute_duration_can_enter_physical_validation(self) -> None:
         pending = self.coordinator.request_synchronized_open(

@@ -3256,8 +3256,16 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             snapshot["rf_control_transaction_state"],
         )
         self.assertEqual(
-            [1, 2, 3, 4, 9, 20, 60],
-            snapshot["rf_control_validated_duration_minutes"],
+            1,
+            snapshot["rf_control_duration_min_minutes"],
+        )
+        self.assertEqual(
+            60,
+            snapshot["rf_control_duration_max_minutes"],
+        )
+        self.assertEqual(
+            1,
+            snapshot["rf_control_duration_step_minutes"],
         )
         self.assertEqual(
             "Watering confirmed for Zone 2",
@@ -3525,20 +3533,20 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         self.assertIsNone(registration["control_pending_duration_seconds"])
 
-    def test_unvalidated_fifteen_minute_open_is_rejected_before_dispatch(
+    def test_fifteen_minute_open_is_reserved_from_continuous_range(
         self,
     ) -> None:
-        with self.assertRaises(HTTPError) as raised:
-            self.post_json(
-                f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
-                {"zone": 1, "duration_seconds": 900},
-            )
+        result = self.post_json(
+            f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
+            {"zone": 1, "duration_seconds": 900},
+        )["control"]
 
-        self.assertEqual(400, raised.exception.code)
-        self.assertEqual([], self.commands)
+        self.assertEqual(900, result["duration_seconds"])
+        self.assertNotEqual([], self.commands)
         registration = self.server.gateway._store.valve_registry()[0]
-        self.assertEqual(6, registration["control_next_sequence"])
-        self.assertIsNone(registration["control_pending_command_id"])
+        self.assertEqual(
+            900, registration["control_transaction_duration_seconds"]
+        )
 
     def test_device_poll_expires_a_stale_node_command_reservation(self) -> None:
         result = self.server.gateway.request_htv405_control(

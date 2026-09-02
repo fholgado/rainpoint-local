@@ -56,8 +56,8 @@ if htv145_tail_enabled and not (
         "RAINPOINT_RESEARCH_BENCH=1 and "
         "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
     )
-standard_version = "0.15.3"
-supervised_version = "0.15.0-supervised-beta.12"
+standard_version = "0.15.5"
+supervised_version = "0.15.5"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
     "0.15.3-htv145-pairing-tail-candidate.1"
