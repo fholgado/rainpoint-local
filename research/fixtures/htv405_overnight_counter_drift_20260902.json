@@ -69,18 +69,25 @@
     }
   ],
   "idle_close_discriminator": {
-    "observed_at": "2026-09-02T12:11:44+00:00",
+    "command_observed_at": "2026-09-02T12:11:34+00:00",
+    "response_observed_at": "2026-09-02T12:11:35.326349+00:00",
+    "incorrect_gateway_timeout_at": "2026-09-02T12:11:44+00:00",
     "sequence": 3,
     "action": "close",
     "zone": 1,
-    "result": "idle_close_probe_timeout_retry",
+    "response_frame": "79f4882f28ee86de8094a9801303508683104f80000000408000568000000000000000007156",
+    "response_receiver_node_id": "rp-f4e5be3b015c",
+    "response_watering": false,
+    "authenticated_next_sequence": 3,
+    "gateway_result": "idle_close_probe_timeout_retry",
     "watering_observed": false,
     "retry_sent": false,
-    "conclusion": "An idle close is not a reliable non-actuating counter oracle. Its silence cannot establish whether the candidate is correct and must not advance the counter."
+    "software_fault": "The network receiver authenticated and retained the valid response, but Gateway.observe_valve_control_air_response compared pending action idle_close_probe literally with decoded action close and discarded it before durable confirmation.",
+    "conclusion": "A matching authenticated closed response is a non-actuating counter oracle and retains the accepted sequence. Silence remains ambiguous and must not advance the search."
   },
   "post_discriminator_recovery": {
     "synchronized_at": "2026-09-02T12:45:12.573272+00:00",
-    "evidence": "The authenticated sequence-2 open established next sequence 3; an accepted close does not advance the command sequence, so the silent sequence-3 close could not make 3 stale whether it was received or ignored.",
+    "evidence": "The authenticated sequence-2 open established next sequence 3, and the retained sequence-3 closed response proved the close was accepted without advancing that sequence. The gateway state was restored from this RF evidence after its action-alias bug had incorrectly recorded a timeout.",
     "open_confirmed_at": "2026-09-02T12:45:23.735303+00:00",
     "sequence": 3,
     "action": "open",
@@ -95,7 +102,7 @@
     "The unchanged custom controller remained authorized because sequence 2 received an authenticated watering response.",
     "The command session changed without requiring a full valve association change.",
     "Routine telemetry acknowledgements use a separate telemetry sequence and do not directly disclose the watering-command sequence.",
-    "Idle close cannot safely resynchronize the command counter from silence.",
+    "A matching authenticated idle-close response safely validates the command counter and retains that counter for the next open; silence alone remains unusable.",
     "Restoring sequence 3 from the earlier authenticated sequence-2 response produced an authenticated 20-minute open and advanced the session to sequence 4."
   ],
   "not_yet_proven": [

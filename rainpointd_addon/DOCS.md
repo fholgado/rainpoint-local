@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.30 supports authenticated network radio nodes, receive-only USB RTL-SDR,
+Version 0.33.31 supports authenticated network radio nodes, receive-only USB RTL-SDR,
 receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
 one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
 cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -42,7 +42,9 @@ counter probe when ordinary control is unsynchronized. The probe is Zone 1
 only, has no duration field, and sends only a close frame. It starts from the
 last authenticated command evidence, repeats silence once, advances only after
 a strict rejection, searches at most four adjacent candidates, and restores
-ordinary control only from a matching authenticated closed response. It is not
+ordinary control only from a matching authenticated closed response. The
+gateway treats that response as confirmation of the pending probe action and
+retains its sequence for the next open. It is not
 exposed as an end-user HA control while physical acceptance remains open.
 
 An independently authenticated operator endpoint can begin a counter-recovery

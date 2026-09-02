@@ -3429,6 +3429,10 @@ class Gateway:
             zone = response["rf_control_response_zone"]
             watering = response["rf_control_response_watering"]
             action = "open" if watering else "close"
+            pending_action = registration.get("control_pending_action")
+            action_matches = pending_action == action or (
+                not watering and pending_action == "idle_close_probe"
+            )
             pending_started_at = registration.get(
                 "control_pending_started_at"
             )
@@ -3450,7 +3454,7 @@ class Gateway:
                 )
                 or registration.get("control_pending_sequence") != sequence
                 or registration.get("control_pending_zone") != zone
-                or registration.get("control_pending_action") != action
+                or not action_matches
                 or not isinstance(pending_started_at, str)
             ):
                 return None

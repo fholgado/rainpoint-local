@@ -694,16 +694,21 @@ same time without conflicting authority.
       the next sequence to `3`. This proves session drift, but does not yet
       prove whether the valve reset directly to `1` or the silent first open
       was received and advanced it. An idle close at authenticated candidate
-      `3` then received no response, so close/no-op is not a synchronization
-      oracle and silence must never advance the search. Restoring `3` from the
-      earlier authenticated sequence-`2` response then produced an
+      `3` did receive a valid closed response on the assigned Vegetable Garden
+      Radio and retained next sequence `3`; gateway 0.33.30 incorrectly
+      discarded it because pending action `idle_close_probe` did not literally
+      equal decoded action `close`. This proves a positive idle-close response
+      is a non-actuating synchronization oracle, while silence still must never
+      advance the search. Restoring `3` from that RF evidence then produced an
       authenticated 1,200-second Zone 1 open at 2026-09-02 12:45 UTC and
-      advanced the session to `4`. This proves the silent close did not consume
-      a new open counter and validates evidence-based restoration when a known
-      authenticated predecessor is still available.
-  - [ ] Persist timestamped HTV405 routine-ACK outcomes and radio-node
+      advanced the session to `4`.
+  - [x] Persist timestamped HTV405 routine-ACK outcomes and radio-node
         connection/reboot checkpoints so an idle timeout can be separated from
-        owner-node reboot, ACK failure, and gateway connection churn.
+        owner-node reboot, ACK failure, and gateway connection churn. Gateway
+        0.33.31 was deployed on 2026-09-02; all three authenticated nodes
+        reconnected, health baselines were retained, and the Vegetable Garden
+        Radio immediately journaled exact routine-ACK frames and outcomes for
+        valve `94a98013`.
   - [ ] Establish one authenticated counter, hold the gateway and owner node
         stable, and test that exact next counter after controlled 1-, 4-, 8-,
         and 12-hour idle intervals using only bounded 60-second Zone 1 opens.
@@ -711,9 +716,10 @@ same time without conflicting authority.
         whether stock sends a missing synchronization transaction, scans
         command candidates, or maintains the session with traffic absent from
         the local implementation.
-  - [ ] If no non-actuating oracle exists, implement an explicitly bounded,
-        response-driven open search that stops on the first authenticated
-        response and never treats silence alone as counter advancement.
+  - [ ] Physically validate the deployed idle-close action-alias fix, then
+        implement an explicitly bounded close search that stops on the first
+        authenticated closed response, retains that accepted counter for the
+        next open, and never treats silence alone as counter advancement.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in
@@ -723,7 +729,8 @@ owner node recorded at least one reboot, 33 connection events, 421 routine ACK
 transmissions, and three aggregate ACK failures before inspection. Those
 events make loss of ACK-owner continuity at least as plausible as a pure
 wall-clock expiry until the new timestamped diagnostics complete a stable
-soak.
+soak. The retained counter-`3` closed response validates the non-actuating
+probe mechanism independently of that still-unknown reset cause.
 
 The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
 the disproven additive `42 02` duration payload received no positive response

@@ -2795,6 +2795,10 @@ class ValveControlHTTPAPITest(unittest.TestCase):
     SECOND_NODE_ID = "rp-aabbccddeeff"
     DEVICE_ID = "htv405-94a98013"
     VALVE_ENDPOINT = "94a98013"
+    HTV405_CLOSE_RESPONSE_SEQUENCE_7 = (
+        "79f4882f28b984028094a9801307508683104f800000004080005680"
+        "00000000000000003963"
+    )
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -3195,6 +3199,28 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             [command["type"] for _node, command in self.commands],
         )
         self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
+
+        registration = gateway._store.valve_registry()[0]
+        observed_at = (
+            datetime.fromisoformat(
+                registration["control_pending_started_at"]
+            )
+            + timedelta(milliseconds=900)
+        ).isoformat()
+        accepted = gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID,
+            self.HTV405_CLOSE_RESPONSE_SEQUENCE_7,
+            observed_at=observed_at,
+        )
+
+        self.assertIsNotNone(accepted)
+        assert accepted is not None
+        self.assertEqual(7, accepted["control_next_sequence"])
+        self.assertEqual(
+            "idle_close_probe_authenticated",
+            accepted["control_last_result"],
+        )
+        self.assertFalse(accepted["control_confirmed_watering"])
 
     def test_guarded_open_probe_route_is_fixed_to_zone_one_and_sixty_seconds(
         self,

@@ -192,6 +192,13 @@ d0 86 83 00 4f
 It echoes the attempted sequence and does not advance the counter. Absence of
 a response is a failed attempt, not proof of rejection or acceptance.
 
+A matching authenticated closed response is a safe non-actuating sequence
+oracle: it proves the candidate is current and retains that same sequence for
+the next open. A bounded re-synchronization search may therefore send idle
+Zone 1 closes one candidate at a time, obey the 15-second command interval,
+and stop only on a positive closed response. It must never advance merely
+because a candidate was silent.
+
 ## Battery and unsupported water usage
 
 Battery is a declared HTV405 capability but remains unavailable locally. The

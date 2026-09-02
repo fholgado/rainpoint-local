@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.31 / Integration 0.13.4 / Firmware 0.15.3
+
+- Accept a strict authenticated HTV405 closed response when the durable
+  pending action is the equivalent `idle_close_probe`. This fixes a receive
+  action-alias mismatch that discarded a physically valid counter-3 response,
+  falsely timed out the probe, and hid a safe non-actuating resynchronization
+  oracle.
+
 ## 0.33.30 / Integration 0.13.4 / Firmware 0.15.3
 
 - Persist every HTV405 routine-ACK transmission outcome with its exact frame,
