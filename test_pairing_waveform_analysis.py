@@ -25,6 +25,10 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    @unittest.skipUnless(
+        MODULE.np is not None,
+        "NumPy is an optional dependency used only for IQ analysis",
+    )
     def test_classifies_a_low_tone_post_frame_tail(self) -> None:
         frame = bytes.fromhex(
             "79f4882f28b42d008fb9840280824085850086700098e1a10d"
