@@ -11,6 +11,34 @@ constexpr std::size_t kHardwareSyncBytes = 2;
 constexpr std::size_t kRadioPayloadBytes = kFrameBytes - kHardwareSyncBytes;
 constexpr std::array<std::uint8_t, 5> kSync = {0x79, 0xf4, 0x88, 0x2f, 0x28};
 
+struct PackedDuration {
+    std::array<std::uint8_t, 2> field{};
+    std::uint8_t extension = 0;
+};
+
+inline bool encodePackedWholeMinuteDuration(
+    std::uint32_t durationSeconds,
+    std::uint32_t maximumSeconds,
+    PackedDuration& encoded
+) {
+    if (durationSeconds < 60U || durationSeconds > maximumSeconds ||
+        durationSeconds % 60U != 0) {
+        return false;
+    }
+    const std::uint32_t units = durationSeconds / 2U;
+    if (units > 0xffffU) {
+        return false;
+    }
+    // The low byte's bit 7 is a mandatory wire marker. Its displaced data bit
+    // moves to bit 7 of the adjacent extension byte.
+    encoded.field[0] = static_cast<std::uint8_t>(
+        0x80U | (units & 0x7fU)
+    );
+    encoded.field[1] = static_cast<std::uint8_t>(units >> 8U);
+    encoded.extension = static_cast<std::uint8_t>(units & 0x80U);
+    return true;
+}
+
 inline std::uint16_t crcCcittZero(
     const std::uint8_t* data,
     std::size_t length

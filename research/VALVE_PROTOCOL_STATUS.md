@@ -138,14 +138,21 @@ old transmitter's `c2 01` payload means 644 seconds to the valve: it reported
 strong decode evidence, but it did not prove the inverse command encoder.
 
 A later guarded five-minute trial disproved the simple additive inverse. The
-local gateway sent candidate `16 01` with retained command sequences 3, 4, and
-5; the valve returned the same negative `d0/86/83/00` response each time.
-Retrying retained sequence 3 with the previously validated 60-second `9e 00`
-payload immediately received an authenticated open response, active reports,
-and a valve-owned automatic stop. Command construction therefore remains
-unknown when the two-second count already contains low-byte bit 7. A stock
-five- or fifteen-minute command capture is required before another encoder is
-promoted.
+local gateway sent candidate `16 01 00` with retained command sequences 3, 4,
+and 5; the valve returned the same negative `d0/86/83/00` response each time.
+Retrying retained sequence 3 with the previously validated 60-second
+`9e 00 00` payload immediately received an authenticated open response, active
+reports, and a valve-owned automatic stop.
+
+Cross-family comparison later resolved the boundary. The low field byte's bit
+7 is a mandatory marker, while its displaced data bit is carried in the next
+byte's bit 7. Retained stock HTV145 commands independently separate that bit
+from selector polarity: a non-inverted 1,020-second request is `fe 01 80`,
+while 600- and 1,200-second selector-6 requests carry extension `00`. The same
+layout explains the HTV405 failures: `16 01 00` and `42 02 00` omitted the
+marker, while `c2 01 00` omitted the displaced bit and reconstructed as 644
+seconds. The corrected five- and fifteen-minute encodings are `96 00 80` and
+`c2 01 80`.
 
 The retained HTV145 evidence resolves two logical opens from four RF attempts.
 The 1,200-second open used three identical attempts at offsets 0, 729.210, and

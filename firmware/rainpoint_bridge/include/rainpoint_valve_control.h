@@ -61,15 +61,14 @@ inline bool buildHtv405GatewayOpenFrame(
     std::array<std::uint8_t, kFrameBytes>& frame
 ) {
     // This builder is compiled only into supervised prototype firmware.
-    // Bounded opens use whole-minute durations. Physical one-, two-, three-,
-    // four-, nine-, twenty-, and sixty-minute requests have authenticated
-    // responses plus matching state reports. The gateway retains the smaller
-    // evidence gate because marker-collision values remain unresolved.
+    // Bounded opens use the protocol's packed whole-minute representation.
+    // The range is deliberately limited to the product's 1-60 minute UI
+    // contract even though the common wire scalar can represent more.
+    PackedDuration duration{};
     if (!validHtv405GatewayControlLink(link) || phase.sequence > 0x1f ||
         zone < 1 || zone > 4 ||
         (associationSelector != 0x05 && associationSelector != 0x85) ||
-        durationSeconds < 60 || durationSeconds > 3'600 ||
-        (durationSeconds % 2U) != 0 ||
+        !encodePackedWholeMinuteDuration(durationSeconds, 3'600U, duration) ||
         trailerResidual != 0x4f03) {
         return false;
     }
@@ -83,13 +82,6 @@ inline bool buildHtv405GatewayOpenFrame(
         frame[9 + index] = link.companionEndpoint[index];
     }
 
-    // HTV405 stores the duration as a two-byte, two-second counter biased by
-    // 0x80. This must be addition, not a bitwise OR: a 900-second request has
-    // units 0x01c2 and must encode as 0x0242. The former OR encoding produced
-    // 0x01c2, which the valve physically bounded to 644 seconds.
-    const std::uint16_t encodedDuration = static_cast<std::uint16_t>(
-        durationSeconds / 2U + 0x80U
-    );
     frame[13] = static_cast<std::uint8_t>(0x80U | phase.sequence);
     // Gateway control byte 14 is the operation marker, not the
     // primary/repeat bit used by lower-channel valve reports.
@@ -101,8 +93,9 @@ inline bool buildHtv405GatewayOpenFrame(
     // the selector-6 association branch. Do not substitute the state-report
     // selector here; the command marker belongs to the gateway envelope.
     frame[17] = static_cast<std::uint8_t>(0x80U | zone);
-    frame[19] = static_cast<std::uint8_t>(encodedDuration & 0xffU);
-    frame[20] = static_cast<std::uint8_t>(encodedDuration >> 8U);
+    frame[19] = duration.field[0];
+    frame[20] = duration.field[1];
+    frame[21] = duration.extension;
     writeTrailer(frame, trailerResidual);
     return true;
 }
@@ -175,7 +168,7 @@ inline bool isHtv405LinkFrame(
         ((frame[17] & 0x7fU) == 0x05 ||
          (frame[17] & 0x7fU) == 0x07) &&
         (frame[20] & 0x7fU) == 0x4f &&
-        frame[25] == 0x40 && frame[28] == 0x56;
+        frame[25] == 0x40 && (frame[28] & 0x7fU) == 0x56;
 }
 
 inline bool nextHtv405Phase(
@@ -236,7 +229,7 @@ inline bool decodeHtv405GatewayCommandResponse(
         (frame[17] & 0x0fU) != 0 ||
         (frame[17] >> 4U) < 1 || (frame[17] >> 4U) > 4 ||
         (frame[18] & 0x7fU) != 0x4f ||
-        frame[23] != 0x40 || frame[26] != 0x56 ||
+        frame[23] != 0x40 || (frame[26] & 0x7fU) != 0x56 ||
         ((frame[14] ^ frame[18]) & 0x80U) != 0) {
         return false;
     }

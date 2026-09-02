@@ -148,26 +148,30 @@ state.
 
 ## Duration
 
-HTV145 duration is a two-byte little-endian count in two-second units, with
-bit `0x80` set in the low byte:
+HTV145 uses the same packed two-second scalar as HTV405. Low-byte bit 7 is a
+mandatory marker and its displaced data bit moves to extension byte 21 bit 7:
 
 ```text
-seconds = (little_endian_u16(encoded) & ~0x0080) * 2
-encoded = little_endian_u16(seconds / 2) with low-byte bit 0x80 set
+units = seconds / 2
+field = little_endian_u16(units) with low-byte bit 7 replaced by 1
+extension = units & 0x80
+seconds = ((little_endian_u16(field) & ~0x80) |
+           (extension & 0x80)) * 2
 ```
 
 Validated whole-minute examples include:
 
-| Encoded | Duration |
-|---|---:|
-| `9e 00` | 60 seconds |
-| `f8 00` | 240 seconds |
-| `96 00` | 300 seconds |
-| `c2 01` | 900 seconds |
-| `fe 01` | 1,020 seconds |
+| Field | Extension | Duration |
+|---|---:|---:|
+| `9e 00` | `00` | 60 seconds |
+| `f8 00` | `00` | 240 seconds |
+| `96 00` | `80` | 300 seconds |
+| `c2 01` | `80` | 900 seconds |
+| `fe 01` | `80` | 1,020 seconds |
 
-This encoding is not the HTV405's additive `0x80` bias and the two must not be
-shared in a generic duration builder.
+The retained 1,020-second selector-5 command has an ordinary open marker and
+extension `0x80`, while 600- and 1,200-second selector-6 commands have extension
+`0x00`. That separates the duration extension from association-marker polarity.
 
 ## Water usage
 
@@ -211,8 +215,11 @@ Association branch markers are:
 
 | Profile | Open marker | Close marker |
 |---|---|---|
-| Selector 5 | `0x10`, duration high marker `0x00` | `0x90` |
-| Selector 6 | `0x90`, duration high marker `0x80` | `0x10` |
+| Selector 5 | `0x10` | `0x90` |
+| Selector 6 | `0x90` | `0x10` |
+
+Duration extension byte 21 is determined only by the packed duration value,
+not by this selector branch.
 
 One logical stock command is three byte-identical RF attempts at approximately
 `0`, `0.729210`, and `1.668479` seconds. The controller waits for a matching

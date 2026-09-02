@@ -147,7 +147,7 @@ inline bool isAuthorizedRoutineHtv405Report(
         ((frame[17] & 0x7fU) == 0x05 ||
          (frame[17] & 0x7fU) == 0x07) &&
         (frame[20] & 0x7fU) == 0x4f && frame[25] == 0x40 &&
-        frame[28] == 0x56;
+        (frame[28] & 0x7fU) == 0x56;
     return authorization.active && routineShape &&
         endpointEquals(frame, 5, authorization.controllerEndpoint) &&
         endpointEquals(frame, 9, authorization.valveEndpoint);

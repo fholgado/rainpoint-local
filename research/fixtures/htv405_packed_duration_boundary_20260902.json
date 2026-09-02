@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "device_model": "HTV405FRF",
+  "purpose": "Physical boundary evidence for the continuous packed duration scalar",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "valve_endpoint": "94a98013",
+    "zone": 1
+  },
+  "codec": {
+    "unit_seconds": 2,
+    "field_low_marker": "0x80",
+    "extension_mask": "0x80",
+    "command_field_offsets": [
+      19,
+      20
+    ],
+    "command_extension_offset": 21,
+    "report_requested_field_offsets": [
+      29,
+      30
+    ],
+    "report_requested_extension_offset": 31,
+    "report_remaining_field_offsets": [
+      26,
+      27
+    ],
+    "report_remaining_extension_offset": 28
+  },
+  "trials": [
+    {
+      "requested_seconds": 300,
+      "encoded_field": "9600",
+      "extension": "80",
+      "open_dispatched_at": "2026-09-02T19:52:20.359812+00:00",
+      "accepted_response": "79f4882f28ee86de8094a9801300d0868010cf80000000409600d69600800000000000002fd1",
+      "active_report": "79f4882f28ee86de8094a980130b810782058090cf80000000409300d69600800000000072a3",
+      "reported_duration_seconds": 300,
+      "reported_remaining_seconds": 294,
+      "idle_reported_at": "2026-09-02T19:57:22.869485+00:00",
+      "idle_report": "79f4882f28ee86de8094a98013110107820580804f800000004080005680000000000000504b",
+      "outcome": "accepted_and_valve_owned_automatic_idle"
+    },
+    {
+      "requested_seconds": 900,
+      "encoded_field": "c201",
+      "extension": "80",
+      "open_dispatched_at": "2026-09-02T20:00:20.873362+00:00",
+      "accepted_response": "79f4882f28ee86de8094a9801300d0868010cf8000000040c201d6c201800000000000004f57",
+      "active_report": "79f4882f28ee86de8094a9801316010782058090cf8000000040bf81d6c20180000000006d7e",
+      "reported_duration_seconds": 900,
+      "reported_remaining_seconds": 894,
+      "close_response": "79f4882f28ee86de8094a9801301508680104f8000000040800056c201800000000000001811",
+      "idle_reported_at": "2026-09-02T20:00:58.370094+00:00",
+      "idle_report": "79f4882f28ee86de8094a98013180107820580804f8000000040800056800000000000002d7b",
+      "outcome": "accepted_and_authenticated_early_stop"
+    }
+  ],
+  "findings": [
+    "Both former marker-collision durations are accepted when low-byte bit 7 remains asserted and the displaced data bit is carried in the adjacent extension byte.",
+    "The valve independently reports the exact requested value and reconstructible remaining value; success is not inferred from the transmitted command.",
+    "The five-minute run returned to idle 302.510 seconds after dispatch, within normal reporting latency for a 300-second valve-owned timer.",
+    "The first five-minute gateway build decoded active reports but rejected its positive responses because response marker byte 26 was d6 rather than exact 56. Gateway 0.33.42 and firmware 0.15.5 mask that proven extension bit in response, link, and routine-ACK matchers."
+  ]
+}

@@ -62,16 +62,13 @@ inline bool encodeHtv145Duration(
     std::uint32_t durationSeconds,
     std::array<std::uint8_t, 2>& encoded
 ) {
-    if (durationSeconds < 60 || durationSeconds > 24U * 60U * 60U ||
-        durationSeconds % 60U != 0) {
+    PackedDuration packed{};
+    if (!encodePackedWholeMinuteDuration(
+            durationSeconds, 24U * 60U * 60U, packed
+        )) {
         return false;
     }
-    const std::uint32_t units = durationSeconds / 2U;
-    if (units > 0xffffU) {
-        return false;
-    }
-    encoded[0] = static_cast<std::uint8_t>(units & 0xffU) | 0x80U;
-    encoded[1] = static_cast<std::uint8_t>(units >> 8U);
+    encoded = packed.field;
     return true;
 }
 
@@ -83,9 +80,11 @@ inline bool buildHtv145OpenFrame(
     std::array<std::uint8_t, kFrameBytes>& frame,
     bool commandMarkerInverted = false
 ) {
-    std::array<std::uint8_t, 2> duration{};
+    PackedDuration duration{};
     if (!validHtv145Link(link) || !validHtv145Sequence(sequence) ||
-        !encodeHtv145Duration(durationSeconds, duration) ||
+        !encodePackedWholeMinuteDuration(
+            durationSeconds, 24U * 60U * 60U, duration
+        ) ||
         (trailerResidual != 0xc713 && trailerResidual != 0x4f03)) {
         return false;
     }
@@ -102,9 +101,9 @@ inline bool buildHtv145OpenFrame(
     frame[15] = 0x82;
     frame[16] = 0x80;
     frame[17] = 0x81;
-    frame[19] = duration[0];
-    frame[20] = duration[1];
-    frame[21] = commandMarkerInverted ? 0x80 : 0x00;
+    frame[19] = duration.field[0];
+    frame[20] = duration.field[1];
+    frame[21] = duration.extension;
     writeTrailer(frame, trailerResidual);
     return true;
 }

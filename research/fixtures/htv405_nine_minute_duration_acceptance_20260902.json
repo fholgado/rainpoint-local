@@ -67,7 +67,7 @@
   },
   "findings": [
     "The valve authenticated a synchronized nine-minute open and independently reported 540 seconds requested with a decreasing remaining counter.",
-    "The accepted 8e 01 duration proves the additive two-byte representation works across a nonzero high byte when low-byte bit 7 is clear before biasing.",
+    "The accepted 8e 01 00 duration is consistent with the packed two-second counter: low-byte bit 7 is the mandatory marker and the displaced data bit is zero.",
     "The response was independently observed by the control node, another radio node, and the SDR.",
     "The early stop received an authenticated idle response and multiple independent idle reports."
   ]

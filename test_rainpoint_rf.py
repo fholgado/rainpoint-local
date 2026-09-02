@@ -45,6 +45,7 @@ from rainpointd.valve_protocol import (  # noqa: E402
     decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
     encode_duration,
+    encode_duration_extension,
     next_sequence,
     open_candidates,
     is_htv405_link_frame,
@@ -751,6 +752,34 @@ class RainPointRFTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "whole-minute"):
             encode_duration(61)
 
+    def test_htv145_builder_carries_displaced_duration_bit(self) -> None:
+        self.assertEqual(
+            bytes.fromhex(
+                "79f4882f28b42d008fb9840280811082808100fe0180"
+                "00000000000000000000000000007669"
+            ),
+            build_open_frame(
+                self.CAPTURED_VALVE_LINK,
+                0x81,
+                1_020,
+                0x4F03,
+            ),
+        )
+
+    def test_duration_codec_round_trips_every_minute_from_one_to_sixty(
+        self,
+    ) -> None:
+        for minutes in range(1, 61):
+            with self.subTest(minutes=minutes):
+                seconds = minutes * 60
+                encoded = encode_duration(seconds)
+                extension = encode_duration_extension(seconds)
+                self.assertEqual(0x80, encoded[0] & 0x80)
+                self.assertEqual(
+                    seconds,
+                    decode_duration(encoded, extension),
+                )
+
     def test_characterizes_synthetic_two_fsk_capture(self) -> None:
         sample_rate = 2_000_000
         center = 433_700_000
@@ -1194,6 +1223,57 @@ class RainPointRFTest(unittest.TestCase):
         self.assertEqual(638, first["remaining_seconds"])
         self.assertEqual(644, second["duration_seconds"])
         self.assertEqual(636, second["remaining_seconds"])
+
+    def test_decodes_htv405_displaced_duration_bit(self) -> None:
+        frame = bytearray.fromhex(
+            "79f4882f28ee86de8094a980130c010782058090cf8000000040"
+            "bf8156c20100000000005074"
+        )
+        frame[31] = 0x80
+        frame[28] |= 0x80
+        trailer = binascii.crc_hqx(frame[:-2], 0) ^ 0x4F03
+        frame[-2:] = trailer.to_bytes(2, "big")
+
+        decoded = decode_htv405_control_frame(bytes(frame))
+
+        self.assertIsNotNone(decoded)
+        assert decoded is not None
+        self.assertEqual(900, decoded["duration_seconds"])
+        self.assertEqual(894, decoded["remaining_seconds"])
+
+    def test_five_minute_duration_extension_preserves_response_and_link(
+        self,
+    ) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research"
+                / "fixtures"
+                / "htv405_packed_duration_boundary_20260902.json"
+            ).read_text()
+        )
+        trial = fixture["trials"][0]
+        response = bytes.fromhex(trial["accepted_response"])
+        report = bytes.fromhex(trial["active_report"])
+
+        decoded_response = decode_htv405_gateway_command_response(response)
+        self.assertIsNotNone(decoded_response)
+        assert decoded_response is not None
+        self.assertEqual(0, decoded_response["rf_control_response_sequence"])
+        self.assertEqual(1, decoded_response["rf_control_response_zone"])
+        self.assertTrue(decoded_response["rf_control_response_watering"])
+        self.assertTrue(is_htv405_link_frame(report))
+        decoded_report = decode_htv405_control_frame(report)
+        self.assertIsNotNone(decoded_report)
+        assert decoded_report is not None
+        self.assertEqual(
+            trial["reported_duration_seconds"],
+            decoded_report["duration_seconds"],
+        )
+        self.assertEqual(
+            trial["reported_remaining_seconds"],
+            decoded_report["remaining_seconds"],
+        )
 
     def test_live_transport_retains_independent_htv405_zone_states(self) -> None:
         catalog = DeviceCatalog(

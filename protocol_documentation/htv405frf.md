@@ -80,7 +80,7 @@ frame[16] has its high bit set and carries the logical address
 frame[17] low 7 bits is 0x05 or 0x07
 frame[20] low 7 bits is 0x4f
 frame[25] == 0x40
-frame[28] == 0x56
+frame[28] low 7 bits == 0x56
 ```
 
 Watering state is `bool(frame[20] & 0x80)`.
@@ -101,24 +101,38 @@ independent strict state report, never from a transmitted command.
 
 ## Duration
 
-HTV405 requested and reported duration is a two-byte little-endian counter
-biased by addition of `0x80`, with one count representing two seconds:
+HTV405 duration is a packed counter in two-second units. Bit 7 of the low wire
+byte is always the protocol marker, so the data bit that would occupy that
+position is carried in bit 7 of an adjacent extension byte:
 
 ```text
-decode_duration(encoded):
-    seconds = (little_endian_u16(encoded) - 0x80) * 2
+units = seconds / 2
 
-encode_duration(seconds):
-    encoded = little_endian_u16(seconds / 2 + 0x80)
+encode:
+    field_low = 0x80 | (units & 0x7f)
+    field_high = (units >> 8) & 0xff
+    extension = units & 0x80
+
+decode:
+    units = (field_high << 8) | (field_low & 0x7f) |
+            (extension & 0x80)
+    seconds = units * 2
 ```
 
-The validated decode range is up to 3,600 seconds. Duration must be even at the
-wire level. Remaining-duration reports first clear the captured status high
-bit in the second duration byte, then apply the same biased decode.
+The locations are:
 
-This is addition across the two-byte counter, not a bitwise OR of the low
-byte. That distinction matters when a duration crosses a low-byte `0x80`
-boundary.
+| Frame family | Field | Extension bit |
+|---|---|---|
+| Gateway open command | `frame[19..20]` | `frame[21] & 0x80` |
+| Requested duration in valve state | `frame[29..30]` | `frame[31] & 0x80` |
+| Remaining duration in valve state | `frame[26..27]` | `frame[28] & 0x80` |
+
+The remaining-duration high byte also carries an unrelated status bit which is
+cleared before reconstruction. The supported product range is every whole
+minute from 1 through 60. The same scalar layout appears in retained HTV145
+stock commands; notably, a non-inverted 17-minute command carries extension
+`0x80`, proving that the extension is duration data rather than selector
+polarity.
 
 ## Control request
 
@@ -131,34 +145,36 @@ frame[15] = 0x82 open, 0x81 close
 frame[16] = 0x80
 frame[17] = 0x80 | one-based zone
 frame[19..20] = encoded duration for open; zero for close
+frame[21] bit 7 = displaced duration bit for open; zero for close
 ```
 
 The controller route is the paired valve endpoint and the destination is its
 association companion endpoint. The current local transmitter uses residue
-`0x4f03` and permits the physically accepted durations 60, 120, 180, 240, 540,
-1,200, and 3,600 seconds. The complete carrier, bounded repeated-attempt
-envelope, and timing are built from the valve's stored association profile by
-the supervised firmware and `htv405_control.py`.
+`0x4f03` and accepts every whole-minute duration from 60 through 3,600 seconds.
+The complete carrier, bounded repeated-attempt envelope, and timing are built
+from the valve's stored association profile by the supervised firmware and
+`htv405_control.py`.
 
-The transmit list is a physical-acceptance gate, not a device preset list.
-Authenticated valve responses and independent active reports validate:
+Representative encodings are:
 
-| Requested | Command field | Independent reported value |
+| Requested | Field | Extension |
 | ---: | --- | ---: |
-| 60 seconds | `9e 00` | 60 seconds |
-| 120 seconds | `bc 00` | 120 seconds |
-| 180 seconds | `da 00` | 180 seconds |
-| 240 seconds | `f8 00` | 240 seconds |
-| 540 seconds | `8e 01` | 540 seconds |
-| 1,200 seconds | `d8 02` | 1,200 seconds |
-| 3,600 seconds | `88 07` | 3,600 seconds |
+| 60 seconds | `9e 00` | `00` |
+| 240 seconds | `f8 00` | `00` |
+| 300 seconds | `96 00` | `80` |
+| 540 seconds | `8e 01` | `00` |
+| 900 seconds | `c2 01` | `80` |
+| 1,200 seconds | `d8 02` | `00` |
+| 3,600 seconds | `88 07` | `00` |
 
-This validates addition across nonzero high bytes and at the supported maximum.
-It does not resolve durations whose unbiased two-second count already contains
-low-byte bit 7. Five- and fifteen-minute additive candidates (`16 01` and
-`42 02`) received explicit negative responses at known-good counters. A stock
-five- or fifteen-minute command capture is required to define that remaining
-wire branch; those durations must remain blocked meanwhile.
+The earlier 300- and 900-second candidates `16 01` and `42 02` were rejected
+because they omitted the mandatory low-byte marker. The earlier `c2 01 00`
+900-second attempt retained the marker but lost the displaced bit and was
+therefore decoded by the valve as 644 seconds. Those failures are direct
+boundary evidence for the packed representation above, not special-duration
+exceptions. Corrected local `96 00 80` and `c2 01 80` commands subsequently
+received authenticated responses and exact independent 300/900-second state
+reports; the five-minute timer also reached valve-owned automatic idle.
 
 ## Command response and sequence
 
@@ -170,7 +186,7 @@ frame[15] == 0x86
 frame[17] high nibble == zone 1..4 and low nibble == 0
 frame[18] low 7 bits == 0x4f
 frame[23] == 0x40
-frame[26] == 0x56
+frame[26] low 7 bits == 0x56
 ```
 
 It routes from the association companion with its first-byte high bit set to

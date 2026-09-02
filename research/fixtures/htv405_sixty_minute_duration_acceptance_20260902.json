@@ -67,7 +67,7 @@
   },
   "findings": [
     "The valve authenticated a synchronized sixty-minute open and independently reported 3,600 seconds requested with a decreasing remaining counter.",
-    "The accepted 88 07 duration validates the additive two-byte representation at the firmware and integration maximum.",
+    "The accepted 88 07 00 duration validates the packed two-second counter at the firmware and integration maximum.",
     "Three independent receivers decoded the same active duration before the authenticated early stop.",
     "The early stop returned the valve to independently reported idle."
   ]

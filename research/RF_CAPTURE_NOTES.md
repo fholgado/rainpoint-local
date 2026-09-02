@@ -506,9 +506,10 @@ Reference evidence:
 
 ### HTV405 duration and command-counter continuity — 2026-08-31 to 2026-09-01
 
-- Transmitted commands around the low-byte boundary proved that HTV405 duration
-  adds a two-byte `0x80` bias. The earlier bitwise-OR interpretation produced
-  incorrect long watering times and was removed.
+- The initial interpretation was that HTV405 duration added a two-byte `0x80`
+  bias. Later boundary trials disproved that model: marker-less additive
+  candidates were rejected, and a marker-preserving request without the
+  adjacent extension lost data bit 7 and ran for 644 rather than 900 seconds.
 - A generated-identity session then established the response-driven sequence:
   fresh pairing started at `1`; accepted opens advanced the next value; closes
   retained it; gateway and node restarts preserved it; and a later open
@@ -520,6 +521,32 @@ Reference evidence:
 Reference evidence:
 `fixtures/htv405_beta10_candidate9_on_air_20260831.json` and
 `fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
+
+### Shared packed duration scalar — 2026-09-02
+
+- Cross-family command and report comparison identified a shared packed
+  two-second counter. Low-byte bit 7 is reserved as a mandatory wire marker;
+  the displaced data bit moves to bit 7 of the adjacent extension byte.
+- A retained stock HTV145 1,020-second command carries `fe 01 80` despite using
+  the non-inverted selector-5 marker. Retained 600- and 1,200-second selector-6
+  commands carry extension `00`, proving the bit follows duration rather than
+  association polarity.
+- The same reconstruction explains all HTV405 evidence without special values:
+  five minutes is `96 00 80`, fifteen minutes is `c2 01 80`, and the old local
+  `c2 01 00` frame necessarily decodes to 644 seconds.
+- Python and native firmware tests exhaustively round-trip all whole-minute
+  values from 1 through 60. Physical HTV405 trials then accepted `96 00 80`
+  for five minutes and `c2 01 80` for fifteen minutes. The valve independently
+  reported 300/900 seconds, returned itself to idle after the complete
+  five-minute run, and authenticated the 15-minute early stop.
+- The first five-minute trial also exposed a strict-decoder bug: accepted
+  response marker byte 26 and report marker byte 28 become `d6` when carrying
+  the extension. Masking only that proven high bit restored command-response
+  confirmation and routine ACK eligibility in gateway 0.33.42 and firmware
+  0.15.5.
+
+Reference evidence:
+`fixtures/htv405_packed_duration_boundary_20260902.json`.
 
 ### HTV145 documented reset isolation — 2026-09-01
 

@@ -293,9 +293,57 @@ int main() {
         0x4f03,
         gatewayCommand
     ));
-    assert(gatewayCommand[19] == 0x42);
-    assert(gatewayCommand[20] == 0x02);
+    assert(gatewayCommand[19] == 0xc2);
+    assert(gatewayCommand[20] == 0x01);
+    assert(gatewayCommand[21] == 0x80);
+    assert(rainpoint::buildHtv405GatewayOpenFrame(
+        capturedGatewayControlLink,
+        {0x02, false},
+        1,
+        0x05,
+        300,
+        0x4f03,
+        gatewayCommand
+    ));
+    assert(gatewayCommand[19] == 0x96);
+    assert(gatewayCommand[20] == 0x00);
+    assert(gatewayCommand[21] == 0x80);
     assert(rainpoint::trailerResidual(gatewayCommand) == 0x4f03);
+    const auto fiveMinuteResponse = fromHex(
+        "79f4882f28ee86de8094a9801300d0868010cf8000000040"
+        "9600d69600800000000000002fd1"
+    );
+    rainpoint::Htv405GatewayCommandResponse fiveMinuteDecoded{};
+    assert(rainpoint::decodeHtv405GatewayCommandResponse(
+        fiveMinuteResponse, fiveMinuteDecoded
+    ));
+    assert(fiveMinuteDecoded.sequence == 0);
+    assert(fiveMinuteDecoded.zone == 1);
+    assert(fiveMinuteDecoded.watering);
+    const auto fiveMinuteReport = fromHex(
+        "79f4882f28ee86de8094a980130b810782058090cf800000"
+        "00409300d69600800000000072a3"
+    );
+    assert(rainpoint::isHtv405LinkFrame(fiveMinuteReport));
+    for (std::uint16_t minutes = 1; minutes <= 60; ++minutes) {
+        const auto seconds = static_cast<std::uint16_t>(minutes * 60U);
+        assert(rainpoint::buildHtv405GatewayOpenFrame(
+            capturedGatewayControlLink,
+            {0x02, false},
+            1,
+            0x05,
+            seconds,
+            0x4f03,
+            gatewayCommand
+        ));
+        const std::uint16_t decodedUnits = static_cast<std::uint16_t>(
+            (gatewayCommand[19] & 0x7fU) |
+            (static_cast<std::uint16_t>(gatewayCommand[21] & 0x80U)) |
+            (static_cast<std::uint16_t>(gatewayCommand[20]) << 8U)
+        );
+        assert(gatewayCommand[19] & 0x80U);
+        assert(decodedUnits * 2U == seconds);
+    }
     std::array<std::uint8_t, rainpoint::kFrameBytes> openFrame{};
     assert(rainpoint::buildHtv405OpenFrame(
         capturedValveLink,
@@ -2121,6 +2169,15 @@ int main() {
     assert(
         htv145Frame == fromHex(
             "79f4882f28b42d008fb98402809710828081009e000000000000000000000000000000003824"
+        )
+    );
+    assert(rainpoint::buildHtv145OpenFrame(
+        htv145Link, 0x81, 1'020, 0x4f03, htv145Frame
+    ));
+    assert(
+        htv145Frame == fromHex(
+            "79f4882f28b42d008fb9840280811082808100fe0180"
+            "00000000000000000000000000007669"
         )
     );
     assert(rainpoint::buildHtv145CloseFrame(

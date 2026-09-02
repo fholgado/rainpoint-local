@@ -35,11 +35,12 @@ class ValveLink:
 
 
 def encode_duration(duration_seconds: int) -> bytes:
-    """Encode a confirmed whole-minute HTV145 watering duration.
+    """Encode the two-byte portion of a packed watering duration.
 
-    Captures correlated to Home Assistant show that the duration is stored in
-    two-second units while bit 7 of the low byte is always asserted. Limiting
-    construction to whole minutes makes that overlaid bit unambiguous.
+    The value is stored in two-second units. Bit 7 of the low byte is always
+    asserted as a wire marker; its original data bit is carried by the high
+    bit of the following extension byte. Callers constructing a frame must
+    therefore also write :func:`encode_duration_extension`.
     """
     if duration_seconds <= 0 or duration_seconds > 24 * 60 * 60:
         raise ValueError("duration must be between 60 seconds and 24 hours")
@@ -51,11 +52,35 @@ def encode_duration(duration_seconds: int) -> bytes:
     return bytes(encoded)
 
 
-def decode_duration(encoded: bytes) -> int:
-    """Decode an HTV145 duration using confirmed whole-minute constraints."""
+def encode_duration_extension(duration_seconds: int) -> int:
+    """Return the extension byte carrying the displaced low-byte data bit."""
+    encode_duration(duration_seconds)
+    return (duration_seconds // 2) & 0x80
+
+
+def decode_duration(encoded: bytes, extension: int | None = None) -> int:
+    """Decode a packed whole-minute duration.
+
+    Exact frame decoders should supply the adjacent extension byte. The
+    fallback without it remains for historical extracts that retained only
+    the two-byte field; whole-minute alignment makes those captures
+    unambiguous.
+    """
     if len(encoded) != 2:
         raise ValueError("duration must contain exactly two bytes")
     raw = int.from_bytes(encoded, "little")
+    if extension is not None:
+        if extension & 0x7F:
+            raise ValueError("duration extension contains unknown bits")
+        units = (raw & ~0x80) | (extension & 0x80)
+        duration_seconds = units * 2
+        if (
+            duration_seconds <= 0
+            or duration_seconds > 24 * 60 * 60
+            or duration_seconds % 60
+        ):
+            raise ValueError("duration is outside whole-minute encoding")
+        return duration_seconds
     candidates = {raw * 2, (raw & ~0x80) * 2}
     confirmed = [
         value
@@ -67,32 +92,30 @@ def decode_duration(encoded: bytes) -> int:
     return confirmed[0]
 
 
-def _decode_htv405_duration(encoded: bytes) -> int:
-    """Decode the HTV405 biased two-second duration counter.
-
-    The physical 2026-08-26 long-run trial resolved the former bit-overlay
-    ambiguity: HTV405 adds 0x80 to the two-byte counter. It does not OR 0x80
-    into the low byte. That distinction matters when the counter already has
-    bit 7 set.
-    """
+def _decode_htv405_duration(encoded: bytes, extension: int) -> int:
+    """Decode the HTV405 packed two-second counter and displaced data bit."""
     if len(encoded) != 2:
         raise ValueError("HTV405 duration must contain exactly two bytes")
-    raw = int.from_bytes(encoded, "little")
-    if raw <= 0x80:
-        raise ValueError("HTV405 duration is missing its positive counter")
-    duration_seconds = (raw - 0x80) * 2
-    if duration_seconds > 3_600 or duration_seconds % 2:
+    if encoded[0] & 0x80 == 0 or extension & 0x7F:
+        raise ValueError("HTV405 duration marker is invalid")
+    units = (int.from_bytes(encoded, "little") & ~0x80) | (
+        extension & 0x80
+    )
+    duration_seconds = units * 2
+    if duration_seconds <= 0 or duration_seconds > 3_600:
         raise ValueError("HTV405 duration is outside validated bounds")
     return duration_seconds
 
 
-def _decode_htv405_remaining_duration(encoded: bytes) -> int:
-    """Decode HTV405 remaining time after clearing its high-byte marker."""
+def _decode_htv405_remaining_duration(
+    encoded: bytes, extension: int
+) -> int:
+    """Decode remaining time after clearing its high-byte status marker."""
     if len(encoded) != 2:
         raise ValueError("HTV405 remaining duration must contain two bytes")
     normalized = bytearray(encoded)
     normalized[1] &= 0x7F
-    return _decode_htv405_duration(bytes(normalized))
+    return _decode_htv405_duration(bytes(normalized), extension)
 
 
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
@@ -116,7 +139,7 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
         or frame[17] & 0x7F != 0x05
         or frame[20] & 0x7F != 0x4F
         or frame[25] != 0x40
-        or frame[28] != 0x56
+        or frame[28] & 0x7F != 0x56
     ):
         return None
 
@@ -152,8 +175,12 @@ def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
     }
     if watering:
         try:
-            duration_seconds = _decode_htv405_duration(frame[29:31])
-            remaining_seconds = _decode_htv405_remaining_duration(frame[26:28])
+            duration_seconds = _decode_htv405_duration(
+                frame[29:31], frame[31]
+            )
+            remaining_seconds = _decode_htv405_remaining_duration(
+                frame[26:28], frame[28] & 0x80
+            )
         except ValueError:
             # Watering state and zone remain independently authoritative even
             # when an as-yet-unseen duration encoding cannot be decoded.
@@ -181,7 +208,7 @@ def is_htv405_link_frame(frame: bytes) -> bool:
         and frame[17] & 0x7F in {0x05, 0x07}
         and frame[20] & 0x7F == 0x4F
         and frame[25] == 0x40
-        and frame[28] == 0x56
+        and frame[28] & 0x7F == 0x56
     )
 
 
@@ -337,7 +364,7 @@ def decode_htv405_gateway_command_response(
         or frame[17] >> 4 not in range(1, 5)
         or frame[18] & 0x7F != 0x4F
         or frame[23] != 0x40
-        or frame[26] != 0x56
+        or frame[26] & 0x7F != 0x56
         or (frame[14] ^ frame[18]) & 0x80
     ):
         return None
@@ -462,7 +489,7 @@ def decode_htv145_gateway_command(
         ):
             return None
         try:
-            duration_seconds = decode_duration(frame[19:21])
+            duration_seconds = decode_duration(frame[19:21], frame[21])
         except ValueError:
             return None
         return {
@@ -602,9 +629,7 @@ def build_open_frame(
         0x00,
     ))
     body += encode_duration(duration_seconds)
-    # The selector-6 branch carries the same high marker polarity into the
-    # byte immediately following the duration field.
-    body += bytes((0x80 if command_marker_inverted else 0x00,))
+    body += bytes((encode_duration_extension(duration_seconds),))
     body += bytes(14)
     return _finish_frame(
         SYNC + link.controller_endpoint + link.valve_endpoint + body, residue
