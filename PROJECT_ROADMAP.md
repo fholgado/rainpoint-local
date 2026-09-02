@@ -735,7 +735,9 @@ same time without conflicting authority.
       and the script submits exactly one open. A new transaction-specific
       terminal failure updates the decision helper, mobile alert, and
       persistent Home Assistant notification within a bounded 40-second
-      confirmation window.
+      confirmation window. The installed script now validates the gateway-
+      published duration list up front and no longer adds a redundant
+      ten-second duration-entity polling delay before submitting the request.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and

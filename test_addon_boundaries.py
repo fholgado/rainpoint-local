@@ -423,6 +423,8 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("completed", force_run)
         self.assertIn("failed", force_run)
         self.assertIn("cancelled", force_run)
+        self.assertIn("validated_duration_minutes", force_run)
+        self.assertNotIn('timeout: "00:00:10"', force_run)
         self.assertNotIn("accepted_command_results", force_run)
 
     def test_htv405_omits_unsupported_water_usage_entity(self) -> None:

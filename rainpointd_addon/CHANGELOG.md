@@ -10,6 +10,9 @@
 - Publish the gateway-owned physical duration list to Home Assistant so the
   duration entities no longer maintain an independent copy of installed
   protocol capability.
+- Make the Garden Run Now example validate that published list before changing
+  the duration entity, then rely on the completed Home Assistant service call
+  instead of polling the entity for up to ten seconds before starting.
 - Keep low-byte marker-collision values blocked: known-good counters explicitly
   rejected the additive five- and fifteen-minute candidates, so a stock command
   capture remains required before those values can be enabled.

@@ -76,30 +76,28 @@ garden_force_run_zone:
             - if:
                 - condition: template
                   value_template: >-
-                    {{ duration_number_entity | default('') | string | length > 0 }}
+                    {{ duration_number_entity | default('') | string
+                       | length > 0 }}
               then:
-                - action: number.set_value
-                  continue_on_error: true
-                  target:
-                    entity_id: "{{ duration_number_entity }}"
-                  data:
-                    value: "{{ run_minutes }}"
-                - wait_template: >-
-                    {{ (states(duration_number_entity) | float(0)
-                        - run_minutes | float(10)) | abs < 0.01 }}
-                  timeout: "00:00:10"
-                  continue_on_timeout: true
+                - variables:
+                    validated_duration_minutes: >-
+                      {{ state_attr(
+                           duration_number_entity,
+                           'validated_duration_minutes'
+                         ) | default([], true) }}
                 - if:
                     - condition: template
                       value_template: >-
-                        {{ (states(duration_number_entity) | float(0)
-                            - run_minutes | float(10)) | abs >= 0.01 }}
+                        {{ run_minutes != (run_minutes | int)
+                           or (run_minutes | int)
+                              not in validated_duration_minutes }}
                   then:
                     - variables:
                         failure_message: >-
                           Refusing to open {{ valve_entity }} because
-                          {{ duration_number_entity }} did not confirm the
-                          requested {{ run_minutes }} minute duration.
+                          {{ run_minutes }} minutes is not in its gateway-
+                          validated duration list:
+                          {{ validated_duration_minutes | join(', ') }}.
                     - action: input_text.set_value
                       target:
                         entity_id: "{{ last_decision_text_entity }}"
@@ -124,6 +122,11 @@ garden_force_run_zone:
                           tag: "{{ notification_id }}-duration-failed"
                     - stop: Valve duration was not confirmed.
                       error: true
+                - action: number.set_value
+                  target:
+                    entity_id: "{{ duration_number_entity }}"
+                  data:
+                    value: "{{ run_minutes }}"
             - if:
                 - condition: template
                   value_template: >-
