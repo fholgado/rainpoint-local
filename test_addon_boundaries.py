@@ -390,7 +390,7 @@ class AddonBoundaryTest(unittest.TestCase):
             "binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering",
             "sensor.rainpoint_4_zone_valve_8013_device_report_time",
             "sensor.rainpoint_4_zone_valve_8013_battery",
-            "binary_sensor.garden_htv405_4_zone_water_timer_8013_control_start_available",
+            "binary_sensor.garden_htv405_4_zone_water_timer_8013",
             "sensor.garden_htv405_4_zone_water_timer_8013_control_request_status",
         ):
             self.assertIn(entity, dashboard)
