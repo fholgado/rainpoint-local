@@ -370,8 +370,11 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn('"number"', const_source)
         self.assertIn("MAXIMUM_RUN_MINUTES = 60", number_source)
         self.assertIn(
-            "VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})",
-            number_source,
+            "DEFAULT_VALIDATED_RUN_MINUTES = frozenset(", number_source
+        )
+        self.assertIn("frozenset({1, 2, 20})", number_source)
+        self.assertIn(
+            '"rf_control_validated_duration_minutes"', number_source
         )
         self.assertIn("_attr_native_min_value = 1", number_source)
         self.assertIn("htv405_run_minutes", coordinator_source)

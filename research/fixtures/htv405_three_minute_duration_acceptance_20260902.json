@@ -1,0 +1,57 @@
+{
+  "captured_at": "2026-09-02",
+  "model": "HTV405FRF",
+  "scope": "generated-identity synchronized Zone 1 three-minute duration acceptance",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "valve_endpoint": "94a98013",
+    "control_node_id": "rp-f4e5be3b015c"
+  },
+  "request": {
+    "transaction_id": "dc5e3fe782f644908892cb66b764d262",
+    "zone": 1,
+    "duration_seconds": 180,
+    "duration_two_second_units": 90,
+    "encoded_duration": "da00",
+    "started_event_id": 289705,
+    "started_at": "2026-09-02T18:41:17.298838+00:00"
+  },
+  "synchronization": {
+    "anchor_confirmed_event_id": 289707,
+    "anchor_confirmed_at": "2026-09-02T18:41:18.062801+00:00",
+    "open_dispatched_event_id": 289710,
+    "open_dispatched_at": "2026-09-02T18:41:32.299239+00:00",
+    "hardware_interval_seconds": 14.236438
+  },
+  "authenticated_open": {
+    "response_event_id": 289712,
+    "response_observed_at": "2026-09-02T18:41:33.091113+00:00",
+    "response_frame": "79f4882f28ee86de8094a9801300d0868010cf8000000040da0056da000000000000000041e9",
+    "response_sequence": 0,
+    "response_zone": 1,
+    "response_watering": true,
+    "confirmation_event_id": 289713,
+    "confirmed_at": "2026-09-02T18:41:33.128402+00:00"
+  },
+  "independent_active_report": {
+    "event_id": 289715,
+    "observed_at": "2026-09-02T18:41:38.878991+00:00",
+    "frame": "79f4882f28ee86de8094a980131e010782058090cf8000000040d78056da000000000000290d",
+    "reported_duration_seconds": 180,
+    "reported_remaining_seconds": 174,
+    "active_zone": 1
+  },
+  "early_stop": {
+    "authenticated_close_event_id": 289735,
+    "authenticated_close_at": "2026-09-02T18:42:08.445984+00:00",
+    "idle_report_event_id": 289736,
+    "idle_report_at": "2026-09-02T18:42:14.339915+00:00",
+    "idle_frame": "79f4882f28ee86de8094a98013008107820580804f80000000408000568000000000000037b3"
+  },
+  "findings": [
+    "The valve authenticated the synchronized three-minute open and independently reported Zone 1 active with 180 seconds requested and 174 seconds remaining.",
+    "An authenticated close after the hardware command interval returned the valve to independently reported idle.",
+    "The accepted duration disproves a device-side preset whitelist limited to 1, 2, and 20 minutes.",
+    "Three minutes remains below the low-byte bit-7 collision at five minutes, so it does not resolve the multi-byte command encoding."
+  ]
+}

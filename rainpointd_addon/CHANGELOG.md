@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.33.40 / Integration 0.13.8 / Firmware 0.15.3
+
+- Physically accept synchronized three-, four-, nine-, and sixty-minute HTV405
+  Zone 1 requests with authenticated command responses, exact independent
+  duration reports, and authenticated early stops. This disproves the old
+  device-preset hypothesis and validates additive carry through the supported
+  maximum.
+- Publish the gateway-owned physical duration list to Home Assistant so the
+  duration entities no longer maintain an independent copy of installed
+  protocol capability.
+- Keep low-byte marker-collision values blocked: known-good counters explicitly
+  rejected the additive five- and fifteen-minute candidates, so a stock command
+  capture remains required before those values can be enabled.
+
 ## 0.33.39 / Integration 0.13.7 / Firmware 0.15.3
 
 - Expose the gateway-owned HTV405 start-availability gate and transaction ID

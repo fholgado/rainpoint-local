@@ -3256,6 +3256,10 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             snapshot["rf_control_transaction_state"],
         )
         self.assertEqual(
+            [1, 2, 3, 4, 9, 20, 60],
+            snapshot["rf_control_validated_duration_minutes"],
+        )
+        self.assertEqual(
             "Watering confirmed for Zone 2",
             snapshot["rf_control_transaction_status"],
         )

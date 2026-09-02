@@ -135,15 +135,30 @@ frame[19..20] = encoded duration for open; zero for close
 
 The controller route is the paired valve endpoint and the destination is its
 association companion endpoint. The current local transmitter uses residue
-`0x4f03` and permits only the physically accepted durations 60, 120, and 1,200
-seconds. The complete carrier, bounded repeated-attempt envelope, and timing
-are built from the valve's stored association profile by the supervised
-firmware and `htv405_control.py`.
+`0x4f03` and permits the physically accepted durations 60, 120, 180, 240, 540,
+1,200, and 3,600 seconds. The complete carrier, bounded repeated-attempt
+envelope, and timing are built from the valve's stored association profile by
+the supervised firmware and `htv405_control.py`.
 
-The three-value transmit whitelist is a physical-acceptance gate, not a format
-limitation. Five- and fifteen-minute commands using the otherwise correct
-additive encoding were rejected by the valve, so other decoded durations are
-not yet safe to construct locally.
+The transmit list is a physical-acceptance gate, not a device preset list.
+Authenticated valve responses and independent active reports validate:
+
+| Requested | Command field | Independent reported value |
+| ---: | --- | ---: |
+| 60 seconds | `9e 00` | 60 seconds |
+| 120 seconds | `bc 00` | 120 seconds |
+| 180 seconds | `da 00` | 180 seconds |
+| 240 seconds | `f8 00` | 240 seconds |
+| 540 seconds | `8e 01` | 540 seconds |
+| 1,200 seconds | `d8 02` | 1,200 seconds |
+| 3,600 seconds | `88 07` | 3,600 seconds |
+
+This validates addition across nonzero high bytes and at the supported maximum.
+It does not resolve durations whose unbiased two-second count already contains
+low-byte bit 7. Five- and fifteen-minute additive candidates (`16 01` and
+`42 02`) received explicit negative responses at known-good counters. A stock
+five- or fifteen-minute command capture is required to define that remaining
+wire branch; those durations must remain blocked meanwhile.
 
 ## Command response and sequence
 

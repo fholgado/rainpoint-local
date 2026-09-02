@@ -15,7 +15,7 @@ from .entity import RainPointLocalEntity
 
 DEFAULT_RUN_MINUTES = 1
 MAXIMUM_RUN_MINUTES = 60
-VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})
+DEFAULT_VALIDATED_RUN_MINUTES = frozenset({1, 2, 20})
 
 
 async def async_setup_entry(
@@ -88,9 +88,10 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Store one physically validated whole-minute duration."""
         minutes = int(value)
-        if value != minutes or minutes not in VALIDATED_RUN_MINUTES:
+        validated_minutes = self._validated_run_minutes()
+        if value != minutes or minutes not in validated_minutes:
             supported = ", ".join(
-                str(item) for item in sorted(VALIDATED_RUN_MINUTES)
+                str(item) for item in sorted(validated_minutes)
             )
             raise ValueError(
                 "duration is not physically validated; supported minute "
@@ -105,5 +106,23 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
     def extra_state_attributes(self) -> dict:
         """Expose the evidence-bounded duration choices."""
         return {
-            "validated_duration_minutes": sorted(VALIDATED_RUN_MINUTES)
+            "validated_duration_minutes": sorted(
+                self._validated_run_minutes()
+            )
         }
+
+    def _validated_run_minutes(self) -> frozenset[int]:
+        """Use the gateway's physical-acceptance gate when available."""
+        raw = self.decoded_state.get(
+            "rf_control_validated_duration_minutes"
+        )
+        if not isinstance(raw, list):
+            return DEFAULT_VALIDATED_RUN_MINUTES
+        values = frozenset(
+            value
+            for value in raw
+            if isinstance(value, int)
+            and not isinstance(value, bool)
+            and 1 <= value <= MAXIMUM_RUN_MINUTES
+        )
+        return values or DEFAULT_VALIDATED_RUN_MINUTES

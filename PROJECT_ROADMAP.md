@@ -640,16 +640,25 @@ same time without conflicting authority.
       `0.15.0-supervised-beta.11` accepted freshly initialized counter `1`,
       reported a 1,200-second Zone 1 run, and returned itself to idle after the
       requested duration.
+- [x] Disprove the old three-value duration preset hypothesis and validate the
+      additive command field across a nonzero high byte and the supported
+      maximum. On 2026-09-02, synchronized 180-, 240-, 540-, and 3,600-second
+      Zone 1 requests each received an authenticated watering response,
+      independent active reports with the exact requested duration and a
+      decreasing remaining counter, an authenticated early stop, and
+      independent idle. Gateway `0.33.40` publishes the accepted 1-, 2-, 3-,
+      4-, 9-, 20-, and 60-minute list to integration `0.13.8` as the single
+      installed validation gate.
 - [ ] Capture stock-gateway commands for durations whose two-second count
       already contains low-byte bit 7, including five and fifteen minutes,
       before constructing them locally. The 2026-08-26 guarded trial proved
       the additive candidates (`16 01` for 300 seconds and, by the same model,
       `42 02` for 900 seconds) are not accepted command encodings: retained
       counter `3` rejected the former, then immediately accepted the proven
-      60-second `9e 00` payload and advanced to `4`. Gateway 0.33.14 now
-      rejects every duration outside the physically accepted 1-, 2-, and
-      20-minute set before reserving a counter or dispatching RF.
-- [ ] Retain the end-to-end installed result across RF evidence, usage decode,
+      60-second `9e 00` payload and advanced to `4`. Gateway 0.33.40 rejects
+      every duration outside its published physical-acceptance list before
+      reserving a counter or dispatching RF.
+- [ ] Retain the end-to-end installed result across RF evidence, duration decode,
       HA completion notification, automation outcome, and watchdog outcome.
 - [ ] Confirm local explicit early stop on Zones 2--4.
 - [x] Validate control under a generated custom controller identity. A fresh

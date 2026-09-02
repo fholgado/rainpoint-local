@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.39 supports authenticated network radio nodes, receive-only USB
+Version 0.33.40 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -44,6 +44,14 @@ Home Assistant keeps the last confirmed valve state visible, removes actuation
 controls while work is active, and exposes a status sensor for synchronization,
 the hardware interval, watering confirmation, success, cancellation, and
 failure. A cancellation button is enabled only before the open has been sent.
+
+The gateway is the source of truth for physically accepted HTV405 durations
+and publishes that list to Home Assistant. One-, two-, three-, four-, nine-,
+twenty-, and sixty-minute requests have authenticated physical acceptance.
+Five- and fifteen-minute values remain blocked because their two-second count
+crosses the low-byte marker boundary and the simple additive candidates were
+explicitly rejected by the valve. A stock-gateway capture is required before
+that remaining encoding branch can be enabled safely.
 
 When an independently confirmed-idle HTV405 loses command synchronization,
 Home Assistant exposes a configuration action that sends a close-only fixed

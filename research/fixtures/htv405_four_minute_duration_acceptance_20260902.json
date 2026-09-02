@@ -1,0 +1,73 @@
+{
+  "captured_at": "2026-09-02",
+  "model": "HTV405FRF",
+  "scope": "generated-identity synchronized Zone 1 four-minute duration acceptance",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "valve_endpoint": "94a98013",
+    "control_node_id": "rp-f4e5be3b015c"
+  },
+  "request": {
+    "transaction_id": "7d7a4a9b2e2448679caca4f49fcb2a9b",
+    "zone": 1,
+    "duration_seconds": 240,
+    "duration_two_second_units": 120,
+    "encoded_duration": "f800",
+    "started_event_id": 289785,
+    "started_at": "2026-09-02T18:44:32.591691+00:00"
+  },
+  "synchronization": {
+    "anchor_response_event_id": 289786,
+    "anchor_response_frame": "79f4882f28ee86de8094a9801300508683104f8000000040800056800000000000000000565b",
+    "anchor_confirmed_event_id": 289787,
+    "anchor_confirmed_at": "2026-09-02T18:44:33.531973+00:00",
+    "open_dispatched_event_id": 289794,
+    "open_dispatched_at": "2026-09-02T18:44:47.592067+00:00",
+    "hardware_interval_seconds": 14.060094
+  },
+  "authenticated_open": {
+    "response_event_id": 289795,
+    "response_observed_at": "2026-09-02T18:44:48.371695+00:00",
+    "response_frame": "79f4882f28ee86de8094a9801300d0868010cf8000000040f80056f800000000000000004838",
+    "response_sequence": 0,
+    "response_zone": 1,
+    "response_watering": true,
+    "confirmation_event_id": 289796,
+    "confirmed_at": "2026-09-02T18:44:48.408531+00:00"
+  },
+  "independent_active_reports": [
+    {
+      "event_id": 289797,
+      "observed_at": "2026-09-02T14:44:54.315577",
+      "receiver_id": "local-sdr",
+      "frame": "79f4882f28ee86de8094a9801304810782058090cf8000000040f50056f800000000000027e3",
+      "reported_duration_seconds": 240,
+      "reported_remaining_seconds": 234,
+      "active_zone": 1
+    },
+    {
+      "event_id": 289799,
+      "observed_at": "2026-09-02T18:44:55.447839+00:00",
+      "receiver_id": "rp-6052bf3b015c",
+      "frame": "79f4882f28ee86de8094a9801305010782058090cf8000000040f48056f8000000000000288a",
+      "reported_duration_seconds": 240,
+      "reported_remaining_seconds": 232,
+      "active_zone": 1
+    }
+  ],
+  "early_stop": {
+    "authenticated_close_response_event_id": 289809,
+    "authenticated_close_response_at": "2026-09-02T18:45:17.127688+00:00",
+    "authenticated_close_response_frame": "79f4882f28ee86de8094a9801301508680104f8000000040800056f8000000000000000067b1",
+    "idle_report_event_id": 289811,
+    "idle_report_at": "2026-09-02T18:45:23.338041+00:00",
+    "idle_frame": "79f4882f28ee86de8094a98013068107820580804f80000000408000568000000000000079a8"
+  },
+  "findings": [
+    "The valve authenticated the synchronized four-minute open and independently reported Zone 1 active with 240 seconds requested.",
+    "Two independent receivers decoded the same 240-second request and a decreasing remaining duration.",
+    "An authenticated close after the hardware command interval returned the valve to independently reported idle.",
+    "Together with the three-minute acceptance, this disproves a device-side preset whitelist limited to 1, 2, and 20 minutes.",
+    "Four minutes is the final whole-minute value before the low-byte bit-7 collision at five minutes."
+  ]
+}

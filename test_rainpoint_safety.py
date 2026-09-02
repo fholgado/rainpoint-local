@@ -1088,6 +1088,28 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
         self.assertIsNone(state["control_pending_command_id"])
         self.assertEqual([], self.sent)
 
+    def test_nine_minute_duration_can_enter_physical_validation(self) -> None:
+        pending = self.coordinator.request_synchronized_open(
+            self.profile,
+            zone=1,
+            duration_seconds=540,
+            started_at="2026-09-02T20:00:20+00:00",
+        )
+
+        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual(540, self.sent[-1][1]["duration_seconds"])
+
+    def test_sixty_minute_duration_can_enter_physical_validation(self) -> None:
+        pending = self.coordinator.request_synchronized_open(
+            self.profile,
+            zone=1,
+            duration_seconds=3_600,
+            started_at="2026-09-02T20:01:20+00:00",
+        )
+
+        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual(3_600, self.sent[-1][1]["duration_seconds"])
+
     def test_bounded_timeout_recovers_two_smallest_counter_candidates(self) -> None:
         first = self.coordinator.request_open(
             self.profile,

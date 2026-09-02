@@ -18,7 +18,9 @@ HTV405_RESPONSE_WINDOW_SECONDS = 5.0
 # Physical valve-owned responses currently validate only these command
 # durations. Other whole-minute values may decode correctly in telemetry but
 # do not yet have a proven inverse command encoding.
-HTV405_VALIDATED_OPEN_DURATIONS_SECONDS = frozenset({60, 120, 1_200})
+HTV405_VALIDATED_OPEN_DURATIONS_SECONDS = frozenset(
+    {60, 120, 180, 240, 540, 1_200, 3_600}
+)
 
 
 @dataclass(frozen=True)

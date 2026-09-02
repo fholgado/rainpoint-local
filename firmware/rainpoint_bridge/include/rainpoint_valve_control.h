@@ -61,9 +61,10 @@ inline bool buildHtv405GatewayOpenFrame(
     std::array<std::uint8_t, kFrameBytes>& frame
 ) {
     // This builder is compiled only into supervised prototype firmware.
-    // Bounded opens use whole-minute durations; one- and two-minute physical
-    // runs have authenticated response, matching state-report, and
-    // automatic-idle evidence, while longer encodings are protocol-tested.
+    // Bounded opens use whole-minute durations. Physical one-, two-, three-,
+    // four-, nine-, twenty-, and sixty-minute requests have authenticated
+    // responses plus matching state reports. The gateway retains the smaller
+    // evidence gate because marker-collision values remain unresolved.
     if (!validHtv405GatewayControlLink(link) || phase.sequence > 0x1f ||
         zone < 1 || zone > 4 ||
         (associationSelector != 0x05 && associationSelector != 0x85) ||

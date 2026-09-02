@@ -1,0 +1,74 @@
+{
+  "captured_at": "2026-09-02",
+  "model": "HTV405FRF",
+  "scope": "generated-identity synchronized Zone 1 sixty-minute duration acceptance",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "valve_endpoint": "94a98013",
+    "control_node_id": "rp-f4e5be3b015c"
+  },
+  "request": {
+    "transaction_id": "82c18f75fb2e4f2b97a4ae68ee89a90c",
+    "zone": 1,
+    "duration_seconds": 3600,
+    "duration_two_second_units": 1800,
+    "encoded_duration": "8807",
+    "started_event_id": 290006,
+    "started_at": "2026-09-02T18:55:37.348463+00:00"
+  },
+  "synchronization": {
+    "anchor_response_event_id": 290007,
+    "anchor_response_frame": "79f4882f28ee86de8094a9801300508683104f8000000040800056800000000000000000565b",
+    "anchor_confirmed_event_id": 290008,
+    "open_dispatched_event_id": 290010,
+    "open_dispatched_at": "2026-09-02T18:55:52.352505+00:00"
+  },
+  "authenticated_open": {
+    "response_event_id": 290011,
+    "response_observed_at": "2026-09-02T18:55:53.073307+00:00",
+    "response_frame": "79f4882f28ee86de8094a9801300d0868010cf800000004088075688070000000000000001e6",
+    "response_sequence": 0,
+    "response_zone": 1,
+    "response_watering": true,
+    "confirmation_event_id": 290012
+  },
+  "independent_active_reports": [
+    {
+      "event_id": 290013,
+      "receiver_id": "local-sdr",
+      "frame": "79f4882f28ee86de8094a9801314010782058090cf80000000408587568807000000000030b8",
+      "reported_duration_seconds": 3600,
+      "reported_remaining_seconds": 3594,
+      "active_zone": 1
+    },
+    {
+      "event_id": 290019,
+      "receiver_id": "rp-6052bf3b015c",
+      "frame": "79f4882f28ee86de8094a9801315010782058090cf8000000040848756880700000000003af6",
+      "reported_duration_seconds": 3600,
+      "reported_remaining_seconds": 3592,
+      "active_zone": 1
+    },
+    {
+      "event_id": 290023,
+      "receiver_id": "rp-cc4c05f57630",
+      "frame": "79f4882f28ee86de8094a9801315010782058090cf8000000040848756880700000000003af6",
+      "reported_duration_seconds": 3600,
+      "reported_remaining_seconds": 3592,
+      "active_zone": 1
+    }
+  ],
+  "early_stop": {
+    "authenticated_close_response_event_id": 290028,
+    "authenticated_close_response_at": "2026-09-02T18:56:29.216465+00:00",
+    "authenticated_close_response_frame": "79f4882f28ee86de8094a9801301508680104f80000000408000568807000000000000000b72",
+    "idle_report_event_id": 290031,
+    "idle_frame": "79f4882f28ee86de8094a98013160107820580804f8000000040800056800000000000007b5b"
+  },
+  "findings": [
+    "The valve authenticated a synchronized sixty-minute open and independently reported 3,600 seconds requested with a decreasing remaining counter.",
+    "The accepted 88 07 duration validates the additive two-byte representation at the firmware and integration maximum.",
+    "Three independent receivers decoded the same active duration before the authenticated early stop.",
+    "The early stop returned the valve to independently reported idle."
+  ]
+}
