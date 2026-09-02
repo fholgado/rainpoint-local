@@ -1619,18 +1619,37 @@ class SQLiteEventStore:
         if state.get("control_pending_command_id") is not None:
             raise RuntimeError("an HTV405 command is already pending")
         current = state.get("control_next_sequence")
-        if (
-            not isinstance(current, int)
-            or isinstance(current, bool)
-            or current not in range(HTV405_COUNTER_MODULUS)
-        ):
+        synchronized = (
+            isinstance(current, int)
+            and not isinstance(current, bool)
+            and current in range(HTV405_COUNTER_MODULUS)
+        )
+        recovery_baseline = state.get("control_recovery_sequence")
+        baseline_recheck = (
+            not synchronized
+            and state.get("control_last_result")
+            == "close_discriminator_timeout_counter_unsynchronized"
+            and isinstance(recovery_baseline, int)
+            and not isinstance(recovery_baseline, bool)
+            and recovery_baseline in range(HTV405_COUNTER_MODULUS)
+        )
+        if not synchronized and not baseline_recheck:
             raise RuntimeError("HTV405 counter is not synchronized")
         if state.get("control_confirmed_watering") not in {0, False}:
             raise RuntimeError("HTV405 valve is not confirmed idle")
-        allowed = {current, (current + 1) & (HTV405_COUNTER_MODULUS - 1)}
+        anchor = int(current if synchronized else recovery_baseline)
+        allowed = (
+            {anchor}
+            if baseline_recheck
+            else {
+                anchor,
+                (anchor + 1) & (HTV405_COUNTER_MODULUS - 1),
+                (anchor + 2) & (HTV405_COUNTER_MODULUS - 1),
+            }
+        )
         if candidate_sequence not in allowed:
             raise ValueError(
-                "HTV405 discriminator is restricted to current or successor"
+                "HTV405 discriminator exceeds its bounded counter window"
             )
         last_at = state.get("control_last_command_started_at")
         if isinstance(last_at, str):
@@ -1646,8 +1665,16 @@ class SQLiteEventStore:
                     )
             except ValueError:
                 pass
+        counter_guard = (
+            "control_next_sequence = ?"
+            if synchronized
+            else """control_next_sequence IS NULL
+              AND control_recovery_sequence = ?
+              AND control_last_result =
+                  'close_discriminator_timeout_counter_unsynchronized'"""
+        )
         cursor = self._connection.execute(
-            """
+            f"""
             UPDATE valve_registry SET
                 control_pending_command_id = ?,
                 control_pending_action = 'close_discriminator',
@@ -1656,8 +1683,8 @@ class SQLiteEventStore:
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = ?,
                 control_last_command_started_at = ?,
-                control_recovery_sequence = NULL,
-                control_recovery_attempt = 0,
+                control_recovery_sequence = ?,
+                control_recovery_attempt = ?,
                 control_recovery_not_before = NULL,
                 control_recovery_idle_at = NULL,
                 control_recovery_zone = NULL,
@@ -1666,7 +1693,7 @@ class SQLiteEventStore:
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
               AND control_pending_command_id IS NULL
-              AND control_next_sequence = ?
+              AND {counter_guard}
               AND control_confirmed_watering = 0
             """,
             (
@@ -1674,10 +1701,12 @@ class SQLiteEventStore:
                 candidate_sequence,
                 started_at,
                 started_at,
+                anchor if baseline_recheck else None,
+                int(state.get("control_recovery_attempt") or 0),
                 started_at,
                 valve_endpoint,
                 node_id,
-                current,
+                anchor,
             ),
         )
         if not cursor.rowcount:
@@ -1933,11 +1962,34 @@ class SQLiteEventStore:
             strict_rejection = reason == (
                 "gateway_command_rejected_counter_unsynchronized"
             )
-            if strict_rejection:
+            published_baseline = state.get("control_next_sequence")
+            baseline_was_published = isinstance(
+                published_baseline, int
+            ) and not isinstance(published_baseline, bool)
+            baseline = published_baseline
+            if not baseline_was_published:
+                baseline = state.get("control_recovery_sequence")
+            if not isinstance(baseline, int) or isinstance(baseline, bool):
+                baseline = None
+            if strict_rejection and baseline_was_published:
                 result = "close_discriminator_rejected_counter_preserved"
-                next_sequence = state.get("control_next_sequence")
+                next_sequence = baseline
+                recovery_sequence = None
+                recovery_attempt = 0
+            elif strict_rejection:
+                result = (
+                    "close_discriminator_baseline_rejected_"
+                    "counter_unsynchronized"
+                )
+                next_sequence = None
+                recovery_sequence = None
+                recovery_attempt = 0
             else:
                 next_sequence = None
+                recovery_sequence = baseline
+                recovery_attempt = int(
+                    state.get("control_recovery_attempt") or 0
+                ) + 1
                 result = (
                     "close_discriminator_timeout_counter_unsynchronized"
                     if reason
@@ -1956,8 +2008,8 @@ class SQLiteEventStore:
                     control_pending_zone = NULL,
                     control_pending_duration_seconds = NULL,
                     control_pending_started_at = NULL,
-                    control_recovery_sequence = NULL,
-                    control_recovery_attempt = 0,
+                    control_recovery_sequence = ?,
+                    control_recovery_attempt = ?,
                     control_recovery_not_before = NULL,
                     control_recovery_idle_at = NULL,
                     control_recovery_zone = NULL,
@@ -1968,6 +2020,8 @@ class SQLiteEventStore:
                 """,
                 (
                     next_sequence,
+                    recovery_sequence,
+                    recovery_attempt,
                     result,
                     observed_at,
                     valve_endpoint,

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.34 / Integration 0.13.5 / Firmware 0.15.3
+
+- Extend the operator-only HTV405 close discriminator by exactly one counter
+  so a controlled `current + 2` probe can map the idle-close acceptance window.
+- After an ambiguous silent probe, retain the previously authenticated counter
+  only as an unpublished research baseline. A matching closed response must
+  re-authenticate it before ordinary control becomes available again.
+
 ## 0.33.33 / Integration 0.13.5 / Firmware 0.15.3
 
 - Add an authenticated, operator-only HTV405 close discriminator that can
