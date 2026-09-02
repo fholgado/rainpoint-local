@@ -92,6 +92,15 @@ def _entities_for_device(
         entities.append(
             ("reporting", RainPointReportingBinarySensor(coordinator, device_id))
         )
+    if "rf_control_start_available" in device.get("state", {}):
+        entities.append(
+            (
+                "control_start_available",
+                RainPointControlStartAvailableBinarySensor(
+                    coordinator, device_id
+                ),
+            )
+        )
     return entities
 
 
@@ -164,6 +173,41 @@ class RainPointReportingBinarySensor(RainPointLocalEntity, BinarySensorEntity):
             "report_age_seconds": self.device.get("report_age_seconds"),
             "reporting_timeout_seconds": self.device.get(
                 "reporting_timeout_seconds"
+            ),
+        }
+
+
+class RainPointControlStartAvailableBinarySensor(
+    RainPointLocalEntity, BinarySensorEntity
+):
+    """Expose whether Home Assistant may start a new valve transaction."""
+
+    _attr_translation_key = "control_start_available"
+
+    def __init__(
+        self, coordinator: RainPointLocalCoordinator, device_id: str
+    ) -> None:
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = f"{device_id}_control_start_available"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the gateway-owned start gate."""
+        value = self.decoded_state.get("rf_control_start_available")
+        return bool(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Explain why a new request is currently unavailable."""
+        return {
+            "unavailable_reason": self.decoded_state.get(
+                "rf_control_start_unavailable_reason"
+            ),
+            "transaction_state": self.decoded_state.get(
+                "rf_control_transaction_state"
+            ),
+            "transaction_status": self.decoded_state.get(
+                "rf_control_transaction_status"
             ),
         }
 

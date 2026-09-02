@@ -1,0 +1,359 @@
+# Installation-specific manual watering scripts retained as an example.
+garden_force_run_zone:
+  alias: Garden - Force Run Zone
+  description: >-
+    Run an irrigation zone for the requested duration without checking
+    moisture, rain, or season settings.
+  icon: mdi:sprinkler-variant
+  mode: queued
+  fields:
+    zone_name:
+      name: Zone name
+      required: true
+      selector:
+        text:
+    valve_entity:
+      name: Valve or switch entity
+      required: true
+      selector:
+        entity:
+          multiple: false
+    duration_number_entity:
+      name: Duration number entity
+      required: false
+      selector:
+        entity:
+          domain: number
+    duration_minutes:
+      name: Duration minutes
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+    last_ran_datetime_entity:
+      name: Last ran helper
+      required: true
+      selector:
+        entity:
+          domain: input_datetime
+    last_decision_text_entity:
+      name: Last decision helper
+      required: true
+      selector:
+        entity:
+          domain: input_text
+    notify_service:
+      name: Notification service
+      required: true
+      selector:
+        text:
+    urgent_notify_service:
+      name: Urgent notification service
+      required: true
+      selector:
+        text:
+  sequence:
+    - variables:
+        started_at: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+        control_domain: "{{ valve_entity.split('.')[0] }}"
+        run_minutes: "{{ duration_minutes | float(10) }}"
+        notification_id: >-
+          {{ zone_name | lower | replace(' ', '-') }}-manual-watering
+    - action: input_text.set_value
+      target:
+        entity_id: "{{ last_decision_text_entity }}"
+      data:
+        value: >-
+          {{ zone_name }} manual run requested at {{ started_at }} for
+          {{ run_minutes }} min.
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ control_domain == 'valve' }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ duration_number_entity | default('') | string | length > 0 }}
+              then:
+                - action: number.set_value
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ duration_number_entity }}"
+                  data:
+                    value: "{{ run_minutes }}"
+                - wait_template: >-
+                    {{ (states(duration_number_entity) | float(0)
+                        - run_minutes | float(10)) | abs < 0.01 }}
+                  timeout: "00:00:10"
+                  continue_on_timeout: true
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {{ (states(duration_number_entity) | float(0)
+                            - run_minutes | float(10)) | abs >= 0.01 }}
+                  then:
+                    - variables:
+                        failure_message: >-
+                          Refusing to open {{ valve_entity }} because
+                          {{ duration_number_entity }} did not confirm the
+                          requested {{ run_minutes }} minute duration.
+                    - action: input_text.set_value
+                      target:
+                        entity_id: "{{ last_decision_text_entity }}"
+                      data:
+                        value: "{{ failure_message }}"
+                    - action: persistent_notification.create
+                      data:
+                        notification_id: "{{ notification_id }}-failed"
+                        title: "{{ zone_name }} manual watering failed"
+                        message: "{{ failure_message }}"
+                    - action: "{{ urgent_notify_service }}"
+                      data:
+                        title: "{{ zone_name }} manual watering failed"
+                        message: "{{ failure_message }}"
+                        data:
+                          push:
+                            sound:
+                              name: default
+                              critical: 1
+                              volume: 1.0
+                            interruption-level: critical
+                          tag: "{{ notification_id }}-duration-failed"
+                    - stop: Valve duration was not confirmed.
+                      error: true
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ state_attr(valve_entity, 'start_available') is not true }}
+              then:
+                - variables:
+                    failure_reason: >-
+                      {{ state_attr(valve_entity, 'start_unavailable_reason')
+                         | default('a valve transaction is already active', true) }}
+                    failure_message: >-
+                      {{ valve_entity }} cannot start a new request:
+                      {{ failure_reason }}.
+                - action: input_text.set_value
+                  target:
+                    entity_id: "{{ last_decision_text_entity }}"
+                  data:
+                    value: "{{ failure_message }}"
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ notification_id }}-failed"
+                    title: "{{ zone_name }} manual watering unavailable"
+                    message: "{{ failure_message }}"
+                - stop: A new valve transaction is unavailable.
+                  error: true
+            - variables:
+                transaction_id_before: >-
+                  {{ state_attr(valve_entity, 'transaction_id')
+                     | default('', true) }}
+            - action: valve.open_valve
+              continue_on_error: true
+              target:
+                entity_id: "{{ valve_entity }}"
+            - wait_template: >-
+                {% set transaction_id =
+                     state_attr(valve_entity, 'transaction_id')
+                     | default('', true) %}
+                {% set transaction_state =
+                     state_attr(valve_entity, 'transaction_state')
+                     | default('', true) %}
+                {{ transaction_id != transaction_id_before
+                   and transaction_state in
+                     ['watering_confirmed', 'completed', 'failed', 'cancelled'] }}
+              timeout: "00:00:40"
+              continue_on_timeout: true
+            - variables:
+                transaction_id: >-
+                  {{ state_attr(valve_entity, 'transaction_id')
+                     | default('', true) }}
+                transaction_state: >-
+                  {{ state_attr(valve_entity, 'transaction_state')
+                     | default('no transaction result', true) }}
+                transaction_status: >-
+                  {{ state_attr(valve_entity, 'transaction_status')
+                     | default('No status was reported', true) }}
+                transaction_error: >-
+                  {{ state_attr(valve_entity, 'transaction_error')
+                     | default('', true) }}
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ transaction_id == transaction_id_before
+                       or transaction_state not in
+                         ['watering_confirmed', 'completed'] }}
+              then:
+                - variables:
+                    failure_message: >-
+                      {{ valve_entity }} did not confirm watering.
+                      {{ transaction_status }}{% if transaction_error %}
+                      ({{ transaction_error }}){% endif %}
+                - action: input_text.set_value
+                  target:
+                    entity_id: "{{ last_decision_text_entity }}"
+                  data:
+                    value: >-
+                      {{ zone_name }} manual watering failed at {{ started_at }}:
+                      {{ transaction_status }}.
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ notification_id }}-failed"
+                    title: "{{ zone_name }} manual watering failed"
+                    message: "{{ failure_message }}"
+                - action: "{{ urgent_notify_service }}"
+                  data:
+                    title: "{{ zone_name }} manual watering failed"
+                    message: "{{ failure_message }}"
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 1.0
+                        interruption-level: critical
+                      tag: "{{ notification_id }}-failed"
+                - stop: Valve transaction did not confirm watering.
+                  error: true
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: "{{ last_ran_datetime_entity }}"
+              data:
+                datetime: "{{ started_at }}"
+            - action: input_text.set_value
+              target:
+                entity_id: "{{ last_decision_text_entity }}"
+              data:
+                value: >-
+                  {{ zone_name }} manual watering confirmed at {{ started_at }}
+                  for {{ run_minutes }} min: {{ transaction_status }}.
+            - action: persistent_notification.dismiss
+              continue_on_error: true
+              data:
+                notification_id: "{{ notification_id }}-failed"
+            - action: "{{ notify_service }}"
+              data:
+                title: "{{ zone_name }} manual watering started"
+                message: >-
+                  {{ zone_name }} confirmed a {{ run_minutes }} minute bounded
+                  manual run. Home Assistant is monitoring the valve-owned stop.
+                data:
+                  tag: "{{ notification_id }}-started"
+            - stop: >-
+                Bounded manual valve run started with transaction-specific
+                confirmation.
+        - conditions:
+            - condition: template
+              value_template: "{{ control_domain == 'switch' }}"
+          sequence:
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id: "{{ valve_entity }}"
+            - wait_template: "{{ is_state(valve_entity, 'on') }}"
+              timeout: "00:01:00"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: "{{ not is_state(valve_entity, 'on') }}"
+              then:
+                - action: "{{ urgent_notify_service }}"
+                  data:
+                    title: "{{ zone_name }} manual watering failed"
+                    message: "{{ valve_entity }} did not turn on within 1 minute."
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 1.0
+                        interruption-level: critical
+                      tag: "{{ notification_id }}-failed"
+                - stop: Water switch did not turn on.
+                  error: true
+      default:
+        - action: "{{ urgent_notify_service }}"
+          data:
+            title: "{{ zone_name }} manual watering failed"
+            message: >-
+              {{ valve_entity }} uses unsupported domain {{ control_domain }}.
+        - stop: Unsupported watering control domain.
+          error: true
+    - delay:
+        minutes: "{{ run_minutes }}"
+    - repeat:
+        count: 3
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ not is_state(valve_entity, 'off') }}"
+            then:
+              - action: switch.turn_off
+                continue_on_error: true
+                target:
+                  entity_id: "{{ valve_entity }}"
+          - wait_template: "{{ is_state(valve_entity, 'off') }}"
+            timeout: "00:00:30"
+            continue_on_timeout: true
+    - if:
+        - condition: template
+          value_template: "{{ not is_state(valve_entity, 'off') }}"
+      then:
+        - action: "{{ urgent_notify_service }}"
+          data:
+            title: "{{ zone_name }} valve failed to close"
+            message: >-
+              CRITICAL: {{ valve_entity }} is still {{ states(valve_entity) }}
+              after three shutdown attempts. Check the irrigation immediately.
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1.0
+                interruption-level: critical
+              tag: "{{ notification_id }}-close-failed"
+        - stop: Irrigation control did not confirm closed.
+          error: true
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: "{{ last_ran_datetime_entity }}"
+      data:
+        datetime: "{{ started_at }}"
+    - action: input_text.set_value
+      target:
+        entity_id: "{{ last_decision_text_entity }}"
+      data:
+        value: >-
+          {{ zone_name }} manual run completed successfully after
+          {{ run_minutes }} min.
+    - action: "{{ notify_service }}"
+      data:
+        title: "{{ zone_name }} manual watering complete"
+        message: >-
+          {{ zone_name }} manual irrigation completed after {{ run_minutes }}
+          min and the valve confirmed closed.
+
+garden_run_manual_watering_program:
+  alias: Garden - Run Manual Watering
+  description: >-
+    Manually run the garden irrigation for the dashboard duration, bypassing
+    moisture, rain, and season checks.
+  icon: mdi:play-circle
+  mode: single
+  sequence:
+    - action: script.garden_force_run_zone
+      data:
+        zone_name: Garden
+        valve_entity: valve.rainpoint_4_zone_valve_8013_zone_1
+        duration_number_entity: number.rainpoint_4_zone_valve_8013_zone_1_duration_2
+        duration_minutes: >-
+          {{ states('input_number.garden_watering_duration') | float(10) }}
+        last_ran_datetime_entity: input_datetime.garden_watering_last_ran
+        last_decision_text_entity: input_text.garden_watering_last_decision
+        notify_service: notify.mobile_app_fedes_iphone
+        urgent_notify_service: notify.mobile_app_fedes_iphone

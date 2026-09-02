@@ -135,11 +135,20 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
             "control_unavailable_reason": self.decoded_state.get(
                 "rf_control_unavailable_reason"
             ),
+            "start_available": self.decoded_state.get(
+                "rf_control_start_available"
+            ),
+            "start_unavailable_reason": self.decoded_state.get(
+                "rf_control_start_unavailable_reason"
+            ),
             "command_pending": self.decoded_state.get(
                 "rf_control_command_pending"
             ),
             "transaction_state": self.decoded_state.get(
                 "rf_control_transaction_state"
+            ),
+            "transaction_id": self.decoded_state.get(
+                "rf_control_transaction_id"
             ),
             "transaction_status": self.decoded_state.get(
                 "rf_control_transaction_status"

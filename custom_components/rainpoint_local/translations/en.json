@@ -225,6 +225,7 @@
       "watering": { "name": "Watering" },
       "zone_watering": { "name": "Zone {zone} watering" },
       "reporting": { "name": "Reporting" },
+      "control_start_available": { "name": "Control start available" },
       "radio_node_connected": { "name": "Connected" },
       "radio_node_tx_armed": { "name": "Pairing transmitter armed" },
       "radio_node_reboot_pending": { "name": "Reboot pending" }

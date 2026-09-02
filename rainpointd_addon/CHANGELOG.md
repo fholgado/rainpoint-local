@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.33.39 / Integration 0.13.7 / Firmware 0.15.3
+
+- Expose the gateway-owned HTV405 start-availability gate and transaction ID
+  to Home Assistant so dashboards can disable duplicate starts and associate a
+  result with the request that produced it.
+- Replace the installation example's legacy nested Run Now retries with one
+  observable synchronized transaction, immediate terminal feedback, and a
+  persistent Home Assistant failure notification.
+- Remove the last stale HTV405 water-usage references from the installed-style
+  Garden dashboard.
+
 ## 0.33.39 / Integration 0.13.6 / Firmware 0.15.3
 
 - Reconcile an already-idle `0.33.37` watering result to **Watering

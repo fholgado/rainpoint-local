@@ -719,6 +719,14 @@ same time without conflicting authority.
       active work. Gateway 0.33.39 additionally labels the final idle result
       **Watering completed** instead of retaining the earlier start-confirmed
       wording.
+- [x] Make the installed Garden Run Now control follow that transaction rather
+      than layering its own retry loop on top. Integration `0.13.7` exposes a
+      start-availability binary sensor plus the transaction ID; the dashboard
+      presents the live status, disables Run Now while a request is active,
+      and the script submits exactly one open. A new transaction-specific
+      terminal failure updates the decision helper, mobile alert, and
+      persistent Home Assistant notification within a bounded 40-second
+      confirmation window.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and
@@ -857,8 +865,10 @@ and the validated fresh-association counter-`1` result are frozen in
       declares no flow or water-volume capability.
       - 2026-09-02: gateway `0.33.29` removes the generic product capability and
         placeholder state, integration `0.13.4` rejects new HTV405 usage
-        entities and removes stale registry entries, and both the checked-in
-        example and installed local dashboard contain no such entity.
+        entities and removes stale registry entries. Integration `0.13.7`
+        finishes the installation cleanup: both the checked-in example and
+        installed primary Garden dashboard contain no water-usage entity or
+        obsolete total-water helper.
 - [x] Mark each field as confirmed, provisional, categorical-only, or not
       transmitted locally; never synthesize an unavailable protocol value.
 - [ ] Ensure product/model discovery is capability- and product-code based, not

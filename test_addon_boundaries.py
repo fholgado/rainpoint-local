@@ -24,6 +24,12 @@ class AddonBoundaryTest(unittest.TestCase):
         button_source = (
             ROOT / "custom_components" / "rainpoint_local" / "button.py"
         ).read_text()
+        binary_sensor_source = (
+            ROOT
+            / "custom_components"
+            / "rainpoint_local"
+            / "binary_sensor.py"
+        ).read_text()
         http_source = (
             ROOT / "rainpointd_addon" / "rainpointd" / "http.py"
         ).read_text()
@@ -32,11 +38,18 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("rf_control_transaction_active", valve_source)
         self.assertIn("return ValveEntityFeature(0)", valve_source)
         self.assertIn("rf_control_start_available", valve_source)
+        self.assertIn('"transaction_id"', valve_source)
         self.assertIn("control_transaction_status", sensor_source)
+        self.assertIn('"transaction_id"', sensor_source)
         self.assertIn(
             "RainPointHtv405CancelWateringRequestButton", button_source
         )
         self.assertIn("cancel_htv405_watering_transaction", button_source)
+        self.assertIn(
+            "RainPointControlStartAvailableBinarySensor",
+            binary_sensor_source,
+        )
+        self.assertIn("rf_control_start_available", binary_sensor_source)
 
     def test_mac_continuous_iq_capture_is_bounded_and_receive_only(self) -> None:
         script = ROOT / "tools" / "capture_rainpoint_continuous_iq.sh"
@@ -377,13 +390,37 @@ class AddonBoundaryTest(unittest.TestCase):
             "binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering",
             "sensor.rainpoint_4_zone_valve_8013_device_report_time",
             "sensor.rainpoint_4_zone_valve_8013_battery",
+            "binary_sensor.garden_htv405_4_zone_water_timer_8013_control_start_available",
+            "sensor.garden_htv405_4_zone_water_timer_8013_control_request_status",
         ):
             self.assertIn(entity, dashboard)
         self.assertNotIn(
             "sensor.rainpoint_4_zone_valve_8013_last_water_usage",
             dashboard,
         )
+        self.assertNotIn("input_number.garden_water_used_today", dashboard)
         self.assertIn("Valve Battery (not decoded)", dashboard)
+
+    def test_garden_manual_run_uses_one_observable_transaction(self) -> None:
+        scripts = (
+            ROOT
+            / "examples"
+            / "federico-garden"
+            / "garden-local-scripts.yaml"
+        ).read_text()
+        force_run = scripts.split(
+            "garden_run_manual_watering_program:", maxsplit=1
+        )[0]
+
+        self.assertEqual(1, force_run.count("action: valve.open_valve"))
+        self.assertIn("transaction_state", force_run)
+        self.assertIn("transaction_status", force_run)
+        self.assertIn("transaction_id_before", force_run)
+        self.assertIn("watering_confirmed", force_run)
+        self.assertIn("completed", force_run)
+        self.assertIn("failed", force_run)
+        self.assertIn("cancelled", force_run)
+        self.assertNotIn("accepted_command_results", force_run)
 
     def test_htv405_omits_unsupported_water_usage_entity(self) -> None:
         sensor_source = (

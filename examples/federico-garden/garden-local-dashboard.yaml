@@ -1,5 +1,5 @@
-# Installation-specific reliability dashboard retained as an example.
-title: Garden Local
+# Primary installation-specific garden dashboard powered by local RF telemetry.
+title: Garden
 views:
   - title: Garden
     path: garden
@@ -11,10 +11,11 @@ views:
         cards:
           - type: markdown
             content: >-
-              **Local RF telemetry and control.** This dashboard reads RainPoint
-              moisture and the currently paired HTV405 valve from
-              `rainpoint_local`. Garden watering uses Zone 1; HTV405 battery
-              remains unavailable until its RF field is independently validated.
+              **Local RainPoint telemetry and control.** Moisture readings,
+              freshness checks, watering decisions, and the paired HTV405 valve
+              now use `rainpoint_local`. Garden watering uses Zone 1; HTV405
+              battery remains unavailable until its RF field is independently
+              validated.
           - type: heading
             heading: Garden Moisture
             heading_style: title
@@ -95,12 +96,39 @@ views:
             icon: mdi:water-percent
             color: teal
             vertical: false
-          - type: button
-            name: Run Now
-            icon: mdi:sprinkler-variant
-            tap_action:
-              action: call-service
-              service: script.garden_run_manual_watering_program
+          - type: tile
+            entity: sensor.garden_htv405_4_zone_water_timer_8013_control_request_status
+            name: Run Now Status
+            icon: mdi:list-status
+            color: blue
+            vertical: false
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.garden_htv405_4_zone_water_timer_8013_control_start_available
+                state: "on"
+            card:
+              type: button
+              entity: binary_sensor.garden_htv405_4_zone_water_timer_8013_control_start_available
+              name: Run Now
+              icon: mdi:sprinkler-variant
+              show_state: false
+              tap_action:
+                action: call-service
+                service: script.garden_run_manual_watering_program
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.garden_htv405_4_zone_water_timer_8013_control_start_available
+                state_not: "on"
+            card:
+              type: button
+              entity: sensor.garden_htv405_4_zone_water_timer_8013_control_request_status
+              name: Run Now
+              icon: mdi:progress-clock
+              show_state: true
+              tap_action:
+                action: none
           - type: entities
             title: Decision Settings
             show_header_toggle: false
@@ -138,12 +166,6 @@ views:
             heading_style: title
             icon: mdi:sprinkler-variant
           - type: tile
-            entity: input_number.garden_water_used_today
-            name: Water Used Today
-            icon: mdi:water
-            color: blue
-            vertical: false
-          - type: tile
             entity: sensor.rainpoint_4_zone_valve_8013_reported_duration
             name: Session Duration
             icon: mdi:timer-outline
@@ -162,10 +184,17 @@ views:
             heading_style: title
             icon: mdi:valve
           - type: tile
-            entity: binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering
-            name: Zone 1 Watering
+            entity: valve.rainpoint_4_zone_valve_8013_zone_1
+            name: Zone 1
             icon: mdi:valve
             color: green
+            features:
+              - type: valve-open-close
+          - type: tile
+            entity: number.rainpoint_4_zone_valve_8013_zone_1_duration_2
+            name: Zone Duration
+            icon: mdi:timer-cog-outline
+            color: amber
           - type: tile
             entity: sensor.rainpoint_4_zone_valve_8013_device_report_time
             name: Last Valve Report
