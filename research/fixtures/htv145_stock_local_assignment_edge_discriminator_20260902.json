@@ -1,0 +1,102 @@
+{
+  "model": "HTV145FRF",
+  "analysis_date": "2026-09-02",
+  "purpose": "Compare packet-boundary energy and sync-aligned alternating-wake evidence that the former fixed-320-transition analyzer truncated.",
+  "method": {
+    "energy": "tools/analyze_pairing_waveform.py waveform with active threshold 5 and a 50 ms bounded window",
+    "sync_alignment": "tools/demod_rainpoint_reply_iq.py with the measured balanced-wake center; histogram counts all exact-frame clock phases",
+    "sample_rate_sps": 2000000,
+    "symbol_rate_sps": 20000
+  },
+  "accepted_stock": [
+    {
+      "name": "stock_counter0",
+      "source_fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
+      "source_capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+      "bounded_capture_sha256": "5026d3c33506ca853a900cd8ab3541802581953b65fb171a3b212bf913b0c53b",
+      "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
+      "burst_duration_ms": 31.3565,
+      "wake_phase_count": 97,
+      "alternating_wake_symbol_histogram": {
+        "129": 1,
+        "280": 1,
+        "281": 1,
+        "319": 40,
+        "321": 54
+      }
+    },
+    {
+      "name": "stock_counter2",
+      "source_fixture": "htv145_counter2_stock_enrollment_20260901.json",
+      "source_capture_sha256": "70c2b374cc7bff8bc0bd02b3094423ea7192836caed672b6be606c11e07e63a9",
+      "bounded_capture_sha256": "b1ea88acaefdbfede926b111fd0dce1f5b93a90c6936a1c40e12064fdad3db7d",
+      "assignment_frame": "79f4882f28b42d008fb9840280824085850086700098e1a10d01008000000000000000001133",
+      "burst_duration_ms": 31.358,
+      "wake_phase_count": 97,
+      "alternating_wake_symbol_histogram": {
+        "271": 1,
+        "275": 1,
+        "279": 1,
+        "319": 29,
+        "321": 65
+      }
+    }
+  ],
+  "accepted_stock_continuation_control": {
+    "name": "stock_counter0_stage1_reply",
+    "source_fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
+    "reply_frame": "79f4882f28b42d008fb98402808141010000800000000000000000000000000000000000592d",
+    "burst_duration_ms": 31.3575,
+    "wake_phase_count": 97,
+    "alternating_wake_symbol_histogram": {
+      "169": 1,
+      "279": 2,
+      "320": 94
+    }
+  },
+  "rejected_local": [
+    {
+      "name": "probe24",
+      "source_fixture": "htv145_probe24_clock_wrap_rejection_20260901.json",
+      "source_capture_sha256": "ffdc953c28f178510244a3df1e6b3375e0b5df629d3b63e4207bec645f8920e3",
+      "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000980f210d01008000000000000000005d02",
+      "configured_wake_symbols": 320,
+      "burst_duration_ms": 31.2275,
+      "wake_phase_count": 86,
+      "alternating_wake_symbol_histogram": {
+        "282": 1,
+        "319": 79,
+        "321": 6
+      }
+    },
+    {
+      "name": "probe25",
+      "source_fixture": "htv145_probe25_clock_correct_rejection_20260901.json",
+      "source_capture_sha256": "0955b3f315c9a830213b4167ccdec305ba878b2709715e07e7b248b32a9b5995",
+      "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000a499210d0100800000000000000000a885",
+      "configured_wake_symbols": 320,
+      "burst_duration_ms": 31.2215,
+      "wake_phase_count": 87,
+      "alternating_wake_symbol_histogram": {
+        "234": 1,
+        "319": 86
+      }
+    }
+  ],
+  "findings": {
+    "accepted_stock_duration_range_ms": [31.3565, 31.358],
+    "rejected_local_duration_range_ms": [31.2215, 31.2275],
+    "stock_minus_local_duration_range_ms": [0.129, 0.1365],
+    "stock_assignment_dominant_sync_aligned_wake_count": 321,
+    "stock_stage1_dominant_sync_aligned_wake_count": 320,
+    "local_assignment_dominant_sync_aligned_wake_count": 319,
+    "configured_local_wake_symbols": 320
+  },
+  "interpretation": [
+    "Two independent accepted stock assignments are about 0.13 ms longer than two rejected local assignments across the same fixed energy threshold; sweeping thresholds from 3 through 25 preserved the separation.",
+    "Most exact-frame clock phases see 321 alternating symbols immediately before stock sync, while nearly every local phase sees 319. The existing local generator is configured for 320 wake symbols and establishes that 319 is this demodulator's normal boundary count.",
+    "The stock stage-1 gateway reply has the same approximately 31.36 ms energy duration but a dominant backward count of 320, so this histogram cannot be translated directly into a fixed configured wake length. Starting phase, wake-to-sync continuity, and the post-frame tail must be separated before changing the wake constant.",
+    "The repeated duration difference is new evidence for packet-boundary behavior, but not proof that it caused rejection: stock and local amplitude/SNR differ, and PA ramp or post-frame energy can contribute to the approximately 0.13 ms difference.",
+    "The next fresh stock capture must reproduce the duration and phase histogram. Exact-byte replay remains first; if it fails through the current CC1101 path, edge-aligned analysis should test start phase and roughly two-to-three symbol-times of stock-only tail before another semantic change."
+  ]
+}

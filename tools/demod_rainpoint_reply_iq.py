@@ -10,6 +10,7 @@ clock-phase search and looks for the established RainPoint sync word.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 from pathlib import Path
@@ -62,6 +63,9 @@ def _group_matches(raw_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "sync_symbols": sorted(set(item["sync_symbols"])),
                 "alternating_wake_symbols": sorted(
                     set(item["alternating_wake_symbols"])
+                ),
+                "alternating_wake_symbol_histogram": dict(
+                    sorted(Counter(item["alternating_wake_symbols"]).items())
                 ),
             }
             for item in grouped.values()

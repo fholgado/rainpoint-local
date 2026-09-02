@@ -284,11 +284,18 @@ observation before it changes transmitted firmware.
       session-generated, and still-unknown fields. Treat the 2026-08-28
       counter-3/selector-6 recording as retained-association evidence, not as a
       universal fresh-enrollment branch.
-- [ ] Extend the IQ analyzer with a stage-0 verdict that fails when an
+- [x] Extend the IQ analyzer with a stage-0 verdict that fails when an
       assignment is transmitted without an addressed stage-1 request. The fast
       fixture replay and raw-IQ replay must report the same red/green result,
       and each physical attempt must retain the exact assignment plus the
       following factory fallbacks or paired request.
+  - 2026-09-02: bounded raw-IQ replay now agrees with both independent
+    outcomes. It reports the accepted stock counter-0 assignment as
+    `accepted` after recovering one addressed stage-1 request, and probe `.25`
+    as `rejected_assignment_without_stage_1` after recovering the local
+    assignment, zero addressed stage-1 requests, and the continuing factory
+    sweep. The red/green evidence is retained in
+    `research/fixtures/htv145_stage0_raw_replay_differential_20260902.json`.
 - [ ] Replace the shared HTV405 session reuse with a dedicated research-only
       HTV145 state machine and one canonical transcript definition consumed by
       the analyzer, gateway tests, and generated firmware table. The initial
@@ -412,6 +419,15 @@ observation before it changes transmitted firmware.
     `.25`; the next discriminator is exact replay of a freshly accepted stock
     assignment, captured under the same controlled lifecycle, before changing
     any further semantic or physical field.
+  - 2026-09-02 edge follow-up: two accepted stock assignments each remain
+    above the energy threshold for about `31.36 ms`, versus `31.22--31.23 ms`
+    for rejected probes `.24` and `.25`. Sync-aligned backward-wake histograms
+    differ too, but an accepted stock continuation proves that count cannot be
+    translated directly into one fixed wake-symbol constant. Preserve this as
+    a packet-boundary/start-phase/PA-tail hypothesis, not as probe `.26` yet.
+    Exact-byte replay remains next and must retain raw IQ so the boundary can
+    be compared. Evidence:
+    `research/fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json`.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected. The staging tool now refuses overflow before writing

@@ -561,6 +561,13 @@ class RainPointRFTest(unittest.TestCase):
                 capture_center_hz=433_700_000,
             )
         self.assertEqual(frame.hex(), recovered["matches"][0]["frame_hex"])
+        wake_histogram = recovered["matches"][0][
+            "alternating_wake_symbol_histogram"
+        ]
+        self.assertEqual(
+            recovered["matches"][0]["phase_count"],
+            sum(wake_histogram.values()),
+        )
 
     def test_decodes_controlled_hcs026_pairing_and_battery_fixtures(self) -> None:
         fixture = json.loads(

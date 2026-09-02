@@ -1,0 +1,73 @@
+{
+  "model": "HTV145FRF",
+  "analysis_date": "2026-09-02",
+  "purpose": "Prove that the raw-IQ analyzer reports the same accepted/rejected stage-zero boundary as the physical valve and radio-node diagnostics.",
+  "analyzer": "tools/analyze_htv145_pairing_iq.py",
+  "shared_route": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "assigned_response_channel": 12,
+    "assigned_response_center_hz": 434351500
+  },
+  "trials": [
+    {
+      "name": "stock_counter0_accepted",
+      "source_fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
+      "source_capture_sha256": "4d6fba2423f66d7d90a687b22e66e5a38436095efa54b3afbf50c7dab6161bc0",
+      "bounded_capture_sha256": "5026d3c33506ca853a900cd8ab3541802581953b65fb171a3b212bf913b0c53b",
+      "bounded_capture_bytes": 16000000,
+      "source_window_seconds": {
+        "start": 128.0,
+        "duration": 4.0
+      },
+      "decision_centers_hz": {
+        "request": 433146216,
+        "assignment": 433581558,
+        "upper_sweep": 434306001,
+        "response": 434351500
+      },
+      "request_count": 1,
+      "assignment_count": 1,
+      "stage_1_request_count": 1,
+      "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+      "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
+      "request_end_to_assignment_start_ms": 52.15,
+      "stage_1_start_seconds_in_window": 3.30855,
+      "physical_result": "successful stock enrollment",
+      "node_result": "not_applicable_stock_gateway",
+      "raw_iq_stage_0_verdict": "accepted"
+    },
+    {
+      "name": "local_probe25_rejected",
+      "source_fixture": "htv145_probe25_clock_correct_rejection_20260901.json",
+      "source_capture_sha256": "0955b3f315c9a830213b4167ccdec305ba878b2709715e07e7b248b32a9b5995",
+      "source_window_seconds": {
+        "start": 46.0,
+        "duration": 4.0
+      },
+      "decision_centers_hz": {
+        "request": 433146080,
+        "assignment": 433577266,
+        "upper_sweep": 434306001,
+        "response": 434351500
+      },
+      "request_count": 2,
+      "assignment_count": 1,
+      "stage_1_request_count": 0,
+      "request_frame": "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf",
+      "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000a499210d0100800000000000000000a885",
+      "request_end_to_assignment_start_ms": 52.55,
+      "physical_result": "valve continued its factory sweep",
+      "node_result": "stage_0_rejected",
+      "raw_iq_stage_0_verdict": "rejected_assignment_without_stage_1"
+    }
+  ],
+  "interpretation": [
+    "The analyzer detects the valve-originated addressed stage-1 request after the accepted stock assignment.",
+    "The same analyzer detects a transmitted local assignment followed by no addressed stage-1 request and at least one factory fallback.",
+    "Raw-IQ replay therefore agrees with the independent physical and node outcomes and is a deterministic red/green stage-zero feedback loop.",
+    "The frozen probe .25 remains red. The next RF discriminator is an exact replay of a freshly accepted stock assignment, not another blind field or timing adjustment."
+  ]
+}

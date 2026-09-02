@@ -49,6 +49,9 @@ from tools.analyze_htv145_pairing_iq import (  # noqa: E402
     analyze as analyze_htv145_pairing_capture,
 )
 from tools.generate_rainpoint_iq import generate_command  # noqa: E402
+from tools.prepare_htv145_exact_replay import (  # noqa: E402
+    prepare_exact_replay,
+)
 
 
 class HCS026PairingProtocolTest(unittest.TestCase):
@@ -630,6 +633,81 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(trial["assignment_to_controller_route"])
         self.assertTrue(trial["counter_echoed"])
         self.assertTrue(trial["stage_1_observed"])
+
+    def test_htv145_raw_stage0_fixture_agrees_with_independent_outcomes(
+        self,
+    ) -> None:
+        fixture = json.loads(
+            (
+                ROOT
+                / "research/fixtures/"
+                "htv145_stage0_raw_replay_differential_20260902.json"
+            ).read_text()
+        )
+        trials = {trial["name"]: trial for trial in fixture["trials"]}
+
+        stock = trials["stock_counter0_accepted"]
+        self.assertEqual("successful stock enrollment", stock["physical_result"])
+        self.assertEqual("accepted", stock["raw_iq_stage_0_verdict"])
+        self.assertEqual(1, stock["assignment_count"])
+        self.assertEqual(1, stock["stage_1_request_count"])
+
+        local = trials["local_probe25_rejected"]
+        self.assertEqual("stage_0_rejected", local["node_result"])
+        self.assertEqual(
+            "rejected_assignment_without_stage_1",
+            local["raw_iq_stage_0_verdict"],
+        )
+        self.assertEqual(1, local["assignment_count"])
+        self.assertEqual(0, local["stage_1_request_count"])
+        self.assertNotEqual(
+            stock["raw_iq_stage_0_verdict"],
+            local["raw_iq_stage_0_verdict"],
+        )
+
+    def test_prepares_strict_htv145_exact_replay_from_accepted_stock(
+        self,
+    ) -> None:
+        source_path = (
+            ROOT
+            / "research/fixtures/"
+            "htv145_counter0_app_first_stock_enrollment_20260901.json"
+        )
+        replay = prepare_exact_replay(
+            json.loads(source_path.read_text()),
+            source_path=source_path,
+        )
+
+        self.assertEqual("HTV145FRF", replay["model"])
+        self.assertEqual(0, replay["factory_sweep_counter"])
+        self.assertEqual(6, replay["assignment_selector"])
+        self.assertEqual(12, replay["assigned_response_channel"])
+        self.assertEqual("c713", replay["assignment_trailer_residual"])
+        self.assertEqual(
+            "79f4882f28b42d008fb984028080c0858500867000f865210d"
+            "010080000000000000000041c6",
+            replay["exact_assignment_frame"],
+        )
+        self.assertEqual(
+            "79f4882f28b9840280b42d008f810107862580804f8000000040"
+            "800056800000000000005689",
+            replay["acceptance_frame"],
+        )
+        self.assertIn("0x79, 0xf4, 0x88, 0x2f", replay["cpp_initializer"])
+
+    def test_refuses_htv145_exact_replay_from_rejected_local_trial(
+        self,
+    ) -> None:
+        rejected_path = (
+            ROOT
+            / "research/fixtures/"
+            "htv145_probe25_clock_correct_rejection_20260901.json"
+        )
+        with self.assertRaisesRegex(ValueError, "successful physical result"):
+            prepare_exact_replay(
+                json.loads(rejected_path.read_text()),
+                source_path=rejected_path,
+            )
 
     def test_symbolic_plan_requires_each_observation_and_dispatch(self) -> None:
         controller = PairingPlanController(VALIDATED_HCS026_PROFILE)
