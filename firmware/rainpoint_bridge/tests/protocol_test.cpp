@@ -1247,6 +1247,9 @@ int main() {
     assert(rainpoint::kHtv405InitialChannelCenterHz == 433'511'445);
     assert(rainpoint::kPairingWakeSymbols == 320);
     assert(
+        rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs == 115
+    );
+    assert(
         htv405Profile.steps[1].deviationRegister ==
         rainpoint::kOrdinaryDeviationRegister
     );

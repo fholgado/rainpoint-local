@@ -165,6 +165,23 @@ corrects the counter-0 packed clock after direct `.24` evidence showed that
 the former marker preservation cleared the FAT/DOS high-hour bit after 4 PM.
 Only bit 7 of the time-low byte is the captured counter-0 branch marker; the
 time-high and date bytes retain their encoded data bits.
+
+The measured post-frame-tail candidate has one further, separately required
+gate:
+
+```sh
+RAINPOINT_RESEARCH_BENCH=1 \
+  RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
+  RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
+  pio run --project-dir firmware/rainpoint_bridge
+```
+
+It changes only stage-zero transmitter shutdown: after the ordinary frame it
+keeps the already-low data input and PA active for another `115 us` before
+`SIDLE`. Production, supervised HTV405, ordinary `.25`, and later HTV145 stages
+retain a zero hold. Do not stage or flash this artifact until a fresh accepted
+stock capture reproduces the retained approximately `160 us` low-tone tail and
+the roadmap explicitly authorizes the physical discriminator.
 Probe `.24` preserved the `.23` counter-0 transcript, scheduler, calibrated
 carrier, and deviation unchanged. It only applies a dedicated research-profile
 calibration guard so the evidenced `122.759 kHz` correction can pass the node's

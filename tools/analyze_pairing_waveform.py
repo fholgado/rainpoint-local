@@ -351,6 +351,108 @@ def analyze_balanced_wake(
     }
 
 
+def analyze_post_frame_edge(
+    path: Path,
+    *,
+    sample_rate: int,
+    capture_center_hz: int,
+    decision_center_hz: int,
+    sync_start_sample: int,
+    frame_symbols: int = 304,
+    symbol_rate: int = DEFAULT_SYMBOL_RATE,
+    active_threshold: float = DEFAULT_ACTIVE_THRESHOLD,
+    pre_window_us: float = 100.0,
+    post_window_us: float = 250.0,
+    maximum_gap_us: float = 10.0,
+) -> dict[str, Any]:
+    """Classify RF energy and FSK tone immediately after one decoded frame."""
+    _require_numpy()
+    assert np is not None
+    if sample_rate % symbol_rate:
+        raise ValueError("sample rate must be an integer multiple of symbol rate")
+    if sync_start_sample < 0 or frame_symbols <= 0:
+        raise ValueError("sync sample and frame symbol count must be positive")
+    if pre_window_us < 0 or post_window_us <= 0 or maximum_gap_us < 0:
+        raise ValueError("edge windows and gap must be non-negative")
+
+    samples_per_symbol = sample_rate // symbol_rate
+    frame_end_sample = sync_start_sample + frame_symbols * samples_per_symbol
+    pre_samples = round(pre_window_us * sample_rate / 1_000_000)
+    post_samples = round(post_window_us * sample_rate / 1_000_000)
+    first_sample = max(0, frame_end_sample - pre_samples)
+    frame_end_index = frame_end_sample - first_sample
+    samples = _read_window(
+        path,
+        sample_rate=sample_rate,
+        start_seconds=first_sample / sample_rate,
+        duration_seconds=(frame_end_index + post_samples) / sample_rate,
+    )
+    if frame_end_index >= samples.size:
+        raise ValueError("decoded frame end is outside the capture")
+
+    magnitude = np.abs(samples)
+    after = magnitude[frame_end_index:]
+    maximum_gap_samples = round(maximum_gap_us * sample_rate / 1_000_000)
+    last_active = -1
+    inactive_run = 0
+    for index, active in enumerate(after > active_threshold):
+        if active:
+            last_active = index
+            inactive_run = 0
+        else:
+            inactive_run += 1
+            if inactive_run > maximum_gap_samples:
+                break
+    if last_active < 0:
+        tail_frequency = np.asarray([], dtype=float)
+    else:
+        tail = samples[frame_end_index : frame_end_index + last_active + 1]
+        tail_magnitude = np.abs(tail)
+        valid = (tail_magnitude[1:] > active_threshold) & (
+            tail_magnitude[:-1] > active_threshold
+        )
+        tail_frequency = (
+            np.angle(tail[1:] * np.conj(tail[:-1]))
+            * sample_rate
+            / (2 * math.pi)
+        )[valid]
+    relative_frequency = (
+        float(np.median(tail_frequency))
+        - (decision_center_hz - capture_center_hz)
+        if tail_frequency.size
+        else None
+    )
+    return {
+        "path": str(path),
+        "sample_rate_sps": sample_rate,
+        "symbol_rate_sps": symbol_rate,
+        "sync_start_sample": sync_start_sample,
+        "frame_symbols": frame_symbols,
+        "frame_end_sample": frame_end_sample,
+        "active_threshold": active_threshold,
+        "post_frame_active_us": round(
+            max(0, last_active + 1) * 1_000_000 / sample_rate, 3
+        ),
+        "post_frame_tone": (
+            "high" if relative_frequency is not None and relative_frequency > 0
+            else "low" if relative_frequency is not None
+            else "none"
+        ),
+        "post_frame_frequency_hz": (
+            round(capture_center_hz + float(np.median(tail_frequency)))
+            if tail_frequency.size
+            else None
+        ),
+        "post_frame_relative_to_decision_hz": (
+            round(relative_frequency) if relative_frequency is not None else None
+        ),
+        "scope": (
+            "threshold-derived RF edge; sync_start_sample must come from an "
+            "exact decoded frame in this same capture"
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -376,6 +478,19 @@ def main() -> int:
     waveform.add_argument("--wake-symbols", type=int, default=DEFAULT_WAKE_SYMBOLS)
     waveform.add_argument("--threshold", type=float, default=DEFAULT_ACTIVE_THRESHOLD)
 
+    edge = subparsers.add_parser("edge")
+    edge.add_argument("capture", type=Path)
+    edge.add_argument("--sync-start-sample", type=int, required=True)
+    edge.add_argument("--decision-center", type=int, required=True)
+    edge.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE)
+    edge.add_argument("--capture-center", type=int, default=DEFAULT_CAPTURE_CENTER_HZ)
+    edge.add_argument("--symbol-rate", type=int, default=DEFAULT_SYMBOL_RATE)
+    edge.add_argument("--frame-symbols", type=int, default=304)
+    edge.add_argument("--threshold", type=float, default=DEFAULT_ACTIVE_THRESHOLD)
+    edge.add_argument("--pre-window-us", type=float, default=100.0)
+    edge.add_argument("--post-window-us", type=float, default=250.0)
+    edge.add_argument("--maximum-gap-us", type=float, default=10.0)
+
     args = parser.parse_args()
     try:
         if args.command == "inventory":
@@ -389,7 +504,7 @@ def main() -> int:
                 maximum_gap_ms=args.maximum_gap_ms,
                 minimum_duration_ms=args.minimum_duration_ms,
             )
-        else:
+        elif args.command == "waveform":
             result = analyze_balanced_wake(
                 args.capture,
                 sample_rate=args.sample_rate,
@@ -400,6 +515,20 @@ def main() -> int:
                 active_threshold=args.threshold,
                 symbol_rate=args.symbol_rate,
                 wake_symbols=args.wake_symbols,
+            )
+        else:
+            result = analyze_post_frame_edge(
+                args.capture,
+                sample_rate=args.sample_rate,
+                capture_center_hz=args.capture_center,
+                decision_center_hz=args.decision_center,
+                sync_start_sample=args.sync_start_sample,
+                frame_symbols=args.frame_symbols,
+                symbol_rate=args.symbol_rate,
+                active_threshold=args.threshold,
+                pre_window_us=args.pre_window_us,
+                post_window_us=args.post_window_us,
+                maximum_gap_us=args.maximum_gap_us,
             )
     except (RuntimeError, ValueError) as error:
         parser.error(str(error))

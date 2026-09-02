@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
+
+from tools.generate_rainpoint_iq import command_symbols, generate_cu8
 
 
 MODULE_PATH = Path(__file__).parent / "tools" / "analyze_pairing_waveform.py"
@@ -22,6 +25,46 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_classifies_a_low_tone_post_frame_tail(self) -> None:
+        frame = bytes.fromhex(
+            "79f4882f28b42d008fb9840280824085850086700098e1a10d"
+            "01008000000000000000001133"
+        )
+        wake_symbols = 320
+        symbols = command_symbols(
+            frame, wake_symbols=wake_symbols, wake_first_bit=0
+        ) + [0, 0, 0]
+        sample_rate = 2_000_000
+        symbol_rate = 20_000
+        leading_ms = 5.0
+        data = generate_cu8(
+            symbols,
+            sample_rate=sample_rate,
+            capture_center_hz=433_700_000,
+            channel_center_hz=433_580_000,
+            symbol_rate=symbol_rate,
+            deviation_hz=40_000,
+            leading_silence_ms=leading_ms,
+            trailing_silence_ms=5.0,
+        )
+        sync_start_sample = (
+            round(sample_rate * leading_ms / 1_000)
+            + wake_symbols * (sample_rate // symbol_rate)
+        )
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(data)
+            capture.flush()
+            edge = MODULE.analyze_post_frame_edge(
+                Path(capture.name),
+                sample_rate=sample_rate,
+                capture_center_hz=433_700_000,
+                decision_center_hz=433_580_000,
+                sync_start_sample=sync_start_sample,
+            )
+        self.assertEqual(150.0, edge["post_frame_active_us"])
+        self.assertEqual("low", edge["post_frame_tone"])
+        self.assertLess(edge["post_frame_relative_to_decision_hz"], 0)
+
     def test_groups_short_fades_into_one_burst(self) -> None:
         groups = MODULE.group_active_indexes(
             [1, 2, 3, 6, 7, 20],

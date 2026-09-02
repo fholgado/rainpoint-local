@@ -5,6 +5,7 @@
   "method": {
     "energy": "tools/analyze_pairing_waveform.py waveform with active threshold 5 and a 50 ms bounded window",
     "sync_alignment": "tools/demod_rainpoint_reply_iq.py with the measured balanced-wake center; histogram counts all exact-frame clock phases",
+    "tail_tone": "50 us median-instantaneous-frequency bins after median sync plus the normalized 304-symbol frame",
     "sample_rate_sps": 2000000,
     "symbol_rate_sps": 20000
   },
@@ -17,7 +18,7 @@
       "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
       "burst_duration_ms": 31.3565,
       "active_start_to_sync_ms": 15.9965,
-      "post_frame_energy_us": 159.5,
+      "post_frame_energy_us": 160.0,
       "sync_start_sample_median": 3854659,
       "wake_phase_count": 97,
       "alternating_wake_symbol_histogram": {
@@ -36,7 +37,7 @@
       "assignment_frame": "79f4882f28b42d008fb9840280824085850086700098e1a10d01008000000000000000001133",
       "burst_duration_ms": 31.358,
       "active_start_to_sync_ms": 15.9975,
-      "post_frame_energy_us": 160.0,
+      "post_frame_energy_us": 160.5,
       "sync_start_sample_median": 2362813,
       "wake_phase_count": 97,
       "alternating_wake_symbol_histogram": {
@@ -54,7 +55,7 @@
     "reply_frame": "79f4882f28b42d008fb98402808141010000800000000000000000000000000000000000592d",
     "burst_duration_ms": 31.3575,
     "active_start_to_sync_ms": 15.997,
-    "post_frame_energy_us": 160.0,
+    "post_frame_energy_us": 160.5,
     "sync_start_sample_median": 6853003,
     "wake_phase_count": 97,
     "alternating_wake_symbol_histogram": {
@@ -72,7 +73,7 @@
       "configured_wake_symbols": 320,
       "burst_duration_ms": 31.2275,
       "active_start_to_sync_ms": 15.981,
-      "post_frame_energy_us": 46.5,
+      "post_frame_energy_us": 47.0,
       "sync_start_sample_median": 1972044,
       "wake_phase_count": 86,
       "alternating_wake_symbol_histogram": {
@@ -89,7 +90,7 @@
       "configured_wake_symbols": 320,
       "burst_duration_ms": 31.2215,
       "active_start_to_sync_ms": 15.9765,
-      "post_frame_energy_us": 44.5,
+      "post_frame_energy_us": 45.0,
       "sync_start_sample_median": 2536883,
       "wake_phase_count": 87,
       "alternating_wake_symbol_histogram": {
@@ -102,10 +103,14 @@
     "accepted_stock_duration_range_ms": [31.3565, 31.358],
     "rejected_local_duration_range_ms": [31.2215, 31.2275],
     "stock_minus_local_duration_range_ms": [0.129, 0.1365],
-    "accepted_stock_post_frame_energy_range_us": [159.5, 160.0],
-    "rejected_local_post_frame_energy_range_us": [44.5, 46.5],
+    "accepted_stock_post_frame_energy_range_us": [160.0, 160.5],
+    "rejected_local_post_frame_energy_range_us": [45.0, 47.0],
     "stock_minus_local_post_frame_energy_range_us": [113.0, 115.5],
     "active_start_to_sync_stock_minus_local_range_us": [15.5, 21.0],
+    "accepted_post_frame_tone": "low_fsk_tone",
+    "accepted_frames_ending_high_that_switch_to_low_tail": 2,
+    "local_post_frame_tone": "low_fsk_tone_before_immediate_sidling",
+    "measured_additional_low_hold_candidate_us": 115,
     "stock_assignment_dominant_sync_aligned_wake_count": 321,
     "stock_stage1_dominant_sync_aligned_wake_count": 320,
     "local_assignment_dominant_sync_aligned_wake_count": 319,
@@ -113,10 +118,12 @@
   },
   "interpretation": [
     "Two independent accepted stock assignments are about 0.13 ms longer than two rejected local assignments across the same fixed energy threshold; sweeping thresholds from 3 through 25 preserved the separation.",
-    "Sync alignment localizes most of that separation after the normalized 304-symbol frame: both accepted assignments and the accepted stage-1 reply retain about 160 us of above-threshold RF energy after the median frame end, while both local assignments retain only 44.5-46.5 us. Start-to-sync differs by only about 15.5-21 us.",
+    "Sync alignment localizes most of that separation after the normalized 304-symbol frame: both accepted assignments and the accepted stage-1 reply retain 160.0-160.5 us of above-threshold RF energy after the median frame end, while both local assignments retain only 45-47 us. Start-to-sync differs by only about 15.5-21 us.",
+    "The accepted tail is the low FSK tone rather than unmodulated decay. The counter-2 assignment and stage-1 reply both end with a high data bit but switch to the same low post-frame tone, so this is not merely a held final bit.",
+    "The local driver already drives GDO0 low before immediately issuing SIDLE, which explains its approximately 45 us low-tone shutdown baseline. Holding that state for an additional 115 us is the smallest measured change expected to match stock's approximately 160 us total tail.",
     "Most exact-frame clock phases see 321 alternating symbols immediately before stock sync, while nearly every local phase sees 319. The existing local generator is configured for 320 wake symbols and establishes that 319 is this demodulator's normal boundary count.",
     "The stock stage-1 gateway reply has the same approximately 31.36 ms energy duration but a dominant backward count of 320, so this histogram cannot be translated directly into a fixed configured wake length. Starting phase, wake-to-sync continuity, and the post-frame tail must be separated before changing the wake constant.",
     "The repeated post-frame-tail difference is new evidence for packet-boundary behavior, but not proof that it caused rejection: stock and local amplitude/SNR differ, and the threshold-derived tail includes PA ramp-down rather than necessarily extra data symbols.",
-    "The next fresh stock capture must reproduce the duration, sync alignment, and approximately 160 us post-frame energy. Exact-byte replay remains first; if it fails through the current CC1101 path, extend only the measured post-frame PA/data tail before another semantic change."
+    "The next fresh stock capture must reproduce the duration, sync alignment, low-tone tail, and approximately 160 us post-frame energy. If it does, test only the dormant research-gated 115 us low-tone hold before exact-byte replay or another semantic change."
   ]
 }

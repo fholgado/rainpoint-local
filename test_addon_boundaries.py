@@ -118,8 +118,11 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
-            'htv145_pairing_candidate_version = '
             '"0.15.3-htv145-pairing-probe.25"',
+            build_profile,
+        )
+        self.assertIn(
+            '"0.15.3-htv145-pairing-tail-candidate.1"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -129,6 +132,37 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn("RAINPOINT_FIRMWARE_VARIANT", build_profile)
         self.assertIn("RAINPOINT_FIRMWARE_VARIANT", wifi_source)
+
+    def test_htv145_post_frame_tail_is_research_only_and_bounded(self) -> None:
+        root = ROOT / "firmware" / "rainpoint_bridge"
+        build_profile = (root / "tools" / "build_profile.py").read_text()
+        main_source = (root / "src" / "main.cpp").read_text()
+        radio_source = (root / "src" / "cc1101.cpp").read_text()
+        pairing_source = (
+            root / "include" / "rainpoint_htv145_pairing.h"
+        ).read_text()
+        wifi_source = (root / "src" / "wifi_transport.cpp").read_text()
+
+        self.assertIn(
+            '"RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
+            build_profile,
+        )
+        self.assertIn('"RAINPOINT_RESEARCH_BENCH=1 and "', build_profile)
+        self.assertIn(
+            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1",
+            main_source,
+        )
+        self.assertIn("replyStep == 0", main_source)
+        self.assertIn("postFrameLowHoldMicros > 500", radio_source)
+        self.assertIn(
+            "kStage0PostFrameLowHoldAdjustmentUs = 115",
+            pairing_source,
+        )
+        self.assertIn("htv145_post_frame_tail_candidate", wifi_source)
 
     def test_htv405_control_uses_bounded_identical_frame_retries(self) -> None:
         source = (

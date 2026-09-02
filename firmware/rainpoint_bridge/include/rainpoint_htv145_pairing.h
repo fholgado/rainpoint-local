@@ -38,6 +38,12 @@ constexpr std::uint8_t kCounter0AssignmentPreludeDeviationRegister = 0x42;
 constexpr std::uint16_t kConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kConfigurationReplyDeadlineMs = 4'000;
 constexpr std::uint32_t kAssignmentReplyStartDelayUs = 52'150;
+// Three independent accepted stock frames retain a low FSK tone until about
+// 160 us after the normalized frame. The existing CC1101 path naturally stays
+// on air for about 45 us after driving GDO0 low, so the isolated candidate adds
+// only the measured 115 us difference. This constant is inert unless the
+// separate research build flag is enabled.
+constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
 constexpr std::uint32_t kStep1ReplyStartDelayUs = 70'700;
 constexpr std::uint32_t kConfigurationReplyStartDelayUs = 3'054'850;
 constexpr std::uint32_t kStep3ReplyStartDelayUs = 35'750;

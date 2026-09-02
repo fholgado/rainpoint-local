@@ -76,6 +76,14 @@
 #error "HTV145 pairing candidate requires valve pairing support"
 #endif
 
+#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 0 && RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 1
+#error "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1)
+#error "HTV145 post-frame tail candidate requires the research pairing build"
+#endif
+
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "Routine acknowledgement trials require generalized pairing"
 #endif
@@ -3637,7 +3645,18 @@ void processHtv145PairingFrame(
             rainpoint::pairingPaTableValue(pairingPowerDbm),
             step->deviationRegister,
             packet.receivedAtMicros +
-                rainpoint::htv145::replyStartDelayUs(replyStep)
+                rainpoint::htv145::replyStartDelayUs(replyStep),
+            0,
+            0,
+            0,
+            false,
+#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1
+            replyStep == 0
+                ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
+                : 0
+#else
+            0
+#endif
         );
         if (sent && replyStep == 1) {
             std::array<std::uint8_t, rainpoint::kFrameBytes>

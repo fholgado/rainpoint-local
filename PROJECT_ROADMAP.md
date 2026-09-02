@@ -416,9 +416,9 @@ observation before it changes transmitted firmware.
   - 2026-09-01 physical `.25` result: the emitted clock correctly represented
     `19:13:08`, but the valve still continued its sweep and the node stopped at
     `1/6` with `stage_0_rejected`. The clock-wrap hypothesis is closed. Freeze
-    `.25`; the next discriminator is exact replay of a freshly accepted stock
-    assignment, captured under the same controlled lifecycle, before changing
-    any further semantic or physical field.
+    `.25`; at that point the next planned discriminator was exact replay of a
+    freshly accepted stock assignment. The later edge evidence below narrows
+    the first physical change further without reopening any `.25` field.
   - 2026-09-02 edge follow-up: two accepted stock assignments each remain
     above the energy threshold for about `31.36 ms`, versus `31.22--31.23 ms`
     for rejected probes `.24` and `.25`. Sync-aligned backward-wake histograms
@@ -428,12 +428,16 @@ observation before it changes transmitted firmware.
     Median sync alignment now localizes most of the duration difference after
     the normalized frame: both accepted stock assignments and an accepted
     stage-1 reply retain about `160 us` of post-frame RF energy, while both
-    rejected local assignments retain only `44.5--46.5 us`. The next fresh
-    stock capture must reproduce this measurement. If exact accepted bytes
-    still fail through the CC1101 path, a single post-frame-tail change is the
-    first physical discriminator; do not reopen payload or wake-length guesses.
-    Exact-byte replay remains next and must retain raw IQ so the boundary can
-    be compared. Evidence:
+    rejected local assignments retain only `45--47 us`. Frequency-resolved
+    bins identify the accepted tail as the low FSK tone even for two frames
+    whose final payload bit is high. The local driver already drives GDO0 low
+    before immediate `SIDLE`; a research-only, stage-0-only build gate now adds
+    the measured `115 us` difference and leaves every normal image unchanged.
+    It compiles and passes the firmware boundary check, but is not staged or
+    deployed. The next fresh stock capture must reproduce the approximately
+    `160 us` low tail before that single-variable candidate is authorized. If
+    a matching on-air tail remains rejected, exact accepted-byte replay is
+    next; do not reopen payload or wake-length guesses. Evidence:
     `research/fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json`.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the

@@ -35,10 +35,11 @@ The current evidence leaves two serious classes of explanation:
 An explicit random nonce in the visible HTV145 assignment is currently a weaker
 hypothesis: two independently reset, successful stock enrollments used the same
 fresh-association constants apart from the accepted sweep counter, live clock,
-and integrity trailer. The next useful discriminator is therefore the one
-already identified by the local evidence: **replay one freshly accepted stock
-assignment exactly under a controlled reset lifecycle before changing any more
-fields.**
+and integrity trailer. The edge analysis now supplies a narrower discriminator
+than a multi-field replay: **reproduce the stock low-tone post-frame tail in one
+fresh reference, then extend only the frozen `.25` transmitter's low-tone hold
+by the measured `115 us`.** Exact accepted-byte replay remains prepared as the
+next discriminator if that single physical change fails.
 
 ## Overnight engineering result
 
@@ -74,10 +75,17 @@ Sync-aligned sample positions sharpen that observation. From the median sync
 position plus the normalized 304-symbol frame, both accepted stock assignments
 and the accepted stage-1 reply remain above the energy threshold for about
 `160 us`; rejected probes `.24` and `.25` remain above it for only
-`44.5--46.5 us`. Their active-start-to-sync intervals differ by just
+`45--47 us`. Their active-start-to-sync intervals differ by just
 `15.5--21 us`, so most of the repeatable `0.13 ms` total-duration gap is at the
 packet end. This is evidence for a PA turn-off/post-frame-tail discriminator,
 not yet proof that the valve requires it or that it represents extra bits.
+Frequency-resolved 50-us bins classify the tail itself as the low FSK tone. The
+counter-2 assignment and accepted stage-1 reply both end with a high data bit
+but switch to low for the tail, ruling out a simple “hold the last bit” model.
+The local driver already drives its data input low before immediately idling
+the CC1101, which accounts for its roughly `45 us` baseline. A dormant,
+research-only build gate now adds the remaining `115 us` only to stage zero;
+it has been compiled and boundary-checked but not staged or deployed.
 
 ## Verified external facts
 
@@ -249,13 +257,15 @@ above local. Because a stock continuation has the same long energy duration
 but a different backward count, the durable finding is a packet-boundary/edge
 difference, not yet a confirmed wake-symbol constant. Median sync alignment
 places roughly `113--116 us` of the repeated difference after the normalized
-frame: stock retains about `160 us` of post-frame RF energy and local retains
-about `45 us`.
+frame: stock retains `160.0--160.5 us` of post-frame RF energy and local retains
+`45--47 us`. Frequency-resolved bins identify both as the low FSK tone. Two
+accepted frames whose final payload bit is high still switch to this low tail,
+so it is a distinct post-frame state rather than the last data bit lingering.
 
-**Prediction:** A byte-identical assignment rebuilt by the CC1101 can still
-fail, while a raw replay of the accepted stock RF burst succeeds. Conversely,
-if a recent stock frame replayed through the current CC1101 succeeds, the
-missing discriminator is semantic/dynamic rather than analog.
+**Prediction:** After a fresh stock reference reproduces the low-tone tail, the
+otherwise frozen `.25` assignment with an additional `115 us` low hold advances
+the valve to the addressed stage-1 request. If it does not, exact accepted-byte
+replay separates remaining semantic/session state from the physical edge.
 
 ### H2 - lifecycle/session context selects more than the visible fresh template
 
@@ -322,7 +332,7 @@ stock success versus local failure.
 
 ## Recommended experiment sequence
 
-Do not modify the frozen `.25` fields before completing experiments 1 and 2.
+Do not modify the frozen `.25` payload, timing, carrier, deviation, or wake.
 
 ### 1. Acquire one more fresh stock counter-0 reference
 
@@ -339,7 +349,38 @@ Do not modify the frozen `.25` fields before completing experiments 1 and 2.
 This either strengthens the “no visible nonce” finding or identifies a dynamic
 field before another local transmit experiment.
 
-### 2. Run the exact-replay discriminator
+### 2. Run the measured post-frame-tail discriminator
+
+Proceed only if the fresh stock capture reproduces all three retained edge
+properties: approximately `31.36 ms` total RF, approximately `160 us` after the
+normalized frame, and a low FSK tone during that tail.
+
+After exact demodulation supplies the median sync sample for the assignment,
+the repeatable edge check is:
+
+```console
+python3 tools/analyze_pairing_waveform.py edge <bounded.cu8> \
+  --sync-start-sample <median> --decision-center <assignment-center-hz>
+```
+
+Build the separately gated tail candidate, which changes only stage-0 shutdown:
+
+- the decoded assignment, dynamic clock, trailer, reply timing, carrier,
+  deviation, wake, power, polarity, endpoints, and one-shot session stay frozen
+  at `.25`;
+- after the final frame symbol, GDO0 is driven low as before;
+- the PA remains in TX for an additional `115 us` before `SIDLE`, raising the
+  measured local approximately `45 us` baseline to stock's approximately
+  `160 us` total;
+- later pairing stages and every production/supervised build retain a zero hold.
+
+Use a documented reset, keep the stock gateway off, record IQ continuously,
+and require the addressed stage-1 valve request as the only pass condition. If
+the on-air tail misses the target, correct only the hold value and repeat. If
+the on-air tail matches but the valve still sweeps, close this hypothesis and
+continue to exact replay without another waveform or payload guess.
+
+### 3. If the measured tail fails, run the exact-replay discriminator
 
 First validate the new accepted fixture and produce the replay manifest:
 
@@ -356,9 +397,9 @@ decoded bytes.
 
 Use two separate, documented-reset trials:
 
-- **Trial 2A:** answer the first counter-0 request with the newly captured stock
+- **Trial 3A:** answer the first counter-0 request with the newly captured stock
   assignment bytes unchanged, as soon after capture as practical.
-- **Trial 2B:** answer the first counter-0 request with `.25`, changing only the
+- **Trial 3B:** answer the first counter-0 request with `.25`, changing only the
   live packed clock and corresponding trailer.
 
 For both, retain raw IQ and require an addressed stage-1 valve request as the
@@ -366,14 +407,14 @@ only stage-zero success signal.
 
 Interpretation:
 
-| 2A exact replay | 2B regenerated | Meaning |
+| 3A exact replay | 3B regenerated | Meaning |
 |---|---|---|
 | Pass | Fail | Clock/trailer/session derivation is wrong; diff those bytes only. |
 | Pass | Pass | The former failure was lifecycle/intermittency; repeat unchanged twice. |
 | Fail | Fail | Visible bytes are insufficient; move to waveform/state experiments. |
 | Fail | Pass | Replay was stale or the trials were not lifecycle-equivalent; repeat with tighter controls. |
 
-### 3. If exact bytes still fail, compare acquisition and packet edges
+### 4. If exact bytes still fail, compare the remaining packet edges
 
 Measure stock and local bursts against the valve request from the same session:
 
@@ -387,15 +428,15 @@ Measure stock and local bursts against the valve request from the same session:
 
 The retained captures already prioritize the packet end: accepted stock
 traffic has approximately `160 us` of post-frame above-threshold RF energy,
-versus `44.5--46.5 us` locally. Reproduce that measurement in the fresh stock
-reference. If exact bytes still fail, change only the local post-frame hold/tail
-to match stock before revisiting any payload field or preamble length.
+versus `45--47 us` locally. Reproduce that measurement in the fresh stock
+reference. The measured tail trial above must already have closed the simple
+low-hold explanation before this broader edge work begins.
 
 If the CC1101 cannot reproduce a discovered difference, a transmit-capable SDR
 raw-IQ replay becomes justified. The existing receive-only RTL-SDR cannot run
 that experiment.
 
-### 4. Complete the lifecycle matrix with stock traffic
+### 5. Complete the lifecycle matrix with stock traffic
 
 Capture separately, without treating them as interchangeable:
 
@@ -410,7 +451,7 @@ route, selector, accepted sweep counter, and whether a shorter rejoin exchange
 occurs. This is the path to correct rejoin support even if it is not the stage-0
 root cause.
 
-### 5. Only then test the lower-priority residuals
+### 6. Only then test the lower-priority residuals
 
 1. request-relative AFC reply placement;
 2. energy-based stock-only pre-assignment burst search with receivers near both
@@ -430,21 +471,20 @@ answer before any new probe number is created:
 2. Use the documented battery-assisted reset, arm stock app search first, and
    complete one fresh stock counter-0 enrollment. Record the white result and
    app Device Address.
-3. Stop the stock capture and run both the stage-zero analyzer and
-   `prepare_htv145_exact_replay.py`. Do not proceed if either rejects the
-   fixture or if the new stock edge measurement does not reproduce the retained
-   approximately `31.36 ms` burst family.
+3. Stop the stock capture and run the stage-zero analyzer, edge comparison, and
+   `prepare_htv145_exact_replay.py`. Do not proceed if the fixture is rejected
+   or if the new stock edge measurement does not reproduce the retained
+   approximately `31.36 ms` burst, `160 us` post-frame duration, and low tone.
 4. Power down the stock gateway, perform a second documented reset, and arm the
-   separately gated local exact-replay image before initiating the valve's
-   pairing gesture.
+   separately gated `115 us` tail image before initiating the valve's pairing
+   gesture. The image is compiled but deliberately not staged tonight.
 5. Count only the addressed stage-1 valve request as success. Retain the local
    assignment, factory fallback, raw IQ, node verdict, and LED result whether
    it passes or fails.
 
-If exact replay passes, freeze stage zero twice before building stage 1. If it
-fails, do not guess another byte: use the already captured stock/local windows
-to separate wake start phase, sync boundary, and post-frame energy, then test
-one measured edge behavior at a time.
+If the tail trial passes, repeat it unchanged once and freeze stage zero before
+building stage 1. If it fails with an on-air stock-matched tail, run the prepared
+exact accepted-byte replay. Do not guess another byte or reopen wake length.
 
 ## Freeze criteria
 

@@ -423,7 +423,8 @@ bool Cc1101::transmitAsync(
     std::uint16_t leadingPreludeSymbols,
     std::int8_t leadingFrequencyOffsetRegister,
     std::uint8_t leadingDeviationRegister,
-    bool invertLeadingPrelude
+    bool invertLeadingPrelude,
+    std::uint16_t postFrameLowHoldMicros
 ) {
     if (!transmitEnabled_) {
         ++blockedTransmitCount_;
@@ -442,6 +443,7 @@ bool Cc1101::transmitAsync(
         ;
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || leadingPreludeSymbols > 2'400 ||
+        postFrameLowHoldMicros > 500 ||
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
         (deviationRegister != kOrdinaryDeviationRegister &&
@@ -618,7 +620,15 @@ bool Cc1101::transmitAsync(
         ) == ESP_OK;
         sent = sent && rmtCompleted;
     }
+    // RMT owns the data pin through the final payload symbol. Return it low
+    // before SIDLE, as the ordinary transmitter has always done. A bounded
+    // hold is available only to separately compile-gated research callers so
+    // captured post-frame low-tone behavior can be tested without adding fake
+    // payload bits or changing production waveforms.
     digitalWrite(dataPin_, LOW);
+    if (sent && postFrameLowHoldMicros != 0) {
+        delayMicroseconds(postFrameLowHoldMicros);
+    }
     enterIdle();
     return restoreReceiveConfiguration(receiveChannel) && sent;
 }
