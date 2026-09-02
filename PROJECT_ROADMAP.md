@@ -738,12 +738,20 @@ same time without conflicting authority.
         authenticated idle response and retained `7`. Thus an idle close may
         select the immediate successor without watering; this test did not
         exercise a genuinely invalid close or its strict-negative branch.
-  - [ ] Map the next idle-close acceptance boundary from fresh authenticated
+  - [x] Map the next idle-close acceptance boundary from fresh authenticated
         counter `7`: send close `9`, capture acceptance/rejection/silence, and
         if it is not accepted re-authenticate the unpublished frozen baseline
         `7` before drawing a non-mutation conclusion. Gateway 0.33.34 permits
         only this additional `current + 2` discriminator and never exposes a
-        timed-out baseline to ordinary valve control.
+        timed-out baseline to ordinary valve control. Close `9` received an
+        authenticated idle response, a subsequent 60-second open at `9`
+        advanced to `10`, and valve-owned telemetry ended the run. The close
+        acceptance window is therefore at least two counters.
+  - [ ] Continue mapping the idle-close acceptance boundary from authenticated
+        counter `10` with one close-only `current + 4` discriminator. If it is
+        accepted, use bounded exponential offsets before concluding that close
+        can select an arbitrary five-bit counter; if it is not accepted,
+        re-authenticate the frozen baseline before ordinary control resumes.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in

@@ -180,6 +180,9 @@ close at 5   -> response retains next 5
 open at 5    -> response advances next to 6
 close at 7 after authenticated next 6
                -> response accepts and retains next 7
+close at 9 after authenticated next 7
+               -> response accepts and retains next 9
+open at 9     -> response advances next to 10
 ```
 
 The gateway persists the next sequence only after a matching authenticated
@@ -203,6 +206,13 @@ command, an idle Zone 1 close at `7` returned an authenticated closed response
 and retained next `7`. Therefore `current + 1` is not an invalid-close test:
 an accepted close can select the successor without watering. The behavior of
 a genuinely unacceptable close candidate remains unproven.
+
+A second controlled discriminator started from authenticated next `7` and
+sent an idle close at `9`. The valve again returned an authenticated closed
+response, retained next `9`, accepted a subsequent 60-second open at `9`,
+advanced to `10`, and stopped on valve-owned telemetry. The accepted forward
+window is therefore at least two counters. This does not yet prove that idle
+close accepts every five-bit value.
 
 A matching authenticated closed response is a safe non-actuating sequence
 oracle: it proves the candidate is current and retains that same sequence for
