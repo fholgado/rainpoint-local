@@ -92,7 +92,7 @@ def _entities_for_device(
         entities.append(
             ("reporting", RainPointReportingBinarySensor(coordinator, device_id))
         )
-    if "rf_control_start_available" in device.get("state", {}):
+    if "bounded_valve_control" in device.get("capabilities", []):
         entities.append(
             (
                 "control_start_available",
