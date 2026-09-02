@@ -726,12 +726,18 @@ same time without conflicting authority.
   - [ ] Physically validate the deployed action-alias fix and bounded scan on
         the next naturally unsynchronized, independently confirmed-idle valve;
         then authenticate one ordinary open using the recovered counter.
-  - [ ] Run the controlled close discriminator from a synchronized idle state:
+  - [x] Run the controlled close discriminator from a synchronized idle state:
         send the immediate successor first, distinguish strict rejection from
         silence, prove the retained current counter with a matching closed
         response, and then authenticate one 60-second Zone 1 open. Gateway
         0.33.33 bounds the research endpoint to current/current-plus-one;
-        rejection preserves current, but silence invalidates certainty.
+        rejection preserves current, but silence invalidates certainty. The
+        physical test instead disproved the assumed rejection: stored next `4`
+        accepted close `5`, then open `5` authenticated next `6` and completed
+        automatically. From that fresh baseline, close `7` also returned an
+        authenticated idle response and retained `7`. Thus an idle close may
+        select the immediate successor without watering; this test did not
+        exercise a genuinely invalid close or its strict-negative branch.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in

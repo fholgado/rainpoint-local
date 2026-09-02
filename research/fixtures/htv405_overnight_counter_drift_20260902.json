@@ -97,18 +97,53 @@
     "authenticated_next_sequence": 4,
     "expected_automatic_idle_at": "2026-09-02T13:05:22.947035+00:00"
   },
+  "successor_close_discriminator": {
+    "gateway_version": "0.33.33",
+    "first_close": {
+      "observed_at": "2026-09-02T14:14:25.875766+00:00",
+      "stored_next_before_command": 4,
+      "attempted_sequence": 5,
+      "response_sequence": 5,
+      "response_watering": false,
+      "authenticated_next_sequence": 5,
+      "response_frame": "79f4882f28ee86de8094a9801305508683104f80000000408000568000000000000000003f4d"
+    },
+    "bounded_open": {
+      "observed_at": "2026-09-02T14:15:21.306581+00:00",
+      "sequence": 5,
+      "zone": 1,
+      "duration_seconds": 60,
+      "response_watering": true,
+      "authenticated_next_sequence": 6,
+      "response_frame": "79f4882f28ee86de8094a9801305d0868010cf80000000409e00569e00000000000000003b5d",
+      "automatic_idle_observed_at": "2026-09-02T14:16:22.508309+00:00"
+    },
+    "fresh_successor_close": {
+      "observed_at": "2026-09-02T14:18:36.342710+00:00",
+      "freshly_authenticated_next_before_command": 6,
+      "attempted_sequence": 7,
+      "response_sequence": 7,
+      "response_watering": false,
+      "authenticated_next_sequence": 7,
+      "response_frame": "79f4882f28ee86de8094a9801307508683104f80000000408000568000000000000000007d4b"
+    },
+    "conclusion": "An idle close at the immediate successor of a freshly authenticated counter is accepted and selects that successor without watering. Candidate current-plus-one is therefore not a valid way to exercise the strict-negative invalid-close branch."
+  },
   "proven_conclusions": [
     "The previously authenticated next sequence 5 was no longer usable after the overnight interval.",
     "The unchanged custom controller remained authorized because sequence 2 received an authenticated watering response.",
     "The command session changed without requiring a full valve association change.",
     "Routine telemetry acknowledgements use a separate telemetry sequence and do not directly disclose the watering-command sequence.",
     "A matching authenticated idle-close response safely validates the command counter and retains that counter for the next open; silence alone remains unusable.",
-    "Restoring sequence 3 from the earlier authenticated sequence-2 response produced an authenticated 20-minute open and advanced the session to sequence 4."
+    "Restoring sequence 3 from the earlier authenticated sequence-2 response produced an authenticated 20-minute open and advanced the session to sequence 4.",
+    "An idle close at the immediate successor of a freshly authenticated next sequence is accepted, does not water, and retains that successor for the next command.",
+    "A subsequent ordinary bounded open at the close-authenticated sequence received a watering response, advanced once, and ended on valve-owned idle telemetry."
   ],
   "not_yet_proven": [
     "Whether the valve reset directly to sequence 1.",
     "Whether the silent sequence-1 open was received and advanced the valve to sequence 2.",
-    "Whether the reset is caused by elapsed idle time, an owner-node reboot, an ACK gap, gateway reconnection churn, or a missing periodic synchronization exchange."
+    "Whether the reset is caused by elapsed idle time, an owner-node reboot, an ACK gap, gateway reconnection churn, or a missing periodic synchronization exchange.",
+    "How a genuinely unacceptable close candidate responds and whether the strict-negative close branch preserves the previously authenticated counter."
   ],
   "next_discriminator": {
     "precondition": "Restore one authenticated next sequence with a bounded 60-second Zone 1 open, then keep the owning radio node and gateway process stable.",

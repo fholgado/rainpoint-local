@@ -176,6 +176,10 @@ open at 3     -> response advances next to 4
 close at 4    -> response retains next 4
 gateway and node restart -> next remains 4
 open at 4     -> response advances next to 5
+close at 5   -> response retains next 5
+open at 5    -> response advances next to 6
+close at 7 after authenticated next 6
+               -> response accepts and retains next 7
 ```
 
 The gateway persists the next sequence only after a matching authenticated
@@ -191,6 +195,14 @@ d0 86 83 00 4f
 
 It echoes the attempted sequence and does not advance the counter. Absence of
 a response is a failed attempt, not proof of rejection or acceptance.
+
+A controlled 2026-09-02 discriminator established that an idle close at the
+immediate successor of a freshly authenticated next sequence is accepted. An
+open at `5` returned authenticated next `6`; with no intervening control
+command, an idle Zone 1 close at `7` returned an authenticated closed response
+and retained next `7`. Therefore `current + 1` is not an invalid-close test:
+an accepted close can select the successor without watering. The behavior of
+a genuinely unacceptable close candidate remains unproven.
 
 A matching authenticated closed response is a safe non-actuating sequence
 oracle: it proves the candidate is current and retains that same sequence for
