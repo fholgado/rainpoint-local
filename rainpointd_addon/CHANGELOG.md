@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.33.36 / Integration 0.13.5 / Firmware 0.15.3
+
+- Replace the HTV405 close-counter search with the physically validated fixed
+  anchor `0`: an exhaustive 32-value test proved that every idle-close counter
+  is authenticated and selected verbatim rather than checked against a window.
+- Retry only the same anchor once after silence, stop fail-closed after a second
+  silence or strict rejection, and normalize persisted pre-0.33.36 scan state
+  to the fixed anchor before any transmission.
+- Confirm five-bit rollover with an authenticated open at `31`, then validate
+  the production-shaped close-`0` / open-`0` sequence and valve-owned idle.
+
 ## 0.33.35 / Integration 0.13.5 / Firmware 0.15.3
 
 - Permit the authenticated operator-only close discriminator to select any one

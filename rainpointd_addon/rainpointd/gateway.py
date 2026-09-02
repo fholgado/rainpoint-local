@@ -74,7 +74,7 @@ from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
     SQLiteEventStore,
     frame_accepted,
-    htv405_idle_close_scan_candidates,
+    htv405_idle_close_sync_candidates,
 )
 
 
@@ -985,9 +985,9 @@ class Gateway:
         now: datetime | None = None,
         device_id: str | None = None,
     ) -> int:
-        """Dispatch every matured candidate in an explicitly started scan.
+        """Dispatch every matured retry in explicit fixed-anchor synchronization.
 
-        This maintenance boundary never starts a scan and never emits an open.
+        This boundary never starts synchronization and never emits an open.
         It only resumes durable `idle_close_probe_*` state after the proven
         15-second valve interval. Production timers call the same method that
         deterministic tests exercise with an injected timestamp.
@@ -1097,7 +1097,7 @@ class Gateway:
     def _schedule_htv405_resync_locked(
         self, registration: dict[str, Any]
     ) -> None:
-        """Schedule one durable close-scan continuation, never an open."""
+        """Schedule one durable fixed-anchor retry, never an open."""
         valve_endpoint = str(registration.get("valve_endpoint") or "")
         existing = self._htv405_resync_timers.pop(valve_endpoint, None)
         if existing is not None:
@@ -3137,7 +3137,7 @@ class Gateway:
                         and not isinstance(last_control_sequence, bool)
                         and isinstance(resync_candidate, int)
                     ):
-                        candidates = htv405_idle_close_scan_candidates(
+                        candidates = htv405_idle_close_sync_candidates(
                             last_control_sequence
                         )
                         if resync_candidate in candidates:

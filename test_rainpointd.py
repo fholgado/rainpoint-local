@@ -372,7 +372,7 @@ class GatewayTest(unittest.TestCase):
             restored.set_node_command_sender(sender)
 
             self.assertTrue(dispatched.wait(timeout=1))
-            self.assertEqual(6, commands[-1][1]["expected_sequence"])
+            self.assertEqual(0, commands[-1][1]["expected_sequence"])
             self.assertNotIn(
                 "valve_control_open",
                 [command["type"] for _node, command in commands],
@@ -2884,9 +2884,9 @@ class ValveControlHTTPAPITest(unittest.TestCase):
     SECOND_NODE_ID = "rp-aabbccddeeff"
     DEVICE_ID = "htv405-94a98013"
     VALVE_ENDPOINT = "94a98013"
-    HTV405_CLOSE_RESPONSE_SEQUENCE_7 = (
-        "79f4882f28b984028094a9801307508683104f800000004080005680"
-        "00000000000000003963"
+    HTV405_CLOSE_RESPONSE_SEQUENCE_0 = (
+        "79f4882f28b984028094a9801300508683104f800000004080005680"
+        "00000000000000001273"
     )
 
     def setUp(self) -> None:
@@ -3287,7 +3287,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             ],
             [command["type"] for _node, command in self.commands],
         )
-        self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
+        self.assertEqual(0, self.commands[-1][1]["expected_sequence"])
 
         registration = gateway._store.valve_registry()[0]
         observed_at = (
@@ -3298,13 +3298,13 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         ).isoformat()
         accepted = gateway.observe_valve_control_air_response(
             self.SECOND_NODE_ID,
-            self.HTV405_CLOSE_RESPONSE_SEQUENCE_7,
+            self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
             observed_at=observed_at,
         )
 
         self.assertIsNotNone(accepted)
         assert accepted is not None
-        self.assertEqual(7, accepted["control_next_sequence"])
+        self.assertEqual(0, accepted["control_next_sequence"])
         self.assertEqual(
             "idle_close_probe_authenticated",
             accepted["control_last_result"],
@@ -3400,7 +3400,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             ],
             [command["type"] for _node, command in self.commands],
         )
-        self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
+        self.assertEqual(0, self.commands[-1][1]["expected_sequence"])
         registration = gateway._store.valve_registry()[0]
         gateway._store.fail_htv405_command(
             valve_endpoint=self.VALVE_ENDPOINT,
@@ -3415,8 +3415,8 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             now=datetime.fromisoformat("2026-08-24T20:01:11+00:00")
         )
 
-        self.assertEqual(1, dispatched)
-        self.assertEqual(1, self.commands[-1][1]["expected_sequence"])
+        self.assertEqual(0, dispatched)
+        self.assertEqual([], self.commands)
         self.assertNotIn(
             "valve_control_open",
             [command["type"] for _node, command in self.commands],
@@ -3464,7 +3464,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             "idle_close_probe_timeout_retry",
             registration["control_last_result"],
         )
-        self.assertEqual(7, registration["control_recovery_sequence"])
+        self.assertEqual(0, registration["control_recovery_sequence"])
         self.assertIn(
             self.VALVE_ENDPOINT,
             gateway._htv405_resync_timers,

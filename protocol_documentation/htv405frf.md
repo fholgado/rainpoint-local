@@ -183,6 +183,11 @@ close at 7 after authenticated next 6
 close at 9 after authenticated next 7
                -> response accepts and retains next 9
 open at 9     -> response advances next to 10
+close at all 32 five-bit values from authenticated next 10
+              -> every response accepts and retains the selected value
+open at 31    -> response advances next to 0
+close at 0    -> response accepts and retains next 0
+open at 0     -> response advances next to 1
 ```
 
 The gateway persists the next sequence only after a matching authenticated
@@ -199,44 +204,28 @@ d0 86 83 00 4f
 It echoes the attempted sequence and does not advance the counter. Absence of
 a response is a failed attempt, not proof of rejection or acceptance.
 
-A controlled 2026-09-02 discriminator established that an idle close at the
-immediate successor of a freshly authenticated next sequence is accepted. An
-open at `5` returned authenticated next `6`; with no intervening control
-command, an idle Zone 1 close at `7` returned an authenticated closed response
-and retained next `7`. Therefore `current + 1` is not an invalid-close test:
-an accepted close can select the successor without watering. The behavior of
-a genuinely unacceptable close candidate remains unproven.
+The controlled 2026-09-02 exhaustive test began from authenticated next `10`
+and visited every five-bit close value once in bit-reversed order. All 32
+values returned a matching authenticated idle response and retained the value
+that had just been sent. An open at `31` then authenticated and advanced to
+`0`; after valve-owned automatic idle, close `0` authenticated and a 60-second
+open at `0` advanced to `1` and again stopped automatically.
 
-A second controlled discriminator started from authenticated next `7` and
-sent an idle close at `9`. The valve again returned an authenticated closed
-response, retained next `9`, accepted a subsequent 60-second open at `9`,
-advanced to `10`, and stopped on valve-owned telemetry. The accepted forward
-window is therefore at least two counters. This does not yet prove that idle
-close accepts every five-bit value.
+An authenticated idle close is therefore a non-actuating counter assignment,
+not a candidate check. The synchronization procedure is deterministic:
 
-A matching authenticated closed response is a safe non-actuating sequence
-oracle: it proves the candidate is current and retains that same sequence for
-the next open. A bounded re-synchronization search may therefore send idle
-Zone 1 closes one candidate at a time, obey the 15-second command interval,
-and stop only on a positive closed response. It must never advance merely
-because a candidate was silent.
+1. Independently confirm the valve is idle.
+2. Send a Zone 1 close at fixed five-bit anchor `0`, with no duration.
+3. Publish next counter `0` only after the matching authenticated closed
+   response.
+4. Observe the 15-second hardware command interval before an open at `0`.
 
-The implemented search is explicit, persistent, and complete over the
-five-bit field. For last authenticated command sequence `L`, it tries the
-following de-duplicated order:
-
-```text
-(L + 1) & 0x1f, 1, 2, 0, then 0..31
-```
-
-The first silent logical close is repeated once at the same candidate. A
-second silence or a strict negative response advances to the next candidate;
-neither outcome changes the published command counter. Only the matching
-authenticated closed response synchronizes control. If all 32 candidates are
-exhausted, a fresh strict idle report is required before a new explicit scan.
-An unexpected watering report terminates the scan immediately. The scan emits
-only the established configure, sync, and close commands and can resume from
-durable state after gateway or assigned-node restart.
+One silent anchor transmission may be repeated once at the same value to
+tolerate a lost RF exchange. A second silence or a strict negative response
+stops fail-closed; neither dispatch nor silence establishes synchronization.
+Unexpected watering aborts the procedure. The retry state is durable across a
+gateway or assigned-node restart, while pre-0.33.36 multi-candidate recovery
+state is normalized to anchor `0` before any transmission.
 
 ## Battery and unsupported water usage
 
@@ -259,5 +248,7 @@ create or populate a water-usage entity for this model.
 - Multi-zone control: `research/fixtures/htv405_local_multizone_control_20260823.json`
 - Counter continuity:
   `research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`
+- Counter drift, exhaustive idle-close selection, rollover, and fixed anchor:
+  `research/fixtures/htv405_overnight_counter_drift_20260902.json`
 - Evidence ledger: [`../research/VALVE_PROTOCOL_STATUS.md`](../research/VALVE_PROTOCOL_STATUS.md)
 - Chronology: [`../research/RF_CAPTURE_NOTES.md`](../research/RF_CAPTURE_NOTES.md)

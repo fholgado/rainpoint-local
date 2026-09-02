@@ -124,7 +124,7 @@ class RainPointRadioNodeRebootButton(RainPointRadioNodeEntity, ButtonEntity):
 class RainPointHtv405ResynchronizeCounterButton(
     RainPointLocalEntity, ButtonEntity
 ):
-    """Start a bounded close-only counter scan for an idle HTV405."""
+    """Start fixed-anchor close-only synchronization for an idle HTV405."""
 
     _attr_translation_key = "resynchronize_valve_counter"
     _attr_entity_category = EntityCategory.CONFIG
@@ -154,7 +154,7 @@ class RainPointHtv405ResynchronizeCounterButton(
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Expose close-scan progress without presenting a guessed counter."""
+        """Expose fixed-anchor progress without claiming a silent success."""
         return {
             "resync_state": self.decoded_state.get(
                 "rf_control_resync_state"
@@ -175,7 +175,7 @@ class RainPointHtv405ResynchronizeCounterButton(
         }
 
     async def async_press(self) -> None:
-        """Begin the scan; the gateway advances it without further input."""
+        """Send the anchor; the gateway handles one bounded retry if needed."""
         try:
             await self.coordinator.client.resynchronize_htv405_counter(
                 self._token,

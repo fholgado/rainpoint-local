@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.35 supports authenticated network radio nodes, receive-only USB
+Version 0.33.36 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -38,22 +38,21 @@ last command-transmission time are stored independently so routine reports do
 not delay user commands.
 
 When an independently confirmed-idle HTV405 loses command synchronization,
-Home Assistant exposes a configuration action that starts a bounded close-only
-search. It sends no duration and cannot construct an open. The deterministic
-candidate order is the successor of the last authenticated command, the
-observed reset candidates `1`, `2`, and `0`, then every remaining five-bit
-value exactly once. One silent candidate is repeated once before advancing;
-strict rejection advances immediately, and every logical command observes the
-15-second valve interval. The explicitly started search is durable across
-gateway and radio-node restarts.
+Home Assistant exposes a configuration action that sends a close-only fixed
+anchor at counter `0`. It sends no duration and cannot construct an open.
+Physical testing proved that every five-bit idle-close value is accepted and
+becomes the next counter, so a scan is neither useful nor required. One silent
+anchor is repeated once after the 15-second valve interval; a second silence
+or strict rejection stops fail-closed. The explicitly started retry is durable
+across gateway and radio-node restarts.
 
 Ordinary control is restored only by a matching authenticated closed response,
 whose sequence remains current for the next open. Silence, successful node
 dispatch, and ordinary valve telemetry do not establish synchronization. An
-unexpected watering report aborts the search and leaves the counter
-unsynchronized. Home Assistant shows the current candidate, position, attempt,
-and terminal exhaustion state; a fresh strict idle report is required before a
-new exhausted search can start.
+unexpected watering report aborts synchronization and leaves the counter
+unsynchronized. Home Assistant shows the anchor, attempt, and terminal state;
+a fresh strict idle report is required before a new failed synchronization can
+start.
 
 An independently authenticated operator endpoint can begin a counter-recovery
 open, but it is deliberately fixed to Zone 1 for 60 seconds. A supervised

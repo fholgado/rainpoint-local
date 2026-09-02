@@ -18,16 +18,17 @@ from .product_identity import (
 SCHEMA_VERSION = 17
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
-HTV405_IDLE_CLOSE_RESET_CANDIDATES = (1, 2, 0)
+HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
 
 
-def htv405_idle_close_scan_candidates(last_sequence: int) -> tuple[int, ...]:
-    """Return one deterministic, complete close-only counter scan.
+def htv405_idle_close_sync_candidates(last_sequence: int) -> tuple[int, ...]:
+    """Return the single physically validated close-only synchronization anchor.
 
-    The authenticated successor is always tried first. Fresh association and
-    the observed overnight session drift make 1, 2, and 0 the next most useful
-    reset candidates. The remaining five-bit values follow in numeric order,
-    with duplicates removed, so the explicit scan is bounded at 32 candidates.
+    Exhaustive hardware testing proved that an authenticated idle close does
+    not validate an existing counter: every five-bit value is accepted and
+    becomes the next command counter. A fixed zero anchor therefore provides
+    deterministic synchronization without a speculative search. The argument
+    remains validated for callers restoring older durable recovery state.
     """
     if (
         not isinstance(last_sequence, int)
@@ -35,16 +36,7 @@ def htv405_idle_close_scan_candidates(last_sequence: int) -> tuple[int, ...]:
         or last_sequence not in range(HTV405_COUNTER_MODULUS)
     ):
         raise ValueError("HTV405 last sequence must be a five-bit integer")
-    baseline = (last_sequence + 1) & (HTV405_COUNTER_MODULUS - 1)
-    candidates: list[int] = []
-    for candidate in (
-        baseline,
-        *HTV405_IDLE_CLOSE_RESET_CANDIDATES,
-        *range(HTV405_COUNTER_MODULUS),
-    ):
-        if candidate not in candidates:
-            candidates.append(candidate)
-    return tuple(candidates)
+    return (HTV405_IDLE_CLOSE_SYNC_ANCHOR,)
 
 
 def frame_accepted(event: dict[str, Any]) -> bool | None:
@@ -1454,11 +1446,11 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Reserve one non-actuating close against an unsynchronized counter.
 
-        The first candidate is exactly one step after the last authenticated
-        watering response. A strict rejection nominates the next candidate;
-        one silent attempt repeats the same candidate before the scan moves on.
-        This method never creates an open command or exposes a candidate as
-        synchronized.
+        The only candidate is the physically validated fixed anchor zero. One
+        silent attempt repeats that same anchor to tolerate a lost RF exchange;
+        a second silence or strict rejection stops fail-closed. This method
+        never creates an open command or exposes the anchor as synchronized
+        before an authenticated closed response.
         """
         if zone != 1:
             raise ValueError("HTV405 idle-close probe is restricted to Zone 1")
@@ -1484,8 +1476,8 @@ class SQLiteEventStore:
         last_sequence = state.get("control_last_sequence")
         if not isinstance(last_sequence, int) or isinstance(last_sequence, bool):
             raise RuntimeError("HTV405 probe lacks a last authenticated counter")
-        scan_candidates = htv405_idle_close_scan_candidates(last_sequence)
-        baseline = scan_candidates[0]
+        sync_candidates = htv405_idle_close_sync_candidates(last_sequence)
+        baseline = sync_candidates[0]
         last_result = str(state.get("control_last_result") or "")
         if last_result == "idle_close_probe_search_exhausted":
             raise RuntimeError(
@@ -1493,15 +1485,17 @@ class SQLiteEventStore:
             )
         recovery_sequence = state.get("control_recovery_sequence")
         recovering_probe = last_result.startswith("idle_close_probe_")
-        sequence = (
+        retained_anchor = (
             int(recovery_sequence)
             if recovering_probe
             and isinstance(recovery_sequence, int)
             and not isinstance(recovery_sequence, bool)
-            else baseline
+            and int(recovery_sequence) in sync_candidates
+            else None
         )
-        if sequence not in scan_candidates:
-            raise RuntimeError("HTV405 idle-close probe search budget exhausted")
+        # Normalize durable pre-0.33.36 multi-candidate recovery state to the
+        # proven fixed anchor instead of resuming an obsolete candidate.
+        sequence = retained_anchor if retained_anchor is not None else baseline
         not_before = state.get("control_recovery_not_before")
         if recovering_probe and isinstance(not_before, str):
             try:
@@ -1532,7 +1526,7 @@ class SQLiteEventStore:
                 pass
         retry_count = (
             int(state.get("control_recovery_attempt") or 0)
-            if recovering_probe
+            if recovering_probe and retained_anchor is not None
             else 0
         )
         cursor = self._connection.execute(
@@ -2094,33 +2088,21 @@ class SQLiteEventStore:
         elif probe_timeout or probe_rejection:
             pending_sequence = int(state["control_pending_sequence"])
             last_sequence = state.get("control_last_sequence")
-            scan_candidates = (
-                htv405_idle_close_scan_candidates(int(last_sequence))
+            sync_candidates = (
+                htv405_idle_close_sync_candidates(int(last_sequence))
                 if isinstance(last_sequence, int)
                 and not isinstance(last_sequence, bool)
                 else (pending_sequence,)
             )
-            try:
-                candidate_index = scan_candidates.index(pending_sequence)
-            except ValueError:
-                candidate_index = len(scan_candidates)
-            if probe_timeout and recovery_attempt == 0:
+            anchor_matches = pending_sequence in sync_candidates
+            if probe_timeout and recovery_attempt == 0 and anchor_matches:
                 next_candidate = pending_sequence
                 recovery_attempt = 1
                 reason = "idle_close_probe_timeout_retry"
             else:
-                next_index = candidate_index + 1
-                next_candidate = (
-                    scan_candidates[next_index]
-                    if next_index < len(scan_candidates)
-                    else None
-                )
+                next_candidate = None
                 recovery_attempt = 0
-                reason = (
-                    "idle_close_probe_rejected"
-                    if probe_rejection
-                    else "idle_close_probe_timeout_advanced"
-                )
+                reason = "idle_close_probe_search_exhausted"
             if next_candidate is not None:
                 recovery_sequence = next_candidate
                 recovery_zone = 1

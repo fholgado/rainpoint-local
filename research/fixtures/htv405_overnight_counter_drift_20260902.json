@@ -157,6 +157,75 @@
     },
     "conclusion": "An idle close can select at least current-plus-two without watering, and the selected counter is usable by the next open. This does not establish an arbitrary-counter acceptance window."
   },
+  "exhaustive_idle_close_selection": {
+    "gateway_version": "0.33.35",
+    "precondition": {
+      "authenticated_next_sequence": 10,
+      "confirmed_watering": false,
+      "owner_node_id": "rp-f4e5be3b015c"
+    },
+    "candidate_order": [
+      0,
+      16,
+      8,
+      24,
+      4,
+      20,
+      12,
+      28,
+      2,
+      18,
+      10,
+      26,
+      6,
+      22,
+      14,
+      30,
+      1,
+      17,
+      9,
+      25,
+      5,
+      21,
+      13,
+      29,
+      3,
+      19,
+      11,
+      27,
+      7,
+      23,
+      15,
+      31
+    ],
+    "result": {
+      "authenticated_idle_responses": 32,
+      "strict_rejections": 0,
+      "response_timeouts": 0,
+      "unexpected_watering_reports": 0,
+      "final_authenticated_next_sequence": 31
+    },
+    "rollover_open": {
+      "confirmed_at": "2026-09-02T15:29:37.038897+00:00",
+      "sequence": 31,
+      "zone": 1,
+      "duration_seconds": 60,
+      "authenticated_next_sequence": 0,
+      "automatic_idle_observed_at": "2026-09-02T15:30:38.774461+00:00"
+    },
+    "fixed_anchor_sequence": {
+      "close_confirmed_at": "2026-09-02T15:31:42.570919+00:00",
+      "close_sequence": 0,
+      "close_authenticated_next_sequence": 0,
+      "open_confirmed_at": "2026-09-02T15:32:29.107712+00:00",
+      "open_sequence": 0,
+      "zone": 1,
+      "duration_seconds": 60,
+      "open_authenticated_next_sequence": 1,
+      "automatic_idle_observed_at": "2026-09-02T15:33:30.742758+00:00"
+    },
+    "conclusion": "Every five-bit idle-close value is accepted and selected verbatim. Idle close is a non-actuating counter assignment, so deterministic synchronization needs one fixed anchor rather than a search."
+  },
   "proven_conclusions": [
     "The previously authenticated next sequence 5 was no longer usable after the overnight interval.",
     "The unchanged custom controller remained authorized because sequence 2 received an authenticated watering response.",
@@ -166,16 +235,18 @@
     "Restoring sequence 3 from the earlier authenticated sequence-2 response produced an authenticated 20-minute open and advanced the session to sequence 4.",
     "An idle close at the immediate successor of a freshly authenticated next sequence is accepted, does not water, and retains that successor for the next command.",
     "A subsequent ordinary bounded open at the close-authenticated sequence received a watering response, advanced once, and ended on valve-owned idle telemetry.",
-    "An idle close at current-plus-two is also accepted, retains the selected counter, and yields a counter that a subsequent bounded open can use."
+    "An idle close at current-plus-two is also accepted, retains the selected counter, and yields a counter that a subsequent bounded open can use.",
+    "All 32 five-bit idle-close values were accepted without watering and selected verbatim as the next control counter.",
+    "An authenticated open at counter 31 advanced to 0 and stopped automatically, proving five-bit rollover.",
+    "A fixed close-0 anchor followed by the 15-second command interval and a 60-second open at 0 authenticated next counter 1 and ended on valve-owned idle telemetry."
   ],
   "not_yet_proven": [
     "Whether the valve reset directly to sequence 1.",
     "Whether the silent sequence-1 open was received and advanced the valve to sequence 2.",
     "Whether the reset is caused by elapsed idle time, an owner-node reboot, an ACK gap, gateway reconnection churn, or a missing periodic synchronization exchange.",
-    "How a genuinely unacceptable close candidate responds and whether the strict-negative close branch preserves the previously authenticated counter.",
-    "Whether idle close accepts an arbitrary five-bit counter or has a forward acceptance boundary wider than two."
+    "What causes command-session drift: elapsed idle time, an owner-node reboot, an ACK gap, gateway reconnection churn, or a missing stock-only maintenance exchange."
   ],
-  "next_discriminator": {
+  "remaining_session_drift_research": {
     "precondition": "Restore one authenticated next sequence with a bounded 60-second Zone 1 open, then keep the owning radio node and gateway process stable.",
     "instrumentation": [
       "Persist every HTV405 routine-ACK outcome with timestamp, endpoint, telemetry sequence, frame, and cumulative success/failure counts.",
@@ -188,7 +259,7 @@
       8,
       12
     ],
-    "command_probe": "At each interval send only the currently authenticated next counter as a bounded 60-second Zone 1 open. If it fails, stop and use an explicitly bounded candidate search rather than treating silence as advancement.",
-    "stock_gateway_followup": "Capture a stock-gateway open after a comparable long idle to determine whether it sends a synchronization transaction, scans candidates, or relies on a keepalive absent from the local implementation."
+    "command_probe": "At each interval send only the currently authenticated next counter as a bounded 60-second Zone 1 open. If it fails, stop; do not infer advancement from silence. Restore control separately with one authenticated close at fixed anchor 0.",
+    "stock_gateway_followup": "Capture a stock-gateway open after a comparable long idle to determine whether it sends a synchronization transaction or relies on a keepalive absent from the local implementation."
   }
 }

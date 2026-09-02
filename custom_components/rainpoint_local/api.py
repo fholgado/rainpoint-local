@@ -328,7 +328,7 @@ class RainPointLocalClient:
     async def resynchronize_htv405_counter(
         self, token: str, *, device_id: str
     ) -> dict[str, Any]:
-        """Start the bounded close-only HTV405 counter scan."""
+        """Start fixed-anchor close-only HTV405 counter synchronization."""
         return await self._post(
             f"devices/{device_id}/valve/probe-idle-close",
             {},

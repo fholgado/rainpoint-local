@@ -685,76 +685,34 @@ same time without conflicting authority.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
-- [ ] Reverse engineer HTV405 command-session reset and physically validate a
-      bounded counter re-synchronization path while the valve is independently
-      confirmed idle. A 2026-09-02 discriminator proved the previously
-      authenticated next sequence `5` became stale overnight while the same
-      controller remained authorized: a Zone 1 60-second open at `1` was
-      silent, then `2` received an authenticated watering response and advanced
-      the next sequence to `3`. This proves session drift, but does not yet
-      prove whether the valve reset directly to `1` or the silent first open
-      was received and advanced it. An idle close at authenticated candidate
-      `3` did receive a valid closed response on the assigned Vegetable Garden
-      Radio and retained next sequence `3`; gateway 0.33.30 incorrectly
-      discarded it because pending action `idle_close_probe` did not literally
-      equal decoded action `close`. This proves a positive idle-close response
-      is a non-actuating synchronization oracle, while silence still must never
-      advance the search. Restoring `3` from that RF evidence then produced an
-      authenticated 1,200-second Zone 1 open at 2026-09-02 12:45 UTC and
-      advanced the session to `4`.
-  - [x] Persist timestamped HTV405 routine-ACK outcomes and radio-node
-        connection/reboot checkpoints so an idle timeout can be separated from
-        owner-node reboot, ACK failure, and gateway connection churn. Gateway
-        0.33.31 was deployed on 2026-09-02; all three authenticated nodes
-        reconnected, health baselines were retained, and the Vegetable Garden
-        Radio immediately journaled exact routine-ACK frames and outcomes for
-        valve `94a98013`.
-  - [ ] Establish one authenticated counter, hold the gateway and owner node
-        stable, and test that exact next counter after controlled 1-, 4-, 8-,
-        and 12-hour idle intervals using only bounded 60-second Zone 1 opens.
-  - [ ] Capture a stock-gateway open after a comparable long idle and determine
-        whether stock sends a missing synchronization transaction, scans
-        command candidates, or maintains the session with traffic absent from
-        the local implementation.
-  - [x] Implement an explicitly bounded close-only search that stops on the
-        first authenticated closed response, retains that accepted counter for
-        the next open, and never treats silence alone as synchronization.
-        Gateway 0.33.32 persists an explicitly started scan across restarts,
-        searches all 32 five-bit candidates in deterministic evidence-weighted
-        order, repeats one silent candidate once, observes the 15-second valve
-        interval, exposes HA progress, and aborts on unexpected watering.
-  - [ ] Physically validate the deployed action-alias fix and bounded scan on
-        the next naturally unsynchronized, independently confirmed-idle valve;
-        then authenticate one ordinary open using the recovered counter.
-  - [x] Run the controlled close discriminator from a synchronized idle state:
-        send the immediate successor first, distinguish strict rejection from
-        silence, prove the retained current counter with a matching closed
-        response, and then authenticate one 60-second Zone 1 open. Gateway
-        0.33.33 bounds the research endpoint to current/current-plus-one;
-        rejection preserves current, but silence invalidates certainty. The
-        physical test instead disproved the assumed rejection: stored next `4`
-        accepted close `5`, then open `5` authenticated next `6` and completed
-        automatically. From that fresh baseline, close `7` also returned an
-        authenticated idle response and retained `7`. Thus an idle close may
-        select the immediate successor without watering; this test did not
-        exercise a genuinely invalid close or its strict-negative branch.
-  - [x] Map the next idle-close acceptance boundary from fresh authenticated
-        counter `7`: send close `9`, capture acceptance/rejection/silence, and
-        if it is not accepted re-authenticate the unpublished frozen baseline
-        `7` before drawing a non-mutation conclusion. Gateway 0.33.34 permits
-        only this additional `current + 2` discriminator and never exposes a
-        timed-out baseline to ordinary valve control. Close `9` received an
-        authenticated idle response, a subsequent 60-second open at `9`
-        advanced to `10`, and valve-owned telemetry ended the run. The close
-        acceptance window is therefore at least two counters.
-  - [ ] Exhaustively map idle-close selection from authenticated counter `10`
-        by visiting every five-bit value once in bit-reversed order. Each step
-        must receive an authenticated idle response before continuing; any
-        rejection or silence stops the scan and rechecks only the frozen prior
-        baseline. Finish with an authenticated 60-second open at `31`, prove
-        rollover to `0`, and require valve-owned automatic idle. Gateway
-        0.33.35 exposes this only through the authenticated close-only research
-        discriminator.
+- [x] Physically validate deterministic, non-actuating HTV405 command-counter
+      synchronization while the valve is independently confirmed idle.
+      Gateway 0.33.31 first fixed the action-alias defect that discarded a valid
+      closed response. Successor and skip-one tests then showed that close can
+      select a new counter. The exhaustive 2026-09-02 test visited all 32
+      five-bit values in bit-reversed order from authenticated next `10`; every
+      value returned a matching idle response and became the retained next
+      counter. Open `31` proved rollover to `0`. A production-shaped close `0`,
+      15-second interval, open `0` sequence authenticated next `1` and ended on
+      valve-owned automatic idle. Gateway 0.33.36 therefore replaces the old
+      scan with a fixed close-`0` anchor, repeats only that anchor once after
+      silence, stops on a second silence or strict rejection, and normalizes
+      persisted legacy scan state before transmitting.
+- [ ] Chain fixed-anchor synchronization and a requested HTV405 open into one
+      explicit, observable transaction. Queue no open until close `0` receives
+      an authenticated idle response and the 15-second command interval has
+      elapsed; cancel the queued open on gateway restart, node loss, rejection,
+      timeout, unexpected watering, or operator cancellation. Expose progress
+      and terminal failure in HA, and cover late response, duplicate request,
+      restart, and missing-RF cases before using it in scheduled irrigation.
+- [ ] Determine what causes an authenticated HTV405 counter to become stale.
+      Timestamped routine-ACK outcomes and radio-node connection/reboot
+      checkpoints are now durable. Hold the gateway and owner node stable and
+      test the exact next counter after controlled 1-, 4-, 8-, and 12-hour idle
+      intervals, then compare a stock-gateway open after a similar interval to
+      distinguish wall-clock reset, owner-node continuity loss, ACK gaps, and a
+      stock-only maintenance exchange. This causal research no longer blocks
+      deterministic fixed-anchor recovery.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in
@@ -801,91 +759,11 @@ the session counter while an accepted close leaves that counter available for
 the next open. Exact responses are retained in
 `research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
 
-Gateway 0.33.18 removes the requested-duration-length recovery hold that made a
-failed 20-minute request occupy the HA script for 20 minutes. One silent command
-is retried with the same counter after the proven 15-second interval. A strict
-negative reply can move to the next five-bit candidate because it proves the
-valve remained closed; a second silent logical command requires a fresh
-independent idle report before any candidate advance. Silence alone remains
-ambiguous. Command transmission time is now stored separately from report time,
-so a routine idle report cannot impose a false 15-second command hold. Physical
-validation of the complete recovery path and the non-actuating close probe
-remains open above.
-
-Gateway 0.33.19 implements the close-only side of that physical gate behind an
-authenticated operator endpoint. It is restricted to Zone 1, carries no
-duration, cannot dispatch an open, begins one step after the last authenticated
-watering response, repeats a silent candidate once, advances only after a
-strict rejection, and stops after four adjacent candidates. Only a matching
-authenticated closed response restores the ordinary command counter. Keep the
-roadmap gate open until the installed idle valve physically accepts the probe
-without watering.
-
-The 2026-08-31 physical trial began from last authenticated command sequence
-`8` and therefore tested idle-close candidate `9`. The assigned Vegetable
-Garden Radio accepted the close-only transaction and its bounded identical
-burst, but the valve returned neither a matching authenticated closed response
-nor a strict rejection. One same-candidate retry after the 15-second hardware
-interval produced the same response timeout. All four zones remained confirmed
-idle, no open or duration was transmitted, and the gateway stopped with the
-counter unsynchronized. This validates the probe's fail-closed behavior but
-does not validate idle close as a counter no-op; do not advance to candidate
-`10` from this silence. Gateway 0.33.20 additionally makes that terminal state
-durable until fresh independent idle telemetry arrives, preventing repeated
-operator requests from silently bypassing the one-retry bound.
-
-Gateway 0.33.21 adds the actuating discriminator requested after that negative
-result. It can begin exactly one Zone 1, 60-second open from the next candidate
-derived from the last authenticated watering response, but does not expose the
-candidate as synchronized before transmission. Only a matching authenticated
-valve-owned watering response restores normal control. Physically test this
-path one candidate at a time; preserve the existing strict-rejection and
-same-candidate timeout bounds.
-
-The 2026-08-31 supervised open trial tested candidates `9`, `10`, and `11`
-from the last authenticated command sequence `8`. Candidate `9` was transmitted
-twice, candidate `10` once, and candidate `11` twice; every logical command used
-Zone 1 and the validated 60-second payload. All attempts were silent: the valve
-returned neither a matching watering response nor a strict rejection, and no
-watering state was observed. Routine valve telemetry continued, including
-fresh idle reports during the trial, proving the valve and receivers remained
-awake but not proving that the high-channel command reached the valve.
-Gateway 0.33.23 therefore keeps all three candidates provisional, caps the
-search at those three values, prevents guarded-probe failure from exposing
-candidate `12` through ordinary HA control, and provides a non-transmitting
-operator cancellation for stale provisional recovery. Before extending the
-search, obtain independent evidence that the transmitted high-channel frame is
-on air and matches a retained accepted command waveform.
-
-An August 31 firmware A/B test then rolled only the assigned, closest Vegetable
-Garden Radio from beta.11 back to the integrity-checked beta.10 image. After the
-node completed OTA health confirmation, it transmitted the same guarded Zone 1
-60-second candidate `9`; the valve again returned neither an authenticated open
-nor a strict rejection. Fresh idle telemetry immediately before the test and
-continued healthy node reception rule out a sleeping valve or disconnected
-radio node. Because beta.10 predates the bounded three-frame burst while the
-payload, association, counter candidate, carrier profile, and owning node were
-unchanged, the burst implementation is not the cause of the current silence.
-Keep candidate `9` provisional and the beta.10 baseline installed until a raw
-on-air comparison separates command waveform/delivery from retained valve
-counter state.
-
-The follow-up high-gain raw-IQ capture resolves that discriminator. It decoded
-the exact beta.10 candidate-`9` frame emitted by the closest Vegetable Garden
-Radio: the custom valve and companion route, `89/90/82/80/81`, Zone 1, the
-validated `9e 00` 60-second duration, and a valid trailer all match the gateway
-builder. The measured 433.472690 MHz channel center, 79.865 kHz tone separation,
-and non-inverted polarity are coherent with the calibrated local RainPoint
-waveform. The valve still emitted neither an authenticated response nor a
-strict rejection. This eliminates a missing node transmission, beta.11 burst
-regression, and gross payload/carrier corruption from the leading hypotheses.
-Do not extend the counter search from silence: next determine whether the valve
-retained command state outside `9`--`11` or requires another valve-side control
-acceptance condition that routine linked telemetry does not reveal. Frozen
-evidence is in
-`research/fixtures/htv405_beta10_candidate9_on_air_20260831.json`.
-After freezing the discriminator, the Vegetable Garden Radio was restored to
-beta.11 and passed its OTA gateway-and-radio health confirmation.
+The superseded adjacent-candidate probes, beta.10/beta.11 radio A/B test, and
+raw-IQ proof that candidate `9` was transmitted correctly remain preserved in
+`research/fixtures/htv405_beta10_candidate9_on_air_20260831.json` and the RF
+capture notes. Their silence-based hypotheses must not be used by production
+control now that the exhaustive fixed-anchor result above defines the protocol.
 
 - [ ] Repeat association and control acceptance on a second HTV405 specimen or
       independently evidenced compatible profile.
