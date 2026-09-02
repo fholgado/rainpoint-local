@@ -113,6 +113,23 @@ class Htv405ControlCoordinator:
             started_at=started_at,
         )
 
+    def request_close_discriminator(
+        self,
+        profile: Htv405ControlProfile,
+        *,
+        candidate_sequence: int,
+        started_at: str,
+    ) -> dict[str, Any]:
+        """Send one non-actuating close at a tightly bounded counter."""
+        return self._reserve_and_send(
+            profile,
+            action="close_discriminator",
+            zone=1,
+            duration_seconds=None,
+            started_at=started_at,
+            candidate_sequence=candidate_sequence,
+        )
+
     def request_guarded_open_probe(
         self,
         profile: Htv405ControlProfile,
@@ -166,6 +183,16 @@ class Htv405ControlCoordinator:
                 zone=zone,
                 started_at=started_at,
             )
+        elif action == "close_discriminator":
+            if candidate_sequence is None:
+                raise ValueError("close discriminator requires a counter")
+            reservation = self.store.reserve_htv405_close_discriminator(
+                valve_endpoint=profile.valve_endpoint,
+                node_id=profile.node_id,
+                command_id=command_id,
+                candidate_sequence=candidate_sequence,
+                started_at=started_at,
+            )
         elif action == "guarded_open_probe":
             reservation = self.store.reserve_htv405_guarded_open_probe(
                 valve_endpoint=profile.valve_endpoint,
@@ -205,7 +232,7 @@ class Htv405ControlCoordinator:
             self._command(
                 (
                     "valve_control_close"
-                    if action == "idle_close_probe"
+                    if action in {"idle_close_probe", "close_discriminator"}
                     else "valve_control_open"
                     if action == "guarded_open_probe"
                     else f"valve_control_{action}"

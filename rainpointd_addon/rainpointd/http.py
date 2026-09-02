@@ -162,6 +162,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/close")
             or parsed.path.endswith("/valve/synchronize")
             or parsed.path.endswith("/valve/probe-idle-close")
+            or parsed.path.endswith("/valve/probe-close-counter")
             or parsed.path.endswith("/valve/probe-open")
             or parsed.path.endswith("/valve/cancel-recovery")
             or parsed.path.endswith("/valve/node")
@@ -430,6 +431,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "close",
                         "synchronize",
                         "probe-idle-close",
+                        "probe-close-counter",
                         "probe-open",
                         "cancel-recovery",
                         "node",
@@ -463,6 +465,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                         result = (
                             self.server.gateway.request_htv405_idle_close_probe(
                                 device_id=device_id
+                            )
+                        )
+                    elif action == "probe-close-counter":
+                        result = (
+                            self.server.gateway.request_htv405_close_discriminator(
+                                device_id=device_id,
+                                candidate_sequence=int(
+                                    body.get("candidate_sequence", -1)
+                                ),
                             )
                         )
                     elif action == "probe-open":

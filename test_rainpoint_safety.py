@@ -571,6 +571,74 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             confirmed["control_last_result"],
         )
 
+    def test_close_discriminator_rejection_preserves_known_counter(self) -> None:
+        wrong = self.coordinator.request_close_discriminator(
+            self.profile,
+            candidate_sequence=7,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+
+        self.assertEqual(7, wrong["expected_sequence"])
+        self.assertEqual("valve_control_close", self.sent[-1][1]["type"])
+        rejected = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=wrong["command_id"],
+            reason="gateway_command_rejected_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:21+00:00",
+        )
+        self.assertEqual(6, rejected["control_next_sequence"])
+        self.assertEqual(
+            "close_discriminator_rejected_counter_preserved",
+            rejected["control_last_result"],
+        )
+
+        correct = self.coordinator.request_close_discriminator(
+            self.profile,
+            candidate_sequence=6,
+            started_at="2026-08-24T20:00:36+00:00",
+        )
+        confirmed = self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=6,
+            next_sequence=6,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:37+00:00",
+            frame="00",
+        )
+
+        self.assertEqual(6, correct["expected_sequence"])
+        self.assertEqual(6, confirmed["control_next_sequence"])
+        self.assertEqual(
+            "close_discriminator_authenticated",
+            confirmed["control_last_result"],
+        )
+
+    def test_silent_close_discriminator_invalidates_local_certainty(self) -> None:
+        wrong = self.coordinator.request_close_discriminator(
+            self.profile,
+            candidate_sequence=7,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+
+        timed_out = self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=wrong["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+
+        self.assertIsNone(timed_out["control_next_sequence"])
+        self.assertEqual(
+            "close_discriminator_timeout_counter_unsynchronized",
+            timed_out["control_last_result"],
+        )
+        self.assertIsNone(timed_out["control_recovery_sequence"])
+
     def test_guarded_open_probe_stays_provisional_until_valve_response(self) -> None:
         first = self.coordinator.request_open(
             self.profile,

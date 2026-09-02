@@ -726,6 +726,12 @@ same time without conflicting authority.
   - [ ] Physically validate the deployed action-alias fix and bounded scan on
         the next naturally unsynchronized, independently confirmed-idle valve;
         then authenticate one ordinary open using the recovered counter.
+  - [ ] Run the controlled close discriminator from a synchronized idle state:
+        send the immediate successor first, distinguish strict rejection from
+        silence, prove the retained current counter with a matching closed
+        response, and then authenticate one 60-second Zone 1 open. Gateway
+        0.33.33 bounds the research endpoint to current/current-plus-one;
+        rejection preserves current, but silence invalidates certainty.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in

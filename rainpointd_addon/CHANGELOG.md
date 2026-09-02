@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.33.33 / Integration 0.13.5 / Firmware 0.15.3
+
+- Add an authenticated, operator-only HTV405 close discriminator that can
+  transmit only the synchronized counter or its immediate successor while the
+  valve is independently confirmed idle.
+- Preserve the known counter only after a strict authenticated rejection;
+  silence or transport failure invalidates local counter certainty, while a
+  matching closed response establishes the accepted counter without actuating
+  a zone.
+
 ## 0.33.32 / Integration 0.13.5 / Firmware 0.15.3
 
 - Add an explicit Home Assistant action for an independently confirmed-idle

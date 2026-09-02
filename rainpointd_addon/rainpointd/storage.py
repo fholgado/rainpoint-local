@@ -1578,6 +1578,117 @@ class SQLiteEventStore:
             if item["valve_endpoint"] == valve_endpoint
         )
 
+    def reserve_htv405_close_discriminator(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        command_id: str,
+        candidate_sequence: int,
+        started_at: str,
+        minimum_interval_seconds: float = 15.0,
+    ) -> dict[str, Any]:
+        """Reserve a close-only current-versus-successor discriminator.
+
+        This research operation is deliberately narrower than counter
+        recovery: it requires a synchronized, confirmed-idle HTV405 and only
+        permits the current counter or its immediate successor. A strict
+        negative reply can therefore reject the candidate without erasing the
+        known current counter. Silence remains ambiguous and invalidates that
+        certainty.
+        """
+        if (
+            not isinstance(candidate_sequence, int)
+            or isinstance(candidate_sequence, bool)
+            or candidate_sequence not in range(HTV405_COUNTER_MODULUS)
+        ):
+            raise ValueError("HTV405 discriminator counter must be five-bit")
+        try:
+            started = datetime.fromisoformat(started_at)
+        except ValueError as error:
+            raise ValueError("invalid HTV405 discriminator timestamp") from error
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if state.get("control_node_id") != node_id:
+            raise ValueError("HTV405 node differs from durable association")
+        if state.get("control_pending_command_id") is not None:
+            raise RuntimeError("an HTV405 command is already pending")
+        current = state.get("control_next_sequence")
+        if (
+            not isinstance(current, int)
+            or isinstance(current, bool)
+            or current not in range(HTV405_COUNTER_MODULUS)
+        ):
+            raise RuntimeError("HTV405 counter is not synchronized")
+        if state.get("control_confirmed_watering") not in {0, False}:
+            raise RuntimeError("HTV405 valve is not confirmed idle")
+        allowed = {current, (current + 1) & (HTV405_COUNTER_MODULUS - 1)}
+        if candidate_sequence not in allowed:
+            raise ValueError(
+                "HTV405 discriminator is restricted to current or successor"
+            )
+        last_at = state.get("control_last_command_started_at")
+        if isinstance(last_at, str):
+            try:
+                previous = datetime.fromisoformat(last_at)
+                if previous.tzinfo is None and started.tzinfo is not None:
+                    previous = previous.replace(tzinfo=started.tzinfo)
+                if started.tzinfo is None and previous.tzinfo is not None:
+                    started = started.replace(tzinfo=previous.tzinfo)
+                if (started - previous).total_seconds() < minimum_interval_seconds:
+                    raise RuntimeError(
+                        "minimum HTV405 command interval has not elapsed"
+                    )
+            except ValueError:
+                pass
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_pending_command_id = ?,
+                control_pending_action = 'close_discriminator',
+                control_pending_sequence = ?,
+                control_pending_zone = 1,
+                control_pending_duration_seconds = NULL,
+                control_pending_started_at = ?,
+                control_last_command_started_at = ?,
+                control_recovery_sequence = NULL,
+                control_recovery_attempt = 0,
+                control_recovery_not_before = NULL,
+                control_recovery_idle_at = NULL,
+                control_recovery_zone = NULL,
+                control_recovery_duration_seconds = NULL,
+                control_last_result = 'pending_close_discriminator_response',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id IS NULL
+              AND control_next_sequence = ?
+              AND control_confirmed_watering = 0
+            """,
+            (
+                command_id,
+                candidate_sequence,
+                started_at,
+                started_at,
+                started_at,
+                valve_endpoint,
+                node_id,
+                current,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 close discriminator reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
     def reserve_htv405_guarded_open_probe(
         self,
         *,
@@ -1818,6 +1929,60 @@ class SQLiteEventStore:
         if row is None:
             raise KeyError(valve_endpoint)
         state = dict(row)
+        if state.get("control_pending_action") == "close_discriminator":
+            strict_rejection = reason == (
+                "gateway_command_rejected_counter_unsynchronized"
+            )
+            if strict_rejection:
+                result = "close_discriminator_rejected_counter_preserved"
+                next_sequence = state.get("control_next_sequence")
+            else:
+                next_sequence = None
+                result = (
+                    "close_discriminator_timeout_counter_unsynchronized"
+                    if reason
+                    == "gateway_command_response_timeout_counter_unsynchronized"
+                    else "close_discriminator_dispatch_failed_counter_unsynchronized"
+                    if reason == "node_dispatch_failed_counter_unsynchronized"
+                    else "close_discriminator_failed_counter_unsynchronized"
+                )
+            cursor = self._connection.execute(
+                """
+                UPDATE valve_registry SET
+                    control_next_sequence = ?,
+                    control_pending_command_id = NULL,
+                    control_pending_action = NULL,
+                    control_pending_sequence = NULL,
+                    control_pending_zone = NULL,
+                    control_pending_duration_seconds = NULL,
+                    control_pending_started_at = NULL,
+                    control_recovery_sequence = NULL,
+                    control_recovery_attempt = 0,
+                    control_recovery_not_before = NULL,
+                    control_recovery_idle_at = NULL,
+                    control_recovery_zone = NULL,
+                    control_recovery_duration_seconds = NULL,
+                    control_last_result = ?, updated_at = ?
+                WHERE valve_endpoint = ? AND control_node_id = ?
+                  AND control_pending_command_id = ?
+                """,
+                (
+                    next_sequence,
+                    result,
+                    observed_at,
+                    valve_endpoint,
+                    node_id,
+                    command_id,
+                ),
+            )
+            if not cursor.rowcount:
+                raise KeyError((valve_endpoint, command_id))
+            self._connection.commit()
+            return next(
+                item
+                for item in self.valve_registry()
+                if item["valve_endpoint"] == valve_endpoint
+            )
         recovery_sequence: int | None = None
         recovery_attempt = int(state.get("control_recovery_attempt") or 0)
         recovery_not_before: str | None = None
@@ -2288,7 +2453,8 @@ class SQLiteEventStore:
         pending_action = registration.get("control_pending_action")
         expected_action = "open" if watering else "close"
         action_matches = pending_action == expected_action or (
-            not watering and pending_action == "idle_close_probe"
+            not watering
+            and pending_action in {"idle_close_probe", "close_discriminator"}
         )
         if pending_id is not None and any(
             (
@@ -2298,11 +2464,10 @@ class SQLiteEventStore:
             )
         ):
             raise ValueError("HTV405 response does not match reservation")
-        last_result = (
-            "idle_close_probe_authenticated"
-            if pending_action == "idle_close_probe"
-            else "authenticated_response_confirmed"
-        )
+        last_result = {
+            "idle_close_probe": "idle_close_probe_authenticated",
+            "close_discriminator": "close_discriminator_authenticated",
+        }.get(pending_action, "authenticated_response_confirmed")
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET

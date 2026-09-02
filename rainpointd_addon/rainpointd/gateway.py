@@ -932,6 +932,53 @@ class Gateway:
             self._refresh_registry_catalog()
             return result
 
+    def request_htv405_close_discriminator(
+        self,
+        *,
+        device_id: str,
+        candidate_sequence: int,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Send one authenticated, close-only counter discriminator."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            if not self._valve_control_enabled:
+                raise PermissionError("HTV405 supervised control is disabled")
+            if self._store is None or self._node_command_sender is None:
+                raise RuntimeError("HTV405 control transport is unavailable")
+            registration = next(
+                (
+                    item
+                    for item in self._store.valve_registry()
+                    if item["device_id"] == device_id
+                ),
+                None,
+            )
+            if registration is None or registration.get("model") != "HTV405FRF":
+                raise KeyError(device_id)
+            profile = self._htv405_control_profile(registration)
+            node = self._nodes.get(profile.node_id, {})
+            if not self._htv405_control_node_ready(node):
+                raise RuntimeError("selected HTV405 radio node is unavailable")
+            device = self._devices.get(device_id, {})
+            if (
+                registration.get("control_confirmed_watering") not in {0, False}
+                or device.get("is_watering") not in {None, 0, False}
+            ):
+                raise RuntimeError("HTV405 valve is not confirmed idle")
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            result = coordinator.request_close_discriminator(
+                profile,
+                candidate_sequence=candidate_sequence,
+                started_at=timestamp,
+            )
+            self._refresh_registry_catalog()
+            return result
+
     def advance_htv405_idle_close_resync(
         self,
         *,
@@ -3700,7 +3747,9 @@ class Gateway:
             action = "open" if watering else "close"
             pending_action = registration.get("control_pending_action")
             action_matches = pending_action == action or (
-                not watering and pending_action == "idle_close_probe"
+                not watering
+                and pending_action
+                in {"idle_close_probe", "close_discriminator"}
             )
             pending_started_at = registration.get(
                 "control_pending_started_at"
