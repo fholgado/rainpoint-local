@@ -710,10 +710,15 @@ same time without conflicting authority.
       node-reported responses, late replies, duplicate requests, node loss,
       restart, timeout, unexpected watering, operator cancellation, and the
       exact 15-second boundary.
-- [ ] Physically validate the one-click synchronized HTV405 start transaction
-      with a 60-second Zone 1 run, including visible HA phase transitions and a
-      valve-originated watering confirmation. Keep scheduled irrigation on its
-      current guarded path until this end-to-end gate passes.
+- [x] Physically validate the one-click synchronized HTV405 start transaction.
+      On 2026-09-02, deployed gateway 0.33.37 moved a 60-second Zone 1 request
+      through synchronization, authenticated anchor confirmation, the exact
+      15-second interval, open-response confirmation, independent watering
+      telemetry, valve-owned automatic idle, and restored start availability.
+      The live state surface exposed every phase and disabled starts throughout
+      active work. Gateway 0.33.38 additionally labels the final idle result
+      **Watering completed** instead of retaining the earlier start-confirmed
+      wording.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and

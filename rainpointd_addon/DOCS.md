@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.37 supports authenticated network radio nodes, receive-only USB
+Version 0.33.38 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -288,7 +288,9 @@ the requested open. The valve control is disabled while this transaction is in
 progress, and the **Control request status** entity explains whether the gateway
 is synchronizing, waiting for the 15-second interval, waiting for the valve's
 watering response, confirmed, cancelled, or failed. **Cancel watering request**
-is available only until the open is transmitted.
+is available only until the open is transmitted. A later valve-originated idle
+report advances a successful request to **Watering completed** and returns the
+controls to ready.
 HTV405 enrollment completes when a trailer-valid paired-link report for the
 expected endpoint is observed after the selected node transmits at least one
 session-scoped reply. The retained 18-row stock exchange describes later

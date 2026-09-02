@@ -3261,6 +3261,26 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         self.assertFalse(snapshot["rf_control_transaction_active"])
 
+        completed = self.server.gateway._store.observe_htv405_state_report(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            watering=False,
+            zone=None,
+            observed_at=(open_started + timedelta(seconds=61)).isoformat(),
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual("completed", completed["control_transaction_state"])
+        snapshot = next(
+            device
+            for device in self.server.gateway.devices()
+            if device["device_id"] == self.DEVICE_ID
+        )["state"]
+        self.assertEqual(
+            "Watering completed for Zone 2",
+            snapshot["rf_control_transaction_status"],
+        )
+        self.assertTrue(snapshot["rf_control_start_available"])
+
     def test_duplicate_open_is_rejected_while_synchronizing(self) -> None:
         self.post_json(
             f"/api/v1/devices/{self.DEVICE_ID}/valve/open",

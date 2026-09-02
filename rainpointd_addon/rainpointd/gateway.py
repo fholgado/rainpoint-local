@@ -126,6 +126,8 @@ def _htv405_transaction_status(
         return f"Waiting for {zone_name} to confirm watering"
     if state == "watering_confirmed":
         return f"Watering confirmed for {zone_name}"
+    if state == "completed":
+        return f"Watering completed for {zone_name}"
     if state == "failed":
         detail = (error or "unknown error").replace("_", " ")
         return f"Watering request failed: {detail}"

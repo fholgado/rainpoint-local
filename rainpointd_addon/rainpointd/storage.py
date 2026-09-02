@@ -2700,12 +2700,22 @@ class SQLiteEventStore:
                     control_run_started_at = NULL,
                     control_run_duration_seconds = NULL,
                     control_expected_idle_at = NULL,
+                    control_transaction_state = CASE
+                        WHEN control_transaction_state = 'watering_confirmed'
+                        THEN 'completed'
+                        ELSE control_transaction_state
+                    END,
+                    control_transaction_updated_at = CASE
+                        WHEN control_transaction_state = 'watering_confirmed'
+                        THEN ?
+                        ELSE control_transaction_updated_at
+                    END,
                     control_last_result =
                         'automatic_idle_confirmed_from_telemetry',
                     updated_at = ?
                 WHERE valve_endpoint = ? AND control_pending_command_id IS NULL
                 """,
-                (observed_at, observed_at, valve_endpoint),
+                (observed_at, observed_at, observed_at, valve_endpoint),
             )
             self._connection.commit()
         elif watering and (

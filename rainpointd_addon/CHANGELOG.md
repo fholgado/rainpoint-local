@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.38 / Integration 0.13.6 / Firmware 0.15.3
+
+- Advance a confirmed HTV405 watering transaction to **Watering completed**
+  when subsequent valve-originated idle telemetry reports the automatic stop.
+  Controls return to ready without discarding the successful transaction result.
+
 ## 0.33.37 / Integration 0.13.6 / Firmware 0.15.3
 
 - Make every HTV405 start request one observable transaction: authenticate a
