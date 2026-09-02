@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.33.29 / Integration 0.13.4 / Firmware 0.15.3
+
+- Remove the unsupported HTV405 water-usage capability from the shared product
+  family, omit its placeholder state from the gateway API, prevent HA from
+  creating the entity, and delete any stale HTV405 usage entity from the HA
+  registry. HTV145 usage remains independently decoded and exposed.
+
 ## 0.33.28 / Integration 0.13.3 / Firmware 0.15.3
 
 - Give only the isolated HTV145 research profile enough calibration range to

@@ -27,6 +27,7 @@ from rainpointd.ingest import FrameIngestor  # noqa: E402
 from rainpointd.product_identity import (  # noqa: E402
     GENERIC_HCS02X_MODEL,
     HCS02X_PROTOCOL,
+    family_from_product_code,
     hcs02x_identity,
     product_from_codes,
 )
@@ -1973,7 +1974,13 @@ class RainPointRFTest(unittest.TestCase):
         self.assertIsNone(valve["state"]["battery_low"])
         self.assertIsNone(valve["state"]["battery_status"])
         self.assertIsNone(valve["state"]["battery_percent"])
-        self.assertIsNone(valve["state"]["last_usage_liters"])
+        self.assertNotIn("last_usage_liters", valve["state"])
+        valve_family = family_from_product_code("irrigation_valve", 0x1F)
+        self.assertIsNotNone(valve_family)
+        assert valve_family is not None
+        self.assertNotIn(
+            "last_water_usage", valve_family.catalog_capabilities
+        )
         gateway.close()
 
     def test_live_transport_publishes_confirmed_moisture(self) -> None:

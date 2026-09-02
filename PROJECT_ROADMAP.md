@@ -856,11 +856,15 @@ and the validated fresh-association counter-`1` result are frozen in
       all 34 strictly decoded fresh-cell HTV405 stock-route status frames while
       the cloud reported 100%. Historical HA data cannot label the weak-cell
       side because that cloud entity was unavailable until after replacement.
-- [ ] Remove HTV405 water-usage entities from the Home Assistant product/entity
+- [x] Remove HTV405 water-usage entities from the Home Assistant product/entity
       definition and from every installed or example dashboard. Entity creation
       must follow model capabilities: retain water usage for HTV145, whose RF
       field is confirmed, and omit it entirely for HTV405, whose product model
       declares no flow or water-volume capability.
+      - 2026-09-02: gateway `0.33.29` removes the generic product capability and
+        placeholder state, integration `0.13.4` rejects new HTV405 usage
+        entities and removes stale registry entries, and both the checked-in
+        example and installed local dashboard contain no such entity.
 - [x] Mark each field as confirmed, provisional, categorical-only, or not
       transmitted locally; never synthesize an unavailable protocol value.
 - [ ] Ensure product/model discovery is capability- and product-code based, not

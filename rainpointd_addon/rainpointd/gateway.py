@@ -2954,6 +2954,14 @@ class Gateway:
                             self._sensor_link_diagnostics[endpoint]
                         ))
                 elif device.get("model") in {HTV145_MODEL, "HTV405FRF"}:
+                    if device.get("model") == "HTV405FRF":
+                        # HTV405 declares no flow/volume capability. Older
+                        # generic valve snapshots carried a placeholder None,
+                        # which was enough for HA to create a permanently
+                        # unavailable water-usage entity.
+                        device.setdefault("state", {}).pop(
+                            "last_usage_liters", None
+                        )
                     device["capabilities"] = sorted(
                         {*device.get("capabilities", []), "forget"}
                     )

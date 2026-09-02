@@ -60,7 +60,6 @@ PRODUCT_FAMILIES = (
             "work_state",
             "alarm",
             "duration",
-            "last_water_usage",
         ),
     ),
 )

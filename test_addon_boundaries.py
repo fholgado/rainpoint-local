@@ -303,6 +303,24 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn("Valve Battery (not decoded)", dashboard)
 
+    def test_htv405_omits_unsupported_water_usage_entity(self) -> None:
+        sensor_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "sensor.py"
+        ).read_text()
+        coordinator_source = (
+            ROOT / "custom_components" / "rainpoint_local" / "coordinator.py"
+        ).read_text()
+        self.assertIn(
+            'device.get("model") == "HTV405FRF"', sensor_source
+        )
+        self.assertIn(
+            'description.state_key == "last_usage_liters"', sensor_source
+        )
+        self.assertIn(
+            'f"{device_id}_last_usage"', coordinator_source
+        )
+        self.assertIn("entity_registry.async_remove", coordinator_source)
+
     def test_release_versions_are_recorded_in_the_current_changelog(self) -> None:
         addon_config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
         addon_match = re.search(r"^version: (\S+)$", addon_config, re.MULTILINE)

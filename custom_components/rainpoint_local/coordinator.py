@@ -94,7 +94,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         active_ids = set(result) | {
             f"radio-node:{node_id}" for node_id in self.nodes
         }
-        self._async_reconcile_entity_registry(active_ids)
+        self._async_reconcile_entity_registry(active_ids, result)
         if not self._logged_inventory:
             _LOGGER.debug(
                 "Loaded %d RainPoint devices, %d custom local radio nodes, and "
@@ -124,11 +124,18 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
                 device_registry.async_update_device(entry.id, model=model)
 
     def _async_reconcile_entity_registry(
-        self, active_device_ids: set[str]
+        self,
+        active_device_ids: set[str],
+        devices: dict[str, dict],
     ) -> None:
-        """Disable removed-device entities without overriding user choices."""
+        """Reconcile removed devices and exact-model capability changes."""
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
+        unsupported_unique_ids = {
+            f"{device_id}_last_usage"
+            for device_id, device in devices.items()
+            if device.get("model") == "HTV405FRF"
+        }
         local_ids_by_registry_id: dict[str, str] = {}
         for device_entry in dr.async_entries_for_config_entry(
             device_registry, self.config_entry_id
@@ -147,6 +154,9 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         for entity_entry in er.async_entries_for_config_entry(
             entity_registry, self.config_entry_id
         ):
+            if entity_entry.unique_id in unsupported_unique_ids:
+                entity_registry.async_remove(entity_entry.entity_id)
+                continue
             if entity_entry.unique_id.startswith("radio-node:"):
                 local_id = entity_entry.unique_id.partition("_")[0]
             else:

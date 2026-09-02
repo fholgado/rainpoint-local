@@ -99,6 +99,16 @@ class RainPointSensorDescription(SensorEntityDescription):
     device_field: bool = False
 
 
+def _description_supported_by_device(
+    device: dict[str, Any], description: RainPointSensorDescription
+) -> bool:
+    """Reject fields that the exact product model does not implement."""
+    return not (
+        device.get("model") == "HTV405FRF"
+        and description.state_key == "last_usage_liters"
+    )
+
+
 DESCRIPTIONS = (
     RainPointSensorDescription(
         key="soil_moisture",
@@ -519,7 +529,11 @@ async def async_setup_entry(
             for description in DESCRIPTIONS:
                 identity = (device_id, description.key)
                 source = device if description.device_field else state
-                if description.state_key not in source or identity in known:
+                if (
+                    not _description_supported_by_device(device, description)
+                    or description.state_key not in source
+                    or identity in known
+                ):
                     continue
                 known.add(identity)
                 entities.append(
