@@ -568,6 +568,14 @@ class RainPointRFTest(unittest.TestCase):
             recovered["matches"][0]["phase_count"],
             sum(wake_histogram.values()),
         )
+        self.assertLessEqual(
+            recovered["matches"][0]["sync_start_sample_min"],
+            recovered["matches"][0]["sync_start_sample_median"],
+        )
+        self.assertLessEqual(
+            recovered["matches"][0]["sync_start_sample_median"],
+            recovered["matches"][0]["sync_start_sample_max"],
+        )
 
     def test_decodes_controlled_hcs026_pairing_and_battery_fixtures(self) -> None:
         fixture = json.loads(

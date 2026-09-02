@@ -16,6 +16,9 @@
       "bounded_capture_sha256": "5026d3c33506ca853a900cd8ab3541802581953b65fb171a3b212bf913b0c53b",
       "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6",
       "burst_duration_ms": 31.3565,
+      "active_start_to_sync_ms": 15.9965,
+      "post_frame_energy_us": 159.5,
+      "sync_start_sample_median": 3854659,
       "wake_phase_count": 97,
       "alternating_wake_symbol_histogram": {
         "129": 1,
@@ -32,6 +35,9 @@
       "bounded_capture_sha256": "b1ea88acaefdbfede926b111fd0dce1f5b93a90c6936a1c40e12064fdad3db7d",
       "assignment_frame": "79f4882f28b42d008fb9840280824085850086700098e1a10d01008000000000000000001133",
       "burst_duration_ms": 31.358,
+      "active_start_to_sync_ms": 15.9975,
+      "post_frame_energy_us": 160.0,
+      "sync_start_sample_median": 2362813,
       "wake_phase_count": 97,
       "alternating_wake_symbol_histogram": {
         "271": 1,
@@ -47,6 +53,9 @@
     "source_fixture": "htv145_counter0_app_first_stock_enrollment_20260901.json",
     "reply_frame": "79f4882f28b42d008fb98402808141010000800000000000000000000000000000000000592d",
     "burst_duration_ms": 31.3575,
+    "active_start_to_sync_ms": 15.997,
+    "post_frame_energy_us": 160.0,
+    "sync_start_sample_median": 6853003,
     "wake_phase_count": 97,
     "alternating_wake_symbol_histogram": {
       "169": 1,
@@ -62,6 +71,9 @@
       "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000980f210d01008000000000000000005d02",
       "configured_wake_symbols": 320,
       "burst_duration_ms": 31.2275,
+      "active_start_to_sync_ms": 15.981,
+      "post_frame_energy_us": 46.5,
+      "sync_start_sample_median": 1972044,
       "wake_phase_count": 86,
       "alternating_wake_symbol_histogram": {
         "282": 1,
@@ -76,6 +88,9 @@
       "assignment_frame": "79f4882f28b42d008fb984028080c0858500867000a499210d0100800000000000000000a885",
       "configured_wake_symbols": 320,
       "burst_duration_ms": 31.2215,
+      "active_start_to_sync_ms": 15.9765,
+      "post_frame_energy_us": 44.5,
+      "sync_start_sample_median": 2536883,
       "wake_phase_count": 87,
       "alternating_wake_symbol_histogram": {
         "234": 1,
@@ -87,6 +102,10 @@
     "accepted_stock_duration_range_ms": [31.3565, 31.358],
     "rejected_local_duration_range_ms": [31.2215, 31.2275],
     "stock_minus_local_duration_range_ms": [0.129, 0.1365],
+    "accepted_stock_post_frame_energy_range_us": [159.5, 160.0],
+    "rejected_local_post_frame_energy_range_us": [44.5, 46.5],
+    "stock_minus_local_post_frame_energy_range_us": [113.0, 115.5],
+    "active_start_to_sync_stock_minus_local_range_us": [15.5, 21.0],
     "stock_assignment_dominant_sync_aligned_wake_count": 321,
     "stock_stage1_dominant_sync_aligned_wake_count": 320,
     "local_assignment_dominant_sync_aligned_wake_count": 319,
@@ -94,9 +113,10 @@
   },
   "interpretation": [
     "Two independent accepted stock assignments are about 0.13 ms longer than two rejected local assignments across the same fixed energy threshold; sweeping thresholds from 3 through 25 preserved the separation.",
+    "Sync alignment localizes most of that separation after the normalized 304-symbol frame: both accepted assignments and the accepted stage-1 reply retain about 160 us of above-threshold RF energy after the median frame end, while both local assignments retain only 44.5-46.5 us. Start-to-sync differs by only about 15.5-21 us.",
     "Most exact-frame clock phases see 321 alternating symbols immediately before stock sync, while nearly every local phase sees 319. The existing local generator is configured for 320 wake symbols and establishes that 319 is this demodulator's normal boundary count.",
     "The stock stage-1 gateway reply has the same approximately 31.36 ms energy duration but a dominant backward count of 320, so this histogram cannot be translated directly into a fixed configured wake length. Starting phase, wake-to-sync continuity, and the post-frame tail must be separated before changing the wake constant.",
-    "The repeated duration difference is new evidence for packet-boundary behavior, but not proof that it caused rejection: stock and local amplitude/SNR differ, and PA ramp or post-frame energy can contribute to the approximately 0.13 ms difference.",
-    "The next fresh stock capture must reproduce the duration and phase histogram. Exact-byte replay remains first; if it fails through the current CC1101 path, edge-aligned analysis should test start phase and roughly two-to-three symbol-times of stock-only tail before another semantic change."
+    "The repeated post-frame-tail difference is new evidence for packet-boundary behavior, but not proof that it caused rejection: stock and local amplitude/SNR differ, and the threshold-derived tail includes PA ramp-down rather than necessarily extra data symbols.",
+    "The next fresh stock capture must reproduce the duration, sync alignment, and approximately 160 us post-frame energy. Exact-byte replay remains first; if it fails through the current CC1101 path, extend only the measured post-frame PA/data tail before another semantic change."
   ]
 }

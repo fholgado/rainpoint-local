@@ -14,6 +14,7 @@ from collections import Counter
 import json
 import math
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 try:
@@ -44,11 +45,13 @@ def _group_matches(raw_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "inverted": match["inverted"],
                 "phase_samples": [],
                 "sync_symbols": [],
+                "sync_start_samples": [],
                 "alternating_wake_symbols": [],
             },
         )
         item["phase_samples"].append(match["phase_samples"])
         item["sync_symbols"].append(match["sync_symbol"])
+        item["sync_start_samples"].append(match["sync_start_sample"])
         item["alternating_wake_symbols"].append(
             match["alternating_wake_symbols"]
         )
@@ -61,6 +64,11 @@ def _group_matches(raw_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "phase_min": min(item["phase_samples"]),
                 "phase_max": max(item["phase_samples"]),
                 "sync_symbols": sorted(set(item["sync_symbols"])),
+                "sync_start_sample_min": min(item["sync_start_samples"]),
+                "sync_start_sample_max": max(item["sync_start_samples"]),
+                "sync_start_sample_median": round(
+                    median(item["sync_start_samples"])
+                ),
                 "alternating_wake_symbols": sorted(
                     set(item["alternating_wake_symbols"])
                 ),
@@ -139,7 +147,11 @@ def _numpy_sync_offsets(bits) -> list[tuple[int, bool]]:
     return sorted(set(offsets))
 
 
-def _numpy_raw_matches(bits, phase: int) -> list[dict[str, Any]]:
+def _numpy_raw_matches(
+    bits,
+    phase: int,
+    samples_per_symbol: int,
+) -> list[dict[str, Any]]:
     """Decode every exact-sync frame recovered for one sample phase."""
     assert np is not None
     matches: list[dict[str, Any]] = []
@@ -165,6 +177,7 @@ def _numpy_raw_matches(bits, phase: int) -> list[dict[str, Any]]:
                 "phase_samples": phase,
                 "inverted": inverted,
                 "sync_symbol": start,
+                "sync_start_sample": phase + start * samples_per_symbol,
                 "alternating_wake_symbols": wake_symbols,
                 "frame_bits": int(frame.size),
                 "frame_hex": frame_hex,
@@ -218,7 +231,9 @@ def demodulate_many(
         means = (right[:count] - left[:count]) / samples_per_symbol
         for center in centers:
             bits = means > thresholds[center]
-            raw_matches[center].extend(_numpy_raw_matches(bits, phase))
+            raw_matches[center].extend(
+                _numpy_raw_matches(bits, phase, samples_per_symbol)
+            )
     del cumulative
     return {
         center: {
@@ -299,6 +314,9 @@ def demodulate(
                         "phase_samples": phase,
                         "inverted": inverted,
                         "sync_symbol": start,
+                        "sync_start_sample": (
+                            phase + start * samples_per_symbol
+                        ),
                         "alternating_wake_symbols": wake_symbols,
                         "frame_bits": len(frame),
                         "frame_hex": (

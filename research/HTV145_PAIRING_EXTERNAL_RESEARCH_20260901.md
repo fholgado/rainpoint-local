@@ -70,6 +70,15 @@ packet start/ending phase, PA ramp, and post-frame tail within H1. Exact values
 are retained in
 [`htv145_stock_local_assignment_edge_discriminator_20260902.json`](fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json).
 
+Sync-aligned sample positions sharpen that observation. From the median sync
+position plus the normalized 304-symbol frame, both accepted stock assignments
+and the accepted stage-1 reply remain above the energy threshold for about
+`160 us`; rejected probes `.24` and `.25` remain above it for only
+`44.5--46.5 us`. Their active-start-to-sync intervals differ by just
+`15.5--21 us`, so most of the repeatable `0.13 ms` total-duration gap is at the
+packet end. This is evidence for a PA turn-off/post-frame-tail discriminator,
+not yet proof that the valve requires it or that it represents extra bits.
+
 ## Verified external facts
 
 ### Pairing and reset lifecycle
@@ -238,7 +247,10 @@ longer than two rejected local replies at every tested energy threshold. The
 stock assignments' dominant sync-aligned backward count is also two symbols
 above local. Because a stock continuation has the same long energy duration
 but a different backward count, the durable finding is a packet-boundary/edge
-difference, not yet a confirmed wake-symbol constant.
+difference, not yet a confirmed wake-symbol constant. Median sync alignment
+places roughly `113--116 us` of the repeated difference after the normalized
+frame: stock retains about `160 us` of post-frame RF energy and local retains
+about `45 us`.
 
 **Prediction:** A byte-identical assignment rebuilt by the CC1101 can still
 fail, while a raw replay of the accepted stock RF burst succeeds. Conversely,
@@ -372,6 +384,12 @@ Measure stock and local bursts against the valve request from the same session:
 - PA amplitude ramp at burst start/end;
 - carrier or data after the final trailer bit;
 - request-end to first RF energy, first wake symbol, sync, and payload.
+
+The retained captures already prioritize the packet end: accepted stock
+traffic has approximately `160 us` of post-frame above-threshold RF energy,
+versus `44.5--46.5 us` locally. Reproduce that measurement in the fresh stock
+reference. If exact bytes still fail, change only the local post-frame hold/tail
+to match stock before revisiting any payload field or preamble length.
 
 If the CC1101 cannot reproduce a discovered difference, a transmit-capable SDR
 raw-IQ replay becomes justified. The existing receive-only RTL-SDR cannot run

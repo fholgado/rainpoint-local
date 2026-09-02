@@ -425,6 +425,13 @@ observation before it changes transmitted firmware.
     differ too, but an accepted stock continuation proves that count cannot be
     translated directly into one fixed wake-symbol constant. Preserve this as
     a packet-boundary/start-phase/PA-tail hypothesis, not as probe `.26` yet.
+    Median sync alignment now localizes most of the duration difference after
+    the normalized frame: both accepted stock assignments and an accepted
+    stage-1 reply retain about `160 us` of post-frame RF energy, while both
+    rejected local assignments retain only `44.5--46.5 us`. The next fresh
+    stock capture must reproduce this measurement. If exact accepted bytes
+    still fail through the CC1101 path, a single post-frame-tail change is the
+    first physical discriminator; do not reopen payload or wake-length guesses.
     Exact-byte replay remains next and must retain raw IQ so the boundary can
     be compared. Evidence:
     `research/fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json`.
