@@ -2690,7 +2690,10 @@ class SQLiteEventStore:
             )
         confirmed_watering = state["control_confirmed_watering"] in {1, True}
         confirmed_zone = state["control_active_zone"]
-        if not watering and confirmed_watering:
+        if not watering and (
+            confirmed_watering
+            or state.get("control_transaction_state") == "watering_confirmed"
+        ):
             self._connection.execute(
                 """
                 UPDATE valve_registry SET

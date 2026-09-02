@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.39 / Integration 0.13.6 / Firmware 0.15.3
+
+- Reconcile an already-idle `0.33.37` watering result to **Watering
+  completed** after upgrade, even when the earlier gateway had already stored
+  the valve's automatic idle before the completed-state model was introduced.
+
 ## 0.33.38 / Integration 0.13.6 / Firmware 0.15.3
 
 - Advance a confirmed HTV405 watering transaction to **Watering completed**

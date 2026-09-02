@@ -716,7 +716,7 @@ same time without conflicting authority.
       15-second interval, open-response confirmation, independent watering
       telemetry, valve-owned automatic idle, and restored start availability.
       The live state surface exposed every phase and disabled starts throughout
-      active work. Gateway 0.33.38 additionally labels the final idle result
+      active work. Gateway 0.33.39 additionally labels the final idle result
       **Watering completed** instead of retaining the earlier start-confirmed
       wording.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
