@@ -230,7 +230,8 @@
     },
     "button": {
       "identify_radio_node": { "name": "Identify" },
-      "reboot_radio_node": { "name": "Reboot" }
+      "reboot_radio_node": { "name": "Reboot" },
+      "resynchronize_valve_counter": { "name": "Resynchronize control counter" }
     },
     "switch": {
       "radio_node_rf_transmissions": { "name": "RF transmissions" }

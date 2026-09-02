@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.33.32 / Integration 0.13.5 / Firmware 0.15.3
+
+- Add an explicit Home Assistant action for an independently confirmed-idle
+  HTV405 whose command counter is unsynchronized. The gateway performs a
+  durable close-only scan across all 32 five-bit candidates, prioritizing the
+  last authenticated successor and observed reset candidates `1`, `2`, and
+  `0`.
+- Retry one silent close candidate once, obey the 15-second valve command
+  interval, resume the explicitly started search across gateway or radio-node
+  restarts, and expose candidate progress without publishing a guessed
+  counter.
+- Restore ordinary valve control only after a matching authenticated closed
+  response. Silence, node dispatch, and routine telemetry never establish a
+  counter; an unexpected watering report aborts the scan.
+
 ## 0.33.31 / Integration 0.13.4 / Firmware 0.15.3
 
 - Accept a strict authenticated HTV405 closed response when the durable

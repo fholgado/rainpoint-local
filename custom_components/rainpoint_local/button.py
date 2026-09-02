@@ -6,10 +6,13 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .api import RainPointLocalError
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import RainPointLocalCoordinator
+from .entity import RainPointLocalEntity
 from .node_entity import RainPointRadioNodeEntity
 
 
@@ -25,8 +28,10 @@ async def async_setup_entry(
     @callback
     def async_add_missing_entities() -> None:
         entities = []
+        token = str(
+            entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, ""))
+        )
         for node_id, node in coordinator.nodes.items():
-            token = str(entry.data.get(CONF_TOKEN, ""))
             if (
                 (node_id, "identify") not in known
                 and "identify" in node.get("capabilities", [])
@@ -45,6 +50,18 @@ async def async_setup_entry(
                 entities.append(
                     RainPointRadioNodeRebootButton(
                         coordinator, node_id, token
+                    )
+                )
+        for device_id, device in coordinator.data.items():
+            if (
+                (device_id, "resynchronize_counter") not in known
+                and "counter_resynchronization"
+                in device.get("capabilities", [])
+            ):
+                known.add((device_id, "resynchronize_counter"))
+                entities.append(
+                    RainPointHtv405ResynchronizeCounterButton(
+                        coordinator, device_id, token
                     )
                 )
         if entities:
@@ -101,4 +118,69 @@ class RainPointRadioNodeRebootButton(RainPointRadioNodeEntity, ButtonEntity):
         await self.coordinator.client.reboot_radio_node(
             self._token, self.node_id
         )
+        await self.coordinator.async_request_refresh()
+
+
+class RainPointHtv405ResynchronizeCounterButton(
+    RainPointLocalEntity, ButtonEntity
+):
+    """Start a bounded close-only counter scan for an idle HTV405."""
+
+    _attr_translation_key = "resynchronize_valve_counter"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: RainPointLocalCoordinator,
+        device_id: str,
+        token: str,
+    ) -> None:
+        super().__init__(coordinator, device_id)
+        self._token = token
+        self._attr_unique_id = f"{device_id}_resynchronize_counter"
+
+    @property
+    def available(self) -> bool:
+        """Offer resynchronization only for a confirmed-idle lost counter."""
+        return bool(
+            super().available
+            and self.decoded_state.get("rf_control_enabled") is True
+            and self.decoded_state.get("is_watering") is False
+            and self.decoded_state.get("rf_next_control_sequence") is None
+            and self.decoded_state.get("rf_control_command_pending") is False
+            and self.decoded_state.get("rf_control_resync_state")
+            == "ready"
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose close-scan progress without presenting a guessed counter."""
+        return {
+            "resync_state": self.decoded_state.get(
+                "rf_control_resync_state"
+            ),
+            "candidate": self.decoded_state.get(
+                "rf_control_resync_candidate"
+            ),
+            "candidate_position": self.decoded_state.get(
+                "rf_control_resync_candidate_position"
+            ),
+            "candidate_count": self.decoded_state.get(
+                "rf_control_resync_candidate_count"
+            ),
+            "candidate_attempt": self.decoded_state.get(
+                "rf_control_resync_candidate_attempt"
+            ),
+            "last_result": self.decoded_state.get("rf_control_last_result"),
+        }
+
+    async def async_press(self) -> None:
+        """Begin the scan; the gateway advances it without further input."""
+        try:
+            await self.coordinator.client.resynchronize_htv405_counter(
+                self._token,
+                device_id=self.device_id,
+            )
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_request_refresh()

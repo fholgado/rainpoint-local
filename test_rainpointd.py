@@ -290,6 +290,95 @@ class GatewayTest(unittest.TestCase):
             )
             restored.close()
 
+    def test_restart_resumes_an_explicit_idle_close_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rainpoint.sqlite3"
+            gateway = self._gateway_with_pending_htv405_open(path)
+            assert gateway._store is not None
+            registration = gateway._store.valve_registry()[0]
+            gateway._store.fail_htv405_command(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                command_id=registration["control_pending_command_id"],
+                reason=(
+                    "gateway_command_response_timeout_"
+                    "counter_unsynchronized"
+                ),
+                observed_at="2026-08-24T20:00:22+00:00",
+            )
+            gateway._store.confirm_valve_control_response(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                sequence=5,
+                next_sequence=6,
+                zone=1,
+                watering=False,
+                center_hz=433_518_527,
+                observed_at="2026-08-24T20:00:23+00:00",
+                frame="00",
+            )
+            failed_open = gateway.request_htv405_control(
+                device_id="htv405-94a98013",
+                action="open",
+                zone=1,
+                duration_seconds=60,
+                now=datetime.fromisoformat("2026-08-24T20:00:38+00:00"),
+            )
+            gateway._store.fail_htv405_command(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                command_id=failed_open["command_id"],
+                reason=(
+                    "gateway_command_response_timeout_"
+                    "counter_unsynchronized"
+                ),
+                observed_at="2026-08-24T20:00:40+00:00",
+            )
+            probe = gateway.request_htv405_idle_close_probe(
+                device_id="htv405-94a98013",
+                now=datetime.fromisoformat("2026-08-24T20:00:55+00:00"),
+            )
+            gateway._store.fail_htv405_command(
+                valve_endpoint="94a98013",
+                node_id="rp-001122334455",
+                command_id=probe["command_id"],
+                reason=(
+                    "gateway_command_response_timeout_"
+                    "counter_unsynchronized"
+                ),
+                observed_at="2026-08-24T20:00:57+00:00",
+            )
+            gateway.close()
+
+            restored = Gateway(
+                storage_path=str(path),
+                valve_control_enabled=True,
+            )
+            dispatched = threading.Event()
+            commands: list[tuple[str, dict]] = []
+
+            def sender(node_id: str, command: dict) -> None:
+                commands.append((node_id, command))
+                if command["type"] == "valve_control_close":
+                    dispatched.set()
+
+            restored.update_node(
+                "rp-001122334455",
+                connected=True,
+                authenticated=True,
+                tx_armed=False,
+                capabilities=["rx", "valve_control_tx_candidate"],
+            )
+            restored.set_node_command_sender(sender)
+
+            self.assertTrue(dispatched.wait(timeout=1))
+            self.assertEqual(6, commands[-1][1]["expected_sequence"])
+            self.assertNotIn(
+                "valve_control_open",
+                [command["type"] for _node, command in commands],
+            )
+            restored.close()
+
     def test_phase_only_htv405_report_preserves_definitive_state(self) -> None:
         gateway = Gateway()
         gateway.observe_decoded(
@@ -3221,6 +3310,141 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             accepted["control_last_result"],
         )
         self.assertFalse(accepted["control_confirmed_watering"])
+
+    def test_idle_close_resync_automatically_dispatches_matured_candidates(
+        self,
+    ) -> None:
+        gateway = self.server.gateway
+        assert gateway._store is not None
+        gateway._store.confirm_valve_control_response(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            sequence=6,
+            next_sequence=6,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:00:02+00:00",
+            frame="00",
+        )
+        pending = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=datetime.fromisoformat("2026-08-24T20:00:20+00:00"),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=pending["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        first = gateway.request_htv405_idle_close_probe(
+            device_id=self.DEVICE_ID,
+            now=datetime.fromisoformat("2026-08-24T20:00:37+00:00"),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=first["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:39+00:00",
+        )
+        self.commands.clear()
+
+        dispatched = gateway.advance_htv405_idle_close_resync(
+            now=datetime.fromisoformat("2026-08-24T20:00:54+00:00")
+        )
+
+        self.assertEqual(1, dispatched)
+        self.assertEqual(
+            [
+                "valve_control_configure",
+                "valve_control_sync",
+                "valve_control_close",
+            ],
+            [command["type"] for _node, command in self.commands],
+        )
+        self.assertEqual(7, self.commands[-1][1]["expected_sequence"])
+        registration = gateway._store.valve_registry()[0]
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=registration["control_pending_command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:56+00:00",
+        )
+        self.commands.clear()
+
+        dispatched = gateway.advance_htv405_idle_close_resync(
+            now=datetime.fromisoformat("2026-08-24T20:01:11+00:00")
+        )
+
+        self.assertEqual(1, dispatched)
+        self.assertEqual(1, self.commands[-1][1]["expected_sequence"])
+        self.assertNotIn(
+            "valve_control_open",
+            [command["type"] for _node, command in self.commands],
+        )
+
+    def test_idle_close_timeout_schedules_durable_background_retry(self) -> None:
+        gateway = self.server.gateway
+        assert gateway._store is not None
+        now = datetime.now(timezone.utc)
+        gateway._store.confirm_valve_control_response(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            sequence=6,
+            next_sequence=6,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at=(now - timedelta(seconds=60)).isoformat(),
+            frame="00",
+        )
+        pending = gateway.request_htv405_control(
+            device_id=self.DEVICE_ID,
+            action="open",
+            zone=1,
+            duration_seconds=60,
+            now=now - timedelta(seconds=45),
+        )
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT,
+            node_id=self.NODE_ID,
+            command_id=pending["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at=(now - timedelta(seconds=43)).isoformat(),
+        )
+        self.commands.clear()
+        gateway.request_htv405_idle_close_probe(
+            device_id=self.DEVICE_ID,
+            now=now - timedelta(seconds=13),
+        )
+
+        gateway.devices(now=now)
+
+        registration = gateway._store.valve_registry()[0]
+        self.assertEqual(
+            "idle_close_probe_timeout_retry",
+            registration["control_last_result"],
+        )
+        self.assertEqual(7, registration["control_recovery_sequence"])
+        self.assertIn(
+            self.VALVE_ENDPOINT,
+            gateway._htv405_resync_timers,
+        )
+        self.assertTrue(
+            gateway._htv405_resync_timers[
+                self.VALVE_ENDPOINT
+            ].is_alive()
+        )
+        self.assertNotIn(
+            "valve_control_open",
+            [command["type"] for _node, command in self.commands],
+        )
 
     def test_guarded_open_probe_route_is_fixed_to_zone_one_and_sixty_seconds(
         self,

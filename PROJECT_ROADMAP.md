@@ -716,10 +716,16 @@ same time without conflicting authority.
         whether stock sends a missing synchronization transaction, scans
         command candidates, or maintains the session with traffic absent from
         the local implementation.
-  - [ ] Physically validate the deployed idle-close action-alias fix, then
-        implement an explicitly bounded close search that stops on the first
-        authenticated closed response, retains that accepted counter for the
-        next open, and never treats silence alone as counter advancement.
+  - [x] Implement an explicitly bounded close-only search that stops on the
+        first authenticated closed response, retains that accepted counter for
+        the next open, and never treats silence alone as synchronization.
+        Gateway 0.33.32 persists an explicitly started scan across restarts,
+        searches all 32 five-bit candidates in deterministic evidence-weighted
+        order, repeats one silent candidate once, observes the 15-second valve
+        interval, exposes HA progress, and aborts on unexpected watering.
+  - [ ] Physically validate the deployed action-alias fix and bounded scan on
+        the next naturally unsynchronized, independently confirmed-idle valve;
+        then authenticate one ordinary open using the recovered counter.
 
 The frozen overnight timeline, competing hypotheses, and controlled
 discriminator are retained in

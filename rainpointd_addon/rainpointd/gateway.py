@@ -74,6 +74,7 @@ from .storage import (
     DEFAULT_EVENT_RETENTION_LIMIT,
     SQLiteEventStore,
     frame_accepted,
+    htv405_idle_close_scan_candidates,
 )
 
 
@@ -248,6 +249,7 @@ class Gateway:
         self._next_event_id = self.latest_event_id() + 1
         self._lock = threading.Lock()
         self._event_condition = threading.Condition(self._lock)
+        self._htv405_resync_timers: dict[str, threading.Timer] = {}
         self._transport_healthy = True
         self._transport_error: str | None = None
         self._node_command_sender: (
@@ -353,6 +355,9 @@ class Gateway:
     def close(self) -> None:
         """Close persistent resources."""
         with self._lock:
+            for timer in self._htv405_resync_timers.values():
+                timer.cancel()
+            self._htv405_resync_timers.clear()
             if self._store:
                 self._store.close()
                 self._store = None
@@ -374,6 +379,8 @@ class Gateway:
                 self._normalize_node_pairing_status_locked(node, normalized)
             node.update(normalized)
             self._adopt_active_valve_identity_from_node_locked(node_id, node)
+            if self._htv405_control_node_ready(node):
+                self._schedule_matured_htv405_resyncs_locked(node_id=node_id)
 
     def observe_node_health(self, node_id: str, **fields: Any) -> None:
         """Update node health and retain connection/reboot discriminator events."""
@@ -632,6 +639,12 @@ class Gateway:
         """Attach the authenticated node command boundary owned by the LAN server."""
         with self._lock:
             self._node_command_sender = sender
+            if sender is None:
+                for timer in self._htv405_resync_timers.values():
+                    timer.cancel()
+                self._htv405_resync_timers.clear()
+            else:
+                self._schedule_matured_htv405_resyncs_locked()
 
     def prepare_htv145_acceptance(
         self,
@@ -898,13 +911,198 @@ class Gateway:
                 sender=self._node_command_sender,
                 enabled=True,
             )
-            result = coordinator.request_idle_close_probe(
-                profile,
-                zone=1,
-                started_at=timestamp,
-            )
+            try:
+                result = coordinator.request_idle_close_probe(
+                    profile,
+                    zone=1,
+                    started_at=timestamp,
+                )
+            except (ConnectionError, OSError, RuntimeError, ValueError):
+                latest = next(
+                    (
+                        item
+                        for item in self._store.valve_registry()
+                        if item["valve_endpoint"] == profile.valve_endpoint
+                    ),
+                    None,
+                )
+                if latest is not None:
+                    self._schedule_htv405_resync_locked(latest)
+                raise
             self._refresh_registry_catalog()
             return result
+
+    def advance_htv405_idle_close_resync(
+        self,
+        *,
+        now: datetime | None = None,
+        device_id: str | None = None,
+    ) -> int:
+        """Dispatch every matured candidate in an explicitly started scan.
+
+        This maintenance boundary never starts a scan and never emits an open.
+        It only resumes durable `idle_close_probe_*` state after the proven
+        15-second valve interval. Production timers call the same method that
+        deterministic tests exercise with an injected timestamp.
+        """
+        with self._lock:
+            return self._advance_htv405_idle_close_resync_locked(
+                now or datetime.now(timezone.utc),
+                device_id=device_id,
+            )
+
+    def _advance_htv405_idle_close_resync_locked(
+        self,
+        now: datetime,
+        *,
+        device_id: str | None = None,
+    ) -> int:
+        if (
+            not self._valve_control_enabled
+            or self._store is None
+            or self._node_command_sender is None
+        ):
+            return 0
+        observed = _observed_utc(now)
+        resumable_results = {
+            "idle_close_probe_dispatch_retry",
+            "idle_close_probe_rejected",
+            "idle_close_probe_timeout_advanced",
+            "idle_close_probe_timeout_retry",
+        }
+        dispatched = 0
+        for registration in self._store.valve_registry():
+            if device_id is not None and registration.get("device_id") != device_id:
+                continue
+            if (
+                registration.get("control_last_result") not in resumable_results
+                or registration.get("control_pending_command_id") is not None
+                or registration.get("control_next_sequence") is not None
+                or not isinstance(
+                    registration.get("control_recovery_sequence"), int
+                )
+                or registration.get("control_confirmed_watering") not in {0, False}
+            ):
+                continue
+            not_before = registration.get("control_recovery_not_before")
+            if not isinstance(not_before, str):
+                continue
+            try:
+                available = _observed_utc(not_before)
+            except (TypeError, ValueError):
+                continue
+            if observed < available:
+                continue
+            profile = self._htv405_control_profile(registration)
+            if not self._htv405_control_node_ready(
+                self._nodes.get(profile.node_id, {})
+            ):
+                continue
+            coordinator = Htv405ControlCoordinator(
+                store=self._store,
+                sender=self._node_command_sender,
+                enabled=True,
+            )
+            try:
+                result = coordinator.request_idle_close_probe(
+                    profile,
+                    zone=1,
+                    started_at=observed.isoformat(),
+                )
+            except (ConnectionError, OSError, RuntimeError, ValueError):
+                latest = next(
+                    (
+                        item
+                        for item in self._store.valve_registry()
+                        if item["valve_endpoint"]
+                        == registration["valve_endpoint"]
+                    ),
+                    None,
+                )
+                if latest is not None:
+                    self._schedule_htv405_resync_locked(latest)
+                continue
+            self._append_valve_control_event_locked(
+                registration=next(
+                    item
+                    for item in self._store.valve_registry()
+                    if item["valve_endpoint"] == registration["valve_endpoint"]
+                ),
+                event_type="valve_control_resync_probe_dispatched",
+                observed_at=observed.isoformat(),
+                action=str(result["action"]),
+            )
+            dispatched += 1
+        if dispatched:
+            self._refresh_registry_catalog()
+        return dispatched
+
+    def _schedule_matured_htv405_resyncs_locked(
+        self, *, node_id: str | None = None
+    ) -> None:
+        if self._store is None:
+            return
+        for registration in self._store.valve_registry():
+            if node_id is not None and registration.get("control_node_id") != node_id:
+                continue
+            self._schedule_htv405_resync_locked(registration)
+
+    def _schedule_htv405_resync_locked(
+        self, registration: dict[str, Any]
+    ) -> None:
+        """Schedule one durable close-scan continuation, never an open."""
+        valve_endpoint = str(registration.get("valve_endpoint") or "")
+        existing = self._htv405_resync_timers.pop(valve_endpoint, None)
+        if existing is not None:
+            existing.cancel()
+        if (
+            not valve_endpoint
+            or self._node_command_sender is None
+            or registration.get("control_last_result")
+            not in {
+                "idle_close_probe_dispatch_retry",
+                "idle_close_probe_rejected",
+                "idle_close_probe_timeout_advanced",
+                "idle_close_probe_timeout_retry",
+            }
+            or registration.get("control_pending_command_id") is not None
+            or registration.get("control_next_sequence") is not None
+            or not isinstance(registration.get("control_recovery_sequence"), int)
+            or registration.get("control_confirmed_watering") not in {0, False}
+        ):
+            return
+        node_id = str(registration.get("control_node_id") or "")
+        if not self._htv405_control_node_ready(self._nodes.get(node_id, {})):
+            return
+        not_before = registration.get("control_recovery_not_before")
+        if not isinstance(not_before, str):
+            return
+        try:
+            available = _observed_utc(not_before)
+        except (TypeError, ValueError):
+            return
+        delay = max(
+            0.0,
+            (available - datetime.now(timezone.utc)).total_seconds(),
+        )
+        timer = threading.Timer(
+            delay,
+            self._run_scheduled_htv405_resync,
+            args=(str(registration["device_id"]), valve_endpoint),
+        )
+        timer.daemon = True
+        self._htv405_resync_timers[valve_endpoint] = timer
+        timer.start()
+
+    def _run_scheduled_htv405_resync(
+        self, device_id: str, valve_endpoint: str
+    ) -> None:
+        with self._lock:
+            self._htv405_resync_timers.pop(valve_endpoint, None)
+            self._advance_htv405_idle_close_resync_locked(
+                datetime.now(timezone.utc),
+                device_id=device_id,
+            )
 
     def request_htv405_guarded_open_probe(
         self,
@@ -2853,6 +3051,53 @@ class Gateway:
                         unavailable_reason = "command_pending_response"
                     else:
                         unavailable_reason = None
+                    pending_action = valve_registration.get(
+                        "control_pending_action"
+                    )
+                    last_result = str(
+                        valve_registration.get("control_last_result") or ""
+                    )
+                    recovery_sequence = valve_registration.get(
+                        "control_recovery_sequence"
+                    )
+                    resync_candidate = (
+                        valve_registration.get("control_pending_sequence")
+                        if pending_action == "idle_close_probe"
+                        else recovery_sequence
+                        if last_result.startswith("idle_close_probe_")
+                        else None
+                    )
+                    if counter_ready:
+                        resync_state = "synchronized"
+                    elif pending_action == "idle_close_probe":
+                        resync_state = "waiting_for_closed_response"
+                    elif last_result == "idle_close_probe_search_exhausted":
+                        resync_state = "search_exhausted"
+                    elif (
+                        last_result.startswith("idle_close_probe_")
+                        and isinstance(recovery_sequence, int)
+                    ):
+                        resync_state = "waiting_for_retry_interval"
+                    else:
+                        resync_state = "ready"
+                    resync_position = None
+                    resync_total = None
+                    last_control_sequence = valve_registration.get(
+                        "control_last_sequence"
+                    )
+                    if (
+                        isinstance(last_control_sequence, int)
+                        and not isinstance(last_control_sequence, bool)
+                        and isinstance(resync_candidate, int)
+                    ):
+                        candidates = htv405_idle_close_scan_candidates(
+                            last_control_sequence
+                        )
+                        if resync_candidate in candidates:
+                            resync_position = (
+                                candidates.index(resync_candidate) + 1
+                            )
+                            resync_total = len(candidates)
                     state.update(
                         {
                             "rf_control_enabled": self._valve_control_enabled,
@@ -2910,6 +3155,28 @@ class Gateway:
                                     "control_recovery_not_before"
                                 )
                             ),
+                            "rf_control_resync_supported": True,
+                            "rf_control_resync_active": resync_state in {
+                                "waiting_for_closed_response",
+                                "waiting_for_retry_interval",
+                            },
+                            "rf_control_resync_state": resync_state,
+                            "rf_control_resync_candidate": resync_candidate,
+                            "rf_control_resync_candidate_position": (
+                                resync_position
+                            ),
+                            "rf_control_resync_candidate_count": resync_total,
+                            "rf_control_resync_candidate_attempt": (
+                                int(
+                                    valve_registration.get(
+                                        "control_recovery_attempt"
+                                    )
+                                    or 0
+                                )
+                                + 1
+                                if isinstance(resync_candidate, int)
+                                else None
+                            ),
                         }
                     )
                     if self._valve_control_enabled:
@@ -2917,6 +3184,7 @@ class Gateway:
                             {
                                 *device.get("capabilities", []),
                                 "bounded_valve_control",
+                                "counter_resynchronization",
                                 "four_zone_valve",
                             }
                         )
@@ -3128,6 +3396,7 @@ class Gateway:
                 observed_at=observed.isoformat(),
                 action=str(action) if isinstance(action, str) else None,
             )
+            self._schedule_htv405_resync_locked(failed)
             expired += 1
         if expired:
             self._refresh_registry_catalog()
@@ -3603,6 +3872,7 @@ class Gateway:
                 observed_at=observed.isoformat(),
                 action=registration.get("control_pending_action"),
             )
+            self._schedule_htv405_resync_locked(failed)
             return failed
 
     def _recover_pending_htv405_air_responses(self) -> None:
@@ -3785,6 +4055,7 @@ class Gateway:
                     observed_at=timestamp,
                     action=registration.get("control_pending_action"),
                 )
+                self._schedule_htv405_resync_locked(failed)
                 return failed
         if status not in {
             "zone_1_open_confirmed",
@@ -3997,6 +4268,7 @@ class Gateway:
                 observed_at=timestamp,
                 action=action,
             )
+            self._schedule_htv405_resync_locked(failed)
             return True
 
     def _append_valve_control_event_locked(

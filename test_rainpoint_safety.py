@@ -30,7 +30,10 @@ from rainpointd.htv405_control import (  # noqa: E402
     Htv405ControlCoordinator,
     Htv405ControlProfile,
 )
-from rainpointd.storage import SQLiteEventStore  # noqa: E402
+from rainpointd.storage import (  # noqa: E402
+    SQLiteEventStore,
+    htv405_idle_close_scan_candidates,
+)
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
     build_open_frame,
@@ -362,6 +365,15 @@ class BenchValveControlSessionTest(unittest.TestCase):
 
 
 class Htv405ControlCoordinatorTest(unittest.TestCase):
+    def test_idle_close_scan_is_complete_and_prioritizes_reset_counters(
+        self,
+    ) -> None:
+        candidates = htv405_idle_close_scan_candidates(4)
+
+        self.assertEqual((5, 1, 2, 0), candidates[:4])
+        self.assertEqual(32, len(candidates))
+        self.assertEqual(set(range(32)), set(candidates))
+
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.store = SQLiteEventStore(
@@ -748,7 +760,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
                 candidate_sequence=10,
             )
 
-    def test_idle_close_probe_rejection_advances_but_silence_only_repeats(self) -> None:
+    def test_idle_close_probe_scans_without_treating_silence_as_sync(self) -> None:
         pending = self.coordinator.request_open(
             self.profile,
             zone=1,
@@ -762,6 +774,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             reason="gateway_command_response_timeout_counter_unsynchronized",
             observed_at="2026-08-24T20:00:22+00:00",
         )
+        self.sent.clear()
         first = self.coordinator.request_idle_close_probe(
             self.profile,
             zone=1,
@@ -774,7 +787,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             reason="gateway_command_rejected_counter_unsynchronized",
             observed_at="2026-08-24T20:00:39+00:00",
         )
-        self.assertEqual(8, rejected["control_recovery_sequence"])
+        self.assertEqual(1, rejected["control_recovery_sequence"])
         self.assertEqual("idle_close_probe_rejected", rejected["control_last_result"])
 
         second = self.coordinator.request_idle_close_probe(
@@ -782,7 +795,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             zone=1,
             started_at="2026-08-24T20:00:54+00:00",
         )
-        self.assertEqual(8, self.sent[-1][1]["expected_sequence"])
+        self.assertEqual(1, self.sent[-1][1]["expected_sequence"])
         silent = self.store.fail_htv405_command(
             valve_endpoint=self.profile.valve_endpoint,
             node_id=self.profile.node_id,
@@ -790,7 +803,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             reason="gateway_command_response_timeout_counter_unsynchronized",
             observed_at="2026-08-24T20:00:56+00:00",
         )
-        self.assertEqual(8, silent["control_recovery_sequence"])
+        self.assertEqual(1, silent["control_recovery_sequence"])
         self.assertEqual(
             "idle_close_probe_timeout_retry", silent["control_last_result"]
         )
@@ -799,26 +812,85 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             zone=1,
             started_at="2026-08-24T20:01:11+00:00",
         )
-        self.assertEqual(8, self.sent[-1][1]["expected_sequence"])
-        exhausted = self.store.fail_htv405_command(
+        self.assertEqual(1, self.sent[-1][1]["expected_sequence"])
+        advanced = self.store.fail_htv405_command(
             valve_endpoint=self.profile.valve_endpoint,
             node_id=self.profile.node_id,
             command_id=repeated["command_id"],
             reason="gateway_command_response_timeout_counter_unsynchronized",
             observed_at="2026-08-24T20:01:13+00:00",
         )
-        self.assertIsNone(exhausted["control_recovery_sequence"])
-        self.assertIsNone(exhausted["control_next_sequence"])
+        self.assertEqual(2, advanced["control_recovery_sequence"])
+        self.assertIsNone(advanced["control_next_sequence"])
         self.assertEqual(
-            "idle_close_probe_timeout_exhausted",
-            exhausted["control_last_result"],
+            "idle_close_probe_timeout_advanced",
+            advanced["control_last_result"],
         )
-        with self.assertRaisesRegex(RuntimeError, "terminal until fresh idle"):
-            self.coordinator.request_idle_close_probe(
-                self.profile,
-                zone=1,
-                started_at="2026-08-24T20:01:28+00:00",
+        final = self.coordinator.request_idle_close_probe(
+            self.profile,
+            zone=1,
+            started_at="2026-08-24T20:01:28+00:00",
+        )
+        self.assertEqual(2, final["expected_sequence"])
+        self.assertTrue(
+            all(
+                command["type"] != "valve_control_open"
+                for _node, command in self.sent
             )
+        )
+        confirmed = self.store.confirm_valve_control_response(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            sequence=2,
+            next_sequence=2,
+            zone=1,
+            watering=False,
+            center_hz=433_518_527,
+            observed_at="2026-08-24T20:01:29+00:00",
+            frame="00",
+        )
+        self.assertEqual(2, confirmed["control_next_sequence"])
+        self.assertEqual(
+            "idle_close_probe_authenticated",
+            confirmed["control_last_result"],
+        )
+
+    def test_idle_close_scan_aborts_on_unexpected_watering(self) -> None:
+        pending = self.coordinator.request_open(
+            self.profile,
+            zone=1,
+            duration_seconds=60,
+            started_at="2026-08-24T20:00:20+00:00",
+        )
+        self.store.fail_htv405_command(
+            valve_endpoint=self.profile.valve_endpoint,
+            node_id=self.profile.node_id,
+            command_id=pending["command_id"],
+            reason="gateway_command_response_timeout_counter_unsynchronized",
+            observed_at="2026-08-24T20:00:22+00:00",
+        )
+        self.coordinator.request_idle_close_probe(
+            self.profile,
+            zone=1,
+            started_at="2026-08-24T20:00:37+00:00",
+        )
+
+        aborted = self.store.observe_htv405_state_report(
+            valve_endpoint=self.profile.valve_endpoint,
+            watering=True,
+            zone=2,
+            observed_at="2026-08-24T20:00:38+00:00",
+        )
+
+        self.assertIsNone(aborted["control_pending_command_id"])
+        self.assertIsNone(aborted["control_recovery_sequence"])
+        self.assertIsNone(aborted["control_next_sequence"])
+        self.assertTrue(aborted["control_confirmed_watering"])
+        self.assertEqual(2, aborted["control_active_zone"])
+        self.assertEqual(
+            "unexpected_watering_aborted_idle_close_resync",
+            aborted["control_last_result"],
+        )
 
     def test_unvalidated_duration_is_never_reserved_or_transmitted(self) -> None:
         with self.assertRaisesRegex(ValueError, "not physically validated"):

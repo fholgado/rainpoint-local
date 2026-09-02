@@ -199,6 +199,23 @@ Zone 1 closes one candidate at a time, obey the 15-second command interval,
 and stop only on a positive closed response. It must never advance merely
 because a candidate was silent.
 
+The implemented search is explicit, persistent, and complete over the
+five-bit field. For last authenticated command sequence `L`, it tries the
+following de-duplicated order:
+
+```text
+(L + 1) & 0x1f, 1, 2, 0, then 0..31
+```
+
+The first silent logical close is repeated once at the same candidate. A
+second silence or a strict negative response advances to the next candidate;
+neither outcome changes the published command counter. Only the matching
+authenticated closed response synchronizes control. If all 32 candidates are
+exhausted, a fresh strict idle report is required before a new explicit scan.
+An unexpected watering report terminates the scan immediately. The scan emits
+only the established configure, sync, and close commands and can resume from
+durable state after gateway or assigned-node restart.
+
 ## Battery and unsupported water usage
 
 Battery is a declared HTV405 capability but remains unavailable locally. The

@@ -17,6 +17,34 @@ from .product_identity import (
 
 SCHEMA_VERSION = 17
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
+HTV405_COUNTER_MODULUS = 0x20
+HTV405_IDLE_CLOSE_RESET_CANDIDATES = (1, 2, 0)
+
+
+def htv405_idle_close_scan_candidates(last_sequence: int) -> tuple[int, ...]:
+    """Return one deterministic, complete close-only counter scan.
+
+    The authenticated successor is always tried first. Fresh association and
+    the observed overnight session drift make 1, 2, and 0 the next most useful
+    reset candidates. The remaining five-bit values follow in numeric order,
+    with duplicates removed, so the explicit scan is bounded at 32 candidates.
+    """
+    if (
+        not isinstance(last_sequence, int)
+        or isinstance(last_sequence, bool)
+        or last_sequence not in range(HTV405_COUNTER_MODULUS)
+    ):
+        raise ValueError("HTV405 last sequence must be a five-bit integer")
+    baseline = (last_sequence + 1) & (HTV405_COUNTER_MODULUS - 1)
+    candidates: list[int] = []
+    for candidate in (
+        baseline,
+        *HTV405_IDLE_CLOSE_RESET_CANDIDATES,
+        *range(HTV405_COUNTER_MODULUS),
+    ):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return tuple(candidates)
 
 
 def frame_accepted(event: dict[str, Any]) -> bool | None:
@@ -1427,9 +1455,10 @@ class SQLiteEventStore:
         """Reserve one non-actuating close against an unsynchronized counter.
 
         The first candidate is exactly one step after the last authenticated
-        watering response. A strict rejection may nominate the next candidate;
-        one silent attempt may only repeat the same candidate. This method
-        never creates an open command or exposes a candidate as synchronized.
+        watering response. A strict rejection nominates the next candidate;
+        one silent attempt repeats the same candidate before the scan moves on.
+        This method never creates an open command or exposes a candidate as
+        synchronized.
         """
         if zone != 1:
             raise ValueError("HTV405 idle-close probe is restricted to Zone 1")
@@ -1455,12 +1484,10 @@ class SQLiteEventStore:
         last_sequence = state.get("control_last_sequence")
         if not isinstance(last_sequence, int) or isinstance(last_sequence, bool):
             raise RuntimeError("HTV405 probe lacks a last authenticated counter")
-        baseline = (last_sequence + 1) & 0x1F
+        scan_candidates = htv405_idle_close_scan_candidates(last_sequence)
+        baseline = scan_candidates[0]
         last_result = str(state.get("control_last_result") or "")
-        if last_result in {
-            "idle_close_probe_timeout_exhausted",
-            "idle_close_probe_search_exhausted",
-        }:
+        if last_result == "idle_close_probe_search_exhausted":
             raise RuntimeError(
                 "HTV405 idle-close probe is terminal until fresh idle telemetry"
             )
@@ -1473,7 +1500,7 @@ class SQLiteEventStore:
             and not isinstance(recovery_sequence, bool)
             else baseline
         )
-        if ((sequence - baseline) & 0x1F) > 3:
+        if sequence not in scan_candidates:
             raise RuntimeError("HTV405 idle-close probe search budget exhausted")
         not_before = state.get("control_recovery_not_before")
         if recovering_probe and isinstance(not_before, str):
@@ -1823,6 +1850,9 @@ class SQLiteEventStore:
         probe_rejection = idle_close_probe and reason == (
             "gateway_command_rejected_counter_unsynchronized"
         )
+        probe_dispatch_failure = idle_close_probe and reason == (
+            "node_dispatch_failed_counter_unsynchronized"
+        )
         if guarded_open_probe and (retryable_timeout or retryable_rejection):
             # A supervised candidate is independently selected by the
             # operator endpoint. Never let generic recovery advance beyond
@@ -1834,29 +1864,49 @@ class SQLiteEventStore:
                 if retryable_rejection
                 else "guarded_open_probe_timeout"
             )
+        elif probe_dispatch_failure:
+            recovery_sequence = int(state["control_pending_sequence"])
+            recovery_zone = 1
+            reason = "idle_close_probe_dispatch_retry"
+            try:
+                recovery_not_before = (
+                    datetime.fromisoformat(observed_at)
+                    + timedelta(seconds=15)
+                ).isoformat()
+            except ValueError:
+                recovery_sequence = None
+                recovery_not_before = None
         elif probe_timeout or probe_rejection:
             pending_sequence = int(state["control_pending_sequence"])
-            baseline = (
-                (int(state["control_last_sequence"]) + 1) & 0x1F
-                if isinstance(state.get("control_last_sequence"), int)
-                else pending_sequence
+            last_sequence = state.get("control_last_sequence")
+            scan_candidates = (
+                htv405_idle_close_scan_candidates(int(last_sequence))
+                if isinstance(last_sequence, int)
+                and not isinstance(last_sequence, bool)
+                else (pending_sequence,)
             )
-            if probe_rejection:
-                next_candidate = (pending_sequence + 1) & 0x1F
-                recovery_attempt = 0
-                reason = "idle_close_probe_rejected"
-            elif recovery_attempt == 0:
+            try:
+                candidate_index = scan_candidates.index(pending_sequence)
+            except ValueError:
+                candidate_index = len(scan_candidates)
+            if probe_timeout and recovery_attempt == 0:
                 next_candidate = pending_sequence
                 recovery_attempt = 1
                 reason = "idle_close_probe_timeout_retry"
             else:
-                next_candidate = None
-                recovery_attempt += 1
-                reason = "idle_close_probe_timeout_exhausted"
-            if (
-                next_candidate is not None
-                and ((next_candidate - baseline) & 0x1F) <= 3
-            ):
+                next_index = candidate_index + 1
+                next_candidate = (
+                    scan_candidates[next_index]
+                    if next_index < len(scan_candidates)
+                    else None
+                )
+                recovery_attempt = 0
+                reason = (
+                    "idle_close_probe_rejected"
+                    if probe_rejection
+                    else "idle_close_probe_timeout_advanced"
+                )
+            if next_candidate is not None:
                 recovery_sequence = next_candidate
                 recovery_zone = 1
                 try:
@@ -1870,8 +1920,7 @@ class SQLiteEventStore:
             else:
                 recovery_sequence = None
                 recovery_not_before = None
-                if probe_rejection:
-                    reason = "idle_close_probe_search_exhausted"
+                reason = "idle_close_probe_search_exhausted"
         elif (retryable_timeout or retryable_rejection) and recovery_attempt < 2:
             pending_sequence = int(state["control_pending_sequence"])
             recovery_attempt += 1
@@ -2068,6 +2117,46 @@ class SQLiteEventStore:
         if row is None:
             return None
         state = dict(row)
+        if (
+            watering
+            and state.get("control_pending_action") == "idle_close_probe"
+        ):
+            self._connection.execute(
+                """
+                UPDATE valve_registry SET
+                    control_next_sequence = NULL,
+                    control_confirmed_watering = 1,
+                    control_confirmed_at = ?,
+                    control_active_zone = ?,
+                    control_run_started_at = NULL,
+                    control_run_duration_seconds = NULL,
+                    control_expected_idle_at = NULL,
+                    control_pending_command_id = NULL,
+                    control_pending_action = NULL,
+                    control_pending_sequence = NULL,
+                    control_pending_zone = NULL,
+                    control_pending_duration_seconds = NULL,
+                    control_pending_started_at = NULL,
+                    control_recovery_sequence = NULL,
+                    control_recovery_attempt = 0,
+                    control_recovery_not_before = NULL,
+                    control_recovery_idle_at = NULL,
+                    control_recovery_zone = NULL,
+                    control_recovery_duration_seconds = NULL,
+                    control_last_result =
+                        'unexpected_watering_aborted_idle_close_resync',
+                    updated_at = ?
+                WHERE valve_endpoint = ?
+                  AND control_pending_action = 'idle_close_probe'
+                """,
+                (observed_at, zone, observed_at, valve_endpoint),
+            )
+            self._connection.commit()
+            return next(
+                item
+                for item in self.valve_registry()
+                if item["valve_endpoint"] == valve_endpoint
+            )
         if state["control_pending_command_id"] is not None:
             return state
         if state["control_next_sequence"] is None and not watering:

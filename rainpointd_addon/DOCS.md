@@ -5,10 +5,10 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.31 supports authenticated network radio nodes, receive-only USB RTL-SDR,
-receive-only ESP32/CC1101 serial mode, and authenticated inbound telemetry from
-one or more Wi-Fi ESP32 nodes. It does not connect to the RainPoint
-cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
+Version 0.33.32 supports authenticated network radio nodes, receive-only USB
+RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
+telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
+RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
 `hcs026_auto_v1`; automatic identity adoption and known-sensor recovery have
 completed physical end-to-end validation across independent identities.
 The staged coexistence release persists one custom RF controller identity for
@@ -37,15 +37,23 @@ independent idle report before any candidate advance. Telemetry report time and
 last command-transmission time are stored independently so routine reports do
 not delay user commands.
 
-An authenticated development endpoint can issue a supervised HTV405 idle-close
-counter probe when ordinary control is unsynchronized. The probe is Zone 1
-only, has no duration field, and sends only a close frame. It starts from the
-last authenticated command evidence, repeats silence once, advances only after
-a strict rejection, searches at most four adjacent candidates, and restores
-ordinary control only from a matching authenticated closed response. The
-gateway treats that response as confirmation of the pending probe action and
-retains its sequence for the next open. It is not
-exposed as an end-user HA control while physical acceptance remains open.
+When an independently confirmed-idle HTV405 loses command synchronization,
+Home Assistant exposes a configuration action that starts a bounded close-only
+search. It sends no duration and cannot construct an open. The deterministic
+candidate order is the successor of the last authenticated command, the
+observed reset candidates `1`, `2`, and `0`, then every remaining five-bit
+value exactly once. One silent candidate is repeated once before advancing;
+strict rejection advances immediately, and every logical command observes the
+15-second valve interval. The explicitly started search is durable across
+gateway and radio-node restarts.
+
+Ordinary control is restored only by a matching authenticated closed response,
+whose sequence remains current for the next open. Silence, successful node
+dispatch, and ordinary valve telemetry do not establish synchronization. An
+unexpected watering report aborts the search and leaves the counter
+unsynchronized. Home Assistant shows the current candidate, position, attempt,
+and terminal exhaustion state; a fresh strict idle report is required before a
+new exhausted search can start.
 
 An independently authenticated operator endpoint can begin a counter-recovery
 open, but it is deliberately fixed to Zone 1 for 60 seconds. A supervised
