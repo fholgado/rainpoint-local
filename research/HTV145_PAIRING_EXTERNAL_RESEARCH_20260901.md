@@ -406,7 +406,9 @@ The next operator session should be deliberately short and produce one binary
 answer before any new probe number is created:
 
 1. Put all custom nodes into verified receive-only mode and start bounded Mac
-   SDR recording before touching the valve.
+   SDR recording before touching the valve. Use
+   `tools/capture_rainpoint_continuous_iq.sh --duration-seconds 300 --gain 0.9`;
+   it does not stop the custom local gateway.
 2. Use the documented battery-assisted reset, arm stock app search first, and
    complete one fresh stock counter-0 enrollment. Record the white result and
    app Device Address.

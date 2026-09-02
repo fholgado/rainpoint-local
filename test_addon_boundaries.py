@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,27 @@ ROOT = Path(__file__).parent
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_mac_continuous_iq_capture_is_bounded_and_receive_only(self) -> None:
+        script = ROOT / "tools" / "capture_rainpoint_continuous_iq.sh"
+        result = subprocess.run(
+            [
+                "bash",
+                str(script),
+                "--duration-seconds",
+                "5",
+                "--dry-run",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("rtl_sdr", result.stdout)
+        self.assertIn("-n 10000000", result.stdout)
+        self.assertIn("-f 433700000", result.stdout)
+        self.assertIn("-s 2000000", result.stdout)
+        self.assertNotIn("ssh ", script.read_text())
+        self.assertNotIn("ha addons", script.read_text())
+
     def test_installable_addon_excludes_research_controls(self) -> None:
         config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
         run_script = (ROOT / "rainpointd_addon" / "run.sh").read_text()

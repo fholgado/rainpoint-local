@@ -168,6 +168,18 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd \
   --transport rtl433 --host 0.0.0.0
 ```
 
+Record bounded continuous IQ directly on a Mac for pairing and waveform
+research without stopping the Home Assistant gateway:
+
+```sh
+./tools/capture_rainpoint_continuous_iq.sh \
+  --duration-seconds 300 --gain 0.9
+```
+
+The script uses the local `rtl_sdr` binary, records the complete 2 MHz window
+centered at 433.7 MHz, verifies the expected byte count, and stores metadata
+and a SHA-256 alongside the ignored raw capture under `captures/continuous/`.
+
 Run the complete Python regression suite:
 
 ```sh

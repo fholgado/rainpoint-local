@@ -945,6 +945,11 @@ and publication/security gates are documented and enforced.
 - [ ] Make the receive-only SDR capture/decoder pipeline run as a managed Mac
       service and optionally forward normalized observations to the custom
       gateway; production HA operation must not depend on the SDR.
+  - 2026-09-02: `tools/capture_rainpoint_continuous_iq.sh` now provides a
+    bounded Mac-local continuous-IQ path with deterministic sample count,
+    capture metadata, and SHA-256 verification without stopping either HA or
+    the custom local gateway. Managed launch/restart and optional normalized
+    forwarding remain open.
 - [ ] Keep research tooling isolated in this repository while protocol APIs are
       changing; decide before public release whether its dependencies, raw data,
       and compile-gated transmit probes warrant a separate
