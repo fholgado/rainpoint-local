@@ -10,6 +10,7 @@ from typing import Any, Callable
 from .gateway import Gateway
 from .rf import FRAME_BYTES, SYNC
 from .ingest import FrameIngestor
+from .valve_protocol import decode_htv405_routine_ack
 
 
 class ESP32SerialTransport:
@@ -202,7 +203,9 @@ class ESP32SerialTransport:
                     )
                 except ValueError:
                     pass
-            self.gateway.update_node(authenticated_node_id, **diagnostics)
+            self.gateway.observe_node_health(
+                authenticated_node_id, **diagnostics
+            )
             return 0
         if message_type == "sensor_recovery_status":
             if authenticated_node_id is None:
@@ -329,6 +332,50 @@ class ESP32SerialTransport:
                 ):
                     diagnostics[target] = value
             self.gateway.update_node(authenticated_node_id, **diagnostics)
+            event_fields: dict[str, Any] = {
+                "ack_state": state,
+            }
+            for source in (
+                "authorized_valve_count",
+                "transmissions",
+                "failures",
+                "channel_center_hz",
+            ):
+                value = message.get(source)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    event_fields[source] = value
+            frame = message.get("frame")
+            if (
+                isinstance(frame, str)
+                and len(frame) == FRAME_BYTES * 2
+                and all(
+                    character in "0123456789abcdef" for character in frame
+                )
+            ):
+                decoded = decode_htv405_routine_ack(bytes.fromhex(frame))
+                event_fields["frame"] = frame
+                if decoded is not None:
+                    event_fields["telemetry_sequence"] = int(
+                        decoded["htv405_routine_ack_sequence"]
+                    )
+                    event_fields["telemetry_repeat"] = bool(
+                        decoded["htv405_routine_ack_repeat"]
+                    )
+                    event_fields["companion_endpoint"] = str(
+                        decoded["htv405_routine_ack_companion_endpoint"]
+                    )
+                    event_fields["controller_endpoint"] = str(
+                        decoded["htv405_routine_ack_controller_endpoint"]
+                    )
+            self.gateway.observe_htv405_routine_ack_status(
+                authenticated_node_id,
+                endpoint,
+                **event_fields,
+            )
             return 0
         if message_type == "valve_control_probe":
             # Research-only status is never an actuator request. Accept

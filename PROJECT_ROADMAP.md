@@ -685,12 +685,45 @@ same time without conflicting authority.
 - [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
       interval, authenticated counter recovery, and positively observed overdue
       anomaly handling without speculative opens or startup closes.
-- [ ] Physically validate bounded counter re-synchronization while the valve is
-      independently confirmed idle. Probe one candidate at a time with an
-      idempotent close/no-op transaction, accept only the matching authenticated
-      valve response, advance only on a strict rejection, repeat a silent
-      candidate at most once, and stop visibly after the bounded search budget.
-      Ordinary open commands must not become counter probes.
+- [ ] Reverse engineer HTV405 command-session reset and physically validate a
+      bounded counter re-synchronization path while the valve is independently
+      confirmed idle. A 2026-09-02 discriminator proved the previously
+      authenticated next sequence `5` became stale overnight while the same
+      controller remained authorized: a Zone 1 60-second open at `1` was
+      silent, then `2` received an authenticated watering response and advanced
+      the next sequence to `3`. This proves session drift, but does not yet
+      prove whether the valve reset directly to `1` or the silent first open
+      was received and advanced it. An idle close at authenticated candidate
+      `3` then received no response, so close/no-op is not a synchronization
+      oracle and silence must never advance the search. Restoring `3` from the
+      earlier authenticated sequence-`2` response then produced an
+      authenticated 1,200-second Zone 1 open at 2026-09-02 12:45 UTC and
+      advanced the session to `4`. This proves the silent close did not consume
+      a new open counter and validates evidence-based restoration when a known
+      authenticated predecessor is still available.
+  - [ ] Persist timestamped HTV405 routine-ACK outcomes and radio-node
+        connection/reboot checkpoints so an idle timeout can be separated from
+        owner-node reboot, ACK failure, and gateway connection churn.
+  - [ ] Establish one authenticated counter, hold the gateway and owner node
+        stable, and test that exact next counter after controlled 1-, 4-, 8-,
+        and 12-hour idle intervals using only bounded 60-second Zone 1 opens.
+  - [ ] Capture a stock-gateway open after a comparable long idle and determine
+        whether stock sends a missing synchronization transaction, scans
+        command candidates, or maintains the session with traffic absent from
+        the local implementation.
+  - [ ] If no non-actuating oracle exists, implement an explicitly bounded,
+        response-driven open search that stops on the first authenticated
+        response and never treats silence alone as counter advancement.
+
+The frozen overnight timeline, competing hypotheses, and controlled
+discriminator are retained in
+`research/fixtures/htv405_overnight_counter_drift_20260902.json`. The interval
+alone is not yet causal: after the last authenticated `4` -> `5` command, the
+owner node recorded at least one reboot, 33 connection events, 421 routine ACK
+transmissions, and three aggregate ACK failures before inspection. Those
+events make loss of ACK-owner continuity at least as plausible as a pure
+wall-clock expiry until the new timestamped diagnostics complete a stable
+soak.
 
 The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
 the disproven additive `42 02` duration payload received no positive response

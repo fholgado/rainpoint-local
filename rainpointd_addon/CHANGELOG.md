@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.30 / Integration 0.13.4 / Firmware 0.15.3
+
+- Persist every HTV405 routine-ACK transmission outcome with its exact frame,
+  telemetry sequence, cumulative success/failure counters, owning node, and
+  timestamp. Persist a node-health baseline after every connection and an
+  explicit reboot event whenever uptime regresses, so command-counter drift
+  can be correlated with ACK gaps and infrastructure lifecycle changes.
+
 ## 0.33.29 / Integration 0.13.4 / Firmware 0.15.3
 
 - Remove the unsupported HTV405 water-usage capability from the shared product

@@ -243,6 +243,17 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual(1, node["routine_ack_authorized_sensors"])
         self.assertEqual(12, node["routine_ack_transmissions"])
         self.assertEqual(3, node["sensor_recovery_transmissions"])
+        health_events = [
+            event
+            for event in self.gateway.events()
+            if event["event_type"] == "radio_node_health_baseline"
+        ]
+        self.assertEqual(1, len(health_events))
+        self.assertEqual(NODE_A, health_events[0]["node_id"])
+        self.assertEqual(60, health_events[0]["state"]["uptime_seconds"])
+        self.assertEqual(
+            1, health_events[0]["state"]["gateway_authentications"]
+        )
 
         stream.write(
             json.dumps(
@@ -269,6 +280,48 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("95a98024", node["routine_ack_endpoint"])
         self.assertEqual(4, node["routine_ack_assigned_channel"])
 
+        htv405_ack_frame = (
+            "79f4882f2894a9801339840280844101000100000000000000000000"
+            "00000000000000000c06"
+        )
+        stream.write(
+            json.dumps(
+                {
+                    "type": "htv405_routine_ack_status",
+                    "node_id": NODE_A,
+                    "state": "transmitted",
+                    "valve_endpoint": "94a98013",
+                    "channel_center_hz": 433518527,
+                    "authorized_valve_count": 1,
+                    "transmissions": 21,
+                    "failures": 2,
+                    "frame": htv405_ack_frame,
+                }
+            ).encode()
+            + b"\n"
+        )
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("htv405_routine_ack_transmissions") == 21:
+                break
+            time.sleep(0.01)
+        self.assertEqual("transmitted", node["htv405_routine_ack_state"])
+        ack_events = [
+            event
+            for event in self.gateway.events()
+            if event["event_type"] == "htv405_routine_ack_status"
+        ]
+        self.assertEqual(1, len(ack_events))
+        self.assertEqual(NODE_A, ack_events[0]["node_id"])
+        self.assertEqual(
+            "94a98013", ack_events[0]["state"]["valve_endpoint"]
+        )
+        self.assertEqual(4, ack_events[0]["state"]["telemetry_sequence"])
+        self.assertFalse(ack_events[0]["state"]["telemetry_repeat"])
+        self.assertEqual(21, ack_events[0]["state"]["transmissions"])
+        self.assertEqual(2, ack_events[0]["state"]["failures"])
+        self.assertEqual(htv405_ack_frame, ack_events[0]["state"]["frame"])
+
         stream.write(
             json.dumps(
                 {
@@ -292,6 +345,37 @@ class ESP32NetworkTest(unittest.TestCase):
         self.assertEqual("reply_transmitted", node["rf_recovery_state"])
         self.assertEqual("paired_message_1", node["rf_recovery_phase"])
         self.assertEqual("95a98024", node["sensor_recovery_endpoint"])
+
+        stream.write(
+            json.dumps(
+                {
+                    "type": "node_health",
+                    "node_id": NODE_A,
+                    "uptime_seconds": 2,
+                    "reset_reason_code": 3,
+                    "gateway_authentications": 2,
+                    "htv405_routine_ack_transmissions": 0,
+                    "htv405_routine_ack_failures": 0,
+                }
+            ).encode()
+            + b"\n"
+        )
+        for _ in range(50):
+            node = self.gateway.nodes()[0]
+            if node.get("uptime_seconds") == 2:
+                break
+            time.sleep(0.01)
+        reboot_events = [
+            event
+            for event in self.gateway.events()
+            if event["event_type"] == "radio_node_reboot_observed"
+        ]
+        self.assertEqual(1, len(reboot_events))
+        self.assertEqual(
+            60, reboot_events[0]["state"]["previous_uptime_seconds"]
+        )
+        self.assertEqual(2, reboot_events[0]["state"]["uptime_seconds"])
+        self.assertEqual(3, reboot_events[0]["state"]["reset_reason_code"])
 
         stream.write(
             json.dumps(

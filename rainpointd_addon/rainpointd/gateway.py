@@ -212,6 +212,7 @@ class Gateway:
         self._memory_reception_metrics: dict[str, dict[str, Any]] = {}
         self._recent_receiver_frames: dict[str, tuple[str, float]] = {}
         self._sensor_link_diagnostics: dict[str, dict[str, Any]] = {}
+        self._node_health_connection_checkpoints: dict[str, str | None] = {}
         self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
         self._store = (
             SQLiteEventStore(
@@ -374,6 +375,60 @@ class Gateway:
             node.update(normalized)
             self._adopt_active_valve_identity_from_node_locked(node_id, node)
 
+    def observe_node_health(self, node_id: str, **fields: Any) -> None:
+        """Update node health and retain connection/reboot discriminator events."""
+        observed = datetime.now(timezone.utc)
+        timestamp = observed.isoformat()
+        with self._event_condition:
+            node = self._nodes.setdefault(node_id, {"node_id": node_id})
+            previous_uptime = node.get("uptime_seconds")
+            connected_at = node.get("connected_at")
+            previous_connection = self._node_health_connection_checkpoints.get(
+                node_id
+            )
+            connection_baseline = previous_connection != connected_at
+            current_uptime = fields.get("uptime_seconds")
+            uptime_regressed = (
+                isinstance(previous_uptime, int)
+                and not isinstance(previous_uptime, bool)
+                and isinstance(current_uptime, int)
+                and not isinstance(current_uptime, bool)
+                and current_uptime < previous_uptime
+            )
+            node.update(copy.deepcopy(fields))
+            self._node_health_connection_checkpoints[node_id] = (
+                str(connected_at) if connected_at is not None else None
+            )
+            if not (connection_baseline or uptime_regressed):
+                return
+            state = copy.deepcopy(fields)
+            if connected_at is not None:
+                state["connected_at"] = connected_at
+            if uptime_regressed:
+                state["previous_uptime_seconds"] = previous_uptime
+            if isinstance(current_uptime, int) and not isinstance(
+                current_uptime, bool
+            ):
+                state["estimated_boot_at"] = (
+                    observed - timedelta(seconds=current_uptime)
+                ).isoformat()
+            event = {
+                "event_id": self._next_event_id,
+                "event_type": (
+                    "radio_node_reboot_observed"
+                    if uptime_regressed
+                    else "radio_node_health_baseline"
+                ),
+                "observed_at": timestamp,
+                "node_id": node_id,
+                "state": state,
+            }
+            self._next_event_id += 1
+            self._events.append(event)
+            if self._store:
+                self._store.append(event)
+            self._event_condition.notify_all()
+
     @staticmethod
     def _normalize_node_pairing_status_locked(
         node: dict[str, Any], fields: dict[str, Any]
@@ -501,7 +556,9 @@ class Gateway:
                 (
                     item_id
                     for item_id, device in self._devices.items()
-                    if str(device.get("state", {}).get("rf_endpoint", "")).lower()
+                    if str(
+                        device.get("state", {}).get("rf_endpoint", "")
+                    ).lower()
                     == endpoint
                 ),
                 None,
@@ -512,6 +569,39 @@ class Gateway:
                 "observed_at": timestamp,
                 "node_id": node_id,
                 "state": copy.deepcopy(diagnostics),
+            }
+            if device_id is not None:
+                event["device_id"] = device_id
+            self._next_event_id += 1
+            self._events.append(event)
+            if self._store:
+                self._store.append(event)
+            self._event_condition.notify_all()
+
+    def observe_htv405_routine_ack_status(
+        self, node_id: str, endpoint: str, **fields: Any
+    ) -> None:
+        """Retain one timestamped HTV405 routine-ACK transmission outcome."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        with self._event_condition:
+            device_id = next(
+                (
+                    item_id
+                    for item_id, device in self._devices.items()
+                    if str(device.get("state", {}).get("rf_endpoint", "")).lower()
+                    == endpoint
+                ),
+                None,
+            )
+            event = {
+                "event_id": self._next_event_id,
+                "event_type": "htv405_routine_ack_status",
+                "observed_at": timestamp,
+                "node_id": node_id,
+                "state": {
+                    "valve_endpoint": endpoint,
+                    **copy.deepcopy(fields),
+                },
             }
             if device_id is not None:
                 event["device_id"] = device_id

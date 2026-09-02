@@ -1,0 +1,122 @@
+{
+  "captured_at": "2026-09-02",
+  "model": "HTV405FRF",
+  "association": {
+    "controller_endpoint": "ee86de80",
+    "companion_endpoint": "6e86de80",
+    "valve_endpoint": "94a98013",
+    "control_node_id": "rp-f4e5be3b015c"
+  },
+  "last_known_good_before_overnight": {
+    "observed_at": "2026-09-01T12:34:04.240877+00:00",
+    "accepted_sequence": 4,
+    "authenticated_next_sequence": 5,
+    "action": "open",
+    "zone": 1,
+    "duration_seconds": 60,
+    "automatic_idle_observed_at": "2026-09-01T12:35:06.222532+00:00"
+  },
+  "intervening_infrastructure_evidence": {
+    "owner_node_connected_event_count": 33,
+    "first_owner_node_connected_at": "2026-09-01T12:58:00+00:00",
+    "last_owner_node_connected_at": "2026-09-02T01:02:41+00:00",
+    "owner_node_boot_estimate": "2026-09-01T15:01:58+00:00",
+    "owner_node_reset_reason_code": 3,
+    "owner_node_htv405_routine_ack_transmissions_at_inspection": 421,
+    "owner_node_htv405_routine_ack_failures_at_inspection": 3,
+    "interpretation": "Elapsed idle time and ACK-owner/node continuity loss are confounded. Most connection events were gateway or WebSocket churn, while the uptime regression identifies at least one physical node reboot. Existing aggregate ACK counters do not retain the timestamps of the three failures."
+  },
+  "morning_failures": [
+    {
+      "observed_at": "2026-09-02T10:30:03+00:00",
+      "result": "gateway_command_response_timeout_counter_unsynchronized",
+      "inferred_sequence": 5
+    },
+    {
+      "observed_at": "2026-09-02T10:30:35+00:00",
+      "result": "gateway_command_response_timeout_counter_unsynchronized",
+      "inferred_sequence": 5,
+      "note": "bounded same-counter retry"
+    },
+    {
+      "observed_at": "2026-09-02T11:00:08+00:00",
+      "result": "gateway_command_response_timeout_counter_unsynchronized",
+      "inferred_sequence": 6,
+      "note": "bounded recovery candidate"
+    }
+  ],
+  "controlled_open_sweep": [
+    {
+      "observed_at": "2026-09-02T11:51:40+00:00",
+      "sequence": 1,
+      "action": "open",
+      "zone": 1,
+      "duration_seconds": 60,
+      "result": "gateway_command_response_timeout_counter_unsynchronized",
+      "watering_observed": false,
+      "interpretation": "Silence does not distinguish rejection from a received command whose response or actuation was missed."
+    },
+    {
+      "observed_at": "2026-09-02T11:58:33+00:00",
+      "sequence": 2,
+      "action": "open",
+      "zone": 1,
+      "duration_seconds": 60,
+      "result": "authenticated_response_confirmed",
+      "watering_observed": true,
+      "automatic_idle_observed": true,
+      "authenticated_next_sequence": 3
+    }
+  ],
+  "idle_close_discriminator": {
+    "observed_at": "2026-09-02T12:11:44+00:00",
+    "sequence": 3,
+    "action": "close",
+    "zone": 1,
+    "result": "idle_close_probe_timeout_retry",
+    "watering_observed": false,
+    "retry_sent": false,
+    "conclusion": "An idle close is not a reliable non-actuating counter oracle. Its silence cannot establish whether the candidate is correct and must not advance the counter."
+  },
+  "post_discriminator_recovery": {
+    "synchronized_at": "2026-09-02T12:45:12.573272+00:00",
+    "evidence": "The authenticated sequence-2 open established next sequence 3; an accepted close does not advance the command sequence, so the silent sequence-3 close could not make 3 stale whether it was received or ignored.",
+    "open_confirmed_at": "2026-09-02T12:45:23.735303+00:00",
+    "sequence": 3,
+    "action": "open",
+    "zone": 1,
+    "duration_seconds": 1200,
+    "result": "authenticated_response_confirmed",
+    "authenticated_next_sequence": 4,
+    "expected_automatic_idle_at": "2026-09-02T13:05:22.947035+00:00"
+  },
+  "proven_conclusions": [
+    "The previously authenticated next sequence 5 was no longer usable after the overnight interval.",
+    "The unchanged custom controller remained authorized because sequence 2 received an authenticated watering response.",
+    "The command session changed without requiring a full valve association change.",
+    "Routine telemetry acknowledgements use a separate telemetry sequence and do not directly disclose the watering-command sequence.",
+    "Idle close cannot safely resynchronize the command counter from silence.",
+    "Restoring sequence 3 from the earlier authenticated sequence-2 response produced an authenticated 20-minute open and advanced the session to sequence 4."
+  ],
+  "not_yet_proven": [
+    "Whether the valve reset directly to sequence 1.",
+    "Whether the silent sequence-1 open was received and advanced the valve to sequence 2.",
+    "Whether the reset is caused by elapsed idle time, an owner-node reboot, an ACK gap, gateway reconnection churn, or a missing periodic synchronization exchange."
+  ],
+  "next_discriminator": {
+    "precondition": "Restore one authenticated next sequence with a bounded 60-second Zone 1 open, then keep the owning radio node and gateway process stable.",
+    "instrumentation": [
+      "Persist every HTV405 routine-ACK outcome with timestamp, endpoint, telemetry sequence, frame, and cumulative success/failure counts.",
+      "Persist radio-node connection baselines and uptime regressions with reset reason and ACK counters.",
+      "Correlate the first stale command with the last successful ACK, any ACK failure, and any owner-node lifecycle event."
+    ],
+    "test_intervals_hours": [
+      1,
+      4,
+      8,
+      12
+    ],
+    "command_probe": "At each interval send only the currently authenticated next counter as a bounded 60-second Zone 1 open. If it fails, stop and use an explicitly bounded candidate search rather than treating silence as advancement.",
+    "stock_gateway_followup": "Capture a stock-gateway open after a comparable long idle to determine whether it sends a synchronization transaction, scans candidates, or relies on a keepalive absent from the local implementation."
+  }
+}
