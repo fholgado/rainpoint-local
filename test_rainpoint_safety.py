@@ -1096,7 +1096,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             started_at="2026-09-02T20:00:20+00:00",
         )
 
-        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual("waiting_for_valve_report", pending["state"])
         self.assertEqual(900, self.sent[-1][1]["duration_seconds"])
 
     def test_nine_minute_duration_can_enter_physical_validation(self) -> None:
@@ -1107,7 +1107,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             started_at="2026-09-02T20:00:20+00:00",
         )
 
-        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual("waiting_for_valve_report", pending["state"])
         self.assertEqual(540, self.sent[-1][1]["duration_seconds"])
 
     def test_sixty_minute_duration_can_enter_physical_validation(self) -> None:
@@ -1118,7 +1118,7 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
             started_at="2026-09-02T20:01:20+00:00",
         )
 
-        self.assertEqual("synchronizing", pending["state"])
+        self.assertEqual("waiting_for_valve_report", pending["state"])
         self.assertEqual(3_600, self.sent[-1][1]["duration_seconds"])
 
     def test_bounded_timeout_recovers_two_smallest_counter_candidates(self) -> None:

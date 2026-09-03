@@ -13,7 +13,7 @@ if research_value not in {"0", "1"}:
     raise ValueError("RAINPOINT_RESEARCH_BENCH must be 0 or 1")
 
 supervised_value = os.environ.get(
-    "RAINPOINT_SUPERVISED_HTV405_CONTROL", "0"
+    "RAINPOINT_SUPERVISED_HTV405_CONTROL", "1"
 )
 if supervised_value not in {"0", "1"}:
     raise ValueError("RAINPOINT_SUPERVISED_HTV405_CONTROL must be 0 or 1")
@@ -72,8 +72,8 @@ if htv145_factory_counter and not (
         "RAINPOINT_RESEARCH_BENCH=1 and "
         "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
     )
-standard_version = "0.15.5"
-supervised_version = "0.15.5"
+standard_version = "0.15.7"
+supervised_version = "0.15.7"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
     "0.15.4-htv145-pairing-counter2-candidate.4"

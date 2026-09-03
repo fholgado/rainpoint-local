@@ -21,6 +21,7 @@ HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
 HTV405_ACTIVE_TRANSACTION_STATES = frozenset(
     {
+        "waiting_for_valve_report",
         "synchronizing",
         "waiting_for_command_interval",
         "waiting_for_open_confirmation",
@@ -1573,8 +1574,7 @@ class SQLiteEventStore:
                 control_pending_sequence = ?,
                 control_pending_zone = 1,
                 control_pending_duration_seconds = NULL,
-                control_pending_started_at = ?,
-                control_last_command_started_at = ?,
+                control_pending_started_at = NULL,
                 control_recovery_sequence = NULL,
                 control_recovery_attempt = 0,
                 control_recovery_not_before = NULL,
@@ -1582,14 +1582,15 @@ class SQLiteEventStore:
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_transaction_id = ?,
-                control_transaction_state = 'synchronizing',
+                control_transaction_state = 'waiting_for_valve_report',
                 control_transaction_zone = ?,
                 control_transaction_duration_seconds = ?,
                 control_transaction_started_at = ?,
                 control_transaction_not_before = NULL,
                 control_transaction_error = NULL,
                 control_transaction_updated_at = ?,
-                control_last_result = 'synchronized_open_synchronizing',
+                control_last_result =
+                    'synchronized_open_waiting_for_valve_report',
                 updated_at = ?
             WHERE valve_endpoint = ? AND control_node_id = ?
               AND control_pending_command_id IS NULL
@@ -1598,8 +1599,6 @@ class SQLiteEventStore:
             (
                 command_id,
                 HTV405_IDLE_CLOSE_SYNC_ANCHOR,
-                started_at,
-                started_at,
                 transaction_id,
                 zone,
                 duration_seconds,
@@ -1612,6 +1611,78 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise RuntimeError("HTV405 watering transaction reservation raced")
+        self._connection.commit()
+        return next(
+            item
+            for item in self.valve_registry()
+            if item["valve_endpoint"] == valve_endpoint
+        )
+
+    def mark_htv405_command_transmitted(
+        self,
+        *,
+        valve_endpoint: str,
+        node_id: str,
+        command_id: str,
+        sequence: int,
+        zone: int,
+        observed_at: str,
+    ) -> dict[str, Any]:
+        """Start the response deadline when a queued RF command is sent."""
+        try:
+            datetime.fromisoformat(observed_at)
+        except ValueError as error:
+            raise ValueError("invalid HTV405 transmit timestamp") from error
+        row = self._connection.execute(
+            "SELECT * FROM valve_registry WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(valve_endpoint)
+        state = dict(row)
+        if any(
+            (
+                state.get("control_node_id") != node_id,
+                state.get("control_pending_command_id") != command_id,
+                state.get("control_pending_sequence") != sequence,
+                state.get("control_pending_zone") != zone,
+            )
+        ):
+            raise ValueError("HTV405 transmission does not match reservation")
+        if isinstance(state.get("control_pending_started_at"), str):
+            return state
+        transaction_state = state.get("control_transaction_state")
+        next_transaction_state = (
+            "synchronizing"
+            if transaction_state == "waiting_for_valve_report"
+            else transaction_state
+        )
+        cursor = self._connection.execute(
+            """
+            UPDATE valve_registry SET
+                control_pending_started_at = ?,
+                control_last_command_started_at = ?,
+                control_transaction_state = ?,
+                control_transaction_updated_at = ?,
+                control_last_result = 'synchronized_open_anchor_transmitted',
+                updated_at = ?
+            WHERE valve_endpoint = ? AND control_node_id = ?
+              AND control_pending_command_id = ?
+              AND control_pending_started_at IS NULL
+            """,
+            (
+                observed_at,
+                observed_at,
+                next_transaction_state,
+                observed_at,
+                observed_at,
+                valve_endpoint,
+                node_id,
+                command_id,
+            ),
+        )
+        if not cursor.rowcount:
+            raise RuntimeError("HTV405 transmission reservation raced")
         self._connection.commit()
         return next(
             item

@@ -2578,6 +2578,8 @@ void handleNetworkCommand() {
         valveControlProbe.commandId = commandId;
         long zone = 0;
         long expectedSequence = -1;
+        bool waitForReport = false;
+        jsonBoolField(command, "wait_for_report", waitForReport);
         if (!jsonLongField(command, "zone", zone) ||
             zone < 1 || zone > 4 ||
             !jsonLongField(
@@ -2589,7 +2591,9 @@ void handleNetworkCommand() {
             );
             return;
         }
-        transmitValveProbeClose(static_cast<std::uint8_t>(zone), true);
+        transmitValveProbeClose(
+            static_cast<std::uint8_t>(zone), !waitForReport
+        );
         return;
     }
     if (type == "valve_control_status") {

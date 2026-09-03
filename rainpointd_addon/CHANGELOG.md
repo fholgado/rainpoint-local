@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.33.43 / Integration 0.13.10 / Firmware 0.15.7
+
+- Queue the non-actuating HTV405 close-`0` synchronization anchor until the
+  valve's next radio check-in instead of transmitting into an arbitrary sleep
+  window. Start the bounded response deadline and 15-second command-spacing
+  guard only when the owner node confirms that it actually transmitted.
+- Expose the new waiting phase in Home Assistant and keep cancellation
+  available until the queued anchor has authenticated, while continuing to
+  reject duplicate watering requests.
+- Compile the authenticated HTV405 control capability into the standard
+  unified firmware profile; the add-on's disabled-by-default runtime option
+  remains the actuation gate.
+
 ## 0.33.42 / Integration 0.13.9 / Firmware 0.15.5
 
 - Accept the displaced duration bit on HTV405 command-response and routine-link

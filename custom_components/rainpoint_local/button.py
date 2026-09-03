@@ -223,7 +223,11 @@ class RainPointHtv405CancelWateringRequestButton(
         return bool(
             super().available
             and self.decoded_state.get("rf_control_transaction_state")
-            in {"synchronizing", "waiting_for_command_interval"}
+            in {
+                "waiting_for_valve_report",
+                "synchronizing",
+                "waiting_for_command_interval",
+            }
         )
 
     @property

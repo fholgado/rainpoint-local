@@ -116,19 +116,22 @@ pio device monitor --baud 115200
 and checks that obsolete local RF bench commands are absent while pairing,
 ACK, and OTA capabilities are present.
 
-The default build is production-safe and compiles out all valve-control
-transmitters and research commands. For an explicitly authorized supervised
-HTV405 node, build the same environment with only the bounded control profile
-enabled:
+The default unified build includes the authenticated, association-specific,
+bounded HTV405 control profile so a normal OTA release cannot silently remove
+valve control from an enrolled node. The add-on still rejects every HTV405
+control request unless its disabled-by-default `supervised_htv405_control`
+runtime option is explicitly enabled. Research commands remain compiled out.
+
+To make the enabled profile and release version explicit in a release build:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.5 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.7 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-This supervised image retains the authenticated, association-specific HTV405
-control boundary without compiling legacy serial RF probes. Keep it on the
+This unified image retains the authenticated HTV405 control boundary without
+compiling legacy serial RF probes. Keep it on the
 experimental OTA channel until the qualification gates in
 `../../PROJECT_ROADMAP.md` are complete.
 
@@ -244,7 +247,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.5 --environment rainpoint_bridge
+  --version 0.15.7 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

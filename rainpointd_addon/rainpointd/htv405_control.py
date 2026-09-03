@@ -269,6 +269,11 @@ class Htv405ControlCoordinator:
                 zone=zone,
                 expected_sequence=sequence,
                 **(
+                    {"wait_for_report": True}
+                    if action == "synchronized_open"
+                    else {}
+                ),
+                **(
                     {"duration_seconds": duration_seconds}
                     if duration_seconds is not None
                     else {}
@@ -301,7 +306,7 @@ class Htv405ControlCoordinator:
             "duration_seconds": duration_seconds,
             "expected_idle_at": expected_idle_at,
             "state": (
-                "synchronizing"
+                "waiting_for_valve_report"
                 if action == "synchronized_open"
                 else "pending_authenticated_response"
             ),
@@ -310,7 +315,7 @@ class Htv405ControlCoordinator:
             result.update(
                 {
                     "transaction_id": transaction_id,
-                    "transaction_state": "synchronizing",
+                    "transaction_state": "waiting_for_valve_report",
                 }
             )
         return result

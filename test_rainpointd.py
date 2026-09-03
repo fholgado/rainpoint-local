@@ -3069,6 +3069,28 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         with urlopen(request, timeout=2) as response:
             return json.load(response)
 
+    def mark_anchor_transmitted(self, observed_at: str) -> datetime:
+        """Model the owner node sending a queued anchor at valve wake-up."""
+        registration = self.server.gateway._store.valve_registry()[0]
+        transmitted = self.server.gateway.observe_valve_control_probe(
+            self.NODE_ID,
+            {
+                "type": "valve_control_probe",
+                "state": "gateway_close_zone_1_sent",
+                "command_id": registration["control_pending_command_id"],
+                "controller_endpoint": "b9840280",
+                "valve_endpoint": self.VALVE_ENDPOINT,
+                "companion_endpoint": "39840280",
+                "selector": 0x05,
+                "center_hz": 433_518_527,
+                "transmitted_sequence": 0,
+                "transmitted_zone": 1,
+            },
+            observed_at=observed_at,
+        )
+        self.assertIsNotNone(transmitted)
+        return datetime.fromisoformat(observed_at)
+
     def test_authenticated_registry_forget_removes_valve_link(self) -> None:
         renamed = self.post_json(
             f"/api/v1/registry/{self.DEVICE_ID}/rename",
@@ -3112,7 +3134,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             f"/api/v1/devices/{self.DEVICE_ID}/valve/open",
             {"zone": 2, "duration_seconds": 60},
         )["control"]
-        self.assertEqual("synchronizing", result["state"])
+        self.assertEqual("waiting_for_valve_report", result["state"])
         self.assertEqual(
             [
                 "valve_control_configure",
@@ -3159,7 +3181,9 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             {"zone": 2, "duration_seconds": 60},
         )["control"]
 
-        self.assertEqual("synchronizing", result["transaction_state"])
+        self.assertEqual(
+            "waiting_for_valve_report", result["transaction_state"]
+        )
         self.assertEqual(2, result["zone"])
         self.assertEqual(60, result["duration_seconds"])
         self.assertEqual(
@@ -3171,23 +3195,44 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             [command["type"] for _node, command in self.commands],
         )
         self.assertEqual(0, self.commands[-1][1]["expected_sequence"])
+        self.assertTrue(self.commands[-1][1]["wait_for_report"])
         registration = self.server.gateway._store.valve_registry()[0]
         self.assertEqual(
             "synchronized_open_anchor",
             registration["control_pending_action"],
         )
         self.assertEqual(
-            "synchronizing",
+            "waiting_for_valve_report",
             registration["control_transaction_state"],
         )
-        started = datetime.fromisoformat(
-            registration["control_pending_started_at"]
+        self.assertIsNone(registration["control_pending_started_at"])
+        self.assertEqual(
+            0,
+            self.server.gateway._expire_stale_htv405_commands_locked(
+                now=datetime.fromisoformat("2026-08-24T20:01:00+00:00")
+            ),
+        )
+
+        transmitted_at = self.mark_anchor_transmitted(
+            "2026-08-24T20:01:10+00:00"
+        )
+        transmitted = self.server.gateway._store.valve_registry()[0]
+        self.assertIsNotNone(transmitted)
+        assert transmitted is not None
+        self.assertEqual(
+            "synchronizing", transmitted["control_transaction_state"]
+        )
+        self.assertEqual(
+            transmitted_at.isoformat(),
+            transmitted["control_pending_started_at"],
         )
 
         accepted = self.server.gateway.observe_valve_control_air_response(
             self.SECOND_NODE_ID,
             self.HTV405_CLOSE_RESPONSE_SEQUENCE_0,
-            observed_at=(started + timedelta(milliseconds=900)).isoformat(),
+            observed_at=(
+                transmitted_at + timedelta(milliseconds=900)
+            ).isoformat(),
         )
 
         self.assertIsNotNone(accepted)
@@ -3197,7 +3242,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             accepted["control_transaction_state"],
         )
         self.assertEqual(
-            (started + timedelta(seconds=15)).isoformat(),
+            (transmitted_at + timedelta(seconds=15)).isoformat(),
             accepted["control_transaction_not_before"],
         )
         self.assertNotIn(
@@ -3208,13 +3253,14 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual(
             0,
             self.server.gateway.advance_htv405_synchronized_opens(
-                now=started + timedelta(seconds=14, milliseconds=999)
+                now=transmitted_at
+                + timedelta(seconds=14, milliseconds=999)
             ),
         )
         self.assertEqual(
             1,
             self.server.gateway.advance_htv405_synchronized_opens(
-                now=started + timedelta(seconds=15)
+                now=transmitted_at + timedelta(seconds=15)
             ),
         )
         self.assertEqual("valve_control_open", self.commands[-1][1]["type"])
@@ -3375,8 +3421,8 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             {"zone": 4, "duration_seconds": 120},
         )
         registration = self.server.gateway._store.valve_registry()[0]
-        started = datetime.fromisoformat(
-            registration["control_pending_started_at"]
+        started = self.mark_anchor_transmitted(
+            "2026-08-24T20:01:10+00:00"
         )
         self.assertIsNotNone(
             self.server.gateway.observe_valve_control_air_response(
@@ -3417,8 +3463,8 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             {"zone": 1, "duration_seconds": 60},
         )
         registration = self.server.gateway._store.valve_registry()[0]
-        started = datetime.fromisoformat(
-            registration["control_pending_started_at"]
+        started = self.mark_anchor_transmitted(
+            "2026-08-24T20:01:10+00:00"
         )
 
         self.server.gateway.devices(
@@ -3481,8 +3527,8 @@ class ValveControlHTTPAPITest(unittest.TestCase):
             {"zone": 4, "duration_seconds": 120},
         )
         registration = self.server.gateway._store.valve_registry()[0]
-        started = datetime.fromisoformat(
-            registration["control_pending_started_at"]
+        started = self.mark_anchor_transmitted(
+            "2026-08-24T20:01:10+00:00"
         )
 
         accepted = self.server.gateway.observe_valve_control_probe(

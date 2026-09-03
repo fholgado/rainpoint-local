@@ -123,6 +123,8 @@ def _htv405_transaction_status(
     )
     if state == "synchronizing":
         return "Synchronizing valve control"
+    if state == "waiting_for_valve_report":
+        return "Waiting for the valve's next radio check-in"
     if state == "waiting_for_command_interval":
         return f"Waiting to start {zone_name}"
     if state == "waiting_for_open_confirmation":
@@ -1142,6 +1144,7 @@ class Gateway:
             if registration is None:
                 raise KeyError(device_id)
             if registration.get("control_transaction_state") not in {
+                "waiting_for_valve_report",
                 "synchronizing",
                 "waiting_for_command_interval",
             }:
@@ -4597,6 +4600,44 @@ class Gateway:
         }
         if self._store is None:
             return None
+        if status in {
+            "gateway_close_zone_1_sent",
+            "gateway_close_zone_candidate_sent",
+        }:
+            valve_endpoint = report.get("valve_endpoint")
+            command_id = report.get("command_id")
+            transmitted_sequence = report.get("transmitted_sequence")
+            transmitted_zone = report.get("transmitted_zone")
+            if (
+                not isinstance(valve_endpoint, str)
+                or not isinstance(command_id, str)
+                or not isinstance(transmitted_sequence, int)
+                or isinstance(transmitted_sequence, bool)
+                or not isinstance(transmitted_zone, int)
+                or isinstance(transmitted_zone, bool)
+            ):
+                return None
+            timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+            with self._lock:
+                try:
+                    transmitted = self._store.mark_htv405_command_transmitted(
+                        valve_endpoint=valve_endpoint.lower(),
+                        node_id=node_id,
+                        command_id=command_id,
+                        sequence=transmitted_sequence,
+                        zone=transmitted_zone,
+                        observed_at=timestamp,
+                    )
+                except (KeyError, RuntimeError, ValueError):
+                    return None
+                self._refresh_registry_catalog()
+                self._append_valve_control_event_locked(
+                    registration=transmitted,
+                    event_type="valve_control_anchor_transmitted",
+                    observed_at=timestamp,
+                    action=transmitted.get("control_pending_action"),
+                )
+                return transmitted
         if status in failure_states:
             valve_endpoint = report.get("valve_endpoint")
             transmitted_sequence = report.get("transmitted_sequence")

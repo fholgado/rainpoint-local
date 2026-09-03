@@ -772,6 +772,20 @@ same time without conflicting authority.
       active work. Gateway 0.33.39 additionally labels the final idle result
       **Watering completed** instead of retaining the earlier start-confirmed
       wording.
+- [x] Make synchronization deterministic across HTV405 sleep windows. Two
+      failed 2026-09-03 dashboard requests transmitted their close-`0` anchors
+      12--13 minutes after the last valve report and received no response. A
+      manual close-`0` sent at the start of the valve's next report burst
+      authenticated immediately, followed by a fully confirmed 15-minute run.
+      Gateway 0.33.43 and firmware 0.15.7 therefore queue the non-actuating
+      anchor at the owner node until the next link report. The response timeout
+      and 15-second hardware interval now start from actual RF transmission,
+      and HA 0.13.10 exposes a cancellable **Waiting for the valve's next radio
+      check-in** phase instead of reporting a false timeout while the valve is
+      asleep. The installed scheduled and manual watering scripts submit one
+      transaction, detect request rejection within five seconds, and otherwise
+      allow a bounded 17-minute wake/check-in window before alerting; they no
+      longer stack command retries on top of the integration transaction.
 - [x] Make the installed Garden Run Now control follow that transaction rather
       than layering its own retry loop on top. Integration `0.13.7` exposes a
       start-availability binary sensor plus the transaction ID; the dashboard

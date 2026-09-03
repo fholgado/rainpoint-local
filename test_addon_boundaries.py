@@ -139,16 +139,16 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
-            '"RAINPOINT_SUPERVISED_HTV405_CONTROL", "0"',
+            '"RAINPOINT_SUPERVISED_HTV405_CONTROL", "1"',
             build_profile,
         )
         self.assertIn(
             'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
             build_profile,
         )
-        self.assertIn('standard_version = "0.15.5"', build_profile)
+        self.assertIn('standard_version = "0.15.7"', build_profile)
         self.assertIn(
-            'supervised_version = "0.15.5"',
+            'supervised_version = "0.15.7"',
             build_profile,
         )
         self.assertIn(
