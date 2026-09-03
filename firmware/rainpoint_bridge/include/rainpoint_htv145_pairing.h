@@ -6,6 +6,10 @@
 
 #include "rainpoint_pairing.h"
 
+#ifndef RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE
+#define RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE 0
+#endif
+
 namespace rainpoint {
 namespace htv145 {
 
@@ -14,6 +18,12 @@ namespace htv145 {
 // pairing profile, state machine, calibration, or reply builder.
 constexpr const char* kProfileId = "htv145_auto_candidate_v1";
 constexpr std::size_t kPairingStepCount = 6;
+constexpr std::uint8_t kTargetFactoryCounter =
+    RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE;
+static_assert(
+    kTargetFactoryCounter == 0 || kTargetFactoryCounter == 2,
+    "HTV145 research pairing supports only captured counter-0 or counter-2 branches"
+);
 // The generic pairing bound remains intentionally narrower for validated
 // sensors and HTV405. HTV145 uses a separately gated research image and its
 // capture-derived node calibration legitimately exceeds that shared bound.
@@ -28,27 +38,52 @@ static_assert(
     "HTV145 pairing calibration must remain inside its research-only bound"
 );
 constexpr std::uint32_t kInitialChannelCenterHz = 433'501'466;
-constexpr std::uint32_t kRoutineChannelCenterHz = 434'306'378;
+// Counter-2 stage 0 is now physically proven and keeps the original initial
+// carrier. Direct balanced-wake measurement of the first two accepted local
+// assignments showed that the following stage-1 response landed 30.326 kHz
+// above the accepted stock response. Correct only the counter-2 routine leg;
+// the independent counter-0 research profile remains unchanged.
+constexpr std::uint32_t kRoutineChannelCenterHz =
+    kTargetFactoryCounter == 2 ? 434'276'052 : 434'306'378;
 constexpr std::uint8_t kInitialDeviationRegister = 0x45;
 constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 // Retained only for the gated SDR calibration command. The live counter-0
 // selector-6 profile does not transmit this older selector-5 prelude.
 constexpr std::uint16_t kCounter0AssignmentPreludeSymbols = 256;
 constexpr std::uint8_t kCounter0AssignmentPreludeDeviationRegister = 0x42;
-constexpr std::uint16_t kConfigurationWakeSymbols = 2'400;
+// Stock emits a 2,400-symbol alternating wake. The candidate-.3 ESP32/CC1101
+// burst was 3.242 ms (about 64 symbols) shorter on-air, and only 2,368 of the
+// expected 2,399 wake transitions were recoverable. Add only that expendable
+// lead compensation on the isolated counter-2 research branch so the on-air
+// wake remains the stock 2,400 symbols. Counter 0 and every production path
+// retain their original 2,400-symbol request.
+constexpr std::uint16_t kConfigurationWakeSymbols =
+    kTargetFactoryCounter == 2 ? 2'464 : 2'400;
 constexpr std::uint32_t kConfigurationReplyDeadlineMs = 4'000;
-constexpr std::uint32_t kAssignmentReplyStartDelayUs = 52'150;
+constexpr std::uint32_t kAssignmentReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 49'650 : 52'150;
 // Three independent accepted stock frames retain a low FSK tone until about
 // 160 us after the normalized frame. The existing CC1101 path naturally stays
 // on air for about 45 us after driving GDO0 low, so the isolated candidate adds
 // only the measured 115 us difference. This constant is inert unless the
 // separate research build flag is enabled.
 constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
-constexpr std::uint32_t kStep1ReplyStartDelayUs = 70'700;
-constexpr std::uint32_t kConfigurationReplyStartDelayUs = 3'054'850;
-constexpr std::uint32_t kStep3ReplyStartDelayUs = 35'750;
-constexpr std::uint32_t kStep4ReplyStartDelayUs = 52'000;
-constexpr std::uint32_t kStep5ReplyStartDelayUs = 47'200;
+constexpr std::uint32_t kStep1ReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 68'700 : 70'700;
+// Stock evidence measures the delayed configuration from the normalized
+// 320-symbol reply boundary, while this transmission carries a 2,400-symbol
+// wake. The first accepted local counter-2 exchange proved that scheduling the
+// waveform at 2,952,550 us made the decoded configuration boundary 101,500 us
+// late. Compensate only the counter-2 research branch; its now-proven stage-0
+// assignment remains byte-for-byte unchanged.
+constexpr std::uint32_t kConfigurationReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 2'851'050 : 3'054'850;
+constexpr std::uint32_t kStep3ReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 53'300 : 35'750;
+constexpr std::uint32_t kStep4ReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 52'550 : 52'000;
+constexpr std::uint32_t kStep5ReplyStartDelayUs =
+    kTargetFactoryCounter == 2 ? 47'500 : 47'200;
 
 constexpr std::uint32_t replyStartDelayUs(std::size_t stepIndex) {
     return stepIndex == 0 ? kAssignmentReplyStartDelayUs
@@ -80,13 +115,26 @@ struct PairingProfile {
 // One coherent counter-0 / selector-6 transcript from the controlled
 // 2026-09-01 stock-gateway capture. Do not synthesize rows from HTV405 or from
 // the older selector-5/later-sweep experiments.
-constexpr std::array<PairingStep, kPairingStepCount> kPairingTemplate = {{
+constexpr std::array<PairingStep, kPairingStepCount> kCounter0PairingTemplate = {{
     {{{0x80, 0x80, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x80, 0xc0, 0x85, 0x85, 0x00, 0x86, 0x70, 0x00, 0xf8, 0x65, 0x21, 0x0d, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kInitialChannelCenterHz, kInitialDeviationRegister, true},
     {{{0x81, 0x01, 0x07, 0x86, 0x25, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0x41, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
     {{{0x81, 0x82, 0x81, 0x06, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0x03, 0x01, 0x86, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+}};
+
+// Complete counter-2 / selector-6 transcript from the controlled
+// button-first stock enrollment. It is a coherent branch: counters, reply
+// residues, and response timing are retained together rather than mixed with
+// the counter-0 profile.
+constexpr std::array<PairingStep, kPairingStepCount> kCounter2PairingTemplate = {{
+    {{{0x82, 0x00, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x40, 0x85, 0x85, 0x00, 0x86, 0x70, 0x00, 0x98, 0xe1, 0xa1, 0x0d, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kInitialChannelCenterHz, kInitialDeviationRegister, true},
+    {{{0x82, 0x81, 0x07, 0x86, 0x25, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xc1, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
+    {{{0x83, 0x02, 0x81, 0x06, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x83, 0x42, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x83, 0x83, 0x01, 0x86, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x83, 0xc3, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
+    {{{0x84, 0x2c, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x84, 0x6c, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
 }};
 
 inline bool buildProfile(
@@ -105,7 +153,9 @@ inline bool buildProfile(
     profile.pairedEndpoint[0] |= 0x80U;
     profile.controllerEndpoint = controllerEndpoint;
     profile.companionEndpoint = companionEndpoint;
-    profile.steps = kPairingTemplate;
+    profile.steps = kTargetFactoryCounter == 2
+        ? kCounter2PairingTemplate
+        : kCounter0PairingTemplate;
     return true;
 }
 
@@ -172,16 +222,29 @@ inline bool buildReply(
             (static_cast<std::uint16_t>(localClock.month) << 5) |
             localClock.day
         );
-        // The accepted counter-0 branch forces only bit 7 of the time-low
-        // byte. The remaining three bytes are ordinary FAT/DOS clock data.
-        // Treating every bit 7 as a template marker wrapped 16:xx--23:xx to
-        // 00:xx--07:xx and produced a semantically invalid assignment even
-        // after the RF waveform matched stock.
-        frame[21] = static_cast<std::uint8_t>(
-            (packedTime & 0x7fU) | (frame[21] & 0x80U)
+        // Counter 0 carries its branch marker in time-low bit 7; counter 2
+        // moves that marker to time-high bit 7. Preserve the other byte as
+        // ordinary FAT/DOS time so the live hour and minute remain intact.
+        const std::uint8_t packedTimeLow = static_cast<std::uint8_t>(
+            packedTime
         );
-        frame[22] = static_cast<std::uint8_t>(packedTime >> 8);
-        frame[23] = static_cast<std::uint8_t>(packedDate);
+        const std::uint8_t packedTimeHigh = static_cast<std::uint8_t>(
+            packedTime >> 8
+        );
+        if (kTargetFactoryCounter == 2) {
+            frame[21] = packedTimeLow;
+            frame[22] = static_cast<std::uint8_t>(
+                (packedTimeHigh & 0x7fU) | 0x80U
+            );
+        } else {
+            frame[21] = static_cast<std::uint8_t>(
+                (packedTimeLow & 0x7fU) | 0x80U
+            );
+            frame[22] = packedTimeHigh;
+        }
+        frame[23] = static_cast<std::uint8_t>(
+            packedDate | (kTargetFactoryCounter == 2 ? 0x80U : 0x00U)
+        );
         frame[24] = static_cast<std::uint8_t>(packedDate >> 8);
     }
     writeTrailer(frame, profile.steps[stepIndex].trailerResidual);
@@ -262,7 +325,7 @@ public:
                 }
                 return nullptr;
             }
-            if (sweepCounter != 0) {
+            if (sweepCounter != kTargetFactoryCounter) {
                 return nullptr;
             }
             assignmentLocked_ = true;

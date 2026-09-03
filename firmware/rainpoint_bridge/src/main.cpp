@@ -855,7 +855,10 @@ void reportPairingStatus(const char* detail = nullptr) {
             line += ",\"selector2_configuration_transmitted\":false";
             line += ",\"selector2_configuration_sequence\":0";
             line += ",\"reply_marker_repeat\":false";
-            line += ",\"htv145_later_sweep_branch\":false";
+            line += ",\"htv145_later_sweep_branch\":";
+            line += rainpoint::htv145::kTargetFactoryCounter == 0
+                ? "false"
+                : "true";
             line += ",\"htv145_factory_sweep_observed\":";
             line += htv145PairingSession.factorySweepObserved()
                 ? "true" : "false";

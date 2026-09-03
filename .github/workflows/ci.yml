@@ -44,6 +44,12 @@ jobs:
             firmware/rainpoint_bridge/tests/protocol_test.cpp \
             -o /tmp/rainpoint-protocol-test
           /tmp/rainpoint-protocol-test
+          c++ -std=c++17 \
+            -DRAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
+            -Ifirmware/rainpoint_bridge/include \
+            firmware/rainpoint_bridge/tests/htv145_counter2_protocol_test.cpp \
+            -o /tmp/rainpoint-htv145-counter2-test
+          /tmp/rainpoint-htv145-counter2-test
 
   firmware:
     runs-on: ubuntu-latest
@@ -91,6 +97,20 @@ jobs:
             pio run --project-dir firmware/rainpoint_bridge \
             --environment rainpoint_bridge
       - name: Verify the HTV145 pairing candidate boundary
+        run: >-
+          python tools/check_firmware_boundaries.py --htv145-pairing
+          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+      - name: Build the research-gated HTV145 counter-2 candidate
+        run: |
+          pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge --target clean
+          RAINPOINT_RESEARCH_BENCH=1 \
+            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
+            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
+            RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
+            pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge
+      - name: Verify the HTV145 counter-2 candidate boundary
         run: >-
           python tools/check_firmware_boundaries.py --htv145-pairing
           firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

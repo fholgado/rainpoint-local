@@ -1,0 +1,156 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-02",
+  "purpose": "Freeze the locally accepted counter-2 assignment and isolate the next rejected stage.",
+  "association": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280",
+    "accepted_factory_counter": 2,
+    "assignment_selector": 6,
+    "assigned_response_channel": 12
+  },
+  "local_trials": [
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.1",
+      "capture_path": "captures/htv145-counter2-live-diagnostic-20260902-2126.cu8",
+      "capture_sha256": "9ea5504e4456d618d8010aadf4d4bd46c8696795111f30ad0823d5d1a418ca60",
+      "capture_bytes": 139722752,
+      "visible_result": "white success flash",
+      "stage_0": {
+        "request_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+        "request_start_seconds": 22.4445,
+        "request_end_seconds": 22.4757,
+        "assignment_frame": "79f4882f28b42d008fb984028082408585008670002baba20d01008000000000000000008c29",
+        "assignment_start_seconds": 22.52635,
+        "request_end_to_assignment_start_ms": 50.65,
+        "node_diagnostic": "stage_0_accepted",
+        "verdict": "accepted"
+      },
+      "stage_1": {
+        "request_start_seconds": 23.9218,
+        "reply_start_seconds": 24.022,
+        "configuration_start_seconds": 27.00705,
+        "configuration_start_after_request_end_ms": 3054.05,
+        "stage_1_retries": 2,
+        "configuration_response_observed": false,
+        "verdict": "rejected"
+      }
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.2",
+      "capture_path": "captures/htv145-counter2-config-timing-20260902-2140.cu8",
+      "capture_sha256": "07b4f2d294ae436de6c90ed55905f8642e192aab07f74e7cde4e766ffe172048",
+      "capture_bytes": 196608000,
+      "visible_result": "white success flash",
+      "stage_0": {
+        "request_frame": "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c",
+        "request_start_seconds": 36.2493,
+        "request_end_seconds": 36.2805,
+        "assignment_frame": "79f4882f28b42d008fb984028082408585008670001bada20d010080000000000000000054d0",
+        "assignment_start_seconds": 36.33085,
+        "request_end_to_assignment_start_ms": 50.35,
+        "measured_center_hz": 433577325,
+        "node_diagnostic": "stage_0_accepted",
+        "verdict": "accepted"
+      },
+      "stage_1": {
+        "request_frame": "79f4882f28b9840280b42d008f828107862580804f8000000040800056800000000000004301",
+        "request_start_seconds": 37.7252,
+        "request_end_seconds": 37.7564,
+        "reply_frame": "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5",
+        "reply_start_seconds": 37.82605,
+        "request_end_to_reply_start_ms": 69.65,
+        "measured_center_hz": 434382116,
+        "measured_deviation_hz": 41289,
+        "stage_1_retries": 2,
+        "configuration_response_observed": false,
+        "verdict": "rejected"
+      },
+      "configuration": {
+        "frame": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+        "start_seconds": 40.7091,
+        "start_after_stage_1_request_end_ms": 2952.7,
+        "wake_symbols": 2400
+      }
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.3",
+      "capture_path": "captures/htv145-counter2-routine-carrier-20260902-2259.cu8",
+      "capture_sha256": "feeaa523d93511e55d6c4adbfee23677e3b2fdab82d17ad9c8f3b5f69b6fa3bc",
+      "capture_bytes": 179044352,
+      "visible_result": "white success flash",
+      "stage_0": {
+        "request_start_seconds": 33.0053,
+        "request_end_seconds": 33.0365,
+        "assignment_frame": "79f4882f28b42d008fb9840280824085850086700002b0a20d010080000000000000000038bb",
+        "assignment_start_seconds": 33.0873,
+        "request_end_to_assignment_start_ms": 50.8,
+        "node_diagnostic": "stage_0_accepted",
+        "verdict": "accepted"
+      },
+      "stage_1": {
+        "request_start_seconds": 34.48335,
+        "request_end_seconds": 34.51455,
+        "reply_start_seconds": 34.58365,
+        "request_end_to_reply_start_ms": 69.1,
+        "measured_center_hz": 434351533,
+        "measured_deviation_hz": 41167,
+        "stage_1_retries": 0,
+        "configuration_response_observed": false,
+        "verdict": "ordinary_reply_accepted_configuration_rejected"
+      },
+      "configuration": {
+        "start_seconds_normalized_to_320_symbols": 37.46305,
+        "active_start_seconds": 37.362227,
+        "active_end_seconds": 37.4943455,
+        "active_duration_ms": 132.119,
+        "measured_center_hz": 434351590,
+        "measured_deviation_hz": 41239,
+        "requested_wake_symbols": 2400,
+        "recovered_wake_transitions": 2368,
+        "stock_active_duration_ms": 135.3605,
+        "local_minus_stock_duration_ms": -3.2415
+      }
+    }
+  ],
+  "stock_comparison": {
+    "bounded_capture_path": "captures/htv145-counter2-stock-window-122s-144s.cu8",
+    "bounded_capture_sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
+    "bounded_capture_bytes": 88000000,
+    "assignment_measured_center_hz": 433581823,
+    "stage_1_reply_measured_center_hz": 434351790,
+    "stage_1_reply_measured_deviation_hz": 40161,
+    "stage_1_retry_count": 0,
+    "configuration_start_after_stage_1_request_end_ms": 2952.55,
+    "configuration_response_observed": true
+  },
+  "discriminators": {
+    "assignment_local_minus_stock_hz": -4498,
+    "candidate_2_stage_1_local_minus_stock_hz": 30326,
+    "candidate_2_configuration_timing_local_minus_stock_ms": 0.15,
+    "candidate_3_stage_1_local_minus_stock_hz": -257,
+    "candidate_3_configuration_local_minus_stock_hz": -228,
+    "candidate_3_configuration_duration_local_minus_stock_ms": -3.2415,
+    "conclusion": "Candidate .3 placed the immediate and long replies on the stock carrier and eliminated stage-1 retries. The long configuration burst remained about 64 symbol periods shorter than stock and did not elicit the 81 50 response."
+  },
+  "next_candidate": {
+    "version": "0.15.4-htv145-pairing-counter2-candidate.4",
+    "single_change": "add 64 expendable leading wake symbols only to the long counter-2 configuration transmission",
+    "frozen": [
+      "stage-0 request matcher",
+      "assignment payload and dynamic clock",
+      "assignment carrier, deviation, wake, timing, and low tail",
+      "stage-1 and configuration frame bytes",
+      "stage-1 response timing",
+      "configuration carrier and corrected timing"
+    ]
+  },
+  "interpretation": [
+    "Two consecutive local trials produced the valve-originated addressed stage-1 request, proving and freezing stage 0.",
+    "The white flash accompanies stage-0 acceptance but is not sufficient evidence of complete enrollment.",
+    "Candidate .3 eliminated stage-1 retries after moving the local routine carrier to within 257 Hz of stock, providing the first evidence that the ordinary stage-1 reply was accepted.",
+    "The next physical discriminator changes only the long configuration wake compensation."
+  ]
+}

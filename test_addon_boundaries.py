@@ -164,6 +164,10 @@ class AddonBoundaryTest(unittest.TestCase):
             '"0.15.3-htv145-pairing-tail-candidate.1"',
             build_profile,
         )
+        self.assertIn(
+            '"0.15.4-htv145-pairing-counter2-candidate.4"',
+            build_profile,
+        )
         self.assertIn('firmware_variant = "unified"', build_profile)
         self.assertIn(
             'firmware_variant = "htv145-pairing-probe"',
@@ -202,6 +206,28 @@ class AddonBoundaryTest(unittest.TestCase):
             pairing_source,
         )
         self.assertIn("htv145_post_frame_tail_candidate", wifi_source)
+
+    def test_htv145_counter2_branch_is_research_only(self) -> None:
+        root = ROOT / "firmware" / "rainpoint_bridge"
+        build_profile = (root / "tools" / "build_profile.py").read_text()
+        pairing_source = (
+            root / "include" / "rainpoint_htv145_pairing.h"
+        ).read_text()
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
+        self.assertIn(
+            '"RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE requires both",
+            build_profile,
+        )
+        self.assertIn("kCounter2PairingTemplate", pairing_source)
+        self.assertIn("kTargetFactoryCounter", pairing_source)
+        self.assertIn(
+            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2", workflow
+        )
 
     def test_htv405_control_uses_bounded_identical_frame_retries(self) -> None:
         source = (

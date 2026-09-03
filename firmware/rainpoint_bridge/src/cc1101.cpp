@@ -441,8 +441,14 @@ bool Cc1101::transmitAsync(
              leadingDeviationRegister == 0x42))
 #endif
         ;
+    constexpr std::uint16_t maximumWakeSymbols =
+#if RAINPOINT_RESEARCH_BENCH == 1
+        2'464;
+#else
+        2'400;
+#endif
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
-        wakeSymbols > 2'400 || leadingPreludeSymbols > 2'400 ||
+        wakeSymbols > maximumWakeSymbols || leadingPreludeSymbols > 2'400 ||
         postFrameLowHoldMicros > 500 ||
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||

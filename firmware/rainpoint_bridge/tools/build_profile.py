@@ -31,6 +31,14 @@ htv145_pairing_value = os.environ.get(
 if htv145_pairing_value not in {"0", "1"}:
     raise ValueError("RAINPOINT_HTV145_PAIRING_CANDIDATE must be 0 or 1")
 htv145_pairing_enabled = htv145_pairing_value == "1"
+htv145_factory_counter_value = os.environ.get(
+    "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE", "0"
+)
+if htv145_factory_counter_value not in {"0", "2"}:
+    raise ValueError(
+        "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE must be 0 or 2"
+    )
+htv145_factory_counter = int(htv145_factory_counter_value)
 htv145_tail_value = os.environ.get(
     "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE", "0"
 )
@@ -56,13 +64,25 @@ if htv145_tail_enabled and not (
         "RAINPOINT_RESEARCH_BENCH=1 and "
         "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
     )
+if htv145_factory_counter and not (
+    research_enabled and htv145_pairing_enabled
+):
+    raise ValueError(
+        "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE requires both "
+        "RAINPOINT_RESEARCH_BENCH=1 and "
+        "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
+    )
 standard_version = "0.15.5"
 supervised_version = "0.15.5"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
-    "0.15.3-htv145-pairing-tail-candidate.1"
-    if htv145_tail_enabled
-    else "0.15.3-htv145-pairing-probe.25"
+    "0.15.4-htv145-pairing-counter2-candidate.4"
+    if htv145_factory_counter == 2
+    else (
+        "0.15.3-htv145-pairing-tail-candidate.1"
+        if htv145_tail_enabled
+        else "0.15.3-htv145-pairing-probe.25"
+    )
 )
 if htv145_pairing_enabled:
     default_version = htv145_pairing_candidate_version
@@ -100,6 +120,10 @@ env.Append(
         (
             "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE",
             int(htv145_tail_enabled),
+        ),
+        (
+            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE",
+            htv145_factory_counter,
         ),
         ("RAINPOINT_FIRMWARE_VERSION", f'\\"{firmware_version}\\"'),
         ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{firmware_variant}\\"'),
