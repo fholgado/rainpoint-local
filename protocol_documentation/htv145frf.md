@@ -2,9 +2,9 @@
 
 The `HTV145FRF` is a single-zone valve with a pairing and command protocol
 distinct from the HTV405. Receive-side telemetry, duration, water usage, and
-categorical battery state are decoded. Local enrollment and control remain
-research-only because structurally valid local exchanges have not yet been
-accepted reliably by the physical valve.
+categorical battery state are decoded. Local enrollment remains research-only:
+the valve now accepts the local association and first ordinary continuation,
+but the delayed configuration and terminal stages are not yet complete.
 
 ## Identity
 
@@ -31,17 +31,17 @@ configuration transmission between stages 1 and 2:
 |---:|---|---|
 | 0 | `80 80 84 02 ff 8f 97` | Assignment to companion, selector 5, about 50.55 ms |
 | 1 | `81 01 07 82 25` | Reply `81 41 01`, about 50.40 ms |
-| 1a | no request | Long-wake config `81 90 01 01` to valve route, about 2.915 s after stage 1 |
+| 1a | no request | Long-wake config `81 90 01 01` to valve route, 2,400-symbol stock wake, about 2,952.55 ms after the normalized stage-1 request end |
 | 2 | `81 d0 00 80` | Observe only |
 | 3 | `81 82 81 02` | Reply `81 c2 87 80 2c 01 05`, about 50.70 ms |
 | 4 | `82 03 01 82` | Reply `82 43 00 80`, about 53.35 ms |
 | 5 | `82 ac 80 99` | Reply `82 ec 81 80 19`, about 45.05 ms |
 
-Stage 1a uses the 2,400-symbol wake-up form; the remaining replies use the
-320-symbol form. The stage-2 response moves to the routine carrier near
-433.472 MHz. Exact captured endpoints, clocks, trailers, and complete bodies
-are retained in the HTV145 pairing fixtures and the table-driven candidate in
-`valve_pairing_protocol.py`.
+Stage 1a uses the 2,400-symbol stock wake-up form; the remaining replies use
+the 320-symbol form. The stage-2 response moves to the response carrier
+selected by the association. Exact captured endpoints, clocks, trailers, and
+complete bodies are retained in the HTV145 pairing fixtures and the
+table-driven candidate in `valve_pairing_protocol.py`.
 
 A second accepted stock association used counter `3`, selector `6`, and a
 routine carrier near 434.461993 MHz. Its request counters progressed
@@ -84,48 +84,59 @@ of `1` has been observed with selector `6`.
 
 ## Local enrollment status
 
-The current local candidate has not yet reproduced a complete transcript that
-the physical valve accepts. Probe `.18` demonstrated that the former shared
-session could transmit a counter-0 selector-5 assignment and then a second
-counter-3 selector-6 assignment in one physical attempt. The valve never sent
-an addressed stage-1 request, so that attempt is a rejected multi-assignment
-baseline rather than evidence against the controlled stock transcript.
+The current research candidate uses the coherent stock counter-2/selector-6
+branch. It deliberately ignores counter 0 and counter 1, sends exactly one
+assignment at counter 2, and never mixes HTV405 or counter-0 continuation
+fields into the session.
 
-The current dedicated one-shot candidate implements the controlled app-first
-stock branch: counter 0, selector 6, response subchannel 12, and the exact six
-captured stages. It transmits at most one assignment and treats any subsequent
-factory announcement without the addressed stage-1 request as a terminal
-stage-0 rejection.
+The following boundaries are physically established:
 
-Decoder-independent balanced-wake measurement of accepted stock and unclipped
-local stage-zero traffic defines the initial reply PHY as follows:
+| Boundary | Device-originated evidence | Status |
+|---|---|---|
+| Stage 0 assignment | Valve sends its addressed stage-1 request; white LED follows | Accepted in two unchanged trials; frozen |
+| Ordinary stage-1 reply | Valve stops retrying the stage-1 request after the response carrier was corrected to within 257 Hz of stock | Accepted once; prefix remains unchanged |
+| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Not yet accepted |
+| Stages 3--5 and retained telemetry | Each next addressed request, then ordinary paired telemetry | Not yet tested locally |
+
+The white LED is the most difficult and useful breakpoint: it is positive
+device-side proof that the initial association was accepted. It is not proof
+of complete enrollment. Once it appears, the addressed stage-1 request gives
+the investigation a deterministic request/reply loop instead of silence.
+
+The validated counter-2 physical definition is:
 
 | Property | Current definition |
 |---|---:|
-| Wake | 320 alternating symbols |
+| Assignment wake | 320 alternating symbols |
 | Symbol rate | 20,000 symbols/s |
-| Initial deviation | CC1101 `0x45` (nominal 41.260 kHz) |
-| Node frequency correction | +122.759 kHz on the validated OTA test node |
-| Reply scheduling offset | 52.150 ms from the request timestamp supplied by the radio path |
+| Deviation | CC1101 `0x45` |
+| Node frequency correction | +122.759 kHz on the OTA test node |
+| Assignment delay | 49.650 ms from the captured request boundary |
+| Assigned response carrier | 434.3515 MHz nominal; node setting is calibrated against the valve oscillator |
+| Ordinary stage-1 delay | 68.700 ms from the captured request boundary |
+| Delayed configuration boundary | 2,952.55 ms after the normalized stage-1 request end |
 
-The counter-0 assignment uses the FAT/DOS packed time/date layout. Only bit 7
-of the time-low byte is forced by the captured branch template. The time-high
-byte must retain bit 7 because it carries the `16` hour bit; clearing it wraps
-16:00--23:59 to 00:00--07:59. Date bytes are ordinary packed data.
+The candidate-.3 ordinary response measured 434.351533 MHz versus stock at
+434.351790 MHz and eliminated the valve's retries. Its delayed configuration
+was nevertheless only 132.119 ms on-air versus stock at 135.361 ms and did not
+elicit `81 50`. Candidate `.4` changes only that research-only long wake from
+2,400 requested symbols to 2,464 so the emitted waveform should reproduce the
+stock 2,400-symbol duration. This candidate is built and installed but has not
+received a physical verdict.
+
+The packed clock/date marker positions are branch-specific. Counter 0 carries
+its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in
+date-low bit 7. All remaining clock bits retain their FAT/DOS meaning.
 
 The frequency correction is node-calibration evidence, not a universal device
-constant. It results from normalizing the stock and local assignment centers
-against the valve request oscillator in each capture. Probe `.25` applies this
-PHY while preserving every decoded frame and state-machine decision from
-`.22`; physical acceptance is still pending.
+constant. Absolute centers from separate SDR sessions are insufficient; the
+gateway response must be normalized against the valve request oscillator in
+the same capture.
 
-Therefore:
-
-- no HTV145 local enrollment profile is advertised as supported;
-- a white LED or plausible outbound frame alone is not accepted as completion;
-- HTV405's 18-stage enrollment must not be reused for this model;
-- stock captures are the reference until a complete local transcript is
-  physically reproduced.
+Therefore no HTV145 local enrollment profile is advertised as supported until
+the delayed configuration and remaining stages complete twice without changing
+the frozen prefix. The reusable investigation method is documented in
+[`research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`](../research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md).
 
 ## Routine telemetry and state
 

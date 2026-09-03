@@ -296,7 +296,7 @@ observation before it changes transmitted firmware.
     assignment, zero addressed stage-1 requests, and the continuing factory
     sweep. The red/green evidence is retained in
     `research/fixtures/htv145_stage0_raw_replay_differential_20260902.json`.
-- [ ] Replace the shared HTV405 session reuse with a dedicated research-only
+- [x] Replace the shared HTV405 session reuse with a dedicated research-only
       HTV145 state machine and one canonical transcript definition consumed by
       the analyzer, gateway tests, and generated firmware table. The initial
       harness must select one evidence-backed lifecycle/selector branch before
@@ -439,16 +439,63 @@ observation before it changes transmitted firmware.
     a matching on-air tail remains rejected, exact accepted-byte replay is
     next; do not reopen payload or wake-length guesses. Evidence:
     `research/fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json`.
+  - 2026-09-02 counter-2 local acceptance: the research image ignored factory
+    counters `0` and `1`, answered counter `2` with the complete captured
+    selector-6 branch and measured low tail, and received the valve's addressed
+    paired-route stage-1 request. The node and IQ analyzer both report stage 0
+    accepted, and the valve gave its white success flash. This is the first
+    locally generated HTV145 assignment with authoritative valve-originated
+    acceptance evidence. The valve retried stage 1 after the immediate local
+    reply and never sent its configuration response, so the addressed request
+    proves only stage 0; it does not prove the stage-1 reply was accepted. The
+    first local delayed 2,400-symbol configuration boundary appeared `101.5 ms`
+    later than stock. Candidate `.2` changed only that scheduler offset while
+    leaving the assignment frozen. Evidence:
+    `research/fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
+  - 2026-09-02 repeated counter-2 acceptance and stage-1 discriminator:
+    candidate `.2` reproduced the addressed stage-1 valve request and white
+    flash with the frozen assignment. Its configuration began `2,952.70 ms`
+    after the stage-1 request boundary versus `2,952.55 ms` in stock, validating
+    the timing correction. Direct balanced-wake analysis then found the stock
+    immediate stage-1 reply centered at `434.351790 MHz` while the local reply
+    centered at `434.382116 MHz`, `30.326 kHz` high. Stock advanced without a
+    retry; local produced two stage-1 retries and no `81 50` response. Candidate
+    `.3` therefore changes only the counter-2 routine carrier by `-30.326 kHz`;
+    the proven stage-0 assignment and all decoded frames and timings remain
+    frozen.
+  - 2026-09-02 candidate `.3` accepted the ordinary stage-1 response: the
+    corrected local reply measured `434.351533 MHz`, only `257 Hz` below the
+    stock `434.351790 MHz`, and the valve did not retry stage 1. The long
+    configuration used the same corrected carrier but lasted `132.119 ms`
+    versus stock's `135.361 ms`; only `2,368` of `2,399` expected alternating
+    transitions were recovered, and the valve did not emit `81 50`. Candidate
+    `.4` adds `64` expendable leading symbols only to that research-only long
+    transmission to compensate for the measured `3.242 ms` on-air shortfall.
+    Stage 0, the accepted ordinary stage-1 reply, all frame bytes, carriers,
+    and scheduling remain unchanged. Evidence:
+    `research/fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
+  - 2026-09-02 candidate `.4` is built, staged, and installed on the OTA test
+    node. It preserves the accepted stage-0 assignment and ordinary stage-1
+    response and changes only the long configuration wake request from 2,400
+    to 2,464 symbols. The predicted observation is a stock-length on-air burst
+    near `135.361 ms`, followed by valve-originated `81 50` and the next
+    addressed request. The user ended physical testing before this candidate
+    was exercised, so this is not an acceptance result.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected. The staging tool now refuses overflow before writing
       an artifact and accepts only explicit, existing, same-variant release
       IDs for supersession; regression tests cover both outcomes.
-- [ ] Prove and freeze the initial assignment boundary. It passes only when
+- [x] Prove and freeze the initial assignment boundary. It passes only when
       two consecutive unchanged trials produce the expected addressed stage-1
       valve request. Freeze its request matcher, assignment payload, endpoints,
       selector, carrier, prelude, deviation, wake, scheduler, clock derivation,
       and trailer in a regression fixture and a separate commit.
+  - [x] First unchanged counter-2 trial produced an addressed stage-1 request
+        and matching node `stage_0_accepted` diagnostics.
+  - [x] Candidate `.2` repeated the frozen counter-2 assignment and produced
+        the expected addressed stage-1 request. Its later timing correction did
+        not alter stage 0.
 - [ ] Build the remaining exchange incrementally without modifying a frozen
       prefix:
   1. stage-1 ordinary reply plus its coupled delayed long-wake configuration,
@@ -938,6 +985,11 @@ and publication/security gates are documented and enforced.
       current definitions under `protocol_documentation/`; retain dated
       discovery history in `research/RF_CAPTURE_NOTES.md` and exact frames in
       redacted fixtures.
+- [x] Document the reusable device-onboarding method in
+      `research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`: isolate lifecycle
+      paths and product profiles, capture opposite arming orders, rank physical
+      evidence, normalize waveform measurements to the device oscillator, and
+      freeze each accepted stage before extending the transcript.
 - [ ] Make the receive-only SDR capture/decoder pipeline run as a managed Mac
       service and optionally forward normalized observations to the custom
       gateway; production HA operation must not depend on the SDR.

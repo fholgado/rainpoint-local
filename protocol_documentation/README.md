@@ -10,7 +10,7 @@ Read [common.md](common.md) first, then the file for the device family:
 |---|---|---|
 | Stock RainPoint gateway (`HWG023WBRF-V2`) | [hwg023wbrf-v2.md](hwg023wbrf-v2.md) | Reference implementation and coexistence constraint |
 | Soil-moisture sensors (`HCS02x`, validated as `HCS026FRF`) | [hcs026frf.md](hcs026frf.md) | Pair, receive, acknowledge, and recover |
-| Single-zone valve (`HTV145FRF`) | [htv145frf.md](htv145frf.md) | Receive/decode; local pairing and control remain research-only |
+| Single-zone valve (`HTV145FRF`) | [htv145frf.md](htv145frf.md) | Receive/decode; local pairing has accepted assignment and stage 1, later stages remain research-only |
 | Four-zone valve (`HTV405FRF`) | [htv405frf.md](htv405frf.md) | Pair, receive, acknowledge, and control |
 
 Exact frames and experiment chronology live under [`research/`](../research/).
@@ -32,3 +32,6 @@ Open work and release gates belong only in
 [`PROJECT_ROADMAP.md`](../PROJECT_ROADMAP.md). Capture procedures and the
 chronological research record belong in
 [`research/RF_CAPTURE_NOTES.md`](../research/RF_CAPTURE_NOTES.md).
+
+The reusable process for investigating another device family is
+[`research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`](../research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md).

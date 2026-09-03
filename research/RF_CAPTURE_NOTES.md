@@ -731,3 +731,44 @@ Reference evidence:
 
 Reference evidence:
 `fixtures/htv145_probe25_clock_correct_rejection_20260901.json`.
+
+### HTV145 counter-2 local acceptance and stage-1 isolation — 2026-09-02
+
+- A dedicated research image ignored factory counters `0` and `1`, answered
+  counter `2` with the coherent stock counter-2/selector-6 profile, and sent
+  at most one assignment. The valve produced its addressed stage-1 request and
+  white flash in two unchanged trials. This freezes stage 0 and resolves the
+  largest earlier uncertainty: the custom node can create an association the
+  HTV145 recognizes.
+- The first accepted assignment exposed a measurement-boundary error. The IQ
+  decoder normalized the long configuration as though it had a 320-symbol
+  wake, placing the decoded boundary `101.5 ms` after its waveform start.
+  Candidate `.2` corrected only the scheduler offset and reproduced the stock
+  `2,952.55 ms` normalized request-end interval within `0.15 ms`.
+- The valve retried stage 1 after candidates `.1` and `.2`. Balanced-wake
+  measurement found their immediate response at `434.382116 MHz`, `30.326 kHz`
+  above stock at `434.351790 MHz`. Candidate `.3` corrected only that response
+  carrier. Its measured center was `434.351533 MHz`, `257 Hz` below stock, and
+  the valve stopped retrying stage 1. This is device-originated evidence that
+  the ordinary stage-1 reply was accepted.
+- Candidate `.3` did not elicit the expected `81 50` configuration response.
+  Its delayed configuration carrier matched stock within `228 Hz`, but its
+  on-air burst lasted `132.119 ms` versus stock at `135.361 ms`, with `2,368`
+  recovered wake transitions rather than stock's `2,399`.
+- Candidate `.4` changes only the research counter-2 configuration request to
+  add 64 expendable leading wake symbols. It is built and installed but was not
+  physically exercised before testing ended. The accepted assignment,
+  ordinary stage-1 response, frame bodies, carriers, and scheduling remain
+  frozen.
+- Moving the SDR to the Mac did not itself cause pairing. It decoupled capture
+  from the running Home Assistant gateway, kept full-band IQ available for
+  every attempt, and shortened the request/transmit/measure feedback loop.
+
+The white flash is now interpreted precisely: it is strong corroboration of
+the hardest boundary—initial association—but not terminal enrollment. Once it
+appears, the valve's addressed request makes every later stage independently
+testable. The reusable method and minimum evidence checklist are in
+`PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`.
+
+Reference evidence:
+`fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
