@@ -51,14 +51,12 @@ constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
 // selector-6 profile does not transmit this older selector-5 prelude.
 constexpr std::uint16_t kCounter0AssignmentPreludeSymbols = 256;
 constexpr std::uint8_t kCounter0AssignmentPreludeDeviationRegister = 0x42;
-// Stock emits a 2,400-symbol alternating wake. The candidate-.3 ESP32/CC1101
-// burst was 3.242 ms (about 64 symbols) shorter on-air, and only 2,368 of the
-// expected 2,399 wake transitions were recoverable. Add only that expendable
-// lead compensation on the isolated counter-2 research branch so the on-air
-// wake remains the stock 2,400 symbols. Counter 0 and every production path
-// retain their original 2,400-symbol request.
-constexpr std::uint16_t kConfigurationWakeSymbols =
-    kTargetFactoryCounter == 2 ? 2'464 : 2'400;
+// Stock emits a 2,400-symbol alternating wake. A lossless candidate-.5 IQ
+// capture recovered all 2,464 requested symbols and measured a 138.536 ms
+// burst, 3.175 ms longer than the accepted 135.361 ms stock burst. The older
+// apparent shortfall was therefore a clipped-capture measurement artifact.
+// Keep the exact stock wake count for every branch.
+constexpr std::uint16_t kConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kConfigurationReplyDeadlineMs = 4'000;
 constexpr std::uint32_t kAssignmentReplyStartDelayUs =
     kTargetFactoryCounter == 2 ? 49'650 : 52'150;
@@ -68,16 +66,21 @@ constexpr std::uint32_t kAssignmentReplyStartDelayUs =
 // only the measured 115 us difference. This constant is inert unless the
 // separate research build flag is enabled.
 constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
+// The accepted stock counter-2 configuration frame retains its final low FSK
+// tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
+// Apply the already proven stage-0 correction only to the currently failing
+// delayed configuration boundary; the accepted ordinary stage-1 reply stays
+// waveform-for-waveform unchanged.
+constexpr std::uint16_t kConfigurationPostFrameLowHoldAdjustmentUs = 115;
 constexpr std::uint32_t kStep1ReplyStartDelayUs =
     kTargetFactoryCounter == 2 ? 68'700 : 70'700;
-// Stock evidence measures the delayed configuration from the normalized
-// 320-symbol reply boundary, while this transmission carries a 2,400-symbol
-// wake. The first accepted local counter-2 exchange proved that scheduling the
-// waveform at 2,952,550 us made the decoded configuration boundary 101,500 us
-// late. Compensate only the counter-2 research branch; its now-proven stage-0
-// assignment remains byte-for-byte unchanged.
+// Lossless candidate-.6 and stock captures both use an exact 2,400-symbol
+// configuration wake. Relative to the valve's addressed stage-1 request end,
+// the candidate frame began 2.650 ms later than stock. Remove only that
+// measured scheduling error from the isolated counter-2 branch; all accepted
+// stage-0 and ordinary stage-1 behavior remains unchanged.
 constexpr std::uint32_t kConfigurationReplyStartDelayUs =
-    kTargetFactoryCounter == 2 ? 2'851'050 : 3'054'850;
+    kTargetFactoryCounter == 2 ? 2'848'400 : 3'054'850;
 constexpr std::uint32_t kStep3ReplyStartDelayUs =
     kTargetFactoryCounter == 2 ? 53'300 : 35'750;
 constexpr std::uint32_t kStep4ReplyStartDelayUs =

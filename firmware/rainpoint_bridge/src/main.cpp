@@ -3678,7 +3678,13 @@ void processHtv145PairingFrame(
                 rainpoint::pairingPaTableValue(pairingPowerDbm),
                 step->deviationRegister,
                 packet.receivedAtMicros +
-                    rainpoint::htv145::kConfigurationReplyStartDelayUs
+                    rainpoint::htv145::kConfigurationReplyStartDelayUs,
+                0,
+                0,
+                0,
+                false,
+                rainpoint::htv145::
+                    kConfigurationPostFrameLowHoldAdjustmentUs
             );
             // The configuration response is sent on the same routine carrier.
             sent = sent && radio.setReceiveFrequency(transmitCenterHz);

@@ -483,6 +483,30 @@ observation before it changes transmitted firmware.
     the valve retried stage 1. Before changing payload, carrier, or timing,
     record one unchanged `.4` trial with the Mac SDR and measure those two
     discriminators.
+  - 2026-09-03 candidates `.4`--`.7` closed the long-configuration waveform
+    hypotheses with continuous Mac SDR evidence. The original `.4` capture
+    showed that the ESP32/CC1101 really emitted all `2,464` requested wake
+    symbols and a `138.420 ms` burst; the earlier apparent shortfall was not a
+    transmitter truncation. Candidate `.5` added only the measured low-tone
+    tail and produced about `193.5 us` after the frame versus `201.5 us` stock,
+    but still received no `81 50`. Candidate `.6` restored the exact stock
+    `2,400`-symbol wake and measured `135.340 ms` versus `135.361 ms` stock,
+    with about `211.5 us` of low tail, but still received no `81 50`.
+    Candidate `.7` moved only the long reply `2.650 ms` earlier; its decoded
+    configuration frame began exactly `2,952.55 ms` after the addressed
+    stage-1 request end, matching stock, while total duration remained
+    `135.340 ms` and the decoded frame remained byte-identical. It also stopped
+    at `2/6`. All three post-`.4` captures used asynchronous rtl_sdr mode and
+    reported no sample loss. Wake count, burst duration, low-tail length, and
+    absolute configuration timing are therefore ruled out as sole causes.
+    Before another firmware change, capture an unclipped local long reply and
+    compare tone centers/deviation and the complete symbol boundary against
+    the accepted stock frame. Keep the assignment, counter-2 branch, ordinary
+    reply, payload, 2,400-symbol wake, and `.7` timing frozen.
+- [x] Require explicit user approval before every RF pairing arm. Analysis,
+      builds, OTA staging, and receive-only SDR capture may proceed unattended,
+      but the gateway must not enter a transmit-armed pairing state until the
+      user approves that specific attempt.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected. The staging tool now refuses overflow before writing

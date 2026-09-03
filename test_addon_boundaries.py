@@ -69,6 +69,7 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("-n 10000000", result.stdout)
         self.assertIn("-f 433700000", result.stdout)
         self.assertIn("-s 2000000", result.stdout)
+        self.assertNotIn(" -S ", result.stdout)
         self.assertNotIn("ssh ", script.read_text())
         self.assertNotIn("ha addons", script.read_text())
 
@@ -165,7 +166,7 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.4"',
+            '"0.15.4-htv145-pairing-counter2-candidate.7"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -227,6 +228,10 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("kTargetFactoryCounter", pairing_source)
         self.assertIn(
             "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2", workflow
+        )
+        self.assertGreaterEqual(
+            workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),
+            2,
         )
 
     def test_htv405_control_uses_bounded_identical_frame_retries(self) -> None:

@@ -79,7 +79,6 @@ command_args=(
   -s "${sample_rate}"
   -g "${gain_db}"
   -n "${sample_count}"
-  -S
   "${capture_path}"
 )
 

@@ -92,7 +92,8 @@ jobs:
         run: |
           pio run --project-dir firmware/rainpoint_bridge \
             --environment rainpoint_bridge --target clean
-          RAINPOINT_RESEARCH_BENCH=1 \
+          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
+            RAINPOINT_RESEARCH_BENCH=1 \
             RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
             pio run --project-dir firmware/rainpoint_bridge \
             --environment rainpoint_bridge
@@ -104,7 +105,8 @@ jobs:
         run: |
           pio run --project-dir firmware/rainpoint_bridge \
             --environment rainpoint_bridge --target clean
-          RAINPOINT_RESEARCH_BENCH=1 \
+          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
+            RAINPOINT_RESEARCH_BENCH=1 \
             RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
             RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
             RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \

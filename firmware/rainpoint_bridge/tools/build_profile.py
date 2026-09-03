@@ -76,7 +76,7 @@ standard_version = "0.15.7"
 supervised_version = "0.15.7"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
-    "0.15.4-htv145-pairing-counter2-candidate.4"
+    "0.15.4-htv145-pairing-counter2-candidate.7"
     if htv145_factory_counter == 2
     else (
         "0.15.3-htv145-pairing-tail-candidate.1"

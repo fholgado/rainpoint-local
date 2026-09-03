@@ -181,8 +181,10 @@ research without stopping the Home Assistant gateway:
 ```
 
 The script uses the local `rtl_sdr` binary, records the complete 2 MHz window
-centered at 433.7 MHz, verifies the expected byte count, and stores metadata
-and a SHA-256 alongside the ignored raw capture under `captures/continuous/`.
+centered at 433.7 MHz in asynchronous USB mode, verifies the expected byte
+count, and stores metadata and a SHA-256 alongside the ignored raw capture
+under `captures/continuous/`. Asynchronous mode avoids the short-read sample
+loss observed with synchronous `-S` captures on macOS.
 
 Run the complete Python regression suite:
 

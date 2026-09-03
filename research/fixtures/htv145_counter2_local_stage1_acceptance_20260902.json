@@ -115,6 +115,57 @@
       }
     }
   ],
+  "configuration_discriminator_trials": [
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.4",
+      "capture_path": "captures/continuous/20260903-122018/continuous.cu8",
+      "capture_sha256": "2b99c39c675b94738db295c24f7057243a4bbfcb0865103795fe650f82fa7fa6",
+      "capture_warning": "rtl_sdr synchronous mode reported samples lost; individual decoded bursts are usable but cross-burst absolute timing is not",
+      "requested_wake_symbols": 2464,
+      "recovered_wake_transitions": 2463,
+      "configuration_duration_ms": 138.42,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.5",
+      "capture_path": "captures/continuous/20260903-125726/continuous.cu8",
+      "capture_sha256": "a42965df69dd1799b35639d9a67931feb106da820abd61f45ba60c2a60c55405",
+      "capture_mode": "rtl_sdr asynchronous; no sample-loss warning",
+      "requested_wake_symbols": 2464,
+      "recovered_wake_transitions": 2463,
+      "configuration_duration_ms": 138.5355,
+      "post_frame_low_tail_us": 193.5,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.6",
+      "capture_path": "captures/continuous/20260903-132146/continuous.cu8",
+      "capture_sha256": "e86253331a652c325ae7ad6048d9282059a7354803be1c69f736c664f36b98b7",
+      "capture_mode": "rtl_sdr asynchronous; no sample-loss warning",
+      "requested_wake_symbols": 2400,
+      "recovered_wake_transitions": 2399,
+      "configuration_duration_ms": 135.34,
+      "configuration_start_after_stage_1_request_end_ms": 2955.2,
+      "post_frame_low_tail_us": 211.5,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.7",
+      "capture_path": "captures/continuous/20260903-150838/continuous.cu8",
+      "capture_sha256": "aed9f1c1ba9b67e29eff6ff682da5d00f092df287e71217d34ac9885d17bf6a8",
+      "capture_mode": "rtl_sdr asynchronous; no sample-loss warning",
+      "requested_wake_symbols": 2400,
+      "recovered_wake_transitions": 2399,
+      "configuration_duration_ms": 135.3395,
+      "configuration_start_after_stage_1_request_end_ms": 2952.55,
+      "post_frame_low_tail_us": 212.5,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    }
+  ],
   "stock_comparison": {
     "bounded_capture_path": "captures/htv145-counter2-stock-window-122s-144s.cu8",
     "bounded_capture_sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
@@ -133,24 +184,29 @@
     "candidate_3_stage_1_local_minus_stock_hz": -257,
     "candidate_3_configuration_local_minus_stock_hz": -228,
     "candidate_3_configuration_duration_local_minus_stock_ms": -3.2415,
-    "conclusion": "Candidate .3 placed the immediate and long replies on the stock carrier and eliminated stage-1 retries. The long configuration burst remained about 64 symbol periods shorter than stock and did not elicit the 81 50 response."
+    "candidate_7_configuration_duration_local_minus_stock_ms": -0.021,
+    "candidate_7_configuration_timing_local_minus_stock_ms": 0.0,
+    "candidate_7_post_frame_tail_local_minus_stock_us": 11.0,
+    "conclusion": "Lossless candidates .5 through .7 disprove wake count, total burst duration, low-tone tail length, and absolute configuration timing as sole causes. Candidate .7 matches the stock 2400-symbol duration and 2952.55 ms request-to-frame boundary but still receives no 81 50 response."
   },
-  "next_candidate": {
-    "version": "0.15.4-htv145-pairing-counter2-candidate.4",
-    "single_change": "add 64 expendable leading wake symbols only to the long counter-2 configuration transmission",
+  "next_discriminator": {
+    "action": "capture an unclipped candidate-7 long reply and compare its full symbol boundary, tone centers, deviation, and polarity with accepted stock",
     "frozen": [
       "stage-0 request matcher",
       "assignment payload and dynamic clock",
       "assignment carrier, deviation, wake, timing, and low tail",
       "stage-1 and configuration frame bytes",
       "stage-1 response timing",
-      "configuration carrier and corrected timing"
+      "configuration carrier",
+      "configuration wake count and total duration",
+      "configuration timing and low tail"
     ]
   },
   "interpretation": [
     "Two consecutive local trials produced the valve-originated addressed stage-1 request, proving and freezing stage 0.",
     "The white flash accompanies stage-0 acceptance but is not sufficient evidence of complete enrollment.",
     "Candidate .3 eliminated stage-1 retries after moving the local routine carrier to within 257 Hz of stock, providing the first evidence that the ordinary stage-1 reply was accepted.",
-    "The next physical discriminator changes only the long configuration wake compensation."
+    "Candidate .7 reproduces the known stock configuration bytes, wake count, total duration, absolute timing, and low-tone tail but still receives no valve response.",
+    "Do not adjust timing or wake again; obtain an unclipped physical-layer comparison before selecting another single-variable candidate."
   ]
 }

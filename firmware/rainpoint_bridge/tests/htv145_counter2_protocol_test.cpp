@@ -43,9 +43,12 @@ int main() {
     assert(rainpoint::htv145::replyStartDelayUs(4) == 52'550);
     assert(rainpoint::htv145::replyStartDelayUs(5) == 47'500);
     assert(rainpoint::htv145::kRoutineChannelCenterHz == 434'276'052);
-    assert(rainpoint::htv145::kConfigurationWakeSymbols == 2'464);
+    assert(rainpoint::htv145::kConfigurationWakeSymbols == 2'400);
     assert(
-        rainpoint::htv145::kConfigurationReplyStartDelayUs == 2'851'050
+        rainpoint::htv145::kConfigurationPostFrameLowHoldAdjustmentUs == 115
+    );
+    assert(
+        rainpoint::htv145::kConfigurationReplyStartDelayUs == 2'848'400
     );
 
     const auto factory0 = fromHex(

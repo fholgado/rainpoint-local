@@ -95,7 +95,7 @@ The following boundaries are physically established:
 |---|---|---|
 | Stage 0 assignment | Valve sends its addressed stage-1 request; white LED follows | Accepted in two unchanged trials; frozen |
 | Ordinary stage-1 reply | Valve stops retrying the stage-1 request after the response carrier was corrected to within 257 Hz of stock | Accepted once; prefix remains unchanged |
-| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidate `.4` retained two completed steps but produced no `81 50`; not accepted |
+| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidates `.4`--`.7` retained two completed steps but produced no `81 50`; not accepted |
 | Stages 3--5 and retained telemetry | Each next addressed request, then ordinary paired telemetry | Not yet tested locally |
 
 The white LED is the most difficult and useful breakpoint: it is positive
@@ -103,12 +103,14 @@ device-side proof that the initial association was accepted. It is not proof
 of complete enrollment. Once it appears, the addressed stage-1 request gives
 the investigation a deterministic request/reply loop instead of silence.
 
-Candidate `.4` was exercised physically on 2026-09-03. It preserved the
-counter-2 assignment acceptance and reached two completed node steps, but the
-valve did not emit the expected `81 50` configuration response. Because that
-trial had no SDR capture, it disproves only the sufficiency of the wake-length
-change; it does not yet establish whether the emitted long burst reached the
-predicted stock duration or whether the valve retried its stage-1 request.
+Continuous SDR captures of candidates `.4`--`.7` preserved counter-2
+assignment acceptance and the addressed stage-1 request but produced no
+`81 50`. They establish that the CC1101 emitted every requested wake symbol;
+the earlier apparent 64-symbol shortfall came from a lossy synchronous SDR
+capture, not from transmitter truncation. Candidate `.5` matched the stock
+post-frame low tail, `.6` matched the stock 2,400-symbol wake and total burst
+duration, and `.7` matched the stock absolute configuration timing. None was
+sufficient to advance the valve beyond two completed steps.
 
 The validated counter-2 physical definition is:
 
@@ -122,14 +124,18 @@ The validated counter-2 physical definition is:
 | Assigned response carrier | 434.3515 MHz nominal; node setting is calibrated against the valve oscillator |
 | Ordinary stage-1 delay | 68.700 ms from the captured request boundary |
 | Delayed configuration boundary | 2,952.55 ms after the normalized stage-1 request end |
+| Delayed configuration wake | 2,400 alternating symbols |
+| Delayed configuration low tail | About 201.5 us stock; candidate `.7` measured about 212.5 us |
 
 The candidate-.3 ordinary response measured 434.351533 MHz versus stock at
-434.351790 MHz and eliminated the valve's retries. Its delayed configuration
-was nevertheless only 132.119 ms on-air versus stock at 135.361 ms and did not
-elicit `81 50`. Candidate `.4` changes only that research-only long wake from
-2,400 requested symbols to 2,464 so the emitted waveform should reproduce the
-stock 2,400-symbol duration. This candidate is built and installed but has not
-received a physical verdict.
+434.351790 MHz and eliminated the valve's retries. A later lossless capture
+proved that its apparent short long-wake result was a capture artifact.
+Candidate `.7` now emits the exact configuration frame with a 2,400-symbol
+wake, `135.340 ms` total duration versus `135.361 ms` stock, approximately the
+stock low-tone tail, and the exact stock request-to-frame delay. Because the
+valve still does not answer, no further timing or wake adjustment is justified.
+The next discriminator is an unclipped same-session comparison of the local
+and stock tone centers, deviation, polarity, and complete symbol boundary.
 
 The packed clock/date marker positions are branch-specific. Counter 0 carries
 its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in
