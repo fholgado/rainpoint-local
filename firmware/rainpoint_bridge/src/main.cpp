@@ -84,6 +84,14 @@
 #error "HTV145 post-frame tail candidate requires the research pairing build"
 #endif
 
+#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 0 && RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 1
+#error "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1 || RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 1)
+#error "HTV145 delayed-prearm candidate requires the frozen research prefix"
+#endif
+
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "Routine acknowledgement trials require generalized pairing"
 #endif
@@ -3200,6 +3208,114 @@ bool handleHtv145PreludeCalibration(const String& command) {
     );
     return true;
 }
+
+bool handleHtv145ConfigurationCalibration(const String& command) {
+    const String prefix = "htv145_configuration_calibration ";
+    if (!command.startsWith(prefix)) {
+        return false;
+    }
+    const String offsetValue = command.substring(prefix.length());
+    const long frequencyOffsetHz = offsetValue.toInt();
+    if (offsetValue.isEmpty() || frequencyOffsetHz < -150'000 ||
+        frequencyOffsetHz > 150'000 ||
+        currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_configuration_calibration_invalid\"}"
+        );
+        return true;
+    }
+
+    const std::int64_t adjustedFrequency =
+        static_cast<std::int64_t>(rainpoint::htv145::kRoutineChannelCenterHz) +
+        frequencyOffsetHz;
+    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
+        !primaryRadio.prepareTransmit() ||
+        !primaryRadio.cacheTransmitFrequency(
+            static_cast<std::uint32_t>(adjustedFrequency)
+        )) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_configuration_calibration_prepare_failed\"}"
+        );
+        return true;
+    }
+
+    // Deliberately impossible endpoints make these frames useful only for
+    // SDR waveform comparison. The body and 2,400-symbol wake retain the
+    // accepted stock configuration structure.
+    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
+    for (std::size_t index = 0; index < rainpoint::kSync.size(); ++index) {
+        frame[index] = rainpoint::kSync[index];
+    }
+    constexpr std::array<std::uint8_t, 4> source{{0xde, 0xad, 0xc0, 0xde}};
+    constexpr std::array<std::uint8_t, 4> destination{{0xf0, 0x0d, 0xca, 0xfe}};
+    for (std::size_t index = 0; index < source.size(); ++index) {
+        frame[5 + index] = source[index];
+        frame[9 + index] = destination[index];
+    }
+    frame[13] = 0x81;
+    frame[14] = 0x10;
+    frame[15] = 0x01;
+    frame[16] = 0x01;
+    rainpoint::writeTrailer(frame, 0xc713);
+
+    struct ConfigurationVariant {
+        std::uint8_t deviationRegister;
+        bool gaussianShaping;
+    };
+    constexpr std::array<ConfigurationVariant, 4> variants{{
+        {0x45, false},
+        {0x44, false},
+        {0x45, true},
+        {0x44, true},
+    }};
+    for (std::size_t index = 0; index < variants.size(); ++index) {
+        const auto& variant = variants[index];
+        String line;
+        line.reserve(240);
+        line += "{\"type\":\"htv145_configuration_calibration\",\"variant\":";
+        line += index + 1;
+        line += ",\"state\":\"starting\",\"center_hz\":";
+        line += static_cast<std::uint32_t>(adjustedFrequency);
+        line += ",\"modulation\":\"";
+        line += variant.gaussianShaping ? "gfsk" : "2fsk";
+        line += "\",\"deviation_register\":\"0x";
+        line += variant.deviationRegister == 0x45 ? "45" : "44";
+        line += "\"}";
+        emitLine(line);
+        Serial.flush();
+        delay(250);
+
+        const bool sent = primaryRadio.transmitAsync(
+            frame,
+            static_cast<std::uint32_t>(adjustedFrequency),
+            rainpoint::htv145::kConfigurationWakeSymbols,
+            false,
+            rainpoint::pairingPaTableValue(0),
+            variant.deviationRegister,
+            micros() + 20'000,
+            0,
+            0,
+            0,
+            false,
+            0,
+            variant.gaussianShaping
+        );
+        line = "{\"type\":\"htv145_configuration_calibration\",\"variant\":";
+        line += index + 1;
+        line += sent
+            ? ",\"state\":\"transmitted\"}"
+            : ",\"state\":\"transmit_failed\"}";
+        emitLine(line);
+        delay(750);
+    }
+    emitLine(
+        "{\"type\":\"htv145_configuration_calibration\","
+        "\"state\":\"complete\"}"
+    );
+    return true;
+}
 #endif
 
 void handleSerialCommand() {
@@ -3212,7 +3328,10 @@ void handleSerialCommand() {
             bool handled = false;
 #if RAINPOINT_RESEARCH_BENCH == 1
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            handled = handleHtv145PreludeCalibration(serialCommand);
+            handled = handleHtv145ConfigurationCalibration(serialCommand);
+            if (!handled) {
+                handled = handleHtv145PreludeCalibration(serialCommand);
+            }
 #endif
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
             if (!handled) {
@@ -3660,7 +3779,10 @@ void processHtv145PairingFrame(
 #if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1
             replyStep == 0
                 ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
-                : 0
+                : replyStep == 1
+                    ? rainpoint::htv145::
+                        kStep1PostFrameLowHoldAdjustmentUs
+                    : 0
 #else
             0
 #endif
@@ -3668,6 +3790,23 @@ void processHtv145PairingFrame(
         if (sent && replyStep == 1) {
             std::array<std::uint8_t, rainpoint::kFrameBytes>
                 configurationFrame{};
+            const std::uint32_t configurationStartAtMicros =
+                packet.receivedAtMicros +
+                rainpoint::htv145::kConfigurationReplyStartDelayUs;
+#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1
+            // The accepted stock capture contains no RF during this delay.
+            // Candidate .8 entered FSTXON immediately and held the synthesizer
+            // there for roughly 2.8 seconds. Keep RX configured until shortly
+            // before the frozen on-air boundary so the long reply exercises a
+            // normal, short synthesizer settle without changing any symbols,
+            // bytes, carrier, or timing.
+            constexpr std::uint32_t kMaximumPrearmLeadUs = 20'000;
+            while (static_cast<std::int32_t>(
+                       configurationStartAtMicros - micros()
+                   ) > static_cast<std::int32_t>(kMaximumPrearmLeadUs)) {
+                delay(1);
+            }
+#endif
             sent = rainpoint::htv145::buildConfigurationReply(
                 activeHtv145PairingProfile, configurationFrame
             ) && radio.transmitAsync(
@@ -3677,8 +3816,7 @@ void processHtv145PairingFrame(
                 pairingInvert,
                 rainpoint::pairingPaTableValue(pairingPowerDbm),
                 step->deviationRegister,
-                packet.receivedAtMicros +
-                    rainpoint::htv145::kConfigurationReplyStartDelayUs,
+                configurationStartAtMicros,
                 0,
                 0,
                 0,

@@ -424,7 +424,8 @@ bool Cc1101::transmitAsync(
     std::int8_t leadingFrequencyOffsetRegister,
     std::uint8_t leadingDeviationRegister,
     bool invertLeadingPrelude,
-    std::uint16_t postFrameLowHoldMicros
+    std::uint16_t postFrameLowHoldMicros,
+    bool gaussianShaping
 ) {
     if (!transmitEnabled_) {
         ++blockedTransmitCount_;
@@ -447,13 +448,24 @@ bool Cc1101::transmitAsync(
 #else
         2'400;
 #endif
+    const bool validatedDeviation =
+        deviationRegister == kOrdinaryDeviationRegister ||
+        deviationRegister == kHtv405InitialDeviationRegister
+#if RAINPOINT_RESEARCH_BENCH == 1
+        || deviationRegister == 0x44
+#endif
+        ;
+    const bool validatedShaping = !gaussianShaping
+#if RAINPOINT_RESEARCH_BENCH == 1
+        || gaussianShaping
+#endif
+        ;
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > maximumWakeSymbols || leadingPreludeSymbols > 2'400 ||
         postFrameLowHoldMicros > 500 ||
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
-        (deviationRegister != kOrdinaryDeviationRegister &&
-         deviationRegister != kHtv405InitialDeviationRegister) ||
+        !validatedDeviation || !validatedShaping ||
         (hasLeadingPrelude &&
          (startAtMicros == 0 || leadingFrequencyOffsetRegister == 0 ||
           !validatedLeadingProfile)) ||
@@ -477,6 +489,10 @@ bool Cc1101::transmitAsync(
     // the ESP32 supplies the complete RainPoint wake, sync, and frame.
     writeRegister(kPacketControl0, 0x30);
     writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
+    // Production uses ordinary 2-FSK. The research-only calibration path can
+    // select CC1101 GFSK (BT=0.5) to compare its long-wake transition shape
+    // against an accepted stock transmission without addressing a device.
+    writeRegister(kModemConfig2, gaussianShaping ? 0x12 : 0x02);
     writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);

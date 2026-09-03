@@ -66,11 +66,16 @@ constexpr std::uint32_t kAssignmentReplyStartDelayUs =
 // only the measured 115 us difference. This constant is inert unless the
 // separate research build flag is enabled.
 constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
+// The first lossless, unclipped candidate-.7 comparison measured only 31 us
+// of low-tone hold after the ordinary stage-1 reply versus 160.5 us stock.
+// Stage 0 already proved that this bounded 115 us correction is required for
+// HTV145 acceptance. Candidate .8 applies that same correction only to the
+// otherwise byte- and carrier-identical stage-1 reply.
+constexpr std::uint16_t kStep1PostFrameLowHoldAdjustmentUs = 115;
 // The accepted stock counter-2 configuration frame retains its final low FSK
 // tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
-// Apply the already proven stage-0 correction only to the currently failing
-// delayed configuration boundary; the accepted ordinary stage-1 reply stays
-// waveform-for-waveform unchanged.
+// Apply the already proven stage-0 correction to the delayed configuration
+// boundary as well.
 constexpr std::uint16_t kConfigurationPostFrameLowHoldAdjustmentUs = 115;
 constexpr std::uint32_t kStep1ReplyStartDelayUs =
     kTargetFactoryCounter == 2 ? 68'700 : 70'700;

@@ -164,6 +164,76 @@
       "post_frame_low_tail_us": 212.5,
       "completed_steps": 2,
       "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.7",
+      "trial": "unchanged unclipped repeat",
+      "capture_path": "captures/continuous/20260903-152421/continuous.cu8",
+      "capture_sha256": "7d81d7a445f39455b59b6958d54328659bd8be6215dc13d6d5170503acab6ee0",
+      "capture_mode": "rtl_sdr asynchronous; no sample-loss warning",
+      "adc_rail_fraction": 0.0,
+      "requested_wake_symbols": 2400,
+      "recovered_wake_transitions": 2399,
+      "configuration_duration_ms": 135.335,
+      "configuration_center_hz": 434351384,
+      "configuration_deviation_hz": 41213,
+      "configuration_symbol_duration_us": 49.998432,
+      "local_stage_1_post_frame_low_tail_us": 31.0,
+      "stock_stage_1_post_frame_low_tail_us": 160.5,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.8",
+      "trial": "stage-1 post-frame low-hold discriminator",
+      "capture_path": "captures/continuous/20260903-154714/continuous.cu8",
+      "capture_sha256": "7f77e748084c27fb36ca633c434e86179d9ce30d6a03ebb905cc3903821bbf13",
+      "capture_mode": "rtl_sdr asynchronous; no sample-loss warning",
+      "adc_rail_fraction": 0.0,
+      "stage_1_frame_hex": "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5",
+      "local_stage_1_post_frame_low_tail_us": 149.5,
+      "stock_stage_1_post_frame_low_tail_us": 160.5,
+      "configuration_frame_hex": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+      "requested_wake_symbols": 2400,
+      "recovered_wake_transitions": 2399,
+      "configuration_duration_ms": 135.338,
+      "configuration_carrier_delta_from_stock_hz": -382,
+      "configuration_tone_separation_delta_from_stock_hz": -91,
+      "configuration_occupied_95_bandwidth_delta_from_stock_hz": -31,
+      "legacy_fft_spectral_match": true,
+      "legacy_fft_warning": "The unconstrained strongest-peak method selected payload-dependent sidebands; use balanced-wake measurements for physical FSK tones.",
+      "balanced_wake": {
+        "stock_center_hz": 434351818,
+        "local_center_hz": 434351362,
+        "local_minus_stock_center_hz": -456,
+        "stock_deviation_hz": 40149,
+        "local_deviation_hz": 41223,
+        "local_minus_stock_deviation_hz": 1074,
+        "stock_symbol_rate_sps": 19999.552,
+        "local_symbol_rate_sps": 20000.564,
+        "stock_transition_fit_rms_samples": 1.604675,
+        "local_transition_fit_rms_samples": 3.609791
+      },
+      "wake_plus_frame_symbol_count": 2704,
+      "wake_plus_frame_symbol_mismatches": 0,
+      "hidden_intermediate_rf_burst_observed": false,
+      "minimum_intermediate_burst_search_us": 20,
+      "completed_steps": 2,
+      "configuration_response_observed": false
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.8",
+      "trial": "unchanged controlled factory-reset lifecycle",
+      "capture_path": null,
+      "capture_unavailable_reason": "Mac SDR was not enumerated before the bounded arm; authoritative node and multi-receiver event evidence retained",
+      "factory_reset_before_arm": true,
+      "visible_result": "white acceptance flash",
+      "addressed_stage_1_request_observed": true,
+      "other_receiver_count": 2,
+      "competing_pairing_or_htv145_ack_observed": false,
+      "completed_steps": 2,
+      "configuration_response_observed": false,
+      "node_disarmed_after_response_margin": true
     }
   ],
   "stock_comparison": {
@@ -189,24 +259,54 @@
     "candidate_7_post_frame_tail_local_minus_stock_us": 11.0,
     "conclusion": "Lossless candidates .5 through .7 disprove wake count, total burst duration, low-tone tail length, and absolute configuration timing as sole causes. Candidate .7 matches the stock 2400-symbol duration and 2952.55 ms request-to-frame boundary but still receives no 81 50 response."
   },
-  "next_discriminator": {
-    "action": "capture an unclipped candidate-7 long reply and compare its full symbol boundary, tone centers, deviation, and polarity with accepted stock",
+  "offline_discriminators": {
+    "synthesizer_wait_leakage": {
+      "stock_target_bin_excess_db": -0.09,
+      "local_target_bin_excess_db": -0.82,
+      "conclusion": "No detectable narrowband carrier rise at the assigned frequency during the local 2.8-second wait."
+    },
+    "rmt_refill_boundary": {
+      "stock_transition_fit_rms_samples": 1.605,
+      "local_transition_fit_rms_samples": 3.61,
+      "local_refill_boundary_rms_samples": 3.569,
+      "local_non_boundary_rms_samples": 3.608,
+      "conclusion": "The local wake has more threshold-crossing jitter, but it is not concentrated at 128-symbol RMT refill boundaries."
+    },
+    "stock_configuration_relative_level": {
+      "counter_2_long_minus_short_db": -1.5,
+      "counter_0_long_minus_short_db": 0.58,
+      "conclusion": "Stock does not encode a fixed configuration-specific transmit-power reduction."
+    }
+  },
+  "next_experiment": {
+    "firmware": "0.15.4-htv145-pairing-counter2-candidate.9",
+    "single_change": "keep the radio in receive configuration during the delayed interval and enter FSTXON no earlier than 20 ms before the frozen configuration boundary, instead of holding FSTXON for roughly 2.8 seconds",
+    "pass_condition": "valve-originated 81 50 configuration response and progress beyond 2 of 6 steps",
     "frozen": [
       "stage-0 request matcher",
       "assignment payload and dynamic clock",
-      "assignment carrier, deviation, wake, timing, and low tail",
-      "stage-1 and configuration frame bytes",
-      "stage-1 response timing",
+      "assignment carrier, deviation, wake, timing, low tail, and transmit level",
+      "stage-1 frame bytes, carrier, deviation, wake, response timing, low tail, and transmit level",
       "configuration carrier",
       "configuration wake count and total duration",
-      "configuration timing and low tail"
+      "configuration timing and low tail",
+      "all endpoint, counter, selector, and trailer semantics"
     ]
   },
   "interpretation": [
     "Two consecutive local trials produced the valve-originated addressed stage-1 request, proving and freezing stage 0.",
     "The white flash accompanies stage-0 acceptance but is not sufficient evidence of complete enrollment.",
-    "Candidate .3 eliminated stage-1 retries after moving the local routine carrier to within 257 Hz of stock, providing the first evidence that the ordinary stage-1 reply was accepted.",
+    "Candidate .3 eliminated immediate stage-1 retries after moving the local routine carrier to within 257 Hz of stock, which was provisionally treated as acceptance but was not terminal device evidence.",
     "Candidate .7 reproduces the known stock configuration bytes, wake count, total duration, absolute timing, and low-tone tail but still receives no valve response.",
-    "Do not adjust timing or wake again; obtain an unclipped physical-layer comparison before selecting another single-variable candidate."
+    "The unclipped candidate-.7 repeat disproves clipping, wake count, frame bytes, and long-frame timing as sole causes.",
+    "Candidate .8 brings the ordinary stage-1 final low-tone hold to 149.5 us versus 160.5 us stock but still produces no 81 50, falsifying that tail as the missing condition.",
+    "Candidate .8's delayed configuration is byte-identical to stock and neither transcript contains a hidden intermediate RF burst down to the 20 us search threshold.",
+    "Balanced-wake analysis corrects the former payload-biased FFT comparison: local deviation is about 1.074 kHz wider than stock even though the carrier centers differ by only 456 Hz and all 2704 symbol polarities match.",
+    "Repeating unchanged candidate .8 after a controlled factory reset again stopped at 2 of 6, falsifying retained valve state as the missing condition.",
+    "Other nodes only observed the addressed request and emitted no competing pairing or HTV145 acknowledgement; their server observed_at differences are network-ingestion latency, not RF retry timing.",
+    "No detectable local-oscillator leakage is present during the delayed wait, and transition error is not concentrated at RMT refill boundaries.",
+    "A second accepted stock session reverses the apparent long-versus-short amplitude relationship, so transmit level is not the next justified discriminator.",
+    "The non-enrolling configuration calibration proves stock uses sharp 2-FSK rather than GFSK, retains the 0x45 deviation family, and does not change PHY at the wake-to-frame boundary.",
+    "Candidate .8 unnecessarily holds the CC1101 in FSTXON for roughly 2.8 seconds before the delayed configuration. Candidate .9 changes only that pre-arm dwell while preserving the entire accepted prefix and on-air configuration waveform."
   ]
 }

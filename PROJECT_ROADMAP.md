@@ -499,10 +499,73 @@ observation before it changes transmitted firmware.
     at `2/6`. All three post-`.4` captures used asynchronous rtl_sdr mode and
     reported no sample loss. Wake count, burst duration, low-tail length, and
     absolute configuration timing are therefore ruled out as sole causes.
-    Before another firmware change, capture an unclipped local long reply and
-    compare tone centers/deviation and the complete symbol boundary against
-    the accepted stock frame. Keep the assignment, counter-2 branch, ordinary
-    reply, payload, 2,400-symbol wake, and `.7` timing frozen.
+    An unchanged `.7` repeat then produced a lossless, unclipped capture at
+    `captures/continuous/20260903-152421/continuous.cu8` (`sha256
+    7d81d7a445f39455b59b6958d54328659bd8be6215dc13d6d5170503acab6ee0`).
+    Its long reply used `0x45` deviation, all 2,400 wake symbols, zero ADC-rail
+    clipping, and the same local carrier/deviation/symbol quality as the short
+    stage-1 reply. The remaining measured mismatch was one step earlier: stock
+    retains the stage-1 reply's final low tone for `160.5 us`, while local `.7`
+    retained it for only `31.0 us`. Retry suppression was not sufficient proof
+    that this intermediate boundary had been accepted. Candidate `.8` changes
+    only that stage-1 low-tone hold using the already stage-0-proven `115 us`
+    correction. Its pass condition is valve-originated `81 50` and progress
+    beyond `2/6`; otherwise the tail hypothesis is falsified. Keep assignment,
+    payloads, carriers, wake counts, response timing, and configuration frozen.
+  - 2026-09-03 candidate `.8` again produced the valve's white acceptance
+    flash and addressed stage-1 request, but the node remained at `2/6` and no
+    valve-originated `81 50` followed. The lossless, unclipped capture is
+    `captures/continuous/20260903-154714/continuous.cu8` (`sha256
+    7f77e748084c27fb36ca633c434e86179d9ce30d6a03ebb905cc3903821bbf13`).
+    Its ordinary reply retained the final low tone for `149.5 us` versus
+    `160.5 us` stock. Its delayed configuration was byte-identical to the
+    selector-6 stock frame, all 2,399 wake transitions were recovered, and
+    zero ADC-rail clipping was present. Searching both accepted-stock and local
+    intervals down to `20 us` found no hidden RF exchange between the ordinary
+    reply and delayed configuration. The stage-1 tail hypothesis is therefore
+    falsified; assignment, stage-1 reply, payload, wake, and absolute timing
+    remain frozen.
+    A 2026-09-03 balanced-wake reanalysis corrected the earlier unconstrained
+    FFT result, which had selected payload-dependent sidebands. Across all
+    `2,704` wake-plus-frame symbols, stock and local polarity have zero
+    mismatches. The stock long wake measures about `40.149 kHz` deviation at
+    `434.351818 MHz`; local measures about `41.223 kHz` at `434.351362 MHz`.
+    The local threshold crossings have higher residual jitter, but no error is
+    concentrated at the RMT driver's 128-symbol refill boundaries.
+  - 2026-09-03 the controlled factory-reset repeat of unchanged `.8` again
+    produced the white acceptance flash and addressed stage-1 request, then
+    stopped at `2/6` without `81 50`. The node was disarmed after the delayed
+    response margin. All three radio nodes observed the request, but the event
+    stream contains no competing pairing or HTV145 acknowledgement
+    transmission from either receive-only node. Their differently delayed
+    `observed_at` values are network-ingestion times, not RF retry evidence;
+    the prior continuous IQ capture remains the timing authority and contains
+    only the first stage-1 exchange. Retained valve state and cross-node reply
+    collision are therefore ruled out for this failure.
+    Offline spectral averaging also found no carrier rise during the local
+    2.8-second synthesizer-on wait, ruling out detectable local-oscillator
+    leakage as the blocker. Transmit level is not justified as the next trial:
+    the counter-2 stock session placed its long reply about `1.5 dB` below the
+    short reply, while a second accepted counter-0 session placed it about
+    `0.6 dB` above.
+    The authorized non-enrolling calibration then transmitted four unclipped
+    frames to impossible endpoints. Stock has a sharp approximately `2 us`
+    transition matching 2-FSK; both GFSK variants take about `14 us` and are
+    ruled out. `0x44` undershoots the stock deviation while `0x45` remains the
+    closest justified CC1101 family. Separate symbol-aligned analysis found no
+    stock or local carrier/deviation change at the wake-to-frame boundary and
+    decoded all 304 frame symbols with zero errors. The broad modulation and
+    frame-boundary PHY hypotheses are therefore closed. The calibration run's
+    absolute center is excluded because the rebooted serial session omitted
+    the node-specific frequency correction; the prior live `.8` capture is
+    still authoritative for the already matched carrier.
+  - [ ] Exercise candidate `.9`, which changes one implementation-only detail:
+    `.8` enters FSTXON immediately after the ordinary stage-1 reply and holds
+    the synthesizer there for roughly `2.8 s`. `.9` keeps the radio in receive
+    configuration until `20 ms` before the frozen delayed configuration
+    boundary. It changes no bytes, carrier, deviation, symbols, power, tail, or
+    on-air timing. Pass only on valve-originated `81 50` and progress beyond
+    `2/6`; request explicit approval before arming.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

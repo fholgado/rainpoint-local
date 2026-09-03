@@ -1,0 +1,107 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-03",
+  "purpose": "Discriminate the stock delayed configuration modulation without addressing or enrolling a valve.",
+  "safety_boundary": {
+    "pairing_armed": false,
+    "source_endpoint": "deadc0de",
+    "destination_endpoint": "f00dcafe",
+    "transmit_power_dbm": 0,
+    "frame_count": 4
+  },
+  "capture": {
+    "path": "captures/continuous/20260903-175920/continuous.cu8",
+    "sha256": "84f8bc805427e869ba4a99e3a4c85ad7ca0b2ce81aa246434acf9b185ee16dbf",
+    "bytes": 160000000,
+    "sample_rate_sps": 2000000,
+    "capture_center_hz": 433700000,
+    "mode": "rtl_sdr asynchronous",
+    "sample_loss_warning": false
+  },
+  "stock_reference": {
+    "path": "captures/htv145-counter2-stock-window-122s-144s.cu8",
+    "sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
+    "modulation": "2fsk",
+    "center_hz": 434351818,
+    "deviation_hz": 40149,
+    "transition_10_90_us": 2.0,
+    "symbol_rate_sps": 19999.552,
+    "transition_fit_rms_samples": 1.604675
+  },
+  "calibration_setup_note": {
+    "programmed_center_hz": 434351500,
+    "observed_2fsk_center_hz": 434304112,
+    "error": "The serial calibration started after reboot with a zero runtime frequency correction. It therefore omitted the node-specific +122759 Hz pairing correction and landed about 47 kHz below the stock carrier.",
+    "scope": "Absolute center frequency from this capture is invalid as a protocol comparison. Deviation, transition shape, symbol rate, burst duration, and modulation-family comparisons remain valid. Candidate .8 independently established the calibrated live center."
+  },
+  "variants": [
+    {
+      "variant": 1,
+      "modulation": "2fsk",
+      "deviation_register": "0x45",
+      "start_seconds": 21.57227,
+      "duration_ms": 135.214,
+      "center_hz": 434303827,
+      "deviation_hz": 42779,
+      "transition_10_90_us": 1.5,
+      "symbol_rate_sps": 20000.563,
+      "transition_fit_rms_samples": 3.716965,
+      "adc_rail_fraction": 0.0
+    },
+    {
+      "variant": 2,
+      "modulation": "2fsk",
+      "deviation_register": "0x44",
+      "start_seconds": 22.753113,
+      "duration_ms": 135.22,
+      "center_hz": 434304397,
+      "deviation_hz": 37628,
+      "transition_10_90_us": 1.0,
+      "symbol_rate_sps": 20000.627,
+      "transition_fit_rms_samples": 3.774911,
+      "adc_rail_fraction": 0.0
+    },
+    {
+      "variant": 3,
+      "modulation": "gfsk",
+      "deviation_register": "0x45",
+      "start_seconds": 23.934078,
+      "duration_ms": 135.219,
+      "center_hz": 434303594,
+      "deviation_hz": 32803,
+      "transition_10_90_us": 14.0,
+      "symbol_rate_sps": 20000.614,
+      "transition_fit_rms_samples": 4.440801,
+      "adc_rail_fraction": 0.0
+    },
+    {
+      "variant": 4,
+      "modulation": "gfsk",
+      "deviation_register": "0x44",
+      "start_seconds": 25.115041,
+      "duration_ms": 135.22,
+      "center_hz": 434304733,
+      "deviation_hz": 29625,
+      "transition_10_90_us": 14.0,
+      "symbol_rate_sps": 20000.636,
+      "transition_fit_rms_samples": 4.575295,
+      "adc_rail_fraction": 0.0
+    }
+  ],
+  "wake_to_frame_boundary": {
+    "stock_frame_bit_errors": 0,
+    "candidate_8_frame_bit_errors": 0,
+    "stock_wake_deviation_hz": 40149,
+    "stock_frame_deviation_hz": 40114,
+    "candidate_8_wake_deviation_hz": 41223,
+    "candidate_8_frame_deviation_hz": 41234,
+    "conclusion": "Neither stock nor candidate .8 changes carrier or deviation at the wake-to-frame boundary. All 304 configuration-frame symbols demodulate with the expected polarity."
+  },
+  "interpretation": [
+    "The stock delayed configuration is ordinary sharp-transition 2-FSK. Both GFSK variants have an approximately 14 us transition and are physically unlike the approximately 2 us stock transition.",
+    "The existing 0x45 deviation family remains the closest justified CC1101 profile. Register 0x44 undershoots stock while 0x45 overshoots it slightly; there is no configuration-specific profile switch at the frame boundary.",
+    "The broad modulation-family and wake-to-frame-profile hypotheses are falsified as sole explanations for the missing valve 81 50 response.",
+    "Code inspection found a different implementation-only discriminator: candidate .8 enters FSTXON immediately after the ordinary stage-1 reply and holds the synthesizer there for roughly 2.8 seconds before the delayed configuration. Stock contains no RF in this interval and is not known to pre-arm its synthesizer that early.",
+    "Candidate .9 must preserve every frozen byte, carrier, symbol, tail, and on-air boundary while keeping the CC1101 in receive configuration until 20 ms before the delayed configuration. It is not accepted until a valve-originated 81 50 advances the session beyond 2 of 6."
+  ]
+}

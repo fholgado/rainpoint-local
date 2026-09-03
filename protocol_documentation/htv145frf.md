@@ -31,7 +31,7 @@ configuration transmission between stages 1 and 2:
 |---:|---|---|
 | 0 | `80 80 84 02 ff 8f 97` | Assignment to companion, selector 5, about 50.55 ms |
 | 1 | `81 01 07 82 25` | Reply `81 41 01`, about 50.40 ms |
-| 1a | no request | Long-wake config `81 90 01 01` to valve route, 2,400-symbol stock wake, about 2,952.55 ms after the normalized stage-1 request end |
+| 1a | no request | Selector-5 branch: long-wake config `81 90 01 01` to valve route; selector-6 counter-0/counter-2 branches use `81 10 01 01`. The counter-2 branch uses a 2,400-symbol stock wake about 2,952.55 ms after the normalized stage-1 request end |
 | 2 | `81 d0 00 80` | Observe only |
 | 3 | `81 82 81 02` | Reply `81 c2 87 80 2c 01 05`, about 50.70 ms |
 | 4 | `82 03 01 82` | Reply `82 43 00 80`, about 53.35 ms |
@@ -94,8 +94,8 @@ The following boundaries are physically established:
 | Boundary | Device-originated evidence | Status |
 |---|---|---|
 | Stage 0 assignment | Valve sends its addressed stage-1 request; white LED follows | Accepted in two unchanged trials; frozen |
-| Ordinary stage-1 reply | Valve stops retrying the stage-1 request after the response carrier was corrected to within 257 Hz of stock | Accepted once; prefix remains unchanged |
-| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidates `.4`--`.7` retained two completed steps but produced no `81 50`; not accepted |
+| Ordinary stage-1 reply | Payload, carrier, symbol rate, timing, and final low-tone hold now match stock; `.8` measured 149.5 us versus 160.5 us stock and produced no immediate stage-1 retry | Intermediate behavior reproduced, but not independently sufficient to prove acceptance |
+| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidates `.4`--`.8` retained two completed steps but produced no `81 50`; not accepted |
 | Stages 3--5 and retained telemetry | Each next addressed request, then ordinary paired telemetry | Not yet tested locally |
 
 The white LED is the most difficult and useful breakpoint: it is positive
@@ -130,12 +130,66 @@ The validated counter-2 physical definition is:
 The candidate-.3 ordinary response measured 434.351533 MHz versus stock at
 434.351790 MHz and eliminated the valve's retries. A later lossless capture
 proved that its apparent short long-wake result was a capture artifact.
-Candidate `.7` now emits the exact configuration frame with a 2,400-symbol
-wake, `135.340 ms` total duration versus `135.361 ms` stock, approximately the
-stock low-tone tail, and the exact stock request-to-frame delay. Because the
-valve still does not answer, no further timing or wake adjustment is justified.
-The next discriminator is an unclipped same-session comparison of the local
-and stock tone centers, deviation, polarity, and complete symbol boundary.
+Candidate `.7` emits the exact configuration frame with a 2,400-symbol wake,
+`135.340 ms` total duration versus `135.361 ms` stock, approximately the stock
+low-tone tail, and the exact stock request-to-frame delay. An unchanged,
+unclipped `.7` repeat showed that the local short and long replies share the
+same carrier, `0x45` deviation, symbol rate, and boundary quality. It exposed
+one previously unfrozen difference: the ordinary stage-1 reply retained its
+final low tone for only `31.0 us` versus `160.5 us` stock.
+
+Candidate `.8` changed only that boundary. Its ordinary reply measured
+`149.5 us` of final low-tone hold, but the valve again stopped at `2/6` without
+emitting `81 50`. Its long configuration was byte-identical to the selector-6
+stock frame, all 2,399 wake transitions were recovered, and no clipping was
+present. A later balanced-wake reanalysis corrected the earlier payload-biased
+FFT result: stock deviation is about `40.149 kHz`, while local deviation is
+about `41.223 kHz`. The centers differ by only about `456 Hz`, and all 2,704
+wake-plus-frame symbols have identical polarity. The logical transcript is
+therefore frozen. The later non-enrolling calibration confirms the same 2-FSK
+family and no wake-to-frame profile change; the small quantized deviation
+difference remains measured but does not justify changing the accepted
+stage-1 profile.
+
+A controlled full-factory-reset repeat of unchanged candidate `.8` again
+produced the white flash and addressed stage-1 request, then stopped at `2/6`
+without `81 50`. Retained valve session state is therefore not the missing
+condition. The other radio nodes only reported receive observations; no
+competing pairing or HTV145 acknowledgement transmission was present. Their
+different Home Assistant `observed_at` times reflect network ingestion and
+must not be used as RF retry timing; the continuous IQ capture is authoritative
+and contains only the first stage-1 exchange.
+
+Additional offline checks ruled out two implementation-side explanations. The
+2.8-second interval in which the CC1101 waits in synthesizer-on state has no
+detectable carrier above the surrounding noise floor, so there is no evidence
+that local-oscillator leakage jams the valve. Transition timing also has no
+error concentrated at the ESP32 RMT driver's 128-symbol refill boundaries.
+The local wake does have more threshold-crossing jitter than stock, but the
+same behavior on the short stage-1 reply is sufficient to suppress retries and
+is not yet causal.
+
+Transmit level is not the next discriminator. One accepted stock counter-2
+capture happened to put the long configuration about `1.5 dB` below its short
+reply, but a second accepted counter-0 capture put the long transmission about
+`0.6 dB` above its short reply. That variation is session geometry, not an
+encoded power rule.
+
+A non-enrolling four-frame calibration closes the configuration-modulation
+hypothesis. The accepted stock transmission is sharp-transition 2-FSK (about
+`2 us` from 10% to 90%); CC1101 GFSK takes about `14 us` and is plainly
+different. Register `0x44` undershoots the stock deviation, while `0x45`
+remains the closest justified CC1101 family. Symbol-aligned measurements of
+all 304 frame bits also show that neither stock nor candidate `.8` changes
+carrier or deviation at the wake-to-frame boundary.
+
+Code inspection exposed the next bounded discriminator. Candidate `.8`
+enters FSTXON immediately after its ordinary stage-1 reply and waits there for
+roughly `2.8 s` before the delayed configuration. Candidate `.9` keeps the
+radio in receive configuration until `20 ms` before the same frozen on-air
+boundary. It changes no packet, carrier, deviation, wake, power, tail, or
+timing. A later valve trial must require valve-originated `81 50` before
+treating that change as accepted.
 
 The packed clock/date marker positions are branch-specific. Counter 0 carries
 its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in
@@ -271,6 +325,8 @@ not exposed as supported functionality.
   `research/fixtures/htv145_counter0_app_first_stock_enrollment_20260901.json`
 - Balanced-wake PHY discriminator:
   `research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`
+- Configuration PHY calibration:
+  `research/fixtures/htv145_configuration_phy_calibration_20260903.json`
 - Command and duration evidence:
   `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
 - Battery and usage evidence:

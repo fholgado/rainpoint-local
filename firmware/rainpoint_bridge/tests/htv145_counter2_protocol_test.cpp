@@ -45,6 +45,9 @@ int main() {
     assert(rainpoint::htv145::kRoutineChannelCenterHz == 434'276'052);
     assert(rainpoint::htv145::kConfigurationWakeSymbols == 2'400);
     assert(
+        rainpoint::htv145::kStep1PostFrameLowHoldAdjustmentUs == 115
+    );
+    assert(
         rainpoint::htv145::kConfigurationPostFrameLowHoldAdjustmentUs == 115
     );
     assert(

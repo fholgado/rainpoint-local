@@ -166,7 +166,11 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.7"',
+            '"0.15.4-htv145-pairing-counter2-candidate.8"',
+            build_profile,
+        )
+        self.assertIn(
+            '"0.15.4-htv145-pairing-counter2-candidate.9"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -182,6 +186,7 @@ class AddonBoundaryTest(unittest.TestCase):
         build_profile = (root / "tools" / "build_profile.py").read_text()
         main_source = (root / "src" / "main.cpp").read_text()
         radio_source = (root / "src" / "cc1101.cpp").read_text()
+        radio_header = (root / "src" / "cc1101.h").read_text()
         pairing_source = (
             root / "include" / "rainpoint_htv145_pairing.h"
         ).read_text()
@@ -192,7 +197,15 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
+            '"RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
             "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
+            build_profile,
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE requires the HTV145",
             build_profile,
         )
         self.assertIn('"RAINPOINT_RESEARCH_BENCH=1 and "', build_profile)
@@ -201,9 +214,24 @@ class AddonBoundaryTest(unittest.TestCase):
             main_source,
         )
         self.assertIn("replyStep == 0", main_source)
+        self.assertIn("replyStep == 1", main_source)
+        self.assertIn("kMaximumPrearmLeadUs = 20'000", main_source)
+        self.assertIn(
+            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1",
+            main_source,
+        )
         self.assertIn("postFrameLowHoldMicros > 500", radio_source)
+        self.assertIn("bool gaussianShaping = false", radio_header)
+        self.assertIn("gaussianShaping ? 0x12 : 0x02", radio_source)
+        self.assertIn("htv145_configuration_calibration", main_source)
+        self.assertIn("{0x45, false}", main_source)
+        self.assertIn("{0x44, true}", main_source)
         self.assertIn(
             "kStage0PostFrameLowHoldAdjustmentUs = 115",
+            pairing_source,
+        )
+        self.assertIn(
+            "kStep1PostFrameLowHoldAdjustmentUs = 115",
             pairing_source,
         )
         self.assertIn("htv145_post_frame_tail_candidate", wifi_source)
@@ -228,6 +256,9 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("kTargetFactoryCounter", pairing_source)
         self.assertIn(
             "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2", workflow
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1", workflow
         )
         self.assertGreaterEqual(
             workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),
