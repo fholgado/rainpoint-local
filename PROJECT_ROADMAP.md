@@ -474,13 +474,15 @@ observation before it changes transmitted firmware.
     Stage 0, the accepted ordinary stage-1 reply, all frame bytes, carriers,
     and scheduling remain unchanged. Evidence:
     `research/fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
-  - 2026-09-02 candidate `.4` is built, staged, and installed on the OTA test
-    node. It preserves the accepted stage-0 assignment and ordinary stage-1
-    response and changes only the long configuration wake request from 2,400
-    to 2,464 symbols. The predicted observation is a stock-length on-air burst
-    near `135.361 ms`, followed by valve-originated `81 50` and the next
-    addressed request. The user ended physical testing before this candidate
-    was exercised, so this is not an acceptance result.
+  - 2026-09-03 candidate `.4` was exercised physically on the OTA test node.
+    It again produced the valve's white flash, the addressed stage-1 request,
+    and two completed node steps, but no valve-originated `81 50` response.
+    Node diagnostics showed no blocked or rejected transmission. The trial had
+    no SDR capture, so it proves that wake-length compensation alone was not
+    sufficient but does not establish the emitted burst duration or whether
+    the valve retried stage 1. Before changing payload, carrier, or timing,
+    record one unchanged `.4` trial with the Mac SDR and measure those two
+    discriminators.
 - [x] Keep firmware-catalog staging within the runtime's 32-release bound.
       Staging probe `.22` temporarily produced a 33-entry catalog that the
       gateway rejected. The staging tool now refuses overflow before writing

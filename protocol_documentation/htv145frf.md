@@ -95,13 +95,20 @@ The following boundaries are physically established:
 |---|---|---|
 | Stage 0 assignment | Valve sends its addressed stage-1 request; white LED follows | Accepted in two unchanged trials; frozen |
 | Ordinary stage-1 reply | Valve stops retrying the stage-1 request after the response carrier was corrected to within 257 Hz of stock | Accepted once; prefix remains unchanged |
-| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Not yet accepted |
+| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidate `.4` retained two completed steps but produced no `81 50`; not accepted |
 | Stages 3--5 and retained telemetry | Each next addressed request, then ordinary paired telemetry | Not yet tested locally |
 
 The white LED is the most difficult and useful breakpoint: it is positive
 device-side proof that the initial association was accepted. It is not proof
 of complete enrollment. Once it appears, the addressed stage-1 request gives
 the investigation a deterministic request/reply loop instead of silence.
+
+Candidate `.4` was exercised physically on 2026-09-03. It preserved the
+counter-2 assignment acceptance and reached two completed node steps, but the
+valve did not emit the expected `81 50` configuration response. Because that
+trial had no SDR capture, it disproves only the sufficiency of the wake-length
+change; it does not yet establish whether the emitted long burst reached the
+predicted stock duration or whether the valve retried its stage-1 request.
 
 The validated counter-2 physical definition is:
 
