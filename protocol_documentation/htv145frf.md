@@ -216,9 +216,20 @@ measured deviation `901 Hz` wider. It emitted about `2,410` alternating symbols
 before sync and lasted `135.779 ms`, versus `2,400` and `135.361 ms` stock.
 Candidate `.10` therefore changes only the delayed configuration transmitter
 from ESP32 RMT to CC1101 FIFO while keeping the accepted stage-0 assignment and
-ordinary stage-1 reply frozen. This is a live discriminator, not a supported
-pairing profile; acceptance still requires valve-originated `81 50` and
-progress beyond `2/6`.
+ordinary stage-1 reply frozen. Its first live trial produced the exact
+valve-originated `81 50` request and advanced through the next two addressed
+requests, moving node progress from `2/6` to `5/6`. This is direct evidence
+that hardware-clocked FIFO transmission solved the delayed-configuration
+boundary.
+
+Enrollment is not terminal yet. The zero-based step-4 reply matched the stock
+frame, carrier, 320-symbol wake, and schedule, but the local burst lasted
+`31.2285 ms` versus `31.358 ms` stock. The valve emitted a sequence of
+`84/03`, `84/83`, `85/03`, and `85/83` retries instead of the stock terminal
+`84/2c` request. The next isolated candidate retains the complete accepted
+prefix and adds only the already proven `115 us` final-low hold to step 4.
+Evidence is in
+[`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 
 The packed clock/date marker positions are branch-specific. Counter 0 carries
 its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in
@@ -230,8 +241,8 @@ gateway response must be normalized against the valve request oscillator in
 the same capture.
 
 Therefore no HTV145 local enrollment profile is advertised as supported until
-the delayed configuration and remaining stages complete twice without changing
-the frozen prefix. The reusable investigation method is documented in
+the remaining stage completes twice without changing the frozen prefix. The
+reusable investigation method is documented in
 [`research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`](../research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md).
 
 ## Routine telemetry and state

@@ -100,6 +100,14 @@
 #error "HTV145 FIFO configuration candidate requires the frozen counter-2 research prefix"
 #endif
 
+#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 0 && RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 1
+#error "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1 && RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 1
+#error "HTV145 step-4 tail candidate requires the accepted FIFO-configuration prefix"
+#endif
+
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "Routine acknowledgement trials require generalized pairing"
 #endif
@@ -3865,6 +3873,11 @@ void processHtv145PairingFrame(
                 : replyStep == 1
                     ? rainpoint::htv145::
                         kStep1PostFrameLowHoldAdjustmentUs
+#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1
+                    : replyStep == 4
+                        ? rainpoint::htv145::
+                            kStep4PostFrameLowHoldAdjustmentUs
+#endif
                     : 0
 #else
             0

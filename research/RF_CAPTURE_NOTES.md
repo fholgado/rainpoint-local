@@ -791,5 +791,20 @@ Reference evidence:
   pairing was armed during calibration; the candidate requires explicit user
   approval and valve-originated `81 50` before it can advance.
 
+The first approved live `.10` trial supplied that evidence. Capture
+`captures/continuous/20260904-141158/continuous.cu8` (SHA-256
+`8d226ca1cc55e2a64bdd42ae8233be974fefd2c5662ab2c799b9b2c9177b9588`)
+contains the accepted counter-2 assignment, addressed stage-1 exchange, exact
+FIFO configuration, valve-originated `81 50`, and the next two addressed
+requests. Node progress advanced from `2/6` to `5/6`, proving the long
+configuration was accepted. The next expected stock request, `84 2c`, did not
+arrive; the valve instead emitted alternating `03/83` retries at incrementing
+counters after the local step-4 reply. That reply's normalized bytes, carrier,
+wake count, and schedule match stock, but its burst is `31.2285 ms` versus
+`31.358 ms` stock. Candidate `.11` therefore adds only the established
+`115 us` final-low hold to zero-based reply step 4, after `.10` is repeated
+unchanged once.
+
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.
+`fixtures/htv145_fifo_configuration_acceptance_20260904.json`.

@@ -1,0 +1,76 @@
+{
+  "scope": "first live HTV145 counter-2 FIFO-configuration acceptance trial",
+  "date": "2026-09-04",
+  "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.10",
+  "capture": {
+    "path": "captures/continuous/20260904-141158/continuous.cu8",
+    "sha256": "8d226ca1cc55e2a64bdd42ae8233be974fefd2c5662ab2c799b9b2c9177b9588",
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "adc_clipped": false
+  },
+  "identity": {
+    "factory_endpoint": "342d008f",
+    "paired_endpoint": "b42d008f",
+    "controller_endpoint": "b9840280",
+    "companion_endpoint": "39840280"
+  },
+  "accepted_prefix": {
+    "factory_counter": 2,
+    "assigned_channel": 12,
+    "assignment_frame": "79f4882f28b42d008fb98402808240858500867000a8f1a40d01008000000000000000004494",
+    "stage_1_request": "79f4882f28b9840280b42d008f828107862580804f8000000040800056800000000000004301",
+    "stage_1_reply": "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5",
+    "fifo_configuration": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+    "post_configuration_request": "79f4882f28b9840280b42d008f81500080000000000000000000000000000000000000006f4d",
+    "progress_before": "2/6",
+    "progress_after": "5/6"
+  },
+  "post_configuration_sequence": [
+    {
+      "request": "79f4882f28b9840280b42d008f83028106008000000000000000000000000000000000004db3",
+      "reply": "79f4882f28b42d008fb9840280834287802c0105000f0000000000000000000000000000063f",
+      "accepted": true
+    },
+    {
+      "request": "79f4882f28b9840280b42d008f83830186008000000000000000000000000000000000004ef9",
+      "reply": "79f4882f28b42d008fb984028083c3008000000000000000000000000000000000000000221c",
+      "accepted": false
+    }
+  ],
+  "failure_boundary": {
+    "expected_next_request": "79f4882f28b9840280b42d008f842c80990000000000000000000000000000000000000028bd",
+    "observed_first_retry": "79f4882f28b9840280b42d008f8403018600800000000000000000000000000000000000576c",
+    "observed_retry_pattern": [
+      "840301",
+      "848301",
+      "850301",
+      "858301"
+    ],
+    "node_pairing_state": "armed",
+    "node_completed_steps": 5,
+    "node_total_steps": 6
+  },
+  "step_4_reply_waveform_comparison": {
+    "frame_equal_to_stock": true,
+    "local": {
+      "request_end_to_reply_start_ms": 53.05,
+      "burst_duration_ms": 31.2285,
+      "center_hz": 434351404,
+      "deviation_hz": 41222,
+      "wake_transitions": 319,
+      "symbol_rate_sps": 19999.319
+    },
+    "stock": {
+      "request_end_to_reply_start_ms": 52.55,
+      "burst_duration_ms": 31.358,
+      "center_hz": 434351830,
+      "deviation_hz": 40093,
+      "wake_transitions": 319,
+      "symbol_rate_sps": 19999.105
+    },
+    "isolated_next_candidate": "retain the complete accepted prefix and add only the proven 115 us final-low hold to zero-based reply step 4"
+  },
+  "conclusion": "FIFO clocking is causally supported: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6. The fifth reply is the next isolated rejection boundary; terminal enrollment is not yet proven."
+}

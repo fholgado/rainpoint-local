@@ -72,6 +72,13 @@ constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
 // HTV145 acceptance. Candidate .8 applies that same correction only to the
 // otherwise byte- and carrier-identical stage-1 reply.
 constexpr std::uint16_t kStep1PostFrameLowHoldAdjustmentUs = 115;
+// Candidate .10 proves that the FIFO-clocked long configuration is accepted:
+// the valve advances through the next two addressed requests. Its fifth local
+// reply is byte-, carrier-, wake-, and schedule-identical to stock, but the
+// captured burst ends about 130 us earlier and the valve never emits the stock
+// final 84/2c request. Candidate .11 adds only the already proven 115 us
+// low-tone hold to that zero-based step 4 reply.
+constexpr std::uint16_t kStep4PostFrameLowHoldAdjustmentUs = 115;
 // The accepted stock counter-2 configuration frame retains its final low FSK
 // tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
 // Apply the already proven stage-0 correction to the delayed configuration

@@ -51,6 +51,9 @@ int main() {
         rainpoint::htv145::kConfigurationPostFrameLowHoldAdjustmentUs == 115
     );
     assert(
+        rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs == 115
+    );
+    assert(
         rainpoint::htv145::kConfigurationReplyStartDelayUs == 2'848'400
     );
 

@@ -177,6 +177,10 @@ class AddonBoundaryTest(unittest.TestCase):
             '"0.15.4-htv145-pairing-counter2-candidate.10"',
             build_profile,
         )
+        self.assertIn(
+            '"0.15.4-htv145-pairing-counter2-candidate.11"',
+            build_profile,
+        )
         self.assertIn('firmware_variant = "unified"', build_profile)
         self.assertIn(
             'firmware_variant = "htv145-pairing-probe"',
@@ -209,6 +213,10 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
+            '"RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
             "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
             build_profile,
         )
@@ -223,6 +231,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn("replyStep == 0", main_source)
         self.assertIn("replyStep == 1", main_source)
+        self.assertIn("replyStep == 4", main_source)
         self.assertIn("kMaximumPrearmLeadUs = 20'000", main_source)
         self.assertIn(
             "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1",
@@ -242,6 +251,10 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("{0x44, true}", main_source)
         self.assertIn(
             "kStage0PostFrameLowHoldAdjustmentUs = 115",
+            pairing_source,
+        )
+        self.assertIn(
+            "kStep4PostFrameLowHoldAdjustmentUs = 115",
             pairing_source,
         )
         self.assertIn(
@@ -317,6 +330,9 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn(
             "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1", workflow
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1", workflow
         )
         self.assertGreaterEqual(
             workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),

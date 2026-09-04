@@ -111,6 +111,7 @@ jobs:
             RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
             RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
             RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
+            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
             RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
             pio run --project-dir firmware/rainpoint_bridge \
             --environment rainpoint_bridge

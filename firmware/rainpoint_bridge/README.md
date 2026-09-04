@@ -179,12 +179,12 @@ RAINPOINT_RESEARCH_BENCH=1 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
-It changes only stage-zero transmitter shutdown: after the ordinary frame it
-keeps the already-low data input and PA active for another `115 us` before
-`SIDLE`. Production, supervised HTV405, ordinary `.25`, and later HTV145 stages
-retain a zero hold. Do not stage or flash this artifact until a fresh accepted
-stock capture reproduces the retained approximately `160 us` low-tone tail and
-the roadmap explicitly authorizes the physical discriminator.
+It changes only the explicitly selected HTV145 reply boundaries: after the
+ordinary frame it keeps the already-low data input and PA active for another
+`115 us` before `SIDLE`. Production, supervised HTV405, and ordinary `.25`
+retain a zero hold. Later counter-2 research flags extend the same measured
+hold to an individually gated stage only after the preceding exchange is
+physically proven; consult the roadmap before staging a candidate.
 Probe `.24` preserved the `.23` counter-0 transcript, scheduler, calibrated
 carrier, and deviation unchanged. It only applies a dedicated research-profile
 calibration guard so the evidenced `122.759 kHz` correction can pass the node's

@@ -606,6 +606,21 @@ observation before it changes transmitted firmware.
       ordinary stage-1 reply remain frozen. The OTA test node is connected and
       authenticated on `.10`. Require explicit approval before each arm and
       accept only valve-originated `81 50` plus progress beyond `2/6`.
+      - 2026-09-04 trial 1 passed. Lossless SDR recovered the accepted
+        assignment, addressed stage-1 request/reply, FIFO configuration, and
+        valve-originated `81 50`, followed by two more addressed exchanges.
+        Node progress advanced from `2/6` to `5/6`. This proves the FIFO
+        configuration discriminator once; repeat `.10` unchanged before
+        freezing it.
+    - [ ] After the unchanged `.10` repeat, exercise isolated candidate `.11`.
+      Preserve the entire accepted prefix and add only the already proven
+      `115 us` final-low hold to zero-based reply step 4. Candidate `.10` sent
+      the exact stock step-4 frame on the matched carrier, wake, and schedule,
+      but its burst ended `129.5 us` before stock; the valve then emitted
+      `84/03`, `84/83`, `85/03`, `85/83` retries instead of terminal `84/2c`.
+      Accept `.11` only if the valve emits the exact `84/2c` request and the
+      node reaches `6/6`; repeat the unchanged successful candidate before
+      declaring enrollment supported.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
