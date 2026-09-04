@@ -49,9 +49,48 @@
     "stock_deviation_hz": 40093,
     "local_symbol_rate_sps": 19999.424,
     "stock_symbol_rate_sps": 19999.105,
-    "local_transition_fit_rms_samples": 3.8126,
+    "local_transition_fit_rms_samples": 3.802378,
     "stock_transition_fit_rms_samples": 0.5531,
     "result": "rejected"
+  },
+  "step_4_fifo_calibration": {
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.12",
+    "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+    "destination_scope": "deliberately impossible endpoints; no valve addressed",
+    "trials": [
+      {
+        "capture_path": "captures/continuous/20260904-173419/continuous.cu8",
+        "sha256": "76fb41deca703a3bc352cf072189e8a5fb7280f40e1dff92ee6d7b84a7bf25c8",
+        "gain_db": 0.9,
+        "adc_clipped": false,
+        "exact_frame_recovered": true,
+        "wake_symbols": 320,
+        "burst_duration_ms": 31.293,
+        "post_frame_low_tone_us": 68.0,
+        "symbol_rate_sps": 19983.072,
+        "transition_fit_rms_samples": 0.430274,
+        "driver_result": "transmitted"
+      },
+      {
+        "capture_path": "captures/continuous/20260904-173908/continuous.cu8",
+        "sha256": "e94c81d45a88aba00fd3bce23225eb6054bcf1811a91fe289957cd27f122a317",
+        "gain_db": 7.7,
+        "adc_clipped": false,
+        "exact_frame_recovered": true,
+        "wake_symbols": 320,
+        "burst_duration_ms": 31.2915,
+        "post_frame_low_tone_us": 69.0,
+        "channel_center_hz": 434351200,
+        "deviation_hz": 41277,
+        "symbol_rate_sps": 19982.991,
+        "transition_fit_rms_samples": 0.459432,
+        "driver_result": "transmit_failed_after_complete_on_air_frame"
+      }
+    ],
+    "stock_post_frame_low_tone_us": 160.5,
+    "rmt_candidate_11_post_frame_low_tone_us": 161.5,
+    "derived_fifo_hold_us": 207,
+    "result": "FIFO removes the RMT symbol-edge jitter, but its post-frame hold must be increased by the measured 92 us deficit before a live trial"
   },
   "identity": {
     "factory_endpoint": "342d008f",
@@ -114,7 +153,7 @@
       "symbol_rate_sps": 19999.105
     },
     "tail_discriminator_result": "falsified by candidate .11; its duration was within 7.5 us of stock without terminal progress",
-    "isolated_next_candidate": "retain the complete accepted prefix and move only zero-based reply step 4 from ESP32 RMT to CC1101 FIFO hardware clocking"
+    "isolated_next_candidate": "retain the complete accepted prefix and candidate-.12 FIFO clocking while increasing only the FIFO hold from 115 us to the measured 207 us"
   },
-  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. The largest measured discriminator at this boundary is ESP32-RMT symbol-edge jitter, so candidate .12 changes only the step-4 transmitter to CC1101 FIFO hardware clocking. Terminal enrollment is not yet proven."
+  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Candidate .12 exposed only 68--69 us of post-frame low tone versus 160.5 us stock, so candidate .13 preserves FIFO clocking and changes only the FIFO hold from 115 us to the measured 207 us. Terminal enrollment is not yet proven."
 }

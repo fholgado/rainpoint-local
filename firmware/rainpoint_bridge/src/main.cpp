@@ -3485,7 +3485,7 @@ bool handleHtv145Step4FifoCalibration(const String& command) {
         rainpoint::htv145::kOrdinaryDeviationRegister,
         micros() + 20'000,
         &diagnostics,
-        rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs
+        rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs
     );
 
     String line;
@@ -3506,6 +3506,8 @@ bool handleHtv145Step4FifoCalibration(const String& command) {
     line += diagnostics.fifoRefills;
     line += ",\"tx_fifo_underflow_observed\":";
     line += diagnostics.txFifoUnderflowObserved ? "true" : "false";
+    line += ",\"main_state_after_stream\":";
+    line += diagnostics.mainStateAfterStream;
     line += ",\"receive_restored\":";
     line += diagnostics.receiveConfigurationRestored ? "true" : "false";
     line += "}";
@@ -3974,7 +3976,7 @@ void processHtv145PairingFrame(
                 packet.receivedAtMicros +
                     rainpoint::htv145::replyStartDelayUs(replyStep),
                 nullptr,
-                rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs
+                rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs
             );
         } else
 #endif

@@ -81,6 +81,11 @@ constexpr std::uint16_t kStep1PostFrameLowHoldAdjustmentUs = 115;
 // cause. The constant remains part of the frozen measured profile while .12
 // isolates hardware-clocked FIFO transmission for zero-based step 4.
 constexpr std::uint16_t kStep4PostFrameLowHoldAdjustmentUs = 115;
+// FIFO underflow reaches the driver's explicit hold later than the RMT frame
+// boundary. Two impossible-endpoint candidate-.12 captures measured only
+// 68--69 us of post-frame low tone with the 115 us RMT adjustment. Add the
+// measured 92 us deficit so FIFO matches the accepted 160--161.5 us edge.
+constexpr std::uint16_t kStep4FifoPostFrameLowHoldAdjustmentUs = 207;
 // The accepted stock counter-2 configuration frame retains its final low FSK
 // tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
 // Apply the already proven stage-0 correction to the delayed configuration

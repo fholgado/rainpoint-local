@@ -140,7 +140,7 @@ supervised_version = "0.15.7"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
     (
-        "0.15.4-htv145-pairing-counter2-candidate.12"
+        "0.15.4-htv145-pairing-counter2-candidate.13"
         if htv145_step4_fifo_enabled
         else "0.15.4-htv145-pairing-counter2-candidate.11"
         if htv145_step4_tail_enabled

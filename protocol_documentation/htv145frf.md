@@ -229,9 +229,14 @@ frame, carrier, 320-symbol wake, and schedule, but candidate `.10` lasted
 of stock. The valve nevertheless emitted the same `84/03`, `84/83`, `85/03`,
 and `85/83` retry family instead of the stock terminal `84/2c` request. Tail
 duration is therefore excluded at this boundary. The remaining measured
-discriminator is symbol-edge stability: `.11` transition-fit RMS was `3.8126`
-samples versus `0.5531` stock. Candidate `.12` retains the complete accepted
-prefix and moves only step 4 from ESP32 RMT to CC1101 FIFO hardware clocking.
+discriminator is symbol-edge stability: `.11` transition-fit RMS was `3.802`
+samples versus `0.5531` stock. Two impossible-endpoint candidate `.12`
+captures recovered the exact reply and all 320 wake symbols with FIFO RMS
+`0.430--0.459` samples. FIFO therefore removes the jitter, but its 115 us
+driver hold produced only `68--69 us` of measured post-frame low tone versus
+`160.5 us` stock and `161.5 us` in `.11`. Candidate `.13` retains the complete
+accepted prefix and FIFO clocking while changing only that hold to the derived
+`207 us` value.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 

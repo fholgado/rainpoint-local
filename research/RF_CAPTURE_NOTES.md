@@ -814,11 +814,29 @@ again stopped at `5/6` and produced the same `84/03`, `84/83`, `85/03`, and
 `7.5 us` of stock, so tail length is falsified as the missing condition.
 
 The largest remaining measured difference is timing stability inside the
-burst. Candidate `.11` had transition-fit RMS `3.8126` samples and symbol
-intervals spanning `87..101` samples, versus stock RMS `0.5531` and intervals
+burst. Candidate `.11` had transition-fit RMS `3.802` samples and symbol
+intervals spanning `88..101` samples, versus stock RMS `0.5531` and intervals
 `100..102`. Candidate `.12` therefore freezes every proven byte, schedule,
 carrier, wake, and prefix while moving only step 4 from ESP32 RMT modulation
 to the CC1101 FIFO hardware clock.
+
+Two impossible-endpoint `.12` calibrations recovered the exact 38-byte reply,
+all 320 wake symbols, and no ADC clipping. Captures
+`captures/continuous/20260904-173419/continuous.cu8` (SHA-256
+`76fb41deca703a3bc352cf072189e8a5fb7280f40e1dff92ee6d7b84a7bf25c8`)
+and `captures/continuous/20260904-173908/continuous.cu8` (SHA-256
+`e94c81d45a88aba00fd3bce23225eb6054bcf1811a91fe289957cd27f122a317`)
+measured FIFO transition-fit RMS `0.430` and `0.459` samples. The higher-SNR
+repeat measured center `434.351200 MHz` and deviation `41.277 kHz`, agreeing
+with the `0x45` profile. FIFO solves the symbol-jitter discriminator.
+
+The same captures exposed only `68--69 us` of post-frame low tone, while stock
+and `.11` measured `160.5 us` and `161.5 us`. Candidate `.13` therefore keeps
+the exact FIFO waveform and increases only its driver hold by the measured
+`92 us` deficit, from `115 us` to `207 us`. The second driver invocation
+reported `transmit_failed` because it missed the transient FIFO-underflow
+status even though SDR recovered the complete exact frame; preserve that as a
+separate completion-diagnostic issue rather than RF rejection evidence.
 
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.

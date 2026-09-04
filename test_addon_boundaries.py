@@ -182,7 +182,7 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.12"',
+            '"0.15.4-htv145-pairing-counter2-candidate.13"',
             build_profile,
         )
         self.assertIn('firmware_variant = "unified"', build_profile)
@@ -326,9 +326,10 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("0xf0, 0x0d, 0xca, 0x80", main_source)
         self.assertIn("rainpoint::kPairingWakeSymbols", main_source)
         self.assertIn(
-            "rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs",
+            "rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs",
             main_source,
         )
+        self.assertIn("main_state_after_stream", main_source)
         self.assertIn(
             "(wakeSymbols != kPairingWakeSymbols && wakeSymbols != 2'400)",
             radio_source,
