@@ -58,18 +58,22 @@ constexpr std::uint8_t kEnterRx = 0x34;
 constexpr std::uint8_t kEnterTx = 0x35;
 constexpr std::uint8_t kIdle = 0x36;
 constexpr std::uint8_t kFlushRx = 0x3a;
+constexpr std::uint8_t kFlushTx = 0x3b;
 constexpr std::uint8_t kRxFifo = 0x3f;
+constexpr std::uint8_t kTxFifo = 0x3f;
 
 constexpr std::uint8_t kPartNumber = 0x30;
 constexpr std::uint8_t kVersion = 0x31;
 constexpr std::uint8_t kFrequencyEstimate = 0x32;
 constexpr std::uint8_t kMainState = 0x35;
 constexpr std::uint8_t kRxBytes = 0x3b;
+constexpr std::uint8_t kTxBytes = 0x3a;
 
 constexpr std::uint8_t kMainStateIdle = 0x01;
 constexpr std::uint8_t kMainStateRx = 0x0d;
 constexpr std::uint8_t kMainStateFrequencySynthOn = 0x12;
 constexpr std::uint8_t kMainStateTx = 0x13;
+constexpr std::uint8_t kMainStateTxFifoUnderflow = 0x16;
 
 // Intentional controller replies must not be suppressed by the receiver's
 // clear-channel assessment. Preserve RXOFF_MODE=RX and TXOFF_MODE=RX while
@@ -79,6 +83,7 @@ constexpr std::uint8_t kTransmitMainStateMachine1 = 0x0f;
 
 constexpr std::uint32_t kCrystalFrequencyHz = 26'000'000;
 constexpr std::uint16_t kSymbolMicros = 50;
+constexpr std::size_t kSynchronousTxLatencyBits = 8;
 constexpr rmt_channel_t kTxRmtChannel = RMT_CHANNEL_0;
 
 std::int16_t decodeRssi(std::uint8_t raw) {
@@ -99,11 +104,18 @@ std::int32_t decodeFrequencyOffset(std::uint8_t raw) {
 
 }  // namespace
 
-Cc1101::Cc1101(SPIClass& spi, int chipSelectPin, int misoPin, int dataPin)
+Cc1101::Cc1101(
+    SPIClass& spi,
+    int chipSelectPin,
+    int misoPin,
+    int dataPin,
+    int clockPin
+)
     : spi_(spi),
       chipSelectPin_(chipSelectPin),
       misoPin_(misoPin),
-      dataPin_(dataPin) {}
+      dataPin_(dataPin),
+      clockPin_(clockPin) {}
 
 bool Cc1101::waitReady(std::uint32_t timeoutMicros) {
     const auto started = micros();
@@ -301,6 +313,9 @@ bool Cc1101::begin(std::uint8_t initialChannel) {
     pinMode(misoPin_, INPUT);
     pinMode(dataPin_, OUTPUT);
     digitalWrite(dataPin_, LOW);
+    if (clockPin_ >= 0) {
+        pinMode(clockPin_, INPUT);
+    }
     if (!reset()) {
         return false;
     }
@@ -653,6 +668,342 @@ bool Cc1101::transmitAsync(
     }
     enterIdle();
     return restoreReceiveConfiguration(receiveChannel) && sent;
+}
+
+bool Cc1101::transmitSynchronousCalibration(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    std::uint32_t centerFrequencyHz,
+    std::uint16_t wakeSymbols,
+    std::uint8_t paTableValue,
+    std::uint8_t deviationRegister,
+    std::uint32_t startAtMicros,
+    std::uint16_t postFrameLowHoldMicros,
+    SynchronousCalibrationDiagnostics* diagnostics
+) {
+    if (diagnostics != nullptr) {
+        *diagnostics = SynchronousCalibrationDiagnostics{};
+    }
+#if RAINPOINT_RESEARCH_BENCH != 1
+    (void)frame;
+    (void)centerFrequencyHz;
+    (void)wakeSymbols;
+    (void)paTableValue;
+    (void)deviationRegister;
+    (void)startAtMicros;
+    (void)postFrameLowHoldMicros;
+    (void)diagnostics;
+    ++blockedTransmitCount_;
+    return false;
+#else
+    if (!transmitEnabled_ || clockPin_ < 0 || !hasSync(frame) ||
+        !hasOrdinaryTrailer(frame) || wakeSymbols != 2'400 ||
+        centerFrequencyHz < 433'000'000 ||
+        centerFrequencyHz > 435'000'000 ||
+        deviationRegister != kOrdinaryDeviationRegister ||
+        postFrameLowHoldMicros > 500) {
+        ++blockedTransmitCount_;
+        return false;
+    }
+
+    const std::uint8_t receiveChannel = channel_;
+    if (!enterIdle()) {
+        return false;
+    }
+
+    // Prove the reserved GDO2-to-GPIO25 path before relying on it as a clock.
+    // GDOx function 0x2f is a hardware zero; setting GDOx_INV makes it a
+    // hardware one. This stays in IDLE and emits no RF.
+    writeRegister(kIocfg2, 0x2f);
+    delayMicroseconds(10);
+    const bool clockForcedLow = digitalRead(clockPin_) == LOW;
+    writeRegister(kIocfg2, 0x6f);
+    delayMicroseconds(10);
+    const bool clockForcedHigh = digitalRead(clockPin_) == HIGH;
+    const bool clockOutputConnected = clockForcedLow && clockForcedHigh;
+    if (diagnostics != nullptr) {
+        diagnostics->clockOutputConnected = clockOutputConnected;
+    }
+
+    // This research-only path removes the ESP32/RMT as the symbol clock. In
+    // synchronous serial mode CC1101 presents its 20 ksymbol/s clock on GDO2
+    // and samples GDO0 on each rising edge. Sync insertion remains disabled so
+    // the supplied stream still contains the complete RainPoint wake, sync,
+    // and frame exactly as the asynchronous path does.
+    // Synchronous serial still obeys LENGTH_CONFIG. Infinite-length mode is
+    // required here: fixed-length mode stops TX after the configured 38-byte
+    // packet length, truncating the 2,400-symbol wake after exactly 15.2 ms.
+    writeRegister(kPacketControl0, 0x12);
+    writeRegister(kIocfg0, 0x2e);
+    writeRegister(kIocfg2, 0x0b);
+    writeRegister(kModemConfig2, 0x00);
+    writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
+    writeRegister(kChannelNumber, 0);
+    setFrequency(centerFrequencyHz);
+    writeRegister(kFrequencySynthControl0, 0);
+    writeRegister(kDeviation, deviationRegister);
+    writeBurst(kPaTable, &paTableValue, 1);
+
+    const CachedFrequencyCalibration* cachedCalibration = nullptr;
+    for (const auto& cached : cachedTransmitFrequencies_) {
+        if (cached.valid && cached.centerFrequencyHz == centerFrequencyHz) {
+            cachedCalibration = &cached;
+            break;
+        }
+    }
+    if (cachedCalibration != nullptr) {
+        writeRegister(kMainStateMachine0, 0x08);
+        writeRegister(
+            kFrequencyCalibration3,
+            cachedCalibration->frequencyCalibration3
+        );
+        writeRegister(
+            kFrequencyCalibration2,
+            cachedCalibration->frequencyCalibration2
+        );
+        writeRegister(
+            kFrequencyCalibration1,
+            cachedCalibration->frequencyCalibration1
+        );
+    } else {
+        writeRegister(kMainStateMachine0, 0x18);
+    }
+
+    const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols, 0);
+    const std::size_t inputBitCount =
+        symbolCount + kSynchronousTxLatencyBits;
+    const auto inputBitAt = [&](std::size_t index) -> std::uint8_t {
+        return index < symbolCount
+            ? rainpointSymbol(frame, wakeSymbols, index, false, 0, false)
+            : 0;
+    };
+
+    bool sent = clockOutputConnected && strobe(kFrequencySynthOn) != 0xff &&
+        waitForMainState(kMainStateFrequencySynthOn, 10'000);
+    if (diagnostics != nullptr) {
+        diagnostics->synthesizerReady = sent;
+    }
+    if (sent && startAtMicros != 0) {
+        while (static_cast<std::int32_t>(startAtMicros - micros()) > 500) {
+            delayMicroseconds(250);
+        }
+        while (static_cast<std::int32_t>(startAtMicros - micros()) > 0) {
+            // Deliberately busy-wait only the final 500 us.
+        }
+    }
+
+    std::size_t sampledBits = 0;
+    if (sent) {
+        digitalWrite(dataPin_, inputBitAt(0));
+        const bool clockBeforeTx = digitalRead(clockPin_) == HIGH;
+        sent = strobe(kEnterTx) != 0xff;
+        if (diagnostics != nullptr) {
+            diagnostics->txStrobeAccepted = sent;
+        }
+        bool previousClock = clockBeforeTx;
+        const std::uint32_t clockStartedAt = micros();
+        const std::uint32_t timeoutMicros =
+            static_cast<std::uint32_t>(inputBitCount * kSymbolMicros * 2U);
+        while (sent && sampledBits < inputBitCount) {
+            const bool currentClock = digitalRead(clockPin_) == HIGH;
+            if (!previousClock && currentClock) {
+                ++sampledBits;
+            } else if (previousClock && !currentClock &&
+                       sampledBits < inputBitCount) {
+                digitalWrite(dataPin_, inputBitAt(sampledBits));
+            }
+            previousClock = currentClock;
+            if (micros() - clockStartedAt > timeoutMicros) {
+                sent = false;
+            }
+        }
+    }
+    if (diagnostics != nullptr) {
+        diagnostics->sampledClockEdges = sampledBits;
+        diagnostics->mainStateAfterStream =
+            readStatus(kMainState) & 0x1f;
+    }
+
+    // The radio's documented eight-bit TX latency means the final desired bit
+    // begins on air as the eighth zero flush bit is sampled. Preserve one full
+    // symbol followed by the bounded low-tone calibration tail before SIDLE.
+    digitalWrite(dataPin_, LOW);
+    if (sent) {
+        delayMicroseconds(kSymbolMicros + postFrameLowHoldMicros);
+    }
+    enterIdle();
+    const bool restored = restoreReceiveConfiguration(receiveChannel);
+    if (diagnostics != nullptr) {
+        diagnostics->receiveConfigurationRestored = restored;
+    }
+    return restored && sent;
+#endif
+}
+
+bool Cc1101::transmitFifoCalibration(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    std::uint32_t centerFrequencyHz,
+    std::uint16_t wakeSymbols,
+    std::uint8_t paTableValue,
+    std::uint8_t deviationRegister,
+    std::uint32_t startAtMicros,
+    FifoCalibrationDiagnostics* diagnostics
+) {
+    if (diagnostics != nullptr) {
+        *diagnostics = FifoCalibrationDiagnostics{};
+    }
+#if RAINPOINT_RESEARCH_BENCH != 1
+    (void)frame;
+    (void)centerFrequencyHz;
+    (void)wakeSymbols;
+    (void)paTableValue;
+    (void)deviationRegister;
+    (void)startAtMicros;
+    (void)diagnostics;
+    ++blockedTransmitCount_;
+    return false;
+#else
+    if (!transmitEnabled_ || !hasSync(frame) ||
+        !hasOrdinaryTrailer(frame) || wakeSymbols != 2'400 ||
+        wakeSymbols % 8 != 0 ||
+        centerFrequencyHz < 433'000'000 ||
+        centerFrequencyHz > 435'000'000 ||
+        deviationRegister != kOrdinaryDeviationRegister) {
+        ++blockedTransmitCount_;
+        return false;
+    }
+
+    const std::uint8_t receiveChannel = channel_;
+    if (!enterIdle()) {
+        return false;
+    }
+
+    // Normal FIFO mode makes the CC1101's own data-rate clock drive every
+    // symbol without needing the optional GDO2 clock wire. Sync detection is
+    // disabled because this raw stream already contains the complete 0x55
+    // wake and all 38 RainPoint frame bytes. Infinite length permits the
+    // 338-byte calibration stream; TXFIFO_UNDERFLOW marks its exact end.
+    writeRegister(kPacketControl0, 0x02);
+    writeRegister(kPacketControl1, 0x00);
+    writeRegister(kIocfg0, 0x05);
+    writeRegister(kModemConfig2, 0x00);
+    writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
+    writeRegister(kChannelNumber, 0);
+    setFrequency(centerFrequencyHz);
+    writeRegister(kFrequencySynthControl0, 0);
+    writeRegister(kDeviation, deviationRegister);
+    writeBurst(kPaTable, &paTableValue, 1);
+
+    const CachedFrequencyCalibration* cachedCalibration = nullptr;
+    for (const auto& cached : cachedTransmitFrequencies_) {
+        if (cached.valid && cached.centerFrequencyHz == centerFrequencyHz) {
+            cachedCalibration = &cached;
+            break;
+        }
+    }
+    if (cachedCalibration != nullptr) {
+        writeRegister(kMainStateMachine0, 0x08);
+        writeRegister(
+            kFrequencyCalibration3,
+            cachedCalibration->frequencyCalibration3
+        );
+        writeRegister(
+            kFrequencyCalibration2,
+            cachedCalibration->frequencyCalibration2
+        );
+        writeRegister(
+            kFrequencyCalibration1,
+            cachedCalibration->frequencyCalibration1
+        );
+    } else {
+        writeRegister(kMainStateMachine0, 0x18);
+    }
+
+    const std::size_t wakeBytes = wakeSymbols / 8;
+    std::vector<std::uint8_t> stream(wakeBytes + frame.size(), 0x55);
+    for (std::size_t index = 0; index < frame.size(); ++index) {
+        stream[wakeBytes + index] = frame[index];
+    }
+
+    strobe(kFlushTx);
+    constexpr std::size_t kFifoCapacity = 64;
+    constexpr std::size_t kRefillThreshold = 32;
+    const std::size_t initialBytes =
+        stream.size() < kFifoCapacity ? stream.size() : kFifoCapacity;
+    writeBurst(kTxFifo, stream.data(), initialBytes);
+    std::size_t bytesQueued = initialBytes;
+    std::uint32_t fifoRefills = 0;
+
+    bool sent = strobe(kFrequencySynthOn) != 0xff &&
+        waitForMainState(kMainStateFrequencySynthOn, 10'000);
+    if (diagnostics != nullptr) {
+        diagnostics->synthesizerReady = sent;
+    }
+    if (sent && startAtMicros != 0) {
+        while (static_cast<std::int32_t>(startAtMicros - micros()) > 500) {
+            delayMicroseconds(250);
+        }
+        while (static_cast<std::int32_t>(startAtMicros - micros()) > 0) {
+            // Deliberately busy-wait only the final 500 us.
+        }
+    }
+    if (sent) {
+        sent = strobe(kEnterTx) != 0xff &&
+            waitForMainState(kMainStateTx, 2'000);
+    }
+    if (diagnostics != nullptr) {
+        diagnostics->txStrobeAccepted = sent;
+    }
+
+    bool underflowObserved = false;
+    const std::uint32_t streamStartedAt = micros();
+    const std::uint32_t timeoutMicros = static_cast<std::uint32_t>(
+        stream.size() * 8U * kSymbolMicros + 25'000U
+    );
+    while (sent && !underflowObserved &&
+           micros() - streamStartedAt <= timeoutMicros) {
+        const std::uint8_t state = readStatus(kMainState) & 0x1f;
+        if (state == kMainStateTxFifoUnderflow) {
+            underflowObserved = true;
+            break;
+        }
+        if (state != kMainStateTx) {
+            sent = false;
+            break;
+        }
+        const std::uint8_t rawFifoBytes = readStatus(kTxBytes);
+        if ((rawFifoBytes & 0x80U) != 0) {
+            underflowObserved = true;
+            break;
+        }
+        const std::size_t fifoBytes = rawFifoBytes & 0x7fU;
+        if (bytesQueued < stream.size() && fifoBytes <= kRefillThreshold) {
+            const std::size_t available = kFifoCapacity - fifoBytes;
+            const std::size_t remaining = stream.size() - bytesQueued;
+            const std::size_t refillBytes =
+                remaining < available ? remaining : available;
+            writeBurst(kTxFifo, stream.data() + bytesQueued, refillBytes);
+            bytesQueued += refillBytes;
+            ++fifoRefills;
+        }
+        delayMicroseconds(50);
+    }
+    sent = sent && underflowObserved && bytesQueued == stream.size();
+    if (diagnostics != nullptr) {
+        diagnostics->bytesQueued = bytesQueued;
+        diagnostics->fifoRefills = fifoRefills;
+        diagnostics->txFifoUnderflowObserved = underflowObserved;
+        diagnostics->mainStateAfterStream =
+            readStatus(kMainState) & 0x1f;
+    }
+
+    enterIdle();
+    strobe(kFlushTx);
+    const bool restored = restoreReceiveConfiguration(receiveChannel);
+    if (diagnostics != nullptr) {
+        diagnostics->receiveConfigurationRestored = restored;
+    }
+    return restored && sent;
+#endif
 }
 
 bool Cc1101::waitForMainState(

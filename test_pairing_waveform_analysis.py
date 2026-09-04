@@ -107,6 +107,20 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(34_912.109, local["expected_hz"], places=3)
         self.assertAlmostEqual(41_259.766, stock["expected_hz"], places=3)
 
+    @unittest.skipUnless(
+        MODULE.np is not None,
+        "NumPy is an optional dependency used only for IQ analysis",
+    )
+    def test_reports_worst_case_wake_transition_timing(self) -> None:
+        transitions = MODULE.np.asarray([100, 200, 300, 401, 502])
+        timing = MODULE.transition_fit_statistics(transitions)
+        self.assertEqual(100, timing["interval_min_samples"])
+        self.assertEqual(101, timing["interval_max_samples"])
+        self.assertGreater(timing["fit_max_abs_samples"], 0)
+        self.assertGreaterEqual(
+            timing["fit_max_abs_samples"], timing["fit_p99_abs_samples"]
+        )
+
     def test_deviation_register_bounds_are_validated(self) -> None:
         with self.assertRaisesRegex(ValueError, "outside"):
             MODULE.cc1101_deviation_hz(0x80)

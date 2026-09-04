@@ -183,13 +183,32 @@ remains the closest justified CC1101 family. Symbol-aligned measurements of
 all 304 frame bits also show that neither stock nor candidate `.8` changes
 carrier or deviation at the wake-to-frame boundary.
 
-Code inspection exposed the next bounded discriminator. Candidate `.8`
-enters FSTXON immediately after its ordinary stage-1 reply and waits there for
-roughly `2.8 s` before the delayed configuration. Candidate `.9` keeps the
-radio in receive configuration until `20 ms` before the same frozen on-air
-boundary. It changes no packet, carrier, deviation, wake, power, tail, or
-timing. A later valve trial must require valve-originated `81 50` before
-treating that change as accepted.
+Candidate `.9` tested the synthesizer pre-arm discriminator. Unlike `.8`, it
+kept the radio in receive configuration until `20 ms` before the frozen
+configuration boundary instead of holding FSTXON for roughly `2.8 s`. The
+valve again accepted stage 0, emitted the addressed stage-1 request, and then
+stopped at `2/6` without `81 50`. Its lossless SDR capture measured a
+`135.339 ms` configuration burst, all `2,399` wake transitions, a frame
+boundary within about `0.15 ms` of stock, and about `210.5 us` of final low
+tone. Long synthesizer pre-arm dwell is therefore not the missing condition.
+
+Worst-case wake analysis found higher transition-fit residuals locally than
+in stock, but the same local signature is present on the short stage-1 reply
+that suppresses retries. No isolated long-burst refill discontinuity or
+frequency drift was found. The next justified discriminator is the transmitter
+implementation: reproduce the delayed configuration with a CC1101-clocked
+synchronous or FIFO-backed path, first to an impossible endpoint for SDR
+comparison, while freezing the accepted assignment and ordinary reply.
+
+The first synchronous-serial calibration exposed two implementation facts,
+not new valve semantics. Fixed packet length truncated the long wake after
+exactly `15.2 ms`; infinite length fixed that cutoff. A forced-low/high GDO2
+probe then showed that the test node lacks continuity from radio GDO2 to ESP32
+GPIO25, so it cannot consume the CC1101 serial clock without a wiring change.
+A separate raw-FIFO calibration avoids that wire and successfully streams the
+complete `300` wake bytes plus `38` frame bytes to `TXFIFO_UNDERFLOW`. Its
+impossible endpoint prevents enrollment. SDR waveform equivalence remains a
+required gate before that transmitter is used in a live pairing candidate.
 
 The packed clock/date marker positions are branch-specific. Counter 0 carries
 its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in

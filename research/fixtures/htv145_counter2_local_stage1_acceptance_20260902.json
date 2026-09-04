@@ -234,6 +234,33 @@
       "completed_steps": 2,
       "configuration_response_observed": false,
       "node_disarmed_after_response_margin": true
+    },
+    {
+      "candidate": "0.15.4-htv145-pairing-counter2-candidate.9",
+      "trial": "delayed configuration synthesizer pre-arm discriminator",
+      "capture_path": "captures/continuous/20260904-095320/continuous.cu8",
+      "capture_sha256": "d64143d5fd3a2d3779b0a362d20664645c0060da32679f2428c6d5ffedf0e605",
+      "capture_mode": "rtl_sdr asynchronous; exact requested byte count; no sample-loss warning",
+      "visible_result": "white stage-0 acceptance flash",
+      "accepted_factory_counter": 2,
+      "stage_0_assignment_start_after_request_end_ms": 50.6,
+      "addressed_stage_1_request_observed": true,
+      "stage_1_reply_frame_hex": "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5",
+      "configuration_frame_hex": "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655",
+      "requested_wake_symbols": 2400,
+      "recovered_wake_transitions": 2399,
+      "configuration_start_after_stage_1_request_end_ms": 2952.4,
+      "configuration_duration_ms": 135.3385,
+      "configuration_center_hz": 434351498,
+      "configuration_deviation_hz": 41287,
+      "configuration_symbol_rate_sps": 20000.557,
+      "configuration_post_frame_low_tail_us": 210.5,
+      "configuration_transition_fit_max_abs_samples": 6.766,
+      "stock_configuration_transition_fit_max_abs_samples": 4.686,
+      "completed_steps": 2,
+      "configuration_response_observed": false,
+      "node_disarmed_after_timeout": true,
+      "conclusion": "Removing the roughly 2.8-second FSTXON dwell while freezing the accepted prefix and on-air configuration did not produce the valve-originated 81 50 response. Synthesizer pre-arm dwell is falsified as the missing condition."
     }
   ],
   "stock_comparison": {
@@ -257,7 +284,11 @@
     "candidate_7_configuration_duration_local_minus_stock_ms": -0.021,
     "candidate_7_configuration_timing_local_minus_stock_ms": 0.0,
     "candidate_7_post_frame_tail_local_minus_stock_us": 11.0,
-    "conclusion": "Lossless candidates .5 through .7 disprove wake count, total burst duration, low-tone tail length, and absolute configuration timing as sole causes. Candidate .7 matches the stock 2400-symbol duration and 2952.55 ms request-to-frame boundary but still receives no 81 50 response."
+    "candidate_9_configuration_duration_local_minus_stock_ms": -0.022,
+    "candidate_9_configuration_center_local_minus_stock_hz": -320,
+    "candidate_9_configuration_deviation_local_minus_stock_hz": 1138,
+    "candidate_9_configuration_post_frame_tail_local_minus_stock_us": 9.0,
+    "conclusion": "Lossless candidates .5 through .9 disprove wake count, total burst duration, low-tone tail length, absolute configuration timing, and long synthesizer pre-arm dwell as sole causes. Candidate .9 still receives no 81 50 despite matching the stock logical transcript and long-burst boundaries."
   },
   "offline_discriminators": {
     "synthesizer_wait_leakage": {
@@ -279,9 +310,9 @@
     }
   },
   "next_experiment": {
-    "firmware": "0.15.4-htv145-pairing-counter2-candidate.9",
-    "single_change": "keep the radio in receive configuration during the delayed interval and enter FSTXON no earlier than 20 ms before the frozen configuration boundary, instead of holding FSTXON for roughly 2.8 seconds",
-    "pass_condition": "valve-originated 81 50 configuration response and progress beyond 2 of 6 steps",
+    "firmware": null,
+    "single_change": "capture the operational CC1101 raw-FIFO impossible-endpoint calibration and compare its emitted waveform to stock; only after offline equivalence may FIFO replace ESP32-timed asynchronous modulation for the delayed configuration",
+    "pass_condition": "offline calibration reproduces stock symbol timing and deviation without changing frame bytes or the frozen on-air boundary; a later explicitly approved valve trial must then produce valve-originated 81 50 and progress beyond 2 of 6 steps",
     "frozen": [
       "stage-0 request matcher",
       "assignment payload and dynamic clock",
@@ -291,7 +322,22 @@
       "configuration wake count and total duration",
       "configuration timing and low tail",
       "all endpoint, counter, selector, and trailer semantics"
-    ]
+    ],
+    "calibration_results": {
+      "synchronous_fixed_length": "The first synchronous-serial calibration emitted exactly 15.2 ms, equal to the configured 38-byte packet at 20 kbit/s. Selecting infinite length removed that cutoff.",
+      "synchronous_clock_path": "A CC1101 forced-low/forced-high GDO2 continuity probe did not propagate to ESP32 GPIO25 on the USB test node; zero sampled edges are therefore a physical clock-path result, not valve evidence.",
+      "fifo_candidate_5": {
+        "endpoint_safety": "source deadc0de to destination f00dcafe",
+        "wake_bytes": 300,
+        "frame_bytes": 38,
+        "bytes_queued": 338,
+        "fifo_refills": 9,
+        "tx_fifo_underflow_observed": true,
+        "receive_configuration_restored": true,
+        "remote_decode_observed": false,
+        "waveform_capture_pending": true
+      }
+    }
   },
   "interpretation": [
     "Two consecutive local trials produced the valve-originated addressed stage-1 request, proving and freezing stage 0.",
@@ -307,6 +353,10 @@
     "No detectable local-oscillator leakage is present during the delayed wait, and transition error is not concentrated at RMT refill boundaries.",
     "A second accepted stock session reverses the apparent long-versus-short amplitude relationship, so transmit level is not the next justified discriminator.",
     "The non-enrolling configuration calibration proves stock uses sharp 2-FSK rather than GFSK, retains the 0x45 deviation family, and does not change PHY at the wake-to-frame boundary.",
-    "Candidate .8 unnecessarily holds the CC1101 in FSTXON for roughly 2.8 seconds before the delayed configuration. Candidate .9 changes only that pre-arm dwell while preserving the entire accepted prefix and on-air configuration waveform."
+    "Candidate .9 removes the roughly 2.8-second FSTXON dwell while preserving the entire accepted prefix and on-air configuration waveform; it still stops at 2 of 6 without 81 50, so pre-arm dwell is falsified.",
+    "Worst-case transition analysis shows higher local residual error than stock, but the same local signature is present on the short reply that suppresses stage-1 retries. No isolated long-burst discontinuity or drift was found.",
+    "The synchronous-serial calibration first exposed a fixed-length 15.2 ms cutoff, then proved the USB test node has no working GDO2-to-GPIO25 clock path.",
+    "A raw-FIFO calibration needing no GDO2 wire successfully queued all 338 bytes, refilled nine times, ended at TXFIFO_UNDERFLOW, and restored receive mode. Its exact SDR waveform remains the gate before a live candidate.",
+    "The next justified discriminator is the transmitter implementation itself: capture the operational CC1101 FIFO-backed long configuration against its impossible endpoint before requesting another live valve arm."
   ]
 }

@@ -112,6 +112,7 @@ constexpr int kSpiMosiPin = 23;
 constexpr int kPrimaryChipSelectPin = 27;
 constexpr int kDiagnosticChipSelectPin = 14;
 constexpr int kPrimaryDataPin = 26;
+constexpr int kPrimaryClockPin = 25;
 constexpr int kDiagnosticDataPin = 33;
 constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint8_t kHcs026TelemetryChannel = 0;
@@ -156,7 +157,8 @@ rainpoint::Cc1101 primaryRadio(
     radioSpi,
     kPrimaryChipSelectPin,
     kSpiMisoPin,
-    kPrimaryDataPin
+    kPrimaryDataPin,
+    kPrimaryClockPin
 );
 rainpoint::WifiTransport wifiTransport;
 #if RAINPOINT_OTA_CANDIDATE == 1
@@ -3210,10 +3212,19 @@ bool handleHtv145PreludeCalibration(const String& command) {
 }
 
 bool handleHtv145ConfigurationCalibration(const String& command) {
-    const String prefix = "htv145_configuration_calibration ";
-    if (!command.startsWith(prefix)) {
+    const String asynchronousPrefix = "htv145_configuration_calibration ";
+    const String synchronousPrefix =
+        "htv145_synchronous_configuration_calibration ";
+    const String fifoPrefix = "htv145_fifo_configuration_calibration ";
+    const bool synchronous = command.startsWith(synchronousPrefix);
+    const bool asynchronous = command.startsWith(asynchronousPrefix);
+    const bool fifo = command.startsWith(fifoPrefix);
+    if (!synchronous && !asynchronous && !fifo) {
         return false;
     }
+    const String prefix = synchronous ? synchronousPrefix
+        : fifo ? fifoPrefix
+        : asynchronousPrefix;
     const String offsetValue = command.substring(prefix.length());
     const long frequencyOffsetHz = offsetValue.toInt();
     if (offsetValue.isEmpty() || frequencyOffsetHz < -150'000 ||
@@ -3270,7 +3281,9 @@ bool handleHtv145ConfigurationCalibration(const String& command) {
         {0x45, true},
         {0x44, true},
     }};
-    for (std::size_t index = 0; index < variants.size(); ++index) {
+    const std::size_t variantCount =
+        synchronous || fifo ? 1 : variants.size();
+    for (std::size_t index = 0; index < variantCount; ++index) {
         const auto& variant = variants[index];
         String line;
         line.reserve(240);
@@ -3280,6 +3293,10 @@ bool handleHtv145ConfigurationCalibration(const String& command) {
         line += static_cast<std::uint32_t>(adjustedFrequency);
         line += ",\"modulation\":\"";
         line += variant.gaussianShaping ? "gfsk" : "2fsk";
+        line += "\",\"clock_source\":\"";
+        line += synchronous ? "cc1101_synchronous"
+            : fifo ? "cc1101_fifo"
+            : "esp32_rmt";
         line += "\",\"deviation_register\":\"0x";
         line += variant.deviationRegister == 0x45 ? "45" : "44";
         line += "\"}";
@@ -3287,26 +3304,84 @@ bool handleHtv145ConfigurationCalibration(const String& command) {
         Serial.flush();
         delay(250);
 
-        const bool sent = primaryRadio.transmitAsync(
-            frame,
-            static_cast<std::uint32_t>(adjustedFrequency),
-            rainpoint::htv145::kConfigurationWakeSymbols,
-            false,
-            rainpoint::pairingPaTableValue(0),
-            variant.deviationRegister,
-            micros() + 20'000,
-            0,
-            0,
-            0,
-            false,
-            0,
-            variant.gaussianShaping
-        );
+        rainpoint::SynchronousCalibrationDiagnostics diagnostics{};
+        rainpoint::FifoCalibrationDiagnostics fifoDiagnostics{};
+        const bool sent = fifo
+            ? primaryRadio.transmitFifoCalibration(
+                frame,
+                static_cast<std::uint32_t>(adjustedFrequency),
+                rainpoint::htv145::kConfigurationWakeSymbols,
+                rainpoint::pairingPaTableValue(0),
+                variant.deviationRegister,
+                micros() + 20'000,
+                &fifoDiagnostics
+            )
+            : synchronous
+            ? primaryRadio.transmitSynchronousCalibration(
+                frame,
+                static_cast<std::uint32_t>(adjustedFrequency),
+                rainpoint::htv145::kConfigurationWakeSymbols,
+                rainpoint::pairingPaTableValue(0),
+                variant.deviationRegister,
+                micros() + 20'000,
+                rainpoint::htv145::
+                    kConfigurationPostFrameLowHoldAdjustmentUs,
+                &diagnostics
+            )
+            : primaryRadio.transmitAsync(
+                frame,
+                static_cast<std::uint32_t>(adjustedFrequency),
+                rainpoint::htv145::kConfigurationWakeSymbols,
+                false,
+                rainpoint::pairingPaTableValue(0),
+                variant.deviationRegister,
+                micros() + 20'000,
+                0,
+                0,
+                0,
+                false,
+                0,
+                variant.gaussianShaping
+            );
         line = "{\"type\":\"htv145_configuration_calibration\",\"variant\":";
         line += index + 1;
         line += sent
-            ? ",\"state\":\"transmitted\"}"
-            : ",\"state\":\"transmit_failed\"}";
+            ? ",\"state\":\"transmitted\""
+            : ",\"state\":\"transmit_failed\"";
+        if (synchronous) {
+            line += ",\"clock_output_connected\":";
+            line += diagnostics.clockOutputConnected ? "true" : "false";
+            line += ",\"synthesizer_ready\":";
+            line += diagnostics.synthesizerReady ? "true" : "false";
+            line += ",\"tx_strobe_accepted\":";
+            line += diagnostics.txStrobeAccepted ? "true" : "false";
+            line += ",\"sampled_clock_edges\":";
+            line += diagnostics.sampledClockEdges;
+            line += ",\"main_state_after_stream\":";
+            line += diagnostics.mainStateAfterStream;
+            line += ",\"receive_restored\":";
+            line += diagnostics.receiveConfigurationRestored
+                ? "true" : "false";
+        }
+        if (fifo) {
+            line += ",\"synthesizer_ready\":";
+            line += fifoDiagnostics.synthesizerReady ? "true" : "false";
+            line += ",\"tx_strobe_accepted\":";
+            line += fifoDiagnostics.txStrobeAccepted ? "true" : "false";
+            line += ",\"bytes_queued\":";
+            line += fifoDiagnostics.bytesQueued;
+            line += ",\"fifo_refills\":";
+            line += fifoDiagnostics.fifoRefills;
+            line += ",\"tx_fifo_underflow_observed\":";
+            line += fifoDiagnostics.txFifoUnderflowObserved
+                ? "true" : "false";
+            line += ",\"main_state_after_stream\":";
+            line += fifoDiagnostics.mainStateAfterStream;
+            line += ",\"receive_restored\":";
+            line += fifoDiagnostics.receiveConfigurationRestored
+                ? "true" : "false";
+        }
+        line += "}";
         emitLine(line);
         delay(750);
     }

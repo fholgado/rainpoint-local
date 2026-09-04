@@ -19,9 +19,34 @@ struct RadioPacket {
     std::uint32_t receivedAtMicros = 0;
 };
 
+struct SynchronousCalibrationDiagnostics {
+    bool clockOutputConnected = false;
+    bool synthesizerReady = false;
+    bool txStrobeAccepted = false;
+    std::uint32_t sampledClockEdges = 0;
+    std::uint8_t mainStateAfterStream = 0xff;
+    bool receiveConfigurationRestored = false;
+};
+
+struct FifoCalibrationDiagnostics {
+    bool synthesizerReady = false;
+    bool txStrobeAccepted = false;
+    std::uint32_t bytesQueued = 0;
+    std::uint32_t fifoRefills = 0;
+    bool txFifoUnderflowObserved = false;
+    std::uint8_t mainStateAfterStream = 0xff;
+    bool receiveConfigurationRestored = false;
+};
+
 class Cc1101 {
 public:
-    Cc1101(SPIClass& spi, int chipSelectPin, int misoPin, int dataPin);
+    Cc1101(
+        SPIClass& spi,
+        int chipSelectPin,
+        int misoPin,
+        int dataPin,
+        int clockPin = -1
+    );
 
     bool begin(std::uint8_t initialChannel = 0);
     bool enterIdle();
@@ -48,6 +73,25 @@ public:
         bool invertLeadingPrelude = false,
         std::uint16_t postFrameLowHoldMicros = 0,
         bool gaussianShaping = false
+    );
+    bool transmitSynchronousCalibration(
+        const std::array<std::uint8_t, kFrameBytes>& frame,
+        std::uint32_t centerFrequencyHz,
+        std::uint16_t wakeSymbols,
+        std::uint8_t paTableValue = 0x60,
+        std::uint8_t deviationRegister = 0x45,
+        std::uint32_t startAtMicros = 0,
+        std::uint16_t postFrameLowHoldMicros = 0,
+        SynchronousCalibrationDiagnostics* diagnostics = nullptr
+    );
+    bool transmitFifoCalibration(
+        const std::array<std::uint8_t, kFrameBytes>& frame,
+        std::uint32_t centerFrequencyHz,
+        std::uint16_t wakeSymbols,
+        std::uint8_t paTableValue = 0x60,
+        std::uint8_t deviationRegister = 0x45,
+        std::uint32_t startAtMicros = 0,
+        FifoCalibrationDiagnostics* diagnostics = nullptr
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();
@@ -97,6 +141,7 @@ private:
     int chipSelectPin_;
     int misoPin_;
     int dataPin_;
+    int clockPin_;
     std::uint8_t channel_ = 0;
     bool configurationValid_ = false;
     bool transmitPrepared_ = false;

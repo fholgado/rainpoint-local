@@ -243,6 +243,30 @@ def _cluster_transitions(candidates, *, minimum_spacing_samples: int):
     return np.asarray([round(float(np.median(group))) for group in groups], dtype=int)
 
 
+def transition_fit_statistics(transitions) -> dict[str, float | int]:
+    """Summarize average and worst-case alternating-wake edge timing."""
+    _require_numpy()
+    assert np is not None
+    values = np.asarray(transitions, dtype=float)
+    if values.ndim != 1 or values.size < 2:
+        raise ValueError("at least two wake transitions are required")
+    if np.any(np.diff(values) <= 0):
+        raise ValueError("wake transitions must be strictly increasing")
+    x = np.arange(values.size)
+    slope, intercept = np.polyfit(x, values, 1)
+    absolute_residual = np.abs(values - (slope * x + intercept))
+    intervals = np.diff(values)
+    return {
+        "fit_slope_samples": float(slope),
+        "fit_rms_samples": float(np.sqrt(np.mean(absolute_residual**2))),
+        "fit_p95_abs_samples": float(np.percentile(absolute_residual, 95)),
+        "fit_p99_abs_samples": float(np.percentile(absolute_residual, 99)),
+        "fit_max_abs_samples": float(np.max(absolute_residual)),
+        "interval_min_samples": int(np.min(intervals)),
+        "interval_max_samples": int(np.max(intervals)),
+    }
+
+
 def analyze_balanced_wake(
     path: Path,
     *,
@@ -293,9 +317,8 @@ def analyze_balanced_wake(
     )[: wake_symbols - 1]
     if transitions.size < wake_symbols * 0.8:
         raise ValueError("alternating wake transitions could not be recovered")
-    x = np.arange(transitions.size)
-    slope, intercept = np.polyfit(x, transitions, 1)
-    residual = transitions - (slope * x + intercept)
+    timing = transition_fit_statistics(transitions)
+    slope = timing["fit_slope_samples"]
     symbol_frequencies = []
     for interval_left, interval_right in zip(transitions[:-1], transitions[1:]):
         margin = max(5, (interval_right - interval_left) // 4)
@@ -331,9 +354,18 @@ def analyze_balanced_wake(
             "recovered_transitions": int(transitions.size),
             "symbol_rate_sps": round(sample_rate / slope, 3),
             "symbol_duration_us": round(slope * 1_000_000 / sample_rate, 6),
-            "transition_fit_rms_samples": round(
-                float(np.sqrt(np.mean(residual**2))), 6
+            "transition_fit_rms_samples": round(timing["fit_rms_samples"], 6),
+            "transition_fit_p95_abs_samples": round(
+                timing["fit_p95_abs_samples"], 6
             ),
+            "transition_fit_p99_abs_samples": round(
+                timing["fit_p99_abs_samples"], 6
+            ),
+            "transition_fit_max_abs_samples": round(
+                timing["fit_max_abs_samples"], 6
+            ),
+            "transition_interval_min_samples": timing["interval_min_samples"],
+            "transition_interval_max_samples": timing["interval_max_samples"],
         },
         "fsk": {
             "low_tone_hz": round(low_tone),

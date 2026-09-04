@@ -236,6 +236,47 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn("htv145_post_frame_tail_candidate", wifi_source)
 
+    def test_htv145_synchronous_configuration_calibration_is_isolated(self) -> None:
+        root = ROOT / "firmware" / "rainpoint_bridge"
+        main_source = (root / "src" / "main.cpp").read_text()
+        radio_source = (root / "src" / "cc1101.cpp").read_text()
+        radio_header = (root / "src" / "cc1101.h").read_text()
+
+        self.assertIn("kPrimaryClockPin = 25", main_source)
+        self.assertIn("kPrimaryClockPin", main_source)
+        self.assertIn(
+            "htv145_synchronous_configuration_calibration", main_source
+        )
+        self.assertIn("transmitSynchronousCalibration", radio_header)
+        self.assertIn("transmitSynchronousCalibration", radio_source)
+        self.assertIn("writeRegister(kIocfg2, 0x0b)", radio_source)
+        self.assertIn("writeRegister(kPacketControl0, 0x12)", radio_source)
+        self.assertIn("writeRegister(kModemConfig2, 0x00)", radio_source)
+        self.assertIn("kSynchronousTxLatencyBits = 8", radio_source)
+        self.assertIn("writeRegister(kIocfg2, 0x2f)", radio_source)
+        self.assertIn("writeRegister(kIocfg2, 0x6f)", radio_source)
+        self.assertIn("clock_output_connected", main_source)
+        self.assertIn("sampled_clock_edges", main_source)
+        self.assertIn("main_state_after_stream", main_source)
+        self.assertIn("0xde, 0xad, 0xc0, 0xde", main_source)
+        self.assertIn("0xf0, 0x0d, 0xca, 0xfe", main_source)
+
+    def test_htv145_fifo_configuration_calibration_is_isolated(self) -> None:
+        root = ROOT / "firmware" / "rainpoint_bridge"
+        main_source = (root / "src" / "main.cpp").read_text()
+        radio_source = (root / "src" / "cc1101.cpp").read_text()
+        radio_header = (root / "src" / "cc1101.h").read_text()
+
+        self.assertIn("htv145_fifo_configuration_calibration", main_source)
+        self.assertIn("transmitFifoCalibration", radio_header)
+        self.assertIn("transmitFifoCalibration", radio_source)
+        self.assertIn("writeRegister(kPacketControl0, 0x02)", radio_source)
+        self.assertIn("strobe(kFlushTx)", radio_source)
+        self.assertIn("readStatus(kTxBytes)", radio_source)
+        self.assertIn("kMainStateTxFifoUnderflow", radio_source)
+        self.assertIn("fifo_refills", main_source)
+        self.assertIn("bytes_queued", main_source)
+
     def test_htv145_counter2_branch_is_research_only(self) -> None:
         root = ROOT / "firmware" / "rainpoint_bridge"
         build_profile = (root / "tools" / "build_profile.py").read_text()

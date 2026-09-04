@@ -559,13 +559,42 @@ observation before it changes transmitted firmware.
     absolute center is excluded because the rebooted serial session omitted
     the node-specific frequency correction; the prior live `.8` capture is
     still authoritative for the already matched carrier.
-  - [ ] Exercise candidate `.9`, which changes one implementation-only detail:
+  - [x] Exercise candidate `.9`, which changes one implementation-only detail:
     `.8` enters FSTXON immediately after the ordinary stage-1 reply and holds
     the synthesizer there for roughly `2.8 s`. `.9` keeps the radio in receive
     configuration until `20 ms` before the frozen delayed configuration
     boundary. It changes no bytes, carrier, deviation, symbols, power, tail, or
-    on-air timing. Pass only on valve-originated `81 50` and progress beyond
-    `2/6`; request explicit approval before arming.
+    on-air timing. The 2026-09-04 trial again produced the white stage-0
+    acceptance flash and addressed stage-1 request, but stopped at `2/6`
+    without valve-originated `81 50`. The lossless asynchronous SDR capture is
+    `captures/continuous/20260904-095320/continuous.cu8` (`sha256
+    d64143d5fd3a2d3779b0a362d20664645c0060da32679f2428c6d5ffedf0e605`).
+    It recovered all `2,399` wake transitions, a `135.339 ms` configuration
+    versus `135.361 ms` stock, a carrier only about `320 Hz` below stock, and
+    a `210.5 us` low tail versus `201.5 us` stock. Removing the long FSTXON
+    dwell is therefore falsified as the missing condition.
+  - [ ] Validate a CC1101-clocked synchronous or FIFO-backed long
+    configuration as the next transmitter-path discriminator. Exercise it
+    first against an impossible endpoint and compare the emitted waveform to
+    stock; do not alter the frozen assignment, short reply, frame bytes, or
+    configuration boundary, and request explicit approval before any live arm.
+    - [x] Isolate the synchronous-serial path behind the research-bench build
+      and an impossible endpoint. Its first calibration stopped after exactly
+      `38 * 8 / 20,000 = 15.2 ms`; a red/green regression proved and fixed the
+      inherited fixed-length setting by selecting infinite length. A
+      forced-low/forced-high GDO2 probe then proved this breadboard node's
+      GDO2-to-GPIO25 clock path is not connected, so synchronous serial is not
+      a valid waveform discriminator on this hardware.
+    - [x] Add a research-only raw-FIFO alternative needing no GDO2 clock wire.
+      Calibration `.5` queued all `300` alternating wake bytes plus the `38`
+      frame bytes, completed nine bounded FIFO refills, observed the expected
+      `TXFIFO_UNDERFLOW` terminator, and restored receive mode. No deployed
+      receiver reported the impossible endpoint.
+    - [ ] Capture calibration `.5` with the Mac SDR and compare carrier,
+      deviation, all `2,399` wake transitions, frame bytes, duration, and tail
+      with the accepted stock configuration. The SDR is not currently
+      enumerating over USB; do not promote FIFO transmission into a live
+      pairing candidate until this comparison passes.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
