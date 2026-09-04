@@ -216,11 +216,11 @@ measured deviation `901 Hz` wider. It emitted about `2,410` alternating symbols
 before sync and lasted `135.779 ms`, versus `2,400` and `135.361 ms` stock.
 Candidate `.10` therefore changes only the delayed configuration transmitter
 from ESP32 RMT to CC1101 FIFO while keeping the accepted stage-0 assignment and
-ordinary stage-1 reply frozen. Its first live trial produced the exact
-valve-originated `81 50` request and advanced through the next two addressed
-requests, moving node progress from `2/6` to `5/6`. This is direct evidence
-that hardware-clocked FIFO transmission solved the delayed-configuration
-boundary.
+ordinary stage-1 reply frozen. Two unchanged clean live trials produced the
+exact valve-originated `81 50` request and advanced through the next two
+addressed requests, moving node progress from `2/6` to `5/6`. This freezes the
+assignment-through-configuration prefix and directly establishes that
+hardware-clocked FIFO transmission solved the delayed-configuration boundary.
 
 Enrollment is not terminal yet. The zero-based step-4 reply matched the stock
 frame, carrier, 320-symbol wake, and schedule, but the local burst lasted

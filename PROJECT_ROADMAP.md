@@ -601,7 +601,7 @@ observation before it changes transmitted firmware.
       `639 Hz` above stock. It remains measurably `0.418 ms` longer than stock.
       Evidence is in
       `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.
-    - [ ] Exercise candidate `.10` twice unchanged. It switches only the
+    - [x] Exercise candidate `.10` twice unchanged. It switches only the
       delayed configuration from ESP32 RMT to CC1101 FIFO; stage 0 and the
       ordinary stage-1 reply remain frozen. The OTA test node is connected and
       authenticated on `.10`. Require explicit approval before each arm and
@@ -612,7 +612,19 @@ observation before it changes transmitted firmware.
         Node progress advanced from `2/6` to `5/6`. This proves the FIFO
         configuration discriminator once; repeat `.10` unchanged before
         freezing it.
-    - [ ] After the unchanged `.10` repeat, exercise isolated candidate `.11`.
+      - 2026-09-04 trial 2 passed unchanged. Node diagnostics again reached
+        `5/6`; SDR again recovered the exact FIFO configuration, both
+        post-configuration replies, and the same non-terminal `03/83` retry
+        family. Capture
+        `captures/continuous/20260904-170527/continuous.cu8` has SHA-256
+        `a17c79851f9ee2a102b899e3d77d28d0d701d694a066bce48d279418bb9bf294`.
+        The assignment-through-configuration prefix is now frozen.
+      - An intervening unchanged attempt also put the accepted configuration
+        on air and elicited the next valve request, but the node reported
+        `transmit_failed` because its post-FIFO receive restoration failed.
+        Treat that as an implementation-recovery defect rather than a valve
+        protocol rejection; it does not replace either clean `5/6` trial.
+    - [ ] Exercise isolated candidate `.11`.
       Preserve the entire accepted prefix and add only the already proven
       `115 us` final-low hold to zero-based reply step 4. Candidate `.10` sent
       the exact stock step-4 frame on the matched carrier, wake, and schedule,

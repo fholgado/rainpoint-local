@@ -10,6 +10,17 @@
     "gain_db": 0.9,
     "adc_clipped": false
   },
+  "unchanged_repeat_capture": {
+    "path": "captures/continuous/20260904-170527/continuous.cu8",
+    "sha256": "a17c79851f9ee2a102b899e3d77d28d0d701d694a066bce48d279418bb9bf294",
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "adc_clipped": false,
+    "node_progress": "5/6",
+    "configuration_accepted": true,
+    "terminal_request_observed": false
+  },
   "identity": {
     "factory_endpoint": "342d008f",
     "paired_endpoint": "b42d008f",
@@ -72,5 +83,5 @@
     },
     "isolated_next_candidate": "retain the complete accepted prefix and add only the proven 115 us final-low hold to zero-based reply step 4"
   },
-  "conclusion": "FIFO clocking is causally supported: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6. The fifth reply is the next isolated rejection boundary; terminal enrollment is not yet proven."
+  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. The fifth reply is the next isolated rejection boundary; terminal enrollment is not yet proven."
 }
