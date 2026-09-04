@@ -92,6 +92,52 @@
     "derived_fifo_hold_us": 207,
     "result": "FIFO removes the RMT symbol-edge jitter, but its post-frame hold must be increased by the measured 92 us deficit before a live trial"
   },
+  "step_4_fifo_hold_calibration": {
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.13",
+    "requested_post_underflow_hold_us": 207,
+    "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+    "destination_scope": "deliberately impossible endpoints; no valve addressed",
+    "trials": [
+      {
+        "capture_path": "captures/continuous/20260904-175038/continuous.cu8",
+        "sha256": "09e947ed34810d1d67c50849498fc0075b54f2c768e7b601b4bdb7c610ebd224",
+        "gain_db": 7.7,
+        "adc_clipped": false,
+        "exact_frame_recovered": true,
+        "wake_symbols": 320,
+        "burst_duration_ms": 31.292,
+        "post_frame_low_tone_us": 69.0,
+        "channel_center_hz": 434351280,
+        "deviation_hz": 41309,
+        "symbol_rate_sps": 19983.022,
+        "transition_fit_rms_samples": 0.319515,
+        "transition_interval_min_samples": 99,
+        "transition_interval_max_samples": 101,
+        "driver_result": "transmitted",
+        "main_state_after_stream": 22
+      },
+      {
+        "capture_path": "captures/continuous/20260904-175747/continuous.cu8",
+        "sha256": "a03351f8730670ac4d4c5cc0d16a1128302657be87736d50370e2b3fda08d2c3",
+        "gain_db": 7.7,
+        "adc_clipped": false,
+        "exact_frame_recovered": true,
+        "wake_symbols": 320,
+        "burst_duration_ms": 31.294,
+        "post_frame_low_tone_us": 69.0,
+        "channel_center_hz": 434351295,
+        "deviation_hz": 41226,
+        "symbol_rate_sps": 19983.007,
+        "transition_fit_rms_samples": 0.325052,
+        "transition_interval_min_samples": 99,
+        "transition_interval_max_samples": 101,
+        "driver_result": "transmitted",
+        "main_state_after_stream": 22
+      }
+    ],
+    "main_state_interpretation": "0x16 is TXFIFO_UNDERFLOW; RF has already ended before the driver delay",
+    "result": "falsified: increasing a delay after TXFIFO_UNDERFLOW does not change the on-air tail; candidate .14 removes the off-air wait and restores receive immediately"
+  },
   "identity": {
     "factory_endpoint": "342d008f",
     "paired_endpoint": "b42d008f",
@@ -153,7 +199,7 @@
       "symbol_rate_sps": 19999.105
     },
     "tail_discriminator_result": "falsified by candidate .11; its duration was within 7.5 us of stock without terminal progress",
-    "isolated_next_candidate": "retain the complete accepted prefix and candidate-.12 FIFO clocking while increasing only the FIFO hold from 115 us to the measured 207 us"
+    "isolated_next_candidate": "retain the complete accepted prefix and exact FIFO waveform while removing candidate-.13's ineffective post-underflow wait; then perform the explicitly approved live FIFO-edge trial"
   },
-  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Candidate .12 exposed only 68--69 us of post-frame low tone versus 160.5 us stock, so candidate .13 preserves FIFO clocking and changes only the FIFO hold from 115 us to the measured 207 us. Terminal enrollment is not yet proven."
+  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Two candidate-.13 trials reduced RMS further to 0.320--0.325 samples but proved that a delay after TXFIFO_UNDERFLOW cannot extend the 69 us on-air tail. Candidate .14 removes that ineffective off-air delay and preserves the exact FIFO waveform for the next explicitly approved live trial. Terminal enrollment is not yet proven."
 }

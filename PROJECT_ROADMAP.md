@@ -645,14 +645,21 @@ observation before it changes transmitted firmware.
       `0.430--0.459` samples, proving that it removes the RMT jitter. Its 115 us
       driver hold yielded only `68--69 us` of post-frame low tone versus
       `160.5 us` stock, so `.12` is not a live candidate.
-    - [ ] Exercise isolated candidate `.13`.
+    - [x] Calibrate isolated candidate `.13` without addressing the valve.
       Preserve the proven prefix and candidate-.12 FIFO clocking, changing only
-      the FIFO hold from `115 us` to the derived `207 us`. First confirm under
-      impossible endpoints that the exact frame, hardware-clocked wake, and
-      `160--162 us` post-frame low tone are all present. Then request explicit
-      approval for a live arm. Accept `.13` only if the valve emits terminal
-      request `84/2c` and the node reaches `6/6`; repeat unchanged before
-      declaring enrollment supported.
+      the FIFO hold from `115 us` to the derived `207 us`. Two unchanged
+      impossible-endpoint trials recovered the exact frame and 320-symbol wake,
+      with transition-fit RMS `0.320--0.325` samples. Both nevertheless retained
+      only `69 us` of post-frame low tone. Diagnostics captured MARCSTATE `0x16`
+      (`TXFIFO_UNDERFLOW`) before the delay, proving that RF had already ended;
+      a software wait in that state cannot extend the waveform.
+    - [ ] Exercise isolated candidate `.14`.
+      Preserve the accepted prefix and the exact FIFO waveform while removing
+      candidate `.13`'s ineffective post-underflow wait so receive mode is
+      restored immediately. Confirm the exact impossible-endpoint frame once,
+      then request explicit approval for a live arm. The live acceptance signal
+      remains the valve's terminal `84/2c` request and node progress `6/6`;
+      repeat `.14` unchanged before declaring enrollment supported.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

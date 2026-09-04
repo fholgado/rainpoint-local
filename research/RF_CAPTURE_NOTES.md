@@ -831,12 +831,24 @@ repeat measured center `434.351200 MHz` and deviation `41.277 kHz`, agreeing
 with the `0x45` profile. FIFO solves the symbol-jitter discriminator.
 
 The same captures exposed only `68--69 us` of post-frame low tone, while stock
-and `.11` measured `160.5 us` and `161.5 us`. Candidate `.13` therefore keeps
-the exact FIFO waveform and increases only its driver hold by the measured
-`92 us` deficit, from `115 us` to `207 us`. The second driver invocation
-reported `transmit_failed` because it missed the transient FIFO-underflow
-status even though SDR recovered the complete exact frame; preserve that as a
-separate completion-diagnostic issue rather than RF rejection evidence.
+and `.11` measured `160.5 us` and `161.5 us`. Candidate `.13` kept the exact
+FIFO waveform and increased only its driver hold by the measured `92 us`
+deficit, from `115 us` to `207 us`. Two synchronized, impossible-endpoint
+captures—`captures/continuous/20260904-175038/continuous.cu8` (SHA-256
+`09e947ed34810d1d67c50849498fc0075b54f2c768e7b601b4bdb7c610ebd224`)
+and `captures/continuous/20260904-175747/continuous.cu8` (SHA-256
+`a03351f8730670ac4d4c5cc0d16a1128302657be87736d50370e2b3fda08d2c3`)
+—again recovered the exact frame and all 320 wake symbols. Transition-fit RMS
+improved to `0.320` and `0.325` samples, but both tails remained exactly
+`69 us`. Driver diagnostics read MARCSTATE `0x16` (`TXFIFO_UNDERFLOW`) before
+the hold, proving that the CC1101 had already ended RF. The additive-hold
+hypothesis is falsified.
+
+Candidate `.14` removes that ineffective off-air delay and otherwise preserves
+the exact FIFO waveform. This restores receive mode `207 us` sooner. Because
+candidate `.11` already showed that matching the stock tail did not produce the
+terminal request, no further tail emulation is justified before the controlled
+live FIFO-edge trial.
 
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.

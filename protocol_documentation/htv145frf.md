@@ -234,9 +234,13 @@ samples versus `0.5531` stock. Two impossible-endpoint candidate `.12`
 captures recovered the exact reply and all 320 wake symbols with FIFO RMS
 `0.430--0.459` samples. FIFO therefore removes the jitter, but its 115 us
 driver hold produced only `68--69 us` of measured post-frame low tone versus
-`160.5 us` stock and `161.5 us` in `.11`. Candidate `.13` retains the complete
-accepted prefix and FIFO clocking while changing only that hold to the derived
-`207 us` value.
+`160.5 us` stock and `161.5 us` in `.11`. Two candidate `.13` calibrations
+proved why: the CC1101 had already entered `TXFIFO_UNDERFLOW` before the driver
+delay, so increasing it to `207 us` left the on-air tail unchanged at `69 us`.
+Candidate `.14` retains the complete accepted prefix and exact FIFO waveform
+while removing that ineffective off-air delay so receive mode is restored
+immediately. Since `.11` already falsified tail length as the missing acceptance
+condition, the next discriminating observation is a controlled live `.14` trial.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 
