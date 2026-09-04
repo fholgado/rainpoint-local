@@ -772,3 +772,24 @@ testable. The reusable method and minimum evidence checklist are in
 
 Reference evidence:
 `fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
+
+### HTV145 hardware-clocked configuration discriminator — 2026-09-04
+
+- A forced-low/high probe and exactly `2,712` sampled GDO2 clock edges proved
+  the new GDO2-to-GPIO25 connection. Lossless SDR then showed that the
+  CPU-polled synchronous data feeder was not bit-exact: the closest sync word
+  had 10 errors and no complete frame decoded. This path is excluded.
+- The raw CC1101 FIFO path recovered the exact impossible-endpoint calibration
+  frame, completed all nine refills, reached `TXFIFO_UNDERFLOW`, and restored
+  receive mode. It measured `434.352457 MHz`, `41.051 kHz` deviation, and
+  `135.7785 ms` without ADC clipping.
+- Stock measured `434.351818 MHz`, `40.150 kHz`, and `135.3605 ms`. FIFO is
+  close but not identical: it exposes about ten additional alternating symbols
+  before sync and lasts `0.418 ms` longer.
+- Candidate `.10` changes only the delayed long configuration to FIFO. The
+  accepted assignment and ordinary stage-1 response remain frozen. No live
+  pairing was armed during calibration; the candidate requires explicit user
+  approval and valve-originated `81 50` before it can advance.
+
+Reference evidence:
+`fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.

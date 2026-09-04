@@ -573,7 +573,7 @@ observation before it changes transmitted firmware.
     versus `135.361 ms` stock, a carrier only about `320 Hz` below stock, and
     a `210.5 us` low tail versus `201.5 us` stock. Removing the long FSTXON
     dwell is therefore falsified as the missing condition.
-  - [ ] Validate a CC1101-clocked synchronous or FIFO-backed long
+  - [x] Validate a CC1101-clocked synchronous or FIFO-backed long
     configuration as the next transmitter-path discriminator. Exercise it
     first against an impossible endpoint and compare the emitted waveform to
     stock; do not alter the frozen assignment, short reply, frame bytes, or
@@ -593,11 +593,19 @@ observation before it changes transmitted firmware.
       frame bytes, completed nine bounded FIFO refills, observed the expected
       `TXFIFO_UNDERFLOW` terminator, and restored receive mode. No deployed
       receiver reported the impossible endpoint.
-    - [ ] Capture the working synchronous and FIFO calibrations with the Mac
-      SDR and compare carrier, deviation, all `2,399` wake transitions, frame
-      bytes, duration, and tail with the accepted stock configuration. The SDR
-      is not currently enumerating over USB; do not promote either transmitter
-      into a live pairing candidate until this comparison passes.
+    - [x] Capture both calibrations with the Mac SDR. The synchronous path's
+      GDO2 clock was exact, but its CPU-polled data stream was corrupt: the
+      nearest sync retained `10/40` errors and no exact frame was recovered.
+      Exclude it. FIFO recovered the exact frame, no clipping, about `2,410`
+      alternating pre-sync symbols, a `135.779 ms` burst, and a carrier only
+      `639 Hz` above stock. It remains measurably `0.418 ms` longer than stock.
+      Evidence is in
+      `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.
+    - [ ] Exercise candidate `.10` twice unchanged. It switches only the
+      delayed configuration from ESP32 RMT to CC1101 FIFO; stage 0 and the
+      ordinary stage-1 reply remain frozen. The OTA test node is connected and
+      authenticated on `.10`. Require explicit approval before each arm and
+      accept only valve-originated `81 50` plus progress beyond `2/6`.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

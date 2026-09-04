@@ -173,6 +173,10 @@ class AddonBoundaryTest(unittest.TestCase):
             '"0.15.4-htv145-pairing-counter2-candidate.9"',
             build_profile,
         )
+        self.assertIn(
+            '"0.15.4-htv145-pairing-counter2-candidate.10"',
+            build_profile,
+        )
         self.assertIn('firmware_variant = "unified"', build_profile)
         self.assertIn(
             'firmware_variant = "htv145-pairing-probe"',
@@ -201,6 +205,10 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
+            '"RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
             "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
             build_profile,
         )
@@ -220,6 +228,12 @@ class AddonBoundaryTest(unittest.TestCase):
             "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1",
             main_source,
         )
+        self.assertIn(
+            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1",
+            main_source,
+        )
+        self.assertIn("configurationBuilt", main_source)
+        self.assertIn("radio.transmitFifoCalibration", main_source)
         self.assertIn("postFrameLowHoldMicros > 500", radio_source)
         self.assertIn("bool gaussianShaping = false", radio_header)
         self.assertIn("gaussianShaping ? 0x12 : 0x02", radio_source)
@@ -300,6 +314,9 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn(
             "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1", workflow
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1", workflow
         )
         self.assertGreaterEqual(
             workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),

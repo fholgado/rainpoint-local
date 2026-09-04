@@ -92,6 +92,14 @@
 #error "HTV145 delayed-prearm candidate requires the frozen research prefix"
 #endif
 
+#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 0 && RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 1
+#error "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1 || RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 1)
+#error "HTV145 FIFO configuration candidate requires the frozen counter-2 research prefix"
+#endif
+
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "Routine acknowledgement trials require generalized pairing"
 #endif
@@ -3882,9 +3890,26 @@ void processHtv145PairingFrame(
                 delay(1);
             }
 #endif
-            sent = rainpoint::htv145::buildConfigurationReply(
-                activeHtv145PairingProfile, configurationFrame
-            ) && radio.transmitAsync(
+            const bool configurationBuilt =
+                rainpoint::htv145::buildConfigurationReply(
+                    activeHtv145PairingProfile, configurationFrame
+                );
+#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1
+            // Candidate .10 changes only the delayed configuration's symbol
+            // clock. A lossless SDR capture recovered its exact 38-byte frame
+            // and an uninterrupted alternating wake from the CC1101 FIFO path.
+            // Stage 0 and the ordinary stage-1 response remain on the frozen,
+            // previously accepted asynchronous path above.
+            sent = configurationBuilt && radio.transmitFifoCalibration(
+                configurationFrame,
+                transmitCenterHz,
+                rainpoint::htv145::kConfigurationWakeSymbols,
+                rainpoint::pairingPaTableValue(pairingPowerDbm),
+                step->deviationRegister,
+                configurationStartAtMicros
+            );
+#else
+            sent = configurationBuilt && radio.transmitAsync(
                 configurationFrame,
                 transmitCenterHz,
                 rainpoint::htv145::kConfigurationWakeSymbols,
@@ -3899,6 +3924,7 @@ void processHtv145PairingFrame(
                 rainpoint::htv145::
                     kConfigurationPostFrameLowHoldAdjustmentUs
             );
+#endif
             // The configuration response is sent on the same routine carrier.
             sent = sent && radio.setReceiveFrequency(transmitCenterHz);
         }

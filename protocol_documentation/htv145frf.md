@@ -206,11 +206,19 @@ exactly `15.2 ms`; infinite length fixed that cutoff. A forced-low/high GDO2
 probe then identified a missing radio-GDO2-to-ESP32-GPIO25 connection. Once
 that jumper was added, synchronous calibration counted exactly `2,712` clock
 edges: `2,704` supplied symbols plus the documented eight-bit transmit latency,
-and restored receive mode. A separate raw-FIFO calibration avoids that wire
-and successfully streams the complete `300` wake bytes plus `38` frame bytes
-to `TXFIFO_UNDERFLOW`. Their impossible endpoints prevent enrollment. SDR
-waveform equivalence remains a required gate before either transmitter is
-used in a live pairing candidate.
+and restored receive mode. Lossless SDR showed that the CPU-polled data feeder
+nevertheless corrupted the synchronous on-air stream: no exact sync or frame
+was recoverable. That path is excluded.
+
+The raw-FIFO calibration produced the exact intended 38-byte frame with stable
+hardware timing and no clipping. Its center was `639 Hz` above stock and its
+measured deviation `901 Hz` wider. It emitted about `2,410` alternating symbols
+before sync and lasted `135.779 ms`, versus `2,400` and `135.361 ms` stock.
+Candidate `.10` therefore changes only the delayed configuration transmitter
+from ESP32 RMT to CC1101 FIFO while keeping the accepted stage-0 assignment and
+ordinary stage-1 reply frozen. This is a live discriminator, not a supported
+pairing profile; acceptance still requires valve-originated `81 50` and
+progress beyond `2/6`.
 
 The packed clock/date marker positions are branch-specific. Counter 0 carries
 its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in

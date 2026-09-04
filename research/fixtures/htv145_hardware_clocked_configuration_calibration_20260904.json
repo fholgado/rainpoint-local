@@ -1,0 +1,78 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-04",
+  "purpose": "Compare hardware-clocked CC1101 transmitter paths with the accepted stock delayed configuration without addressing a real valve.",
+  "safety_boundary": {
+    "pairing_armed": false,
+    "source_endpoint": "deadc0de",
+    "destination_endpoint": "f00dcafe",
+    "transmit_power_dbm": 0
+  },
+  "capture": {
+    "path": "captures/continuous/20260904-123207/continuous.cu8",
+    "sha256": "63b28f04b8609ac17e5ea5a8c58a948799c44789d079aaf173596acd031a26dbf",
+    "bytes": 180000000,
+    "sample_rate_sps": 2000000,
+    "capture_center_hz": 433700000,
+    "mode": "rtl_sdr asynchronous",
+    "sample_loss_warning": false,
+    "adc_clipping_observed": false
+  },
+  "stock_reference": {
+    "path": "captures/htv145-counter2-stock-window-122s-144s.cu8",
+    "sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
+    "duration_ms": 135.3605,
+    "center_hz": 434351818,
+    "deviation_hz": 40150,
+    "symbol_rate_sps": 19999.55,
+    "wake_transitions": 2399,
+    "wake_symbols_before_sync": 2400
+  },
+  "synchronous_serial": {
+    "start_seconds": 17.837905,
+    "duration_ms": 135.883,
+    "gdo2_to_gpio25_connected": true,
+    "sampled_clock_edges": 2712,
+    "expected_clock_edges": 2712,
+    "tx_state_retained_through_stream": true,
+    "receive_restored": true,
+    "best_sync_hamming_errors_of_40": 10,
+    "best_window_wake_transitions_of_2399": 1265,
+    "exact_frame_recovered": false,
+    "verdict": "rejected transmitter path: the wiring and CC1101 clock are valid, but the CPU-polled GDO0 feeder corrupts the on-air bitstream"
+  },
+  "fifo": {
+    "start_seconds": 26.816609,
+    "duration_ms": 135.7785,
+    "center_hz": 434352457,
+    "center_minus_stock_hz": 639,
+    "deviation_hz": 41051,
+    "deviation_minus_stock_hz": 901,
+    "symbol_rate_sps": 19983.029,
+    "observed_alternating_symbols_before_sync": 2410,
+    "recovered_transitions_before_sync": 2408,
+    "requested_wake_symbols": 2400,
+    "frame_hex": "79f4882f28deadc0def00dcafe811001010000000000000000000000000000000000000063df",
+    "exact_frame_recovered": true,
+    "bytes_queued": 338,
+    "fifo_refills": 9,
+    "tx_fifo_underflow_observed": true,
+    "receive_restored": true,
+    "duration_minus_stock_ms": 0.418,
+    "verdict": "accepted as the next isolated live discriminator: exact payload and stable hardware timing, with the approximately ten-symbol leading surplus retained as a measured difference"
+  },
+  "candidate": {
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.10",
+    "node_id": "rp-cc4c05f57630",
+    "node_state_after_flash": "connected_and_authenticated",
+    "change": "only the delayed stage-1 configuration uses the FIFO path; the proven stage-0 assignment and ordinary stage-1 reply remain unchanged",
+    "live_pairing_armed": false,
+    "acceptance_evidence_required": "a valve-originated 81 50 response followed by advancement beyond 2 of 6"
+  },
+  "interpretation": [
+    "Adding GDO2 was useful because it proved the CC1101 clock and physical connection, but it did not make CPU-polled synchronous data delivery bit-exact.",
+    "The raw FIFO path is the only new hardware-clocked path that recovered the intended complete frame from the lossless IQ capture.",
+    "The FIFO path is not declared waveform-equivalent to stock: its on-air wake begins about ten symbols earlier and the total burst is about 0.418 ms longer.",
+    "A live trial remains a single-variable transmitter-path test, not proof of complete pairing unless the valve itself emits the expected next protocol message."
+  ]
+}
