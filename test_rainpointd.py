@@ -3214,7 +3214,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
 
         transmitted_at = self.mark_anchor_transmitted(
-            "2026-08-24T20:01:10+00:00"
+            (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
         )
         transmitted = self.server.gateway._store.valve_registry()[0]
         self.assertIsNotNone(transmitted)
@@ -3422,7 +3422,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         )
         registration = self.server.gateway._store.valve_registry()[0]
         started = self.mark_anchor_transmitted(
-            "2026-08-24T20:01:10+00:00"
+            (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
         )
         self.assertIsNotNone(
             self.server.gateway.observe_valve_control_air_response(
