@@ -624,15 +624,26 @@ observation before it changes transmitted firmware.
         `transmit_failed` because its post-FIFO receive restoration failed.
         Treat that as an implementation-recovery defect rather than a valve
         protocol rejection; it does not replace either clean `5/6` trial.
-    - [ ] Exercise isolated candidate `.11`.
+    - [x] Exercise isolated candidate `.11`.
       Preserve the entire accepted prefix and add only the already proven
       `115 us` final-low hold to zero-based reply step 4. Candidate `.10` sent
       the exact stock step-4 frame on the matched carrier, wake, and schedule,
       but its burst ended `129.5 us` before stock; the valve then emitted
       `84/03`, `84/83`, `85/03`, `85/83` retries instead of terminal `84/2c`.
-      Accept `.11` only if the valve emits the exact `84/2c` request and the
-      node reaches `6/6`; repeat the unchanged successful candidate before
-      declaring enrollment supported.
+      The approved 2026-09-04 trial did not pass: it again stopped at `5/6`
+      with the same retries. Capture
+      `captures/continuous/20260904-171403/continuous.cu8` has SHA-256
+      `1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1`.
+      The burst measured `31.3505 ms` versus `31.358 ms` stock, which excludes
+      final-low tail length as the remaining condition.
+    - [ ] Exercise isolated candidate `.12`.
+      Freeze the complete accepted prefix and move only zero-based reply step
+      4 from ESP32 RMT to CC1101 FIFO hardware clocking. Candidate `.11` still
+      had transition-fit RMS `3.8126` samples versus `0.5531` stock despite its
+      now-matched total duration. Calibrate the short FIFO burst against an
+      impossible endpoint under SDR before a live arm. Accept `.12` only if
+      the valve emits exact terminal request `84/2c` and the node reaches
+      `6/6`; then repeat `.12` unchanged before declaring enrollment supported.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

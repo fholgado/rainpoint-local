@@ -91,7 +91,8 @@ public:
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45,
         std::uint32_t startAtMicros = 0,
-        FifoCalibrationDiagnostics* diagnostics = nullptr
+        FifoCalibrationDiagnostics* diagnostics = nullptr,
+        std::uint16_t postFrameLowHoldMicros = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();

@@ -181,6 +181,10 @@ class AddonBoundaryTest(unittest.TestCase):
             '"0.15.4-htv145-pairing-counter2-candidate.11"',
             build_profile,
         )
+        self.assertIn(
+            '"0.15.4-htv145-pairing-counter2-candidate.12"',
+            build_profile,
+        )
         self.assertIn('firmware_variant = "unified"', build_profile)
         self.assertIn(
             'firmware_variant = "htv145-pairing-probe"',
@@ -217,6 +221,10 @@ class AddonBoundaryTest(unittest.TestCase):
             build_profile,
         )
         self.assertIn(
+            '"RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE", "0"',
+            build_profile,
+        )
+        self.assertIn(
             "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
             build_profile,
         )
@@ -232,6 +240,10 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("replyStep == 0", main_source)
         self.assertIn("replyStep == 1", main_source)
         self.assertIn("replyStep == 4", main_source)
+        self.assertIn(
+            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1",
+            main_source,
+        )
         self.assertIn("kMaximumPrearmLeadUs = 20'000", main_source)
         self.assertIn(
             "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1",
@@ -304,6 +316,24 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("fifo_refills", main_source)
         self.assertIn("bytes_queued", main_source)
 
+    def test_htv145_fifo_step4_calibration_is_isolated(self) -> None:
+        root = ROOT / "firmware" / "rainpoint_bridge"
+        main_source = (root / "src" / "main.cpp").read_text()
+        radio_source = (root / "src" / "cc1101.cpp").read_text()
+
+        self.assertIn("htv145_fifo_step4_calibration", main_source)
+        self.assertIn("0x5e, 0xad, 0xc0, 0x8f", main_source)
+        self.assertIn("0xf0, 0x0d, 0xca, 0x80", main_source)
+        self.assertIn("rainpoint::kPairingWakeSymbols", main_source)
+        self.assertIn(
+            "rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs",
+            main_source,
+        )
+        self.assertIn(
+            "(wakeSymbols != kPairingWakeSymbols && wakeSymbols != 2'400)",
+            radio_source,
+        )
+
     def test_htv145_counter2_branch_is_research_only(self) -> None:
         root = ROOT / "firmware" / "rainpoint_bridge"
         build_profile = (root / "tools" / "build_profile.py").read_text()
@@ -333,6 +363,9 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn(
             "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1", workflow
+        )
+        self.assertIn(
+            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1", workflow
         )
         self.assertGreaterEqual(
             workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),

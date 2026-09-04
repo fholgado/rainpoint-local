@@ -805,8 +805,20 @@ freezing the long configuration prefix. The next expected stock request,
 `84 2c`, did not arrive; the valve instead emitted alternating `03/83` retries
 at incrementing counters after the local step-4 reply. That reply's normalized
 bytes, carrier, wake count, and schedule match stock, but its burst is
-`31.2285 ms` versus `31.358 ms` stock. Candidate `.11` therefore adds only the
-established `115 us` final-low hold to zero-based reply step 4.
+`31.2285 ms` versus `31.358 ms` stock. Candidate `.11` added only the
+established `115 us` final-low hold to zero-based reply step 4. Its approved
+capture, `captures/continuous/20260904-171403/continuous.cu8` (SHA-256
+`1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1`),
+again stopped at `5/6` and produced the same `84/03`, `84/83`, `85/03`, and
+`85/83` retry family. The local burst now measured `31.3505 ms`, within
+`7.5 us` of stock, so tail length is falsified as the missing condition.
+
+The largest remaining measured difference is timing stability inside the
+burst. Candidate `.11` had transition-fit RMS `3.8126` samples and symbol
+intervals spanning `87..101` samples, versus stock RMS `0.5531` and intervals
+`100..102`. Candidate `.12` therefore freezes every proven byte, schedule,
+carrier, wake, and prefix while moving only step 4 from ESP32 RMT modulation
+to the CC1101 FIFO hardware clock.
 
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.

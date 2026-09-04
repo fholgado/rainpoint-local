@@ -846,7 +846,8 @@ bool Cc1101::transmitFifoCalibration(
     std::uint8_t paTableValue,
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
-    FifoCalibrationDiagnostics* diagnostics
+    FifoCalibrationDiagnostics* diagnostics,
+    std::uint16_t postFrameLowHoldMicros
 ) {
     if (diagnostics != nullptr) {
         *diagnostics = FifoCalibrationDiagnostics{};
@@ -859,15 +860,18 @@ bool Cc1101::transmitFifoCalibration(
     (void)deviationRegister;
     (void)startAtMicros;
     (void)diagnostics;
+    (void)postFrameLowHoldMicros;
     ++blockedTransmitCount_;
     return false;
 #else
     if (!transmitEnabled_ || !hasSync(frame) ||
-        !hasOrdinaryTrailer(frame) || wakeSymbols != 2'400 ||
+        !hasOrdinaryTrailer(frame) ||
+        (wakeSymbols != kPairingWakeSymbols && wakeSymbols != 2'400) ||
         wakeSymbols % 8 != 0 ||
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
-        deviationRegister != kOrdinaryDeviationRegister) {
+        deviationRegister != kOrdinaryDeviationRegister ||
+        postFrameLowHoldMicros > 500) {
         ++blockedTransmitCount_;
         return false;
     }
@@ -996,6 +1000,12 @@ bool Cc1101::transmitFifoCalibration(
             readStatus(kMainState) & 0x1f;
     }
 
+    // Preserve the same bounded post-frame interval used by the accepted RMT
+    // profile before leaving the FIFO-underflow state. SDR calibration must
+    // establish the resulting on-air tail before this path is used live.
+    if (sent && postFrameLowHoldMicros > 0) {
+        delayMicroseconds(postFrameLowHoldMicros);
+    }
     enterIdle();
     strobe(kFlushTx);
     const bool restored = restoreReceiveConfiguration(receiveChannel);

@@ -21,6 +21,38 @@
     "configuration_accepted": true,
     "terminal_request_observed": false
   },
+  "step_4_tail_trial": {
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.11",
+    "capture": {
+      "path": "captures/continuous/20260904-171403/continuous.cu8",
+      "sha256": "1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1",
+      "sample_rate_sps": 2000000,
+      "center_hz": 433700000,
+      "gain_db": 0.9,
+      "adc_clipped": false
+    },
+    "node_progress": "5/6",
+    "configuration_accepted": true,
+    "terminal_request_observed": false,
+    "step_4_reply": "79f4882f28b42d008fb984028083c3008000000000000000000000000000000000000000221c",
+    "observed_retry_pattern": [
+      "840301",
+      "848301",
+      "850301",
+      "858301"
+    ],
+    "local_burst_duration_ms": 31.3505,
+    "stock_burst_duration_ms": 31.358,
+    "local_center_hz": 434351308,
+    "stock_center_hz": 434351830,
+    "local_deviation_hz": 41230,
+    "stock_deviation_hz": 40093,
+    "local_symbol_rate_sps": 19999.424,
+    "stock_symbol_rate_sps": 19999.105,
+    "local_transition_fit_rms_samples": 3.8126,
+    "stock_transition_fit_rms_samples": 0.5531,
+    "result": "rejected"
+  },
   "identity": {
     "factory_endpoint": "342d008f",
     "paired_endpoint": "b42d008f",
@@ -81,7 +113,8 @@
       "wake_transitions": 319,
       "symbol_rate_sps": 19999.105
     },
-    "isolated_next_candidate": "retain the complete accepted prefix and add only the proven 115 us final-low hold to zero-based reply step 4"
+    "tail_discriminator_result": "falsified by candidate .11; its duration was within 7.5 us of stock without terminal progress",
+    "isolated_next_candidate": "retain the complete accepted prefix and move only zero-based reply step 4 from ESP32 RMT to CC1101 FIFO hardware clocking"
   },
-  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. The fifth reply is the next isolated rejection boundary; terminal enrollment is not yet proven."
+  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. The largest measured discriminator at this boundary is ESP32-RMT symbol-edge jitter, so candidate .12 changes only the step-4 transmitter to CC1101 FIFO hardware clocking. Terminal enrollment is not yet proven."
 }

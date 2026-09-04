@@ -223,11 +223,15 @@ assignment-through-configuration prefix and directly establishes that
 hardware-clocked FIFO transmission solved the delayed-configuration boundary.
 
 Enrollment is not terminal yet. The zero-based step-4 reply matched the stock
-frame, carrier, 320-symbol wake, and schedule, but the local burst lasted
-`31.2285 ms` versus `31.358 ms` stock. The valve emitted a sequence of
-`84/03`, `84/83`, `85/03`, and `85/83` retries instead of the stock terminal
-`84/2c` request. The next isolated candidate retains the complete accepted
-prefix and adds only the already proven `115 us` final-low hold to step 4.
+frame, carrier, 320-symbol wake, and schedule, but candidate `.10` lasted
+`31.2285 ms` versus `31.358 ms` stock. Candidate `.11` added only the proven
+`115 us` final-low hold and brought the burst to `31.3505 ms`, within `7.5 us`
+of stock. The valve nevertheless emitted the same `84/03`, `84/83`, `85/03`,
+and `85/83` retry family instead of the stock terminal `84/2c` request. Tail
+duration is therefore excluded at this boundary. The remaining measured
+discriminator is symbol-edge stability: `.11` transition-fit RMS was `3.8126`
+samples versus `0.5531` stock. Candidate `.12` retains the complete accepted
+prefix and moves only step 4 from ESP32 RMT to CC1101 FIFO hardware clocking.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 

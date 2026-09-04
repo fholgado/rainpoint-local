@@ -71,6 +71,14 @@ if htv145_step4_tail_value not in {"0", "1"}:
         "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE must be 0 or 1"
     )
 htv145_step4_tail_enabled = htv145_step4_tail_value == "1"
+htv145_step4_fifo_value = os.environ.get(
+    "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE", "0"
+)
+if htv145_step4_fifo_value not in {"0", "1"}:
+    raise ValueError(
+        "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE must be 0 or 1"
+    )
+htv145_step4_fifo_enabled = htv145_step4_fifo_value == "1"
 if htv145_enabled and not research_enabled:
     raise ValueError(
         "RAINPOINT_HTV145_TX_CANDIDATE requires RAINPOINT_RESEARCH_BENCH=1"
@@ -114,6 +122,11 @@ if htv145_step4_tail_enabled and not (
         "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE requires the accepted "
         "counter-2 FIFO-configuration candidate"
     )
+if htv145_step4_fifo_enabled and not htv145_step4_tail_enabled:
+    raise ValueError(
+        "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE requires the measured "
+        "step-4-tail discriminator"
+    )
 if htv145_factory_counter and not (
     research_enabled and htv145_pairing_enabled
 ):
@@ -127,7 +140,9 @@ supervised_version = "0.15.7"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
     (
-        "0.15.4-htv145-pairing-counter2-candidate.11"
+        "0.15.4-htv145-pairing-counter2-candidate.12"
+        if htv145_step4_fifo_enabled
+        else "0.15.4-htv145-pairing-counter2-candidate.11"
         if htv145_step4_tail_enabled
         else "0.15.4-htv145-pairing-counter2-candidate.10"
         if htv145_fifo_configuration_enabled
@@ -190,6 +205,10 @@ env.Append(
         (
             "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE",
             int(htv145_step4_tail_enabled),
+        ),
+        (
+            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE",
+            int(htv145_step4_fifo_enabled),
         ),
         (
             "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE",

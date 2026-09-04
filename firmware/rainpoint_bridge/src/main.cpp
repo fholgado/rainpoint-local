@@ -108,6 +108,14 @@
 #error "HTV145 step-4 tail candidate requires the accepted FIFO-configuration prefix"
 #endif
 
+#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE != 0 && RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE != 1
+#error "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE must be 0 or 1"
+#endif
+
+#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1 && RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 1
+#error "HTV145 step-4 FIFO candidate requires the measured tail discriminator"
+#endif
+
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
 #error "Routine acknowledgement trials require generalized pairing"
 #endif
@@ -3407,6 +3415,103 @@ bool handleHtv145ConfigurationCalibration(const String& command) {
     );
     return true;
 }
+
+bool handleHtv145Step4FifoCalibration(const String& command) {
+    const String prefix = "htv145_fifo_step4_calibration ";
+    if (!command.startsWith(prefix)) {
+        return false;
+    }
+    const String offsetValue = command.substring(prefix.length());
+    const long frequencyOffsetHz = offsetValue.toInt();
+    if (offsetValue.isEmpty() || frequencyOffsetHz < -150'000 ||
+        frequencyOffsetHz > 150'000 ||
+        currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_fifo_step4_calibration_invalid\"}"
+        );
+        return true;
+    }
+
+    const std::int64_t adjustedFrequency =
+        static_cast<std::int64_t>(rainpoint::htv145::kRoutineChannelCenterHz) +
+        frequencyOffsetHz;
+    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
+        !primaryRadio.prepareTransmit() ||
+        !primaryRadio.cacheTransmitFrequency(
+            static_cast<std::uint32_t>(adjustedFrequency)
+        )) {
+        emitLine(
+            "{\"type\":\"command_error\","
+            "\"error\":\"htv145_fifo_step4_calibration_prepare_failed\"}"
+        );
+        return true;
+    }
+
+    // These endpoints cannot address the test valve. The body, residual, wake,
+    // and hardware path remain identical to live zero-based reply step 4 so an
+    // SDR can measure FIFO timing without advancing an enrollment session.
+    constexpr std::array<std::uint8_t, 4> factoryEndpoint{{
+        0x5e, 0xad, 0xc0, 0x8f,
+    }};
+    constexpr std::array<std::uint8_t, 4> controllerEndpoint{{
+        0xf0, 0x0d, 0xca, 0x80,
+    }};
+    constexpr std::array<std::uint8_t, 4> companionEndpoint{{
+        0x70, 0x0d, 0xca, 0x80,
+    }};
+    rainpoint::htv145::PairingProfile profile{};
+    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
+    constexpr rainpoint::PairingLocalDateTime ignoredClock{
+        2026, 1, 1, 0, 0, 0,
+    };
+    const bool built = rainpoint::htv145::buildProfile(
+            factoryEndpoint,
+            controllerEndpoint,
+            companionEndpoint,
+            profile
+        ) && rainpoint::htv145::buildReply(
+            profile,
+            4,
+            ignoredClock,
+            frame
+        );
+    rainpoint::FifoCalibrationDiagnostics diagnostics{};
+    const bool sent = built && primaryRadio.transmitFifoCalibration(
+        frame,
+        static_cast<std::uint32_t>(adjustedFrequency),
+        rainpoint::kPairingWakeSymbols,
+        rainpoint::pairingPaTableValue(0),
+        rainpoint::htv145::kOrdinaryDeviationRegister,
+        micros() + 20'000,
+        &diagnostics,
+        rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs
+    );
+
+    String line;
+    line.reserve(320);
+    line += "{\"type\":\"htv145_fifo_step4_calibration\",\"state\":\"";
+    line += sent ? "transmitted" : "transmit_failed";
+    line += "\",\"center_hz\":";
+    line += static_cast<std::uint32_t>(adjustedFrequency);
+    line += ",\"wake_symbols\":";
+    line += rainpoint::kPairingWakeSymbols;
+    line += ",\"synthesizer_ready\":";
+    line += diagnostics.synthesizerReady ? "true" : "false";
+    line += ",\"tx_strobe_accepted\":";
+    line += diagnostics.txStrobeAccepted ? "true" : "false";
+    line += ",\"bytes_queued\":";
+    line += diagnostics.bytesQueued;
+    line += ",\"fifo_refills\":";
+    line += diagnostics.fifoRefills;
+    line += ",\"tx_fifo_underflow_observed\":";
+    line += diagnostics.txFifoUnderflowObserved ? "true" : "false";
+    line += ",\"receive_restored\":";
+    line += diagnostics.receiveConfigurationRestored ? "true" : "false";
+    line += "}";
+    emitLine(line);
+    return true;
+}
 #endif
 
 void handleSerialCommand() {
@@ -3419,7 +3524,10 @@ void handleSerialCommand() {
             bool handled = false;
 #if RAINPOINT_RESEARCH_BENCH == 1
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            handled = handleHtv145ConfigurationCalibration(serialCommand);
+            handled = handleHtv145Step4FifoCalibration(serialCommand);
+            if (!handled) {
+                handled = handleHtv145ConfigurationCalibration(serialCommand);
+            }
             if (!handled) {
                 handled = handleHtv145PreludeCalibration(serialCommand);
             }
@@ -3854,35 +3962,53 @@ void processHtv145PairingFrame(
                 static_cast<std::int64_t>(step->channelCenterHz) +
                 pairingFrequencyOffsetHz
             );
-        bool sent = built && radio.transmitAsync(
-            replyFrame,
-            transmitCenterHz,
-            rainpoint::kPairingWakeSymbols,
-            pairingInvert,
-            rainpoint::pairingPaTableValue(pairingPowerDbm),
-            step->deviationRegister,
-            packet.receivedAtMicros +
-                rainpoint::htv145::replyStartDelayUs(replyStep),
-            0,
-            0,
-            0,
-            false,
+        bool sent = false;
+#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1
+        if (built && replyStep == 4) {
+            sent = radio.transmitFifoCalibration(
+                replyFrame,
+                transmitCenterHz,
+                rainpoint::kPairingWakeSymbols,
+                rainpoint::pairingPaTableValue(pairingPowerDbm),
+                step->deviationRegister,
+                packet.receivedAtMicros +
+                    rainpoint::htv145::replyStartDelayUs(replyStep),
+                nullptr,
+                rainpoint::htv145::kStep4PostFrameLowHoldAdjustmentUs
+            );
+        } else
+#endif
+        {
+            sent = built && radio.transmitAsync(
+                replyFrame,
+                transmitCenterHz,
+                rainpoint::kPairingWakeSymbols,
+                pairingInvert,
+                rainpoint::pairingPaTableValue(pairingPowerDbm),
+                step->deviationRegister,
+                packet.receivedAtMicros +
+                    rainpoint::htv145::replyStartDelayUs(replyStep),
+                0,
+                0,
+                0,
+                false,
 #if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1
-            replyStep == 0
-                ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
-                : replyStep == 1
-                    ? rainpoint::htv145::
-                        kStep1PostFrameLowHoldAdjustmentUs
-#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1
-                    : replyStep == 4
+                replyStep == 0
+                    ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
+                    : replyStep == 1
                         ? rainpoint::htv145::
-                            kStep4PostFrameLowHoldAdjustmentUs
+                            kStep1PostFrameLowHoldAdjustmentUs
+#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1
+                        : replyStep == 4
+                            ? rainpoint::htv145::
+                                kStep4PostFrameLowHoldAdjustmentUs
 #endif
-                    : 0
+                        : 0
 #else
-            0
+                0
 #endif
-        );
+            );
+        }
         if (sent && replyStep == 1) {
             std::array<std::uint8_t, rainpoint::kFrameBytes>
                 configurationFrame{};
