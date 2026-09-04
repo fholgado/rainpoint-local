@@ -848,7 +848,16 @@ Candidate `.14` removes that ineffective off-air delay and otherwise preserves
 the exact FIFO waveform. This restores receive mode `207 us` sooner. Because
 candidate `.11` already showed that matching the stock tail did not produce the
 terminal request, no further tail emulation is justified before the controlled
-live FIFO-edge trial.
+live FIFO-edge trial. The `.14` impossible-endpoint capture
+`captures/continuous/20260904-180543/continuous.cu8` (SHA-256
+`3da4d92da731df67756f50accb91bd0d60d819ab18a7ad65188f954a6931dae9`)
+recovered the exact frame and all 320 wake symbols without clipping. It measured
+`31.2935 ms`, center `434.351344 MHz`, deviation `41.245 kHz`, symbol rate
+`19,983.071 symbols/s`, transition-fit RMS `0.337` samples, and the expected
+natural `69.5 us` low-tone edge. The driver observed `TXFIFO_UNDERFLOW`, restored
+receive, and reported success. Candidate `.14` is calibrated but remains
+unproven against the valve until an explicitly approved live trial reaches the
+terminal `84/2c` request.
 
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.

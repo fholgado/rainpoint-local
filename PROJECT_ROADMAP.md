@@ -653,13 +653,18 @@ observation before it changes transmitted firmware.
       only `69 us` of post-frame low tone. Diagnostics captured MARCSTATE `0x16`
       (`TXFIFO_UNDERFLOW`) before the delay, proving that RF had already ended;
       a software wait in that state cannot extend the waveform.
-    - [ ] Exercise isolated candidate `.14`.
+    - [x] Calibrate isolated candidate `.14` without addressing the valve.
       Preserve the accepted prefix and the exact FIFO waveform while removing
       candidate `.13`'s ineffective post-underflow wait so receive mode is
-      restored immediately. Confirm the exact impossible-endpoint frame once,
-      then request explicit approval for a live arm. The live acceptance signal
-      remains the valve's terminal `84/2c` request and node progress `6/6`;
-      repeat `.14` unchanged before declaring enrollment supported.
+      restored immediately. Capture
+      `captures/continuous/20260904-180543/continuous.cu8` recovered the exact
+      impossible-endpoint frame, all 320 wake symbols, and transition-fit RMS
+      `0.337` samples without clipping. The driver observed the expected
+      `TXFIFO_UNDERFLOW`, restored receive, and reported success.
+    - [ ] Exercise controlled live candidate `.14` after explicit approval.
+      The acceptance signal remains the valve's terminal `84/2c` request and
+      node progress `6/6`; repeat `.14` unchanged before declaring enrollment
+      supported. Do not arm this trial without the user present.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

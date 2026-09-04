@@ -241,6 +241,9 @@ Candidate `.14` retains the complete accepted prefix and exact FIFO waveform
 while removing that ineffective off-air delay so receive mode is restored
 immediately. Since `.11` already falsified tail length as the missing acceptance
 condition, the next discriminating observation is a controlled live `.14` trial.
+Its impossible-endpoint calibration recovered the exact frame, all 320 wake
+symbols, and transition-fit RMS `0.337` samples without clipping; the node then
+restored receive successfully.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 

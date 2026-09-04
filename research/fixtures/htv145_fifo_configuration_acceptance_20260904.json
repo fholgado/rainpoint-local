@@ -138,6 +138,29 @@
     "main_state_interpretation": "0x16 is TXFIFO_UNDERFLOW; RF has already ended before the driver delay",
     "result": "falsified: increasing a delay after TXFIFO_UNDERFLOW does not change the on-air tail; candidate .14 removes the off-air wait and restores receive immediately"
   },
+  "step_4_fifo_live_candidate_calibration": {
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.14",
+    "capture_path": "captures/continuous/20260904-180543/continuous.cu8",
+    "sha256": "3da4d92da731df67756f50accb91bd0d60d819ab18a7ad65188f954a6931dae9",
+    "gain_db": 7.7,
+    "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+    "destination_scope": "deliberately impossible endpoints; no valve addressed",
+    "adc_clipped": false,
+    "exact_frame_recovered": true,
+    "wake_symbols": 320,
+    "burst_duration_ms": 31.2935,
+    "post_frame_low_tone_us": 69.5,
+    "channel_center_hz": 434351344,
+    "deviation_hz": 41245,
+    "symbol_rate_sps": 19983.071,
+    "transition_fit_rms_samples": 0.336733,
+    "transition_interval_min_samples": 99,
+    "transition_interval_max_samples": 101,
+    "driver_result": "transmitted",
+    "main_state_after_stream": 22,
+    "receive_restored": true,
+    "result": "calibrated for an explicitly approved live trial; terminal enrollment is not yet proven"
+  },
   "identity": {
     "factory_endpoint": "342d008f",
     "paired_endpoint": "b42d008f",
@@ -201,5 +224,5 @@
     "tail_discriminator_result": "falsified by candidate .11; its duration was within 7.5 us of stock without terminal progress",
     "isolated_next_candidate": "retain the complete accepted prefix and exact FIFO waveform while removing candidate-.13's ineffective post-underflow wait; then perform the explicitly approved live FIFO-edge trial"
   },
-  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Two candidate-.13 trials reduced RMS further to 0.320--0.325 samples but proved that a delay after TXFIFO_UNDERFLOW cannot extend the 69 us on-air tail. Candidate .14 removes that ineffective off-air delay and preserves the exact FIFO waveform for the next explicitly approved live trial. Terminal enrollment is not yet proven."
+  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Two candidate-.13 trials reduced RMS further to 0.320--0.325 samples but proved that a delay after TXFIFO_UNDERFLOW cannot extend the 69 us on-air tail. Candidate .14 removes that ineffective off-air delay; its exact frame, 320-symbol wake, 0.337-sample RMS, and successful receive restoration are calibrated for the next explicitly approved live trial. Terminal enrollment is not yet proven."
 }
