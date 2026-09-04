@@ -582,19 +582,22 @@ observation before it changes transmitted firmware.
       and an impossible endpoint. Its first calibration stopped after exactly
       `38 * 8 / 20,000 = 15.2 ms`; a red/green regression proved and fixed the
       inherited fixed-length setting by selecting infinite length. A
-      forced-low/forced-high GDO2 probe then proved this breadboard node's
-      GDO2-to-GPIO25 clock path is not connected, so synchronous serial is not
-      a valid waveform discriminator on this hardware.
+      forced-low/forced-high GDO2 probe then identified a missing
+      GDO2-to-GPIO25 connection. After adding that jumper, the probe passed
+      and synchronous calibration counted exactly `2,712` rising edges:
+      `2,400` wake symbols plus `304` frame bits plus the CC1101's documented
+      eight-bit TX latency. The radio remained in TX through the stream and
+      restored receive mode afterward.
     - [x] Add a research-only raw-FIFO alternative needing no GDO2 clock wire.
       Calibration `.5` queued all `300` alternating wake bytes plus the `38`
       frame bytes, completed nine bounded FIFO refills, observed the expected
       `TXFIFO_UNDERFLOW` terminator, and restored receive mode. No deployed
       receiver reported the impossible endpoint.
-    - [ ] Capture calibration `.5` with the Mac SDR and compare carrier,
-      deviation, all `2,399` wake transitions, frame bytes, duration, and tail
-      with the accepted stock configuration. The SDR is not currently
-      enumerating over USB; do not promote FIFO transmission into a live
-      pairing candidate until this comparison passes.
+    - [ ] Capture the working synchronous and FIFO calibrations with the Mac
+      SDR and compare carrier, deviation, all `2,399` wake transitions, frame
+      bytes, duration, and tail with the accepted stock configuration. The SDR
+      is not currently enumerating over USB; do not promote either transmitter
+      into a live pairing candidate until this comparison passes.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

@@ -325,7 +325,17 @@
     ],
     "calibration_results": {
       "synchronous_fixed_length": "The first synchronous-serial calibration emitted exactly 15.2 ms, equal to the configured 38-byte packet at 20 kbit/s. Selecting infinite length removed that cutoff.",
-      "synchronous_clock_path": "A CC1101 forced-low/forced-high GDO2 continuity probe did not propagate to ESP32 GPIO25 on the USB test node; zero sampled edges are therefore a physical clock-path result, not valve evidence.",
+      "synchronous_clock_path": {
+        "initial_result": "A CC1101 forced-low/forced-high GDO2 continuity probe did not propagate to ESP32 GPIO25 on the USB test node; zero sampled edges were therefore a physical clock-path result, not valve evidence.",
+        "remediation": "Added the missing radio GDO2 to ESP32 GPIO25 jumper.",
+        "continuity_after_remediation": true,
+        "desired_stream_symbols": 2704,
+        "documented_tx_latency_bits": 8,
+        "sampled_clock_edges": 2712,
+        "main_state_after_stream": 19,
+        "receive_configuration_restored": true,
+        "waveform_capture_pending": true
+      },
       "fifo_candidate_5": {
         "endpoint_safety": "source deadc0de to destination f00dcafe",
         "wake_bytes": 300,
@@ -355,7 +365,7 @@
     "The non-enrolling configuration calibration proves stock uses sharp 2-FSK rather than GFSK, retains the 0x45 deviation family, and does not change PHY at the wake-to-frame boundary.",
     "Candidate .9 removes the roughly 2.8-second FSTXON dwell while preserving the entire accepted prefix and on-air configuration waveform; it still stops at 2 of 6 without 81 50, so pre-arm dwell is falsified.",
     "Worst-case transition analysis shows higher local residual error than stock, but the same local signature is present on the short reply that suppresses stage-1 retries. No isolated long-burst discontinuity or drift was found.",
-    "The synchronous-serial calibration first exposed a fixed-length 15.2 ms cutoff, then proved the USB test node has no working GDO2-to-GPIO25 clock path.",
+    "The synchronous-serial calibration first exposed a fixed-length 15.2 ms cutoff, then identified a missing GDO2-to-GPIO25 jumper. After adding it, the continuity probe passed and the stream consumed exactly 2,712 edges: 2,704 desired symbols plus the documented eight-bit latency.",
     "A raw-FIFO calibration needing no GDO2 wire successfully queued all 338 bytes, refilled nine times, ended at TXFIFO_UNDERFLOW, and restored receive mode. Its exact SDR waveform remains the gate before a live candidate.",
     "The next justified discriminator is the transmitter implementation itself: capture the operational CC1101 FIFO-backed long configuration against its impossible endpoint before requesting another live valve arm."
   ]
