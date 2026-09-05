@@ -1083,3 +1083,56 @@ bounded receive-only IQ recording are retained untracked in
 `output/right-bed-20260905`. Synthetic endpoint substitutions and recomputed
 trailers are in `fixtures/hcs026_missing_sdr_coverage_20260905.json`. Recovery
 remains unverified; the canonical gate is in `../PROJECT_ROADMAP.md`.
+
+### Earlier reply opportunity in the natural rejoin sweep
+
+The user's follow-up prompted a replay of the exact factory burst through the
+native `PairingSession`, rather than requiring a manual recovery gesture.
+Counter 1 reaches the gateway and arms the existing ACK owner. Counter 2
+arrives 6.003604 seconds later with body prefix `80 83 82 7f a4 1e 80`.
+Firmware 0.15.7 required `00` at byte 14 and silently rejected that retry.
+Counter 4, arriving 12.010699 seconds after the first packet, clears that bit
+and was the first eligible reply trigger. The live node's transmit-completion
+timestamp coincides with this final copy.
+
+The regression uses the synthetic-route first/retry/final frames preserved in
+`fixtures/hcs026_missing_sdr_coverage_20260905.json`, arms after the first copy,
+and requires a reply claim on counter 2. It failed before the change and passes
+after masking only byte 14's high repeat marker. Additional cases preserve
+rejection of wrong endpoints, altered model/body bytes, and damaged trailers;
+the final retry cannot cause a second transmission after the one-reply session
+has completed. No reply payload, counter, clock, RF carrier, ACK ownership, or
+new-enrollment permission was changed.
+
+This establishes a missed reply opportunity, not the cause of every failed
+recovery. The old single-reply path has physically recovered long-pressed known
+sensors, but the current automatic sweep still needs an accepted reply and
+fresh sensor-originated moisture. The alternate `04/83` report route also
+remains uncharacterized. Replaying a saved announcement into the air outside
+the sensor's receive window would not test this fix.
+
+Firmware 0.15.8 passed the 410-test Python suite (two optional NumPy cases
+skipped), all 11 waveform tests in the NumPy runtime, both native protocol
+executables, and standard/supervised PlatformIO builds with binary boundary
+checks. Its supervised artifact is 947,360 bytes with SHA-256
+`7f0f6b27ae53807385311061aef8f22e06bebc47a88ae8d373b87dc7086937f1`.
+Private snapshots, test logs, and the previous catalog are retained under
+`output/right-bed-20260905`; live configuration and catalog backups are under
+`/share/rainpoint-local/firmware-backups/right-bed-retry-20260905`.
+
+The supervised artifact was installed through authenticated OTA on Right Bed's
+existing Vegetable Garden ACK owner. The gateway confirmed firmware 0.15.8,
+`gateway_and_radio_healthy`, no pending candidate, three restored sensor
+authorizations, and one restored HTV405 authorization. The complete persisted
+ACK-assignment snapshot was unchanged. Fresh receive traffic and two routine
+ACK transmissions with zero failures verified post-reboot service. The other
+two radio firmware versions were unchanged. Only the staged firmware catalog
+and this node's firmware were updated; the existing daemon was restarted to
+load the catalog, with no daemon source or schema deployment. The old 0.15.7
+artifact remains available for rollback; an obsolete 0.12.6 catalog entry was
+superseded to stay within the 32-release limit, preserving its raw artifact.
+
+The original live Right Bed reporting assertion still fails after deployment,
+as no new sensor transmission has been observed. The corrected owner is ready
+to answer the next natural sweep without an open HA pairing flow. Recovery is
+not yet claimed.

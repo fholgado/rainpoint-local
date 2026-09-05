@@ -188,8 +188,11 @@ Known factory identities may enter a bounded automatic rejoin through their
 existing assignment; unknown identities still require an explicit HA pairing
 window. Automatic rejoin accepts the validated factory retry counters 1, 2,
 and 4 so a node armed by the first announcement can answer a later retry.
-Known-sensor recovery completes after that reply, immediately restoring normal
-receive and acknowledgement service. The authenticated command inbox holds up
+Firmware 0.15.8 also accepts the captured repeat marker on counter 2, which
+previously delayed the response until counter 4. The one-reply transaction
+completes after transmission, immediately restoring normal receive and
+acknowledgement service; fresh sensor telemetry is required to verify recovery.
+The authenticated command inbox holds up
 to eight commands so every persisted ACK assignment can be restored after a
 reconnect or OTA reboot.
 After the first OTA-capable image is installed by USB, compatible releases can

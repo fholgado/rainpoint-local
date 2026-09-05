@@ -1,5 +1,13 @@
 # Changelog
 
+## Firmware 0.15.8
+
+- Accept the captured HCS026 factory-rejoin retry marker, allowing the existing
+  ACK owner to answer counter 2 six seconds before the final counter-4 copy.
+  Keep the CRC, model signature, factory identity, bounded session, and
+  single-owner restrictions. Transmission completion still does not establish
+  recovery; sensor-originated telemetry is required.
+
 ## Integration 0.13.11
 
 - Correct the HTV145 single-zone display, including removing the legacy

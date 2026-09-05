@@ -929,6 +929,51 @@ int main() {
         automaticRejoinSession.state() ==
         rainpoint::PairingSessionState::Completed
     );
+    // Reproduce the September 5 installed-sensor sweep with synthetic routes:
+    // the gateway arms after counter 1, then the sensor retries at +6 seconds
+    // with byte 14's repeat marker set. That earlier reply opportunity must
+    // not be discarded in favor of the final counter-4 copy at +12 seconds.
+    const auto dormantFactoryFirst = fromHex(
+        "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b"
+    );
+    const auto dormantFactoryRetry = fromHex(
+        "79f4882f288000000051234524028083827fa41e8080b2000000000000000000000000000db3"
+    );
+    const auto dormantFactoryFinal = fromHex(
+        "79f4882f288000000051234524040083827fa41e8080b200000000000000000000000000712d"
+    );
+    assert(rainpoint::hasOrdinaryTrailer(dormantFactoryRetry));
+    assert(rainpoint::hasOrdinaryTrailer(dormantFactoryFinal));
+    assert(rainpoint::hcs026FactoryAnnouncement(
+        dormantFactoryFirst, detectedFactory
+    ));
+    rainpoint::PairingProfile dormantRejoin{};
+    assert(rainpoint::buildAutomaticHcs026RejoinProfile(
+        detectedFactory, stockController, stockCompanion, 4, dormantRejoin
+    ));
+    rainpoint::PairingSession dormantRejoinSession(dormantRejoin);
+    dormantRejoinSession.arm(20'100, 60'000);
+    assert(dormantRejoinSession.claimReply(dormantFactoryRetry, 26'000) ==
+        &dormantRejoin.steps[0]);
+    assert(dormantRejoinSession.finishReply(true, 26'100));
+    assert(dormantRejoinSession.state() ==
+        rainpoint::PairingSessionState::Completed);
+    assert(dormantRejoinSession.claimReply(dormantFactoryFinal, 32'000) ==
+        nullptr);
+    // Only the repeat marker is variable; wrong family, identity, and damaged
+    // trailers must not gain permission to transmit through this change.
+    for (const auto byteIndex : {9, 14, 15, 18, 36}) {
+        auto invalidRetry = dormantFactoryRetry;
+        invalidRetry[byteIndex] ^= 1U;
+        if (byteIndex != 36) {
+            rainpoint::writeTrailer(
+                invalidRetry, rainpoint::kCurrentPairingTrailerResidual
+            );
+        }
+        rainpoint::PairingSession invalidRetrySession(dormantRejoin);
+        invalidRetrySession.arm(20'100, 60'000);
+        assert(invalidRetrySession.claimReply(invalidRetry, 26'000) == nullptr);
+    }
     rainpoint::PairingProfile automaticSensorB{};
     assert(rainpoint::buildAutomaticHcs026Profile(
         profile.factoryEndpoint, stockController, stockCompanion,

@@ -135,8 +135,8 @@ if htv145_factory_counter and not (
         "RAINPOINT_RESEARCH_BENCH=1 and "
         "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
     )
-standard_version = "0.15.7"
-supervised_version = "0.15.7"
+standard_version = "0.15.8"
+supervised_version = "0.15.8"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
     (

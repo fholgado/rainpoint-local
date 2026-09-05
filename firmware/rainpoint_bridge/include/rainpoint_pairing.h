@@ -449,15 +449,19 @@ inline bool hcs026FactoryAnnouncement(
             return false;
         }
     }
-    // A long press repeats the same factory announcement with message counters
-    // 1, 2, and 4. Automatic rejoin can only arm after the first copy has
-    // reached the gateway, so accept the otherwise byte-identical retries.
+    // Long presses and dormant-sensor rejoin sweeps use counters 1, 2, and 4.
+    // Automatic rejoin can only arm after the first copy reaches the gateway.
+    // The captured counter-2 retry sets byte 14's repeat marker; it is still
+    // the same factory announcement and arrives before the final counter 4.
     const std::uint8_t message = frame[13] & 0x7fU;
     if (message != 1 && message != 2 && message != 4) {
         return false;
     }
     for (std::size_t index = 0; index < hcs026SignatureTail.size(); ++index) {
-        if (frame[14 + index] != hcs026SignatureTail[index]) {
+        const auto value = index == 0
+            ? static_cast<std::uint8_t>(frame[14] & 0x7fU)
+            : frame[14 + index];
+        if (value != hcs026SignatureTail[index]) {
             return false;
         }
     }

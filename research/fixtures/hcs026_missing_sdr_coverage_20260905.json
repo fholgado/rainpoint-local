@@ -74,7 +74,17 @@
     ],
     "owner_rssi_dbm": -65.5,
     "following_moisture_observed": false,
-    "node_one_reply_completion_is_sensor_recovery_proof": false
+    "node_one_reply_completion_is_sensor_recovery_proof": false,
+    "frames": [
+      "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "79f4882f288000000051234524028083827fa41e8080b2000000000000000000000000000db3",
+      "79f4882f288000000051234524040083827fa41e8080b200000000000000000000000000712d"
+    ],
+    "relative_seconds": [
+      0,
+      6.003604,
+      12.010699
+    ]
   },
   "ack_compatibility": {
     "last_report_matches_configured_route": false,
@@ -88,7 +98,7 @@
     "sensor_death_ruled_out_at": "2026-09-05T05:36:35.480319+00:00",
     "current_battery_condition": "Not established by the old full-category observation.",
     "full_recovery_verified": false,
-    "next_physical_discriminator": "One short sensor button press during continuous IQ plus gateway observation; inspect existing display and new route before choosing retained rejoin or fresh local enrollment.",
+    "next_physical_discriminator": "Observe the next natural factory sweep with the corrected retry matcher, then require fresh sensor-originated moisture; use a physical wake capture if the earlier reply fails.",
     "sensor_transmitted_during_latest_rejoin_sweep": true
   },
   "passive_capture": {
@@ -107,5 +117,14 @@
     "right_bed_frames_recovered": 0,
     "other_valid_frames_recovered": true,
     "physical_button_press_confirmed": false
+  },
+  "rejoin_retry_matcher": {
+    "before_version": "0.15.7",
+    "counter_2_repeat_marker_accepted_before": false,
+    "counter_4_accepted_before": true,
+    "corrected_version": "0.15.8",
+    "native_session_replay_passes": true,
+    "fix": "Mask only byte 14 bit 7 when checking the otherwise exact HCS026 factory signature. Keep CRC, route, model and endpoint checks.",
+    "physical_recovery_verified": false
   }
 }

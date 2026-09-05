@@ -848,9 +848,14 @@ result is frozen in
       September 2; its last ESP32 reading was August 25. Five subsequent factory
       sweeps triggered known rejoin attempts without later moisture. Its last
       observed `04/83` report route/form also differs from the configured
-      `01/82` routine-ACK path. Capture one short physical button press before
-      selecting retained recovery or fresh local enrollment; preserve the
-      sensor's canonical device identity and single ACK owner. Evidence:
+      `01/82` routine-ACK path. A native replay reproduced the rejected
+      counter-2 repeat marker; firmware 0.15.8 accepts that earlier opportunity
+      while preserving the sensor's canonical identity and single ACK owner.
+      OTA on its garden owner passed health confirmation with all assignments
+      restored; the live Right Bed reporting assertion remains false.
+      Verify the next natural sweep and subsequent moisture before declaring
+      recovery; use a physical wake capture if the corrected reply is rejected.
+      Evidence:
       `research/fixtures/hcs026_missing_sdr_coverage_20260905.json`.
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node
       reconnect, gateway reconnect, and successful OTA.
