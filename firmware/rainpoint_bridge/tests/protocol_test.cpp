@@ -2407,6 +2407,37 @@ int main() {
     auto negativeClose = fromHex(
         "79f4882f28d1234580c123458f81508683004f8000000040800056800000000000000000d990"
     );
+    // Independent RF acceptance after .22 reached only 5/6: two dry opens
+    // and an active early close, all with residue 4f03 on this association.
+    const rainpoint::Htv145Link partialControlLink{
+        {{0xb1, 0xc2, 0xd3, 0x8f}}, {{0xa1, 0xb2, 0xc3, 0x80}}
+    };
+    assert(rainpoint::buildHtv145OpenFrame(
+        partialControlLink, 0x81, 60, 0x4f03, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b"
+    ));
+    assert(rainpoint::buildHtv145OpenFrame(
+        partialControlLink, 0x82, 60, 0x4f03, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b1c2d38fa1b2c3808290828081009e000000000000000000000000000000007486"
+    ));
+    assert(rainpoint::buildHtv145CloseFrame(
+        partialControlLink, 0x83, 0x4f03, htv145Frame, true
+    ));
+    assert(htv145Frame == fromHex(
+        "79f4882f28b1c2d38fa1b2c3808310818081000000000000000000000000000000000000ce76"
+    ));
+    assert(rainpoint::decodeHtv145CommandResponse(fromHex(
+        "79f4882f28a1b2c380b1c2d38f82d0868010cf80000000409e00569e000000000000000047ef"
+    ), partialControlLink, htv145Response));
+    assert(htv145Response.sequence == 0x82 && htv145Response.watering);
+    assert(rainpoint::decodeHtv145CommandResponse(fromHex(
+        "79f4882f28a1b2c380b1c2d38f83508680104f80000000408000569e000000000000000058a8"
+    ), partialControlLink, htv145Response));
+    assert(htv145Response.sequence == 0x83 && !htv145Response.watering);
     rainpoint::Htv145CommandError htv145Error{};
     assert(rainpoint::decodeHtv145CommandError(
         negativeClose, redactedControlLink, htv145Error

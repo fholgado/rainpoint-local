@@ -1,0 +1,668 @@
+{
+  "date": "2026-09-05",
+  "scope": "One user-authorized .22 pairing gesture reached 5/6. Subsequent dry controls on that unchanged valve association proved two opens, timer-owned stop and an explicit active close. No supported HA transmit path is claimed.",
+  "redaction": "Synthetic association endpoints; original CRC residues preserved. Node, transaction and SDR hardware identities omitted. Raw IQ, serial logs, settings backup and firmware remain local.",
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380",
+    "factory_counter": 2,
+    "assignment_selector": 6,
+    "assigned_channel": 12
+  },
+  "firmware": {
+    "version": "0.15.4-htv145-pairing-counter2-candidate.22",
+    "sha256": "a5e762c7fcc1415fd7abd0ce227f71c34aaa5c4135b4e66483c44e07c6eaca65",
+    "changed_during_trials": false
+  },
+  "pairing": {
+    "capture": {
+      "sha256": "8130825b9dcc6269e4a48a18f331a0d3e3b9408cf31ad1959b4e6edadfb71308",
+      "size_bytes": 775684096,
+      "sample_rate_sps": 2000000,
+      "center_hz": 433700000,
+      "gain_db": 0.9,
+      "started_at": "2026-09-05T20:14:04.817615+00:00",
+      "finished_at": "2026-09-05T20:17:19.503985+00:00"
+    },
+    "operator_led": "white/success",
+    "stock_gateway": "unplugged per operator session confirmation",
+    "maximum_completed_steps": 5,
+    "stage_0_accepted": true,
+    "terminal_exchange_observed": false,
+    "requests": [
+      {
+        "sync_seconds": 80.813563,
+        "frame": "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000001c71",
+        "residue": "4f03",
+        "phase_count": 35
+      },
+      {
+        "sync_seconds": 85.739275,
+        "frame": "79f4882f28a1b2c380b1c2d38f830281060080000000000000000000000000000000000012c3",
+        "residue": "4f03",
+        "phase_count": 41
+      },
+      {
+        "sync_seconds": 86.809552,
+        "frame": "79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189",
+        "residue": "c713",
+        "phase_count": 43
+      },
+      {
+        "sync_seconds": 87.74119,
+        "frame": "79f4882f28a1b2c380b1c2d38f8403018600800000000000000000000000000000000000081c",
+        "residue": "4f03",
+        "phase_count": 41
+      },
+      {
+        "sync_seconds": 88.833957,
+        "frame": "79f4882f28a1b2c380b1c2d38f84830186008000000000000000000000000000000000003a99",
+        "residue": "c713",
+        "phase_count": 41
+      },
+      {
+        "sync_seconds": 89.832572,
+        "frame": "79f4882f28a1b2c380b1c2d38f85030186008000000000000000000000000000000000006d17",
+        "residue": "4f03",
+        "phase_count": 41
+      },
+      {
+        "sync_seconds": 90.831833,
+        "frame": "79f4882f28a1b2c380b1c2d38f85830186008000000000000000000000000000000000005f92",
+        "residue": "c713",
+        "phase_count": 42
+      }
+    ],
+    "replies": [
+      {
+        "sync_seconds": 80.914095,
+        "frame": "79f4882f28b1c2d38fa1b2c38082c1010000800000000000000000000000000000000000e3f2",
+        "residue": "4f03",
+        "phase_count": 38
+      },
+      {
+        "sync_seconds": 83.797723,
+        "frame": "79f4882f28b1c2d38fa1b2c3808110010100000000000000000000000000000000000000a902",
+        "residue": "c713",
+        "phase_count": 31
+      },
+      {
+        "sync_seconds": 84.052603,
+        "frame": "79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d",
+        "residue": "c713",
+        "phase_count": 42
+      },
+      {
+        "sync_seconds": 85.824555,
+        "frame": "79f4882f28b1c2d38fa1b2c380834287802c0105000f0000000000000000000000000000a968",
+        "residue": "4f03",
+        "phase_count": 38
+      },
+      {
+        "sync_seconds": 86.893385,
+        "frame": "79f4882f28b1c2d38fa1b2c38083c30080000000000000000000000000000000000000008d4b",
+        "residue": "c713",
+        "phase_count": 30
+      }
+    ],
+    "control_commands_sent_in_pairing_capture": 0
+  },
+  "runner_incident": {
+    "saved_progress_before_disarm": 5,
+    "live_progress_after_disarm": 0,
+    "effect": "The old runner required live progress after stopping pairing, but disarm clears it. No command was dispatched by that runner. A separate control recorder used the saved, command-scoped RF evidence; no additional valve gesture or pairing arm occurred.",
+    "fix": "Use the saved current-command prefix plus current disarmed state; offline tests now exercise cleared live progress.",
+    "continuity_limitation": "Recordings roll over and the test radio restarts before each control session. The valve association remains unchanged; no claim of uninterrupted radio-session control is made."
+  },
+  "control_trials": [
+    {
+      "label": "first_open_and_unconfirmed_close",
+      "capture": {
+        "sha256": "999ddc98f00740dad3dea1c816aa63b7333e007f4e46061c062c6fecec7e035a",
+        "size_bytes": 608698368,
+        "sample_rate_sps": 2000000,
+        "center_hz": 433700000,
+        "gain_db": 0.9,
+        "started_at": "2026-09-05T20:19:15.508121+00:00",
+        "finished_at": "2026-09-05T20:21:48.460053+00:00"
+      },
+      "commands": [
+        {
+          "sync_seconds": 47.260035,
+          "frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+          "residue": "4f03",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 67.59213,
+          "frame": "79f4882f28b1c2d38fa1b2c380819081808100000000000000000000000000000000000036e5",
+          "residue": "c713",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 68.32216,
+          "frame": "79f4882f28b1c2d38fa1b2c380819081808100000000000000000000000000000000000036e5",
+          "residue": "c713",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 69.262125,
+          "frame": "79f4882f28b1c2d38fa1b2c380819081808100000000000000000000000000000000000036e5",
+          "residue": "c713",
+          "phase_count": 38
+        }
+      ],
+      "responses": [
+        {
+          "sync_seconds": 47.52877,
+          "frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+          "residue": "c713",
+          "phase_count": 41
+        }
+      ],
+      "reports": [
+        {
+          "sync_seconds": 53.63963,
+          "frame": "79f4882f28a1b2c380b1c2d38f86010786058090cf80000000409b00569e0000000000003ec2",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 55.222505,
+          "frame": "79f4882f28a1b2c380b1c2d38f86810786058090cf80000000409a80569e00000000000054a0",
+          "residue": "4f03",
+          "phase_count": 44
+        },
+        {
+          "sync_seconds": 57.39858,
+          "frame": "79f4882f28a1b2c380b1c2d38f87010786058090cf80000000409980569e0000000000003af1",
+          "residue": "4f03",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 81.553178,
+          "frame": "79f4882f28a1b2c380b1c2d38f87810786070090cf80000000408d00569e0000000000004d75",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 109.16045,
+          "frame": "79f4882f28a1b2c380b1c2d38f880107860580804f8000000040800056800000000000001473",
+          "residue": "4f03",
+          "phase_count": 42
+        },
+        {
+          "sync_seconds": 111.09397,
+          "frame": "79f4882f28a1b2c380b1c2d38f888107860580804f80000000408000568000000000000026f6",
+          "residue": "c713",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 113.090658,
+          "frame": "79f4882f28a1b2c380b1c2d38f890107860580804f8000000040800056800000000000007178",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 117.630853,
+          "frame": "79f4882f28a1b2c380b1c2d38f8982078600808002a50d10800000001e000000000000004c3c",
+          "residue": "c713",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 141.587588,
+          "frame": "79f4882f28a1b2c380b1c2d38f8a0107860700804f8000000040800056800000000000001d75",
+          "residue": "c713",
+          "phase_count": 43
+        }
+      ],
+      "node_results": [
+        {
+          "state": "confirmed",
+          "confirmation": "matching_immediate_response",
+          "transmitted_sequence": 129,
+          "requested_watering": true,
+          "counter_authenticated": true,
+          "attempts_sent": 1,
+          "frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2"
+        },
+        {
+          "state": "confirmation_timeout_counter_unsynchronized",
+          "failure_class": "state_confirmation_missed_after_no_immediate_response",
+          "transmitted_sequence": 129,
+          "requested_watering": false,
+          "counter_authenticated": false,
+          "attempts_sent": 3
+        }
+      ]
+    },
+    {
+      "label": "same_counter_close_marker10",
+      "capture": {
+        "sha256": "bba996401e37f2aee2d6bae32eb7c750a3f983825c26993149e326a27f57c10f",
+        "size_bytes": 349175808,
+        "sample_rate_sps": 2000000,
+        "center_hz": 433700000,
+        "gain_db": 0.9,
+        "started_at": "2026-09-05T20:24:25.763457+00:00",
+        "finished_at": "2026-09-05T20:25:53.834603+00:00"
+      },
+      "commands": [
+        {
+          "sync_seconds": 52.401578,
+          "frame": "79f4882f28b1c2d38fa1b2c38081108180810000000000000000000000000000000000008c70",
+          "residue": "c713",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 53.131363,
+          "frame": "79f4882f28b1c2d38fa1b2c38081108180810000000000000000000000000000000000008c70",
+          "residue": "c713",
+          "phase_count": 39
+        },
+        {
+          "sync_seconds": 54.071328,
+          "frame": "79f4882f28b1c2d38fa1b2c38081108180810000000000000000000000000000000000008c70",
+          "residue": "c713",
+          "phase_count": 38
+        }
+      ],
+      "responses": [],
+      "reports": [
+        {
+          "sync_seconds": 71.299267,
+          "frame": "79f4882f28a1b2c380b1c2d38f8e0107860700804f8000000040800056800000000000001168",
+          "residue": "4f03",
+          "phase_count": 41
+        }
+      ],
+      "node_results": [
+        {
+          "state": "confirmation_timeout_counter_unsynchronized",
+          "failure_class": "state_confirmation_missed_after_no_immediate_response",
+          "transmitted_sequence": 129,
+          "requested_watering": false,
+          "counter_authenticated": false,
+          "attempts_sent": 3
+        }
+      ]
+    },
+    {
+      "label": "next_counter_close_old_trailer",
+      "capture": {
+        "sha256": "d9021f3afb25473cec829e4ebe295b57a006cac72c040cd5d454dd6ae2fb4f61",
+        "size_bytes": 288358400,
+        "sample_rate_sps": 2000000,
+        "center_hz": 433700000,
+        "gain_db": 0.9,
+        "started_at": "2026-09-05T20:26:47.925476+00:00",
+        "finished_at": "2026-09-05T20:28:00.779289+00:00"
+      },
+      "commands": [
+        {
+          "sync_seconds": 37.022465,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000ab7d",
+          "residue": "4f03",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 37.752145,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000ab7d",
+          "residue": "4f03",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 38.692113,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000ab7d",
+          "residue": "4f03",
+          "phase_count": 39
+        }
+      ],
+      "responses": [
+        {
+          "sync_seconds": 37.294905,
+          "frame": "79f4882f28a1b2c380b1c2d38f82508683104f800000004080005680000000000000000043ff",
+          "residue": "4f03",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 38.019135,
+          "frame": "79f4882f28a1b2c380b1c2d38f82508683104f800000004080005680000000000000000043ff",
+          "residue": "4f03",
+          "phase_count": 42
+        },
+        {
+          "sync_seconds": 38.958985,
+          "frame": "79f4882f28a1b2c380b1c2d38f82508683104f800000004080005680000000000000000043ff",
+          "residue": "4f03",
+          "phase_count": 41
+        }
+      ],
+      "reports": [
+        {
+          "sync_seconds": 45.142337,
+          "frame": "79f4882f28a1b2c380b1c2d38f9002078600808002a50d10800000001e0000000000000033ff",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 70.203132,
+          "frame": "79f4882f28a1b2c380b1c2d38f908107860700804f80000000408000568000000000000045bb",
+          "residue": "c713",
+          "phase_count": 41
+        }
+      ],
+      "node_results": [
+        {
+          "state": "confirmation_timeout_counter_unsynchronized",
+          "failure_class": "corrupt_or_foreign_matching_route_response",
+          "transmitted_sequence": 130,
+          "requested_watering": false,
+          "counter_authenticated": false,
+          "attempts_sent": 3
+        }
+      ]
+    },
+    {
+      "label": "next_counter_close_new_trailer",
+      "capture": {
+        "sha256": "81d0e9e842e17bcd44d18b9eac0fc64b150fb041142efffbc11dfab7b82dd7d2",
+        "size_bytes": 350224384,
+        "sample_rate_sps": 2000000,
+        "center_hz": 433700000,
+        "gain_db": 0.9,
+        "started_at": "2026-09-05T20:29:16.816166+00:00",
+        "finished_at": "2026-09-05T20:30:45.104928+00:00"
+      },
+      "commands": [
+        {
+          "sync_seconds": 52.504895,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000236d",
+          "residue": "c713",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 53.234583,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000236d",
+          "residue": "c713",
+          "phase_count": 39
+        },
+        {
+          "sync_seconds": 54.174545,
+          "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000236d",
+          "residue": "c713",
+          "phase_count": 38
+        }
+      ],
+      "responses": [],
+      "reports": [
+        {
+          "sync_seconds": 41.312328,
+          "frame": "79f4882f28a1b2c380b1c2d38f928107860700804f80000000408000568000000000000007bd",
+          "residue": "4f03",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 71.25136,
+          "frame": "79f4882f28a1b2c380b1c2d38f930107860700804f8000000040800056800000000000005033",
+          "residue": "c713",
+          "phase_count": 41
+        }
+      ],
+      "node_results": [
+        {
+          "state": "confirmation_timeout_counter_unsynchronized",
+          "failure_class": "state_confirmation_missed_after_no_immediate_response",
+          "transmitted_sequence": 130,
+          "requested_watering": false,
+          "counter_authenticated": false,
+          "attempts_sent": 3
+        }
+      ]
+    },
+    {
+      "label": "second_open_and_confirmed_early_close",
+      "capture": {
+        "sha256": "9e1ff5895327e4953c1ea1b1d6bfd5a8629209bfce0b7fce96c5f785a6266b02",
+        "size_bytes": 531628032,
+        "sample_rate_sps": 2000000,
+        "center_hz": 433700000,
+        "gain_db": 0.9,
+        "started_at": "2026-09-05T20:32:24.070221+00:00",
+        "finished_at": "2026-09-05T20:34:37.678150+00:00"
+      },
+      "commands": [
+        {
+          "sync_seconds": 27.897813,
+          "frame": "79f4882f28b1c2d38fa1b2c3808290828081009e000000000000000000000000000000007486",
+          "residue": "4f03",
+          "phase_count": 38
+        },
+        {
+          "sync_seconds": 48.373877,
+          "frame": "79f4882f28b1c2d38fa1b2c3808310818081000000000000000000000000000000000000ce76",
+          "residue": "4f03",
+          "phase_count": 38
+        }
+      ],
+      "responses": [
+        {
+          "sync_seconds": 28.171872,
+          "frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf80000000409e00569e000000000000000047ef",
+          "residue": "4f03",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 48.644467,
+          "frame": "79f4882f28a1b2c380b1c2d38f83508680104f80000000408000569e000000000000000058a8",
+          "residue": "4f03",
+          "phase_count": 43
+        }
+      ],
+      "reports": [
+        {
+          "sync_seconds": 34.070525,
+          "frame": "79f4882f28a1b2c380b1c2d38f95810786058090cf80000000409b00569e0000000000001b3c",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 36.039525,
+          "frame": "79f4882f28a1b2c380b1c2d38f96010786058090cf80000000409a80569e0000000000005653",
+          "residue": "c713",
+          "phase_count": 42
+        },
+        {
+          "sync_seconds": 38.033313,
+          "frame": "79f4882f28a1b2c380b1c2d38f96810786058090cf80000000409980569e0000000000005d09",
+          "residue": "c713",
+          "phase_count": 42
+        },
+        {
+          "sync_seconds": 39.080275,
+          "frame": "79f4882f28a1b2c380b1c2d38f9702078600808002a50d10800000001e0000000000000018ef",
+          "residue": "4f03",
+          "phase_count": 41
+        },
+        {
+          "sync_seconds": 54.51641,
+          "frame": "79f4882f28a1b2c380b1c2d38f978107860580804f80000000408000568000000000000025ab",
+          "residue": "c713",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 55.736128,
+          "frame": "79f4882f28a1b2c380b1c2d38f980107860580804f8000000040800056800000000000002405",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 57.837942,
+          "frame": "79f4882f28a1b2c380b1c2d38f988107860580804f8000000040800056800000000000001680",
+          "residue": "c713",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 59.08735,
+          "frame": "79f4882f28a1b2c380b1c2d38f9902078600808002a50d10800000001e000000000000004ecf",
+          "residue": "4f03",
+          "phase_count": 43
+        },
+        {
+          "sync_seconds": 87.009895,
+          "frame": "79f4882f28a1b2c380b1c2d38f998107860700804f800000004080005680000000000000388b",
+          "residue": "c713",
+          "phase_count": 44
+        },
+        {
+          "sync_seconds": 117.044435,
+          "frame": "79f4882f28a1b2c380b1c2d38f9a0107860700804f8000000040800056800000000000002d03",
+          "residue": "c713",
+          "phase_count": 43
+        }
+      ],
+      "node_results": [
+        {
+          "state": "confirmed",
+          "confirmation": "matching_immediate_response",
+          "transmitted_sequence": 130,
+          "requested_watering": true,
+          "counter_authenticated": true,
+          "attempts_sent": 1,
+          "frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf80000000409e00569e000000000000000047ef"
+        },
+        {
+          "state": "confirmed",
+          "confirmation": "matching_immediate_response",
+          "transmitted_sequence": 131,
+          "requested_watering": false,
+          "counter_authenticated": true,
+          "attempts_sent": 1,
+          "frame": "79f4882f28a1b2c380b1c2d38f83508680104f80000000408000569e000000000000000058a8"
+        }
+      ]
+    }
+  ],
+  "accepted_commands": [
+    {
+      "trial": "first_open_and_unconfirmed_close",
+      "action": "open",
+      "sequence": 129,
+      "marker_inverted": true,
+      "duration_seconds": 60,
+      "trailer_residue": "4f03",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+      "command_sync_seconds": 47.260035,
+      "response_sync_seconds": 47.52877,
+      "sync_to_sync_ms": 268.735
+    },
+    {
+      "trial": "second_open_and_confirmed_early_close",
+      "action": "open",
+      "sequence": 130,
+      "marker_inverted": true,
+      "duration_seconds": 60,
+      "trailer_residue": "4f03",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808290828081009e000000000000000000000000000000007486",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf80000000409e00569e000000000000000047ef",
+      "command_sync_seconds": 27.897813,
+      "response_sync_seconds": 28.171872,
+      "sync_to_sync_ms": 274.059
+    },
+    {
+      "trial": "second_open_and_confirmed_early_close",
+      "action": "close",
+      "sequence": 131,
+      "marker_inverted": true,
+      "duration_seconds": 0,
+      "trailer_residue": "4f03",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808310818081000000000000000000000000000000000000ce76",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f83508680104f80000000408000569e000000000000000058a8",
+      "command_sync_seconds": 48.373877,
+      "response_sync_seconds": 48.644467,
+      "sync_to_sync_ms": 270.59
+    }
+  ],
+  "limitations": [
+    "This is one physical valve and one accepted 5/6 association. Repeat enrollment and retained runtime control remain separate gates.",
+    "The valid first open differs from the earlier local packet only in trailer residue, but pairing candidate, date and association lifecycle also differ; trailer causality is not isolated across those sessions.",
+    "Idle close result3 may depend on operation state. Its general meaning remains unresolved; it never authenticates a command counter or confirms a physical close.",
+    "The firmware recognizes the older result3 layout with byte17=00, but the new byte17=10 variant falls through to corrupt_or_foreign diagnostics. Raw CRC-valid RF is retained and is not success.",
+    "Routine reports here use family byte16=86, outside the current runtime 85-only decoder. Watering/idle evidence is checked directly from the recorded layout and state bit.",
+    "Unacknowledged session summaries repeat the first 60-second run, including during the second run. They cannot establish the second run duration. Early stop is established by its direct close reply and subsequent idle reports.",
+    "The command/report ACK lifecycle and a durable association-specific counter/profile still need integration work before HA controls are promoted."
+  ],
+  "timing": {
+    "first_open_to_idle_report_seconds": 61.900415,
+    "second_open_to_close_seconds": 20.476064,
+    "close_to_idle_report_seconds": 6.142533,
+    "timing_basis": "Within-recording RF sync positions; command host timestamps are not substituted for RF timing."
+  },
+  "accepted_open_waveform": {
+    "burst": {
+      "adc_rail_fraction": 0.0,
+      "duration_ms": 135.229,
+      "end_seconds": 47.275277,
+      "magnitude_median": 40.798,
+      "start_seconds": 47.1400485
+    },
+    "wake": {
+      "recovered_transitions": 2399,
+      "requested_symbols": 2400,
+      "symbol_duration_us": 49.998496,
+      "symbol_rate_sps": 20000.602,
+      "transition_fit_max_abs_samples": 6.776788,
+      "transition_fit_p95_abs_samples": 5.922524,
+      "transition_fit_p99_abs_samples": 6.350048,
+      "transition_fit_rms_samples": 3.642722,
+      "transition_interval_max_samples": 101,
+      "transition_interval_min_samples": 87
+    },
+    "fsk": {
+      "channel_center_hz": 434351406,
+      "closest_deviation_register": {
+        "error_hz": -113.859,
+        "expected_hz": 41259.766,
+        "measured_hz": 41145.906,
+        "register": 69,
+        "register_hex": "0x45"
+      },
+      "deviation_hz": 41146,
+      "high_tone_hz": 434392552,
+      "low_tone_hz": 434310260
+    }
+  },
+  "verdict": {
+    "terminal_pairing_completed": false,
+    "accepted_opens": 2,
+    "accepted_active_closes": 1,
+    "automatic_stop_observed": true,
+    "early_stop_observed": true,
+    "final_valve_idle": true,
+    "radios_connected_and_disarmed": true,
+    "ha_control_promoted": false
+  },
+  "working_recipe": {
+    "scope": "This selector6 association only; endpoints must come from the actual association.",
+    "physical_carrier_hz": 434351406,
+    "command_wake_symbols": 2400,
+    "open_marker": "90",
+    "open_trailer_residue": "4f03",
+    "close_marker": "10",
+    "close_trailer_residue": "4f03",
+    "counter_evidence": "Open81 acknowledged, timer stopped; open82 acknowledged; active close83 acknowledged. This validates the incremented close counter for this association, not the fresh selector2 same-counter rule."
+  },
+  "validation": {
+    "python_suite_passed": 434,
+    "optional_skips": 2,
+    "native_protocol_passed": true,
+    "native_counter2_passed": true,
+    "native_selector2_passed": true,
+    "numpy_waveform_suite_passed": true,
+    "redacted_crc_valid_frame_entries": 66,
+    "runtime_or_firmware_implementation_changed": false
+  }
+}

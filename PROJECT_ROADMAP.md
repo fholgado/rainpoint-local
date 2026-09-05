@@ -767,19 +767,22 @@ observation before it changes transmitted firmware.
           oscillator-relative carrier differed by 601 Hz and the stable RF
           envelope gaps were 357--360 us later. Timing is not a proven cause.
           Evidence: `research/fixtures/htv145_selector2_assignment_rejection_20260905.json`.
-        - [ ] Prioritize the accepted counter-2/selector-6 `.22` prefix and
-          isolate its final-exchange failure using the existing successful
-          September 1 stock recording for that same branch. Preserve the
-          accepted prefix; identify a discriminating measurement before
-          selecting another RF change or requesting a new gesture. The
+        - [ ] Preserve the accepted counter-2/selector-6 `.22` prefix. Local
+          open, automatic stop and early close now work after 5/6; prioritize
+          repeatable operational acceptance and report ACK/counter integration
+          before another terminal timing tweak. The missing terminal exchange
+          remains research work unless it blocks a lifecycle/reliability gate.
+          Identify a discriminating measurement before another RF change. The
           selector-2 `.3` initial-delay adjustment was built and tested, but
           parked without flashing or arming after the user questioned this
           detour. Its patch and binary remain local; it is not the next trial.
-        - [ ] After terminal acceptance, run the close-first, one-minute dry
-          open and early-close sequence with continuous RF/serial capture.
-          Retain direct acknowledgments and later idle evidence. Select each
-          marker and counter explicitly, including stock close retaining its
-          open counter. A white LED alone is not this gate.
+        - [x] Test operational control independently of terminal acceptance.
+          On September 5 the user-approved `.22` 5/6 association supported two
+          acknowledged one-minute opens, automatic stop and an acknowledged
+          active close. The working selector-6 close used the incremented
+          counter, not the fresh selector-2 same-counter hypothesis. See the
+          control acceptance gate and fixture below; a white LED alone was
+          not used as proof, and the full six-step exchange remains unproven.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
@@ -1249,7 +1252,7 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       September 5 supplied positive responses for all five stock commands and
       final idle evidence. The cloud reported 100% battery, but physical battery
       replacement was not reconfirmed; that qualification remains open.
-- [ ] Physically accept exactly one bounded local open on its evidenced carrier,
+- [x] Physically accept a bounded local open on its evidenced carrier,
       with an immediate response or independent active-state fallback.
   - [x] Prepare the user-requested 5/6 control experiment from the fresh stock
         command evidence. Restore the exact `.22` artifact; preserve its pairing
@@ -1261,18 +1264,37 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
         disarmed with its sensor ACK assignment restored. Full Python suite:
         432 passed, two optional skips; both relevant native suites passed.
         Evidence: `htv145_partial_control_variant_preparation_20260905.json`.
-  - [ ] In one user-assisted `.22` attempt, verify at least the accepted 5/6
-        prefix and retain its continuation traffic, then disarm pairing and
-        review the capture. On the same uninterrupted radio session, send one
-        dry 60-second open with sequence `81`, marker `90`, residue `4f03` on
-        channel 12. If positively acknowledged, test an explicit close after
-        20 seconds using the same sequence and fresh close marker `90`/residue
-        `c713`; record through 105 seconds after open. This deliberately tests
-        control before step 6 under the user's dry-hardware authorization.
-        Cross-branch transfer of these fields is unproven. No counter scan,
-        repeat logical open or production exposure follows an ambiguous result.
+  - [x] Run the authorized `.22` experiment after independently verifying 5/6.
+        Open `81/90/4f03` succeeded on its first RF attempt, with a direct reply
+        and watering reports; its unacknowledged `81/90/c713` close did not
+        stop the run. Automatic stop produced idle after 61.900415 seconds.
+        A second bounded `82/90/4f03` open and active `83/10/4f03` close both
+        received positive first-attempt replies. Early close was sent after
+        20.476064 seconds; idle followed 6.142533 seconds later. No new pairing
+        arm occurred between these runs. Progress clearing on disarm required
+        a recorder rollover and test-radio restarts, so uninterrupted-session
+        control is not claimed. The runner now uses saved current-command
+        prefix evidence and tests cleared live progress. Firmware stayed `.22`;
+        the valve ended idle and all nodes connected/disarmed. Evidence:
+        `research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json`.
 - [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware
       interval, durable counter progression, and restart without command replay.
+  - [x] Observe automatic stop and active early stop on the dry `.22` association
+        using independent RF replies and idle reports, as recorded above.
+  - [ ] Persist and restore the evidenced selector-6 control profile: 2,400 wake
+        symbols, open marker `90`, close marker `10`, residue `4f03` for both,
+        and incremented close counter. Keep it distinct from selector-2 evidence.
+        Prove repeat commands, durable counter state and no replay after restart.
+  - [ ] Complete HTV145 report/summary ACK handling with one persistent owner.
+        Unacknowledged 60-second summaries repeated during the second run and
+        cannot be used as new elapsed-duration evidence. Preserve the captured
+        family-`86` reports and result-3 byte-17-`10` variant in read-only decoder
+        tests; current `85`/`00` recognizers miss them without granting control.
+  - [ ] Repeat operational acceptance on fresh user-assisted associations and
+        define HA enrollment completion from valve-originated operational proof,
+        while retaining an honest distinction from the incomplete six-step
+        transcript. Full terminal success is no longer a prerequisite for the
+        already-demonstrated dry command capability.
 - [ ] Promote controls into HA only after the preceding physical gates pass.
 
 ### HA and irrigation behavior

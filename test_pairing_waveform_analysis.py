@@ -11,7 +11,12 @@ from pathlib import Path
 from tools.generate_rainpoint_iq import command_symbols, generate_cu8
 from tools.analyze_htv145_pairing_iq import terminal_exchange_evidence
 from tools.analyze_htv145_control_iq import summarize_matches
-from rainpointd.valve_protocol import ValveLink
+from rainpointd.valve_protocol import (
+    ValveLink,
+    build_close_frame,
+    build_open_frame,
+    decode_htv145_command_response,
+)
 
 
 MODULE_PATH = Path(__file__).parent / "tools" / "analyze_pairing_waveform.py"
@@ -28,6 +33,59 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_partial_pairing_can_have_independently_accepted_control(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json").read_text())
+        identity = fixture["association"]
+        paired = bytes.fromhex(identity["paired_endpoint"])
+        route = bytes.fromhex(identity["controller_endpoint"])
+        link = ValveLink(paired, route)
+        pairing = fixture["pairing"]
+        verdict = terminal_exchange_evidence(
+            pairing["requests"], pairing["replies"],
+            controller_endpoint=route, paired_endpoint=paired,
+        )
+        self.assertEqual(5, pairing["maximum_completed_steps"])
+        self.assertFalse(verdict["terminal_exchange_observed"])
+        self.assertEqual(
+            [("open", 0x81), ("open", 0x82), ("close", 0x83)],
+            [(r["action"], r["sequence"]) for r in fixture["accepted_commands"]],
+        )
+        for row in fixture["accepted_commands"]:
+            with self.subTest(action=row["action"], sequence=row["sequence"]):
+                args = (link, row["sequence"])
+                if row["action"] == "open":
+                    frame = build_open_frame(
+                        *args, 60, int(row["trailer_residue"], 16),
+                        command_marker_inverted=row["marker_inverted"],
+                    )
+                else:
+                    frame = build_close_frame(
+                        *args, int(row["trailer_residue"], 16),
+                        command_marker_inverted=row["marker_inverted"],
+                    )
+                self.assertEqual(row["command_frame"], frame.hex())
+                response = decode_htv145_command_response(
+                    bytes.fromhex(row["response_frame"]), link,
+                )
+                self.assertIsNotNone(response)
+                self.assertEqual(row["sequence"], response["sequence"])
+                self.assertEqual(row["action"] == "open", response["watering"])
+
+    def test_idle_result3_variant_is_not_an_accepted_close(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json").read_text())
+        identity = fixture["association"]
+        link = ValveLink(bytes.fromhex(identity["paired_endpoint"]),
+                         bytes.fromhex(identity["controller_endpoint"]))
+        trial = next(t for t in fixture["control_trials"]
+                     if t["label"] == "next_counter_close_old_trailer")
+        self.assertEqual(3, len(trial["responses"]))
+        for response in trial["responses"]:
+            frame = bytes.fromhex(response["frame"])
+            self.assertEqual(bytes.fromhex("50868310"), frame[14:18])
+            self.assertIsNone(decode_htv145_command_response(frame, link))
+
     def test_received_edge_anchor_does_not_imply_terminal_acceptance(self):
         fixture = json.loads((Path(__file__).parent /
             "research/fixtures/htv145_receive_edge_terminal_retry_20260905.json").read_text())

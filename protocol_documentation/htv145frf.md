@@ -5,6 +5,11 @@ distinct from the HTV405. Receive-side telemetry, duration, water usage, and
 categorical battery state are decoded. Local enrollment remains research-only:
 the valve accepts the local association, delayed configuration, and following
 continuation through the stage-4 request. The terminal stage remains unproven.
+On September 5, the unchanged `.22` candidate nevertheless supported two
+positively acknowledged dry opens, an automatic stop and a positively
+acknowledged early close on one 5/6 association. Step 6 is not required for those
+observed controls. Durable runtime counters and the report ACK cycle remain
+separate integration work.
 
 ## Identity
 
@@ -391,8 +396,8 @@ trace, so the isolated trial uses explicit fields rather than its convenience
 close. Only a passive stock command or matching response can authenticate a
 command counter; periodic telemetry cannot.
 
-Local command acceptance has not been demonstrated, so transmit is not exposed
-as supported functionality. Following the original `.15` trial, candidate `.16`
+Before the successful `.22` experiment below, local command acceptance had not
+been demonstrated. Following the original `.15` trial, candidate `.16`
 sent one user-authorized 60-second open with the corrected 2,400-symbol wake and
 assumed counter `1`. SDR recovered three exact commands, with approximately
 `135.25 ms` duration and no clipping, but no matching valve response or later
@@ -418,22 +423,18 @@ authenticating the counter. It changes no pairing payload, timing, or RF driver.
 The latest first stock 60-second open and the earlier local open have identical
 normalized bytes 13 through 35, including sequence `81`, marker `90` and
 duration `9e 00`. Their trailer residues differ: `4f03` stock versus `c713`
-local. This supplies an untested command variant for the user's requested 5/6
+local. This supplied the new command variant for the user's requested 5/6
 control experiment. The successful stock command belongs to selector 2, while
 the accepted local prefix belongs to selector 6; transfer between these branches
 is a hypothesis, not proof that the earlier packet was malformed.
 
-The original `.22` binary has been restored unchanged. The prepared recorder
-retains one serial connection and continuous low-gain IQ across pairing and
-control. Current-command progress must reach at least 5/6 with stage-0 acceptance;
-after 15 seconds of continuation traffic, pairing transmission stops. A review
-of that capture then permits one 60-second open at sequence `81`, marker `90`,
-residue `4f03`, on the association's channel 12. A matching positive open reply
-permits an explicit close after 20 seconds, retaining sequence `81` and testing
-the fresh close marker `90`/residue `c713`. That close combination is also an
-explicit cross-branch hypothesis. There is no counter scan or repeated logical
-open, and recording continues for 105 seconds after the open to cover the timer
-and later idle evidence. Negative replies and silence remain separate outcomes.
+Preparation restored the original `.22` binary unchanged and proposed one
+continuous pairing/control recording. After verifying its accepted prefix, the
+first command would use sequence `81`, marker `90`, residue `4f03` and 60 seconds
+on channel 12. The proposed close retained `81` with marker `90`/residue `c713`.
+That cross-branch close hypothesis failed in the actual experiment below. The
+prepared uninterrupted recorder also encountered a progress-reset guard issue;
+the retained evidence distinguishes that incident from RF behavior.
 
 This is a user-authorized dry research experiment before terminal enrollment,
 not a supported HA transmit path. Native replay reproduced all five successful
@@ -442,6 +443,68 @@ to reject insufficient progress, an armed radio, a stale pairing review, and a
 stale open response. Preparation evidence is retained in
 [`htv145_partial_control_variant_preparation_20260905.json`](../research/fixtures/htv145_partial_control_variant_preparation_20260905.json);
 the [canonical roadmap](../PROJECT_ROADMAP.md) records the physical gate.
+
+## Accepted local control after 5/6 (2026-09-05)
+
+The user authorized one `.22` pairing arm and reported a white/success LED. The
+radio again reached 5/6. Filtered CRC-valid RF recovered the configuration
+response, addressed continuations and exact local replies, followed by
+`84/03` through `85/83` retries. The terminal exchange remained absent.
+
+Stopping pairing clears the node's live progress fields. The prepared recorder
+incorrectly required those fields to retain 5/6 after disarm and therefore sent
+no command. The corrected gate uses the saved, command-scoped prefix together
+with current disarmed state; its offline replay now includes cleared progress.
+Control continued on the unchanged valve association in separate recordings,
+with a test-radio restart before each. No additional valve gesture or pairing
+arm occurred. This result does not claim uninterrupted radio-session control.
+
+These transactions were independently recovered from RF and positively
+acknowledged by the valve on the first transmitted attempt:
+
+| Action | Counter | Marker | Trailer residue | Result |
+|---|---|---|---|---|
+| First 60-second open | `81` | `90` | `4f03` | Positive reply; automatic stop and idle report |
+| Second 60-second open | `82` | `90` | `4f03` | Positive reply and watering reports |
+| Active early close | `83` | `10` | `4f03` | Positive reply and subsequent idle reports |
+
+The first open's measured carrier was `434.351406 MHz`, with 2,399 recovered
+wake transitions, a `135.229 ms` burst and no clipping. Direct response delays
+were `268.735`, `274.059` and `270.590 ms` from command sync to response sync.
+The first idle report followed its open by `61.900415 s`. In the second run,
+the explicit close followed open by `20.476064 s`; independent idle followed
+close by `6.142533 s`, before the 60-second timer would expire.
+
+The initial same-counter close (`81/90/c713`) was not acknowledged, and later
+watering telemetry proved it had not stopped that run. After automatic stop,
+a marker-only `81/10/c713` probe also went unanswered. The older selector-6
+close `82/10/4f03` then elicited three result-3 replies while already idle;
+changing only its trailer to `c713` produced silence. A further bounded open
+at `82/90/4f03`, followed while active by `83/10/4f03`, completed the positive
+open/close exchange. An already-idle explanation for result 3 is now plausible,
+but its general meaning remains unresolved and it must not authenticate a
+counter or be classified as an accepted close.
+
+This validates incrementing the close counter after open on this selector-6
+association, unlike the latest selector-2 same-counter close trace. Both actions
+used residue `4f03` here. The working packets should be retained as an
+association profile, not generalized to every selector or lifecycle.
+
+The new result-3 layout has byte 17 `10`, while the existing narrow recognizer
+expects `00`; `.22` therefore reported it as corrupt/foreign rather than a
+classified negative result. Routine telemetry here uses family byte 16 `86`,
+outside the runtime's current `85`-only state recognizer. These limitations did
+not create the positive verdict: exact direct replies and raw watering/idle
+frames provide the evidence. The reports also repeat an older 60-second session
+summary, including during the second run, because report ACKs are missing.
+Those summaries cannot establish the second run's elapsed duration.
+
+Both the Python and native firmware regressions preserve the three accepted
+command packets. Raw captures, negative probes, node results and the recorder
+incident are retained in
+[`htv145_partial_pairing_control_acceptance_20260905.json`](../research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json).
+The valve finished idle and all radios connected/disarmed. Firmware stayed at
+the exact `.22` artifact; no HA control path was promoted.
 
 The read-only `tools/analyze_htv145_control_iq.py` separates commands, accepted
 responses, and negative replies, including wake histograms. The pairing analyzer's
