@@ -39,6 +39,12 @@ if htv145_factory_counter_value not in {"0", "2"}:
         "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE must be 0 or 2"
     )
 htv145_factory_counter = int(htv145_factory_counter_value)
+htv145_selector_value = os.environ.get(
+    "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE", "6"
+)
+if htv145_selector_value not in {"2", "6"}:
+    raise ValueError("RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE must be 2 or 6")
+htv145_selector2_enabled = htv145_selector_value == "2"
 htv145_tail_value = os.environ.get(
     "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE", "0"
 )
@@ -108,7 +114,7 @@ if htv145_fifo_configuration_enabled and not (
     and htv145_pairing_enabled
     and htv145_tail_enabled
     and htv145_delayed_prearm_enabled
-    and htv145_factory_counter == 2
+    and (htv145_factory_counter == 2 or htv145_selector2_enabled)
 ):
     raise ValueError(
         "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE requires the frozen "
@@ -116,7 +122,7 @@ if htv145_fifo_configuration_enabled and not (
     )
 if htv145_step4_tail_enabled and not (
     htv145_fifo_configuration_enabled
-    and htv145_factory_counter == 2
+    and (htv145_factory_counter == 2 or htv145_selector2_enabled)
 ):
     raise ValueError(
         "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE requires the accepted "
@@ -135,10 +141,20 @@ if htv145_factory_counter and not (
         "RAINPOINT_RESEARCH_BENCH=1 and "
         "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
     )
+if htv145_selector2_enabled and not (
+    research_enabled and htv145_pairing_enabled and not supervised_enabled
+    and htv145_factory_counter == 0 and htv145_step4_fifo_enabled
+):
+    raise ValueError(
+        "HTV145 selector 2 requires supervised control disabled, counter 0, and the research "
+        "FIFO-configuration, tail, and step-4-FIFO candidates"
+    )
 standard_version = "0.15.11"
 supervised_version = "0.15.11"
 htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
 htv145_pairing_candidate_version = (
+    "0.15.4-htv145-pairing-selector2-candidate.2"
+    if htv145_selector2_enabled else
     (
         "0.15.4-htv145-pairing-counter2-candidate.22"
         if htv145_step4_fifo_enabled
@@ -213,6 +229,10 @@ env.Append(
         (
             "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE",
             htv145_factory_counter,
+        ),
+        (
+            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE",
+            int(htv145_selector_value),
         ),
         ("RAINPOINT_FIRMWARE_VERSION", f'\\"{firmware_version}\\"'),
         ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{firmware_variant}\\"'),

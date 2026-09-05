@@ -1,0 +1,919 @@
+{
+  "date": "2026-09-05",
+  "scope": "Research-only counter-0/selector-2 candidate preparation and unused-address RF calibration; no valve pairing or control acceptance is implied.",
+  "stock_reference": "htv145_selector2_stock_pairing_control_20260905.json",
+  "selected_profile": {
+    "factory_counter": 0,
+    "assignment_selector": 2,
+    "assigned_channel": 4,
+    "initial_register_center_hz": 433506719,
+    "routine_register_center_hz": 433396052,
+    "node_frequency_offset_hz": 122759,
+    "step4_fifo_active_tail_delay_us": 905,
+    "configuration_wake_symbols": 2400,
+    "initial_reply_delay_us": 46550,
+    "step1_reply_delay_us": 70000,
+    "configuration_reply_delay_us": 3065500,
+    "step3_reply_delay_us": 37700,
+    "step4_reply_delay_us": 53800,
+    "step5_reply_delay_us": 49750
+  },
+  "firmware": {
+    "version": "0.15.4-htv145-pairing-selector2-candidate.2",
+    "sha256": "e122ab2dda0b54e92685f030bbbae20288ffdaf1ef14d8e62e6f14bda285fbb4",
+    "bytes": 981344
+  },
+  "stock_measurements": [
+    {
+      "body_prefix": "80c0858500",
+      "sync_seconds": 276.3510995,
+      "channel_center_hz": 433582308,
+      "deviation_hz": 40272,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 159.5
+    },
+    {
+      "body_prefix": "8141010000",
+      "sync_seconds": 277.950426,
+      "channel_center_hz": 433472108,
+      "deviation_hz": 40213,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 159.5
+    },
+    {
+      "body_prefix": "8110010100",
+      "sync_seconds": 281.0499165,
+      "channel_center_hz": 433472184,
+      "deviation_hz": 40191,
+      "burst_duration_ms": 135.358,
+      "post_frame_low_tone_us": 160.0
+    },
+    {
+      "body_prefix": "81c287802c",
+      "sync_seconds": 282.8612825,
+      "channel_center_hz": 433472101,
+      "deviation_hz": 40099,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 159.5
+    },
+    {
+      "body_prefix": "8243008000",
+      "sync_seconds": 283.93019,
+      "channel_center_hz": 433472108,
+      "deviation_hz": 40017,
+      "burst_duration_ms": 31.3555,
+      "post_frame_low_tone_us": 159.5
+    },
+    {
+      "body_prefix": "82ec818019",
+      "sync_seconds": 284.881096,
+      "channel_center_hz": 433471968,
+      "deviation_hz": 40082,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 159.5
+    }
+  ],
+  "calibration_captures": [
+    {
+      "capture_sha256": "a57f5cd7e82999f47346c027f02cf633a7e350b1cac2be7c16c97a6405c0ec15",
+      "bytes": 46923776,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.1",
+      "initial_offset_hz": 122759,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled impossible-endpoint stage-4 calibration only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471325,
+          "deviation_hz": 41367,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3705,
+          "transition_fit_rms_samples": 0.339735,
+          "post_frame_low_tone_us": 150.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471437,
+          "deviation_hz": 41369,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.775,
+          "transition_fit_rms_samples": 0.347054,
+          "post_frame_low_tone_us": 149.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471322,
+          "deviation_hz": 41380,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.7695,
+          "transition_fit_rms_samples": 0.359988,
+          "post_frame_low_tone_us": 144.0,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "step4_delay_us": [
+        895,
+        895,
+        895
+      ],
+      "node_transmission_results": [],
+      "outcome": "recorded",
+      "expected_bursts": 3,
+      "recovered_bursts": 3
+    },
+    {
+      "capture_sha256": "53b7a2a28bb0e10e6651c7392882bd5c730445a45c4a6c845a40bdf6f3eea993",
+      "bytes": 46923776,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.1",
+      "initial_offset_hz": 122759,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled impossible-endpoint stage-4 calibration only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471416,
+          "deviation_hz": 41180,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3775,
+          "transition_fit_rms_samples": 0.346545,
+          "post_frame_low_tone_us": 156.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471360,
+          "deviation_hz": 41291,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.781,
+          "transition_fit_rms_samples": 0.33409,
+          "post_frame_low_tone_us": 156.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471440,
+          "deviation_hz": 41211,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.781,
+          "transition_fit_rms_samples": 0.342724,
+          "post_frame_low_tone_us": 156.0,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "step4_delay_us": [
+        905,
+        905,
+        905
+      ],
+      "node_transmission_results": [],
+      "outcome": "recorded",
+      "expected_bursts": 3,
+      "recovered_bursts": 3
+    },
+    {
+      "capture_sha256": "0244a0a934b23af13cb32d7f30b1b94cf383f391ae31961b9df24a10a574a001",
+      "bytes": 52166656,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.1",
+      "initial_offset_hz": 122759,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled unused endpoints only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433577055,
+          "deviation_hz": 41177,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3545,
+          "transition_fit_rms_samples": 3.754737,
+          "post_frame_low_tone_us": 162.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471730,
+          "deviation_hz": 41103,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3475,
+          "transition_fit_rms_samples": 3.806073,
+          "post_frame_low_tone_us": 155.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471475,
+          "deviation_hz": 41300,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.379,
+          "transition_fit_rms_samples": 0.361343,
+          "post_frame_low_tone_us": 69.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471486,
+          "deviation_hz": 41321,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.348,
+          "transition_fit_rms_samples": 3.748957,
+          "post_frame_low_tone_us": 156.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471600,
+          "deviation_hz": 41233,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.396,
+          "transition_fit_rms_samples": 0.351649,
+          "post_frame_low_tone_us": 176.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471629,
+          "deviation_hz": 41253,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3455,
+          "transition_fit_rms_samples": 3.518414,
+          "post_frame_low_tone_us": 152.5,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "node_transmission_results": [
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        }
+      ],
+      "outcome": "recorded",
+      "expected_bursts": 6,
+      "recovered_bursts": 6
+    },
+    {
+      "capture_sha256": "573e3dc9f29abd749c8391de3e607028451bacf7aa6b19eadb7894966ae41775",
+      "bytes": 129236992,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.1",
+      "initial_offset_hz": 128012,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled unused endpoints only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582447,
+          "deviation_hz": 41346,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3535,
+          "transition_fit_rms_samples": 3.837105,
+          "post_frame_low_tone_us": 161.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471384,
+          "deviation_hz": 41170,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3435,
+          "transition_fit_rms_samples": 3.509926,
+          "post_frame_low_tone_us": 150.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471437,
+          "deviation_hz": 41302,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.3775,
+          "transition_fit_rms_samples": 0.362943,
+          "post_frame_low_tone_us": 69.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471466,
+          "deviation_hz": 41218,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.345,
+          "transition_fit_rms_samples": 3.545837,
+          "post_frame_low_tone_us": 152.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471487,
+          "deviation_hz": 41274,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.4045,
+          "transition_fit_rms_samples": 0.355423,
+          "post_frame_low_tone_us": 182.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471562,
+          "deviation_hz": 41159,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3445,
+          "transition_fit_rms_samples": 3.436587,
+          "post_frame_low_tone_us": 151.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582324,
+          "deviation_hz": 41461,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.348,
+          "transition_fit_rms_samples": 3.787355,
+          "post_frame_low_tone_us": 155.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471288,
+          "deviation_hz": 41286,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3395,
+          "transition_fit_rms_samples": 3.676851,
+          "post_frame_low_tone_us": 147.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471361,
+          "deviation_hz": 41298,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.3775,
+          "transition_fit_rms_samples": 0.359601,
+          "post_frame_low_tone_us": 68.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471544,
+          "deviation_hz": 41129,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.346,
+          "transition_fit_rms_samples": 3.614996,
+          "post_frame_low_tone_us": 153.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471306,
+          "deviation_hz": 41283,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3925,
+          "transition_fit_rms_samples": 0.367317,
+          "post_frame_low_tone_us": 169.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471327,
+          "deviation_hz": 41249,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.342,
+          "transition_fit_rms_samples": 3.639454,
+          "post_frame_low_tone_us": 149.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582334,
+          "deviation_hz": 41459,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.344,
+          "transition_fit_rms_samples": 3.433958,
+          "post_frame_low_tone_us": 151.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471490,
+          "deviation_hz": 41186,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.343,
+          "transition_fit_rms_samples": 3.449496,
+          "post_frame_low_tone_us": 150.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471379,
+          "deviation_hz": 41340,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.3815,
+          "transition_fit_rms_samples": 0.36515,
+          "post_frame_low_tone_us": 69.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471439,
+          "deviation_hz": 41220,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.349,
+          "transition_fit_rms_samples": 3.465006,
+          "post_frame_low_tone_us": 156.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471409,
+          "deviation_hz": 41182,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3875,
+          "transition_fit_rms_samples": 0.348653,
+          "post_frame_low_tone_us": 162.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471383,
+          "deviation_hz": 41342,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.347,
+          "transition_fit_rms_samples": 3.820523,
+          "post_frame_low_tone_us": 154.5,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "node_transmission_results": [
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        }
+      ],
+      "outcome": "recorded",
+      "expected_bursts": 18,
+      "recovered_bursts": 18
+    },
+    {
+      "capture_sha256": "599ba4905f11dc1317b1420041d1ee7aadf40f43014344ecdf8ed46b52aa996e",
+      "bytes": 18874368,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.2",
+      "initial_offset_hz": 122759,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled unused endpoints only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582317,
+          "deviation_hz": 41395,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.35,
+          "transition_fit_rms_samples": 3.387461,
+          "post_frame_low_tone_us": 157.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471527,
+          "deviation_hz": 41331,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3415,
+          "transition_fit_rms_samples": 3.667735,
+          "post_frame_low_tone_us": 149.0,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "node_transmission_results": [
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmit_failed",
+          "receive_restored": true
+        }
+      ],
+      "outcome": "transmit_failed",
+      "expected_bursts": 6,
+      "recovered_bursts": 2
+    },
+    {
+      "capture_sha256": "2bca95c507b545ff4e7dd354a4279e4151663cbef6b5311d2272dd1803c62eb8",
+      "bytes": 90701824,
+      "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.2",
+      "initial_offset_hz": 122759,
+      "sample_rate_sps": 2000000,
+      "capture_center_hz": 433700000,
+      "gain_db": 0.9,
+      "scope": "Compiled unused endpoints only; no pairing arm or valve control",
+      "measurements": [
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582325,
+          "deviation_hz": 41177,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.355,
+          "transition_fit_rms_samples": 3.571713,
+          "post_frame_low_tone_us": 162.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471422,
+          "deviation_hz": 41384,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3465,
+          "transition_fit_rms_samples": 3.688271,
+          "post_frame_low_tone_us": 153.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471483,
+          "deviation_hz": 41287,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.381,
+          "transition_fit_rms_samples": 0.364465,
+          "post_frame_low_tone_us": 69.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471524,
+          "deviation_hz": 41283,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3495,
+          "transition_fit_rms_samples": 3.419673,
+          "post_frame_low_tone_us": 157.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471502,
+          "deviation_hz": 41292,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.388,
+          "transition_fit_rms_samples": 0.358275,
+          "post_frame_low_tone_us": 162.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471597,
+          "deviation_hz": 41236,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3445,
+          "transition_fit_rms_samples": 3.473834,
+          "post_frame_low_tone_us": 152.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 0,
+          "frame": "79f4882f28deadc08ff00dca8080c0858500827000d7eea50d0300800000000000000000257b",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433582146,
+          "deviation_hz": 41190,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3455,
+          "transition_fit_rms_samples": 3.547681,
+          "post_frame_low_tone_us": 152.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 1,
+          "frame": "79f4882f28deadc08ff00dca8081410100008000000000000000000000000000000000002ef9",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471510,
+          "deviation_hz": 41295,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3475,
+          "transition_fit_rms_samples": 3.863701,
+          "post_frame_low_tone_us": 154.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 6,
+          "frame": "79f4882f28deadc08ff00dca8081100101000000000000000000000000000000000000007181",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471538,
+          "deviation_hz": 41295,
+          "wake_transitions": 2398,
+          "burst_duration_ms": 135.382,
+          "transition_fit_rms_samples": 0.364414,
+          "post_frame_low_tone_us": 68.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 3,
+          "frame": "79f4882f28deadc08ff00dca8081c287802c0105000f00000000000000000000000000000168",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471588,
+          "deviation_hz": 41345,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.345,
+          "transition_fit_rms_samples": 3.574271,
+          "post_frame_low_tone_us": 152.5,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 4,
+          "frame": "79f4882f28deadc08ff00dca8082430080000000000000000000000000000000000000000246",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471601,
+          "deviation_hz": 41285,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3845,
+          "transition_fit_rms_samples": 0.356826,
+          "post_frame_low_tone_us": 162.0,
+          "adc_rail_fraction": 0.0
+        },
+        {
+          "step": 5,
+          "frame": "79f4882f28deadc08ff00dca8082ec8180190000000000000000000000000000000000000092",
+          "exact_frame_recovered": true,
+          "channel_center_hz": 433471469,
+          "deviation_hz": 41350,
+          "wake_transitions": 319,
+          "burst_duration_ms": 31.3455,
+          "transition_fit_rms_samples": 3.628276,
+          "post_frame_low_tone_us": 153.0,
+          "adc_rail_fraction": 0.0
+        }
+      ],
+      "node_transmission_results": [
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 0,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 1,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 6,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 3,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 4,
+          "state": "transmitted",
+          "receive_restored": true
+        },
+        {
+          "step": 5,
+          "state": "transmitted",
+          "receive_restored": true
+        }
+      ],
+      "outcome": "recorded",
+      "expected_bursts": 12,
+      "recovered_bursts": 12
+    }
+  ],
+  "limitations": [
+    "The matched native transcript proves builder and state-machine coherence; only the physical valve can establish terminal acceptance.",
+    "Clock bytes are patched from live local time with captured selector-2 masks. Assignment byte 25 remains captured 0x03 with unknown semantics; this is not a generalized profile.",
+    "Timing constants are rounded from exact-sync stock request/reply gaps. Live receive-marker-to-RF offset remains unmeasured for this branch.",
+    "Absolute same-SDR carrier matching must be checked against the valve oscillator during the live attempt.",
+    "The accepted counter-2 selector-6 FIFO configuration transport is retained, including its shorter post-frame tail; it is not claimed analog-identical to stock.",
+    "First stock open marker90 and subsequent open marker10 remain evidence against a fixed association-wide marker assumption. Close retains its corresponding open counter. The control trial must select explicit recorded packet fields, not rely on an unverified automatic next-command counter."
+  ]
+}

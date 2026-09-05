@@ -3,15 +3,60 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import runpy
 import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).parent
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_selector2_build_requires_the_complete_isolated_profile(self):
+        build_script = ROOT / "firmware/rainpoint_bridge/tools/build_profile.py"
+
+        class BuildEnvironment:
+            def Append(self, **kwargs):
+                self.defines = dict(kwargs["CPPDEFINES"])
+
+        def build(values):
+            env = BuildEnvironment()
+            with patch.dict(os.environ, values, clear=True):
+                runpy.run_path(str(build_script), init_globals={
+                    "env": env, "Import": lambda name: None,
+                })
+            return env.defines
+
+        flags = {
+            "RAINPOINT_SUPERVISED_HTV405_CONTROL": "0",
+            "RAINPOINT_RESEARCH_BENCH": "1",
+            "RAINPOINT_HTV145_PAIRING_CANDIDATE": "1",
+            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE": "1",
+            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE": "1",
+            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE": "1",
+            "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE": "1",
+            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE": "1",
+            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE": "2",
+        }
+        defines = build(flags)
+        self.assertEqual(2, defines["RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE"])
+        self.assertEqual(0, defines["RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE"])
+        self.assertIn("selector2-candidate.2", defines["RAINPOINT_FIRMWARE_VERSION"])
+        for missing in flags.keys() - {
+            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE",
+        }:
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                build({key: value for key, value in flags.items() if key != missing})
+        for counter in ("1", "2"):
+            with self.subTest(counter=counter), self.assertRaises(ValueError):
+                build({**flags, "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE": counter})
+        defaults = build({})
+        self.assertEqual(0, defaults["RAINPOINT_HTV145_PAIRING_CANDIDATE"])
+        self.assertEqual(6, defaults["RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE"])
+
     def test_htv145_dry_probe_is_explicit_and_does_not_authenticate_guess(self):
         source = (
             ROOT / "firmware/rainpoint_bridge/src/main.cpp"

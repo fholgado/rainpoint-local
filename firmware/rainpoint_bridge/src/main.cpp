@@ -3150,7 +3150,7 @@ void handleNetworkCommand() {
         }
         pairingAssignedChannel =
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-            valvePairingHtv145 ? 12 :
+            valvePairingHtv145 ? rainpoint::htv145::kAssignedChannel :
 #endif
             0;
     } else
@@ -3289,6 +3289,72 @@ void handleNetworkCommand() {
 }
 
 #if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE == 2
+bool handleHtv145ProfileCalibration(const String& command) {
+    const String prefix = "htv145_profile_calibration ";
+    if (!command.startsWith(prefix)) return false;
+    unsigned step = 0;
+    long offsetHz = 0;
+    char extra = 0;
+    if (sscanf(command.substring(prefix.length()).c_str(), "%u %ld %c",
+               &step, &offsetHz, &extra) != 2 || step > 6 || step == 2 ||
+        offsetHz < -150'000 || offsetHz > 150'000 ||
+        currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        emitLine("{\"type\":\"command_error\",\"error\":\"htv145_profile_calibration_invalid\"}");
+        return true;
+    }
+    // Compile-time unused endpoints; no caller can supply a live valve route.
+    // Exercise the same builders, wake and TX paths as the selected profile.
+    rainpoint::htv145::PairingProfile profile{};
+    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
+    constexpr rainpoint::PairingLocalDateTime clock{2026, 9, 5, 13, 54, 46};
+    const bool built = rainpoint::htv145::buildProfile(
+        {{0x5e, 0xad, 0xc0, 0x8f}}, {{0xf0, 0x0d, 0xca, 0x80}},
+        {{0x70, 0x0d, 0xca, 0x80}}, profile
+    ) && (step == 6 ? rainpoint::htv145::buildConfigurationReply(profile, frame)
+                   : rainpoint::htv145::buildReply(profile, step, clock, frame));
+    const auto centerHz = static_cast<std::uint32_t>(
+        static_cast<std::int64_t>(step == 0
+            ? rainpoint::htv145::kInitialChannelCenterHz
+            : rainpoint::htv145::kRoutineChannelCenterHz) + offsetHz);
+    if (!built || !primaryRadio.prepareTransmit() ||
+        !primaryRadio.cacheTransmitFrequency(centerHz)) {
+        emitLine("{\"type\":\"command_error\",\"error\":\"htv145_profile_calibration_prepare_failed\"}");
+        return true;
+    }
+    const auto wake = step == 6 ? rainpoint::htv145::kConfigurationWakeSymbols
+                                : rainpoint::kPairingWakeSymbols;
+    rainpoint::FifoCalibrationDiagnostics diagnostics{};
+    const bool sent = step == 4 || step == 6
+        ? primaryRadio.transmitFifoCalibration(
+            frame, centerHz, wake, rainpoint::pairingPaTableValue(10),
+            rainpoint::htv145::kOrdinaryDeviationRegister, micros() + 20'000,
+            &diagnostics, 0, step == 4
+                ? rainpoint::htv145::kStep4FifoActiveTailDelayUs : 0)
+        : primaryRadio.transmitAsync(
+            frame, centerHz, wake, false, rainpoint::pairingPaTableValue(10),
+            rainpoint::htv145::kOrdinaryDeviationRegister, micros() + 20'000,
+            0, 0, 0, false, rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs);
+    String line = "{\"type\":\"htv145_profile_calibration\",\"step\":";
+    line += step;
+    line += ",\"state\":\"";
+    line += sent ? "transmitted" : "transmit_failed";
+    line += "\",\"center_hz\":";
+    line += centerHz;
+    line += ",\"frame\":\"";
+    line += hexString(frame.data(), frame.size());
+    line += "\",\"fifo\":";
+    line += step == 4 || step == 6 ? "true" : "false";
+    line += ",\"receive_restored\":";
+    line += step == 4 || step == 6
+        ? (diagnostics.receiveConfigurationRestored ? "true" : "false")
+        : (sent ? "true" : "false");
+    line += "}";
+    emitLine(line);
+    return true;
+}
+#endif
+
 bool handleHtv145PreludeCalibration(const String& command) {
     const String prefix = "htv145_prelude_calibration ";
     if (!command.startsWith(prefix)) {
@@ -3757,6 +3823,11 @@ void handleSerialCommand() {
             handled = handleHtv145DryOpenProbe(serialCommand);
 #endif
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE == 2
+            if (!handled) {
+                handled = handleHtv145ProfileCalibration(serialCommand);
+            }
+#endif
             if (!handled) {
                 handled = handleHtv145ReceiveEdgeCalibration(serialCommand);
             }
@@ -4249,7 +4320,9 @@ void processHtv145PairingFrame(
                             ? rainpoint::htv145::
                                 kStep4PostFrameLowHoldAdjustmentUs
 #endif
-                        : 0
+                        : rainpoint::htv145::kSelector2Branch
+                            ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
+                            : 0
 #else
                 0
 #endif

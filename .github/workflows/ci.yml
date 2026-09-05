@@ -50,6 +50,12 @@ jobs:
             firmware/rainpoint_bridge/tests/htv145_counter2_protocol_test.cpp \
             -o /tmp/rainpoint-htv145-counter2-test
           /tmp/rainpoint-htv145-counter2-test
+          c++ -std=c++17 \
+            -DRAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE=2 \
+            -Ifirmware/rainpoint_bridge/include \
+            firmware/rainpoint_bridge/tests/htv145_selector2_protocol_test.cpp \
+            -o /tmp/rainpoint-htv145-selector2-test
+          /tmp/rainpoint-htv145-selector2-test
 
   firmware:
     runs-on: ubuntu-latest
@@ -141,3 +147,20 @@ jobs:
           python tools/check_firmware_boundaries.py --htv145-pairing
           --htv145-control
           firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+      - name: Build the isolated HTV145 selector-2 pairing and dry-control candidate
+        run: |
+          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
+            RAINPOINT_RESEARCH_BENCH=1 \
+            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
+            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
+            RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
+            RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
+            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
+            RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1 \
+            RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE=2 \
+            RAINPOINT_HTV145_TX_CANDIDATE=1 \
+            pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge
+          python tools/check_firmware_boundaries.py --htv145-pairing \
+            --htv145-control \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

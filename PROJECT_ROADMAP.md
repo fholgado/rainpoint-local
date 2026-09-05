@@ -746,6 +746,23 @@ observation before it changes transmitted firmware.
         `0x10` opens in the same association; a fixed association-wide marker
         assumption is not established. Existing evidence still favors sharp
         2-FSK and the `0x45` deviation family over GFSK or `0x44`.
+        - [x] Prepare an isolated counter-0/selector-2 profile from the complete
+          September 5 stock transcript. Native replay covers every reply,
+          current-clock patching, wrong-branch/CRC rejection and the missing
+          terminal gate. Candidate `0.15.4-htv145-pairing-selector2-candidate.2`
+          retains the hardware FIFO configuration and receive-end observer,
+          applies a measured selector-2-only initial-carrier correction and
+          calibrated 905 us step-4 active stop, and reports assigned channel 4.
+          Production and supervised builds exclude its calibration command.
+          Calibration evidence:
+          `research/fixtures/htv145_selector2_candidate_calibration_20260905.json`.
+        - [ ] Run the specifically authorized matched-branch attempt with the
+          stock gateway unplugged and continuous low-gain SDR plus serial
+          diagnostics. Require the terminal exchange before the close-first,
+          one-minute dry open and early-close sequence; retain direct command
+          acknowledgments and later idle evidence. Select each command's
+          marker and counter explicitly from evidence, including the stock
+          close retaining its open counter. A white LED is not this gate.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

@@ -254,9 +254,11 @@ terminal acceptance. The accepted assignment/configuration prefix stays frozen.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 
-The packed clock/date marker positions are branch-specific. Counter 0 carries
-its marker in time-low bit 7. Counter 2 carries it in time-high bit 7 and in
-date-low bit 7. All remaining clock bits retain their FAT/DOS meaning.
+The older selector-6 clock/date masks differ between its counter-0 and
+counter-2 transcripts: counter 0 sets time-low bit 7, while counter 2 sets
+time-high and date-low bit 7. The fresh selector-2 transcript also sets
+time-low bit 7; counter alone therefore does not identify the clock mask.
+The selected research profile preserves its own captured masks.
 
 The frequency correction is node-calibration evidence, not a universal device
 constant. Absolute centers from separate SDR sessions are insufficient; the
@@ -596,3 +598,77 @@ and report acknowledgments are retained in
   `research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`
 - Evidence ledger: [`../research/VALVE_PROTOCOL_STATUS.md`](../research/VALVE_PROTOCOL_STATUS.md)
 - Chronology: [`../research/RF_CAPTURE_NOTES.md`](../research/RF_CAPTURE_NOTES.md)
+
+## Isolated selector-2 candidate preparation (2026-09-05)
+
+The fresh successful stock transcript now has an independent firmware profile,
+selected by `RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE=2`. It requires the
+counter-0 branch, the complete research FIFO/tail build gates, and supervised
+HTV405 control disabled. Selector 6 and candidate `.22` retain their existing
+payloads, carriers and timing. All variants use the one supported
+`rainpoint_bridge` environment.
+
+The native selector-2 regression reproduces all six stock responses (including
+the separate long configuration), consumes the valve's configuration response,
+and reaches completion only after `82 ac 80 99` / `82 ec 81 80 19`. It first
+failed at the assignment against the older counter-0 selector-6 builder.
+Negative checks cover the wrong selector, invalid CRC, and the missing terminal
+request. Endpoints come from the association supplied to the builder. The live
+clock is advanced normally; selector 2 retains the captured high flags in both
+time bytes and date-low. Assignment byte 25 remains the captured, uninterpreted
+`03`, so this is a bounded research profile, not a general clock encoding.
+
+`htv145_profile_calibration` is compiled only into this research profile. It
+uses fixed unused endpoints and the actual selected reply builders, covering
+assignment, ordinary continuations, FIFO configuration and FIFO step 4. It
+cannot accept a live endpoint. Production and supervised binary-boundary checks
+explicitly exclude the command. The candidate also contains the existing,
+separately gated one-minute dry-control probes.
+
+The initial six-frame recording recovered every frame without ADC clipping.
+Its initial assignment carrier was 5.253 kHz below the fresh stock measurement;
+three repeats with that correction measured 433.582324--433.582447 MHz, versus
+stock 433.582308 MHz. Routine replies remained within approximately 1 kHz of
+stock. Candidate `0.15.4-htv145-pairing-selector2-candidate.2` encodes the initial
+correction only for selector 2. Three step-4 probes at the selected 905 us active
+FIFO stop measured 156--156.5 us low tone (stock 159.5 us), exact CRC-valid frames,
+no clipping, and less than 0.35 sample edge RMS. Selector 6 retains 910 us.
+Short selector-2 replies use the existing 115 us low-hold adjustment; the
+hardware-clocked configuration and step-4 receive-end observer are retained.
+
+The stock timing constants were recomputed from exact-sync positions rather
+than the coarser inventory timestamps. Request-frame end to reply-wake start
+measured 46.5345, 70.0065, 37.681, 53.808 and 49.741 ms for steps 0, 1, 3, 4 and
+5. The configuration wake starts 3065.497 ms after the stage-1 request end.
+These supply rounded initial deadlines; they do not establish the live radio's
+receive-to-transmit offset. Likewise, carrier matching with one SDR must be
+checked against the valve's oscillator in the actual attempt. The retained FIFO
+configuration path has a shorter final low tone than stock despite comparable
+total burst duration; no claim of analog identity is made.
+
+The combined trial keeps recording after terminal enrollment. It requires a
+positive direct close response before a one-minute dry open, then an explicit
+early close and later idle evidence. The first stock open's marker differs
+from subsequent opens, and a stock close retains its open's counter. Use
+explicit per-command packet fields during this experiment; the existing
+`htv145_dry_close` convenience path's automatic counter choice is not this
+trial's evidence. Raw IQ and serial diagnostics stay untracked. Measurements
+are preserved in
+[`htv145_selector2_candidate_calibration_20260905.json`](../research/fixtures/htv145_selector2_candidate_calibration_20260905.json).
+The physical acceptance gates remain in [the roadmap](../PROJECT_ROADMAP.md).
+
+The first post-flash `.2` verification aborted at the long configuration: RF
+stopped after 112.212 ms, before its frame sync, and the radio returned
+`transmit_failed` with receive restored. Its preceding two short frames were
+valid. This failure is retained in the calibration fixture and must not be
+counted as a successful configuration. Startup/network scheduling interference
+is a hypothesis, not an established cause; the same image is subsequently
+checked after startup settles. A successful repeat does not erase that observed
+transmit failure or establish pairing reliability.
+
+Two complete unchanged `.2` repeats after startup settled recovered all twelve
+frames with no clipping and receive restored. Their step-4 endings measured
+162 and 162.5 us, with edge RMS below 0.36 sample; initial carriers measured
+433.582146 and 433.582325 MHz. Both long configurations decoded successfully.
+These are preparation evidence for the next physical attempt, not evidence
+that startup settling fixed the isolated earlier failure.
