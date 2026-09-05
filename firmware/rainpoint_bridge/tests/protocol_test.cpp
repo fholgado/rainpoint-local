@@ -5,6 +5,7 @@
 
 #include "rainpoint_protocol.h"
 #include "rainpoint_fifo_calibration.h"
+#include "rainpoint_receive_edge.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_htv145_pairing.h"
 #include "rainpoint_valve_pairing.h"
@@ -63,6 +64,29 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    rainpoint::ReceiveEndCapture receiveEdge;
+    assert(!receiveEdge.take(100, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(10'000, 13'500);
+    const auto freshEdge = receiveEdge.take(10'023, rainpoint::kRadioPayloadBytes + 2);
+    assert(freshEdge.valid && freshEdge.endedAtMicros == 10'000);
+    assert(freshEdge.pollLagMicros == 23 && freshEdge.highObservedMicros == 13'500);
+    assert(!receiveEdge.take(10'024, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(20'000, 13'500);
+    assert(!receiveEdge.take(22'001, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(30'000, 20);  // Reject a brief SPI/settling edge.
+    assert(!receiveEdge.take(30'025, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(40'000, 16'001);  // Bounded acquisition timed out.
+    assert(!receiveEdge.take(40'025, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(50'000, 13'500);
+    assert(!receiveEdge.take(50'025, rainpoint::kRadioPayloadBytes + 3).valid);
+    receiveEdge.observe(60'000, 13'500);
+    receiveEdge.clear();  // A flush or channel change invalidates the anchor.
+    assert(!receiveEdge.take(60'025, rainpoint::kRadioPayloadBytes + 2).valid);
+    receiveEdge.observe(0xfffffff0U, 13'500);
+    const auto wrappedEdge = receiveEdge.take(0x10, rainpoint::kRadioPayloadBytes + 2);
+    assert(wrappedEdge.valid && wrappedEdge.pollLagMicros == 32);
+    receiveEdge.observe(0, 13'500);  // micros() == 0 is a valid wraparound edge.
+    assert(receiveEdge.take(10, rainpoint::kRadioPayloadBytes + 2).valid);
     std::array<std::uint8_t, rainpoint::kFrameBytes> calibrationFrame{};
     for (std::size_t index = 0; index < calibrationFrame.size(); ++index)
         calibrationFrame[index] = static_cast<std::uint8_t>(index);

@@ -216,6 +216,7 @@ rainpoint::htv145::PairingSession htv145PairingSession(
     activeHtv145PairingProfile
 );
 bool valvePairingHtv145 = false;
+std::uint32_t htv145ReceiveCalibrationUntilMs = 0;
 #endif
 #endif
 std::uint8_t pairingAssignedChannel = rainpoint::pairingChannelFromReply(
@@ -3577,6 +3578,52 @@ bool handleHtv145ConfigurationCalibration(const String& command) {
     return true;
 }
 
+bool handleHtv145ReceiveEdgeCalibration(const String& command) {
+    const String prefix = "htv145_receive_edge_calibration ";
+    if (!command.startsWith(prefix)) return false;
+    unsigned seconds = 0;
+    char extra = 0;
+    const int fields = sscanf(command.substring(prefix.length()).c_str(),
+                              "%u %c", &seconds, &extra);
+    if (fields != 1 || seconds > 120 ||
+        currentPairingState() == rainpoint::PairingSessionState::Armed) {
+        emitLine("{\"type\":\"command_error\","
+                 "\"error\":\"htv145_receive_edge_calibration_invalid\"}");
+        return true;
+    }
+    htv145ReceiveCalibrationUntilMs = seconds == 0 ? 0 : millis() + seconds * 1'000;
+    emitLine(String("{\"type\":\"htv145_receive_edge_calibration\",\"state\":\"") +
+             (seconds == 0 ? "disabled" : "observing") +
+             "\",\"receive_only\":true}");
+    return true;
+}
+
+void reportHtv145ReceiveEdge(
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
+    const rainpoint::RadioPacket& packet,
+    const char* purpose,
+    std::uint32_t replyStartAtMicros = 0
+) {
+    String line = "{\"type\":\"htv145_receive_edge_observation\",\"purpose\":\"";
+    line += purpose;
+    line += "\",\"frame\":\"";
+    line += hexString(frame.data(), frame.size());
+    line += "\",\"edge_valid\":";
+    line += packet.receiveEnd.valid ? "true" : "false";
+    line += ",\"packet_end_us\":";
+    line += packet.receiveEnd.endedAtMicros;
+    line += ",\"fifo_polled_us\":";
+    line += packet.receivedAtMicros;
+    line += ",\"poll_lag_us\":";
+    line += packet.receiveEnd.pollLagMicros;
+    line += ",\"observed_high_us\":";
+    line += packet.receiveEnd.highObservedMicros;
+    line += ",\"reply_start_at_us\":";
+    line += replyStartAtMicros;
+    line += "}";
+    emitLine(line);
+}
+
 bool handleHtv145Step4FifoCalibration(const String& command) {
     const String prefix = "htv145_fifo_step4_calibration ";
     if (!command.startsWith(prefix)) {
@@ -3710,6 +3757,9 @@ void handleSerialCommand() {
             handled = handleHtv145DryOpenProbe(serialCommand);
 #endif
 #if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+            if (!handled) {
+                handled = handleHtv145ReceiveEdgeCalibration(serialCommand);
+            }
             if (!handled) {
                 handled = handleHtv145Step4FifoCalibration(serialCommand);
             }
@@ -4153,18 +4203,25 @@ void processHtv145PairingFrame(
         bool sent = false;
 #if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1
         if (built && replyStep == 4) {
-            sent = radio.transmitFifoCalibration(
+            const std::uint32_t replyStartAtMicros =
+                packet.receiveEnd.endedAtMicros +
+                    rainpoint::htv145::replyStartDelayUs(replyStep);
+            // A missing or ambiguous edge must not silently select the old
+            // polling anchor and make this isolated timing test uninterpretable.
+            sent = packet.receiveEnd.valid && radio.transmitFifoCalibration(
                 replyFrame,
                 transmitCenterHz,
                 rainpoint::kPairingWakeSymbols,
                 rainpoint::pairingPaTableValue(pairingPowerDbm),
                 step->deviationRegister,
-                packet.receivedAtMicros +
-                    rainpoint::htv145::replyStartDelayUs(replyStep),
+                replyStartAtMicros,
                 nullptr,
                 rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs,
                 rainpoint::htv145::kStep4FifoActiveTailDelayUs
             );
+            reportHtv145ReceiveEdge(frame, packet,
+                packet.receiveEnd.valid ? "step4_reply" : "step4_missing_edge",
+                packet.receiveEnd.valid ? replyStartAtMicros : 0);
         } else
 #endif
         {
@@ -4274,6 +4331,24 @@ void processHtv145PairingFrame(
 
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
+#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (&radio == &primaryRadio) {
+        if (currentPairingState() == rainpoint::PairingSessionState::Armed ||
+            static_cast<std::int32_t>(htv145ReceiveCalibrationUntilMs - millis()) <= 0) {
+            htv145ReceiveCalibrationUntilMs = 0;
+        }
+        const bool observeFinalRequest =
+#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1
+            valvePairingActive && valvePairingHtv145 &&
+            activeValvePairingArmed() && htv145PairingSession.completedSteps() == 4;
+#else
+            false;
+#endif
+        primaryRadio.setReceiveEndCapture(
+            observeFinalRequest || htv145ReceiveCalibrationUntilMs != 0
+        );
+    }
+#endif
     const bool deferReceiveRecovery = &radio == &primaryRadio &&
 #if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive &&
@@ -4613,6 +4688,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         radio.recoverReceive();
     }
     printPacket(name, frame, packet, radio);
+#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+    if (&radio == &primaryRadio && htv145ReceiveCalibrationUntilMs != 0) {
+        // Report only after ordinary ACK handling, never on its deadline path.
+        reportHtv145ReceiveEdge(frame, packet, "receive_only_calibration");
+    }
+#endif
 }
 
 bool beginRadio(

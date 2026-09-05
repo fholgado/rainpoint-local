@@ -708,6 +708,19 @@ observation before it changes transmitted firmware.
       prefix and measured ending; do not select a fixed timing correction from
       this one observation alone. Terminal `84/2c`, `6/6`, and two unchanged
       successful progressions remain required before claiming support.
+      - [x] Prepare and calibrate `.22` to observe packet end on existing
+        GDO1/MISO with SPI idle, using that edge only for zero-based reply 4.
+        Three CRC-valid receive frames had qualified edges `40--48 us` before
+        the FIFO poll. The installed image also repeated three exact,
+        unclipped final-reply probes with `163--164 us` low tone. Stale,
+        missing, short, or ambiguous observations suppress the experimental
+        reply. Production and supervised builds exclude the experiment.
+        See `research/fixtures/htv145_receive_edge_candidate_calibration_20260905.json`.
+      - [ ] Capture one authorized `.22` pairing attempt with serial edge
+        diagnostics and low-gain SDR. Measure actual reply onset relative to
+        the request, verify the calibrated ending, and evaluate terminal
+        acceptance. The receive-only calibration does not yet establish the
+        absolute hardware-marker offset from the valve's RF frame end.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

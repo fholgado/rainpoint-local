@@ -464,6 +464,38 @@ causation or justify an unmeasured constant timing shift. Raw capture hashes,
 redacted frames, waveform measurements, and the comparison are preserved in
 [`htv145_calibrated_tail_terminal_retry_20260905.json`](../research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json).
 
+Candidate `.22` changes only the timing anchor for zero-based reply 4. While
+waiting for that request, it selects IOCFG1 `0x06`, watches GDO1/MISO go high
+for sync, and leaves SPI idle until the packet-end falling edge. The wait is
+bounded to `16 ms`; the fixed received payload lasts about `14.4 ms`. This
+avoids changing the GDO0 pin configuration used by the accepted RMT prefix.
+The original FIFO-poll timestamp remains available for all earlier replies.
+The final reply retains its `52,550 us` nominal delay and `910 us` active FIFO
+ending, but schedules from the captured edge. It does not subtract a guessed
+constant from the old timestamp.
+
+An observation qualifies only after at least `200 us` of continuously observed
+high signal, at most `2 ms` before the software sees exactly one complete
+packet in the RX FIFO. It is consumed once and cleared by flushes or channel
+changes. A missing or ambiguous edge suppresses the experimental reply and
+emits `step4_missing_edge`; packet matching and CRC checks remain mandatory.
+The `htv145_receive_edge_observation` diagnostic records the edge, FIFO-poll
+time, observed high interval, and selected reply deadline after transmission.
+These fields distinguish a failed timing experiment from a missing marker.
+
+The serial-only command `htv145_receive_edge_calibration SECONDS` enables
+bounded receive-only observation while pairing is disarmed (`1..120` seconds,
+or `0` to stop). It does not arm a valve or send an RF probe. Three CRC-valid
+incoming frames produced qualified edges `40--48 us` before the FIFO poll;
+one was also recovered exactly from the lower-gain SDR recording. Two weaker
+frames were not recovered by that decoder, and two invalid-CRC observations
+were excluded. Three separate unused-address transmissions from the installed
+`.22` image retained `163--164 us` of low tone, exact packets, and no clipping.
+This verifies marker acquisition and preservation of the calibrated ending;
+absolute marker timing relative to a valve's RF frame end and terminal
+acceptance still require the controlled pairing capture. Evidence is in
+[`htv145_receive_edge_candidate_calibration_20260905.json`](../research/fixtures/htv145_receive_edge_candidate_calibration_20260905.json).
+
 ## Evidence and implementation
 
 - Receive decode and research command builder:

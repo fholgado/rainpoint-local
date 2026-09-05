@@ -1,0 +1,100 @@
+{
+  "date": "2026-09-05",
+  "scope": "Research-only packet-end capture preparation and calibration for the next one-zone pairing attempt. No new valve pairing arm in these calibrations.",
+  "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.22",
+  "firmware_sha256": "a5e762c7fcc1415fd7abd0ce227f71c34aaa5c4135b4e66483c44e07c6eaca65",
+  "redaction": "Received endpoints replaced consistently with synthetic values, preserving original CRC residues. Transmitted calibration endpoints were synthetic on air. Installation identifiers and private logs omitted.",
+  "receive_capture": {
+    "sha256": "b37746ca86db48e1ef65f53c767fcc957e3475b688bb16451a741fb2b92d21d9",
+    "size_bytes": 39059456,
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "observations": [
+      {
+        "frame": "79f4882f28e0aabb80e1aabb241001820205442600000000000000000000000000000000ed99",
+        "crc_residue": "4f03",
+        "edge_valid": true,
+        "packet_end_us": 2541460,
+        "fifo_polled_us": 2541500,
+        "poll_lag_us": 40,
+        "observed_high_us": 14099,
+        "independent_sdr_exact_frame_recovered": false
+      },
+      {
+        "frame": "79f4882f28e2aabb80e3aabb240381820205c41680000000000000000000000000000000aba5",
+        "crc_residue": "c713",
+        "edge_valid": true,
+        "packet_end_us": 8629075,
+        "fifo_polled_us": 8629115,
+        "poll_lag_us": 40,
+        "observed_high_us": 13714,
+        "independent_sdr_exact_frame_recovered": false
+      },
+      {
+        "frame": "79f4882f28e0aabb80e4aabb8f8a0107860700804f800000004080005680000000000000d79d",
+        "crc_residue": "c713",
+        "edge_valid": true,
+        "packet_end_us": 9612298,
+        "fifo_polled_us": 9612346,
+        "poll_lag_us": 48,
+        "observed_high_us": 13937,
+        "independent_sdr_exact_frame_recovered": true
+      }
+    ],
+    "excluded_non_crc_valid_observations": 2
+  },
+  "tail_capture": {
+    "sha256": "a63b1adf96d0cea6924252c00d188cd094ab94b216bfe2a5908ea6a7ef00e86b",
+    "size_bytes": 46923776,
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "power_dbm": 10,
+    "active_delay_us": 910,
+    "trials": [
+      {
+        "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+        "post_frame_low_tone_us": 164.0,
+        "transition_fit_rms_samples": 0.314527,
+        "wake_transitions": 319,
+        "adc_rail_fraction": 0.0
+      },
+      {
+        "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+        "post_frame_low_tone_us": 163.0,
+        "transition_fit_rms_samples": 0.322094,
+        "wake_transitions": 319,
+        "adc_rail_fraction": 0.0
+      },
+      {
+        "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+        "post_frame_low_tone_us": 163.0,
+        "transition_fit_rms_samples": 0.307986,
+        "wake_transitions": 319,
+        "adc_rail_fraction": 0.0
+      }
+    ]
+  },
+  "candidate_behavior": {
+    "automatic_capture_only_for_zero_based_reply": 4,
+    "nominal_reply_delay_us": 52550,
+    "capture_source": "GDO1/MISO sync-to-packet-end signal, with SPI idle throughout the observed high interval",
+    "maximum_busy_wait_us": 16000,
+    "minimum_observed_high_us": 200,
+    "maximum_edge_to_fifo_poll_us": 2000,
+    "required_fifo_bytes": 38,
+    "missing_or_ambiguous_edge": "Do not send experimental reply; report step4_missing_edge",
+    "prefix_and_packet_ending": "Retain previously accepted reply prefix and calibrated 910 us active FIFO stop"
+  },
+  "verdict": {
+    "receive_edge_capture_observed": true,
+    "tail_calibration_passed": true,
+    "physical_terminal_pairing_proven": false
+  },
+  "limitations": [
+    "Three radio-received frames passed exact sync and captured CRC checks, and their packet-end markers preceded the FIFO poll by 40--48 us. One was independently recovered from low-gain SDR; the other two weaker frames were not recovered by that decoder.",
+    "Absolute marker timing relative to the valve RF frame end and its effect on terminal acceptance still require the next controlled pairing capture. These receive-only observations do not prove either.",
+    "Two non-CRC-valid frames are excluded from the verified calibration evidence; normal pairing request validation remains required."
+  ]
+}

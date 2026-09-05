@@ -1066,6 +1066,10 @@ bool Cc1101::waitForMainState(
 }
 
 bool Cc1101::enterIdle() {
+#if RAINPOINT_RESEARCH_BENCH == 1
+    receiveEndCapture_.clear();
+    if (receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x2e);
+#endif
     if (strobe(kIdle) == 0xff) {
         return false;
     }
@@ -1076,7 +1080,11 @@ bool Cc1101::enterReceive() {
     if (strobe(kEnterRx) == 0xff) {
         return false;
     }
-    return waitForMainState(kMainStateRx);
+    const bool receiving = waitForMainState(kMainStateRx);
+#if RAINPOINT_RESEARCH_BENCH == 1
+    if (receiving && receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x06);
+#endif
+    return receiving;
 }
 
 bool Cc1101::setChannel(std::uint8_t channel) {
@@ -1118,7 +1126,35 @@ void Cc1101::recoverRx() {
     enterReceive();
 }
 
+#if RAINPOINT_RESEARCH_BENCH == 1
+void Cc1101::setReceiveEndCapture(bool enabled) {
+    if (receiveEndCaptureEnabled_ == enabled) return;
+    receiveEndCaptureEnabled_ = enabled;
+    receiveEndCapture_.clear();
+    // Table 41, IOCFG1=6: sync-to-packet-end indication while CS is high.
+    // MISO is already an input; the frozen GDO0/RMT configuration is untouched.
+    writeRegister(kIocfg1, enabled ? 0x06 : 0x2e);
+    delayMicroseconds(2);
+}
+#endif
+
 bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
+#if RAINPOINT_RESEARCH_BENCH == 1
+    if (receiveEndCaptureEnabled_ && digitalRead(misoPin_) == HIGH) {
+        // Leave SPI completely idle while a packet is in progress, so GDO1
+        // cannot be confused with SPI data. Fixed RX payload lasts 14.4 ms;
+        // this bounded wait is enabled only for the isolated research probe.
+        const std::uint32_t highAt = micros();
+        while (digitalRead(misoPin_) == HIGH &&
+               micros() - highAt < ReceiveEndCapture::kMaximumHighMicros) {}
+        const std::uint32_t endedAt = micros();
+        if (digitalRead(misoPin_) == LOW) {
+            receiveEndCapture_.observe(endedAt, endedAt - highAt);
+        } else {
+            receiveEndCapture_.clear();
+        }
+    }
+#endif
     const auto rxBytes = readStatus(kRxBytes);
     if (rxBytes & 0x80) {
         ++overflowCount_;
@@ -1133,6 +1169,11 @@ bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
     // The fixed-length RX FIFO becomes complete at the end of the request.
     // Capture the earliest available deadline anchor before the SPI burst.
     packet.receivedAtMicros = micros();
+#if RAINPOINT_RESEARCH_BENCH == 1
+    packet.receiveEnd = receiveEndCapture_.take(
+        packet.receivedAtMicros, rxBytes & 0x7fU
+    );
+#endif
     std::array<std::uint8_t, kBytesWithStatus> received{};
     readBurst(kRxFifo, received.data(), received.size());
     for (std::size_t index = 0; index < packet.payload.size(); ++index) {
