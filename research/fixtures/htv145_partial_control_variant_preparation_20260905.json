@@ -1,0 +1,61 @@
+{
+  "date": "2026-09-05",
+  "scope": "Preparation only for one user-requested dry control test after an accepted 5/6 prefix. No physical trial result is recorded here.",
+  "stock_reference": "htv145_selector2_stock_pairing_control_20260905.json",
+  "earlier_local_reference": "htv145_stock_control_shape_20260905.json",
+  "firmware": {
+    "version": "0.15.4-htv145-pairing-counter2-candidate.22",
+    "sha256": "a5e762c7fcc1415fd7abd0ce227f71c34aaa5c4135b4e66483c44e07c6eaca65",
+    "restored_unchanged": true,
+    "fresh_authenticated_connection": true,
+    "pairing_disarmed": true
+  },
+  "redaction": "Frames use the stock fixture synthetic endpoints; physical radio and transaction identities are omitted.",
+  "comparison": {
+    "normalized_body_equal_indices": [
+      13,
+      35
+    ],
+    "earlier_local_open_residue": "c713",
+    "fresh_stock_open_residue": "4f03",
+    "meaning": "Untested trailer variant; not proof the earlier command was malformed or that this variant transfers between association branches."
+  },
+  "selected_open": {
+    "frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+    "sequence": 129,
+    "marker": 144,
+    "residue": "4f03",
+    "duration_seconds": 60,
+    "command_wake_symbols": 2400,
+    "physical_carrier_hz": 434351500,
+    "counter_status": "Assumed until a matching direct response"
+  },
+  "conditional_close": {
+    "frame": "79f4882f28b1c2d38fa1b2c380819081808100000000000000000000000000000000000036e5",
+    "sequence": 129,
+    "marker": 144,
+    "residue": "c713",
+    "after_open_seconds": 20,
+    "requires": "Positive matching immediate open response from this command",
+    "hypothesis": "Latest stock close marker/residue and same-open-counter behavior transferred to selector 6; counter 81 close was not observed in that stock session."
+  },
+  "observation_seconds_after_open": 105,
+  "maximum_logical_opens": 1,
+  "maximum_logical_closes": 1,
+  "terminal_pairing_required_for_this_dry_experiment": false,
+  "minimum_pairing_progress": 5,
+  "pairing_arm_requires_operator_readiness": true,
+  "verification": {
+    "stock_commands_reproduced_by_native_builders": 5,
+    "runner_cases_passed": 6,
+    "first_open_body_equal_to_earlier_local": true,
+    "earlier_local_open_residue": "c713",
+    "new_first_open_residue": "4f03",
+    "no_live_transmission": true,
+    "python_tests_passed": 432,
+    "optional_skips": 2,
+    "native_default_passed": true,
+    "native_counter2_passed": true
+  },
+  "physical_trial_performed": false
+}

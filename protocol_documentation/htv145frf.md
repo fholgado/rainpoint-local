@@ -354,12 +354,18 @@ body[0] = 0x80 | (sequence & 0x1f)
 body[2] = 0x82 open, 0x81 close
 ```
 
-Association branch markers are:
+The older stock captures supplied these marker combinations:
 
 | Profile | Open marker | Close marker |
 |---|---|---|
 | Selector 5 | `0x10` | `0x90` |
 | Selector 6 | `0x90` | `0x10` |
+
+These are observations, not fixed association rules. In the fresh September 5
+selector-2 session, the first open used `90`, later opens used `10`, and both
+explicit closes used `90`. The marker can change within one association; its
+full state rule remains unresolved. Explicit research probes can select it per
+command without changing the runtime's existing profile assumptions.
 
 Duration extension byte 21 is determined only by the packed duration value,
 not by this selector branch.
@@ -367,18 +373,23 @@ not by this selector branch.
 Both stock opens and closes use **2,400 alternating wake symbols** (2,399
 transitions before sync), about `135.36 ms` including the frame. Candidate
 `.15` used only 1,200 symbols; its earlier silence did not test the stock wake.
-The accepted selector-6 opens use trailer residue `c713`, while closes use
-`4f03`; preserve them separately in the association profile.
+The older accepted selector-6 opens use trailer residue `c713`, while closes
+use `4f03`. The fresh selector-2 opens instead use `4f03`, with `c713` closes.
+Retain the exact captured variant for each transaction; neither observation
+establishes a universal action-to-trailer mapping.
 
 One logical stock command is three byte-identical RF attempts at approximately
 `0`, `0.729210`, and `1.668479` seconds. The controller waits for a matching
 response; it does not issue repeated logical opens in rapid succession.
 
-An accepted open response advances the command sequence modulo the five-bit
-field; an accepted close retains it. The stock sequence is open `81`, close
-`82`, open `82`, close `83`. Only a passive stock command or a matching response to a
-pending local command can synchronize or advance that counter; periodic
-telemetry cannot.
+The older selector-6 sequence was open `81`, close `82`, open `82`, close `83`.
+The fresh selector-2 trace instead has open `81` with automatic stop, then open
+`82`/close `82` and open `83`/close `83`. A single "next sequence after open"
+value is therefore insufficient to choose both the next open and its early
+close across the observed branches. The existing helper embodies the older
+trace, so the isolated trial uses explicit fields rather than its convenience
+close. Only a passive stock command or matching response can authenticate a
+command counter; periodic telemetry cannot.
 
 Local command acceptance has not been demonstrated, so transmit is not exposed
 as supported functionality. Following the original `.15` trial, candidate `.16`
@@ -403,6 +414,34 @@ counter guesses, association state, and other command fields remain separate
 possible causes. Candidate `.18` recognizes the captured negative family,
 retains the frame in failure diagnostics, and stops its pending command without
 authenticating the counter. It changes no pairing payload, timing, or RF driver.
+
+The latest first stock 60-second open and the earlier local open have identical
+normalized bytes 13 through 35, including sequence `81`, marker `90` and
+duration `9e 00`. Their trailer residues differ: `4f03` stock versus `c713`
+local. This supplies an untested command variant for the user's requested 5/6
+control experiment. The successful stock command belongs to selector 2, while
+the accepted local prefix belongs to selector 6; transfer between these branches
+is a hypothesis, not proof that the earlier packet was malformed.
+
+The original `.22` binary has been restored unchanged. The prepared recorder
+retains one serial connection and continuous low-gain IQ across pairing and
+control. Current-command progress must reach at least 5/6 with stage-0 acceptance;
+after 15 seconds of continuation traffic, pairing transmission stops. A review
+of that capture then permits one 60-second open at sequence `81`, marker `90`,
+residue `4f03`, on the association's channel 12. A matching positive open reply
+permits an explicit close after 20 seconds, retaining sequence `81` and testing
+the fresh close marker `90`/residue `c713`. That close combination is also an
+explicit cross-branch hypothesis. There is no counter scan or repeated logical
+open, and recording continues for 105 seconds after the open to cover the timer
+and later idle evidence. Negative replies and silence remain separate outcomes.
+
+This is a user-authorized dry research experiment before terminal enrollment,
+not a supported HA transmit path. Native replay reproduced all five successful
+stock commands exactly. The recorder's real control block was exercised offline
+to reject insufficient progress, an armed radio, a stale pairing review, and a
+stale open response. Preparation evidence is retained in
+[`htv145_partial_control_variant_preparation_20260905.json`](../research/fixtures/htv145_partial_control_variant_preparation_20260905.json);
+the [canonical roadmap](../PROJECT_ROADMAP.md) records the physical gate.
 
 The read-only `tools/analyze_htv145_control_iq.py` separates commands, accepted
 responses, and negative replies, including wake histograms. The pairing analyzer's

@@ -1251,6 +1251,26 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       replacement was not reconfirmed; that qualification remains open.
 - [ ] Physically accept exactly one bounded local open on its evidenced carrier,
       with an immediate response or independent active-state fallback.
+  - [x] Prepare the user-requested 5/6 control experiment from the fresh stock
+        command evidence. Restore the exact `.22` artifact; preserve its pairing
+        prefix. The first stock 60-second open and earlier local attempt have
+        identical command bodies but different trailer residues (`4f03` versus
+        `c713`). Native builders reproduce all five fresh accepted commands.
+        A continuous pairing/control runner scopes progress and responses to
+        their own commands and rejects stale evidence; `.22` is connected and
+        disarmed with its sensor ACK assignment restored. Full Python suite:
+        432 passed, two optional skips; both relevant native suites passed.
+        Evidence: `htv145_partial_control_variant_preparation_20260905.json`.
+  - [ ] In one user-assisted `.22` attempt, verify at least the accepted 5/6
+        prefix and retain its continuation traffic, then disarm pairing and
+        review the capture. On the same uninterrupted radio session, send one
+        dry 60-second open with sequence `81`, marker `90`, residue `4f03` on
+        channel 12. If positively acknowledged, test an explicit close after
+        20 seconds using the same sequence and fresh close marker `90`/residue
+        `c713`; record through 105 seconds after open. This deliberately tests
+        control before step 6 under the user's dry-hardware authorization.
+        Cross-branch transfer of these fields is unproven. No counter scan,
+        repeat logical open or production exposure follows an ambiguous result.
 - [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware
       interval, durable counter progression, and restart without command replay.
 - [ ] Promote controls into HA only after the preceding physical gates pass.
