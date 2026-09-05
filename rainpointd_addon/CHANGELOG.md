@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.34.3 / Firmware 0.15.12
+
+- Persist the accepted HTV145 selector-6 control recipe, positive command counters,
+  one report-ACK owner and correlated revocation behind the dry-qualification gate.
+  Send daytime commands directly; morning readiness and restart recovery never
+  actuate. Unknown counters and overdue idle evidence remain explicit.
+- Decode family-82/86 reports and the result-3 flag-10 variant. Repeated session
+  summaries update history without overwriting current watering state.
+- Remove retired firmware experiments and fixed feature forks. Keep one build
+  environment and one isolated HTV145 option; preserve the `.22` RF recipe and
+  historical capture fixtures. Stock ACK replay passes; new on-air ACK and
+  restart acceptance remain qualification gates before HA control promotion.
+
 ## 0.34.2 / Integration 0.14.0 / Firmware 0.15.11
 
 - Use the existing known-idle authorization with a fresh link report for morning

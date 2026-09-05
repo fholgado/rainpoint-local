@@ -15,66 +15,36 @@ ROOT = Path(__file__).parent
 
 
 class AddonBoundaryTest(unittest.TestCase):
-    def test_selector2_build_requires_the_complete_isolated_profile(self):
-        build_script = ROOT / "firmware/rainpoint_bridge/tools/build_profile.py"
 
-        class BuildEnvironment:
+
+    def test_firmware_has_one_environment_and_one_htv145_qualification_option(self):
+        root = ROOT / "firmware/rainpoint_bridge"
+        self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))
+        class Environment:
             def Append(self, **kwargs):
                 self.defines = dict(kwargs["CPPDEFINES"])
-
         def build(values):
-            env = BuildEnvironment()
+            env = Environment()
             with patch.dict(os.environ, values, clear=True):
-                runpy.run_path(str(build_script), init_globals={
-                    "env": env, "Import": lambda name: None,
-                })
+                runpy.run_path(str(root / "tools/build_profile.py"), init_globals={"env": env, "Import": lambda _: None})
             return env.defines
-
-        flags = {
-            "RAINPOINT_SUPERVISED_HTV405_CONTROL": "0",
-            "RAINPOINT_RESEARCH_BENCH": "1",
-            "RAINPOINT_HTV145_PAIRING_CANDIDATE": "1",
-            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE": "1",
-            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE": "1",
-            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE": "1",
-            "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE": "1",
-            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE": "1",
-            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE": "2",
-        }
-        defines = build(flags)
-        self.assertEqual(2, defines["RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE"])
-        self.assertEqual(0, defines["RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE"])
-        self.assertIn("selector2-candidate.2", defines["RAINPOINT_FIRMWARE_VERSION"])
-        for missing in flags.keys() - {
-            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE",
-        }:
-            with self.subTest(missing=missing), self.assertRaises(ValueError):
-                build({key: value for key, value in flags.items() if key != missing})
-        for counter in ("1", "2"):
-            with self.subTest(counter=counter), self.assertRaises(ValueError):
-                build({**flags, "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE": counter})
-        defaults = build({})
-        self.assertEqual(0, defaults["RAINPOINT_HTV145_PAIRING_CANDIDATE"])
-        self.assertEqual(6, defaults["RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE"])
-
-    def test_htv145_dry_probe_is_explicit_and_does_not_authenticate_guess(self):
-        source = (
-            ROOT / "firmware/rainpoint_bridge/src/main.cpp"
-        ).read_text()
-        probe = source.split("bool handleHtv145DryOpenProbe(", 1)[1].split(
-            "void observeHtv145CandidateFrame", 1
-        )[0]
-        self.assertIn("!rfMaintenance.transmitAllowed()", probe)
-        self.assertIn("!wifiTransport.authenticated()", probe)
-        self.assertIn("fields != 8", probe)
-        self.assertIn("!closeProbe, closeProbe ? 0 : 60, true", probe)
-        self.assertRegex(source, r"validHtv145DryProbeDuration\(\s*watering, durationSeconds\)")
-        self.assertIn("htv145CommandIntervalElapsed(", source)
-        self.assertIn("commandMarkerInverted = marker != 0", probe)
-        self.assertNotIn("counterAuthenticated = true", probe)
-        self.assertIn(r'\"counter_assumed\":', source)
-        self.assertIn("counterAuthenticated = sequenceConfirmed", source)
-        self.assertIn("rainpoint::buildHtv145ControlFrame(", source)
+        self.assertEqual(0, build({})["RAINPOINT_HTV145_ENABLED"])
+        self.assertEqual(1, build({"RAINPOINT_HTV145_ENABLED": "1"})["RAINPOINT_HTV145_ENABLED"])
+        for values in [{"RAINPOINT_HTV145_ENABLED": "2"},
+                       {"RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE": "2"},
+                       {"RAINPOINT_RESEARCH_BENCH": "1"}]:
+            with self.assertRaises(ValueError):
+                build(values)
+        source = (root / "src/main.cpp").read_text()
+        for command in ("htv145_dry_open_probe", "htv145_dry_close_probe", "pairing_probe_b",
+                        "htv145_fifo_step4_calibration", "htv145_prelude_calibration"):
+            self.assertNotIn(command, source)
+        for capability in ("routine_ack_configure", "htv405_routine_ack_configure", "firmware_update_start",
+                           "htv145_control_open", "htv145_control_revoke"):
+            self.assertIn(capability, source)
+        self.assertIn("!htv145ControlCandidate.counterAuthenticated", source)
+        self.assertIn("!rfMaintenance.transmitAllowed()", source)
+        self.assertIn("!wifiTransport.authenticated()", source)
 
     def test_ha_valve_controls_expose_and_guard_synchronized_transactions(
         self,
@@ -175,267 +145,11 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn('type == "htv405_routine_ack_revoke"', command_boundary)
         self.assertIn("htv405_routine_ack_tx", source)
 
-    def test_firmware_has_one_standard_build_environment(self) -> None:
-        platformio = (
-            ROOT / "firmware" / "rainpoint_bridge" / "platformio.ini"
-        ).read_text()
-        self.assertEqual(1, platformio.count("[env:"))
-        self.assertIn("[env:rainpoint_bridge]", platformio)
-        self.assertIn("default_envs = rainpoint_bridge", platformio)
-        self.assertNotIn("single_bench", platformio)
-        self.assertNotIn("candidate]", platformio)
-        self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
-        build_profile = (
-            ROOT
-            / "firmware"
-            / "rainpoint_bridge"
-            / "tools"
-            / "build_profile.py"
-        ).read_text()
-        wifi_source = (
-            ROOT
-            / "firmware"
-            / "rainpoint_bridge"
-            / "src"
-            / "wifi_transport.cpp"
-        ).read_text()
-        self.assertIn(
-            'os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")',
-            build_profile,
-        )
-        self.assertIn(
-            '"RAINPOINT_SUPERVISED_HTV405_CONTROL", "1"',
-            build_profile,
-        )
-        self.assertIn(
-            'os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")',
-            build_profile,
-        )
-        self.assertIn('standard_version = "0.15.11"', build_profile)
-        self.assertIn(
-            'supervised_version = "0.15.11"',
-            build_profile,
-        )
-        self.assertIn(
-            'htv145_candidate_version = '
-            '"0.15.0-htv145-control-candidate.3"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.3-htv145-pairing-probe.25"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.3-htv145-pairing-tail-candidate.1"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.8"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.9"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.10"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.11"',
-            build_profile,
-        )
-        self.assertIn(
-            '"0.15.4-htv145-pairing-counter2-candidate.22"',
-            build_profile,
-        )
-        self.assertIn('firmware_variant = "unified"', build_profile)
-        self.assertIn(
-            'firmware_variant = "htv145-pairing-probe"',
-            build_profile,
-        )
-        self.assertIn("RAINPOINT_FIRMWARE_VARIANT", build_profile)
-        self.assertIn("RAINPOINT_FIRMWARE_VARIANT", wifi_source)
 
-    def test_htv145_post_frame_tail_is_research_only_and_bounded(self) -> None:
-        root = ROOT / "firmware" / "rainpoint_bridge"
-        build_profile = (root / "tools" / "build_profile.py").read_text()
-        main_source = (root / "src" / "main.cpp").read_text()
-        radio_source = (root / "src" / "cc1101.cpp").read_text()
-        radio_header = (root / "src" / "cc1101.h").read_text()
-        pairing_source = (
-            root / "include" / "rainpoint_htv145_pairing.h"
-        ).read_text()
-        wifi_source = (root / "src" / "wifi_transport.cpp").read_text()
 
-        self.assertIn(
-            '"RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            '"RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            '"RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            '"RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            '"RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both",
-            build_profile,
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE requires the HTV145",
-            build_profile,
-        )
-        self.assertIn('"RAINPOINT_RESEARCH_BENCH=1 and "', build_profile)
-        self.assertIn(
-            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1",
-            main_source,
-        )
-        self.assertIn("replyStep == 0", main_source)
-        self.assertIn("replyStep == 1", main_source)
-        self.assertIn("replyStep == 4", main_source)
-        self.assertIn(
-            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1",
-            main_source,
-        )
-        self.assertIn("kMaximumPrearmLeadUs = 20'000", main_source)
-        self.assertIn(
-            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1",
-            main_source,
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1",
-            main_source,
-        )
-        self.assertIn("configurationBuilt", main_source)
-        self.assertIn("radio.transmitFifoCalibration", main_source)
-        self.assertIn("postFrameLowHoldMicros > 500", radio_source)
-        self.assertIn("bool gaussianShaping = false", radio_header)
-        self.assertIn("gaussianShaping ? 0x12 : 0x02", radio_source)
-        self.assertIn("htv145_configuration_calibration", main_source)
-        self.assertIn("{0x45, false}", main_source)
-        self.assertIn("{0x44, true}", main_source)
-        self.assertIn(
-            "kStage0PostFrameLowHoldAdjustmentUs = 115",
-            pairing_source,
-        )
-        self.assertIn(
-            "kStep4PostFrameLowHoldAdjustmentUs = 115",
-            pairing_source,
-        )
-        self.assertIn(
-            "kStep1PostFrameLowHoldAdjustmentUs = 115",
-            pairing_source,
-        )
-        self.assertIn("htv145_post_frame_tail_candidate", wifi_source)
 
-    def test_htv145_synchronous_configuration_calibration_is_isolated(self) -> None:
-        root = ROOT / "firmware" / "rainpoint_bridge"
-        main_source = (root / "src" / "main.cpp").read_text()
-        radio_source = (root / "src" / "cc1101.cpp").read_text()
-        radio_header = (root / "src" / "cc1101.h").read_text()
 
-        self.assertIn("kPrimaryClockPin = 25", main_source)
-        self.assertIn("kPrimaryClockPin", main_source)
-        self.assertIn(
-            "htv145_synchronous_configuration_calibration", main_source
-        )
-        self.assertIn("transmitSynchronousCalibration", radio_header)
-        self.assertIn("transmitSynchronousCalibration", radio_source)
-        self.assertIn("writeRegister(kIocfg2, 0x0b)", radio_source)
-        self.assertIn("writeRegister(kPacketControl0, 0x12)", radio_source)
-        self.assertIn("writeRegister(kModemConfig2, 0x00)", radio_source)
-        self.assertIn("kSynchronousTxLatencyBits = 8", radio_source)
-        self.assertIn("writeRegister(kIocfg2, 0x2f)", radio_source)
-        self.assertIn("writeRegister(kIocfg2, 0x6f)", radio_source)
-        self.assertIn("clock_output_connected", main_source)
-        self.assertIn("sampled_clock_edges", main_source)
-        self.assertIn("main_state_after_stream", main_source)
-        self.assertIn("0xde, 0xad, 0xc0, 0xde", main_source)
-        self.assertIn("0xf0, 0x0d, 0xca, 0xfe", main_source)
 
-    def test_htv145_fifo_configuration_calibration_is_isolated(self) -> None:
-        root = ROOT / "firmware" / "rainpoint_bridge"
-        main_source = (root / "src" / "main.cpp").read_text()
-        radio_source = (root / "src" / "cc1101.cpp").read_text()
-        radio_header = (root / "src" / "cc1101.h").read_text()
-
-        self.assertIn("htv145_fifo_configuration_calibration", main_source)
-        self.assertIn("transmitFifoCalibration", radio_header)
-        self.assertIn("transmitFifoCalibration", radio_source)
-        self.assertIn("writeRegister(kPacketControl0, 0x02)", radio_source)
-        self.assertIn("strobe(kFlushTx)", radio_source)
-        self.assertIn("readStatus(kTxBytes)", radio_source)
-        self.assertIn("kMainStateTxFifoUnderflow", radio_source)
-        self.assertIn("fifo_refills", main_source)
-        self.assertIn("bytes_queued", main_source)
-
-    def test_htv145_fifo_step4_calibration_is_isolated(self) -> None:
-        root = ROOT / "firmware" / "rainpoint_bridge"
-        main_source = (root / "src" / "main.cpp").read_text()
-        radio_source = (root / "src" / "cc1101.cpp").read_text()
-
-        self.assertIn("htv145_fifo_step4_calibration", main_source)
-        self.assertIn("0x5e, 0xad, 0xc0, 0x8f", main_source)
-        self.assertIn("0xf0, 0x0d, 0xca, 0x80", main_source)
-        self.assertIn("rainpoint::kPairingWakeSymbols", main_source)
-        self.assertIn(
-            "rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs",
-            main_source,
-        )
-        self.assertIn("main_state_after_stream", main_source)
-        self.assertIn(
-            "(wakeSymbols != kPairingWakeSymbols && wakeSymbols != 2'400)",
-            radio_source,
-        )
-
-    def test_htv145_counter2_branch_is_research_only(self) -> None:
-        root = ROOT / "firmware" / "rainpoint_bridge"
-        build_profile = (root / "tools" / "build_profile.py").read_text()
-        pairing_source = (
-            root / "include" / "rainpoint_htv145_pairing.h"
-        ).read_text()
-        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
-
-        self.assertIn(
-            '"RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE", "0"',
-            build_profile,
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE requires both",
-            build_profile,
-        )
-        self.assertIn("kCounter2PairingTemplate", pairing_source)
-        self.assertIn("kTargetFactoryCounter", pairing_source)
-        self.assertIn(
-            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2", workflow
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1", workflow
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1", workflow
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1", workflow
-        )
-        self.assertIn(
-            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1", workflow
-        )
-        self.assertGreaterEqual(
-            workflow.count("RAINPOINT_SUPERVISED_HTV405_CONTROL=0"),
-            2,
-        )
 
     def test_htv405_control_uses_bounded_identical_frame_retries(self) -> None:
         source = (
@@ -471,12 +185,12 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("valve_pairing_tx_candidate", transport)
         self.assertIn("htv405_auto_identity_pairing", transport)
         self.assertIn(
-            "#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1",
+            "valve_control_tx_candidate",
             transport,
         )
         self.assertIn("valve_control_tx_candidate", transport)
         self.assertIn(
-            "#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1",
+            "valve_control_open",
             source,
         )
         self.assertIn('type == "valve_control_open"', source)
@@ -499,7 +213,7 @@ class AddonBoundaryTest(unittest.TestCase):
         boundary_check = (
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
-        self.assertIn("RAINPOINT_HTV145_PAIRING_CANDIDATE=1", workflow)
+        self.assertIn('RAINPOINT_HTV145_ENABLED: "1"', workflow)
         self.assertIn("--htv145-pairing", workflow)
         self.assertIn("HTV145_PAIRING_CAPABILITIES", boundary_check)
         self.assertIn('option == "--htv145-pairing"', boundary_check)
@@ -528,11 +242,10 @@ class AddonBoundaryTest(unittest.TestCase):
                 "*.py"
             )
         )
-        self.assertIn("RAINPOINT_HTV145_TX_CANDIDATE == 1", source)
+        self.assertIn("RAINPOINT_HTV145_ENABLED == 1", source)
         self.assertIn("htv145_control_candidate", source)
         self.assertIn(
-            "RAINPOINT_HTV145_TX_CANDIDATE requires "
-            "RAINPOINT_RESEARCH_BENCH=1",
+            'os.environ.get("RAINPOINT_HTV145_ENABLED", "0")',
             build_profile,
         )
         self.assertIn("htv145_dry_acceptance: false", config)

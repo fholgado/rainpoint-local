@@ -8,7 +8,7 @@
 #include <cstdint>
 
 #include "rainpoint_protocol.h"
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 #include "rainpoint_receive_edge.h"
 #endif
 
@@ -20,21 +20,12 @@ struct RadioPacket {
     std::int32_t frequencyOffsetHz = 0;
     std::uint8_t lqi = 0;
     std::uint32_t receivedAtMicros = 0;
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     ReceiveEndObservation receiveEnd{};
 #endif
 };
 
-struct SynchronousCalibrationDiagnostics {
-    bool clockOutputConnected = false;
-    bool synthesizerReady = false;
-    bool txStrobeAccepted = false;
-    std::uint32_t sampledClockEdges = 0;
-    std::uint8_t mainStateAfterStream = 0xff;
-    bool receiveConfigurationRestored = false;
-};
-
-struct FifoCalibrationDiagnostics {
+struct ClockedTransmitDiagnostics {
     bool synthesizerReady = false;
     bool txStrobeAccepted = false;
     std::uint32_t bytesQueued = 0;
@@ -76,36 +67,21 @@ public:
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45,
         std::uint32_t startAtMicros = 0,
-        std::uint16_t leadingPreludeSymbols = 0,
-        std::int8_t leadingFrequencyOffsetRegister = 0,
-        std::uint8_t leadingDeviationRegister = 0,
-        bool invertLeadingPrelude = false,
-        std::uint16_t postFrameLowHoldMicros = 0,
-        bool gaussianShaping = false
+        std::uint16_t postFrameLowHoldMicros = 0
     );
-    bool transmitSynchronousCalibration(
+    bool transmitClocked(
         const std::array<std::uint8_t, kFrameBytes>& frame,
         std::uint32_t centerFrequencyHz,
         std::uint16_t wakeSymbols,
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45,
         std::uint32_t startAtMicros = 0,
-        std::uint16_t postFrameLowHoldMicros = 0,
-        SynchronousCalibrationDiagnostics* diagnostics = nullptr
-    );
-    bool transmitFifoCalibration(
-        const std::array<std::uint8_t, kFrameBytes>& frame,
-        std::uint32_t centerFrequencyHz,
-        std::uint16_t wakeSymbols,
-        std::uint8_t paTableValue = 0x60,
-        std::uint8_t deviationRegister = 0x45,
-        std::uint32_t startAtMicros = 0,
-        FifoCalibrationDiagnostics* diagnostics = nullptr,
+        ClockedTransmitDiagnostics* diagnostics = nullptr,
         std::uint16_t postFrameLowHoldMicros = 0,
         std::uint16_t activeTailDelayUs = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     void setReceiveEndCapture(bool enabled);
 #endif
     void recoverReceive();
@@ -168,7 +144,7 @@ private:
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;
     std::uint32_t blockedTransmitCount_ = 0;
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     bool receiveEndCaptureEnabled_ = false;
     ReceiveEndCapture receiveEndCapture_;
 #endif

@@ -771,7 +771,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(20, restored._store.schema_version())
+            self.assertEqual(21, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1627,7 +1627,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(20, gateway.info()["storage_schema_version"])
+            self.assertEqual(21, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1638,7 +1638,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(20, migrated.info()["storage_schema_version"])
+            self.assertEqual(21, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -2909,6 +2909,39 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         )
         with urlopen(request, timeout=2) as response:
             return json.load(response)
+
+    def test_persistent_control_http_is_authenticated_and_uses_accepted_counter(self):
+        gateway = self.server.gateway
+        gateway.update_node(self.NODE_ID, capabilities=["rx", "htv145_control_tx_candidate", "htv145_report_ack_tx"])
+        now = datetime.now(timezone.utc)
+        payload = {
+            "profile": {"node_id": self.NODE_ID, "controller_endpoint": "b1c2d38f", "valve_endpoint": "a1b2c380",
+                "center_hz": 434398811, "power_dbm": 10, "invert": False,
+                "trailer_residual": 0x4f03, "close_trailer_residual": 0x4f03,
+                "command_marker_inverted": True, "report_ack_center_hz": 433518905},
+            "command_frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+            "response_frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+            "idle_frame": "79f4882f28a1b2c380b1c2d38f880107860580804f8000000040800056800000000000001473",
+            "exchange_observed_at": (now - timedelta(seconds=65)).isoformat(),
+            "idle_observed_at": (now - timedelta(seconds=1)).isoformat(),
+        }
+        prefix = "/api/v1/research/htv145-control/"
+        with self.assertRaises(HTTPError) as context:
+            self.post_json(prefix + "enroll", payload, token=None)
+        self.assertEqual(401, context.exception.code)
+        self.assertEqual([], self.commands)
+        result = self.post_json(prefix + "enroll", payload)
+        self.assertTrue(result["ready"])
+        self.assertEqual(0x82, result["next_sequence"])
+        self.commands.clear()
+        result = self.post_json(prefix + "morning-check", {"valve_endpoint": "a1b2c380"})
+        self.assertTrue(result["ready"])
+        self.assertEqual([], self.commands)
+        result = self.post_json(prefix + "open", {"valve_endpoint": "a1b2c380", "duration_seconds": 60})
+        self.assertEqual("pending_valve_evidence", result["state"])
+        self.assertEqual(0x82, result["command"]["expected_sequence"])
+        self.assertEqual("b1c2d38f", result["command"]["controller_endpoint"])
+        self.assertEqual(["htv145_control_open"], [command["type"] for _, command in self.commands])
 
     def test_one_shot_open_requires_auth_and_positive_valve_evidence(self) -> None:
         link = ValveLink(

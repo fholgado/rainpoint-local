@@ -6,13 +6,7 @@
 
 #include "rainpoint_pairing.h"
 
-#ifndef RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE
-#define RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE 0
-#endif
 
-#ifndef RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE
-#define RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE 6
-#endif
 
 namespace rainpoint {
 namespace htv145 {
@@ -22,115 +16,32 @@ namespace htv145 {
 // pairing profile, state machine, calibration, or reply builder.
 constexpr const char* kProfileId = "htv145_auto_candidate_v1";
 constexpr std::size_t kPairingStepCount = 6;
-constexpr std::uint8_t kTargetFactoryCounter =
-    RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE;
-static_assert(
-    kTargetFactoryCounter == 0 || kTargetFactoryCounter == 2,
-    "HTV145 research pairing supports only captured counter-0 or counter-2 branches"
-);
-constexpr std::uint8_t kAssignmentSelector =
-    RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE;
-static_assert(kAssignmentSelector == 6 ||
-              (kAssignmentSelector == 2 && kTargetFactoryCounter == 0),
-              "HTV145 selector 2 requires its captured counter-0 branch");
-constexpr bool kSelector2Branch = kAssignmentSelector == 2;
-constexpr std::uint8_t kAssignedChannel = 2 * kAssignmentSelector;
-// The generic pairing bound remains intentionally narrower for validated
-// sensors and HTV405. HTV145 uses a separately gated research image and its
-// capture-derived node calibration legitimately exceeds that shared bound.
+constexpr std::uint8_t kTargetFactoryCounter = 2;
+constexpr std::uint8_t kAssignmentSelector = 6;
+constexpr std::uint8_t kAssignedChannel = 12;
+// Frozen counter-2/selector-6 recipe from candidate .22. Five rows plus
+// operational controls passed on dry hardware. The terminal sixth row has
+// not been observed locally. Historical alternatives live in RF fixtures.
 constexpr std::int32_t kMaximumPairingFrequencyOffsetHz = 150'000;
-// Balanced-wake analysis of unclipped probe .22 and accepted stock IQ showed
-// that the local assignment was 35.370 kHz low relative to the valve's own
-// factory request oscillator. Probe .23 adds only that normalized correction
-// and the independently measured stock initial-deviation profile.
 constexpr std::int32_t kPairingFrequencyOffsetHz = 122'759;
-static_assert(
-    kPairingFrequencyOffsetHz <= kMaximumPairingFrequencyOffsetHz,
-    "HTV145 pairing calibration must remain inside its research-only bound"
-);
-// Three unused-address repeats match the fresh stock assignment carrier
-// after a selector-2-only +5,253 Hz correction; selector 6 stays frozen.
-constexpr std::uint32_t kInitialChannelCenterHz =
-    kSelector2Branch ? 433'506'719 : 433'501'466;
-// Counter-2 stage 0 is now physically proven and keeps the original initial
-// carrier. Direct balanced-wake measurement of the first two accepted local
-// assignments showed that the following stage-1 response landed 30.326 kHz
-// above the accepted stock response. Correct only the counter-2 routine leg;
-// the independent counter-0 research profile remains unchanged.
-constexpr std::uint32_t kRoutineChannelCenterHz =
-    kSelector2Branch ? 433'396'052
-        : kTargetFactoryCounter == 2 ? 434'276'052 : 434'306'378;
+constexpr std::uint32_t kInitialChannelCenterHz = 433'501'466;
+constexpr std::uint32_t kRoutineChannelCenterHz = 434'276'052;
 constexpr std::uint8_t kInitialDeviationRegister = 0x45;
 constexpr std::uint8_t kOrdinaryDeviationRegister = 0x45;
-// Retained only for the gated SDR calibration command. The live counter-0
-// selector-6 profile does not transmit this older selector-5 prelude.
-constexpr std::uint16_t kCounter0AssignmentPreludeSymbols = 256;
-constexpr std::uint8_t kCounter0AssignmentPreludeDeviationRegister = 0x42;
-// Stock emits a 2,400-symbol alternating wake. A lossless candidate-.5 IQ
-// capture recovered all 2,464 requested symbols and measured a 138.536 ms
-// burst, 3.175 ms longer than the accepted 135.361 ms stock burst. The older
-// apparent shortfall was therefore a clipped-capture measurement artifact.
-// Keep the exact stock wake count for every branch.
 constexpr std::uint16_t kConfigurationWakeSymbols = 2'400;
 constexpr std::uint32_t kConfigurationReplyDeadlineMs = 4'000;
-// Selector-2 delays use the fresh stock sync positions minus the request's
-// 304 symbols and the reply wake (320, or 2400 for configuration). These are
-// initial software deadlines; the live RX-to-RF offset remains a measured gate.
-constexpr std::uint32_t kAssignmentReplyStartDelayUs =
-    kSelector2Branch ? 46'550 : kTargetFactoryCounter == 2 ? 49'650 : 52'150;
-// Three independent accepted stock frames retain a low FSK tone until about
-// 160 us after the normalized frame. The existing CC1101 path naturally stays
-// on air for about 45 us after driving GDO0 low, so the isolated candidate adds
-// only the measured 115 us difference. This constant is inert unless the
-// separate research build flag is enabled.
+constexpr std::uint32_t kAssignmentReplyStartDelayUs = 49'650;
 constexpr std::uint16_t kStage0PostFrameLowHoldAdjustmentUs = 115;
-// The first lossless, unclipped candidate-.7 comparison measured only 31 us
-// of low-tone hold after the ordinary stage-1 reply versus 160.5 us stock.
-// Stage 0 already proved that this bounded 115 us correction is required for
-// HTV145 acceptance. Candidate .8 applies that same correction only to the
-// otherwise byte- and carrier-identical stage-1 reply.
 constexpr std::uint16_t kStep1PostFrameLowHoldAdjustmentUs = 115;
-// Candidate .10 proves that the FIFO-clocked long configuration is accepted:
-// the valve advances through the next two addressed requests. Its fifth local
-// reply is byte-, carrier-, wake-, and schedule-identical to stock, but the
-// captured burst ends about 130 us earlier and the valve never emits the stock
-// final 84/2c request. Candidate .11 matched the stock total duration within
-// 7.5 us but still stopped at the same boundary, so tail length alone was
-// insufficient. The constant remains part of the frozen profile while .12
-// isolates hardware-clocked FIFO transmission for zero-based step 4.
 constexpr std::uint16_t kStep4PostFrameLowHoldAdjustmentUs = 115;
-// FIFO underflow occurs only after the CC1101 has already stopped transmitting.
-// Candidate .13 proved that delaying in that state cannot extend the on-air
-// tail: both 207 us trials remained at 69 us. Restore receive immediately.
 constexpr std::uint16_t kStep4FifoPostFrameLowHoldAdjustmentUs = 0;
-// Three candidate-.20 unused-address captures measured 157--164 us of low
-// tone (stock 160.5 us) with stable FIFO edges. Candidate .21 applies this
-// active stop only to reply 4; the accepted earlier exchanges stay frozen.
-// Selector-2's new step-4 frame measured 156--156.5 us low tone at 905 us
-// (stock 159.5 us); the frozen selector-6 candidate retains 910 us.
-constexpr std::uint16_t kStep4FifoActiveTailDelayUs =
-    kSelector2Branch ? 905 : 910;
-// The accepted stock counter-2 configuration frame retains its final low FSK
-// tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
-// Apply the already proven stage-0 correction to the delayed configuration
-// boundary as well.
+constexpr std::uint16_t kStep4FifoActiveTailDelayUs = 910;
+constexpr std::uint32_t kStep1ReplyStartDelayUs = 68'700;
 constexpr std::uint16_t kConfigurationPostFrameLowHoldAdjustmentUs = 115;
-constexpr std::uint32_t kStep1ReplyStartDelayUs =
-    kSelector2Branch ? 70'000 : kTargetFactoryCounter == 2 ? 68'700 : 70'700;
-// Lossless candidate-.6 and stock captures both use an exact 2,400-symbol
-// configuration wake. Relative to the valve's addressed stage-1 request end,
-// the candidate frame began 2.650 ms later than stock. Remove only that
-// measured scheduling error from the isolated counter-2 branch; all accepted
-// stage-0 and ordinary stage-1 behavior remains unchanged.
-constexpr std::uint32_t kConfigurationReplyStartDelayUs =
-    kSelector2Branch ? 3'065'500
-        : kTargetFactoryCounter == 2 ? 2'848'400 : 3'054'850;
-constexpr std::uint32_t kStep3ReplyStartDelayUs =
-    kSelector2Branch ? 37'700 : kTargetFactoryCounter == 2 ? 53'300 : 35'750;
-constexpr std::uint32_t kStep4ReplyStartDelayUs =
-    kSelector2Branch ? 53'800 : kTargetFactoryCounter == 2 ? 52'550 : 52'000;
-constexpr std::uint32_t kStep5ReplyStartDelayUs =
-    kSelector2Branch ? 49'750 : kTargetFactoryCounter == 2 ? 47'500 : 47'200;
+constexpr std::uint32_t kConfigurationReplyStartDelayUs = 2'848'400;
+constexpr std::uint32_t kStep3ReplyStartDelayUs = 53'300;
+constexpr std::uint32_t kStep4ReplyStartDelayUs = 52'550;
+constexpr std::uint32_t kStep5ReplyStartDelayUs = 47'500;
 
 constexpr std::uint32_t replyStartDelayUs(std::size_t stepIndex) {
     return stepIndex == 0 ? kAssignmentReplyStartDelayUs
@@ -159,18 +70,6 @@ struct PairingProfile {
     std::array<PairingStep, kPairingStepCount> steps{};
 };
 
-// One coherent counter-0 / selector-6 transcript from the controlled
-// 2026-09-01 stock-gateway capture. Do not synthesize rows from HTV405 or from
-// the older selector-5/later-sweep experiments.
-constexpr std::array<PairingStep, kPairingStepCount> kCounter0PairingTemplate = {{
-    {{{0x80, 0x80, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x80, 0xc0, 0x85, 0x85, 0x00, 0x86, 0x70, 0x00, 0xf8, 0x65, 0x21, 0x0d, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kInitialChannelCenterHz, kInitialDeviationRegister, true},
-    {{{0x81, 0x01, 0x07, 0x86, 0x25, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0x41, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
-    {{{0x81, 0x82, 0x81, 0x06, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x82, 0x03, 0x01, 0x86, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-}};
-
 // Complete counter-2 / selector-6 transcript from the controlled
 // button-first stock enrollment. It is a coherent branch: counters, reply
 // residues, and response timing are retained together rather than mixed with
@@ -182,18 +81,6 @@ constexpr std::array<PairingStep, kPairingStepCount> kCounter2PairingTemplate = 
     {{{0x83, 0x02, 0x81, 0x06, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x83, 0x42, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x83, 0x83, 0x01, 0x86, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x83, 0xc3, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
     {{{0x84, 0x2c, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x84, 0x6c, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-}};
-
-// Complete counter-0 / selector-2 transcript from the successful September 5
-// stock pairing. Keep its request bodies, clock markers, channel and residues
-// together. The assignment's byte 25 remains the captured, uninterpreted 0x03.
-constexpr std::array<PairingStep, kPairingStepCount> kSelector2PairingTemplate = {{
-    {{{0x80, 0x80, 0x84, 0x02, 0xff, 0x8f, 0x97, 0x00, 0x80, 0xbf, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x80, 0xc0, 0x85, 0x85, 0x00, 0x82, 0x70, 0x00, 0xd7, 0xee, 0xa5, 0x0d, 0x03, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0xc713, kInitialChannelCenterHz, kInitialDeviationRegister, true},
-    {{{0x81, 0x01, 0x07, 0x82, 0x25, 0x80, 0x80, 0x4f, 0x80, 0x00, 0x00, 0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0x41, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x81, 0x50, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, false, 0x0000, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, false},
-    {{{0x81, 0x82, 0x81, 0x02, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x81, 0xc2, 0x87, 0x80, 0x2c, 0x01, 0x05, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x82, 0x03, 0x01, 0x82, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0x43, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
-    {{{0x82, 0xac, 0x80, 0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, {{0x82, 0xec, 0x81, 0x80, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, true, 0x4f03, kRoutineChannelCenterHz, kOrdinaryDeviationRegister, true},
 }};
 
 inline bool buildProfile(
@@ -212,10 +99,7 @@ inline bool buildProfile(
     profile.pairedEndpoint[0] |= 0x80U;
     profile.controllerEndpoint = controllerEndpoint;
     profile.companionEndpoint = companionEndpoint;
-    profile.steps = kSelector2Branch ? kSelector2PairingTemplate
-        : kTargetFactoryCounter == 2
-        ? kCounter2PairingTemplate
-        : kCounter0PairingTemplate;
+    profile.steps = kCounter2PairingTemplate;
     return true;
 }
 
@@ -282,32 +166,16 @@ inline bool buildReply(
             (static_cast<std::uint16_t>(localClock.month) << 5) |
             localClock.day
         );
-        // Selector 6 retains the separately captured counter-0/counter-2
-        // clock masks. The fresh selector-2 transcript sets bit 7 in both
-        // time bytes and date-low. Preserve those masks with the live clock.
+        // Preserve the accepted counter-2 clock overlays with the live clock.
         const std::uint8_t packedTimeLow = static_cast<std::uint8_t>(
             packedTime
         );
         const std::uint8_t packedTimeHigh = static_cast<std::uint8_t>(
             packedTime >> 8
         );
-        if (kSelector2Branch) {
-            frame[21] = static_cast<std::uint8_t>(packedTimeLow | 0x80U);
-            frame[22] = static_cast<std::uint8_t>(packedTimeHigh | 0x80U);
-        } else if (kTargetFactoryCounter == 2) {
-            frame[21] = packedTimeLow;
-            frame[22] = static_cast<std::uint8_t>(
-                (packedTimeHigh & 0x7fU) | 0x80U
-            );
-        } else {
-            frame[21] = static_cast<std::uint8_t>(
-                (packedTimeLow & 0x7fU) | 0x80U
-            );
-            frame[22] = packedTimeHigh;
-        }
-        frame[23] = static_cast<std::uint8_t>(
-            packedDate | (kSelector2Branch || kTargetFactoryCounter == 2 ? 0x80U : 0x00U)
-        );
+        frame[21] = packedTimeLow;
+        frame[22] = static_cast<std::uint8_t>((packedTimeHigh & 0x7fU) | 0x80U);
+        frame[23] = static_cast<std::uint8_t>(packedDate | 0x80U);
         frame[24] = static_cast<std::uint8_t>(packedDate >> 8);
     }
     writeTrailer(frame, profile.steps[stepIndex].trailerResidual);

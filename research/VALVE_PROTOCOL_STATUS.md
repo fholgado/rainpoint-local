@@ -30,12 +30,12 @@ this document preserves the physical evidence behind their support status.
 | Receive/state decode | Confirmed | Confirmed |
 | Duration decode | Confirmed two-byte biased requested/remaining counters; command construction across the low-byte bit-7 boundary remains unresolved | Confirmed for whole-minute commands |
 | Zone selection | Confirmed for Zones 1--4; association-profile-specific packing | One zone |
-| Local new enrollment | 18-step exchange physically reproduced | Not yet reproduced locally |
-| Local bounded open | Physically confirmed on Zones 1--4 | Corrected 2,400-symbol dry open unconfirmed; close probes returned result 3 |
-| Immediate command response | Physically confirmed | Stock response structure and timing confirmed |
-| Independent state fallback | Physically confirmed | Stock behavior confirmed |
-| Automatic stop | Physically confirmed | Stock behavior confirmed; local acceptance pending |
-| Early stop | Locally confirmed on Zone 1; stock-cloud confirmed on all zones | Frame family decoded; local acceptance pending |
+| Local new enrollment | 18-step exchange physically reproduced | Accepted 5/6 prefix; operational authority proven; terminal sixth row absent |
+| Local bounded open | Physically confirmed on Zones 1--4 | Two 60-second dry opens accepted on first RF attempt after 5/6 |
+| Immediate command response | Physically confirmed | Three positive local command replies confirmed |
+| Independent state fallback | Physically confirmed | Local watering and idle reports confirmed |
+| Automatic stop | Physically confirmed | Local timer stop confirmed by idle after 61.900415 seconds |
+| Early stop | Locally confirmed on Zone 1; stock-cloud confirmed on all zones | Local active close confirmed; independent idle followed 6.142533 seconds later |
 | Battery | Unknown in RF; HA must remain unavailable | Categorical normal/low bit confirmed |
 | Battery-cycle rejoin | Unresolved | Unresolved |
 
@@ -240,3 +240,19 @@ traffic can do so.
 4. Correlate a controlled HTV405 normal-to-low battery transition.
 5. Repeat association/control acceptance on another specimen before promoting
    HTV405 control from beta or enabling a Home Assistant migration flow.
+
+## HTV145 persistent control and report ACK implementation
+
+The September 5 local evidence is retained in
+`fixtures/htv145_partial_pairing_control_acceptance_20260905.json`. Gateway 0.34.3
+persists the accepted selector-6 recipe and command reservations, advances counters
+only on positive matched replies, restores without replay and checks morning
+readiness without the unproven HTV405 close-zero anchor. The protected research
+control route remains distinct from supported Home Assistant actuation.
+
+Firmware `0.15.12-htv145-control.1` implements report/summary ACKs with one persisted
+gateway owner and correlated revocation. Python and native builders reproduce ten
+stock ACK pairs. The fixed 40 ms post-reception ACK timing and association-specific
+calibrated carrier still require a live qualification recording; software replay
+is not physical ACK-cycle acceptance. CRC-valid result-3 variants `00` and `10`
+remain negative. Historical summary retries never establish current idle state.

@@ -1281,15 +1281,30 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       interval, durable counter progression, and restart without command replay.
   - [x] Observe automatic stop and active early stop on the dry `.22` association
         using independent RF replies and idle reports, as recorded above.
-  - [ ] Persist and restore the evidenced selector-6 control profile: 2,400 wake
+  - [x] Implement persistence/restoration of the evidenced selector-6 profile: 2,400 wake
         symbols, open marker `90`, close marker `10`, residue `4f03` for both,
         and incremented close counter. Keep it distinct from selector-2 evidence.
-        Prove repeat commands, durable counter state and no replay after restart.
-  - [ ] Complete HTV145 report/summary ACK handling with one persistent owner.
+        Gateway 0.34.3 implements direct commands, durable reservations, restart
+        without replay and observation-only morning readiness. Recorded exchange,
+        HTTP/TCP, ownership and overdue-anomaly regression tests cover this path.
+        Repeat live commands across restart remain a physical qualification gate.
+  - [x] Implement HTV145 report/summary ACK handling with one persistent owner.
         Unacknowledged 60-second summaries repeated during the second run and
         cannot be used as new elapsed-duration evidence. Preserve the captured
-        family-`86` reports and result-3 byte-17-`10` variant in read-only decoder
-        tests; current `85`/`00` recognizers miss them without granting control.
+        family-`86` reports and result-3 byte-17-`10` variant in decoder tests.
+        Both implementations reproduce ten stock ACKs. Summary retries do not
+        change current watering state; owner reassignment requires a correlated
+        revocation reply. No negative reply authenticates a counter.
+  - [ ] Physically qualify the cleaned image's report/summary ACK timing/residue,
+        repeated operational commands and counter restore across node/gateway
+        restart on dry hardware; preserve `.22` as the rollback baseline.
+  - [x] Retire obsolete firmware feature/timing forks, selector-2/counter-0
+        executable recipes, shifted/GFSK/synchronous probes and raw serial TX.
+        Keep one PlatformIO environment and one HTV145 qualification option;
+        retain historical RF fixtures and native tests for the frozen recipe.
+        Validation: 438 Python tests (two optional skips), 17 NumPy waveform
+        tests, both native protocol suites, production and isolated PlatformIO
+        builds, both binary boundaries and the verified production manifest.
   - [ ] Repeat operational acceptance on fresh user-assisted associations and
         define HA enrollment completion from valve-originated operational proof,
         while retaining an honest distinction from the incomplete six-step

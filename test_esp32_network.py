@@ -1965,6 +1965,7 @@ class ESP32NetworkTest(unittest.TestCase):
                 "rx",
                 "sensor_pairing_tx",
                 "htv145_control_tx_candidate",
+                "htv145_report_ack_tx",
             ],
         )
         self.assertEqual("node_authenticated", response["type"])
@@ -1991,6 +1992,8 @@ class ESP32NetworkTest(unittest.TestCase):
                 "duration_seconds": 600,
             },
         ]
+        commands.append({"type": "htv145_control_revoke", "command_id": "74" * 16,
+            "controller_endpoint": "b42d008f", "valve_endpoint": "b9840280"})
         for command in commands:
             self.server.send_command(NODE_A, command)
             self.assertEqual(command, json.loads(stream.readline()))

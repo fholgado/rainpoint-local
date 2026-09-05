@@ -1787,7 +1787,7 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
             [item["event"] for item in report["audit"]],
         )
 
-    def test_terminal_summary_is_independent_automatic_idle_evidence(self) -> None:
+    def test_terminal_summary_never_overwrites_current_watering(self) -> None:
         self.coordinator.request_open(
             self.profile,
             duration_seconds=600,
@@ -1803,7 +1803,8 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
             self.TERMINAL_IDLE,
             observed_at="2026-08-24T12:10:20+00:00",
         )
-        self.assertFalse(state["confirmed_watering"])
+        self.assertTrue(state["confirmed_watering"])
+        self.assertIsNotNone(state["expected_idle_at"])
         self.assertEqual(0x82, state["next_sequence"])
 
     def test_candidate_response_updates_the_acceptance_verdict(self) -> None:
@@ -1874,3 +1875,159 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Htv145RuntimeTest(unittest.TestCase):
+    def setUp(self):
+        from rainpointd.htv145_runtime import Htv145Runtime
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.addCleanup(lambda: self.store.close())
+        self.sent = []
+        self.coordinator = Htv145ControlCoordinator(store=self.store,
+            sender=lambda node, command: self.sent.append((node, command)), enabled=True)
+        self.node = {"connected": True, "authenticated": True, "tx_armed": False,
+            "connected_at": "connection-1", "firmware_version": "test",
+            "capabilities": ["htv145_control_tx_candidate", "htv145_report_ack_tx"]}
+        self.runtime = Htv145Runtime(self.coordinator, lambda _: self.node)
+        self.profile = Htv145ControlProfile(node_id="rp-001122334455",
+            controller_endpoint="b1c2d38f", valve_endpoint="a1b2c380",
+            center_hz=434398811, power_dbm=10, invert=False,
+            trailer_residual=0x4f03, close_trailer_residual=0x4f03,
+            command_marker_inverted=True, report_ack_center_hz=433518905)
+        self.fixture = json.loads((ROOT / "research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json").read_text())
+        self.open_frame = bytes.fromhex("79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b")
+        self.response = bytes.fromhex("79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2")
+        reports = self.fixture["control_trials"][0]["reports"]
+        self.watering = bytes.fromhex(reports[0]["frame"])
+        self.idle = bytes.fromhex(reports[4]["frame"])
+        self.summary = bytes.fromhex(reports[7]["frame"])
+
+    def enroll(self):
+        return self.runtime.enroll(self.profile, command=self.open_frame, response=self.response,
+            idle=self.idle, exchange_at="2026-09-05T12:00:00+00:00",
+            idle_at="2026-09-05T12:01:03+00:00", now="2026-09-05T12:01:05+00:00")
+
+    def test_positive_exchange_enrollment_restores_only_configuration_and_counter(self):
+        result = self.enroll()
+        self.assertTrue(result["ready"])
+        self.assertEqual(0x82, result["next_sequence"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"], [c["type"] for _, c in self.sent])
+        self.assertEqual(0x4f03, self.sent[0][1]["close_trailer_residual"])
+        self.assertEqual(433518905, self.sent[0][1]["report_ack_center_hz"])
+        self.sent.clear()
+        self.node["connected_at"] = "connection-2"
+        self.runtime.tick(now="2026-09-05T12:02:00+00:00")
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"], [c["type"] for _, c in self.sent])
+        self.assertEqual(0x82, self.sent[-1][1]["next_sequence"])
+
+    def test_direct_command_and_summary_retry_leave_counter_and_current_state_intact(self):
+        self.enroll(); self.sent.clear()
+        command = self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        self.assertEqual(["htv145_control_open"], [c["type"] for _, c in self.sent])
+        self.assertEqual(0x82, command["expected_sequence"])
+        # A repeated previous session summary is not evidence for this command.
+        self.runtime.observe_frame(self.summary, now="2026-09-05T12:02:01+00:00")
+        self.assertEqual(command["command_id"], self.store.htv145_control_states()[0]["pending_command_id"])
+        response = bytearray(self.response); response[13] = 0x82
+        response[-2:] = (binascii.crc_hqx(response[:-2], 0) ^ 0xc713).to_bytes(2, "big")
+        self.runtime.observe_frame(bytes(response), now="2026-09-05T12:02:02+00:00")
+        self.runtime.observe_frame(self.summary, now="2026-09-05T12:02:03+00:00")
+        state = self.store.htv145_control_states()[0]
+        self.assertTrue(state["confirmed_watering"])
+        self.assertEqual(0x83, state["next_sequence"])
+        self.runtime.observe_frame(self.idle, now="2026-09-05T12:03:03+00:00")
+        self.assertEqual(0x83, self.store.htv145_control_states()[0]["next_sequence"])
+
+    def test_restart_timeout_and_overdue_watchdog_are_observation_only(self):
+        from rainpointd.htv145_runtime import Htv145Runtime
+        self.enroll()
+        self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        self.sent.clear()
+        self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.coordinator = Htv145ControlCoordinator(store=self.store,
+            sender=lambda n, c: self.sent.append((n, c)), enabled=True)
+        self.runtime = Htv145Runtime(self.coordinator, lambda _: self.node)
+        self.runtime.tick(now="2026-09-05T12:02:05+00:00")
+        self.assertEqual([], self.sent)
+        self.runtime.tick(now="2026-09-05T12:03:31+00:00")
+        result = self.runtime.status(self.profile, now="2026-09-05T12:03:31+00:00")
+        self.assertFalse(result["ready"])
+        self.assertTrue(result["recovery_required"])
+        self.assertEqual("expected_idle_not_observed", result["anomaly"])
+        self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.sent])
+
+    def test_morning_check_preserves_known_counter_without_an_idle_close_probe(self):
+        self.enroll(); self.sent.clear()
+        status = self.runtime.status(self.profile, now="2026-09-06T09:30:00+00:00")
+        self.assertFalse(status["ready"])
+        self.assertTrue(status["counter_synchronized"])
+        self.assertFalse(status["fresh_state"])
+        self.assertEqual([], self.sent)
+        self.runtime.observe_frame(self.idle, now="2026-09-06T09:30:01+00:00")
+        self.assertTrue(self.runtime.status(self.profile, now="2026-09-06T09:30:02+00:00")["ready"])
+        self.assertEqual([], self.sent)
+
+    def test_revoke_requires_correlated_owner_confirmation_before_reassignment(self):
+        self.enroll(); self.sent.clear()
+        self.runtime.revoke(self.profile)
+        message = {"type": "htv145_control_candidate", "node_id": self.profile.node_id,
+            "state": "revoked", "controller_endpoint": self.profile.controller_endpoint,
+            "valve_endpoint": self.profile.valve_endpoint, "command_id": "old-revocation"}
+        self.runtime.observe_node(self.profile.node_id, message, now="2026-09-05T12:02:00+00:00")
+        self.assertEqual(1, len(self.runtime.profiles()))
+        with self.assertRaisesRegex(RuntimeError, "revocation"):
+            self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:01+00:00")
+        message["command_id"] = self.sent[-1][1]["command_id"]
+        self.runtime.observe_node(self.profile.node_id, message, now="2026-09-05T12:02:02+00:00")
+        self.assertEqual([], self.runtime.profiles())
+
+    def test_invalid_exchange_or_foreign_idle_cannot_persist_an_owner(self):
+        for response, idle in [(self.summary, self.idle), (self.response, self.watering)]:
+            with self.assertRaises(ValueError):
+                self.runtime.enroll(self.profile, command=self.open_frame, response=response,
+                    idle=idle, exchange_at="2026-09-05T12:00:00+00:00",
+                    idle_at="2026-09-05T12:01:03+00:00", now="2026-09-05T12:01:05+00:00")
+            self.assertEqual([], self.store.htv145_control_states())
+        self.assertEqual([], self.sent)
+
+    def test_all_stock_acknowledgments_match_without_using_command_sequence(self):
+        from rainpointd.valve_protocol import build_htv145_report_ack
+        stock = json.loads((ROOT / "research/fixtures/htv145_selector2_stock_pairing_control_20260905.json").read_text())
+        for report in stock["valve_reports"]:
+            ack = min(stock["gateway_report_acknowledgments"], key=lambda a: abs(a["sync_seconds"] - report["sync_seconds"]))
+            self.assertEqual(bytes.fromhex(ack["frame"]), build_htv145_report_ack(
+                bytes.fromhex(report["frame"]), self.profile.link, int(ack["residue"], 16)))
+        for frame in [self.open_frame, self.response, bytes(38)]:
+            with self.assertRaises(ValueError):
+                build_htv145_report_ack(frame, self.profile.link, 0x4f03)
+
+    def test_new_flag10_result3_does_not_confirm_idle_or_a_counter(self):
+        self.enroll()
+        self.coordinator.request_close(self.profile, started_at="2026-09-05T12:02:00+00:00")
+        body = bytes.fromhex("508683104f8000000040800056800000000000000000")
+        frame = bytearray(self.response); frame[13] = 0x82; frame[14:36] = body
+        frame[-2:] = (binascii.crc_hqx(frame[:-2], 0) ^ 0xc713).to_bytes(2, "big")
+        self.runtime.observe_frame(bytes(frame), now="2026-09-05T12:02:01+00:00")
+        state = self.store.htv145_control_states()[0]
+        self.assertFalse(state["counter_synchronized"])
+        self.assertEqual("2026-09-05T12:01:03+00:00", state["confirmed_at"])
+        self.assertEqual("negative_command_result_3", state["last_result"])
+
+
+    def test_close_when_freshly_idle_preserves_counter_without_transmitting(self):
+        self.enroll(); self.sent.clear()
+        result = self.runtime.request(self.profile, "close", now="2026-09-05T12:02:00+00:00")
+        self.assertEqual("already_idle", result["reason"])
+        self.assertEqual([], self.sent)
+        self.assertTrue(self.store.htv145_control_states()[0]["counter_synchronized"])
+
+    def test_legacy_acceptance_cannot_replace_a_persistent_ack_owner(self):
+        self.enroll(); self.sent.clear()
+        with self.assertRaisesRegex(RuntimeError, "revoke"):
+            self.coordinator.configure(replace(self.profile, report_ack_center_hz=None),
+                observed_at="2026-09-05T12:02:00+00:00")
+        self.assertEqual(433518905, self.store.htv145_control_states()[0]["report_ack_center_hz"])
+        self.assertEqual([], self.sent)

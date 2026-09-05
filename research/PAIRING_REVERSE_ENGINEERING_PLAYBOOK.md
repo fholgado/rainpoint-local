@@ -11,7 +11,8 @@ Pairing progress is established only by the physical device:
 
 1. A device-originated request for the next stage proves the previous gateway
    response was accepted.
-2. Ordinary paired telemetry on the new route proves terminal enrollment.
+2. Ordinary paired telemetry proves the assigned route is in use; distinguish
+   operational association from completion of every stock enrollment row.
 3. An authenticated control response additionally proves command authority for
    a valve.
 4. An app result or distinctive LED is useful corroboration.
@@ -161,23 +162,55 @@ This is substantial progress even though HTV145 enrollment is not finished:
 the valve now responds to the custom gateway, and subsequent failures identify
 a specific stage instead of collapsing into silent assignment rejection.
 
-## Current HTV145 next test
+## HTV145 operational proof after 5/6 — September 5
 
-Candidate `.4` preserves the accepted assignment and ordinary stage-1 reply.
-It adds 64 expendable leading wake symbols only to the counter-2 delayed
-configuration, predicting an on-air duration near the stock 135.361 ms. It is
-installed on the OTA test node but has not received a physical verdict.
+The `.22` counter-2/selector-6 recipe reached five of six transcript rows and
+showed the white LED. Without another valve pairing gesture, local open
+`81/90/4f03` was accepted on the first RF attempt. Independent idle followed
+61.900415 seconds later. A second `82/90/4f03` open and active `83/10/4f03`
+close were also positively acknowledged; the close was issued 20.476064 seconds
+after open and independent idle followed 6.142533 seconds later. These observations
+prove usable command authority on that partial association. They do not prove
+the absent sixth row or repeatability across fresh associations.
 
-Success requires all three observations:
+The retained evidence is
+[`htv145_partial_pairing_control_acceptance_20260905.json`](fixtures/htv145_partial_pairing_control_acceptance_20260905.json).
+It records test-radio restarts and recorder rollovers: the valve association
+remained unchanged, but uninterrupted recording is not claimed.
 
-1. no repeated stage-1 request;
-2. valve-originated `81 50` configuration response;
-3. the next addressed stage-3 request.
+Use the accepted recipe as a unit: 2,400-symbol command wake; open marker `90`;
+close marker `10`; both action residues `4f03`; accepted opens increment the
+command counter and accepted closes retain it. The fresh stock selector-2 trace
+has different marker/counter behavior and must not supply individual values for
+this selector-6 recipe. The `.22` firmware binary/hash is the rollback baseline;
+old timing switches and selector alternatives are no longer executable profiles.
 
-If the duration matches stock but those events remain absent, revert the wake
-compensation and compare configuration-specific polarity, post-frame tail, and
-CC1101 long-burst termination. Do not reopen the frozen assignment or ordinary
-stage-1 carrier.
+After an authorized pairing attempt, include bounded watering in the capture
+procedure: verify the prefix against that attempt's command ID, stop/disarm
+pairing, start one 60-second dry run, observe a positive immediate response and
+independent watering, then capture automatic idle. Test early close in a second
+bounded run after the minimum 15-second interval. Never count local TX logs or
+an idle-looking result-3 reply as control acceptance. A result-3 reply with
+byte 17 `10` is now also recognized as negative; its general meaning is unresolved.
+
+Capture both ordinary reports and session-summary retries. Family bytes `82`,
+`85` and `86` are evidenced. A summary can repeat during a later run, so it may
+update last-session usage/duration and receive an ACK, but never current watering
+state or the next command counter. Stock ACKs echo report byte 13, OR byte 14 with
+`40`, reverse the association routes and use `01 00 01` for state reports or
+`00 80 00` for summaries. Ten complete golden pairs exercise both builders.
+A locally emitted ACK still needs a subsequent valve reaction/on-air recording
+before claiming ACK-cycle acceptance.
+
+The persistent runtime imports a matching positive command/response exchange and
+fresh independent idle evidence, separately from pairing completion. It restores
+configuration and authenticated counters, sends daytime commands directly, and
+requires correlated owner revocation before reassignment. Morning readiness is
+observation-only for HTV145: do not borrow HTV405's idle-close-zero RF anchor.
+Counter ambiguity blocks commands until new positive evidence is available.
+The management interface and qualification boundary are described in the
+[HTV145 protocol document](../protocol_documentation/htv145frf.md); live acceptance
+status remains only in the [roadmap](../PROJECT_ROADMAP.md).
 
 ## Minimum onboarding checklist for the next device
 

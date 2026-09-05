@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.34.2 supports authenticated network radio nodes, receive-only USB
+Version 0.34.3 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -416,3 +416,16 @@ after a matching valve response or accepted state report. Restart, missing
 telemetry, and client loss never emit a speculative command. USB access is used
 only by `rtl_433` or the serial bridge. The read-only share mapping supports an
 optional external device catalog and cannot be used to write raw captures.
+
+## HTV145 persistent dry qualification
+
+With `htv145_dry_acceptance` explicitly enabled and an isolated radio advertising
+`htv145_report_ack_tx`, the protected `/api/v1/research/htv145-control/` route can
+persist the accepted selector-6 recipe, import positive exchange/idle evidence,
+and issue bounded direct open/close commands. One persisted owner handles report
+and summary ACKs; changing it requires the exact revocation reply. Restart and
+morning readiness checks do not send actuator commands. Routine telemetry cannot
+reseed the command counter and repeated summaries cannot change current watering.
+The new ACK timing still requires on-air qualification before HA control promotion.
+See the [protocol interface](../protocol_documentation/htv145frf.md) for input
+fields and the [roadmap](../PROJECT_ROADMAP.md) for hardware qualification status.

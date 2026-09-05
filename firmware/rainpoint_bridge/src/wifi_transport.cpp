@@ -1,7 +1,5 @@
 #include "wifi_transport.h"
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 #include "rainpoint_valve_control.h"
-#endif
 
 #include <Esp.h>
 #include <esp_system.h>
@@ -273,25 +271,19 @@ void WifiTransport::handleGatewayLine(const String& line) {
         (type == "pairing_start" || type == "pairing_cancel" ||
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
          || type == "htv145_control_configure" ||
              type == "htv145_control_sync" ||
              type == "htv145_control_open" ||
              type == "htv145_control_close" ||
              type == "htv145_control_status"
 #endif
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
          || isHtv405NetworkCommand(type.c_str())
-#endif
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
          || type == "routine_ack_configure" ||
              type == "routine_ack_revoke" ||
              type == "htv405_routine_ack_configure" ||
              type == "htv405_routine_ack_revoke"
-#endif
-#if RAINPOINT_OTA_CANDIDATE == 1
          || type == "firmware_update_start"
-#endif
         )) {
         if (pendingCommandCount_ == pendingCommands_.size()) {
             reportNetworkState("protocol_error", "command_queue_full");
@@ -320,39 +312,24 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"mode\":\"local_radio_node\","
         "\"hardware_profile\":\"esp32dev-cc1101-v1\","
         "\"firmware_variant\":\"%s\","
-#if RAINPOINT_OTA_CANDIDATE == 1
         "\"firmware_channel\":\"experimental\","
-#else
-        "\"firmware_channel\":\"stable\","
-#endif
         "\"gateway_host\":\"%s\","
         "\"capabilities\":[\"rx\",\"sensor_pairing_tx\",\"identify\","
         "\"configurable_rf_controller_identity\","
         "\"rf_maintenance\",\"node_reboot\""
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         ",\"valve_control_tx_candidate\""
         ",\"htv405_bounded_sync_wait\""
+#if RAINPOINT_HTV145_ENABLED == 1
+        ",\"htv145_control_tx_candidate\",\"htv145_report_ack_tx\""
 #endif
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
-        ",\"htv145_control_tx_candidate\""
-#endif
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         ",\"valve_pairing_tx_candidate\""
         ",\"htv405_auto_identity_pairing\""
-#endif
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         ",\"htv145_pairing_tx_candidate\""
 #endif
-#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1
-        ",\"htv145_post_frame_tail_candidate\""
-#endif
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
-#endif
-#if RAINPOINT_OTA_CANDIDATE == 1
         ",\"firmware_update_trial\""
-#endif
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,

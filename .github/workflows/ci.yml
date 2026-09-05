@@ -44,18 +44,10 @@ jobs:
             firmware/rainpoint_bridge/tests/protocol_test.cpp \
             -o /tmp/rainpoint-protocol-test
           /tmp/rainpoint-protocol-test
-          c++ -std=c++17 \
-            -DRAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
-            -Ifirmware/rainpoint_bridge/include \
+          c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
             firmware/rainpoint_bridge/tests/htv145_counter2_protocol_test.cpp \
             -o /tmp/rainpoint-htv145-counter2-test
           /tmp/rainpoint-htv145-counter2-test
-          c++ -std=c++17 \
-            -DRAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE=2 \
-            -Ifirmware/rainpoint_bridge/include \
-            firmware/rainpoint_bridge/tests/htv145_selector2_protocol_test.cpp \
-            -o /tmp/rainpoint-htv145-selector2-test
-          /tmp/rainpoint-htv145-selector2-test
 
   firmware:
     runs-on: ubuntu-latest
@@ -66,101 +58,22 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
-      - name: Build the standard radio-node firmware
-        env:
-          RAINPOINT_SUPERVISED_HTV405_CONTROL: "0"
-        run: >-
-          pio run --project-dir firmware/rainpoint_bridge
-          --environment rainpoint_bridge
-      - name: Verify the standard firmware command boundary
-        run: >-
-          python tools/check_firmware_boundaries.py
-          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-      - name: Build and verify production OTA artifact manifest
+      - name: Build and check unified production firmware
         run: |
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          python tools/check_firmware_boundaries.py --supervised \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
-            /tmp/rainpoint-firmware-manifest.json \
-            --version 0.15.1 --environment rainpoint_bridge
+            /tmp/rainpoint-firmware-manifest.json --version 0.15.12 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify
-      - name: Build the supervised unified firmware
+      - name: Build and check isolated HTV145 control and pairing
+        env:
+          RAINPOINT_HTV145_ENABLED: "1"
         run: |
-          pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge --target clean
-          RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-            pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge
-      - name: Verify the supervised firmware command boundary
-        run: >-
-          python tools/check_firmware_boundaries.py --supervised
-          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-      - name: Build the research-gated HTV145 pairing candidate
-        run: |
-          pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge --target clean
-          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
-            RAINPOINT_RESEARCH_BENCH=1 \
-            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-            pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge
-      - name: Verify the HTV145 pairing candidate boundary
-        run: >-
-          python tools/check_firmware_boundaries.py --htv145-pairing
-          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-      - name: Build the research-gated HTV145 counter-2 candidate
-        run: |
-          pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge --target clean
-          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
-            RAINPOINT_RESEARCH_BENCH=1 \
-            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
-            RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1 \
-            RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
-            pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge
-      - name: Verify the HTV145 counter-2 candidate boundary
-        run: >-
-          python tools/check_firmware_boundaries.py --htv145-pairing
-          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-      - name: Build the isolated HTV145 dry-open probe
-        run: |
-          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
-            RAINPOINT_RESEARCH_BENCH=1 \
-            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
-            RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1 \
-            RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
-            RAINPOINT_HTV145_TX_CANDIDATE=1 \
-            pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge
-      - name: Verify the isolated HTV145 dry-open boundary
-        run: >-
-          python tools/check_firmware_boundaries.py --htv145-pairing
-          --htv145-control
-          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-      - name: Build the isolated HTV145 selector-2 pairing and dry-control candidate
-        run: |
-          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
-            RAINPOINT_RESEARCH_BENCH=1 \
-            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
-            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
-            RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
-            RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1 \
-            RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE=2 \
-            RAINPOINT_HTV145_TX_CANDIDATE=1 \
-            pio run --project-dir firmware/rainpoint_bridge \
-            --environment rainpoint_bridge
-          python tools/check_firmware_boundaries.py --htv145-pairing \
-            --htv145-control \
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target clean
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

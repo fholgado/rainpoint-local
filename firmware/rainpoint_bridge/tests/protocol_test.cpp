@@ -4,7 +4,7 @@
 #include <string>
 
 #include "rainpoint_protocol.h"
-#include "rainpoint_fifo_calibration.h"
+#include "rainpoint_clocked_transmit.h"
 #include "rainpoint_receive_edge.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_htv145_pairing.h"
@@ -91,18 +91,18 @@ int main() {
     for (std::size_t index = 0; index < calibrationFrame.size(); ++index)
         calibrationFrame[index] = static_cast<std::uint8_t>(index);
     std::vector<std::uint8_t> naturalStream, activeTailStream;
-    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 0, naturalStream));
-    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 500, activeTailStream));
+    assert(rainpoint::buildClockedTransmitStream(calibrationFrame, 320, 0, naturalStream));
+    assert(rainpoint::buildClockedTransmitStream(calibrationFrame, 320, 500, activeTailStream));
     assert(naturalStream.size() == 78 && activeTailStream.size() == 79);
     assert(std::equal(naturalStream.begin(), naturalStream.end(), activeTailStream.begin()));
     assert(activeTailStream.back() == 0);
     assert(std::equal(calibrationFrame.begin(), calibrationFrame.end(), naturalStream.begin() + 40));
-    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 2'400, 0, naturalStream));
+    assert(rainpoint::buildClockedTransmitStream(calibrationFrame, 2'400, 0, naturalStream));
     assert(naturalStream.size() == 338);
-    assert(!rainpoint::buildFifoCalibrationStream(calibrationFrame, 319, 0, activeTailStream));
-    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 906, activeTailStream));
+    assert(!rainpoint::buildClockedTransmitStream(calibrationFrame, 319, 0, activeTailStream));
+    assert(rainpoint::buildClockedTransmitStream(calibrationFrame, 320, 906, activeTailStream));
     assert(activeTailStream.size() == 79 && activeTailStream.back() == 0);
-    assert(!rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 1'201, activeTailStream));
+    assert(!rainpoint::buildClockedTransmitStream(calibrationFrame, 320, 1'201, activeTailStream));
     assert(rainpoint::isHtv405NetworkCommand("valve_control_cancel_wait"));
     assert(rainpoint::isHtv405NetworkCommand("valve_control_close"));
     assert(!rainpoint::isHtv405NetworkCommand("valve_open"));
@@ -1198,145 +1198,6 @@ int main() {
         {{0x39, 0x84, 0x02, 0x80}},
         htv405Profile
     ));
-    const auto htv145FactorySweep0 = fromHex(
-        "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
-    );
-    const auto htv145FactorySweep3 = fromHex(
-        "79f4882f2880000000342d008f83808402ff8f970080bf060000000000000000000000005bc2"
-    );
-    rainpoint::htv145::PairingProfile htv145PairingProbe{};
-    assert(rainpoint::htv145::buildProfile(
-        {{0x34, 0x2d, 0x00, 0x8f}},
-        {{0xb9, 0x84, 0x02, 0x80}},
-        {{0x39, 0x84, 0x02, 0x80}},
-        htv145PairingProbe
-    ));
-    assert(htv145PairingProbe.pairedEndpoint ==
-        (std::array<std::uint8_t, 4>{{0xb4, 0x2d, 0x00, 0x8f}}));
-    assert(rainpoint::htv145::requestMatches(
-        htv145PairingProbe, 0, htv145FactorySweep0
-    ));
-    assert(rainpoint::htv145::requestMatches(
-        htv145PairingProbe, 0, htv145FactorySweep3
-    ));
-    assert(
-        htv145PairingProbe.steps[0].requestBody !=
-        htv405Profile.steps[0].requestBody
-    );
-    assert((htv145PairingProbe.steps[0].replyBody[5] & 0x7fU) == 0x06);
-    assert(htv405Profile.steps[0].replyBody[5] == 0x02);
-    assert(htv405Profile.stepCount == rainpoint::kHtv405PairingStepCount);
-    assert(htv145PairingProbe.steps.size() ==
-        rainpoint::htv145::kPairingStepCount);
-    assert(rainpoint::htv145::kPairingFrequencyOffsetHz == 122'759);
-    assert(
-        rainpoint::htv145::kMaximumPairingFrequencyOffsetHz == 150'000
-    );
-    assert(
-        rainpoint::htv145::kPairingFrequencyOffsetHz <=
-        rainpoint::htv145::kMaximumPairingFrequencyOffsetHz
-    );
-    assert(rainpoint::htv145::kInitialDeviationRegister == 0x45);
-    assert(
-        rainpoint::htv145::kInitialChannelCenterHz ==
-        433'501'466
-    );
-    assert(
-        htv145PairingProbe.steps[0].channelCenterHz ==
-        rainpoint::htv145::kInitialChannelCenterHz
-    );
-    assert(
-        htv145PairingProbe.steps[0].channelCenterHz !=
-        htv405Profile.steps[0].channelCenterHz
-    );
-    assert(rainpoint::htv145::replyStartDelayUs(0) == 52'150);
-    assert(rainpoint::htv145::replyStartDelayUs(1) == 70'700);
-    assert(rainpoint::htv145::replyStartDelayUs(3) == 35'750);
-    assert(rainpoint::htv145::replyStartDelayUs(4) == 52'000);
-    assert(rainpoint::htv145::replyStartDelayUs(5) == 47'200);
-    assert(htv145PairingProbe.steps[0].replyToController);
-    assert(htv145PairingProbe.steps[1].replyToController);
-    assert(htv145PairingProbe.steps[3].replyToController);
-    const rainpoint::PairingLocalDateTime htv145StockClock{
-        2026, 9, 1, 12, 43, 48,
-    };
-    std::array<std::uint8_t, rainpoint::kFrameBytes> htv145Reply{};
-    assert(rainpoint::htv145::buildReply(
-        htv145PairingProbe, 0, htv145StockClock, htv145Reply
-    ));
-    assert(htv145Reply == fromHex(
-        "79f4882f28b42d008fb984028080c0858500867000f865210d010080000000000000000041c6"
-    ));
-    const rainpoint::PairingLocalDateTime htv145EveningClock{
-        2026, 9, 1, 17, 56, 48,
-    };
-    assert(rainpoint::htv145::buildReply(
-        htv145PairingProbe, 0, htv145EveningClock, htv145Reply
-    ));
-    assert(htv145Reply == fromHex(
-        "79f4882f28b42d008fb984028080c0858500867000988f210d01008000000000000000000a7c"
-    ));
-    assert(rainpoint::htv145::buildConfigurationReply(
-        htv145PairingProbe, htv145Reply
-    ));
-    assert(htv145Reply == fromHex(
-        "79f4882f28b42d008fb984028081100101000000000000000000000000000000000000000655"
-    ));
-    const auto htv145Request1 = fromHex(
-        "79f4882f28b9840280b42d008f810107862580804f8000000040800056800000000000005689"
-    );
-    const auto htv145ConfigurationResponse = fromHex(
-        "79f4882f28b9840280b42d008f81500080000000000000000000000000000000000000006f4d"
-    );
-    const auto htv145ShortRequest = fromHex(
-        "79f4882f28b9840280b42d008f81828106008000000000000000000000000000000000003d30"
-    );
-    const auto htv145ControllerRequest = fromHex(
-        "79f4882f28b9840280b42d008f82030186008000000000000000000000000000000000001977"
-    );
-    const auto htv145ExtendedRequest = fromHex(
-        "79f4882f28b9840280b42d008f82ac8099000000000000000000000000000000000000005423"
-    );
-    rainpoint::htv145::PairingSession htv145Session(htv145PairingProbe);
-    htv145Session.arm(0);
-    assert(htv145Session.claimReply(htv145FactorySweep0, 1) ==
-        &htv145PairingProbe.steps[0]);
-    assert(htv145Session.finishReply(true, 2));
-    assert(htv145Session.assignmentLocked());
-    assert(!htv145Session.stage0Accepted());
-    assert(htv145Session.claimReply(htv145Request1, 1'000) ==
-        &htv145PairingProbe.steps[1]);
-    assert(htv145Session.stage0Accepted());
-    assert(htv145Session.finishReply(true, 3'900));
-    assert(htv145Session.claimReply(
-        htv145ConfigurationResponse, 4'200
-    ) == nullptr);
-    assert(htv145Session.completedSteps() == 3);
-    assert(htv145Session.claimReply(htv145ShortRequest, 5'000) ==
-        &htv145PairingProbe.steps[3]);
-    assert(htv145Session.finishReply(true, 5'001));
-    assert(htv145Session.claimReply(htv145ControllerRequest, 6'000) ==
-        &htv145PairingProbe.steps[4]);
-    assert(htv145Session.finishReply(true, 6'001));
-    assert(htv145Session.claimReply(htv145ExtendedRequest, 7'000) ==
-        &htv145PairingProbe.steps[5]);
-    assert(htv145Session.finishReply(true, 7'001));
-    assert(htv145Session.state() ==
-        rainpoint::PairingSessionState::Completed);
-    // Once the single assignment has been transmitted, the next factory
-    // fallback is explicit stage-0 rejection. It must never cause a second
-    // assignment in the same arm window.
-    rainpoint::htv145::PairingSession htv145Rejected(htv145PairingProbe);
-    htv145Rejected.arm(0);
-    assert(htv145Rejected.claimReply(htv145FactorySweep0, 1) ==
-        &htv145PairingProbe.steps[0]);
-    assert(htv145Rejected.finishReply(true, 2));
-    assert(htv145Rejected.claimReply(htv145FactorySweep3, 3'000) == nullptr);
-    assert(htv145Rejected.state() == rainpoint::PairingSessionState::Failed);
-    assert(htv145Rejected.failureReason() ==
-        rainpoint::PairingFailureReason::Stage0Rejected);
-    assert(htv145Rejected.stage0Rejected());
-    assert(!htv145Rejected.stage0Accepted());
     // Custom gateway identity changes only the association endpoints. Freeze
     // every timing, channel, and request/reply body from the physically
     // accepted stock-identity profile so identity rollout cannot silently
@@ -2296,11 +2157,6 @@ int main() {
     assert(!rainpoint::htv145CommandIntervalElapsed(100, 15'099));
     assert(rainpoint::htv145CommandIntervalElapsed(100, 15'100));
     assert(rainpoint::htv145CommandIntervalElapsed(0xfffffff0U, 14'984));
-    assert(rainpoint::validHtv145DryProbeDuration(true, 60));
-    assert(rainpoint::validHtv145DryProbeDuration(false, 0));
-    assert(!rainpoint::validHtv145DryProbeDuration(true, 0));
-    assert(!rainpoint::validHtv145DryProbeDuration(true, 120));
-    assert(!rainpoint::validHtv145DryProbeDuration(false, 60));
     const rainpoint::Htv145Link redactedControlLink{
         {{0xc1, 0x23, 0x45, 0x8f}}, {{0xd1, 0x23, 0x45, 0x80}},
     };
@@ -2465,5 +2321,43 @@ int main() {
     // The state report's 0x9b is a separate telemetry counter and must never
     // be mistaken for the response to an outbound 0x8c command.
     assert(htv145ActiveState[13] != 0x8c);
+    // Exact redacted report/ACK pairs from the stock September 5 fixture.
+    const rainpoint::Htv145Link ackLink{{{0xb1,0xc2,0xd3,0x8f}}, {{0xa1,0xb2,0xc3,0x80}}};
+    assert(rainpoint::canRevokeHtv145Owner(false, false, {}, ackLink)); // rebooted owner
+    assert(rainpoint::canRevokeHtv145Owner(true, false, ackLink, ackLink));
+    assert(!rainpoint::canRevokeHtv145Owner(true, true, ackLink, ackLink));
+    assert(!rainpoint::canRevokeHtv145Owner(true, false, {}, ackLink));
+    assert(!rainpoint::canRevokeHtv145Owner(false, false, {}, {}));
+    struct AckFixture { const char* report; const char* reply; std::uint16_t residue; };
+    const AckFixture ackFixtures[] = {
+        {"79f4882f28a1b2c380b1c2d38f83810782058090cf80000000409b80569e0000000000000c2f", "79f4882f28b1c2d38fa1b2c38083c1010001000000000000000000000000000000000000bff9", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f840107820580804f8000000040800056800000000000005e89", "79f4882f28b1c2d38fa1b2c3808441010001000000000000000000000000000000000000a66c", 0xc713},
+        {"79f4882f28a1b2c380b1c2d38f848107820580804f8000000040800056800000000000006c0c", "79f4882f28b1c2d38fa1b2c38084c101000100000000000000000000000000000000000094e9", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f850207820080c570a50d10800000001e000000000000003e62", "79f4882f28b1c2d38fa1b2c38085420080000000000000000000000000000000000000009c0d", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f85810782058090cf8000000040b98056bc00000000000023b6", "79f4882f28b1c2d38fa1b2c38085c1010001000000000000000000000000000000000000f1e2", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f8682078200808c71250d1080000000180000000000000030f1", "79f4882f28b1c2d38fa1b2c38086c20080000000000000000000000000000000000000008985", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f860107820580804f8000000040800056800000000000001c8f", "79f4882f28b1c2d38fa1b2c3808641010001000000000000000000000000000000000000e46a", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f87010782058090cf80000000409b80569e00000000000032b7", "79f4882f28b1c2d38fa1b2c38087410100010000000000000000000000000000000000008161", 0x4f03},
+        {"79f4882f28a1b2c380b1c2d38f878107820580804f8000000040800056800000000000004b01", "79f4882f28b1c2d38fa1b2c38087c1010001000000000000000000000000000000000000b3e4", 0xc713},
+        {"79f4882f28a1b2c380b1c2d38f880207820080ccf1250d108000000011800000000000005ec1", "79f4882f28b1c2d38fa1b2c3808842008000000000000000000000000000000000000000ed20", 0xc713},
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> reportAck{};
+    for (const auto& fixture : ackFixtures) {
+        auto report = fromHex(fixture.report);
+        assert(rainpoint::buildHtv145ReportAck(report, ackLink, fixture.residue, reportAck));
+        assert(reportAck == fromHex(fixture.reply));
+        report[8] ^= 1;
+        rainpoint::writeTrailer(report, 0x4f03);
+        assert(!rainpoint::buildHtv145ReportAck(report, ackLink, fixture.residue, reportAck));
+    }
+    auto active86 = fromHex("79f4882f28a1b2c380b1c2d38f86010786058090cf80000000409b00569e0000000000003ec2");
+    assert(rainpoint::decodeHtv145StateReport(active86, ackLink, htv145Watering));
+    assert(htv145Watering);
+    assert(rainpoint::buildHtv145ReportAck(active86, ackLink, 0x4f03, reportAck));
+    auto result3 = fromHex("79f4882f28a1b2c380b1c2d38f82508683104f80000000408000568000000000000000000000");
+    rainpoint::writeTrailer(result3, 0x4f03);
+    assert(rainpoint::decodeHtv145CommandError(result3, ackLink, htv145Error));
+    assert(!rainpoint::decodeHtv145CommandResponse(result3, ackLink, htv145Response));
+    assert(!rainpoint::buildHtv145ReportAck(result3, ackLink, 0x4f03, reportAck));
     return 0;
 }

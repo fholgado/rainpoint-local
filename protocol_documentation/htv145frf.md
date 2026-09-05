@@ -806,3 +806,46 @@ frames with no clipping and receive restored. Their step-4 endings measured
 433.582146 and 433.582325 MHz. Both long configurations decoded successfully.
 These are preparation evidence for the next physical attempt, not evidence
 that startup settling fixed the isolated earlier failure.
+
+## Persistent qualification runtime (gateway 0.34.3)
+
+The accepted selector-6 recipe is persisted with separate open/close residues,
+marker polarity, command carrier, calibrated report-ACK carrier, and one owner
+node. Ordinary firmware excludes this path; the designated dry-test image uses
+`RAINPOINT_HTV145_ENABLED=1` and the add-on retains `htv145_dry_acceptance: true`
+as its explicit runtime gate. This is not yet a supported HA actuator route.
+
+Management-token-protected POST routes under `/api/v1/research/htv145-control/`:
+
+| Action | Required input and effect |
+|---|---|
+| `enroll` | `profile`, `command_frame`, `response_frame`, `idle_frame`, `exchange_observed_at`, `idle_observed_at`; require matching positive exchange and independent idle within one hour. Persists owner; configures/synchronizes node without actuation. |
+| `status`, `morning-check` | `valve_endpoint`; return counter, fresh state, owner availability, readiness and any overdue-idle anomaly. No RF probe. |
+| `open` | `valve_endpoint`, `duration_seconds` (60–3600, whole minutes); reserve durably, then dispatch once using the known counter. |
+| `close` | `valve_endpoint`; explicit close with the authenticated counter and minimum 15-second spacing; a fresh known-idle state returns `already_idle` without RF. |
+| `revoke` | `valve_endpoint`; wait for the exact node command's revocation acknowledgment before permitting reassignment. |
+
+The profile supplies `node_id`, `controller_endpoint`, `valve_endpoint`,
+`center_hz`, `power_dbm`, `invert`, `trailer_residual`,
+`command_marker_inverted`, `close_trailer_residual`, and `report_ack_center_hz`.
+Endpoint names follow the command direction (`controller_endpoint` transmits
+commands); do not reverse them by guessing from their product suffix. Obtain
+all identities and calibration from the association under test. Runtime selector-6
+uses `command_marker_inverted=true` and both residues `0x4f03`.
+
+The daemon's maintenance tick restores configuration/counters after connection
+changes and expires unresolved reservations without replay. Daytime requests do
+not wait for a valve report before sending. A fresh idle observation is required
+for a new open; routine report counters never reseed command counters. Unlike
+HTV405, HTV145 has no proven idle-close-zero anchor: lost counter certainty requires
+new positive command evidence. A missing idle report after the planned duration
+plus 30 seconds raises an anomaly without transmitting another command.
+
+Report ACK builders accept captured family bytes `82`, `85`, `86`, reverse the
+route, echo byte 13, OR byte 14 with `40`, and write `01 00 01` for state reports
+or `00 80 00` for summaries. The runtime uses residue `4f03`, a 320-symbol wake,
+and a provisional 40 ms post-reception transmit deadline. The ten stock ACKs
+include both ordinary residues; the selected local timing/residue still needs
+physical qualification. Session summaries update historical usage/duration only;
+they cannot clear current watering or confirm a pending close. Result 3 layouts
+with byte 17 `00` or `10` neither authenticate a counter nor prove physical idle.

@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 FORBIDDEN_BENCH_COMMANDS = (
+    b"htv145_dry_open_probe", b"htv145_dry_close_probe",
+    b"htv145_post_frame_tail_candidate",
     b"htv145_profile_calibration",
     b"htv145_fifo_step4_calibration",
     b"htv145_receive_edge_calibration",
@@ -47,8 +49,8 @@ SUPERVISED_VALVE_CONTROL_COMMANDS = (
 
 HTV145_PAIRING_CAPABILITIES = (b"htv145_pairing_tx_candidate",)
 HTV145_CONTROL_COMMANDS = (
-    b"htv145_dry_open_probe", b"htv145_dry_close_probe",
-    b"htv145_dry_close", b"htv145_control_open",
+    b"htv145_control_open", b"htv145_control_close",
+    b"htv145_control_revoke", b"htv145_report_ack_tx",
 )
 
 
@@ -75,18 +77,7 @@ def main() -> int:
         )
         return 2
     firmware = Path(arguments[0]).read_bytes()
-    # The HTV145 pairing probe still deliberately uses the research build
-    # boundary; production and supervised images must never retain those
-    # serial-only investigation commands.
-    leaked = (
-        []
-        if htv145_pairing
-        else [
-            value.decode()
-            for value in FORBIDDEN_BENCH_COMMANDS
-            if value in firmware
-        ]
-    )
+    leaked = [value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware]
     forbidden_valve_commands = FORBIDDEN_VALVE_CONTROL_COMMANDS + (
         () if supervised else SUPERVISED_VALVE_CONTROL_COMMANDS
     )

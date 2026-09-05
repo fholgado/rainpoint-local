@@ -170,6 +170,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/morning-sync")
             or parsed.path.endswith("/valve/sync-now")
         )
+        htv145_control_prefix = f"{base}/research/htv145-control/"
+        htv145_control_path = parsed.path.startswith(htv145_control_prefix)
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
         htv145_acceptance_path = parsed.path.startswith(
             htv145_acceptance_prefix
@@ -181,6 +183,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             or registry_path
             or device_forget_path
             or valve_control_path
+            or htv145_control_path
             or htv145_acceptance_path
             or pairing_path
             or node_path
@@ -374,6 +377,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "transmit_performed": transmit_performed,
                         },
                     )
+                    return
+                if htv145_control_path:
+                    action = parsed.path[len(htv145_control_prefix):]
+                    result = self.server.gateway.htv145_control(action, body)
+                    self._json(202 if action in {"open", "close", "revoke"} else 200, result)
                     return
                 if htv145_acceptance_path:
                     action = parsed.path[len(htv145_acceptance_prefix) :]

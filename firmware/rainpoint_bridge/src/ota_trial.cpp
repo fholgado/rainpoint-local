@@ -1,6 +1,5 @@
 #include "ota_trial.h"
 
-#if RAINPOINT_OTA_CANDIDATE == 1
 
 #include <HTTPClient.h>
 #include <Update.h>
@@ -274,5 +273,3 @@ String OtaTrial::status(const String& nodeId) const {
 }
 
 }  // namespace rainpoint
-
-#endif  // RAINPOINT_OTA_CANDIDATE == 1

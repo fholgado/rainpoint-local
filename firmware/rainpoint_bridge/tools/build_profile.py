@@ -1,5 +1,9 @@
-"""Select production-safe or explicitly requested research build flags."""
+"""One supported firmware environment and one isolated HTV145 qualification gate.
 
+Production includes sensor pairing/ACKs, HTV405 control and OTA. The HTV145
+option selects the frozen counter-2/selector-6 recipe plus bounded controls;
+it does not restore serial probes or select individual timing experiments.
+"""
 from __future__ import annotations
 
 import os
@@ -7,234 +11,22 @@ import re
 
 Import("env")  # type: ignore[name-defined]  # PlatformIO/SCons injection.
 
-
-research_value = os.environ.get("RAINPOINT_RESEARCH_BENCH", "0")
-if research_value not in {"0", "1"}:
-    raise ValueError("RAINPOINT_RESEARCH_BENCH must be 0 or 1")
-
-supervised_value = os.environ.get(
-    "RAINPOINT_SUPERVISED_HTV405_CONTROL", "1"
-)
-if supervised_value not in {"0", "1"}:
-    raise ValueError("RAINPOINT_SUPERVISED_HTV405_CONTROL must be 0 or 1")
-
-htv145_value = os.environ.get("RAINPOINT_HTV145_TX_CANDIDATE", "0")
-if htv145_value not in {"0", "1"}:
-    raise ValueError("RAINPOINT_HTV145_TX_CANDIDATE must be 0 or 1")
-
-research_enabled = research_value == "1"
-supervised_enabled = supervised_value == "1"
-htv145_enabled = htv145_value == "1"
-htv145_pairing_value = os.environ.get(
-    "RAINPOINT_HTV145_PAIRING_CANDIDATE", "0"
-)
-if htv145_pairing_value not in {"0", "1"}:
-    raise ValueError("RAINPOINT_HTV145_PAIRING_CANDIDATE must be 0 or 1")
-htv145_pairing_enabled = htv145_pairing_value == "1"
-htv145_factory_counter_value = os.environ.get(
-    "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE", "0"
-)
-if htv145_factory_counter_value not in {"0", "2"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE must be 0 or 2"
-    )
-htv145_factory_counter = int(htv145_factory_counter_value)
-htv145_selector_value = os.environ.get(
-    "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE", "6"
-)
-if htv145_selector_value not in {"2", "6"}:
-    raise ValueError("RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE must be 2 or 6")
-htv145_selector2_enabled = htv145_selector_value == "2"
-htv145_tail_value = os.environ.get(
-    "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE", "0"
-)
-if htv145_tail_value not in {"0", "1"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE must be 0 or 1"
-    )
-htv145_tail_enabled = htv145_tail_value == "1"
-htv145_delayed_prearm_value = os.environ.get(
-    "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE", "0"
-)
-if htv145_delayed_prearm_value not in {"0", "1"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE must be 0 or 1"
-    )
-htv145_delayed_prearm_enabled = htv145_delayed_prearm_value == "1"
-htv145_fifo_configuration_value = os.environ.get(
-    "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE", "0"
-)
-if htv145_fifo_configuration_value not in {"0", "1"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE must be 0 or 1"
-    )
-htv145_fifo_configuration_enabled = htv145_fifo_configuration_value == "1"
-htv145_step4_tail_value = os.environ.get(
-    "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE", "0"
-)
-if htv145_step4_tail_value not in {"0", "1"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE must be 0 or 1"
-    )
-htv145_step4_tail_enabled = htv145_step4_tail_value == "1"
-htv145_step4_fifo_value = os.environ.get(
-    "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE", "0"
-)
-if htv145_step4_fifo_value not in {"0", "1"}:
-    raise ValueError(
-        "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE must be 0 or 1"
-    )
-htv145_step4_fifo_enabled = htv145_step4_fifo_value == "1"
-if htv145_enabled and not research_enabled:
-    raise ValueError(
-        "RAINPOINT_HTV145_TX_CANDIDATE requires RAINPOINT_RESEARCH_BENCH=1"
-    )
-if htv145_pairing_enabled and not research_enabled:
-    raise ValueError(
-        "RAINPOINT_HTV145_PAIRING_CANDIDATE requires "
-        "RAINPOINT_RESEARCH_BENCH=1"
-    )
-if htv145_tail_enabled and not (
-    research_enabled and htv145_pairing_enabled
-):
-    raise ValueError(
-        "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE requires both "
-        "RAINPOINT_RESEARCH_BENCH=1 and "
-        "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
-    )
-if htv145_delayed_prearm_enabled and not (
-    research_enabled and htv145_pairing_enabled and htv145_tail_enabled
-):
-    raise ValueError(
-        "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE requires the HTV145 "
-        "research pairing and post-frame-tail candidates"
-    )
-if htv145_fifo_configuration_enabled and not (
-    research_enabled
-    and htv145_pairing_enabled
-    and htv145_tail_enabled
-    and htv145_delayed_prearm_enabled
-    and (htv145_factory_counter == 2 or htv145_selector2_enabled)
-):
-    raise ValueError(
-        "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE requires the frozen "
-        "counter-2 HTV145 research pairing candidate"
-    )
-if htv145_step4_tail_enabled and not (
-    htv145_fifo_configuration_enabled
-    and (htv145_factory_counter == 2 or htv145_selector2_enabled)
-):
-    raise ValueError(
-        "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE requires the accepted "
-        "counter-2 FIFO-configuration candidate"
-    )
-if htv145_step4_fifo_enabled and not htv145_step4_tail_enabled:
-    raise ValueError(
-        "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE requires the measured "
-        "step-4-tail discriminator"
-    )
-if htv145_factory_counter and not (
-    research_enabled and htv145_pairing_enabled
-):
-    raise ValueError(
-        "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE requires both "
-        "RAINPOINT_RESEARCH_BENCH=1 and "
-        "RAINPOINT_HTV145_PAIRING_CANDIDATE=1"
-    )
-if htv145_selector2_enabled and not (
-    research_enabled and htv145_pairing_enabled and not supervised_enabled
-    and htv145_factory_counter == 0 and htv145_step4_fifo_enabled
-):
-    raise ValueError(
-        "HTV145 selector 2 requires supervised control disabled, counter 0, and the research "
-        "FIFO-configuration, tail, and step-4-FIFO candidates"
-    )
-standard_version = "0.15.11"
-supervised_version = "0.15.11"
-htv145_candidate_version = "0.15.0-htv145-control-candidate.3"
-htv145_pairing_candidate_version = (
-    "0.15.4-htv145-pairing-selector2-candidate.2"
-    if htv145_selector2_enabled else
-    (
-        "0.15.4-htv145-pairing-counter2-candidate.22"
-        if htv145_step4_fifo_enabled
-        else "0.15.4-htv145-pairing-counter2-candidate.11"
-        if htv145_step4_tail_enabled
-        else "0.15.4-htv145-pairing-counter2-candidate.10"
-        if htv145_fifo_configuration_enabled
-        else "0.15.4-htv145-pairing-counter2-candidate.9"
-        if htv145_delayed_prearm_enabled
-        else "0.15.4-htv145-pairing-counter2-candidate.8"
-    )
-    if htv145_factory_counter == 2
-    else (
-        "0.15.3-htv145-pairing-tail-candidate.1"
-        if htv145_tail_enabled
-        else "0.15.3-htv145-pairing-probe.25"
-    )
-)
-if htv145_pairing_enabled:
-    default_version = htv145_pairing_candidate_version
-    firmware_variant = "htv145-pairing-probe"
-elif htv145_enabled:
-    default_version = htv145_candidate_version
-    firmware_variant = "htv145-control-candidate"
-elif supervised_enabled:
-    default_version = supervised_version
-    firmware_variant = "unified"
-elif research_enabled:
-    default_version = "0.15.0-research-bench.1"
-    firmware_variant = "research-bench"
-else:
-    default_version = standard_version
-    firmware_variant = "unified"
-firmware_version = os.environ.get(
-    "RAINPOINT_FIRMWARE_VERSION", default_version
-)
-if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", firmware_version):
+value = os.environ.get("RAINPOINT_HTV145_ENABLED", "0")
+if value not in {"0", "1"}:
+    raise ValueError("RAINPOINT_HTV145_ENABLED must be 0 or 1")
+retired = [name for name in os.environ if name.startswith("RAINPOINT_") and
+           (name.endswith("_CANDIDATE") or name in {
+               "RAINPOINT_RESEARCH_BENCH", "RAINPOINT_SUPERVISED_HTV405_CONTROL"})]
+if retired:
+    raise ValueError("Retired firmware flags: " + ", ".join(sorted(retired)))
+enabled = value == "1"
+version = os.environ.get("RAINPOINT_FIRMWARE_VERSION",
+                         "0.15.12-htv145-control.1" if enabled else "0.15.12")
+if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", version):
     raise ValueError("RAINPOINT_FIRMWARE_VERSION is invalid")
-
-env.Append(
-    CPPDEFINES=[
-        ("RAINPOINT_RESEARCH_BENCH", int(research_enabled)),
-        (
-            "RAINPOINT_SUPERVISED_HTV405_CONTROL",
-            int(supervised_enabled),
-        ),
-        ("RAINPOINT_HTV145_TX_CANDIDATE", int(htv145_enabled)),
-        (
-            "RAINPOINT_HTV145_PAIRING_CANDIDATE",
-            int(htv145_pairing_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE",
-            int(htv145_tail_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE",
-            int(htv145_delayed_prearm_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE",
-            int(htv145_fifo_configuration_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE",
-            int(htv145_step4_tail_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE",
-            int(htv145_step4_fifo_enabled),
-        ),
-        (
-            "RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE",
-            htv145_factory_counter,
-        ),
-        (
-            "RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE",
-            int(htv145_selector_value),
-        ),
-        ("RAINPOINT_FIRMWARE_VERSION", f'\\"{firmware_version}\\"'),
-        ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{firmware_variant}\\"'),
-    ]
-)
+variant = "htv145-control-candidate" if enabled else "unified"
+env.Append(CPPDEFINES=[
+    ("RAINPOINT_HTV145_ENABLED", int(enabled)),
+    ("RAINPOINT_FIRMWARE_VERSION", f'\\"{version}\\"'),
+    ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{variant}\\"'),
+])

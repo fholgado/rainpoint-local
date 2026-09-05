@@ -22,6 +22,7 @@ from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .firmware_catalog import FirmwareCatalog
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
+from .htv145_runtime import Htv145Runtime
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv405_control import (
     HTV405_CONTROL_BASE_CENTER_HZ,
@@ -296,6 +297,7 @@ class Gateway:
             Callable[[str, dict[str, Any]], None] | None
         ) = None
         self._htv145_acceptance: Htv145DryValveAcceptance | None = None
+        self._htv145_runtime: Htv145Runtime | None = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
@@ -696,6 +698,11 @@ class Gateway:
         """Attach the authenticated node command boundary owned by the LAN server."""
         with self._lock:
             self._node_command_sender = sender
+            self._htv145_runtime = (
+                Htv145Runtime(Htv145ControlCoordinator(store=self._store, sender=sender, enabled=True),
+                              lambda node_id: self._nodes.get(node_id, {}))
+                if sender is not None and self._store is not None and self._htv145_acceptance_enabled else None
+            )
             if sender is None:
                 for timer in self._htv405_resync_timers.values():
                     timer.cancel()
@@ -709,6 +716,29 @@ class Gateway:
                 )
             else:
                 self._schedule_matured_htv405_resyncs_locked()
+
+    def htv145_control(self, action: str, body: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+        """Manage one evidenced dry association under the existing runtime gate."""
+        timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self._lock:
+            runtime = self._htv145_runtime
+            if not self._htv145_acceptance_enabled or runtime is None:
+                raise PermissionError("HTV145 dry control is disabled")
+            if action == "enroll":
+                profile = Htv145ControlProfile(**body["profile"])
+                return runtime.enroll(profile, command=bytes.fromhex(body["command_frame"]),
+                    response=bytes.fromhex(body["response_frame"]), idle=bytes.fromhex(body["idle_frame"]),
+                    exchange_at=body["exchange_observed_at"], idle_at=body["idle_observed_at"], now=timestamp)
+            profile = next((p for p in runtime.profiles() if p.valve_endpoint == body.get("valve_endpoint")), None)
+            if profile is None:
+                raise KeyError(body.get("valve_endpoint"))
+            if action in {"status", "morning-check"}:
+                return runtime.status(profile, now=timestamp)
+            if action == "revoke":
+                runtime.revoke(profile)
+                return {"state": "awaiting_owner_revocation"}
+            command = runtime.request(profile, action, now=timestamp, duration_seconds=body.get("duration_seconds"))
+            return {"state": "already_idle" if command["type"] == "htv145_control_noop" else "pending_valve_evidence", "command": command}
 
     def prepare_htv145_acceptance(
         self,
@@ -860,6 +890,8 @@ class Gateway:
         """Feed selected-node response diagnostics into the active trial."""
         timestamp = datetime.now(timezone.utc).isoformat()
         with self._lock:
+            if self._htv145_runtime is not None:
+                self._htv145_runtime.observe_node(node_id, message, now=timestamp)
             harness = self._htv145_acceptance
             if harness is None or harness.profile.node_id != node_id:
                 return None
@@ -879,6 +911,8 @@ class Gateway:
     def _observe_htv145_acceptance_frame_locked(
         self, *, frame: str, model: str, observed_at: str
     ) -> None:
+        if self._htv145_runtime is not None:
+            self._htv145_runtime.observe_frame(bytes.fromhex(frame), now=observed_at)
         harness = self._htv145_acceptance
         if harness is None or model != HTV145_MODEL:
             return
@@ -1167,6 +1201,9 @@ class Gateway:
     def _run_morning_sync_timer(self) -> None:
         try:
             self.run_htv405_morning_sync()
+            with self._lock:
+                if self._htv145_runtime is not None:
+                    self._htv145_runtime.tick(now=datetime.now(timezone.utc).isoformat())
         finally:
             with self._lock:
                 if self._morning_sync_running:
@@ -6376,6 +6413,9 @@ class Gateway:
                         if (valve_registration.get("control_pending_command_id") is not None
                                 or valve_registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES):
                             raise RuntimeError("finish or cancel the active transaction before forgetting the valve")
+                        htv145 = self._store.htv145_control_states(valve_registration["valve_endpoint"])
+                        if htv145 and htv145[0]["report_ack_center_hz"] is not None:
+                            raise RuntimeError("revoke the HTV145 control/ACK owner before forgetting")
                         self._revoke_htv405_ack_locked(valve_registration)
                     forgotten_valve = self._store.forget_valve_registry_device(
                         device_id,

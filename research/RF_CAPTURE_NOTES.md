@@ -1136,3 +1136,30 @@ The original live Right Bed reporting assertion still fails after deployment,
 as no new sensor transmission has been observed. The corrected owner is ready
 to answer the next natural sweep without an open HA pairing flow. Recovery is
 not yet claimed.
+
+## HTV145 local controls after 5/6 and ACK replay — 2026-09-05
+
+The retained `.22` association supported open `81/90/4f03`, open `82/90/4f03`
+and active close `83/10/4f03`, each accepted on its first RF attempt. The first
+60-second run stopped automatically; the second stopped early after an explicit
+close. See `fixtures/htv145_partial_pairing_control_acceptance_20260905.json` for
+all six captures, the failed close probes, node outcomes and measured times.
+Neither the white LED nor the missing sixth pairing row alone predicts control
+acceptance. Association identity stayed unchanged across the radio restarts.
+
+Group raw demodulation matches by RF sync-time clusters before byte grouping:
+otherwise byte-identical retries inside an analysis window can collapse into a
+single median timestamp. Raw recordings remain preserved locally.
+
+The captured family-86 state reports are now decoded alongside families 82 and
+85. Result-3 byte-17 `10` is classified as negative, like the older `00` layout.
+Repeated previous-session summaries during a new run no longer override physical
+watering state. Summary elapsed time includes odd seconds (the stock 35-second
+summary), distinct from whole-minute command duration encoding.
+
+Ten report/ACK golden pairs from
+`fixtures/htv145_selector2_stock_pairing_control_20260905.json` reproduce in Python
+and native firmware tests. Runtime ACKs use explicit association routes and a
+calibrated frequency, echo the report counter/marker and never consume a command
+counter. The new ACK timing remains an on-air qualification question, separate
+from the already successful `.22` control transmissions.

@@ -25,6 +25,7 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> fromHex(
 
 }  // namespace
 
+// Synthetic endpoints; captured bodies and original CRC residues preserved.
 int main() {
     static_assert(
         rainpoint::htv145::kTargetFactoryCounter == 2,
@@ -32,9 +33,9 @@ int main() {
     );
     rainpoint::htv145::PairingProfile profile{};
     assert(rainpoint::htv145::buildProfile(
-        {{0x34, 0x2d, 0x00, 0x8f}},
-        {{0xb9, 0x84, 0x02, 0x80}},
-        {{0x39, 0x84, 0x02, 0x80}},
+        {{0x31, 0xc2, 0xd3, 0x8f}},
+        {{0xa1, 0xb2, 0xc3, 0x80}},
+        {{0x21, 0xb2, 0xc3, 0x80}},
         profile
     ));
     assert(rainpoint::htv145::replyStartDelayUs(0) == 49'650);
@@ -58,16 +59,16 @@ int main() {
     );
 
     const auto factory0 = fromHex(
-        "79f4882f2880000000342d008f80808402ff8f970080bf060000000000000000000000007ccf"
+        "79f4882f288000000031c2d38f80808402ff8f970080bf0600000000000000000000000057be"
     );
     const auto factory1 = fromHex(
-        "79f4882f2880000000342d008f81008402ff8f970080bf060000000000000000000000002b41"
+        "79f4882f288000000031c2d38f81008402ff8f970080bf060000000000000000000000000030"
     );
     const auto factory2 = fromHex(
-        "79f4882f2880000000342d008f82008402ff8f970080bf060000000000000000000000000c4c"
+        "79f4882f288000000031c2d38f82008402ff8f970080bf06000000000000000000000000273d"
     );
     const auto request1 = fromHex(
-        "79f4882f28b9840280b42d008f828107862580804f8000000040800056800000000000004301"
+        "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000001c71"
     );
 
     rainpoint::htv145::PairingSession session(profile);
@@ -90,30 +91,57 @@ int main() {
         profile, 0, capturedClock, reply
     ));
     assert(reply == fromHex(
-        "79f4882f28b42d008fb9840280824085850086700098e1a10d01008000000000000000001133"
+        "79f4882f28b1c2d38fa1b2c380824085850086700098e1a10d0100800000000000000000be64"
     ));
     assert(rainpoint::htv145::buildReply(
         profile, 1, capturedClock, reply
     ));
     assert(reply == fromHex(
-        "79f4882f28b42d008fb984028082c10100008000000000000000000000000000000000004ca5"
+        "79f4882f28b1c2d38fa1b2c38082c1010000800000000000000000000000000000000000e3f2"
     ));
     assert(rainpoint::htv145::buildReply(
         profile, 3, capturedClock, reply
     ));
     assert(reply == fromHex(
-        "79f4882f28b42d008fb9840280834287802c0105000f0000000000000000000000000000063f"
+        "79f4882f28b1c2d38fa1b2c380834287802c0105000f0000000000000000000000000000a968"
     ));
     assert(rainpoint::htv145::buildReply(
         profile, 4, capturedClock, reply
     ));
     assert(reply == fromHex(
-        "79f4882f28b42d008fb984028083c3008000000000000000000000000000000000000000221c"
+        "79f4882f28b1c2d38fa1b2c38083c30080000000000000000000000000000000000000008d4b"
     ));
     assert(rainpoint::htv145::buildReply(
         profile, 5, capturedClock, reply
     ));
     assert(reply == fromHex(
-        "79f4882f28b42d008fb9840280846c8180190000000000000000000000000000000000000bd8"
+        "79f4882f28b1c2d38fa1b2c380846c818019000000000000000000000000000000000000a48f"
     ));
+    assert(session.finishReply(true, 7'001));
+    const auto configurationResponse = fromHex("79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d");
+    const auto request3 = fromHex("79f4882f28a1b2c380b1c2d38f830281060080000000000000000000000000000000000012c3");
+    const auto request4 = fromHex("79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189");
+    const auto request5 = fromHex("79f4882f28a1b2c380b1c2d38f842c80990000000000000000000000000000000000000077cd");
+    assert(session.claimReply(request4, 8'000) == nullptr);  // out of order
+    assert(session.claimReply(configurationResponse, 9'000) == nullptr); // no reply
+    assert(session.completedSteps() == 3);
+    assert(session.claimReply(request3, 10'000) == &profile.steps[3]);
+    assert(session.finishReply(true, 10'001));
+    assert(session.claimReply(request4, 11'000) == &profile.steps[4]);
+    assert(session.finishReply(true, 11'001));
+    assert(session.completedSteps() == 5);
+    assert(session.state() == rainpoint::PairingSessionState::Armed);
+    auto corrupt = request5; corrupt[37] ^= 1;
+    assert(session.claimReply(corrupt, 12'000) == nullptr);
+    assert(session.claimReply(request5, 12'100) == &profile.steps[5]);
+    assert(session.finishReply(true, 12'101));
+    assert(session.state() == rainpoint::PairingSessionState::Completed);
+    rainpoint::htv145::PairingSession rejected(profile);
+    rejected.arm(0);
+    assert(rejected.claimReply(factory2, 1) == &profile.steps[0]);
+    assert(rejected.finishReply(true, 2));
+    assert(rejected.claimReply(factory0, 3) == nullptr);
+    assert(rejected.stage0Rejected());
+    assert(rejected.state() == rainpoint::PairingSessionState::Failed);
+
 }

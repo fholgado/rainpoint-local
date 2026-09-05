@@ -43,6 +43,8 @@ class Htv145ControlProfile:
     invert: bool
     trailer_residual: int
     command_marker_inverted: bool = False
+    close_trailer_residual: int = 0x4f03
+    report_ack_center_hz: int | None = None
 
     def __post_init__(self) -> None:
         if not _NODE_ID.fullmatch(self.node_id):
@@ -52,7 +54,7 @@ class Htv145ControlProfile:
             raise ValueError("HTV145 endpoints must be lowercase hexadecimal")
         if self.controller_endpoint == self.valve_endpoint:
             raise ValueError("HTV145 endpoints must differ")
-        if not 400_000_000 <= self.center_hz <= 500_000_000:
+        if not 433_000_000 <= self.center_hz <= 435_000_000:
             raise ValueError("HTV145 center frequency is outside bench bounds")
         if not -30 <= self.power_dbm <= 10:
             raise ValueError("HTV145 transmit power is outside CC1101 bounds")
@@ -60,6 +62,10 @@ class Htv145ControlProfile:
             raise ValueError("HTV145 inversion flag must be a boolean")
         if not isinstance(self.command_marker_inverted, bool):
             raise ValueError("HTV145 command marker must be a boolean")
+        if self.report_ack_center_hz is not None and not 433_000_000 <= self.report_ack_center_hz <= 435_000_000:
+            raise ValueError("HTV145 report ACK frequency is outside RF bounds")
+        if self.close_trailer_residual not in TRAILER_RESIDUES:
+            raise ValueError("unknown HTV145 close trailer residual")
         if self.trailer_residual not in TRAILER_RESIDUES:
             raise ValueError("unknown HTV145 trailer residual")
 
@@ -94,6 +100,9 @@ class Htv145ControlCoordinator:
         self, profile: Htv145ControlProfile, *, observed_at: str
     ) -> dict[str, Any]:
         """Persist a profile without enabling or transmitting anything."""
+        previous = self.store.htv145_control_states(profile.valve_endpoint)
+        if previous and previous[0]["report_ack_center_hz"] is not None:
+            raise RuntimeError("revoke the persistent HTV145 ACK owner before reconfiguration")
         return self.store.configure_htv145_control(
             valve_endpoint=profile.valve_endpoint,
             controller_endpoint=profile.controller_endpoint,
@@ -103,6 +112,8 @@ class Htv145ControlCoordinator:
             invert=profile.invert,
             trailer_residual=profile.trailer_residual,
             command_marker_inverted=profile.command_marker_inverted,
+            close_trailer_residual=profile.close_trailer_residual,
+            report_ack_center_hz=profile.report_ack_center_hz,
             updated_at=observed_at,
         )
 
@@ -125,6 +136,59 @@ class Htv145ControlCoordinator:
             source="passive_stock_command",
             observed_at=observed_at,
         )
+
+    def synchronize_from_exchange(
+        self, profile: Htv145ControlProfile, command: bytes, response: bytes,
+        *, observed_at: str,
+    ) -> dict[str, Any]:
+        """Seed/recover from a positive exchange on the selected association."""
+        state = self._state(profile.valve_endpoint)
+        self._require_profile(state, profile)
+        request = decode_htv145_gateway_command(command, profile.link)
+        reply = decode_htv145_command_response(response, profile.link)
+        if request is None or reply is None or any(
+            request[key] != reply[key]
+            for key in ("sequence", "watering", "command_marker_inverted")
+        ) or reply["command_marker_inverted"] != profile.command_marker_inverted:
+            raise ValueError("HTV145 counter requires a matching positive exchange")
+        if state["last_command_started_at"] and datetime.fromisoformat(observed_at) <= datetime.fromisoformat(state["last_command_started_at"]):
+            raise ValueError("HTV145 exchange predates the last local command")
+        return self.store.synchronize_htv145_control_counter(
+            valve_endpoint=profile.valve_endpoint, next_sequence=int(reply["next_sequence"]),
+            source="matching_immediate_response", observed_at=observed_at,
+        )
+
+    @staticmethod
+    def restored_profile(state: dict[str, Any]) -> Htv145ControlProfile:
+        return Htv145ControlProfile(**{
+            name: state[name] for name in Htv145ControlProfile.__dataclass_fields__
+        })
+
+    def readiness(self, profile: Htv145ControlProfile, *, observed_at: str) -> dict[str, Any]:
+        """Morning/daytime check with no RF synchronization or actuation.
+
+        Like HTV405, keep the authenticated counter for direct daytime sends.
+        HTV145 has no proven idle-close anchor: an unknown counter stays blocked.
+        Expired runs raise an observation-only anomaly; never send a close.
+        """
+        state = self._state(profile.valve_endpoint)
+        self._require_profile(state, profile)
+        now = datetime.fromisoformat(observed_at)
+        if state["pending_started_at"] and (now - datetime.fromisoformat(state["pending_started_at"])).total_seconds() > 15:
+            state = self.store.fail_htv145_command(
+                valve_endpoint=profile.valve_endpoint, command_id=state["pending_command_id"],
+                reason="confirmation_timeout_counter_unsynchronized", observed_at=observed_at,
+            )
+        fresh = bool(state["confirmed_at"] and 0 <= (now - datetime.fromisoformat(state["confirmed_at"])).total_seconds() <= 3600)
+        overdue = bool(state["expected_idle_at"] and now > datetime.fromisoformat(state["expected_idle_at"]) + timedelta(seconds=30))
+        return {
+            "ready": bool(state["counter_synchronized"] and state["pending_command_id"] is None and state["revocation_command_id"] is None and state["confirmed_watering"] is False and fresh and not overdue),
+            "counter_synchronized": state["counter_synchronized"],
+            "next_sequence": state["next_sequence"], "fresh_state": fresh,
+            "anomaly": "expected_idle_not_observed" if overdue else None,
+            "recovery_required": not state["counter_synchronized"],
+            "policy": "persistent_counter_direct_commands", "state": state,
+        }
 
     def start(
         self, profile: Htv145ControlProfile, *, observed_at: str
@@ -150,12 +214,16 @@ class Htv145ControlCoordinator:
             invert=profile.invert,
             trailer_residual=profile.trailer_residual,
             command_marker_inverted=profile.command_marker_inverted,
+            close_trailer_residual=profile.close_trailer_residual,
+            report_ack_center_hz=profile.report_ack_center_hz,
         )
         commands = [configure]
         if state["counter_synchronized"]:
             commands.append(
                 self._command(
                     "htv145_control_sync",
+                    controller_endpoint=profile.controller_endpoint,
+                    valve_endpoint=profile.valve_endpoint,
                     next_sequence=state["next_sequence"],
                 )
             )
@@ -209,6 +277,8 @@ class Htv145ControlCoordinator:
         """Persist state and resolve a reservation only with matching evidence."""
         state = self._state(profile.valve_endpoint)
         self._require_profile(state, profile)
+        if state["pending_started_at"] and datetime.fromisoformat(observed_at) < datetime.fromisoformat(state["pending_started_at"]):
+            raise ValueError("HTV145 evidence predates the pending command")
         error = decode_htv145_command_error(frame, profile.link)
         if error is not None:
             if (
@@ -239,10 +309,16 @@ class Htv145ControlCoordinator:
                 frame=frame.hex(),
             )
         report = decode_htv145_state_report(frame, profile.link)
-        if report is None:
-            report = decode_htv145_terminal_idle_report(frame, profile.link)
+        if report is None and decode_htv145_terminal_idle_report(frame, profile.link) is not None:
+            # Summaries are retried until ACKed, including during later runs.
+            # They never confirm a command or overwrite current physical state.
+            return state
         if report is None:
             raise ValueError("frame is not matching HTV145 valve evidence")
+        evidence_time = datetime.fromisoformat(observed_at)
+        for field in ("confirmed_at", "pending_started_at"):
+            if state[field] and evidence_time < datetime.fromisoformat(state[field]):
+                raise ValueError("HTV145 state evidence predates current command/state")
         watering = bool(report["watering"])
         if state["pending_command_id"] is not None:
             expected_watering = state["pending_action"] == "open"
@@ -355,7 +431,8 @@ class Htv145ControlCoordinator:
         if duration_seconds is not None:
             fields["duration_seconds"] = duration_seconds
         command = self._command(
-            f"htv145_control_{action}", command_id=command_id, **fields
+            f"htv145_control_{action}", command_id=command_id,
+            controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint, **fields
         )
         try:
             # This is one logical send. The ESP32 owns the one bounded burst of
@@ -390,6 +467,8 @@ class Htv145ControlCoordinator:
             "invert": profile.invert,
             "trailer_residual": profile.trailer_residual,
             "command_marker_inverted": profile.command_marker_inverted,
+            "close_trailer_residual": profile.close_trailer_residual,
+            "report_ack_center_hz": profile.report_ack_center_hz,
         }
         if any(state[key] != value for key, value in fields.items()):
             raise ValueError("HTV145 profile differs from durable association")

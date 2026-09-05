@@ -256,15 +256,13 @@ class RainPointProtocolTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     expected["duration_seconds"],
-                    rf["duration_seconds"],
+                    rf["last_session_duration_seconds"],
                 )
                 self.assertEqual(
                     expected["is_watering"], cloud["is_watering"]
                 )
-                self.assertEqual(
-                    expected["is_watering"], rf["is_watering"]
-                )
-                self.assertEqual("idle", rf["valve_state"])
+                self.assertNotIn("is_watering", rf)
+                self.assertNotIn("valve_state", rf)
                 self.assertTrue(rf["trailer_valid"])
                 self.assertNotIn("battery_status", rf)
                 self.assertNotIn("battery_percent", rf)

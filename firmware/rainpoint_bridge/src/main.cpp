@@ -7,12 +7,12 @@
 #include <cstdint>
 
 #include "cc1101.h"
-#include "rainpoint_fifo_calibration.h"
+#include "rainpoint_clocked_transmit.h"
 #include "rainpoint_ack.h"
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 #include "rainpoint_htv145_control.h"
 #endif
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 #include "rainpoint_htv145_pairing.h"
 #endif
 #include "rainpoint_pairing.h"
@@ -21,109 +21,7 @@
 #include "rainpoint_valve_control.h"
 #include "rainpoint_valve_pairing.h"
 #include "wifi_transport.h"
-#if RAINPOINT_OTA_CANDIDATE == 1
 #include "ota_trial.h"
-#endif
-
-#if RAINPOINT_RADIO_COUNT != 1 && RAINPOINT_RADIO_COUNT != 2
-#error "RAINPOINT_RADIO_COUNT must be 1 or 2"
-#endif
-
-#if RAINPOINT_RESEARCH_BENCH != 0 && RAINPOINT_RESEARCH_BENCH != 1
-#error "RAINPOINT_RESEARCH_BENCH must be 0 or 1"
-#endif
-
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL != 0 && RAINPOINT_SUPERVISED_HTV405_CONTROL != 1
-#error "RAINPOINT_SUPERVISED_HTV405_CONTROL must be 0 or 1"
-#endif
-
-#if RAINPOINT_SENSOR_A_CANDIDATE != 0 && RAINPOINT_SENSOR_A_CANDIDATE != 1
-#error "RAINPOINT_SENSOR_A_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_PAIRING_GENERALIZATION != 0 && RAINPOINT_PAIRING_GENERALIZATION != 1
-#error "RAINPOINT_PAIRING_GENERALIZATION must be 0 or 1"
-#endif
-
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE != 0 && RAINPOINT_ROUTINE_ACK_CANDIDATE != 1
-#error "RAINPOINT_ROUTINE_ACK_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_OTA_CANDIDATE != 0 && RAINPOINT_OTA_CANDIDATE != 1
-#error "RAINPOINT_OTA_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE != 0 && RAINPOINT_VALVE_PAIRING_CANDIDATE != 1
-#error "RAINPOINT_VALVE_PAIRING_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_TX_CANDIDATE != 0 && RAINPOINT_HTV145_TX_CANDIDATE != 1
-#error "RAINPOINT_HTV145_TX_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1 && RAINPOINT_RESEARCH_BENCH != 1
-#error "HTV145 transmit candidate requires the research-bench build"
-#endif
-
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE != 0 && RAINPOINT_HTV145_PAIRING_CANDIDATE != 1
-#error "RAINPOINT_HTV145_PAIRING_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1 && RAINPOINT_RESEARCH_BENCH != 1
-#error "HTV145 pairing candidate requires the research-bench build"
-#endif
-
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1 && RAINPOINT_VALVE_PAIRING_CANDIDATE != 1
-#error "HTV145 pairing candidate requires valve pairing support"
-#endif
-
-#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 0 && RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 1
-#error "RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1)
-#error "HTV145 post-frame tail candidate requires the research pairing build"
-#endif
-
-#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 0 && RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 1
-#error "RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1 || RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE != 1)
-#error "HTV145 delayed-prearm candidate requires the frozen research prefix"
-#endif
-
-#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 0 && RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 1
-#error "RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1 && (RAINPOINT_RESEARCH_BENCH != 1 || RAINPOINT_HTV145_PAIRING_CANDIDATE != 1 || RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE != 1)
-#error "HTV145 FIFO configuration candidate requires the frozen counter-2 research prefix"
-#endif
-
-#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 0 && RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 1
-#error "RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1 && RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE != 1
-#error "HTV145 step-4 tail candidate requires the accepted FIFO-configuration prefix"
-#endif
-
-#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE != 0 && RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE != 1
-#error "RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE must be 0 or 1"
-#endif
-
-#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1 && RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE != 1
-#error "HTV145 step-4 FIFO candidate requires the measured tail discriminator"
-#endif
-
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION != 1
-#error "Routine acknowledgement trials require generalized pairing"
-#endif
-
-#if RAINPOINT_SENSOR_A_CANDIDATE == 1 && RAINPOINT_PAIRING_GENERALIZATION == 1
-#error "Select only one experimental pairing firmware mode"
-#endif
 
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
@@ -143,7 +41,6 @@ constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint8_t kHcs026TelemetryChannel = 0;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 constexpr std::uint32_t kIdentifyToggleMs = 250;
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 // Supervised HTV405 control. This association-normalized selector-2 base
 // plus the node's pairing calibration (97,154 Hz on the validated bench node)
 // requests 433,518,527 Hz and lands on the accepted ~433.471 MHz carrier.
@@ -175,7 +72,6 @@ constexpr std::uint32_t kValveProbeResponseListenMs = 3'000;
 // Bounded span covering both the selector-6 and selector-2 gateway carriers.
 // Pairing calibration remains independently bounded.
 constexpr std::int32_t kValveProbeMaxFrequencyOffsetHz = 1'500'000;
-#endif
 
 SPIClass radioSpi(VSPI);
 rainpoint::Cc1101 primaryRadio(
@@ -186,38 +82,22 @@ rainpoint::Cc1101 primaryRadio(
     kPrimaryClockPin
 );
 rainpoint::WifiTransport wifiTransport;
-#if RAINPOINT_OTA_CANDIDATE == 1
 rainpoint::OtaTrial otaTrial;
 bool radiosHealthy = false;
-#endif
-#if RAINPOINT_RADIO_COUNT == 2
-rainpoint::Cc1101 diagnosticRadio(
-    radioSpi,
-    kDiagnosticChipSelectPin,
-    kSpiMisoPin,
-    kDiagnosticDataPin
-);
-#endif
 rainpoint::PairingProfile activePairingProfile =
-#if RAINPOINT_SENSOR_A_CANDIDATE == 1
-    rainpoint::kSensorAHcs026CandidateProfile;
-#else
     rainpoint::kValidatedHcs026Profile;
-#endif
 rainpoint::PairingSession pairingSession(activePairingProfile);
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
 rainpoint::Htv405PairingProfile activeValvePairingProfile{};
 rainpoint::Htv405PairingSession valvePairingSession(activeValvePairingProfile);
 bool valvePairingActive = false;
 bool valvePairingKnownRejoin = false;
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 rainpoint::htv145::PairingProfile activeHtv145PairingProfile{};
 rainpoint::htv145::PairingSession htv145PairingSession(
     activeHtv145PairingProfile
 );
 bool valvePairingHtv145 = false;
 std::uint32_t htv145ReceiveCalibrationUntilMs = 0;
-#endif
 #endif
 std::uint8_t pairingAssignedChannel = rainpoint::pairingChannelFromReply(
     activePairingProfile.steps[0].frame
@@ -234,7 +114,6 @@ bool pairingRequiresNetwork = false;
 bool pairingAutomaticDiscovery = false;
 bool pairingFactoryAdopted = false;
 String pairingCommandId;
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
 rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
 rainpoint::Htv405RoutineAckAuthorizations htv405RoutineAckAuthorizations;
 std::uint32_t routineAckTransmissions = 0;
@@ -260,7 +139,6 @@ void reportHtv405RoutineAckStatus(
     const rainpoint::Htv405RoutineAckAuthorization& authorization,
     const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
 );
-#endif
 std::uint32_t lastHealthReport = 0;
 std::uint32_t lastLoopAt = 0;
 std::uint32_t maximumLoopGapMs = 0;
@@ -274,7 +152,6 @@ String rfMaintenanceCommandId;
 std::uint32_t rfRejectedCommandCount = 0;
 bool nodeRestartPending = false;
 
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 struct ValveControlProbe {
     rainpoint::Htv405ValveLink link{};
     rainpoint::Htv405GatewayControlLink gatewayControlLink{};
@@ -304,8 +181,6 @@ struct ValveControlProbe {
     bool confirmedStateValid = false;
     bool confirmedWatering = false;
     std::uint8_t lastConfirmedSequence = 0;
-    bool ackQueued = false;
-    bool ackSent = false;
     bool openQueued = false;
     bool closeQueued = false;
     rainpoint::Htv405SyncWait syncWait{};
@@ -317,14 +192,14 @@ struct ValveControlProbe {
 };
 
 ValveControlProbe valveControlProbe;
-#endif
 
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 struct Htv145ControlCandidate {
     rainpoint::Htv145Link link{};
     std::array<std::uint8_t, rainpoint::kFrameBytes> commandFrame{};
     String commandId;
     std::uint32_t centerHz = 0;
+    std::uint32_t reportAckCenterHz = 0;
     std::uint32_t durationSeconds = 0;
     std::uint32_t burstStartedAtMs = 0;
     std::uint32_t nextAttemptAtMs = 0;
@@ -345,7 +220,6 @@ struct Htv145ControlCandidate {
     std::uint16_t conflictingStateFrames = 0;
     bool invert = false;
     bool commandMarkerInverted = false;
-    bool counterAssumed = false;
     bool configured = false;
     bool counterAuthenticated = false;
     bool pending = false;
@@ -359,10 +233,8 @@ bool htv145CommandIssued = false;
 std::uint32_t lastHtv145CommandStartedAtMs = 0;
 #endif
 
-#if RAINPOINT_RADIO_COUNT == 1
 bool scanChannels = true;
 std::uint32_t lastChannelChange = 0;
-#endif
 
 String hexString(const std::uint8_t* data, std::size_t length) {
     constexpr char digits[] = "0123456789abcdef";
@@ -686,7 +558,6 @@ void printNodeHealth() {
     line += rfRejectedCommandCount;
     line += ",\"node_reboot_pending\":";
     line += nodeRestartPending ? "true" : "false";
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     line += ",\"routine_ack_authorized_sensors\":";
     line += static_cast<unsigned int>(routineAckAuthorizations.activeCount());
     line += ",\"routine_ack_receive_channel\":";
@@ -711,23 +582,15 @@ void printNodeHealth() {
     line += sensorRecoveryFailures;
     line += ",\"sensor_recovery_completions\":";
     line += sensorRecoveryCompletions;
-#endif
     line += "}";
     emitLine(line);
     maximumLoopGapMs = 0;
 }
 
 void reportHealth() {
-#if RAINPOINT_RADIO_COUNT == 1
     printRadioHealth("primary", primaryRadio);
-#else
-    printRadioHealth("primary", primaryRadio);
-    printRadioHealth("diagnostic", diagnosticRadio);
-#endif
     printNodeHealth();
-#if RAINPOINT_OTA_CANDIDATE == 1
     emitLine(otaTrial.status(wifiTransport.nodeId()));
-#endif
 }
 
 const char* pairingStateName(rainpoint::PairingSessionState state) {
@@ -765,44 +628,38 @@ const char* pairingFailureReasonName(rainpoint::PairingFailureReason reason) {
 }
 
 rainpoint::PairingSessionState currentPairingState() {
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             return htv145PairingSession.state();
         }
 #endif
         return valvePairingSession.state();
     }
-#endif
     return pairingSession.state();
 }
 
 std::size_t currentPairingCompletedSteps() {
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             return htv145PairingSession.completedSteps();
         }
 #endif
         return valvePairingSession.completedSteps();
     }
-#endif
     return pairingSession.completedSteps();
 }
 
 rainpoint::PairingFailureReason currentPairingFailureReason() {
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             return htv145PairingSession.failureReason();
         }
 #endif
         return valvePairingSession.failureReason();
     }
-#endif
     return pairingSession.failureReason();
 }
 
@@ -813,28 +670,24 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += wifiTransport.nodeId();
     line += "\",\"profile\":\"";
     line +=
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive ?
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
             (valvePairingHtv145 ? rainpoint::htv145::kProfileId :
                 rainpoint::kAutomaticHtv405ProfileId) :
 #else
             rainpoint::kAutomaticHtv405ProfileId :
 #endif
-#endif
         activePairingProfile.id;
     line += "\",\"factory_endpoint\":\"";
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
             valvePairingActive ?
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
                 (valvePairingHtv145
                     ? activeHtv145PairingProfile.factoryEndpoint.data()
                     : activeValvePairingProfile.factoryEndpoint.data()) :
 #else
                 activeValvePairingProfile.factoryEndpoint.data() :
-#endif
 #endif
             activePairingProfile.factoryEndpoint.data(),
             4
@@ -843,15 +696,13 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += "\",\"paired_endpoint\":\"";
     if (!pairingAutomaticDiscovery || pairingFactoryAdopted) {
         line += hexString(
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
             valvePairingActive ?
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
                 (valvePairingHtv145
                     ? activeHtv145PairingProfile.pairedEndpoint.data()
                     : activeValvePairingProfile.pairedEndpoint.data()) :
 #else
                 activeValvePairingProfile.pairedEndpoint.data() :
-#endif
 #endif
             activePairingProfile.pairedEndpoint.data(),
             4
@@ -869,10 +720,9 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += currentPairingCompletedSteps();
     line += ",\"step_count\":";
     line +=
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive
             ?
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
                 (valvePairingHtv145
                     ? activeHtv145PairingProfile.steps.size()
                     : activeValvePairingProfile.stepCount)
@@ -880,17 +730,15 @@ void reportPairingStatus(const char* detail = nullptr) {
                 activeValvePairingProfile.stepCount
 #endif
             :
-#endif
         activePairingProfile.stepCount;
     line += ",\"assigned_channel\":";
     line += pairingAssignedChannel;
     line += ",\"automatic_discovery\":";
     line += pairingAutomaticDiscovery ? "true" : "false";
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     line += ",\"retained_association_rejoin\":";
     line += valvePairingActive && valvePairingKnownRejoin ? "true" : "false";
     if (valvePairingActive) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             line += ",\"counter_offset\":0";
             line += ",\"counter_offset_known\":false";
@@ -941,20 +789,15 @@ void reportPairingStatus(const char* detail = nullptr) {
         line += valvePairingSession.replyMarkerRepeat() ? "true" : "false";
         }
     }
-#endif
     line += ",\"factory_adopted\":";
     line += pairingFactoryAdopted ? "true" : "false";
     line += ",\"awaiting_terminal_confirmation\":";
     line +=
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive ? "false" :
-#endif
         (pairingSession.awaitingTerminalConfirmation() ? "true" : "false");
     line += ",\"terminal_trigger\":\"";
     line +=
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive ? "final_reply" :
-#endif
         "paired_message_3";
     line += '"';
     line += ",\"failure_reason\":\"";
@@ -968,10 +811,9 @@ void reportPairingStatus(const char* detail = nullptr) {
     line += pairingInvert ? "true" : "false";
     line += ",\"frequency_offset_hz\":";
     line += pairingFrequencyOffsetHz;
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
         const std::uint32_t profileCenterHz =
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
             valvePairingHtv145
                 ? activeHtv145PairingProfile.steps[0].channelCenterHz
                 :
@@ -983,7 +825,6 @@ void reportPairingStatus(const char* detail = nullptr) {
         line += static_cast<std::int64_t>(profileCenterHz) +
             pairingFrequencyOffsetHz;
     }
-#endif
     line += ",\"power_dbm\":";
     line += pairingPowerDbm;
     line += ",\"local_clock_set\":";
@@ -999,19 +840,15 @@ void reportPairingStatus(const char* detail = nullptr) {
 }
 
 void restoreScanningAfterPairing() {
-#if RAINPOINT_RADIO_COUNT == 1
     scanChannels = true;
     lastChannelChange = millis();
-#endif
 }
 
 void cancelPairing(const char* detail) {
     pairingSession.cancel();
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingSession.cancel();
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     htv145PairingSession.cancel();
-#endif
 #endif
     pairingRequiresNetwork = false;
     restoreScanningAfterPairing();
@@ -1020,9 +857,6 @@ void cancelPairing(const char* detail) {
 
 void setAllRadioTransmitEnabled(bool enabled) {
     primaryRadio.setTransmitEnabled(enabled);
-#if RAINPOINT_RADIO_COUNT == 2
-    diagnosticRadio.setTransmitEnabled(enabled);
-#endif
 }
 
 const char* rfModeName() {
@@ -1063,12 +897,10 @@ bool rfCommandMayTransmit(const String& type) {
         type == "firmware_update_start") {
         return true;
     }
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (type == "valve_control_open" || type == "valve_control_close") {
         return true;
     }
-#endif
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (
         type == "htv145_control_open" ||
         type == "htv145_control_close"
@@ -1090,14 +922,11 @@ void enterRfReceiveOnly(
     if (currentPairingState() == rainpoint::PairingSessionState::Armed) {
         cancelPairing("rf_receive_only");
     }
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
-    valveControlProbe.ackQueued = false;
     valveControlProbe.openQueued = false;
     valveControlProbe.closeQueued = false;
     valveControlProbe.commandPendingConfirmation = false;
     valveControlProbe.responseListenActive = false;
-#endif
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (htv145ControlCandidate.pending) {
         htv145ControlCandidate.pending = false;
         htv145ControlCandidate.counterAuthenticated = false;
@@ -1124,53 +953,7 @@ void pollRfMaintenance() {
     reportRfMaintenanceStatus("receive_only_expired");
 }
 
-#if RAINPOINT_RESEARCH_BENCH == 1
-bool handlePairingProbe(const String& command) {
-    for (std::size_t index = 0;
-         index < activePairingProfile.stepCount;
-         ++index) {
-        const String expected = String("pairing_probe_b ") + (index + 1) +
-            " 15a98024";
-        if (command != expected) {
-            continue;
-        }
-        if (pairingSession.state() == rainpoint::PairingSessionState::Armed) {
-            emitLine(
-                "{\"type\":\"command_error\","
-                "\"error\":\"pairing_is_armed\"}"
-            );
-            return true;
-        }
-        const auto& step = activePairingProfile.steps[index];
-        const std::int64_t adjustedFrequency =
-            static_cast<std::int64_t>(step.channelCenterHz) +
-            pairingFrequencyOffsetHz;
-        const bool sent = primaryRadio.transmitAsync(
-            step.frame,
-            static_cast<std::uint32_t>(adjustedFrequency),
-            step.wakeSymbols,
-            pairingInvert,
-            rainpoint::pairingPaTableValue(pairingPowerDbm)
-        );
-        String line =
-            "{\"type\":\"pairing_tx_probe\",\"profile\":\"";
-        line += activePairingProfile.id;
-        line += "\","
-            "\"step\":";
-        line += index + 1;
-        line += ",\"channel_center_hz\":";
-        line += static_cast<long>(adjustedFrequency);
-        line += ",\"success\":";
-        line += sent ? "true" : "false";
-        line += '}';
-        emitLine(line);
-        return true;
-    }
-    return false;
-}
-#endif
 
-#if RAINPOINT_RADIO_COUNT == 1
 void selectChannel(std::uint8_t channel) {
     if (primaryRadio.setChannel(channel)) {
         lastChannelChange = millis();
@@ -1180,9 +963,7 @@ void selectChannel(std::uint8_t channel) {
         );
     }
 }
-#endif
 
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
 bool parseSignedLongValue(const String& value, long& result) {
     if (value.isEmpty() || value.length() > 11) {
         return false;
@@ -1373,7 +1154,7 @@ bool transmitQueuedValveProbe(
     std::uint32_t startAtMicros,
     rainpoint::Htv405SyncReport syncReport = rainpoint::Htv405SyncReport::None
 ) {
-    if (!valveControlProbe.ackQueued && !valveControlProbe.openQueued &&
+    if (!valveControlProbe.openQueued &&
         !valveControlProbe.closeQueued) {
         return false;
     }
@@ -1385,20 +1166,12 @@ bool transmitQueuedValveProbe(
     }
 
     std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
-    const bool acknowledging = valveControlProbe.ackQueued;
     const bool opening = valveControlProbe.openQueued;
     const rainpoint::Htv405Phase commandPhase{
         valveControlProbe.commandSequence,
         valveControlProbe.commandRepeat,
     };
-    const bool built = acknowledging
-        ? rainpoint::buildHtv405GatewayLinkAckFrame(
-            valveControlProbe.gatewayControlLink,
-            valveControlProbe.currentReportPhase,
-            0xc713,
-            frame
-        )
-        : opening
+    const bool built = opening
         ? rainpoint::buildHtv405GatewayOpenFrame(
             valveControlProbe.gatewayControlLink,
             commandPhase,
@@ -1419,13 +1192,12 @@ bool transmitQueuedValveProbe(
     const bool sent = built && radio.transmitAsync(
         frame,
         valveProbeCenterHz(),
-        acknowledging ? 320 : kValveProbeWakeSymbols,
+        kValveProbeWakeSymbols,
         false,
         rainpoint::pairingPaTableValue(kValveProbePowerDbm),
         rainpoint::kOrdinaryDeviationRegister,
         startAtMicros
     );
-    valveControlProbe.ackQueued = false;
     valveControlProbe.openQueued = false;
     valveControlProbe.closeQueued = false;
     valveControlProbe.phaseValid = false;
@@ -1436,25 +1208,15 @@ bool transmitQueuedValveProbe(
         );
         return true;
     }
-    if (acknowledging) {
-        valveControlProbe.ackSent = true;
-        valveControlProbe.phaseValid = false;
-        if (!radio.restoreReceiveChannel(kHcs026TelemetryChannel)) {
-            reportValveProbeError("ordinary_receiver_restore_failed");
-        }
-        reportValveProbeStatus("gateway_link_ack_sent", &frame);
-        return true;
-    } else {
-        valveControlProbe.commandFrame = frame;
-        valveControlProbe.commandBurstStartedAtMs = millis();
-        valveControlProbe.commandAttemptsSent = 1;
-        valveControlProbe.responseListenActive =
-            radio.setReceiveFrequency(valveProbeCenterHz());
-        valveControlProbe.responseListenUntilMs =
-            millis() + kValveProbeResponseListenMs;
-        if (!valveControlProbe.responseListenActive) {
-            reportValveProbeError("control_response_receiver_tune_failed");
-        }
+    valveControlProbe.commandFrame = frame;
+    valveControlProbe.commandBurstStartedAtMs = millis();
+    valveControlProbe.commandAttemptsSent = 1;
+    valveControlProbe.responseListenActive =
+        radio.setReceiveFrequency(valveProbeCenterHz());
+    valveControlProbe.responseListenUntilMs =
+        millis() + kValveProbeResponseListenMs;
+    if (!valveControlProbe.responseListenActive) {
+        reportValveProbeError("control_response_receiver_tune_failed");
     }
     // A successful radio write only proves that the bridge transmitted. It
     // does not prove that the valve accepted the frame, so do not advance the
@@ -1786,10 +1548,8 @@ bool configureValveProbe(const String& command) {
     valveControlProbe.selector = static_cast<std::uint8_t>(selector);
     valveControlProbe.frequencyOffsetHz = static_cast<std::int32_t>(offset);
     valveControlProbe.configured = true;
-#if RAINPOINT_RADIO_COUNT == 1
     scanChannels = false;
     selectChannel(0);
-#endif
     reportValveProbeStatus("configured_waiting_for_report");
     return true;
 }
@@ -1825,23 +1585,6 @@ bool transmitValveProbeOpen(
         } else {
             reportValveProbeStatus("open_queued_waiting_for_link_report");
         }
-    }
-    return true;
-}
-
-bool transmitValveProbeAck() {
-    if (!valveControlProbe.configured) {
-        reportValveProbeError("not_configured");
-    } else if (currentPairingState() ==
-            rainpoint::PairingSessionState::Armed) {
-        reportValveProbeError("pairing_is_armed");
-    } else if (valveControlProbe.ackQueued ||
-            valveControlProbe.openQueued ||
-            valveControlProbe.closeQueued) {
-        reportValveProbeError("command_already_queued");
-    } else {
-        valveControlProbe.ackQueued = true;
-        reportValveProbeStatus("link_ack_queued_waiting_for_report");
     }
     return true;
 }
@@ -1907,7 +1650,6 @@ bool configureValveProbeCommandPhase(const String& command) {
     valveControlProbe.commandCounterAuthenticated = false;
     valveControlProbe.openQueued = false;
     valveControlProbe.closeQueued = false;
-    valveControlProbe.ackQueued = false;
     valveControlProbe.openSent = false;
     valveControlProbe.closeSent = false;
     valveControlProbe.commandPendingConfirmation = false;
@@ -1916,61 +1658,8 @@ bool configureValveProbeCommandPhase(const String& command) {
     return true;
 }
 
-bool handleValveProbeCommand(const String& command) {
-    if (command.startsWith("valve_probe_config ")) {
-        return configureValveProbe(command);
-    }
-    if (command == "valve_probe_status") {
-        reportValveProbeStatus("status");
-        return true;
-    }
-    if (command == "valve_probe_ack_once") {
-        return transmitValveProbeAck();
-    }
-    if (command == "valve_probe_open_1_60") {
-        return transmitValveProbeOpen(1, false, 60);
-    }
-    if (command == "valve_probe_open_1_60_now") {
-        return transmitValveProbeOpen(1, true, 60);
-    }
-    if (command == "valve_probe_open_1_120") {
-        return transmitValveProbeOpen(1, false, 120);
-    }
-    if (command == "valve_probe_open_1_120_now") {
-        return transmitValveProbeOpen(1, true, 120);
-    }
-    if (command == "valve_probe_open_2_60_now") {
-        return transmitValveProbeOpen(2, true, 60);
-    }
-    if (command == "valve_probe_open_3_60_now") {
-        return transmitValveProbeOpen(3, true, 60);
-    }
-    if (command == "valve_probe_open_4_60_now") {
-        return transmitValveProbeOpen(4, true, 60);
-    }
-    if (command == "valve_probe_close_1") {
-        return transmitValveProbeClose(1, false);
-    }
-    if (command == "valve_probe_close_1_now") {
-        return transmitValveProbeClose(1, true);
-    }
-    if (command == "valve_probe_close_2_now") {
-        return transmitValveProbeClose(2, true);
-    }
-    if (command == "valve_probe_close_3_now") {
-        return transmitValveProbeClose(3, true);
-    }
-    if (command == "valve_probe_close_4_now") {
-        return transmitValveProbeClose(4, true);
-    }
-    if (command.startsWith("valve_probe_phase ")) {
-        return configureValveProbeCommandPhase(command);
-    }
-    return false;
-}
-#endif
 
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 void reportHtv145CandidateStatus(
     const char* state,
     const char* confirmation = nullptr,
@@ -1987,11 +1676,9 @@ void reportHtv145CandidateStatus(
     line += htv145ControlCandidate.configured ? "true" : "false";
     line += ",\"counter_authenticated\":";
     line += htv145ControlCandidate.counterAuthenticated ? "true" : "false";
-    line += ",\"counter_assumed\":";
-    line += htv145ControlCandidate.counterAssumed ? "true" : "false";
     line += ",\"pending\":";
     line += htv145ControlCandidate.pending ? "true" : "false";
-    if (htv145ControlCandidate.configured) {
+    if (htv145ControlCandidate.configured || strcmp(state, "revoked") == 0) {
         line += ",\"controller_endpoint\":\"";
         line += hexString(
             htv145ControlCandidate.link.controllerEndpoint.data(), 4
@@ -2085,12 +1772,8 @@ void reportHtv145CandidateStatus(
 
 void restoreHtv145CandidateReceive() {
     htv145ControlCandidate.listeningOnCommandCarrier = false;
-#if RAINPOINT_RADIO_COUNT == 1
     scanChannels = true;
     selectChannel(kHcs026TelemetryChannel);
-#else
-    primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel);
-#endif
 }
 
 const char* htv145CandidateFailureClass(const char* state) {
@@ -2152,7 +1835,6 @@ void confirmHtv145Candidate(
                 htv145ControlCandidate.transmittedSequence,
                 htv145ControlCandidate.commandWatering
             );
-        htv145ControlCandidate.counterAssumed = false;
     }
     // Independent watering telemetry proves state, not acceptance of an
     // assumed sequence. Only the matching command response authenticates it.
@@ -2209,16 +1891,13 @@ bool transmitNextHtv145CandidateAttempt() {
 bool startHtv145Candidate(
     const String& commandId,
     bool watering,
-    std::uint32_t durationSeconds,
-    bool assumedDryProbe = false
+    std::uint32_t durationSeconds
 ) {
     if (!htv145ControlCandidate.configured ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
         (htv145CommandIssued && !rainpoint::htv145CommandIntervalElapsed(
             lastHtv145CommandStartedAtMs, millis())) ||
-        (!htv145ControlCandidate.counterAuthenticated && !assumedDryProbe) ||
-        (assumedDryProbe && !rainpoint::validHtv145DryProbeDuration(
-            watering, durationSeconds)) ||
+        !htv145ControlCandidate.counterAuthenticated ||
         htv145ControlCandidate.pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         return false;
@@ -2238,7 +1917,6 @@ bool startHtv145Candidate(
         return false;
     }
     htv145ControlCandidate.commandFrame = frame;
-    htv145ControlCandidate.counterAssumed = assumedDryProbe;
     htv145ControlCandidate.commandId = commandId;
     htv145ControlCandidate.durationSeconds = durationSeconds;
     htv145ControlCandidate.transmittedSequence =
@@ -2263,85 +1941,29 @@ bool startHtv145Candidate(
     htv145ControlCandidate.stateConfirmationDeadlineMs =
         htv145ControlCandidate.burstStartedAtMs +
         rainpoint::kHtv145StateConfirmationWindowMs;
-#if RAINPOINT_RADIO_COUNT == 1
     scanChannels = false;
-#endif
     return transmitNextHtv145CandidateAttempt();
 }
 
-// Serial-only, explicit one-minute dry-valve experiment. This does not arm
-// pairing, authenticate a guessed counter, or add a production HA control.
-bool handleHtv145DryOpenProbe(const String& command) {
-    if (command == "htv145_dry_close") {
-        // Use only the counter authenticated by this test's open response.
-        // startHtv145Candidate also enforces the 15-second hardware interval.
-        if (!htv145ControlCandidate.commandWatering ||
-            !startHtv145Candidate(String("dry-close-") + millis(), false, 0)) {
-            emitLine("{\"type\":\"command_error\",\"error\":\"htv145_dry_close_not_started\"}");
-        }
-        return true;
-    }
-    const bool closeProbe = command.startsWith("htv145_dry_close_probe ");
-    if (!closeProbe && !command.startsWith("htv145_dry_open_probe ")) {
-        return false;
-    }
-    char controller[9]{};
-    char valve[9]{};
-    char extra = 0;
-    unsigned long center = 0;
-    unsigned int sequence = 0;
-    unsigned int residue = 0;
-    int power = 0;
-    int invert = 0;
-    int marker = 0;
-    rainpoint::Htv145Link link{};
-    const int fields = sscanf(
-        command.c_str(),
-        closeProbe
-            ? "htv145_dry_close_probe %8s %8s %lu %x %x %d %d %d %c"
-            : "htv145_dry_open_probe %8s %8s %lu %x %x %d %d %d %c",
-        controller, valve, &center, &sequence, &residue, &power,
-        &invert, &marker, &extra
-    );
-    if (fields != 8 ||
-        !parseRawHexEndpoint(String(controller), link.controllerEndpoint) ||
-        !parseRawHexEndpoint(String(valve), link.valveEndpoint) ||
-        !rainpoint::validHtv145Link(link) ||
-        link.controllerEndpoint[3] != 0x8f ||
-        center < 433'000'000 || center > 435'000'000 ||
-        sequence < 0x80 || sequence > 0x9f ||
-        (residue != 0xc713 && residue != 0x4f03) ||
-        power < -128 || power > 127 ||
-        !rainpoint::validPairingPowerDbm(static_cast<std::int8_t>(power)) ||
-        (invert != 0 && invert != 1) || (marker != 0 && marker != 1) ||
+void acknowledgeHtv145Report(
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
+    rainpoint::Cc1101& radio, std::uint32_t receivedAtMicros
+) {
+    if (!htv145ControlCandidate.configured || !htv145ControlCandidate.reportAckCenterHz ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
-        htv145ControlCandidate.pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed ||
-        !primaryRadio.prepareTransmit()) {
-        emitLine("{\"type\":\"command_error\",\"error\":\"invalid_htv145_dry_open_probe\"}");
-        return true;
+        htv145ControlCandidate.listeningOnCommandCarrier) {
+        return;
     }
-    primaryRadio.cacheTransmitFrequency(static_cast<std::uint32_t>(center));
-    htv145ControlCandidate = Htv145ControlCandidate{};
-    htv145ControlCandidate.link = link;
-    htv145ControlCandidate.centerHz = static_cast<std::uint32_t>(center);
-    htv145ControlCandidate.powerDbm = static_cast<std::int8_t>(power);
-    htv145ControlCandidate.trailerResidual = static_cast<std::uint16_t>(residue);
-    if (closeProbe) {
-        htv145ControlCandidate.closeTrailerResidual =
-            static_cast<std::uint16_t>(residue);
+    std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
+    if (!rainpoint::buildHtv145ReportAck(frame, htv145ControlCandidate.link, 0x4f03, reply)) {
+        return;
     }
-    htv145ControlCandidate.nextSequence = static_cast<std::uint8_t>(sequence);
-    htv145ControlCandidate.invert = invert != 0;
-    htv145ControlCandidate.commandMarkerInverted = marker != 0;
-    htv145ControlCandidate.configured = true;
-    if (!startHtv145Candidate(
-            String(closeProbe ? "dry-close-probe-" : "dry-open-") + millis(),
-            !closeProbe, closeProbe ? 0 : 60, true
-        )) {
-        emitLine("{\"type\":\"command_error\",\"error\":\"htv145_dry_open_probe_not_started\"}");
-    }
-    return true;
+    const bool sent = radio.transmitAsync(reply, htv145ControlCandidate.reportAckCenterHz,
+        rainpoint::kHtv145ReportAckWakeSymbols, htv145ControlCandidate.invert,
+        rainpoint::pairingPaTableValue(htv145ControlCandidate.powerDbm), 0x45,
+        receivedAtMicros + rainpoint::kHtv145ReportAckDelayUs);
+    reportHtv145CandidateStatus(sent ? "report_ack_transmitted" : "report_ack_failed", nullptr, &reply);
 }
 
 void observeHtv145CandidateFrame(
@@ -2424,9 +2046,7 @@ void pollHtv145Candidate() {
         // carrier. Restore it once the immediate response window closes.
         restoreHtv145CandidateReceive();
         htv145ControlCandidate.immediateResponseWindowClosed = true;
-#if RAINPOINT_RADIO_COUNT == 1
         scanChannels = false;
-#endif
     }
     if (static_cast<std::int32_t>(
             now - htv145ControlCandidate.stateConfirmationDeadlineMs
@@ -2542,7 +2162,7 @@ void handleNetworkCommand() {
         reportIdentifyStatus(true);
         return;
     }
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (type == "htv145_control_configure") {
         rainpoint::Htv145Link link{};
         const String controller = jsonStringField(
@@ -2552,6 +2172,10 @@ void handleNetworkCommand() {
         long centerHz = 0;
         long powerDbm = 0;
         long trailerResidual = 0;
+        long closeTrailerResidual = 0x4f03;
+        long reportAckCenterHz = 0;
+        jsonLongField(command, "close_trailer_residual", closeTrailerResidual);
+        jsonLongField(command, "report_ack_center_hz", reportAckCenterHz);
         bool invert = false;
         bool commandMarkerInverted = false;
         if (!parseRawHexEndpoint(controller, link.controllerEndpoint) ||
@@ -2568,6 +2192,11 @@ void handleNetworkCommand() {
                 command, "trailer_residual", trailerResidual
             ) ||
             (trailerResidual != 0xc713 && trailerResidual != 0x4f03) ||
+            (closeTrailerResidual != 0xc713 && closeTrailerResidual != 0x4f03) ||
+            (reportAckCenterHz != 0 && (reportAckCenterHz < 433'000'000 || reportAckCenterHz > 435'000'000)) ||
+            (htv145ControlCandidate.configured && htv145ControlCandidate.reportAckCenterHz != 0 &&
+             (link.controllerEndpoint != htv145ControlCandidate.link.controllerEndpoint ||
+              link.valveEndpoint != htv145ControlCandidate.link.valveEndpoint)) ||
             !jsonBoolField(command, "invert", invert) ||
             !jsonBoolField(command, "command_marker_inverted", commandMarkerInverted) ||
             htv145ControlCandidate.pending ||
@@ -2589,6 +2218,11 @@ void handleNetworkCommand() {
             static_cast<std::int8_t>(powerDbm);
         htv145ControlCandidate.trailerResidual =
             static_cast<std::uint16_t>(trailerResidual);
+        htv145ControlCandidate.closeTrailerResidual = static_cast<std::uint16_t>(closeTrailerResidual);
+        htv145ControlCandidate.reportAckCenterHz = static_cast<std::uint32_t>(reportAckCenterHz);
+        if (reportAckCenterHz) {
+            primaryRadio.cacheTransmitFrequency(static_cast<std::uint32_t>(reportAckCenterHz));
+        }
         htv145ControlCandidate.invert = invert;
         htv145ControlCandidate.commandMarkerInverted = commandMarkerInverted;
         htv145ControlCandidate.configured = true;
@@ -2596,6 +2230,34 @@ void handleNetworkCommand() {
         reportHtv145CandidateStatus("configured_counter_required");
         htv145ControlCandidate.commandId.clear();
         return;
+    }
+    if (type == "htv145_control_revoke") {
+        rainpoint::Htv145Link requested{};
+        if (!parseRawHexEndpoint(jsonStringField(command, "controller_endpoint"), requested.controllerEndpoint) ||
+            !parseRawHexEndpoint(jsonStringField(command, "valve_endpoint"), requested.valveEndpoint) ||
+            !rainpoint::canRevokeHtv145Owner(htv145ControlCandidate.configured,
+                htv145ControlCandidate.pending, htv145ControlCandidate.link, requested)) {
+            reportNetworkCommandError(commandId, "invalid_htv145_control_revoke");
+            return;
+        }
+        // After a reboot the empty node can still confirm that the old lease
+        // is gone. Echo the requested route and exact command ID without RF.
+        htv145ControlCandidate.link = requested;
+        htv145ControlCandidate.configured = false;
+        restoreHtv145CandidateReceive();
+        htv145ControlCandidate.commandId = commandId;
+        htv145ControlCandidate.counterAuthenticated = false;
+        htv145ControlCandidate.reportAckCenterHz = 0;
+        reportHtv145CandidateStatus("revoked");
+        htv145ControlCandidate = Htv145ControlCandidate{};
+        return;
+    }
+    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync") {
+        if (jsonStringField(command, "controller_endpoint") != hexString(htv145ControlCandidate.link.controllerEndpoint.data(), 4) ||
+            jsonStringField(command, "valve_endpoint") != hexString(htv145ControlCandidate.link.valveEndpoint.data(), 4)) {
+            reportNetworkCommandError(commandId, "htv145_control_association_mismatch");
+            return;
+        }
     }
     if (type == "htv145_control_sync") {
         long nextSequence = 0;
@@ -2656,7 +2318,6 @@ void handleNetworkCommand() {
         return;
     }
 #endif
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (type == "valve_control_configure") {
         valveControlProbe.commandId = commandId;
         const String controller = jsonStringField(
@@ -2796,8 +2457,6 @@ void handleNetworkCommand() {
         reportValveProbeStatus("status_requested_by_gateway");
         return;
     }
-#endif
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     if (type == "routine_ack_configure") {
         const String endpointValue = jsonStringField(
             command, "paired_endpoint"
@@ -2931,8 +2590,6 @@ void handleNetworkCommand() {
         );
         return;
     }
-#endif
-#if RAINPOINT_OTA_CANDIDATE == 1
     if (type == "firmware_update_start") {
         const String url = jsonStringField(command, "url");
         const String version = jsonStringField(command, "version");
@@ -2955,7 +2612,6 @@ void handleNetworkCommand() {
         emitLine(otaTrial.status(wifiTransport.nodeId()));
         return;
     }
-#endif
     if (type == "pairing_cancel") {
         if (!pairingCommandId.isEmpty() && commandId != pairingCommandId) {
             reportNetworkCommandError(commandId, "pairing_command_mismatch");
@@ -2994,7 +2650,6 @@ void handleNetworkCommand() {
     std::array<std::uint8_t, 4> requestedValveRoute{};
     std::array<std::uint8_t, 4> requestedCompanionEndpoint{};
     bool requestedKnownFactory = false;
-#if RAINPOINT_PAIRING_GENERALIZATION == 1
     const String sensorAFactory = hexString(
         rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.data(),
         rainpoint::kSensorAHcs026CandidateProfile.factoryEndpoint.size()
@@ -3015,10 +2670,9 @@ void handleNetworkCommand() {
         rainpoint::validRfControllerIdentity(
             requestedControllerEndpoint, requestedCompanionEndpoint
         );
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     const bool requestedHtv405Profile =
         profile == rainpoint::kAutomaticHtv405ProfileId;
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     const bool requestedHtv145Profile =
         profile == rainpoint::htv145::kProfileId;
     if (requestedHtv145Profile) {
@@ -3032,9 +2686,7 @@ void handleNetworkCommand() {
         parseRawHexEndpoint(factory, requestedFactoryEndpoint);
     requestedValveAutomaticDiscovery =
         requestedHtv405Profile && factory.isEmpty();
-#endif
     if (
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         (requestedValveAutomaticDiscovery ||
             ((requestedHtv405Profile || requestedHtv145Profile) &&
                 requestedValveFactoryParsed)) &&
@@ -3045,9 +2697,6 @@ void handleNetworkCommand() {
             jsonStringField(command, "companion_endpoint"),
             requestedCompanionEndpoint
         )
-#else
-        false
-#endif
     ) {
         requestedValvePairing = true;
         jsonBoolField(command, "known_rejoin", requestedValveRejoin);
@@ -3068,15 +2717,6 @@ void handleNetworkCommand() {
         factory == sensorBFactory) {
         requestedProfile = &rainpoint::kValidatedHcs026Profile;
     }
-#else
-    const String expectedFactory = hexString(
-        activePairingProfile.factoryEndpoint.data(),
-        activePairingProfile.factoryEndpoint.size()
-    );
-    if (profile == activePairingProfile.id && factory == expectedFactory) {
-        requestedProfile = &activePairingProfile;
-    }
-#endif
     if (requestedProfile == nullptr && !requestedValvePairing) {
         reportNetworkCommandError(commandId, "unsupported_pairing_profile");
         return;
@@ -3107,16 +2747,15 @@ void handleNetworkCommand() {
     pairingAutomaticDiscovery =
         requestedAutomaticDiscovery || requestedValveAutomaticDiscovery;
     pairingFactoryAdopted = !pairingAutomaticDiscovery;
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     valvePairingActive = requestedValvePairing;
     valvePairingKnownRejoin = requestedValvePairing && requestedValveRejoin;
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     valvePairingHtv145 = requestedValvePairing &&
         profile == rainpoint::htv145::kProfileId;
 #endif
     if (requestedValvePairing) {
         const bool profileBuilt =
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
             valvePairingHtv145
                 ? rainpoint::htv145::buildProfile(
                     requestedFactoryEndpoint,
@@ -3149,15 +2788,13 @@ void handleNetworkCommand() {
             return;
         }
         pairingAssignedChannel =
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
             valvePairingHtv145 ? rainpoint::htv145::kAssignedChannel :
 #endif
             0;
     } else
-#endif
     {
         activePairingProfile = *requestedProfile;
-#if RAINPOINT_PAIRING_GENERALIZATION == 1
     // Same-selector coexistence is physically validated: addressed sensors can
     // share one RF channel, so selector allocation must not imply uniqueness.
     pairingAssignedChannel = 4;
@@ -3192,11 +2829,6 @@ void handleNetworkCommand() {
         reportNetworkCommandError(commandId, "pairing_channel_invalid");
         return;
     }
-#else
-    pairingAssignedChannel = rainpoint::pairingChannelFromReply(
-        activePairingProfile.steps[0].frame
-    );
-#endif
     }
     pairingCommandId = commandId;
     pairingFrequencyOffsetHz = static_cast<std::int32_t>(frequencyOffsetHz);
@@ -3204,9 +2836,8 @@ void handleNetworkCommand() {
     pairingInvert = invert;
     pairingLocalDateTime = parsedClock;
     pairingLocalDateTimeSet = true;
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         const std::uint32_t initialCenterHz = valvePairingHtv145
             ? activeHtv145PairingProfile.steps[0].channelCenterHz
             : activeValvePairingProfile.steps[0].channelCenterHz;
@@ -3236,16 +2867,12 @@ void handleNetworkCommand() {
             return;
         }
     }
-#endif
-#if RAINPOINT_RADIO_COUNT == 1
     scanChannels = false;
     selectChannel(0);
-#endif
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
         const auto durationMs =
             static_cast<std::uint32_t>(durationSeconds) * 1'000U;
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             // HTV145 owns an independent one-shot transcript. It must never
             // inherit HTV405 retries, resynchronization, or retained-rejoin
@@ -3259,7 +2886,6 @@ void handleNetworkCommand() {
             );
         }
     } else
-#endif
     {
         pairingSession.arm(
             millis(), static_cast<std::uint32_t>(durationSeconds) * 1'000U
@@ -3274,541 +2900,14 @@ void handleNetworkCommand() {
     // that session armed if the gateway listener is temporarily stopped for
     // simultaneous raw SDR capture; sensor pairing retains the existing
     // fail-closed connection requirement.
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     pairingRequiresNetwork = !valvePairingActive;
-#else
-    pairingRequiresNetwork = true;
-#endif
     reportPairingStatus(
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive && valvePairingKnownRejoin
             ? "waiting_for_cold_boot_rejoin" :
-#endif
         "waiting_for_factory_message_1"
     );
 }
 
-#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-#if RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE == 2
-bool handleHtv145ProfileCalibration(const String& command) {
-    const String prefix = "htv145_profile_calibration ";
-    if (!command.startsWith(prefix)) return false;
-    unsigned step = 0;
-    long offsetHz = 0;
-    char extra = 0;
-    if (sscanf(command.substring(prefix.length()).c_str(), "%u %ld %c",
-               &step, &offsetHz, &extra) != 2 || step > 6 || step == 2 ||
-        offsetHz < -150'000 || offsetHz > 150'000 ||
-        currentPairingState() == rainpoint::PairingSessionState::Armed) {
-        emitLine("{\"type\":\"command_error\",\"error\":\"htv145_profile_calibration_invalid\"}");
-        return true;
-    }
-    // Compile-time unused endpoints; no caller can supply a live valve route.
-    // Exercise the same builders, wake and TX paths as the selected profile.
-    rainpoint::htv145::PairingProfile profile{};
-    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
-    constexpr rainpoint::PairingLocalDateTime clock{2026, 9, 5, 13, 54, 46};
-    const bool built = rainpoint::htv145::buildProfile(
-        {{0x5e, 0xad, 0xc0, 0x8f}}, {{0xf0, 0x0d, 0xca, 0x80}},
-        {{0x70, 0x0d, 0xca, 0x80}}, profile
-    ) && (step == 6 ? rainpoint::htv145::buildConfigurationReply(profile, frame)
-                   : rainpoint::htv145::buildReply(profile, step, clock, frame));
-    const auto centerHz = static_cast<std::uint32_t>(
-        static_cast<std::int64_t>(step == 0
-            ? rainpoint::htv145::kInitialChannelCenterHz
-            : rainpoint::htv145::kRoutineChannelCenterHz) + offsetHz);
-    if (!built || !primaryRadio.prepareTransmit() ||
-        !primaryRadio.cacheTransmitFrequency(centerHz)) {
-        emitLine("{\"type\":\"command_error\",\"error\":\"htv145_profile_calibration_prepare_failed\"}");
-        return true;
-    }
-    const auto wake = step == 6 ? rainpoint::htv145::kConfigurationWakeSymbols
-                                : rainpoint::kPairingWakeSymbols;
-    rainpoint::FifoCalibrationDiagnostics diagnostics{};
-    const bool sent = step == 4 || step == 6
-        ? primaryRadio.transmitFifoCalibration(
-            frame, centerHz, wake, rainpoint::pairingPaTableValue(10),
-            rainpoint::htv145::kOrdinaryDeviationRegister, micros() + 20'000,
-            &diagnostics, 0, step == 4
-                ? rainpoint::htv145::kStep4FifoActiveTailDelayUs : 0)
-        : primaryRadio.transmitAsync(
-            frame, centerHz, wake, false, rainpoint::pairingPaTableValue(10),
-            rainpoint::htv145::kOrdinaryDeviationRegister, micros() + 20'000,
-            0, 0, 0, false, rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs);
-    String line = "{\"type\":\"htv145_profile_calibration\",\"step\":";
-    line += step;
-    line += ",\"state\":\"";
-    line += sent ? "transmitted" : "transmit_failed";
-    line += "\",\"center_hz\":";
-    line += centerHz;
-    line += ",\"frame\":\"";
-    line += hexString(frame.data(), frame.size());
-    line += "\",\"fifo\":";
-    line += step == 4 || step == 6 ? "true" : "false";
-    line += ",\"receive_restored\":";
-    line += step == 4 || step == 6
-        ? (diagnostics.receiveConfigurationRestored ? "true" : "false")
-        : (sent ? "true" : "false");
-    line += "}";
-    emitLine(line);
-    return true;
-}
-#endif
-
-bool handleHtv145PreludeCalibration(const String& command) {
-    const String prefix = "htv145_prelude_calibration ";
-    if (!command.startsWith(prefix)) {
-        return false;
-    }
-    const String offsetValue = command.substring(prefix.length());
-    const long frequencyOffsetHz = offsetValue.toInt();
-    if (offsetValue.isEmpty() || frequencyOffsetHz < -250'000 ||
-        frequencyOffsetHz > 250'000 ||
-        currentPairingState() == rainpoint::PairingSessionState::Armed) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_prelude_calibration_invalid\"}"
-        );
-        return true;
-    }
-
-    const std::int64_t adjustedFrequency =
-        static_cast<std::int64_t>(rainpoint::kHtv405InitialChannelCenterHz) +
-        frequencyOffsetHz;
-    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
-        !primaryRadio.prepareTransmit() ||
-        !primaryRadio.cacheTransmitFrequency(
-            static_cast<std::uint32_t>(adjustedFrequency)
-        )) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_prelude_calibration_prepare_failed\"}"
-        );
-        return true;
-    }
-
-    // This deliberately unaddressed frame keeps the ordinary assignment
-    // waveform realistic without enrolling or controlling a RainPoint device.
-    // Only the leading prelude parameters below vary across the four shots.
-    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
-    for (std::size_t index = 0; index < rainpoint::kSync.size(); ++index) {
-        frame[index] = rainpoint::kSync[index];
-    }
-    constexpr std::array<std::uint8_t, 4> source{{0xde, 0xad, 0xc0, 0xde}};
-    constexpr std::array<std::uint8_t, 4> destination{{0xf0, 0x0d, 0xca, 0xfe}};
-    for (std::size_t index = 0; index < source.size(); ++index) {
-        frame[5 + index] = source[index];
-        frame[9 + index] = destination[index];
-    }
-    frame[13] = 0x80;
-    frame[14] = 0xc0;
-    frame[15] = 0x85;
-    frame[16] = 0x85;
-    rainpoint::writeTrailer(frame, 0x4f03);
-
-    struct PreludeVariant {
-        std::int8_t frequencyOffsetRegister;
-        std::uint8_t deviationRegister;
-    };
-    constexpr std::array<PreludeVariant, 4> variants{{
-        {12, 0x41},
-        {12, 0x42},
-        {13, 0x41},
-        {13, 0x42},
-    }};
-    for (std::size_t index = 0; index < variants.size(); ++index) {
-        const auto& variant = variants[index];
-        String line;
-        line.reserve(240);
-        line += "{\"type\":\"htv145_prelude_calibration\",\"variant\":";
-        line += index + 1;
-        line += ",\"state\":\"starting\",\"center_hz\":";
-        line += static_cast<std::uint32_t>(adjustedFrequency);
-        line += ",\"prelude_polarity\":\"reversed\",\"fsctrl0\":";
-        line += static_cast<int>(variant.frequencyOffsetRegister);
-        line += ",\"deviatn\":\"0x";
-        line += variant.deviationRegister == 0x41 ? "41" : "42";
-        line += "\"}";
-        emitLine(line);
-        Serial.flush();
-        delay(250);
-
-        const bool sent = primaryRadio.transmitAsync(
-            frame,
-            static_cast<std::uint32_t>(adjustedFrequency),
-            rainpoint::kPairingWakeSymbols,
-            false,
-            // Keep this near-field measurement below the RTL-SDR's clipping
-            // point. Live pairing retains its separately configured power.
-            rainpoint::pairingPaTableValue(0),
-            rainpoint::kHtv405InitialDeviationRegister,
-            micros() + 20'000,
-            rainpoint::htv145::kCounter0AssignmentPreludeSymbols,
-            variant.frequencyOffsetRegister,
-            variant.deviationRegister,
-            true
-        );
-        line = "{\"type\":\"htv145_prelude_calibration\",\"variant\":";
-        line += index + 1;
-        line += sent
-            ? ",\"state\":\"transmitted\"}"
-            : ",\"state\":\"transmit_failed\"}";
-        emitLine(line);
-        delay(750);
-    }
-    emitLine(
-        "{\"type\":\"htv145_prelude_calibration\","
-        "\"state\":\"complete\"}"
-    );
-    return true;
-}
-
-bool handleHtv145ConfigurationCalibration(const String& command) {
-    const String asynchronousPrefix = "htv145_configuration_calibration ";
-    const String synchronousPrefix =
-        "htv145_synchronous_configuration_calibration ";
-    const String fifoPrefix = "htv145_fifo_configuration_calibration ";
-    const bool synchronous = command.startsWith(synchronousPrefix);
-    const bool asynchronous = command.startsWith(asynchronousPrefix);
-    const bool fifo = command.startsWith(fifoPrefix);
-    if (!synchronous && !asynchronous && !fifo) {
-        return false;
-    }
-    const String prefix = synchronous ? synchronousPrefix
-        : fifo ? fifoPrefix
-        : asynchronousPrefix;
-    const String offsetValue = command.substring(prefix.length());
-    const long frequencyOffsetHz = offsetValue.toInt();
-    if (offsetValue.isEmpty() || frequencyOffsetHz < -150'000 ||
-        frequencyOffsetHz > 150'000 ||
-        currentPairingState() == rainpoint::PairingSessionState::Armed) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_configuration_calibration_invalid\"}"
-        );
-        return true;
-    }
-
-    const std::int64_t adjustedFrequency =
-        static_cast<std::int64_t>(rainpoint::htv145::kRoutineChannelCenterHz) +
-        frequencyOffsetHz;
-    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
-        !primaryRadio.prepareTransmit() ||
-        !primaryRadio.cacheTransmitFrequency(
-            static_cast<std::uint32_t>(adjustedFrequency)
-        )) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_configuration_calibration_prepare_failed\"}"
-        );
-        return true;
-    }
-
-    // Deliberately impossible endpoints make these frames useful only for
-    // SDR waveform comparison. The body and 2,400-symbol wake retain the
-    // accepted stock configuration structure.
-    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
-    for (std::size_t index = 0; index < rainpoint::kSync.size(); ++index) {
-        frame[index] = rainpoint::kSync[index];
-    }
-    constexpr std::array<std::uint8_t, 4> source{{0xde, 0xad, 0xc0, 0xde}};
-    constexpr std::array<std::uint8_t, 4> destination{{0xf0, 0x0d, 0xca, 0xfe}};
-    for (std::size_t index = 0; index < source.size(); ++index) {
-        frame[5 + index] = source[index];
-        frame[9 + index] = destination[index];
-    }
-    frame[13] = 0x81;
-    frame[14] = 0x10;
-    frame[15] = 0x01;
-    frame[16] = 0x01;
-    rainpoint::writeTrailer(frame, 0xc713);
-
-    struct ConfigurationVariant {
-        std::uint8_t deviationRegister;
-        bool gaussianShaping;
-    };
-    constexpr std::array<ConfigurationVariant, 4> variants{{
-        {0x45, false},
-        {0x44, false},
-        {0x45, true},
-        {0x44, true},
-    }};
-    const std::size_t variantCount =
-        synchronous || fifo ? 1 : variants.size();
-    for (std::size_t index = 0; index < variantCount; ++index) {
-        const auto& variant = variants[index];
-        String line;
-        line.reserve(240);
-        line += "{\"type\":\"htv145_configuration_calibration\",\"variant\":";
-        line += index + 1;
-        line += ",\"state\":\"starting\",\"center_hz\":";
-        line += static_cast<std::uint32_t>(adjustedFrequency);
-        line += ",\"modulation\":\"";
-        line += variant.gaussianShaping ? "gfsk" : "2fsk";
-        line += "\",\"clock_source\":\"";
-        line += synchronous ? "cc1101_synchronous"
-            : fifo ? "cc1101_fifo"
-            : "esp32_rmt";
-        line += "\",\"deviation_register\":\"0x";
-        line += variant.deviationRegister == 0x45 ? "45" : "44";
-        line += "\"}";
-        emitLine(line);
-        Serial.flush();
-        delay(250);
-
-        rainpoint::SynchronousCalibrationDiagnostics diagnostics{};
-        rainpoint::FifoCalibrationDiagnostics fifoDiagnostics{};
-        const bool sent = fifo
-            ? primaryRadio.transmitFifoCalibration(
-                frame,
-                static_cast<std::uint32_t>(adjustedFrequency),
-                rainpoint::htv145::kConfigurationWakeSymbols,
-                rainpoint::pairingPaTableValue(0),
-                variant.deviationRegister,
-                micros() + 20'000,
-                &fifoDiagnostics
-            )
-            : synchronous
-            ? primaryRadio.transmitSynchronousCalibration(
-                frame,
-                static_cast<std::uint32_t>(adjustedFrequency),
-                rainpoint::htv145::kConfigurationWakeSymbols,
-                rainpoint::pairingPaTableValue(0),
-                variant.deviationRegister,
-                micros() + 20'000,
-                rainpoint::htv145::
-                    kConfigurationPostFrameLowHoldAdjustmentUs,
-                &diagnostics
-            )
-            : primaryRadio.transmitAsync(
-                frame,
-                static_cast<std::uint32_t>(adjustedFrequency),
-                rainpoint::htv145::kConfigurationWakeSymbols,
-                false,
-                rainpoint::pairingPaTableValue(0),
-                variant.deviationRegister,
-                micros() + 20'000,
-                0,
-                0,
-                0,
-                false,
-                0,
-                variant.gaussianShaping
-            );
-        line = "{\"type\":\"htv145_configuration_calibration\",\"variant\":";
-        line += index + 1;
-        line += sent
-            ? ",\"state\":\"transmitted\""
-            : ",\"state\":\"transmit_failed\"";
-        if (synchronous) {
-            line += ",\"clock_output_connected\":";
-            line += diagnostics.clockOutputConnected ? "true" : "false";
-            line += ",\"synthesizer_ready\":";
-            line += diagnostics.synthesizerReady ? "true" : "false";
-            line += ",\"tx_strobe_accepted\":";
-            line += diagnostics.txStrobeAccepted ? "true" : "false";
-            line += ",\"sampled_clock_edges\":";
-            line += diagnostics.sampledClockEdges;
-            line += ",\"main_state_after_stream\":";
-            line += diagnostics.mainStateAfterStream;
-            line += ",\"receive_restored\":";
-            line += diagnostics.receiveConfigurationRestored
-                ? "true" : "false";
-        }
-        if (fifo) {
-            line += ",\"synthesizer_ready\":";
-            line += fifoDiagnostics.synthesizerReady ? "true" : "false";
-            line += ",\"tx_strobe_accepted\":";
-            line += fifoDiagnostics.txStrobeAccepted ? "true" : "false";
-            line += ",\"bytes_queued\":";
-            line += fifoDiagnostics.bytesQueued;
-            line += ",\"fifo_refills\":";
-            line += fifoDiagnostics.fifoRefills;
-            line += ",\"tx_fifo_underflow_observed\":";
-            line += fifoDiagnostics.txFifoUnderflowObserved
-                ? "true" : "false";
-            line += ",\"main_state_after_stream\":";
-            line += fifoDiagnostics.mainStateAfterStream;
-            line += ",\"receive_restored\":";
-            line += fifoDiagnostics.receiveConfigurationRestored
-                ? "true" : "false";
-        }
-        line += "}";
-        emitLine(line);
-        delay(750);
-    }
-    emitLine(
-        "{\"type\":\"htv145_configuration_calibration\","
-        "\"state\":\"complete\"}"
-    );
-    return true;
-}
-
-bool handleHtv145ReceiveEdgeCalibration(const String& command) {
-    const String prefix = "htv145_receive_edge_calibration ";
-    if (!command.startsWith(prefix)) return false;
-    unsigned seconds = 0;
-    char extra = 0;
-    const int fields = sscanf(command.substring(prefix.length()).c_str(),
-                              "%u %c", &seconds, &extra);
-    if (fields != 1 || seconds > 120 ||
-        currentPairingState() == rainpoint::PairingSessionState::Armed) {
-        emitLine("{\"type\":\"command_error\","
-                 "\"error\":\"htv145_receive_edge_calibration_invalid\"}");
-        return true;
-    }
-    htv145ReceiveCalibrationUntilMs = seconds == 0 ? 0 : millis() + seconds * 1'000;
-    emitLine(String("{\"type\":\"htv145_receive_edge_calibration\",\"state\":\"") +
-             (seconds == 0 ? "disabled" : "observing") +
-             "\",\"receive_only\":true}");
-    return true;
-}
-
-void reportHtv145ReceiveEdge(
-    const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
-    const rainpoint::RadioPacket& packet,
-    const char* purpose,
-    std::uint32_t replyStartAtMicros = 0
-) {
-    String line = "{\"type\":\"htv145_receive_edge_observation\",\"purpose\":\"";
-    line += purpose;
-    line += "\",\"frame\":\"";
-    line += hexString(frame.data(), frame.size());
-    line += "\",\"edge_valid\":";
-    line += packet.receiveEnd.valid ? "true" : "false";
-    line += ",\"packet_end_us\":";
-    line += packet.receiveEnd.endedAtMicros;
-    line += ",\"fifo_polled_us\":";
-    line += packet.receivedAtMicros;
-    line += ",\"poll_lag_us\":";
-    line += packet.receiveEnd.pollLagMicros;
-    line += ",\"observed_high_us\":";
-    line += packet.receiveEnd.highObservedMicros;
-    line += ",\"reply_start_at_us\":";
-    line += replyStartAtMicros;
-    line += "}";
-    emitLine(line);
-}
-
-bool handleHtv145Step4FifoCalibration(const String& command) {
-    const String prefix = "htv145_fifo_step4_calibration ";
-    if (!command.startsWith(prefix)) {
-        return false;
-    }
-    const String offsetValue = command.substring(prefix.length());
-    long frequencyOffsetHz = 0;
-    unsigned activeTailDelayUs = 0;
-    int calibrationPowerDbm = 0;
-    char extra = 0;
-    const int fields = sscanf(offsetValue.c_str(), "%ld %u %d %c",
-                              &frequencyOffsetHz, &activeTailDelayUs,
-                              &calibrationPowerDbm, &extra);
-    if (fields != 3 ||
-        activeTailDelayUs > rainpoint::kMaxFifoActiveTailDelayUs ||
-        (calibrationPowerDbm != 0 && calibrationPowerDbm != 10) ||
-        frequencyOffsetHz < -150'000 ||
-        frequencyOffsetHz > 150'000 ||
-        currentPairingState() == rainpoint::PairingSessionState::Armed) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_fifo_step4_calibration_invalid\"}"
-        );
-        return true;
-    }
-
-    const std::int64_t adjustedFrequency =
-        static_cast<std::int64_t>(rainpoint::htv145::kRoutineChannelCenterHz) +
-        frequencyOffsetHz;
-    if (adjustedFrequency < 433'000'000 || adjustedFrequency > 435'000'000 ||
-        !primaryRadio.prepareTransmit() ||
-        !primaryRadio.cacheTransmitFrequency(
-            static_cast<std::uint32_t>(adjustedFrequency)
-        )) {
-        emitLine(
-            "{\"type\":\"command_error\","
-            "\"error\":\"htv145_fifo_step4_calibration_prepare_failed\"}"
-        );
-        return true;
-    }
-
-    // These endpoints cannot address the test valve. The body, residual, wake,
-    // and hardware path remain identical to live zero-based reply step 4 so an
-    // SDR can measure FIFO timing without advancing an enrollment session.
-    constexpr std::array<std::uint8_t, 4> factoryEndpoint{{
-        0x5e, 0xad, 0xc0, 0x8f,
-    }};
-    constexpr std::array<std::uint8_t, 4> controllerEndpoint{{
-        0xf0, 0x0d, 0xca, 0x80,
-    }};
-    constexpr std::array<std::uint8_t, 4> companionEndpoint{{
-        0x70, 0x0d, 0xca, 0x80,
-    }};
-    rainpoint::htv145::PairingProfile profile{};
-    std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
-    constexpr rainpoint::PairingLocalDateTime ignoredClock{
-        2026, 1, 1, 0, 0, 0,
-    };
-    const bool built = rainpoint::htv145::buildProfile(
-            factoryEndpoint,
-            controllerEndpoint,
-            companionEndpoint,
-            profile
-        ) && rainpoint::htv145::buildReply(
-            profile,
-            4,
-            ignoredClock,
-            frame
-        );
-    rainpoint::FifoCalibrationDiagnostics diagnostics{};
-    const bool sent = built && primaryRadio.transmitFifoCalibration(
-        frame,
-        static_cast<std::uint32_t>(adjustedFrequency),
-        rainpoint::kPairingWakeSymbols,
-        rainpoint::pairingPaTableValue(calibrationPowerDbm),
-        rainpoint::htv145::kOrdinaryDeviationRegister,
-        micros() + 20'000,
-        &diagnostics,
-        rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs,
-        static_cast<std::uint16_t>(activeTailDelayUs)
-    );
-
-    String line;
-    line.reserve(320);
-    line += "{\"type\":\"htv145_fifo_step4_calibration\",\"state\":\"";
-    line += sent ? "transmitted" : "transmit_failed";
-    line += "\",\"center_hz\":";
-    line += static_cast<std::uint32_t>(adjustedFrequency);
-    line += ",\"wake_symbols\":";
-    line += rainpoint::kPairingWakeSymbols;
-    line += ",\"synthesizer_ready\":";
-    line += diagnostics.synthesizerReady ? "true" : "false";
-    line += ",\"tx_strobe_accepted\":";
-    line += diagnostics.txStrobeAccepted ? "true" : "false";
-    line += ",\"bytes_queued\":";
-    line += diagnostics.bytesQueued;
-    line += ",\"fifo_refills\":";
-    line += diagnostics.fifoRefills;
-    line += ",\"tx_fifo_underflow_observed\":";
-    line += diagnostics.txFifoUnderflowObserved ? "true" : "false";
-    line += ",\"main_state_after_stream\":";
-    line += diagnostics.mainStateAfterStream;
-    line += ",\"receive_restored\":";
-    line += diagnostics.receiveConfigurationRestored ? "true" : "false";
-    line += ",\"active_tail_delay_us\":";
-    line += activeTailDelayUs;
-    line += ",\"power_dbm\":";
-    line += calibrationPowerDbm;
-    line += ",\"fifo_empty_observed\":";
-    line += diagnostics.fifoEmptyObserved ? "true" : "false";
-    line += ",\"stopped_while_transmitting\":";
-    line += diagnostics.stoppedWhileTransmitting ? "true" : "false";
-    line += ",\"fifo_empty_to_stop_us\":";
-    line += diagnostics.fifoEmptyToStopUs;
-    line += "}";
-    emitLine(line);
-    return true;
-}
-#endif
 
 void handleSerialCommand() {
     while (Serial.available()) {
@@ -3818,198 +2917,6 @@ void handleSerialCommand() {
                 continue;
             }
             bool handled = false;
-#if RAINPOINT_RESEARCH_BENCH == 1
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
-            handled = handleHtv145DryOpenProbe(serialCommand);
-#endif
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-#if RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE == 2
-            if (!handled) {
-                handled = handleHtv145ProfileCalibration(serialCommand);
-            }
-#endif
-            if (!handled) {
-                handled = handleHtv145ReceiveEdgeCalibration(serialCommand);
-            }
-            if (!handled) {
-                handled = handleHtv145Step4FifoCalibration(serialCommand);
-            }
-            if (!handled) {
-                handled = handleHtv145ConfigurationCalibration(serialCommand);
-            }
-            if (!handled) {
-                handled = handleHtv145PreludeCalibration(serialCommand);
-            }
-#endif
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
-            if (!handled) {
-                handled = handleValveProbeCommand(serialCommand);
-            }
-#endif
-            if (!handled && serialCommand == "pairing_plan_b") {
-                handled = true;
-                for (std::size_t index = 0;
-                     index < activePairingProfile.stepCount;
-                     ++index) {
-                    const auto& step = activePairingProfile.steps[index];
-                    String line;
-                    line.reserve(360);
-                    line += "{\"type\":\"pairing_dry_run\",\"step\":";
-                    line += index + 1;
-                    line += ",\"trigger\":\"";
-                    line += rainpoint::pairingTriggerName(step.trigger);
-                    line += "\",\"channel_center_hz\":";
-                    line += step.channelCenterHz;
-                    line += ",\"wake_symbols\":";
-                    line += step.wakeSymbols;
-                    line += ",\"reply_delay_ms\":";
-                    line += activePairingProfile.replyDelayMs;
-                    line += ",\"reply_deadline_ms\":";
-                    line += step.replyDeadlineMs;
-                    line += ",\"transmit_enabled\":false,\"frame\":\"";
-                    line += hexString(step.frame.data(), step.frame.size());
-                    line += "\"}";
-                    emitLine(line);
-                }
-            }
-            if (!handled && serialCommand == "pairing_arm_b 15a98024") {
-                handled = true;
-                if (!pairingLocalDateTimeSet) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_local_clock_required\"}"
-                    );
-                    serialCommand = "";
-                    continue;
-                }
-#if RAINPOINT_RADIO_COUNT == 1
-                scanChannels = false;
-                selectChannel(0);
-#endif
-                pairingCommandId.clear();
-                pairingSession.arm(millis());
-                pairingRequiresNetwork = wifiTransport.authenticated();
-                reportPairingStatus("waiting_for_factory_message_1");
-            } else if (!handled && serialCommand == "pairing_cancel") {
-                handled = true;
-                cancelPairing("cancelled_by_operator");
-            } else if (!handled && serialCommand == "pairing_status") {
-                handled = true;
-                reportPairingStatus();
-            } else if (!handled && serialCommand.startsWith("pairing_probe_b ")) {
-                handled = handlePairingProbe(serialCommand);
-            } else if (!handled && serialCommand.startsWith("pairing_offset_hz ")) {
-                handled = true;
-                const long offset = serialCommand.substring(18).toInt();
-                if (
-                    offset < -rainpoint::kMaxPairingFrequencyOffsetHz ||
-                    offset > rainpoint::kMaxPairingFrequencyOffsetHz
-                ) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_offset_out_of_range\"}"
-                    );
-                } else if (
-                    pairingSession.state() ==
-                    rainpoint::PairingSessionState::Armed
-                ) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_is_armed\"}"
-                    );
-                } else {
-                    pairingFrequencyOffsetHz = offset;
-                    reportPairingStatus("frequency_offset_updated");
-                }
-            } else if (!handled && serialCommand.startsWith("pairing_power_dbm ")) {
-                handled = true;
-                const long requested = serialCommand.substring(18).toInt();
-                if (!rainpoint::validPairingPowerDbm(requested)) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_power_invalid\"}"
-                    );
-                } else if (
-                    pairingSession.state() ==
-                    rainpoint::PairingSessionState::Armed
-                ) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_is_armed\"}"
-                    );
-                } else {
-                    pairingPowerDbm = static_cast<std::int8_t>(requested);
-                    reportPairingStatus("power_updated");
-                }
-            } else if (!handled && serialCommand.startsWith("pairing_clock_local ")) {
-                handled = true;
-                if (
-                    pairingSession.state() ==
-                    rainpoint::PairingSessionState::Armed
-                ) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_is_armed\"}"
-                    );
-                } else {
-                    rainpoint::PairingLocalDateTime parsed{};
-                    if (!parsePairingLocalDateTime(
-                            serialCommand.substring(20), parsed
-                        )) {
-                        emitLine(
-                            "{\"type\":\"command_error\","
-                            "\"error\":\"pairing_clock_invalid\"}"
-                        );
-                    } else {
-                        pairingLocalDateTime = parsed;
-                        pairingLocalDateTimeSet = true;
-                        pairingLocalDateTimeSetAtMs = millis();
-                        reportPairingStatus("local_clock_updated");
-                    }
-                }
-            } else if (!handled && serialCommand == "pairing_invert on") {
-                handled = true;
-                if (pairingSession.state() ==
-                    rainpoint::PairingSessionState::Armed) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_is_armed\"}"
-                    );
-                } else {
-                    pairingInvert = true;
-                    reportPairingStatus("polarity_updated");
-                }
-            } else if (!handled && serialCommand == "pairing_invert off") {
-                handled = true;
-                if (pairingSession.state() ==
-                    rainpoint::PairingSessionState::Armed) {
-                    emitLine(
-                        "{\"type\":\"command_error\","
-                        "\"error\":\"pairing_is_armed\"}"
-                    );
-                } else {
-                    pairingInvert = false;
-                    reportPairingStatus("polarity_updated");
-                }
-            }
-#if RAINPOINT_RADIO_COUNT == 1
-            if (!handled && serialCommand == "0") {
-                handled = true;
-                scanChannels = false;
-                selectChannel(0);
-            } else if (!handled && serialCommand == "1") {
-                handled = true;
-                scanChannels = false;
-                selectChannel(11);
-            } else if (
-                !handled && (serialCommand == "s" || serialCommand == "S")
-            ) {
-                handled = true;
-                scanChannels = true;
-                lastChannelChange = millis();
-            }
-#endif
-#endif
             if (
                 !handled &&
                 !wifiTransport.handleProvisioningCommand(serialCommand)
@@ -4032,7 +2939,6 @@ void handleSerialCommand() {
     }
 }
 
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
 void reportRoutineAckStatus(
     const char* state,
     const rainpoint::RoutineAckAuthorization& authorization,
@@ -4152,15 +3058,13 @@ void authorizeRoutineAckFromCompletedPairing() {
         authorization
     );
 }
-#endif
 
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
 bool activeValvePairingArmed() {
     return currentPairingState() == rainpoint::PairingSessionState::Armed;
 }
 
 std::size_t activeValvePairingCompletedSteps() {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return htv145PairingSession.completedSteps();
     }
@@ -4176,7 +3080,7 @@ const rainpoint::Htv405PairingStep* claimActiveValvePairingReply(
 }
 
 std::uint8_t activeValvePairingReplyCounterOffset() {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return 0;
     }
@@ -4187,7 +3091,7 @@ std::uint8_t activeValvePairingReplyCounterOffset() {
 bool activeValvePairingIsSelector2ConfigurationStep(
     std::size_t replyStep
 ) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return false;
     }
@@ -4198,7 +3102,7 @@ bool activeValvePairingIsSelector2ConfigurationStep(
 void markActiveValvePairingSelector2ConfigurationTransmitted(
     std::uint8_t sequence
 ) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return;
     }
@@ -4207,7 +3111,7 @@ void markActiveValvePairingSelector2ConfigurationTransmitted(
 }
 
 std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return 0;
     }
@@ -4216,7 +3120,7 @@ std::uint32_t activeValvePairingReplyStartDelayOverrideUs() {
 }
 
 bool activeValvePairingReplyMarkerRepeat() {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         return false;
     }
@@ -4229,7 +3133,7 @@ bool finishActiveValvePairingReply(bool success, std::uint32_t nowMs) {
 }
 
 void tickActiveValvePairing(std::uint32_t nowMs) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (valvePairingHtv145) {
         htv145PairingSession.tick(nowMs);
         return;
@@ -4237,9 +3141,8 @@ void tickActiveValvePairing(std::uint32_t nowMs) {
 #endif
     valvePairingSession.tick(nowMs);
 }
-#endif
 
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 void processHtv145PairingFrame(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     const rainpoint::RadioPacket& packet,
@@ -4272,14 +3175,13 @@ void processHtv145PairingFrame(
                 pairingFrequencyOffsetHz
             );
         bool sent = false;
-#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1
         if (built && replyStep == 4) {
             const std::uint32_t replyStartAtMicros =
                 packet.receiveEnd.endedAtMicros +
                     rainpoint::htv145::replyStartDelayUs(replyStep);
             // A missing or ambiguous edge must not silently select the old
             // polling anchor and make this isolated timing test uninterpretable.
-            sent = packet.receiveEnd.valid && radio.transmitFifoCalibration(
+            sent = packet.receiveEnd.valid && radio.transmitClocked(
                 replyFrame,
                 transmitCenterHz,
                 rainpoint::kPairingWakeSymbols,
@@ -4290,11 +3192,7 @@ void processHtv145PairingFrame(
                 rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs,
                 rainpoint::htv145::kStep4FifoActiveTailDelayUs
             );
-            reportHtv145ReceiveEdge(frame, packet,
-                packet.receiveEnd.valid ? "step4_reply" : "step4_missing_edge",
-                packet.receiveEnd.valid ? replyStartAtMicros : 0);
         } else
-#endif
         {
             sent = built && radio.transmitAsync(
                 replyFrame,
@@ -4305,27 +3203,15 @@ void processHtv145PairingFrame(
                 step->deviationRegister,
                 packet.receivedAtMicros +
                     rainpoint::htv145::replyStartDelayUs(replyStep),
-                0,
-                0,
-                0,
-                false,
-#if RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE == 1
                 replyStep == 0
                     ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
                     : replyStep == 1
                         ? rainpoint::htv145::
                             kStep1PostFrameLowHoldAdjustmentUs
-#if RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE == 1
                         : replyStep == 4
                             ? rainpoint::htv145::
                                 kStep4PostFrameLowHoldAdjustmentUs
-#endif
-                        : rainpoint::htv145::kSelector2Branch
-                            ? rainpoint::htv145::kStage0PostFrameLowHoldAdjustmentUs
-                            : 0
-#else
-                0
-#endif
+                        : 0
             );
         }
         if (sent && replyStep == 1) {
@@ -4334,7 +3220,6 @@ void processHtv145PairingFrame(
             const std::uint32_t configurationStartAtMicros =
                 packet.receivedAtMicros +
                 rainpoint::htv145::kConfigurationReplyStartDelayUs;
-#if RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE == 1
             // The accepted stock capture contains no RF during this delay.
             // Candidate .8 entered FSTXON immediately and held the synthesizer
             // there for roughly 2.8 seconds. Keep RX configured until shortly
@@ -4347,18 +3232,16 @@ void processHtv145PairingFrame(
                    ) > static_cast<std::int32_t>(kMaximumPrearmLeadUs)) {
                 delay(1);
             }
-#endif
             const bool configurationBuilt =
                 rainpoint::htv145::buildConfigurationReply(
                     activeHtv145PairingProfile, configurationFrame
                 );
-#if RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE == 1
             // Candidate .10 changes only the delayed configuration's symbol
             // clock. A lossless SDR capture recovered its exact 38-byte frame
             // and an uninterrupted alternating wake from the CC1101 FIFO path.
             // Stage 0 and the ordinary stage-1 response remain on the frozen,
             // previously accepted asynchronous path above.
-            sent = configurationBuilt && radio.transmitFifoCalibration(
+            sent = configurationBuilt && radio.transmitClocked(
                 configurationFrame,
                 transmitCenterHz,
                 rainpoint::htv145::kConfigurationWakeSymbols,
@@ -4366,23 +3249,6 @@ void processHtv145PairingFrame(
                 step->deviationRegister,
                 configurationStartAtMicros
             );
-#else
-            sent = configurationBuilt && radio.transmitAsync(
-                configurationFrame,
-                transmitCenterHz,
-                rainpoint::htv145::kConfigurationWakeSymbols,
-                pairingInvert,
-                rainpoint::pairingPaTableValue(pairingPowerDbm),
-                step->deviationRegister,
-                configurationStartAtMicros,
-                0,
-                0,
-                0,
-                false,
-                rainpoint::htv145::
-                    kConfigurationPostFrameLowHoldAdjustmentUs
-            );
-#endif
             // The configuration response is sent on the same routine carrier.
             sent = sent && radio.setReceiveFrequency(transmitCenterHz);
         }
@@ -4404,52 +3270,34 @@ void processHtv145PairingFrame(
 
 void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     rainpoint::RadioPacket packet;
-#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (&radio == &primaryRadio) {
-        if (currentPairingState() == rainpoint::PairingSessionState::Armed ||
-            static_cast<std::int32_t>(htv145ReceiveCalibrationUntilMs - millis()) <= 0) {
-            htv145ReceiveCalibrationUntilMs = 0;
-        }
-        const bool observeFinalRequest =
-#if RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE == 1
-            valvePairingActive && valvePairingHtv145 &&
-            activeValvePairingArmed() && htv145PairingSession.completedSteps() == 4;
-#else
-            false;
-#endif
-        primaryRadio.setReceiveEndCapture(
-            observeFinalRequest || htv145ReceiveCalibrationUntilMs != 0
-        );
+        primaryRadio.setReceiveEndCapture(valvePairingActive && valvePairingHtv145 &&
+            activeValvePairingArmed() && htv145PairingSession.completedSteps() == 4);
     }
 #endif
     const bool deferReceiveRecovery = &radio == &primaryRadio &&
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         valvePairingActive &&
         activeValvePairingArmed();
-#else
-        false;
-#endif
     if (!radio.poll(packet, !deferReceiveRecovery)) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
     bool valveProbeTransmitted = false;
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     if (&radio == &primaryRadio) {
         valveProbeTransmitted = observeValveProbeFrame(
             frame, radio, packet.receivedAtMicros
         );
     }
-#endif
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (&radio == &primaryRadio) {
         observeHtv145CandidateFrame(frame);
+        acknowledgeHtv145Report(frame, radio, packet.receivedAtMicros);
     }
 #endif
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
-#if RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         if (valvePairingHtv145) {
             processHtv145PairingFrame(frame, packet, radio);
         } else
@@ -4564,11 +3412,8 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         }
         }
     }
-#endif
     if (&radio == &primaryRadio &&
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         !valvePairingActive &&
-#endif
         pairingSession.state() == rainpoint::PairingSessionState::Armed) {
         const auto pairingStateBeforeFrame = pairingSession.state();
         if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
@@ -4632,15 +3477,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                 restoreScanningAfterPairing();
             }
         }
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         if (pairingStateBeforeFrame == rainpoint::PairingSessionState::Armed &&
             pairingSession.state() ==
                 rainpoint::PairingSessionState::Completed) {
             authorizeRoutineAckFromCompletedPairing();
         }
-#endif
     }
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
     if (&radio == &primaryRadio &&
         currentPairingState() != rainpoint::PairingSessionState::Armed) {
         rainpoint::PairingTrigger recoveryTrigger{};
@@ -4753,7 +3595,6 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             );
         }
     }
-#endif
     if (deferReceiveRecovery) {
         // A successful reply already restored RX; repeating recovery here is
         // harmless and keeps non-matching/no-reply valve frames on the normal
@@ -4761,12 +3602,6 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         radio.recoverReceive();
     }
     printPacket(name, frame, packet, radio);
-#if RAINPOINT_RESEARCH_BENCH == 1 && RAINPOINT_HTV145_PAIRING_CANDIDATE == 1
-    if (&radio == &primaryRadio && htv145ReceiveCalibrationUntilMs != 0) {
-        // Report only after ordinary ACK handling, never on its deadline path.
-        reportHtv145ReceiveEdge(frame, packet, "receive_only_calibration");
-    }
-#endif
 }
 
 bool beginRadio(
@@ -4797,71 +3632,40 @@ bool beginRadio(
 void setup() {
     Serial.begin(115200);
     delay(250);
-#if RAINPOINT_OTA_CANDIDATE == 1
     otaTrial.begin();
-#endif
     pinMode(RAINPOINT_STATUS_LED_PIN, OUTPUT);
     setIdentifyLed(false);
     wifiTransport.begin();
     emitLine(
         String("{\"type\":\"boot\",\"node_id\":\"") +
         wifiTransport.nodeId() +
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         "\",\"mode\":\"radio_node\",\"local_tx_controls\":true,"
-#else
-        "\",\"mode\":\"radio_node\",\"local_tx_controls\":false,"
-#endif
         "\"pairing_tx_available\":true,"
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
         "\"valve_pairing_tx_candidate\":true,"
         "\"htv405_auto_identity_pairing\":true,"
-#else
-        "\"valve_pairing_tx_candidate\":false,"
-        "\"htv405_auto_identity_pairing\":false,"
-#endif
         "\"valve_control_available\":false,"
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
         "\"htv145_control_candidate\":true,"
 #else
         "\"htv145_control_candidate\":false,"
 #endif
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         "\"valve_control_probe\":true,"
-#else
-        "\"valve_control_probe\":false,"
-#endif
         "\"tx_armed\":false,"
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         "\"routine_ack_candidate\":true,"
         "\"routine_ack_authorization_persistent\":false,"
         "\"htv405_routine_ack_available\":true,"
-#else
-        "\"routine_ack_candidate\":false,"
-        "\"htv405_routine_ack_available\":false,"
-#endif
-#if RAINPOINT_OTA_CANDIDATE == 1
         "\"ota_trial\":true,"
-#else
-        "\"ota_trial\":false,"
-#endif
         "\"wifi_configured\":" +
         (wifiTransport.configured() ? "true" : "false") +
-        ",\"radio_count\":" + RAINPOINT_RADIO_COUNT + "}"
+        ",\"radio_count\":" + 1 + "}"
     );
 
     // Keep every device deselected before the shared SPI bus is started.
     pinMode(kPrimaryChipSelectPin, OUTPUT);
     digitalWrite(kPrimaryChipSelectPin, HIGH);
-#if RAINPOINT_RADIO_COUNT == 2
-    pinMode(kDiagnosticChipSelectPin, OUTPUT);
-    digitalWrite(kDiagnosticChipSelectPin, HIGH);
-#endif
     radioSpi.begin(kSpiSckPin, kSpiMisoPin, kSpiMosiPin);
 
     bool ready = beginRadio("primary", primaryRadio, 0);
-#if RAINPOINT_RADIO_COUNT == 2
-    ready = beginRadio("diagnostic", diagnosticRadio, 11) && ready;
-#endif
     if (!ready) {
         emitLine(
             String("{\"type\":\"fatal\",\"node_id\":\"") +
@@ -4872,12 +3676,8 @@ void setup() {
             delay(1'000);
         }
     }
-#if RAINPOINT_OTA_CANDIDATE == 1
     radiosHealthy = ready;
-#endif
-#if RAINPOINT_RADIO_COUNT == 1
     lastChannelChange = millis();
-#endif
     reportHealth();
     lastHealthReport = millis();
 }
@@ -4892,20 +3692,17 @@ void loop() {
     wifiTransport.poll();
     const bool gatewayReconnected =
         !gatewayWasAuthenticated && wifiTransport.authenticated();
-#if RAINPOINT_OTA_CANDIDATE == 1
     otaTrial.confirmHealthy(wifiTransport.authenticated(), radiosHealthy);
-#endif
     if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
         cancelPairing("gateway_connection_lost");
     }
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (htv145ControlCandidate.pending && !wifiTransport.authenticated()) {
         failHtv145Candidate("gateway_connection_lost_counter_unsynchronized");
     }
 #endif
     pollRfMaintenance();
     handleNetworkCommand();
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     // Pairing status emitted while the gateway was down could not be
     // delivered. Replay the authoritative node state on reconnection so the
     // controller can distinguish a completed transcript from a white-LED-only
@@ -4913,7 +3710,6 @@ void loop() {
     if (gatewayReconnected && valvePairingActive) {
         reportPairingStatus("gateway_reconnected");
     }
-#endif
     if (gatewayReconnected) {
         reportRfMaintenanceStatus("gateway_reconnected");
     }
@@ -4922,7 +3718,6 @@ void loop() {
         ESP.restart();
         return;
     }
-#if RAINPOINT_OTA_CANDIDATE == 1
     // Restart only after unwinding the authenticated network-command handler.
     // A physical 0.9 -> 0.10 trial reached verified_sha256 but remained inside
     // that handler until an external reset. Deferring the partition switch to
@@ -4932,49 +3727,39 @@ void loop() {
         ESP.restart();
         return;
     }
-#endif
     pollIdentify();
     handleSerialCommand();
-#if RAINPOINT_RADIO_COUNT == 1
     pollRadio("primary", primaryRadio);
-#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
     pollValveProbeResponseListener();
-#endif
 
     if (scanChannels) {
-#if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
         // Locally enrolled HCS026 sensors return to telemetry channel 0 after
         // their gateway assigns reply selector 4 or 5. Missing one report
         // batch can leave a battery sensor dormant indefinitely. An ACK owner
         // therefore stays on the proven telemetry channel and hops only for
         // its bounded reply; nodes without assignments continue broad scans.
-        if (routineAckAuthorizations.activeCount() > 0 &&
+        const bool ownsTelemetryAcks = routineAckAuthorizations.activeCount() > 0 ||
+            htv405RoutineAckAuthorizations.activeCount() > 0
+#if RAINPOINT_HTV145_ENABLED == 1
+            || (htv145ControlCandidate.configured && htv145ControlCandidate.reportAckCenterHz != 0)
+#endif
+            ;
+        if (ownsTelemetryAcks &&
             primaryRadio.channel() != kHcs026TelemetryChannel) {
             selectChannel(kHcs026TelemetryChannel);
-        } else if (routineAckAuthorizations.activeCount() == 0 &&
+        } else if (!ownsTelemetryAcks &&
             millis() - lastChannelChange >= kScanDwellMs) {
             selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
         }
-#else
-        if (millis() - lastChannelChange >= kScanDwellMs) {
-            selectChannel(primaryRadio.channel() == 0 ? 11 : 0);
-        }
-#endif
     }
-#else
-    pollRadio("primary", primaryRadio);
-    pollRadio("diagnostic", diagnosticRadio);
-#endif
-#if RAINPOINT_HTV145_TX_CANDIDATE == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     // Drain a matching response before deciding whether the bounded command
     // burst needs its next byte-identical RF attempt.
     pollHtv145Candidate();
 #endif
-#if RAINPOINT_VALVE_PAIRING_CANDIDATE == 1
     if (valvePairingActive) {
         tickActiveValvePairing(millis());
     } else
-#endif
     {
         pairingSession.tick(millis());
     }

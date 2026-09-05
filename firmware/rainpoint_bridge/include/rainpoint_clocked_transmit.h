@@ -10,9 +10,9 @@ namespace rainpoint {
 
 constexpr std::uint16_t kMaxFifoActiveTailDelayUs = 1'200;
 
-// An optional zero byte keeps the modulator supplied while the research
-// caller measures the FIFO-empty edge and stops TX. It is outside the frame.
-inline bool buildFifoCalibrationStream(
+// An optional zero byte sustains the final tone while the accepted HTV145
+// recipe waits from FIFO-empty to SIDLE. It is outside the protocol frame.
+inline bool buildClockedTransmitStream(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint16_t wakeSymbols,
     std::uint16_t activeTailDelayUs,

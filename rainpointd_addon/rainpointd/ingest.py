@@ -152,6 +152,7 @@ class FrameIngestor:
                     "is_watering",
                     "duration_seconds",
                     "last_usage_liters",
+                    "last_session_duration_seconds",
                 )
                 if key in decoded
             }

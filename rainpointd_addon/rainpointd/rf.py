@@ -359,11 +359,9 @@ def _valve_fields(
             if not 0 <= tenths_liters <= 100_000:
                 return {}
             result = {
-                "is_watering": False,
-                "valve_state": "idle",
                 "last_usage_liters": round(tenths_liters / 10, 1),
             }
-            result["duration_seconds"] = terminal["duration_seconds"]
+            result["last_session_duration_seconds"] = terminal["duration_seconds"]
             return result
 
         # 0x4f/0xcf marks last-session usage. The following bytes hold a

@@ -2336,7 +2336,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertNotIn("device_id", retained[-1])
         self.assertEqual("open", retained[-1]["state"]["valve_command"])
 
-    def test_live_transport_terminal_summary_confirms_valve_closed(self) -> None:
+    def test_live_transport_terminal_summary_cannot_confirm_valve_closed(self) -> None:
         gateway = Gateway(transport="rtl433")
         transport = RTL433Transport(gateway, command=["unused"])
         transport.seed()
@@ -2357,9 +2357,9 @@ class RainPointRFTest(unittest.TestCase):
             for device in gateway.devices()
             if device["device_id"] == "valve-1"
         )
-        self.assertFalse(valve["state"]["is_watering"])
-        self.assertEqual("idle", valve["state"]["valve_state"])
-        self.assertEqual(600, valve["state"]["duration_seconds"])
+        self.assertIsNone(valve["state"]["is_watering"])
+        self.assertNotEqual("idle", valve["state"]["valve_state"])
+        self.assertEqual(600, valve["state"]["last_session_duration_seconds"])
         self.assertEqual(105.7, valve["state"]["last_usage_liters"])
 
     def test_live_transport_publishes_confirmed_htv145_low_battery(self) -> None:

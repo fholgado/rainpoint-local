@@ -16,7 +16,7 @@ from .product_identity import (
 )
 from .valve_protocol import next_htv145_command_sequence
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -235,6 +235,9 @@ class SQLiteEventStore:
             version = 19
         if version == 19:
             self._migrate_v19_to_v20()
+            version = 20
+        if version == 20:
+            self._migrate_v20_to_v21()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -608,6 +611,21 @@ class SQLiteEventStore:
                 "counter_synchronized = 0, counter_source = NULL"
             )
             self._connection.execute("PRAGMA user_version = 19")
+
+    def _migrate_v20_to_v21(self) -> None:
+        """Persist one-zone ACK ownership and separate action residues."""
+        with self._connection:
+            columns = {row[1] for row in self._connection.execute("PRAGMA table_info(htv145_control_state)")}
+            for column, declaration in (
+                ("revocation_command_id", "TEXT"),
+                ("close_trailer_residual", "INTEGER NOT NULL DEFAULT 20227"),
+                ("report_ack_center_hz", "INTEGER"),
+            ):
+                if column not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE htv145_control_state ADD COLUMN {column} {declaration}"
+                    )
+            self._connection.execute("PRAGMA user_version = 21")
 
     def _migrate_v19_to_v20(self) -> None:
         """Keep optional morning maintenance separate from watering intent."""
@@ -3068,6 +3086,23 @@ class SQLiteEventStore:
         )
         return result
 
+    def reserve_htv145_revocation(self, valve_endpoint: str, command_id: str) -> None:
+        with self._connection:
+            cursor = self._connection.execute(
+                "UPDATE htv145_control_state SET revocation_command_id = ? WHERE valve_endpoint = ? AND pending_command_id IS NULL",
+                (command_id, valve_endpoint),
+            )
+            if not cursor.rowcount:
+                raise RuntimeError("cannot revoke a missing or busy HTV145 association")
+
+    def delete_htv145_control(self, valve_endpoint: str) -> None:
+        """Remove an association only after its radio acknowledged revocation."""
+        with self._connection:
+            self._connection.execute(
+                "DELETE FROM htv145_control_state WHERE valve_endpoint = ? AND pending_command_id IS NULL",
+                (valve_endpoint,),
+            )
+
     def htv145_control_states(
         self, valve_endpoint: str | None = None
     ) -> list[dict[str, Any]]:
@@ -3106,14 +3141,17 @@ class SQLiteEventStore:
         trailer_residual: int,
         updated_at: str,
         command_marker_inverted: bool = False,
+        close_trailer_residual: int = 0x4f03,
+        report_ack_center_hz: int | None = None,
     ) -> dict[str, Any]:
         """Persist an association-specific profile with control unsynchronized."""
         cursor = self._connection.execute(
             """
             INSERT INTO htv145_control_state(
                 valve_endpoint, controller_endpoint, node_id, center_hz,
-                power_dbm, invert, trailer_residual, updated_at, command_marker_inverted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                power_dbm, invert, trailer_residual, updated_at, command_marker_inverted,
+                close_trailer_residual, report_ack_center_hz
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(valve_endpoint) DO UPDATE SET
                 controller_endpoint=excluded.controller_endpoint,
                 node_id=excluded.node_id,
@@ -3122,6 +3160,8 @@ class SQLiteEventStore:
                 invert=excluded.invert,
                 trailer_residual=excluded.trailer_residual,
                 command_marker_inverted=excluded.command_marker_inverted,
+                close_trailer_residual=excluded.close_trailer_residual,
+                report_ack_center_hz=excluded.report_ack_center_hz,
                 next_sequence=NULL,
                 counter_synchronized=0,
                 counter_source=NULL,
@@ -3148,6 +3188,8 @@ class SQLiteEventStore:
                 trailer_residual,
                 updated_at,
                 int(command_marker_inverted),
+                close_trailer_residual,
+                report_ack_center_hz,
             ),
         )
         if not cursor.rowcount:
@@ -3169,7 +3211,6 @@ class SQLiteEventStore:
         if source not in {
             "passive_stock_command",
             "matching_immediate_response",
-            "matching_independent_state_report",
         }:
             raise ValueError("unsupported HTV145 counter source")
         cursor = self._connection.execute(
@@ -3249,8 +3290,8 @@ class SQLiteEventStore:
             ).fetchone()
             if row is None:
                 raise KeyError(valve_endpoint)
-            if row["pending_command_id"] is not None:
-                raise RuntimeError("an HTV145 command is already pending")
+            if row["pending_command_id"] is not None or row["revocation_command_id"] is not None:
+                raise RuntimeError("an HTV145 command or revocation is already pending")
             if not row["counter_synchronized"] or row["next_sequence"] is None:
                 raise RuntimeError("the HTV145 command counter is unsynchronized")
             if action == "open" and row["confirmed_watering"] != 0:

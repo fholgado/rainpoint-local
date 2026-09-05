@@ -1,6 +1,6 @@
 #include "cc1101.h"
 #include "rainpoint_htv145_pairing.h"
-#include "rainpoint_fifo_calibration.h"
+#include "rainpoint_clocked_transmit.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
 
@@ -437,62 +437,17 @@ bool Cc1101::transmitAsync(
     std::uint8_t paTableValue,
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
-    std::uint16_t leadingPreludeSymbols,
-    std::int8_t leadingFrequencyOffsetRegister,
-    std::uint8_t leadingDeviationRegister,
-    bool invertLeadingPrelude,
-    std::uint16_t postFrameLowHoldMicros,
-    bool gaussianShaping
+    std::uint16_t postFrameLowHoldMicros
 ) {
     if (!transmitEnabled_) {
         ++blockedTransmitCount_;
         return false;
     }
-    const bool hasLeadingPrelude = leadingPreludeSymbols != 0;
-    const bool validatedLeadingProfile =
-        leadingDeviationRegister ==
-            htv145::kCounter0AssignmentPreludeDeviationRegister
-#if RAINPOINT_RESEARCH_BENCH == 1
-        || ((leadingFrequencyOffsetRegister == 12 ||
-             leadingFrequencyOffsetRegister == 13) &&
-            (leadingDeviationRegister == 0x41 ||
-             leadingDeviationRegister == 0x42))
-#endif
-        ;
-    constexpr std::uint16_t maximumWakeSymbols =
-#if RAINPOINT_RESEARCH_BENCH == 1
-        2'464;
-#else
-        2'400;
-#endif
-    const bool validatedDeviation =
-        deviationRegister == kOrdinaryDeviationRegister ||
-        deviationRegister == kHtv405InitialDeviationRegister
-#if RAINPOINT_RESEARCH_BENCH == 1
-        || deviationRegister == 0x44
-#endif
-        ;
-    const bool validatedShaping = !gaussianShaping
-#if RAINPOINT_RESEARCH_BENCH == 1
-        || gaussianShaping
-#endif
-        ;
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
-        wakeSymbols > maximumWakeSymbols || leadingPreludeSymbols > 2'400 ||
-        postFrameLowHoldMicros > 500 ||
-        centerFrequencyHz < 433'000'000 ||
-        centerFrequencyHz > 435'000'000 ||
-        !validatedDeviation || !validatedShaping ||
-        (hasLeadingPrelude &&
-         (startAtMicros == 0 || leadingFrequencyOffsetRegister == 0 ||
-          !validatedLeadingProfile)) ||
-        (!hasLeadingPrelude &&
-         (leadingFrequencyOffsetRegister != 0 ||
-          leadingDeviationRegister != 0 || invertLeadingPrelude)) ||
-#if RAINPOINT_RESEARCH_BENCH != 1
-        invertLeadingPrelude ||
-#endif
-        false) {
+        wakeSymbols > 2'400 || postFrameLowHoldMicros > 500 ||
+        centerFrequencyHz < 433'000'000 || centerFrequencyHz > 435'000'000 ||
+        (deviationRegister != kOrdinaryDeviationRegister &&
+         deviationRegister != kHtv405InitialDeviationRegister)) {
         return false;
     }
 
@@ -506,22 +461,15 @@ bool Cc1101::transmitAsync(
     // the ESP32 supplies the complete RainPoint wake, sync, and frame.
     writeRegister(kPacketControl0, 0x30);
     writeRegister(kIocfg0, 0x2e);  // High impedance until GDO0 becomes TX input.
-    // Production uses ordinary 2-FSK. The research-only calibration path can
-    // select CC1101 GFSK (BT=0.5) to compare its long-wake transition shape
-    // against an accepted stock transmission without addressing a device.
-    writeRegister(kModemConfig2, gaussianShaping ? 0x12 : 0x02);
+    // Both supported valve families use ordinary 2-FSK.
+    writeRegister(kModemConfig2, 0x02);
     writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
     writeRegister(kChannelNumber, 0);
     setFrequency(centerFrequencyHz);
-    writeRegister(
-        kFrequencySynthControl0,
-        static_cast<std::uint8_t>(
-            hasLeadingPrelude ? leadingFrequencyOffsetRegister : 0
-        )
-    );
+    writeRegister(kFrequencySynthControl0, 0);
     writeRegister(
         kDeviation,
-        hasLeadingPrelude ? leadingDeviationRegister : deviationRegister
+        deviationRegister
     );
     writeBurst(kPaTable, &paTableValue, 1);
 
@@ -555,7 +503,7 @@ bool Cc1101::transmitAsync(
     }
 
     const std::size_t symbolCount = rainpointSymbolCount(
-        wakeSymbols, leadingPreludeSymbols
+        wakeSymbols
     );
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
     const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
@@ -563,9 +511,7 @@ bool Cc1101::transmitAsync(
             frame,
             wakeSymbols,
             index,
-            invert,
-            leadingPreludeSymbols,
-            invertLeadingPrelude
+            invert
         );
     };
     for (std::size_t index = 0; index < items.size(); ++index) {
@@ -623,27 +569,6 @@ bool Cc1101::transmitAsync(
             sent = strobe(kEnterTx) != 0xff &&
                 waitForMainState(kMainStateTx, 2'000);
         }
-        if (sent && hasLeadingPrelude) {
-            // Keep the PA and RMT stream active while changing only FSCTRL0
-            // and DEVIATN at the evidence-derived prelude boundary. This
-            // reproduces the stock gateway's seamless shifted alternating
-            // prefix without incurring a synthesizer restart between it and
-            // the ordinary 320-symbol wake.
-            const std::uint32_t transitionAtMicros = startAtMicros +
-                leadingPreludeSymbols * kSymbolMicros;
-            while (static_cast<std::int32_t>(
-                       transitionAtMicros - micros()
-                   ) > 500) {
-                delayMicroseconds(250);
-            }
-            while (static_cast<std::int32_t>(
-                       transitionAtMicros - micros()
-                   ) > 0) {
-                // Deliberately busy-wait only the final 500 us.
-            }
-            writeRegister(kFrequencySynthControl0, 0);
-            writeRegister(kDeviation, deviationRegister);
-        }
         // Ordinary RainPoint frames use a 320-symbol wake and finish in about
         // 31 ms, but the HTV405 selector-2 configuration command uses the
         // stock gateway's 2,400-symbol wake and lasts about 135 ms. A fixed
@@ -672,190 +597,21 @@ bool Cc1101::transmitAsync(
     return restoreReceiveConfiguration(receiveChannel) && sent;
 }
 
-bool Cc1101::transmitSynchronousCalibration(
+bool Cc1101::transmitClocked(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     std::uint32_t centerFrequencyHz,
     std::uint16_t wakeSymbols,
     std::uint8_t paTableValue,
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
-    std::uint16_t postFrameLowHoldMicros,
-    SynchronousCalibrationDiagnostics* diagnostics
-) {
-    if (diagnostics != nullptr) {
-        *diagnostics = SynchronousCalibrationDiagnostics{};
-    }
-#if RAINPOINT_RESEARCH_BENCH != 1
-    (void)frame;
-    (void)centerFrequencyHz;
-    (void)wakeSymbols;
-    (void)paTableValue;
-    (void)deviationRegister;
-    (void)startAtMicros;
-    (void)postFrameLowHoldMicros;
-    (void)diagnostics;
-    ++blockedTransmitCount_;
-    return false;
-#else
-    if (!transmitEnabled_ || clockPin_ < 0 || !hasSync(frame) ||
-        !hasOrdinaryTrailer(frame) || wakeSymbols != 2'400 ||
-        centerFrequencyHz < 433'000'000 ||
-        centerFrequencyHz > 435'000'000 ||
-        deviationRegister != kOrdinaryDeviationRegister ||
-        postFrameLowHoldMicros > 500) {
-        ++blockedTransmitCount_;
-        return false;
-    }
-
-    const std::uint8_t receiveChannel = channel_;
-    if (!enterIdle()) {
-        return false;
-    }
-
-    // Prove the reserved GDO2-to-GPIO25 path before relying on it as a clock.
-    // GDOx function 0x2f is a hardware zero; setting GDOx_INV makes it a
-    // hardware one. This stays in IDLE and emits no RF.
-    writeRegister(kIocfg2, 0x2f);
-    delayMicroseconds(10);
-    const bool clockForcedLow = digitalRead(clockPin_) == LOW;
-    writeRegister(kIocfg2, 0x6f);
-    delayMicroseconds(10);
-    const bool clockForcedHigh = digitalRead(clockPin_) == HIGH;
-    const bool clockOutputConnected = clockForcedLow && clockForcedHigh;
-    if (diagnostics != nullptr) {
-        diagnostics->clockOutputConnected = clockOutputConnected;
-    }
-
-    // This research-only path removes the ESP32/RMT as the symbol clock. In
-    // synchronous serial mode CC1101 presents its 20 ksymbol/s clock on GDO2
-    // and samples GDO0 on each rising edge. Sync insertion remains disabled so
-    // the supplied stream still contains the complete RainPoint wake, sync,
-    // and frame exactly as the asynchronous path does.
-    // Synchronous serial still obeys LENGTH_CONFIG. Infinite-length mode is
-    // required here: fixed-length mode stops TX after the configured 38-byte
-    // packet length, truncating the 2,400-symbol wake after exactly 15.2 ms.
-    writeRegister(kPacketControl0, 0x12);
-    writeRegister(kIocfg0, 0x2e);
-    writeRegister(kIocfg2, 0x0b);
-    writeRegister(kModemConfig2, 0x00);
-    writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
-    writeRegister(kChannelNumber, 0);
-    setFrequency(centerFrequencyHz);
-    writeRegister(kFrequencySynthControl0, 0);
-    writeRegister(kDeviation, deviationRegister);
-    writeBurst(kPaTable, &paTableValue, 1);
-
-    const CachedFrequencyCalibration* cachedCalibration = nullptr;
-    for (const auto& cached : cachedTransmitFrequencies_) {
-        if (cached.valid && cached.centerFrequencyHz == centerFrequencyHz) {
-            cachedCalibration = &cached;
-            break;
-        }
-    }
-    if (cachedCalibration != nullptr) {
-        writeRegister(kMainStateMachine0, 0x08);
-        writeRegister(
-            kFrequencyCalibration3,
-            cachedCalibration->frequencyCalibration3
-        );
-        writeRegister(
-            kFrequencyCalibration2,
-            cachedCalibration->frequencyCalibration2
-        );
-        writeRegister(
-            kFrequencyCalibration1,
-            cachedCalibration->frequencyCalibration1
-        );
-    } else {
-        writeRegister(kMainStateMachine0, 0x18);
-    }
-
-    const std::size_t symbolCount = rainpointSymbolCount(wakeSymbols, 0);
-    const std::size_t inputBitCount =
-        symbolCount + kSynchronousTxLatencyBits;
-    const auto inputBitAt = [&](std::size_t index) -> std::uint8_t {
-        return index < symbolCount
-            ? rainpointSymbol(frame, wakeSymbols, index, false, 0, false)
-            : 0;
-    };
-
-    bool sent = clockOutputConnected && strobe(kFrequencySynthOn) != 0xff &&
-        waitForMainState(kMainStateFrequencySynthOn, 10'000);
-    if (diagnostics != nullptr) {
-        diagnostics->synthesizerReady = sent;
-    }
-    if (sent && startAtMicros != 0) {
-        while (static_cast<std::int32_t>(startAtMicros - micros()) > 500) {
-            delayMicroseconds(250);
-        }
-        while (static_cast<std::int32_t>(startAtMicros - micros()) > 0) {
-            // Deliberately busy-wait only the final 500 us.
-        }
-    }
-
-    std::size_t sampledBits = 0;
-    if (sent) {
-        digitalWrite(dataPin_, inputBitAt(0));
-        const bool clockBeforeTx = digitalRead(clockPin_) == HIGH;
-        sent = strobe(kEnterTx) != 0xff;
-        if (diagnostics != nullptr) {
-            diagnostics->txStrobeAccepted = sent;
-        }
-        bool previousClock = clockBeforeTx;
-        const std::uint32_t clockStartedAt = micros();
-        const std::uint32_t timeoutMicros =
-            static_cast<std::uint32_t>(inputBitCount * kSymbolMicros * 2U);
-        while (sent && sampledBits < inputBitCount) {
-            const bool currentClock = digitalRead(clockPin_) == HIGH;
-            if (!previousClock && currentClock) {
-                ++sampledBits;
-            } else if (previousClock && !currentClock &&
-                       sampledBits < inputBitCount) {
-                digitalWrite(dataPin_, inputBitAt(sampledBits));
-            }
-            previousClock = currentClock;
-            if (micros() - clockStartedAt > timeoutMicros) {
-                sent = false;
-            }
-        }
-    }
-    if (diagnostics != nullptr) {
-        diagnostics->sampledClockEdges = sampledBits;
-        diagnostics->mainStateAfterStream =
-            readStatus(kMainState) & 0x1f;
-    }
-
-    // The radio's documented eight-bit TX latency means the final desired bit
-    // begins on air as the eighth zero flush bit is sampled. Preserve one full
-    // symbol followed by the bounded low-tone calibration tail before SIDLE.
-    digitalWrite(dataPin_, LOW);
-    if (sent) {
-        delayMicroseconds(kSymbolMicros + postFrameLowHoldMicros);
-    }
-    enterIdle();
-    const bool restored = restoreReceiveConfiguration(receiveChannel);
-    if (diagnostics != nullptr) {
-        diagnostics->receiveConfigurationRestored = restored;
-    }
-    return restored && sent;
-#endif
-}
-
-bool Cc1101::transmitFifoCalibration(
-    const std::array<std::uint8_t, kFrameBytes>& frame,
-    std::uint32_t centerFrequencyHz,
-    std::uint16_t wakeSymbols,
-    std::uint8_t paTableValue,
-    std::uint8_t deviationRegister,
-    std::uint32_t startAtMicros,
-    FifoCalibrationDiagnostics* diagnostics,
+    ClockedTransmitDiagnostics* diagnostics,
     std::uint16_t postFrameLowHoldMicros,
     std::uint16_t activeTailDelayUs
 ) {
     if (diagnostics != nullptr) {
-        *diagnostics = FifoCalibrationDiagnostics{};
+        *diagnostics = ClockedTransmitDiagnostics{};
     }
-#if RAINPOINT_RESEARCH_BENCH != 1
+#if RAINPOINT_HTV145_ENABLED != 1
     (void)frame;
     (void)centerFrequencyHz;
     (void)wakeSymbols;
@@ -936,7 +692,7 @@ bool Cc1101::transmitFifoCalibration(
     }
 
     std::vector<std::uint8_t> stream;
-    buildFifoCalibrationStream(frame, wakeSymbols, activeTailDelayUs, stream);
+    buildClockedTransmitStream(frame, wakeSymbols, activeTailDelayUs, stream);
 
     strobe(kFlushTx);
     constexpr std::size_t kFifoCapacity = 64;
@@ -1066,7 +822,7 @@ bool Cc1101::waitForMainState(
 }
 
 bool Cc1101::enterIdle() {
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     receiveEndCapture_.clear();
     if (receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x2e);
 #endif
@@ -1081,7 +837,7 @@ bool Cc1101::enterReceive() {
         return false;
     }
     const bool receiving = waitForMainState(kMainStateRx);
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (receiving && receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x06);
 #endif
     return receiving;
@@ -1126,7 +882,7 @@ void Cc1101::recoverRx() {
     enterReceive();
 }
 
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
 void Cc1101::setReceiveEndCapture(bool enabled) {
     if (receiveEndCaptureEnabled_ == enabled) return;
     receiveEndCaptureEnabled_ = enabled;
@@ -1139,7 +895,7 @@ void Cc1101::setReceiveEndCapture(bool enabled) {
 #endif
 
 bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     if (receiveEndCaptureEnabled_ && digitalRead(misoPin_) == HIGH) {
         // Leave SPI completely idle while a packet is in progress, so GDO1
         // cannot be confused with SPI data. Fixed RX payload lasts 14.4 ms;
@@ -1169,7 +925,7 @@ bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
     // The fixed-length RX FIFO becomes complete at the end of the request.
     // Capture the earliest available deadline anchor before the SPI burst.
     packet.receivedAtMicros = micros();
-#if RAINPOINT_RESEARCH_BENCH == 1
+#if RAINPOINT_HTV145_ENABLED == 1
     packet.receiveEnd = receiveEndCapture_.take(
         packet.receivedAtMicros, rxBytes & 0x7fU
     );

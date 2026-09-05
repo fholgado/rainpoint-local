@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 
@@ -27,10 +28,6 @@ inline bool htv145CommandIntervalElapsed(std::uint32_t last, std::uint32_t now) 
     return now - last >= kHtv145MinimumCommandIntervalMs;
 }
 
-inline bool validHtv145DryProbeDuration(bool watering, std::uint32_t seconds) {
-    return watering ? seconds == 60 : seconds == 0;
-}
-
 struct Htv145Link {
     std::array<std::uint8_t, 4> controllerEndpoint{};
     std::array<std::uint8_t, 4> valveEndpoint{};
@@ -51,6 +48,14 @@ inline bool validHtv145Link(const Htv145Link& link) {
     return link.controllerEndpoint != std::array<std::uint8_t, 4>{} &&
         link.valveEndpoint != std::array<std::uint8_t, 4>{} &&
         link.controllerEndpoint != link.valveEndpoint;
+}
+
+inline bool canRevokeHtv145Owner(
+    bool configured, bool pending, const Htv145Link& current, const Htv145Link& requested
+) {
+    return !pending && validHtv145Link(requested) && (!configured ||
+        (current.controllerEndpoint == requested.controllerEndpoint &&
+         current.valveEndpoint == requested.valveEndpoint));
 }
 
 inline bool htv145RouteMatches(
@@ -162,8 +167,8 @@ struct Htv145ControlProfile {
     Htv145Link link{};
     std::uint16_t trailerResidual = 0;
     bool commandMarkerInverted = false;
-    // The accepted selector-6 close frames use 4f03 while their opens use
-    // c713. Preserve separate action residues instead of reusing the open's.
+    // Stock recordings differ by association; the locally accepted recipe
+    // uses 4f03 for both actions. Persist both residues explicitly.
     std::uint16_t closeTrailerResidual = 0x4f03;
 };
 
@@ -229,6 +234,9 @@ inline bool decodeHtv145CommandError(
         return false;
     }
     for (std::size_t index = 0; index < body.size(); ++index) {
+        if (index == 3 && (frame[17] == 0 || frame[17] == 0x10)) {
+            continue;
+        }
         if (frame[14 + index] != body[index]) {
             return false;
         }
@@ -247,12 +255,58 @@ inline bool decodeHtv145StateReport(
         !htv145RouteMatches(
             frame, link.valveEndpoint, link.controllerEndpoint
         ) ||
-        frame[15] != 0x07 || frame[16] != 0x85 ||
+        !validHtv145Sequence(frame[13]) || frame[15] != 0x07 ||
+        (frame[16] != 0x82 && frame[16] != 0x85 && frame[16] != 0x86) ||
         (frame[14] != 0x01 && frame[14] != 0x81) ||
-        (frame[20] & 0x7fU) != 0x4f) {
+        (frame[20] & 0x7fU) != 0x4f || frame[25] != 0x40 ||
+        frame[28] != 0x56) {
         return false;
     }
     watering = (frame[20] & 0x80U) != 0;
+    return true;
+}
+
+// Timing candidate from the ten stock report/ACK exchanges: 67--84 ms
+// sync-to-sync, including the 15.2 ms report and 16 ms ACK wake.
+constexpr std::uint16_t kHtv145ReportAckWakeSymbols = 320;
+constexpr std::uint32_t kHtv145ReportAckDelayUs = 40'000;
+
+inline bool buildHtv145ReportAck(
+    const std::array<std::uint8_t, kFrameBytes>& report,
+    const Htv145Link& link,
+    std::uint16_t residue,
+    std::array<std::uint8_t, kFrameBytes>& reply
+) {
+    bool watering = false;
+    const bool state = decodeHtv145StateReport(report, link, watering);
+    bool summary = hasSync(report) && hasOrdinaryTrailer(report) &&
+        htv145RouteMatches(report, link.valveEndpoint, link.controllerEndpoint) &&
+        validHtv145Sequence(report[13]) &&
+        (report[14] == 0x02 || report[14] == 0x82) && report[15] == 0x07 &&
+        (report[16] == 0x82 || report[16] == 0x85 || report[16] == 0x86) &&
+        (report[17] == 0 || report[17] == 0x80) && report[18] == 0x80 &&
+        (report[23] == 0x08 || report[23] == 0x10) &&
+        !(report[26] & 0x7fU) && report[27] == 0;
+    const std::uint16_t elapsed = static_cast<std::uint16_t>(report[28]) |
+        (static_cast<std::uint16_t>(report[29]) << 8U);
+    const std::uint32_t elapsedSeconds = (elapsed & 0x7fffU) * 2U + ((elapsed & 0x8000U) != 0);
+    summary = summary && elapsedSeconds > 0 && elapsedSeconds <= 86'400;
+    for (std::size_t i = 30; i < 36; ++i) {
+        summary = summary && report[i] == 0;
+    }
+    if ((!state && !summary) || (residue != 0x4f03 && residue != 0xc713)) {
+        return false;
+    }
+    reply.fill(0);
+    std::copy(kSync.begin(), kSync.end(), reply.begin());
+    std::copy(link.controllerEndpoint.begin(), link.controllerEndpoint.end(), reply.begin() + 5);
+    std::copy(link.valveEndpoint.begin(), link.valveEndpoint.end(), reply.begin() + 9);
+    reply[13] = report[13];
+    reply[14] = report[14] | 0x40;
+    reply[15] = state ? 1 : 0;
+    reply[16] = state ? 0 : 0x80;
+    reply[17] = state ? 1 : 0;
+    writeTrailer(reply, residue);
     return true;
 }
 

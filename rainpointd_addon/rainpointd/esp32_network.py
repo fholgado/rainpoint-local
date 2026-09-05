@@ -156,6 +156,7 @@ class ESP32NetworkServer:
             "htv145_control_open",
             "htv145_control_close",
             "htv145_control_status",
+            "htv145_control_revoke",
         }:
             raise ValueError("unsupported radio-node command")
         with self._sessions_lock:
@@ -703,6 +704,7 @@ class ESP32NetworkServer:
                         "valve_control_tx_candidate",
                         "htv405_bounded_sync_wait",
                         "htv145_control_tx_candidate",
+                        "htv145_report_ack_tx",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }

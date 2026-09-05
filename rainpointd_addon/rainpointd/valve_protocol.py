@@ -567,9 +567,10 @@ def decode_htv145_command_error(
             frame, link.valve_endpoint, link.controller_endpoint
         )
         or frame[13] not in range(0x80, 0xA0)
-        or frame[14:36] != bytes.fromhex(
-            "508683004f8000000040800056800000000000000000"
-        )
+        or frame[14:36] not in {
+            bytes.fromhex("508683004f8000000040800056800000000000000000"),
+            bytes.fromhex("508683104f8000000040800056800000000000000000"),
+        }
     ):
         return None
     return {"sequence": frame[13], "result_code": 3}
@@ -591,7 +592,7 @@ def decode_htv145_state_report(
         or frame[13] not in range(0x80, 0xA0)
         or frame[14] not in {0x01, 0x81}
         or frame[15] != 0x07
-        or frame[16] != 0x85
+        or frame[16] not in {0x82, 0x85, 0x86}
         or (frame[20] & 0x7F) != 0x4F
         or frame[25] != 0x40
         or frame[28] != 0x56
@@ -613,16 +614,22 @@ def decode_htv145_terminal_idle_report(
             frame, link.valve_endpoint, link.controller_endpoint
         )
         or frame[13] not in range(0x80, 0xA0)
-        or frame[14:19] != bytes.fromhex("8207858080")
+        or frame[14] not in {0x02, 0x82}
+        or frame[15] != 0x07
+        or frame[16] not in {0x82, 0x85, 0x86}
+        or frame[17] not in {0x00, 0x80}
+        or frame[18] != 0x80
         or frame[23] not in {0x08, 0x10}
         or frame[26] & 0x7F
         or frame[27] != 0
         or any(frame[30:36])
     ):
         return None
-    try:
-        duration_seconds = decode_duration(frame[28:30])
-    except ValueError:
+    # Session elapsed time supports odd seconds: the high-byte marker is
+    # a one-second fractional unit, as the 35-second stock stop demonstrates.
+    raw_duration = int.from_bytes(frame[28:30], "little")
+    duration_seconds = (raw_duration & 0x7fff) * 2 + bool(raw_duration & 0x8000)
+    if not 0 < duration_seconds <= 86400:
         return None
     return {
         "telemetry_sequence": frame[13],
@@ -724,3 +731,23 @@ def close_candidates(
         )
         for residue in TRAILER_RESIDUES
     )
+
+
+def build_htv145_report_ack(frame: bytes, link: ValveLink, residue: int) -> bytes:
+    """Acknowledge a report/summary without consuming a command counter.
+
+    ACKs echo the telemetry sequence and marker. A summary describes a past
+    session; recognizing it for ACK never makes it evidence of current idle.
+    """
+    state = decode_htv145_state_report(frame, link)
+    summary = decode_htv145_terminal_idle_report(frame, link)
+    if state is None and summary is None:
+        raise ValueError("not an HTV145 report on this association")
+    reply = bytearray(FRAME_BYTES - 2)
+    reply[:5] = SYNC
+    reply[5:9] = link.controller_endpoint
+    reply[9:13] = link.valve_endpoint
+    reply[13] = frame[13]
+    reply[14] = frame[14] | 0x40
+    reply[15:18] = bytes.fromhex("010001" if state is not None else "008000")
+    return _finish_frame(bytes(reply), residue)
