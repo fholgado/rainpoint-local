@@ -841,6 +841,17 @@ result is frozen in
 
 ## Phase 2 — persistence, recovery, and coexistence
 
+- [ ] Restore the installed Right Bed sensor's direct local reporting and prove
+      consecutive accepted moisture reports without SDR assistance. On
+      2026-09-05, HA's SDR reader had exited with code 2 and no SDR USB device
+      was enumerated. Right Bed's latest moisture report was SDR-only on
+      September 2; its last ESP32 reading was August 25. Five subsequent factory
+      sweeps triggered known rejoin attempts without later moisture. Its last
+      observed `04/83` report route/form also differs from the configured
+      `01/82` routine-ACK path. Capture one short physical button press before
+      selecting retained recovery or fresh local enrollment; preserve the
+      sensor's canonical device identity and single ACK owner. Evidence:
+      `research/fixtures/hcs026_missing_sdr_coverage_20260905.json`.
 - [x] Persist one sensor ACK owner and restore assignments after ordinary node
       reconnect, gateway reconnect, and successful OTA.
 - [x] Freeze recurring stock-gateway HTV405 idle/watering reply evidence and
@@ -1292,6 +1303,12 @@ pairing, control, recovery, coexistence, and stable identity are proven.
 These items are intentionally outside the active stabilization sequence unless
 one becomes a blocker:
 
+- Preserve explicit timezone information on SDR observations before reusing
+  that transport for freshness-dependent irrigation decisions. Coincident
+  September 2 factory frames showed naive SDR local time four hours behind
+  node UTC, while the gateway treats naive values as UTC. This overstates age;
+  promote the fix before restoring SDR as an authoritative live receiver, and
+  validate a simultaneous SDR/node report without rewriting ambiguous history.
 - Discover and qualify additional RainPoint sensor and valve families.
 - Determine whether HCS026 P1--P6 soil selection is transmitted, device-local,
   or cloud metadata.

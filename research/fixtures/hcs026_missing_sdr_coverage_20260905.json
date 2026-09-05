@@ -1,0 +1,111 @@
+{
+  "date": "2026-09-05",
+  "scope": "Read-only diagnosis of an installed HCS026 reporting gap. Synthetic RF identities and recomputed trailers; original snapshots and IQ are retained untracked. This is not a successful recovery fixture.",
+  "identity": {
+    "paired_endpoint": "d1234524",
+    "factory_endpoint": "51234524",
+    "configured_controller_endpoint": "e1234580",
+    "configured_companion_endpoint": "61234580",
+    "last_report_peer": "c123458f"
+  },
+  "gateway": {
+    "transport": "rtl433",
+    "transport_healthy": false,
+    "transport_error": "rtl_433 exited unexpectedly (2)",
+    "sdr_usb_device_present": false,
+    "usb_inventory": "Only four USB root hubs; no SDR device enumerated.",
+    "connected_radio_nodes": 3
+  },
+  "last_report": {
+    "observed_at_original": "2026-09-02T21:18:51.978796",
+    "timestamp_has_timezone": false,
+    "receiver": "local-sdr",
+    "frame": "79f4882f28c123458fd123452408848302018005c41e800000000000000000000000000044ee",
+    "moisture_percent": 61
+  },
+  "recent_observations": {
+    "event_id_range": [
+      280000,
+      331116
+    ],
+    "accepted_moisture_reports": 91,
+    "all_from_sdr": true,
+    "last_esp32_reading_at": "2026-08-25T21:07:43.767018+00:00",
+    "last_owner_reading_at": "2026-08-25T00:43:25.474614+00:00"
+  },
+  "rejoin_attempts": [
+    {
+      "observed_at_original": "2026-09-02T11:59:40.422769",
+      "frame": "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "owner_requested": true,
+      "owner_preserved": true
+    },
+    {
+      "observed_at_original": "2026-09-03T07:24:06.839563+00:00",
+      "frame": "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "owner_requested": true,
+      "owner_preserved": true
+    },
+    {
+      "observed_at_original": "2026-09-03T22:46:18.702081+00:00",
+      "frame": "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "owner_requested": true,
+      "owner_preserved": true
+    },
+    {
+      "observed_at_original": "2026-09-04T14:13:28.851303+00:00",
+      "frame": "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "owner_requested": true,
+      "owner_preserved": true
+    },
+    {
+      "observed_at_original": "2026-09-05T05:36:23.469620+00:00",
+      "frame": "79f4882f288000000051234524010083827fa41e8080b200000000000000000000000000183b",
+      "owner_requested": true,
+      "owner_preserved": true
+    }
+  ],
+  "latest_rejoin_burst": {
+    "start_utc": "2026-09-05T05:36:23.469620+00:00",
+    "factory_counters": [
+      1,
+      2,
+      4
+    ],
+    "owner_rssi_dbm": -65.5,
+    "following_moisture_observed": false,
+    "node_one_reply_completion_is_sensor_recovery_proof": false
+  },
+  "ack_compatibility": {
+    "last_report_matches_configured_route": false,
+    "last_report_family": "04/83",
+    "supported_routine_family": "01/82",
+    "last_report_eligible_for_current_routine_ack": false,
+    "changing_route_alone_makes_eligible": false
+  },
+  "conclusion": {
+    "immediate_reporting_dependency": "The SDR ingestion path stopped; this sensor had no established ESP32 moisture-report fallback.",
+    "sensor_death_ruled_out_at": "2026-09-05T05:36:35.480319+00:00",
+    "current_battery_condition": "Not established by the old full-category observation.",
+    "full_recovery_verified": false,
+    "next_physical_discriminator": "One short sensor button press during continuous IQ plus gateway observation; inspect existing display and new route before choosing retained rejoin or fresh local enrollment.",
+    "sensor_transmitted_during_latest_rejoin_sweep": true
+  },
+  "passive_capture": {
+    "filename": "20260905-060927/continuous.cu8",
+    "sha256": "615525fe408cf948d731d5b89f22088ebeeac8bba6027a3ac21e9cf34cef263e",
+    "start_utc": "2026-09-05T10:09:27+00:00",
+    "duration_seconds": 600,
+    "sample_rate_sps": 2000000,
+    "capture_center_hz": 433700000,
+    "gain_db": 7.7,
+    "decision_centers_hz": {
+      "first": 433000000,
+      "last": 434650000,
+      "step": 50000
+    },
+    "right_bed_frames_recovered": 0,
+    "other_valid_frames_recovered": true,
+    "physical_button_press_confirmed": false
+  }
+}

@@ -1027,3 +1027,59 @@ The complete Python suite passed 410 tests (two optional NumPy tests skipped);
 the NumPy-enabled waveform suite separately passed all 11 tests. Both native
 protocol executables passed. Research `.18`, standard supervised, and
 non-control production images built and passed their binary boundary checks.
+
+## 2026-09-05 — Right Bed reporting depends on the missing SDR
+
+A read-only live assertion reproduced the user's stale Right Bed sensor:
+`reporting=false`, with its latest accepted moisture timestamp still
+`2026-09-02T21:18:51.978796`. Left Bed, both front sensors, and Test Sensor A
+were reporting through connected ESP32 nodes. No live configuration, ACK
+ownership, firmware, or pairing arm was changed during this diagnosis.
+
+The gateway's primary transport remains `rtl433`, but it reports
+`rtl_433 exited unexpectedly (2)`. HA's hardware inventory contains only four
+USB root hubs and no RTL-SDR device. The broad SDR receive path therefore
+cannot currently supply live telemetry. All retained SDR receiver timestamps
+end around September 2 at 21:17–21:23 local time.
+
+Receiver provenance isolates why this affected Right Bed: every one of its
+accepted moisture observations in the inspected event range came from
+`local-sdr`. Its last ESP32 observation was on August 25 at 21:07 UTC, and its
+current ACK owner's last accepted Right Bed reading was August 25 at 00:43 UTC.
+The configured ownership still exists, but that is not proof that this sensor
+has been reporting or accepting acknowledgements through the owner.
+
+Right Bed is not simply absent from RF. Five factory sweeps triggered automatic
+known-sensor rejoin attempts between September 2 and 5, with no subsequent
+accepted moisture reports. The latest sweep at September 5 05:36:23–35 UTC
+contained counters 1, 2, and 4; its owner heard it at approximately -65.5 dBm.
+The node's `completed` state describes its one-reply rejoin transmission and
+must not be promoted to sensor-side recovery evidence. These observations
+establish that the sensor was alive then; its current battery condition is
+unknown, and the old “100%” reading is only a historical battery category.
+
+The last SDR report also uses a different peer and `04/83` family from the
+configured ordinary report/ACK path. Replaying a synthetic-route version
+through the actual native `isAuthorizedRoutineHcs026Report` predicate returns
+false; changing its route alone still returns false because the family differs
+from the supported `01/82` form. This does not authorize inventing an ACK for
+that alternate exchange. A fresh observed sensor transmission is needed before
+choosing association recovery or new local enrollment.
+
+Original SDR timestamps lack an offset. Coincident factory observations show
+that they are four hours behind the UTC ESP32 timestamp, so the gateway's
+naive-as-UTC freshness calculation overstates their age by four hours. That
+presentation defect does not explain the multi-day reporting gap. Keep original
+timestamps and receiver provenance when reconstructing the incident.
+
+A ten-minute passive CU8 recording at 2 Msps, centered on 433.7 MHz, recovered
+other valid RainPoint traffic but no Right Bed factory/paired/product-alias
+frames. The search used 50 kHz decision-center spacing from 433.0 to 434.65 MHz.
+No physical button press was confirmed during that window. The live freshness
+assertion remained false afterward; no recovery is claimed.
+
+The original snapshots, targeted event history, native predicate probe, and
+bounded receive-only IQ recording are retained untracked in
+`output/right-bed-20260905`. Synthetic endpoint substitutions and recomputed
+trailers are in `fixtures/hcs026_missing_sdr_coverage_20260905.json`. Recovery
+remains unverified; the canonical gate is in `../PROJECT_ROADMAP.md`.
