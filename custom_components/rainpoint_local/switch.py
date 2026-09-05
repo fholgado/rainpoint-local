@@ -7,10 +7,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import RainPointLocalCoordinator
 from .node_entity import RainPointRadioNodeEntity
+from .entity import RainPointLocalEntity
+from .api import RainPointLocalError
 
 
 DEFAULT_RECEIVE_ONLY_SECONDS = 30 * 60
@@ -42,6 +45,12 @@ async def async_setup_entry(
                     str(entry.data.get(CONF_TOKEN, "")),
                 )
             )
+        for device_id, device in coordinator.data.items():
+            if device_id in known or "morning_synchronization" not in device.get("capabilities", []):
+                continue
+            known.add(device_id)
+            entities.append(RainPointMorningSyncSwitch(coordinator, device_id,
+                str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))))
         if entities:
             async_add_entities(entities)
 
@@ -95,3 +104,33 @@ class RainPointRadioNodeRfTransmissionsSwitch(
             self._token, self.node_id, "normal"
         )
         await self.coordinator.async_request_refresh()
+
+
+class RainPointMorningSyncSwitch(RainPointLocalEntity, SwitchEntity):
+    """Enable daily synchronization and direct daytime watering together."""
+
+    _attr_translation_key = "morning_sync"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator, device_id: str, token: str) -> None:
+        super().__init__(coordinator, device_id)
+        self._token = token
+        self._attr_unique_id = f"{device_id}_morning_sync"
+
+    @property
+    def is_on(self) -> bool:
+        return self.decoded_state.get("rf_morning_sync_enabled") is True
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        try:
+            await self.coordinator.client.configure_morning_sync(self._token,
+                device_id=self.device_id, enabled=enabled, timezone=self.hass.config.time_zone)
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._set_enabled(False)

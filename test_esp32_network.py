@@ -145,6 +145,29 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_v2_morning_sync_owner_authenticates_and_cancels_exact_wait(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "valve_control_tx_candidate", "htv405_bounded_sync_wait"],
+        )
+        try:
+            self.assertEqual("node_authenticated", response["type"])
+            command = {"type": "valve_control_cancel_wait", "command_id": "morning-sync-wait"}
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+            stream.write(json.dumps({"type": "valve_control_probe", "state": "morning_sync_wait_cancelled",
+                "command_id": command["command_id"], "close_queued": False}).encode() + b"\n")
+            for _ in range(50):
+                node = self.gateway.nodes()[0]
+                if node.get("valve_control_wait_cancelled_command_id"):
+                    break
+                time.sleep(0.01)
+            self.assertEqual(command["command_id"], node.get("valve_control_wait_cancelled_command_id"))
+            self.assertFalse(node["valve_control_close_queued"])
+        finally:
+            stream.close()
+            connection.close()
+
     def test_v2_htv145_tail_candidate_capability_authenticates(self) -> None:
         connection, stream, response = self._connect(
             NODE_A,

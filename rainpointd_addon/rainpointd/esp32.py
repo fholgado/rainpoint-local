@@ -397,6 +397,12 @@ class ESP32SerialTransport:
                         == "authenticated_valve_response"
                     ),
                 )
+            if status == "morning_sync_wait_cancelled":
+                self.gateway.update_node(
+                    authenticated_node_id,
+                    valve_control_wait_cancelled_command_id=message.get("command_id"),
+                    valve_control_close_queued=message.get("close_queued") is True,
+                )
             self.gateway.observe_valve_control_probe(
                 authenticated_node_id, message
             )

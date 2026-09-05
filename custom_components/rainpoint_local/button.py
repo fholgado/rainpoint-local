@@ -153,6 +153,12 @@ class RainPointHtv405ResynchronizeCounterButton(
     @property
     def available(self) -> bool:
         """Offer resynchronization only for a confirmed-idle lost counter."""
+        if self.decoded_state.get("rf_morning_sync_enabled") is True:
+            return bool(super().available
+                and self.decoded_state.get("rf_control_enabled") is True
+                and self.decoded_state.get("is_watering") is False
+                and self.decoded_state.get("rf_control_command_pending") is False
+                and self.decoded_state.get("rf_control_transaction_active") is not True)
         return bool(
             super().available
             and self.decoded_state.get("rf_control_enabled") is True
@@ -190,7 +196,12 @@ class RainPointHtv405ResynchronizeCounterButton(
     async def async_press(self) -> None:
         """Send the anchor; the gateway handles one bounded retry if needed."""
         try:
-            await self.coordinator.client.resynchronize_htv405_counter(
+            action = (
+                self.coordinator.client.sync_htv405_now
+                if self.decoded_state.get("rf_morning_sync_enabled") is True
+                else self.coordinator.client.resynchronize_htv405_counter
+            )
+            await action(
                 self._token,
                 device_id=self.device_id,
             )

@@ -1015,10 +1015,14 @@ same time without conflicting authority.
       persists counter/owner continuity, and sends a user's bounded command
       directly when ready. It distinguishes counter validity from an asleep
       receiver; see `research/HTV405_MORNING_SYNC_DESIGN.md`.
+- [x] Implement optional morning synchronization and direct daytime commands in
+      gateway `0.34.1`, integration `0.14.0`, and firmware `0.15.10`. Keep the
+      feature disabled by default. Cover daily claims, bounded radio waits,
+      restarts, missed windows, concurrent clicks, and uncertain opens in tests.
 - [ ] Validate that a morning-synchronized HTV405 accepts retained-counter opens
       away from report windows after 1, 4, 8, and 12 hours with a stable owner.
       Measure actual wake/repetition against stock and command latency before
-      implementing the proposed disabled-by-default daily schedule. Keep current
+      enabling the daily schedule for garden watering. Keep current
       garden behavior until this evidence supports immediate daytime dispatch.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot

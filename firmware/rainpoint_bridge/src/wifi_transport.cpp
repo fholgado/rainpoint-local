@@ -1,4 +1,7 @@
 #include "wifi_transport.h"
+#if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
+#include "rainpoint_valve_control.h"
+#endif
 
 #include <Esp.h>
 #include <esp_system.h>
@@ -278,11 +281,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
              type == "htv145_control_status"
 #endif
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
-         || type == "valve_control_configure" ||
-             type == "valve_control_sync" ||
-             type == "valve_control_open" ||
-             type == "valve_control_close" ||
-             type == "valve_control_status"
+         || isHtv405NetworkCommand(type.c_str())
 #endif
 #if RAINPOINT_ROUTINE_ACK_CANDIDATE == 1
          || type == "routine_ack_configure" ||
@@ -332,6 +331,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"rf_maintenance\",\"node_reboot\""
 #if RAINPOINT_SUPERVISED_HTV405_CONTROL == 1
         ",\"valve_control_tx_candidate\""
+        ",\"htv405_bounded_sync_wait\""
 #endif
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
         ",\"htv145_control_tx_candidate\""

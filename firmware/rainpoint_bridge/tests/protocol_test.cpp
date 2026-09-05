@@ -62,6 +62,27 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    assert(rainpoint::isHtv405NetworkCommand("valve_control_cancel_wait"));
+    assert(rainpoint::isHtv405NetworkCommand("valve_control_close"));
+    assert(!rainpoint::isHtv405NetworkCommand("valve_open"));
+    assert(!rainpoint::isHtv405NetworkCommand("valve_control_cancel_wait_extra"));
+    rainpoint::Htv405SyncWait morningWait;
+    assert(!morningWait.claim(0, true));
+    assert(!morningWait.arm(0, 0));
+    assert(!morningWait.arm(0, 7'201));
+    assert(morningWait.arm(100, 30));
+    assert(!morningWait.claim(200, false)); // phase-only or active report
+    assert(morningWait.active());
+    assert(morningWait.claim(300, true));
+    assert(!morningWait.claim(301, true)); // single transmission
+    assert(morningWait.arm(100, 30));
+    assert(morningWait.expired(30'100));
+    assert(!morningWait.claim(30'100, true));
+    morningWait.cancel();
+    assert(!morningWait.claim(30'101, true));
+    assert(morningWait.arm(0xfffffff0U, 1));
+    assert(!morningWait.expired(50));
+    assert(morningWait.expired(984));
     rainpoint::RfMaintenanceState rfMaintenance;
     assert(rfMaintenance.transmitAllowed());
     assert(!rfMaintenance.enterReceiveOnly(100, 59));

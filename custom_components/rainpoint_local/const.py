@@ -18,4 +18,5 @@ PLATFORMS = [
     "switch",
     "update",
     "valve",
+    "time",
 ]

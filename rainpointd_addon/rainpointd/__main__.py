@@ -155,6 +155,7 @@ def main() -> int:
             f"{args.node_listen_host}:{node_server.server_port}"
         )
     server = create_server(gateway, args.host, args.port)
+    gateway.start_morning_sync_scheduler()
     print(
         f"rainpointd {args.transport} API listening on "
         f"http://{args.host}:{server.server_port}/api/v1"

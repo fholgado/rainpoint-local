@@ -1,5 +1,34 @@
 # Changelog
 
+## Firmware 0.15.10
+
+- Route exact queued-wait cancellation through the supervised firmware command
+  filter. The live cancellation check exposed a dropped command before morning
+  mode was enabled for watering. The actual filter is now exercised by native
+  protocol tests.
+
+## 0.34.1 / Integration 0.14.0 / Firmware 0.15.9
+
+- Accept the firmware 0.15.9 bounded-sync capability during authenticated radio
+  handshakes. The first live OTA exposed its omission from the strict capability
+  allowlist; a real TCP regression now authenticates this owner and delivers
+  cancellation of its queued wait.
+
+## 0.34.0 / Integration 0.14.0 / Firmware 0.15.9
+
+- Add optional per-valve morning synchronization and direct daytime watering.
+  A bounded morning close-0 anchor authenticates the retained counter without
+  opening a zone. The feature is disabled by default pending physical acceptance.
+- Share the existing transaction lock, persist each daily attempt before
+  dispatch, and never retry an unanswered open or replay it after restart.
+- Require radio firmware with an independently bounded wait, fresh idle-report
+  gating, and cancellation of the exact queued synchronization command.
+- Add HA controls for enablement, local start time, window length, Sync now,
+  readiness and last successful sync. Missed windows and competing controller
+  traffic invalidate readiness.
+- Migrate storage to schema 20, including the preceding HTV145 branch-polarity
+  migration. Single-zone dry acceptance remains separately disabled.
+
 ## Firmware 0.15.8
 
 - Accept the captured HCS026 factory-rejoin retry marker, allowing the existing

@@ -1,6 +1,7 @@
 # HTV405 morning synchronization and immediate daytime commands
 
-This is a design proposal, not a deployed scheduling change. Completion gates
+Implemented behind a disabled-by-default per-valve setting in gateway 0.34.1,
+integration 0.14.0, and firmware 0.15.10. Physical acceptance is pending. Completion gates
 live in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 Move the existing non-actuating close-0 synchronization into a bounded morning
@@ -13,7 +14,7 @@ The distinction is counter continuity versus radio reachability. September 2
 dry testing established that all 32 close counters can become the next counter,
 and that open advances it while close retains it. September 3 established that
 two off-report close-0 attempts received no response, whereas the same anchor
-at the next report succeeded. The current implementation therefore waits for a
+at the next report succeeded. The default control path therefore waits for a
 report before every synchronized open. Morning synchronization moves that wait
 out of the normal user interaction, but does not prove that an hours-idle valve
 will receive a daytime command. The latter must be measured independently.
@@ -92,8 +93,8 @@ timeout into apparent success.
 A silence does not diagnose counter drift. First verify the command on SDR and
 compare the same counter/payload at the next report opportunity. If it works only
 near a report, investigate receiver wake timing or a missing stock maintenance
-exchange. If daytime delivery is reliable with the retained counter, implement
-the direct-open path and morning scheduling behind a disabled feature flag, then
+exchange. If daytime delivery is reliable with the retained counter, qualify
+the implemented direct-open path and morning scheduling, then
 run several complete dry days including restart, DST, concurrent-click, missed
 morning-window, and active-run-at-maintenance cases before enabling it for garden
 watering. Rollback is the existing explicit per-request synchronized transaction.

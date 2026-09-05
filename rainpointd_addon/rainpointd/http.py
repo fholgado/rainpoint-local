@@ -167,6 +167,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/cancel-recovery")
             or parsed.path.endswith("/valve/cancel-transaction")
             or parsed.path.endswith("/valve/node")
+            or parsed.path.endswith("/valve/morning-sync")
+            or parsed.path.endswith("/valve/sync-now")
         )
         htv145_acceptance_prefix = f"{base}/research/htv145-acceptance/"
         htv145_acceptance_path = parsed.path.startswith(
@@ -437,10 +439,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "cancel-recovery",
                         "cancel-transaction",
                         "node",
+                        "morning-sync",
+                        "sync-now",
                     }:
                         self._json(404, {"error": "not found"})
                         return
-                    if action == "node":
+                    if action == "morning-sync":
+                        result = self.server.gateway.configure_htv405_morning_sync(
+                            device_id=device_id, settings=body,
+                        )
+                    elif action == "sync-now":
+                        result = self.server.gateway.request_htv405_morning_sync(device_id=device_id)
+                    elif action == "node":
                         result = self.server.gateway.assign_htv405_control_node(
                             device_id=device_id,
                             node_id=str(body.get("node_id", "")),

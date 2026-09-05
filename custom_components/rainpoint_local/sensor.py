@@ -147,6 +147,14 @@ DESCRIPTIONS = (
         state_key="rf_control_transaction_status",
     ),
     RainPointSensorDescription(
+        key="morning_sync_status", translation_key="morning_sync_status",
+        state_key="rf_morning_sync_status",
+    ),
+    RainPointSensorDescription(
+        key="morning_sync_last_success", translation_key="morning_sync_last_success",
+        state_key="rf_morning_sync_last_success_at", device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    RainPointSensorDescription(
         key="duration",
         translation_key="duration",
         state_key="duration_seconds",
@@ -596,6 +604,12 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
         """Attach structured report data to the last-report timestamp."""
         if self.entity_description.key == "report_time":
             return _report_attributes(self.device)
+        if self.entity_description.key == "morning_sync_status":
+            return {"reason": self.decoded_state.get("rf_morning_sync_reason"),
+                "last_success_at": self.decoded_state.get("rf_morning_sync_last_success_at"),
+                "start_time": self.decoded_state.get("rf_morning_sync_start_time"),
+                "timezone": self.decoded_state.get("rf_morning_sync_timezone"),
+                "window_minutes": self.decoded_state.get("rf_morning_sync_window_minutes")}
         if self.entity_description.key == "reception_success":
             return {
                 key: self.device.get(key)

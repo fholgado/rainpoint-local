@@ -113,6 +113,28 @@ class Htv405ControlCoordinator:
             started_at=started_at,
         )
 
+    def request_morning_sync(
+        self, profile: Htv405ControlProfile, *, started_at: str,
+        wait_seconds: int,
+    ) -> dict[str, Any]:
+        """Queue only an idle counter anchor, bounded by the service window."""
+        if isinstance(wait_seconds, bool) or not 1 <= wait_seconds <= 7200:
+            raise ValueError("sync wait must be bounded to 1-7200 seconds")
+        return self._reserve_and_send(
+            profile, action="morning_sync", zone=1, duration_seconds=None,
+            started_at=started_at, wait_seconds=wait_seconds,
+        )
+
+    def request_direct_open(
+        self, profile: Htv405ControlProfile, *, zone: int,
+        duration_seconds: int, started_at: str,
+    ) -> dict[str, Any]:
+        """Track a direct open with the same durable watering transaction."""
+        return self._reserve_and_send(
+            profile, action="direct_open", zone=zone,
+            duration_seconds=duration_seconds, started_at=started_at,
+        )
+
     def request_idle_close_probe(
         self,
         profile: Htv405ControlProfile,
@@ -172,10 +194,11 @@ class Htv405ControlCoordinator:
         duration_seconds: int | None,
         started_at: str,
         candidate_sequence: int | None = None,
+        wait_seconds: int | None = None,
     ) -> dict[str, Any]:
         self._require_enabled()
         self._require_profile(profile)
-        if action in {"open", "guarded_open_probe", "synchronized_open"} and (
+        if action in {"open", "direct_open", "guarded_open_probe", "synchronized_open"} and (
             not isinstance(duration_seconds, int)
             or isinstance(duration_seconds, bool)
             or duration_seconds < HTV405_OPEN_DURATION_MIN_SECONDS
@@ -187,7 +210,7 @@ class Htv405ControlCoordinator:
             )
         command_id = uuid.uuid4().hex
         transaction_id: str | None = None
-        if action == "synchronized_open":
+        if action in {"synchronized_open", "morning_sync"}:
             transaction_id = uuid.uuid4().hex
             reservation = self.store.reserve_htv405_synchronized_open(
                 valve_endpoint=profile.valve_endpoint,
@@ -195,8 +218,9 @@ class Htv405ControlCoordinator:
                 transaction_id=transaction_id,
                 command_id=command_id,
                 zone=zone,
-                duration_seconds=int(duration_seconds or 0),
+                duration_seconds=duration_seconds,
                 started_at=started_at,
+                sync_only=action == "morning_sync",
             )
         elif action == "idle_close_probe":
             reservation = self.store.reserve_htv405_idle_close_probe(
@@ -227,14 +251,17 @@ class Htv405ControlCoordinator:
                 candidate_sequence=candidate_sequence,
             )
         else:
+            if action == "direct_open":
+                transaction_id = uuid.uuid4().hex
             reservation = self.store.reserve_htv405_command(
                 valve_endpoint=profile.valve_endpoint,
                 node_id=profile.node_id,
                 command_id=command_id,
-                action=action,
+                action="open" if action == "direct_open" else action,
                 zone=zone,
                 duration_seconds=duration_seconds,
                 started_at=started_at,
+                transaction_id=transaction_id,
             )
         sequence = int(reservation["control_pending_sequence"])
         commands = (
@@ -260,9 +287,10 @@ class Htv405ControlCoordinator:
                         "idle_close_probe",
                         "close_discriminator",
                         "synchronized_open",
+                        "morning_sync",
                     }
                     else "valve_control_open"
-                    if action == "guarded_open_probe"
+                    if action in {"guarded_open_probe", "direct_open"}
                     else f"valve_control_{action}"
                 ),
                 command_id=command_id,
@@ -270,9 +298,11 @@ class Htv405ControlCoordinator:
                 expected_sequence=sequence,
                 **(
                     {"wait_for_report": True}
-                    if action == "synchronized_open"
+                    if action in {"synchronized_open", "morning_sync"}
                     else {}
                 ),
+                **({"wait_timeout_seconds": wait_seconds, "idle_only": True}
+                   if action == "morning_sync" else {}),
                 **(
                     {"duration_seconds": duration_seconds}
                     if duration_seconds is not None
@@ -307,7 +337,7 @@ class Htv405ControlCoordinator:
             "expected_idle_at": expected_idle_at,
             "state": (
                 "waiting_for_valve_report"
-                if action == "synchronized_open"
+                if action in {"synchronized_open", "morning_sync"}
                 else "pending_authenticated_response"
             ),
         }
@@ -315,7 +345,10 @@ class Htv405ControlCoordinator:
             result.update(
                 {
                     "transaction_id": transaction_id,
-                    "transaction_state": "waiting_for_valve_report",
+                    "transaction_state": (
+                        "waiting_for_open_confirmation" if action == "direct_open"
+                        else "waiting_for_valve_report"
+                    ),
                 }
             )
         return result

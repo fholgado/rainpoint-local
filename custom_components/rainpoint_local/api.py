@@ -335,6 +335,14 @@ class RainPointLocalClient:
             token,
         )
 
+    async def configure_morning_sync(self, token: str, *, device_id: str, **settings) -> dict[str, Any]:
+        """Update only the supplied per-valve morning settings."""
+        return await self._post(f"devices/{device_id}/valve/morning-sync", settings, token)
+
+    async def sync_htv405_now(self, token: str, *, device_id: str) -> dict[str, Any]:
+        """Request bounded synchronization without a watering request."""
+        return await self._post(f"devices/{device_id}/valve/sync-now", {}, token)
+
     async def cancel_htv405_watering_transaction(
         self, token: str, *, device_id: str
     ) -> dict[str, Any]:

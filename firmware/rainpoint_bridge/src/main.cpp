@@ -306,6 +306,7 @@ struct ValveControlProbe {
     bool ackSent = false;
     bool openQueued = false;
     bool closeQueued = false;
+    rainpoint::Htv405SyncWait syncWait{};
     bool openSent = false;
     bool closeSent = false;
     bool responseListenActive = false;
@@ -1367,11 +1368,18 @@ void reportValveProbeError(const char* error) {
 
 bool transmitQueuedValveProbe(
     rainpoint::Cc1101& radio,
-    std::uint32_t startAtMicros
+    std::uint32_t startAtMicros,
+    bool currentReportIdle = false
 ) {
     if (!valveControlProbe.ackQueued && !valveControlProbe.openQueued &&
         !valveControlProbe.closeQueued) {
         return false;
+    }
+
+    if (valveControlProbe.closeQueued && valveControlProbe.syncWait.active()) {
+        if (!valveControlProbe.syncWait.claim(millis(), currentReportIdle)) {
+            return false;
+        }
     }
 
     std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
@@ -1611,7 +1619,8 @@ bool observeValveProbeFrame(
     }
     if (transmitQueuedValveProbe(
             radio,
-            receivedAtMicros + rainpoint::kHtv405OrdinaryReplyStartDelayUs
+            receivedAtMicros + rainpoint::kHtv405OrdinaryReplyStartDelayUs,
+            stateReport && !watering
         )) {
         return true;
     }
@@ -1623,6 +1632,12 @@ bool observeValveProbeFrame(
 }
 
 void pollValveProbeResponseListener() {
+    if (valveControlProbe.closeQueued && valveControlProbe.syncWait.expired(millis())) {
+        valveControlProbe.closeQueued = false;
+        valveControlProbe.syncWait.cancel();
+        reportValveProbeError("morning_sync_wait_expired");
+        valveControlProbe.commandId.clear();
+    }
     if (!valveControlProbe.responseListenActive) {
         return;
     }
@@ -2724,12 +2739,33 @@ void handleNetworkCommand() {
         );
         return;
     }
+    if (type == "valve_control_cancel_wait") {
+        // Only cancel the exact queued maintenance command. An already-sent
+        // command keeps its response listener and physical-state evidence.
+        if (valveControlProbe.commandId == commandId &&
+            valveControlProbe.closeQueued && valveControlProbe.syncWait.active()) {
+            valveControlProbe.closeQueued = false;
+            valveControlProbe.syncWait.cancel();
+            reportValveProbeStatus("morning_sync_wait_cancelled");
+            valveControlProbe.commandId.clear();
+        }
+        return;
+    }
     if (type == "valve_control_close") {
         valveControlProbe.commandId = commandId;
         long zone = 0;
         long expectedSequence = -1;
         bool waitForReport = false;
+        bool idleOnly = false;
+        long waitTimeoutSeconds = 0;
         jsonBoolField(command, "wait_for_report", waitForReport);
+        jsonBoolField(command, "idle_only", idleOnly);
+        if (idleOnly && (!waitForReport ||
+            !jsonLongField(command, "wait_timeout_seconds", waitTimeoutSeconds) ||
+            waitTimeoutSeconds < 1 || waitTimeoutSeconds > 7'200)) {
+            reportNetworkCommandError(commandId, "invalid_morning_sync_wait");
+            return;
+        }
         if (!jsonLongField(command, "zone", zone) ||
             zone < 1 || zone > 4 ||
             !jsonLongField(
@@ -2740,6 +2776,9 @@ void handleNetworkCommand() {
                 commandId, "invalid_valve_control_close"
             );
             return;
+        }
+        if (idleOnly) {
+            valveControlProbe.syncWait.arm(millis(), waitTimeoutSeconds);
         }
         transmitValveProbeClose(
             static_cast<std::uint8_t>(zone), !waitForReport

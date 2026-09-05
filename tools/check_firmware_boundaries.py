@@ -37,6 +37,8 @@ SUPERVISED_VALVE_CONTROL_COMMANDS = (
     b"valve_control_open",
     b"valve_control_close",
     b"valve_control_tx_candidate",
+    b"valve_control_cancel_wait",
+    b"htv405_bounded_sync_wait",
 )
 
 HTV145_PAIRING_CAPABILITIES = (b"htv145_pairing_tx_candidate",)

@@ -2,10 +2,43 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 
 #include "rainpoint_protocol.h"
 
 namespace rainpoint {
+
+inline bool isHtv405NetworkCommand(const char* type) {
+    for (const auto* candidate : {"valve_control_configure", "valve_control_sync",
+            "valve_control_open", "valve_control_close", "valve_control_status",
+            "valve_control_cancel_wait"}) {
+        if (std::strcmp(type, candidate) == 0) return true;
+    }
+    return false;
+}
+
+class Htv405SyncWait {
+public:
+    bool arm(std::uint32_t nowMs, std::uint32_t durationSeconds) {
+        if (durationSeconds < 1 || durationSeconds > 7'200) return false;
+        expiresAtMs_ = nowMs + durationSeconds * 1'000;
+        active_ = true;
+        return true;
+    }
+    bool active() const { return active_; }
+    bool expired(std::uint32_t nowMs) const {
+        return active_ && static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0;
+    }
+    bool claim(std::uint32_t nowMs, bool currentReportIdle) {
+        if (!active_ || expired(nowMs) || !currentReportIdle) return false;
+        active_ = false;
+        return true;
+    }
+    void cancel() { active_ = false; }
+private:
+    bool active_ = false;
+    std::uint32_t expiresAtMs_ = 0;
+};
 
 struct Htv405ValveLink {
     std::array<std::uint8_t, 4> controllerEndpoint{};

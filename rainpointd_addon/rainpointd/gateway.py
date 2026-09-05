@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import binascii
 import hmac
 import os
 import re
@@ -19,6 +20,7 @@ from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
 from .firmware_catalog import FirmwareCatalog
+from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv405_control import (
@@ -286,6 +288,8 @@ class Gateway:
         self._event_condition = threading.Condition(self._lock)
         self._htv405_resync_timers: dict[str, threading.Timer] = {}
         self._htv405_transaction_timers: dict[str, threading.Timer] = {}
+        self._morning_sync_timer: threading.Timer | None = None
+        self._morning_sync_running = False
         self._transport_healthy = True
         self._transport_error: str | None = None
         self._node_command_sender: (
@@ -392,6 +396,9 @@ class Gateway:
     def close(self) -> None:
         """Close persistent resources."""
         with self._lock:
+            self._morning_sync_running = False
+            if self._morning_sync_timer is not None:
+                self._morning_sync_timer.cancel()
             for timer in self._htv405_resync_timers.values():
                 timer.cancel()
             self._htv405_resync_timers.clear()
@@ -881,6 +888,279 @@ class Gateway:
         except (KeyError, RuntimeError, ValueError):
             return
 
+    def _morning_sync_registration_locked(self, device_id: str) -> dict:
+        if self._store is None:
+            raise RuntimeError("HTV405 storage is unavailable")
+        for item in self._store.valve_registry():
+            if item["device_id"] == device_id and item["model"] == "HTV405FRF":
+                return item
+        raise KeyError(device_id)
+
+    def _morning_sync_status_locked(self, registration: dict, now: datetime) -> dict:
+        """Reconcile readiness from durable valve evidence, never transmit."""
+        assert self._store is not None
+        endpoint = registration["valve_endpoint"]
+        previous = self._store.morning_sync(endpoint)
+        data = copy.deepcopy(previous)
+        config = morning_sync.configuration(data.get("config", {}), {})
+        data["config"] = config
+        date, phase, _ = morning_sync.service_window(config, now)
+        key = morning_sync.association_key(registration)
+        transaction = registration.get("control_transaction_state")
+        owns_transaction = (
+            data.get("transaction_id") is not None
+            and data["transaction_id"] == registration.get("control_transaction_id")
+            and registration.get("control_transaction_purpose") == "morning_sync"
+        )
+        if data.get("association_key") != key:
+            data.update(ready=False, awaiting_confirmation=False,
+                        reason="association_changed", association_key=key)
+        if owns_transaction and data.get("awaiting_confirmation"):
+            if transaction == "completed" and registration.get("control_next_sequence") is not None:
+                data.update(
+                    ready=True, reason="confirmed", awaiting_confirmation=False,
+                    last_success_at=registration.get("control_confirmed_at"),
+                    last_success_date=data.get("service_date"),
+                    confirmed_counter=registration.get("control_next_sequence"),
+                    transmitted_at=registration.get("control_last_command_started_at"),
+                )
+            elif transaction in {"failed", "cancelled"}:
+                data.update(ready=False, awaiting_confirmation=False,
+                            reason=registration.get("control_transaction_error") or "sync_failed")
+        elif data.get("awaiting_confirmation"):
+            data.update(ready=False, awaiting_confirmation=False, reason="sync_interrupted")
+        if registration.get("control_next_sequence") is None and not data.get("awaiting_confirmation"):
+            data.update(ready=False, reason="counter_unconfirmed")
+        if phase == "after" and data.get("last_success_date") != date:
+            data.update(ready=False, reason="morning_window_missed")
+        node = self._nodes.get(str(registration.get("control_node_id")), {})
+        if not config["enabled"]:
+            status, reason = "Disabled", "disabled"
+        elif not self._htv405_control_node_ready(node):
+            status, reason = "Needs sync", "radio_node_unavailable"
+        elif data.get("awaiting_confirmation"):
+            status, reason = "Syncing", "waiting_for_valve_confirmation"
+        elif registration.get("control_pending_command_id") is not None:
+            status, reason = "Watering", "command_pending_confirmation"
+        elif registration.get("control_confirmed_watering") in {True, 1}:
+            status, reason = "Watering", "valve_confirmed_watering"
+        elif data.get("ready"):
+            status, reason = "Ready", "confirmed"
+        else:
+            status, reason = "Needs sync", data.get("reason", "not_synchronized")
+        if previous and data != previous:
+            self._store.save_morning_sync(endpoint, data)
+        return {**data, "status": status, "reason": reason}
+
+    @staticmethod
+    def _unresolved_direct_open(registration: dict) -> bool:
+        if (registration.get("control_transaction_purpose") != "direct_open"
+                or registration.get("control_transaction_state") not in {"failed", "cancelled"}):
+            return False
+        started = registration.get("control_transaction_started_at")
+        duration = registration.get("control_transaction_duration_seconds")
+        confirmed = registration.get("control_confirmed_at")
+        return (registration.get("control_confirmed_watering") not in {False, 0}
+                or not isinstance(started, str) or not isinstance(duration, int)
+                or not isinstance(confirmed, str)
+                or _observed_utc(confirmed) < _observed_utc(started) + timedelta(seconds=duration))
+
+    def configure_htv405_morning_sync(
+        self, *, device_id: str, settings: dict, now: datetime | None = None,
+    ) -> dict:
+        """Persist a disabled-by-default per-valve morning policy."""
+        with self._lock:
+            registration = self._morning_sync_registration_locked(device_id)
+            assert self._store is not None
+            data = self._store.morning_sync(registration["valve_endpoint"])
+            config = morning_sync.configuration(data.get("config", {}), settings)
+            if registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES:
+                raise RuntimeError("finish or cancel the active transaction before changing sync settings")
+            if self._unresolved_direct_open(registration):
+                raise RuntimeError("previous watering outcome is unresolved; await independent idle evidence")
+            if config["enabled"]:
+                node = self._nodes.get(str(registration.get("control_node_id")), {})
+                if "htv405_bounded_sync_wait" not in node.get("capabilities", []):
+                    raise RuntimeError("morning sync requires bounded-wait radio firmware")
+                if not self._valve_control_enabled:
+                    raise PermissionError("HTV405 supervised control is disabled")
+            if config != data.get("config"):
+                data.update(config=config, ready=False, reason="settings_changed")
+                self._store.save_morning_sync(registration["valve_endpoint"], data)
+            self._event_condition.notify_all()
+            return self._morning_sync_status_locked(registration, now or datetime.now(timezone.utc))
+
+    def _request_morning_sync_locked(
+        self, registration: dict, now: datetime, *, wait_seconds: int,
+    ) -> dict:
+        assert self._store is not None
+        if not self._valve_control_enabled or self._node_command_sender is None:
+            raise RuntimeError("HTV405 control transport is unavailable")
+        status = self._morning_sync_status_locked(registration, now)
+        config = status["config"]
+        if not config["enabled"]:
+            raise PermissionError("morning synchronization is disabled")
+        node = self._nodes.get(str(registration.get("control_node_id")), {})
+        if not self._htv405_control_node_ready(node) or "htv405_bounded_sync_wait" not in node.get("capabilities", []):
+            raise RuntimeError("bounded-wait radio node is unavailable")
+        if registration.get("control_confirmed_watering") not in {False, 0}:
+            raise RuntimeError("valve is not confirmed idle")
+        if registration.get("control_pending_command_id") is not None or registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES:
+            raise RuntimeError("valve transaction is already active")
+        if registration.get("control_recovery_duration_seconds") is not None:
+            raise RuntimeError("previous watering outcome is unresolved")
+        if self._unresolved_direct_open(registration):
+            raise RuntimeError("previous watering outcome is unresolved; await independent idle evidence")
+        last_command = registration.get("control_last_command_started_at")
+        if isinstance(last_command, str) and (now - _observed_utc(last_command)).total_seconds() < 15:
+            raise RuntimeError("minimum HTV405 command interval has not elapsed")
+        last_report = registration.get("last_phase_at")
+        if not isinstance(last_report, str) or not 0 <= (now - _observed_utc(last_report)).total_seconds() <= 3600:
+            raise RuntimeError("fresh valve reporting is required for maintenance")
+        date, _, _ = morning_sync.service_window(config, now)
+        endpoint = registration["valve_endpoint"]
+        data = self._store.morning_sync(endpoint)
+        data.pop("external_command_at", None)
+        # Persist the date/association claim BEFORE queueing RF. A process crash
+        # can lose a maintenance opportunity but cannot duplicate it on restart.
+        data.update(
+            ready=False, reason="sync_requested", service_date=date,
+            association_key=morning_sync.association_key(registration),
+            service_key=date + ":" + morning_sync.association_key(registration),
+            attempted_at=now.isoformat(),
+            wait_until=(now + timedelta(seconds=wait_seconds)).isoformat(),
+            awaiting_confirmation=True, transaction_id=None,
+        )
+        self._store.save_morning_sync(endpoint, data)
+        coordinator = Htv405ControlCoordinator(store=self._store, sender=self._node_command_sender, enabled=True)
+        try:
+            result = coordinator.request_morning_sync(
+                self._htv405_control_profile(registration), started_at=now.isoformat(),
+                wait_seconds=wait_seconds,
+            )
+        except (ConnectionError, OSError, RuntimeError, ValueError):
+            data.update(ready=False, awaiting_confirmation=False, reason="sync_dispatch_failed")
+            self._store.save_morning_sync(endpoint, data)
+            raise
+        data.update(transaction_id=result["transaction_id"], command_id=result["command_id"])
+        self._store.save_morning_sync(endpoint, data)
+        latest = self._morning_sync_registration_locked(registration["device_id"])
+        self._append_valve_control_event_locked(registration=latest,
+            event_type="valve_control_transaction_started", observed_at=now.isoformat(), action="morning_sync")
+        self._refresh_registry_catalog()
+        return result
+
+    def request_htv405_morning_sync(self, *, device_id: str, now: datetime | None = None) -> dict:
+        """Explicit recover-now action; never enqueue a watering command."""
+        with self._lock:
+            registration = self._morning_sync_registration_locked(device_id)
+            data = self._store.morning_sync(registration["valve_endpoint"])
+            config = data.get("config", morning_sync.DEFAULT_CONFIG)
+            return self._request_morning_sync_locked(registration, now or datetime.now(timezone.utc),
+                wait_seconds=config["window_minutes"] * 60)
+
+    def run_htv405_morning_sync(self, *, now: datetime | None = None) -> int:
+        """Run one bounded scheduler tick; caller can supply a deterministic clock."""
+        current = now or datetime.now(timezone.utc)
+        with self._lock:
+            if self._store is None or not self._valve_control_enabled:
+                return 0
+            self._expire_stale_htv405_commands_locked(current)
+            count = 0
+            for registration in self._store.valve_registry():
+                if registration.get("model") != "HTV405FRF":
+                    continue
+                daily = self._morning_sync_status_locked(registration, current)
+                if not daily["config"]["enabled"]:
+                    continue
+                if daily.get("awaiting_confirmation"):
+                    deadline = daily.get("wait_until")
+                    if (isinstance(deadline, str) and current >= _observed_utc(deadline)
+                            and registration.get("control_pending_started_at") is None):
+                        if registration.get("control_transaction_id") == daily.get("transaction_id"):
+                            self._cancel_morning_sync_wait_locked(registration)
+                            self._fail_htv405_transaction_locked(registration, reason="sync_window_expired", observed_at=current.isoformat())
+                    continue
+                date, phase, remaining = morning_sync.service_window(daily["config"], current)
+                service_key = date + ":" + morning_sync.association_key(registration)
+                if phase != "inside" or remaining < 1 or daily.get("service_key") == service_key or daily.get("external_command_at"):
+                    continue
+                try:
+                    self._request_morning_sync_locked(registration, current, wait_seconds=remaining)
+                except (ConnectionError, OSError, RuntimeError, ValueError):
+                    continue
+                count += 1
+            return count
+
+    def _cancel_morning_sync_wait_locked(self, registration: dict) -> None:
+        if registration.get("control_transaction_purpose") != "morning_sync" or self._node_command_sender is None:
+            return
+        command_id = registration.get("control_pending_command_id")
+        if not isinstance(command_id, str):
+            return
+        try:
+            self._node_command_sender(str(registration["control_node_id"]), {
+                "type": "valve_control_cancel_wait", "command_id": command_id,
+            })
+        except (ConnectionError, OSError, RuntimeError, ValueError):
+            # The owner independently expires this exact non-actuating wait.
+            pass
+
+    def _observe_morning_sync_command_locked(self, frame: str, timestamp: str) -> None:
+        """Invalidate daytime readiness on another controller's valid command."""
+        if self._store is None:
+            return
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            return
+        if (len(raw) != 38 or raw[:5] != bytes.fromhex("79f4882f28")
+                or (binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(raw[-2:], "big")) != 0x4f03
+                or raw[13] not in range(0x80, 0xa0) or raw[14] not in {0x10, 0x90}
+                or raw[15] not in {0x81, 0x82} or raw[16] != 0x80
+                or raw[17] not in range(0x81, 0x85)):
+            return
+        for registration in self._store.valve_registry():
+            if registration["valve_endpoint"] != raw[5:9].hex():
+                continue
+            data = self._store.morning_sync(registration["valve_endpoint"])
+            if not data.get("config", {}).get("enabled"):
+                continue
+            last = registration.get("control_last_command_started_at")
+            try:
+                recent = isinstance(last, str) and 0 <= (_observed_utc(timestamp) - _observed_utc(last)).total_seconds() <= 5
+            except (TypeError, ValueError):
+                recent = False
+            if (recent and raw[9:13].hex() == registration.get("control_companion_endpoint")
+                    and raw[13] & 0x1f in {registration.get("control_pending_sequence"), registration.get("control_last_sequence")}):
+                continue
+            was_waiting = data.get("awaiting_confirmation")
+            data.update(ready=False, awaiting_confirmation=False,
+                        reason="external_control_observed", external_command_at=timestamp)
+            self._store.save_morning_sync(registration["valve_endpoint"], data)
+            if was_waiting:
+                self._cancel_morning_sync_wait_locked(registration)
+                self._fail_htv405_transaction_locked(registration, reason="external_control_observed", observed_at=timestamp)
+
+    def start_morning_sync_scheduler(self) -> None:
+        """Start maintenance in the daemon, independently of HA polling."""
+        with self._lock:
+            if self._morning_sync_running:
+                return
+            self._morning_sync_running = True
+        self._run_morning_sync_timer()
+
+    def _run_morning_sync_timer(self) -> None:
+        try:
+            self.run_htv405_morning_sync()
+        finally:
+            with self._lock:
+                if self._morning_sync_running:
+                    timer = threading.Timer(30, self._run_morning_sync_timer)
+                    timer.daemon = True
+                    self._morning_sync_timer = timer
+                    timer.start()
+
     def request_htv405_control(
         self,
         *,
@@ -982,6 +1262,21 @@ class Gateway:
                 sender=self._node_command_sender,
                 enabled=True,
             )
+            daily = self._morning_sync_status_locked(registration, _observed_utc(timestamp))
+            if daily["config"]["enabled"]:
+                if daily["status"] != "Ready":
+                    raise RuntimeError("Needs sync: " + daily["reason"])
+                result = coordinator.request_direct_open(
+                    profile, zone=zone, duration_seconds=duration_seconds,
+                    started_at=timestamp,
+                )
+                self._refresh_registry_catalog()
+                self._append_valve_control_event_locked(
+                    registration=self._morning_sync_registration_locked(device_id),
+                    event_type="valve_control_transaction_started",
+                    observed_at=timestamp, action="direct_open",
+                )
+                return result
             result = coordinator.request_synchronized_open(
                 profile,
                 zone=zone,
@@ -1165,6 +1460,7 @@ class Gateway:
                 raise RuntimeError(
                     "the queued open can no longer be cancelled"
                 )
+            self._cancel_morning_sync_wait_locked(registration)
             cancelled = self._store.cancel_htv405_transaction(
                 valve_endpoint=str(registration["valve_endpoint"]),
                 reason="cancelled_by_operator",
@@ -1503,6 +1799,7 @@ class Gateway:
             )
             if timer is not None:
                 timer.cancel()
+            self._cancel_morning_sync_wait_locked(registration)
             cancelled = self._store.cancel_htv405_transaction(
                 valve_endpoint=valve_endpoint,
                 reason=reason,
@@ -1872,6 +2169,11 @@ class Gateway:
                 raise RuntimeError("selected HTV405 radio node is unavailable")
             if registration.get("control_confirmed_watering") in {1, True}:
                 raise RuntimeError("HTV405 valve is not confirmed idle")
+            if (registration.get("control_pending_command_id") is not None
+                    or registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES):
+                raise RuntimeError("finish or cancel the active transaction before changing radio owner")
+            if self._unresolved_direct_open(registration):
+                raise RuntimeError("previous watering outcome is unresolved; await independent idle evidence")
             if registration.get("control_node_id") != node_id:
                 self._revoke_htv405_ack_locked(registration)
             result = self._store.assign_htv405_control_node(
@@ -2861,6 +3163,7 @@ class Gateway:
         decoded = copy.deepcopy(state)
 
         with self._lock:
+            self._observe_morning_sync_command_locked(frame, timestamp)
             duplicate = self._receiver_duplicate_locked(
                 frame=frame,
                 state=decoded,
@@ -2979,6 +3282,7 @@ class Gateway:
         decoded = copy.deepcopy(state)
         with self._lock:
             self._confirm_sensor_ack_locked(decoded, timestamp)
+            self._observe_morning_sync_command_locked(frame, timestamp)
             duplicate = self._receiver_duplicate_locked(
                 frame=frame,
                 state=decoded,
@@ -3520,6 +3824,16 @@ class Gateway:
                     transaction_active = transaction_state in (
                         HTV405_ACTIVE_TRANSACTION_STATES
                     )
+                    daily = self._morning_sync_status_locked(valve_registration, observed)
+                    state.update({
+                        "rf_morning_sync_enabled": daily["config"]["enabled"],
+                        "rf_morning_sync_start_time": daily["config"]["start_time"],
+                        "rf_morning_sync_timezone": daily["config"]["timezone"],
+                        "rf_morning_sync_window_minutes": daily["config"]["window_minutes"],
+                        "rf_morning_sync_status": daily["status"],
+                        "rf_morning_sync_reason": daily["reason"],
+                        "rf_morning_sync_last_success_at": daily.get("last_success_at"),
+                    })
                     confirmed_idle = confirmed_watering in {0, False}
                     start_available = bool(
                         self._valve_control_enabled
@@ -3528,6 +3842,7 @@ class Gateway:
                         and confirmed_idle
                         and pending_command is None
                         and not transaction_active
+                        and (not daily["config"]["enabled"] or daily["status"] == "Ready")
                     )
                     if not self._valve_control_enabled:
                         start_unavailable_reason = "disabled_by_gateway"
@@ -3541,6 +3856,8 @@ class Gateway:
                         start_unavailable_reason = "command_pending_response"
                     elif not confirmed_idle:
                         start_unavailable_reason = "valve_not_confirmed_idle"
+                    elif daily["config"]["enabled"] and daily["status"] != "Ready":
+                        start_unavailable_reason = "Needs sync: " + daily["reason"]
                     else:
                         start_unavailable_reason = None
                     control_available = bool(
@@ -3785,12 +4102,19 @@ class Gateway:
                             ),
                         }
                     )
+                    if valve_registration.get("control_transaction_purpose") == "morning_sync":
+                        state["rf_control_transaction_status"] = (
+                            "Synchronization completed" if transaction_state == "completed"
+                            else "Syncing" if transaction_active
+                            else "Needs sync: " + str(valve_registration.get("control_transaction_error") or daily["reason"])
+                        )
                     if self._valve_control_enabled:
                         device["capabilities"] = sorted(
                             {
                                 *device.get("capabilities", []),
                                 "bounded_valve_control",
                                 "counter_resynchronization",
+                                "morning_synchronization",
                                 "four_zone_valve",
                             }
                         )
@@ -6035,6 +6359,9 @@ class Gateway:
                         None,
                     )
                     if valve_registration is not None:
+                        if (valve_registration.get("control_pending_command_id") is not None
+                                or valve_registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES):
+                            raise RuntimeError("finish or cancel the active transaction before forgetting the valve")
                         self._revoke_htv405_ack_locked(valve_registration)
                     forgotten_valve = self._store.forget_valve_registry_device(
                         device_id,

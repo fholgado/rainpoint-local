@@ -16,7 +16,7 @@ from .product_identity import (
 )
 from .valve_protocol import next_htv145_command_sequence
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -232,6 +232,9 @@ class SQLiteEventStore:
             version = 18
         if version == 18:
             self._migrate_v18_to_v19()
+            version = 19
+        if version == 19:
+            self._migrate_v19_to_v20()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -605,6 +608,38 @@ class SQLiteEventStore:
                 "counter_synchronized = 0, counter_source = NULL"
             )
             self._connection.execute("PRAGMA user_version = 19")
+
+    def _migrate_v19_to_v20(self) -> None:
+        """Keep optional morning maintenance separate from watering intent."""
+        with self._connection:
+            columns = {row[1] for row in self._connection.execute("PRAGMA table_info(valve_registry)")}
+            if "control_transaction_purpose" not in columns:
+                self._connection.execute(
+                    "ALTER TABLE valve_registry ADD COLUMN "
+                    "control_transaction_purpose TEXT DEFAULT 'watering'"
+                )
+            self._connection.execute(
+                "CREATE TABLE IF NOT EXISTS htv405_morning_sync ("
+                "valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)"
+            )
+            self._connection.execute("PRAGMA user_version = 20")
+
+    def morning_sync(self, valve_endpoint: str) -> dict[str, Any]:
+        """Read durable configuration and the last claimed daily service."""
+        row = self._connection.execute(
+            "SELECT payload FROM htv405_morning_sync WHERE valve_endpoint = ?",
+            (valve_endpoint,),
+        ).fetchone()
+        return json.loads(row[0]) if row is not None else {}
+
+    def save_morning_sync(self, valve_endpoint: str, payload: dict) -> None:
+        """Persist a claim before dispatch, under the gateway transaction lock."""
+        self._connection.execute(
+            "INSERT INTO htv405_morning_sync VALUES (?, ?) "
+            "ON CONFLICT(valve_endpoint) DO UPDATE SET payload = excluded.payload",
+            (valve_endpoint, json.dumps(payload, sort_keys=True)),
+        )
+        self._connection.commit()
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -1074,6 +1109,10 @@ class SQLiteEventStore:
                 (device["valve_endpoint"],),
             )
             self._connection.execute(
+                "DELETE FROM htv405_morning_sync WHERE valve_endpoint = ?",
+                (device["valve_endpoint"],),
+            )
+            self._connection.execute(
                 "INSERT OR REPLACE INTO device_suppressions(endpoint, suppressed_at) "
                 "VALUES (?, ?)",
                 (device["valve_endpoint"], suppressed_at),
@@ -1393,6 +1432,7 @@ class SQLiteEventStore:
         duration_seconds: int | None,
         started_at: str,
         minimum_interval_seconds: float = 15.0,
+        transaction_id: str | None = None,
     ) -> dict[str, Any]:
         """Atomically reserve one authenticated HTV405 command counter."""
         if action not in {"open", "close"}:
@@ -1443,6 +1483,10 @@ class SQLiteEventStore:
                 raise RuntimeError(
                     "HTV405 open differs from the queued watering request"
                 )
+        if transaction_id is not None:
+            if action != "open" or transaction_open:
+                raise RuntimeError("invalid direct-open transaction")
+            transaction_open = True
         sequence = state["control_next_sequence"]
         if sequence is None:
             raise RuntimeError("HTV405 control counter is not synchronized")
@@ -1482,6 +1526,12 @@ class SQLiteEventStore:
                 control_pending_duration_seconds = ?,
                 control_pending_started_at = ?,
                 control_last_command_started_at = ?,
+                control_transaction_id = ?,
+                control_transaction_purpose = ?,
+                control_transaction_zone = ?,
+                control_transaction_duration_seconds = ?,
+                control_transaction_started_at = ?,
+                control_transaction_error = ?,
                 control_transaction_state = ?,
                 control_transaction_not_before = ?,
                 control_transaction_updated_at = ?,
@@ -1499,6 +1549,12 @@ class SQLiteEventStore:
                 duration_seconds,
                 started_at,
                 started_at,
+                transaction_id or state.get("control_transaction_id"),
+                "direct_open" if transaction_id else state.get("control_transaction_purpose"),
+                zone if transaction_id else state.get("control_transaction_zone"),
+                duration_seconds if transaction_id else state.get("control_transaction_duration_seconds"),
+                started_at if transaction_id else state.get("control_transaction_started_at"),
+                None if transaction_id else state.get("control_transaction_error"),
                 (
                     "waiting_for_open_confirmation"
                     if transaction_open
@@ -1537,20 +1593,23 @@ class SQLiteEventStore:
         transaction_id: str,
         command_id: str,
         zone: int,
-        duration_seconds: int,
+        duration_seconds: int | None,
         started_at: str,
         minimum_interval_seconds: float = 15.0,
+        sync_only: bool = False,
     ) -> dict[str, Any]:
         """Atomically queue watering and reserve its non-actuating anchor."""
         if zone not in range(1, 5):
             raise ValueError("HTV405 zone must be between 1 and 4")
-        if (
+        if not sync_only and (
             duration_seconds not in range(60, 3_601)
             or duration_seconds % 60
         ):
             raise ValueError(
                 "HTV405 open must be 60-3600 seconds in whole minutes"
             )
+        if sync_only and (zone != 1 or duration_seconds is not None):
+            raise ValueError("maintenance synchronization cannot request watering")
         try:
             started = datetime.fromisoformat(started_at)
         except ValueError as error:
@@ -1605,6 +1664,7 @@ class SQLiteEventStore:
                 control_recovery_zone = NULL,
                 control_recovery_duration_seconds = NULL,
                 control_transaction_id = ?,
+                control_transaction_purpose = ?,
                 control_transaction_state = 'waiting_for_valve_report',
                 control_transaction_zone = ?,
                 control_transaction_duration_seconds = ?,
@@ -1623,6 +1683,7 @@ class SQLiteEventStore:
                 command_id,
                 HTV405_IDLE_CLOSE_SYNC_ANCHOR,
                 transaction_id,
+                "morning_sync" if sync_only else "watering",
                 zone,
                 duration_seconds,
                 started_at,
@@ -2924,7 +2985,10 @@ class SQLiteEventStore:
                 raise ValueError(
                     "HTV405 anchor has an invalid command timestamp"
                 ) from error
-            transaction_state = "waiting_for_command_interval"
+            sync_only = registration.get("control_transaction_purpose") == "morning_sync"
+            transaction_state = "completed" if sync_only else "waiting_for_command_interval"
+            if sync_only:
+                transaction_not_before = None
             transaction_error = None
             transaction_updated_at = observed_at
         elif (

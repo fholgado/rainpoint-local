@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTime
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import CONF_TOKEN, DOMAIN
+from .api import RainPointLocalError
 from .api_models import multi_zone_numbers
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
@@ -35,6 +37,10 @@ async def async_setup_entry(
         for device_id, device in coordinator.data.items():
             if "bounded_valve_control" not in device.get("capabilities", []):
                 continue
+            if "morning_synchronization" in device.get("capabilities", []) and (device_id, 0) not in known:
+                known.add((device_id, 0))
+                entities.append(RainPointMorningSyncWindow(coordinator, device_id,
+                    str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))))
             for zone in multi_zone_numbers(device):
                 identity = (device_id, zone)
                 if identity in known:
@@ -139,3 +145,34 @@ class RainPointHtv405ZoneDuration(RainPointLocalEntity, NumberEntity):
         ):
             return values
         return MINIMUM_RUN_MINUTES, MAXIMUM_RUN_MINUTES, RUN_MINUTE_STEP
+
+
+class RainPointMorningSyncWindow(RainPointLocalEntity, NumberEntity):
+    """Bound the morning wait for an idle report."""
+
+    _attr_translation_key = "morning_sync_window"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 15
+    _attr_native_max_value = 120
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator, device_id: str, token: str) -> None:
+        super().__init__(coordinator, device_id)
+        self._token = token
+        self._attr_unique_id = f"{device_id}_morning_sync_window"
+
+    @property
+    def native_value(self) -> float:
+        return float(self.decoded_state.get("rf_morning_sync_window_minutes", 30))
+
+    async def async_set_native_value(self, value: float) -> None:
+        if value != int(value):
+            raise ValueError("sync window must use whole minutes")
+        try:
+            await self.coordinator.client.configure_morning_sync(self._token,
+                device_id=self.device_id, window_minutes=int(value))
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
+        await self.coordinator.async_request_refresh()

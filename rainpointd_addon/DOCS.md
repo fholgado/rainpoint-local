@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.33.43 supports authenticated network radio nodes, receive-only USB
+Version 0.34.1 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -28,6 +28,37 @@ Completing HTV405 naming in HA leaves the radio node's bounded association
 session running so it can finish every modeled protocol reply. Strict
 selector-`0x07` paired-link reports refresh device availability without
 overwriting the last definitive zone or watering state.
+
+### Optional morning synchronization
+
+Integration 0.14.0 exposes a per-valve **Morning sync and direct watering** switch,
+**Morning sync starts** local time, and a **Morning sync window** of 15–120 minutes.
+Enabling requires firmware 0.15.10 with `htv405_bounded_sync_wait`; the switch is
+initially off. The HA controls supply Home Assistant's configured timezone.
+Choose a window before the first scheduled watering, long enough to include a
+routine valve report. Physical daytime reception must be validated before
+using this option for unattended garden watering.
+
+During the window the gateway queues one close-0 synchronization. The radio
+transmits only on a fresh idle report and independently expires the wait. A
+matching idle response makes **Watering readiness** Ready and records **Last
+successful sync**. Run Now then sends the bounded open immediately with the
+retained counter. An unanswered open is never automatically retried.
+
+**Resynchronize command counter** acts as Sync now when this option is enabled.
+It performs the same close-only bounded wait. A missed window, uncertain command,
+association change, or competing controller traffic requires synchronization;
+competing traffic requires explicit recovery. Cancel a queued transaction before
+changing its owner or forgetting the valve. Restart does not replay commands.
+
+Authenticated API clients configure the policy with
+`POST /api/v1/devices/{device_id}/valve/morning-sync` using `enabled`, `start_time`
+(`HH:MM`), `timezone` (IANA), and `window_minutes`. Partial updates are supported.
+`POST /api/v1/devices/{device_id}/valve/sync-now` requests close-only maintenance.
+The existing `/valve/open` endpoint selects direct dispatch when the option is
+on and readiness is confirmed; otherwise the default transaction below applies.
+
+### Default synchronized watering
 
 For HTV405 control, one start request is one durable, observable transaction.
 The gateway first transmits a non-actuating close at fixed counter `0`. Only an

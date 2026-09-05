@@ -166,6 +166,8 @@
   },
   "entity": {
     "sensor": {
+      "morning_sync_status": { "name": "Watering readiness" },
+      "morning_sync_last_success": { "name": "Last successful sync" },
       "soil_moisture": { "name": "Soil moisture" },
       "battery": { "name": "Battery" },
       "signal_strength": { "name": "Signal strength" },
@@ -237,13 +239,18 @@
       "cancel_watering_request": { "name": "Cancel watering request" }
     },
     "switch": {
+      "morning_sync": { "name": "Morning sync and direct watering" },
       "radio_node_rf_transmissions": { "name": "RF transmissions" }
     },
     "number": {
+      "morning_sync_window": { "name": "Morning sync window" },
       "htv405_zone_duration": { "name": "Zone {zone} duration" }
     },
     "update": {
       "radio_node_firmware": { "name": "Firmware" }
+    },
+    "time": {
+      "morning_sync_start": { "name": "Morning sync starts" }
     },
     "valve": {
       "htv405_zone": { "name": "Zone {zone}" }
