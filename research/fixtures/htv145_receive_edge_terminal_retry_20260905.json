@@ -1,0 +1,227 @@
+{
+  "date": "2026-09-05",
+  "scope": "One explicitly authorized user-assisted candidate-.22 pairing attempt after successful unused-address calibration.",
+  "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.22",
+  "redaction": "Association endpoints replaced with synthetic values; original CRC residues preserved. Node and transaction IDs omitted. Raw IQ and private diagnostics retained locally.",
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380"
+  },
+  "capture": {
+    "sha256": "b78f175713b96a7e560944c60c5df5e766157afdd402232b75a6feab17909cf8",
+    "size_bytes": 580124672,
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "filtered_request_analysis_window_seconds": [
+      85,
+      145.031168
+    ]
+  },
+  "operator_observation": {
+    "led": "white/success",
+    "stock_gateway": "unplugged per operator session confirmation"
+  },
+  "node_result": {
+    "maximum_completed_steps": 5,
+    "step_count": 6,
+    "stage_0_accepted": true,
+    "disarmed_after_trial": true
+  },
+  "requests": [
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000001c71",
+      "sync_seconds": 100.43359,
+      "end_seconds": 100.44879,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f830281060080000000000000000000000000000000000012c3",
+      "sync_seconds": 105.359408,
+      "end_seconds": 105.374608,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189",
+      "sync_seconds": 106.429605,
+      "end_seconds": 106.444805,
+      "crc_residue": "c713"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f8403018600800000000000000000000000000000000000081c",
+      "sync_seconds": 107.360888,
+      "end_seconds": 107.376088,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f84830186008000000000000000000000000000000000003a99",
+      "sync_seconds": 108.452755,
+      "end_seconds": 108.467955,
+      "crc_residue": "c713"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85030186008000000000000000000000000000000000006d17",
+      "sync_seconds": 109.451437,
+      "end_seconds": 109.466637,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85830186008000000000000000000000000000000000005f92",
+      "sync_seconds": 110.450325,
+      "end_seconds": 110.465525,
+      "crc_residue": "c713"
+    }
+  ],
+  "replies": [
+    {
+      "center_hz": 434351500,
+      "end_seconds": 100.5494,
+      "frame": "79f4882f28b1c2d38fa1b2c38082c1010000800000000000000000000000000000000000e3f2",
+      "phase_count": 88,
+      "start_seconds": 100.51820000000001
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 103.43305000000001,
+      "frame": "79f4882f28b1c2d38fa1b2c3808110010100000000000000000000000000000000000000a902",
+      "phase_count": 75,
+      "start_seconds": 103.40185
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 105.45985,
+      "frame": "79f4882f28b1c2d38fa1b2c380834287802c0105000f0000000000000000000000000000a968",
+      "phase_count": 87,
+      "start_seconds": 105.42865
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 106.5286,
+      "frame": "79f4882f28b1c2d38fa1b2c38083c30080000000000000000000000000000000000000008d4b",
+      "phase_count": 75,
+      "start_seconds": 106.4974
+    }
+  ],
+  "configuration_response": {
+    "center_hz": 434351500,
+    "end_seconds": 103.6879,
+    "frame": "79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d",
+    "phase_count": 49,
+    "start_seconds": 103.6567
+  },
+  "final_reply_waveform": {
+    "frame_equal_to_stock": true,
+    "adc_rail_fraction": 0.0,
+    "burst_duration_ms": 31.388,
+    "channel_center_hz": 434351277,
+    "deviation_hz": 41282,
+    "wake_symbols": 320,
+    "wake_transitions": 319,
+    "symbol_rate_sps": 19982.992,
+    "transition_fit_rms_samples": 0.30953,
+    "post_frame_low_tone_us": 163.5,
+    "stock_reference_post_frame_low_tone_us": 160.5,
+    "active_fifo_delay_us": 910
+  },
+  "verdict": {
+    "terminal_request_observed": false,
+    "terminal_exchange_observed": false,
+    "enrollment_complete": false
+  },
+  "findings": [
+    "The driver captured the addressed request end after a 13.615 ms high interval. The FIFO poll followed 40 us later; the transmitted reply was scheduled from the captured edge plus exactly 52550 us.",
+    "The exact live final reply retained a 163.5 us low-tone ending and 0.310 sample edge-fit RMS without clipping. The new timing path executed, not a fallback to the old poll timestamp.",
+    "At stable 20% and 50% envelope thresholds, the local RF-burst gap was 52.404--52.4085 ms against stock 52.3655--52.372 ms: local remained 36.5--38.5 us later. The 10% threshold was contaminated and excluded.",
+    "The valve still emitted 84/03, 84/83, 85/03, and 85/83 instead of terminal 84/2c. All four ordinary response frames after assignment remain byte-for-byte equal to stock before endpoint redaction.",
+    "The wideband analyzer missed the quiet addressed request and incorrectly labeled assignment rejected; filtered exact-sync/CRC recovery and independent node stage-0 acceptance establish the accepted prefix.",
+    "The initial serial preflight stopped before any arm because Wi-Fi authentication had not returned. The successful retry waited for fresh authentication and then performed exactly one authorized arm. The radio was verified disarmed with one persistent sensor ACK authorization afterward."
+  ],
+  "receive_edge_observation": {
+    "purpose": "step4_reply",
+    "edge_valid": true,
+    "packet_end_us": 105662064,
+    "fifo_polled_us": 105662104,
+    "poll_lag_us": 40,
+    "observed_high_us": 13615,
+    "reply_start_at_us": 105714614,
+    "frame": "79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189"
+  },
+  "reply_timing_comparison": {
+    "scope": "Offline zero-phase channel-filtered envelope comparison, same method for stock/local. This measures RF-burst gap, not nominal decoded frame gap. No schedule adjustment selected from this alone.",
+    "stock_window_original_origin_seconds": 122,
+    "results": [
+      {
+        "source": "stock",
+        "signal_to_noise_amplitude": {
+          "request": 18.003236592485,
+          "reply": 283.5627433402681
+        },
+        "measurements": [
+          {
+            "envelope_fraction": 0.1,
+            "request_rf_end_seconds": 17.592418,
+            "reply_rf_start_seconds": 17.644779999999997,
+            "gap_ms": 52.362
+          },
+          {
+            "envelope_fraction": 0.2,
+            "request_rf_end_seconds": 17.5924165,
+            "reply_rf_start_seconds": 17.644782,
+            "gap_ms": 52.3655
+          },
+          {
+            "envelope_fraction": 0.5,
+            "request_rf_end_seconds": 17.592412999999997,
+            "reply_rf_start_seconds": 17.644785,
+            "gap_ms": 52.372
+          }
+        ]
+      },
+      {
+        "source": "local",
+        "signal_to_noise_amplitude": {
+          "request": 11.216500696067515,
+          "reply": 222.63620190232203
+        },
+        "measurements": [
+          {
+            "envelope_fraction": 0.1,
+            "request_rf_end_seconds": 106.44578899999999,
+            "reply_rf_start_seconds": 106.4974115,
+            "gap_ms": 51.6225
+          },
+          {
+            "envelope_fraction": 0.2,
+            "request_rf_end_seconds": 106.445009,
+            "reply_rf_start_seconds": 106.497413,
+            "gap_ms": 52.404
+          },
+          {
+            "envelope_fraction": 0.5,
+            "request_rf_end_seconds": 106.44500649999999,
+            "reply_rf_start_seconds": 106.497415,
+            "gap_ms": 52.4085
+          }
+        ]
+      }
+    ],
+    "local_minus_stock_gap_us": [
+      -739.5,
+      38.5,
+      36.5
+    ],
+    "stock_window_sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
+    "usable_envelope_fractions": [
+      0.2,
+      0.5
+    ],
+    "usable_local_minus_stock_gap_us": [
+      38.5,
+      36.5
+    ],
+    "excluded_measurement": "The 10% local threshold selected weak residual energy roughly 0.8 ms after packet cessation, inconsistent with the stable 20% and 50% thresholds. Retained as raw analysis, excluded from timing conclusions.",
+    "interpretation": "The edge anchor reduced the measured gap difference to about 37--39 us while keeping the ending and packet intact. This attempt still lacked terminal acceptance; do not claim all timing causes excluded or choose another arbitrary shift from the residual."
+  }
+}

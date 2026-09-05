@@ -716,11 +716,24 @@ observation before it changes transmitted firmware.
         missing, short, or ambiguous observations suppress the experimental
         reply. Production and supervised builds exclude the experiment.
         See `research/fixtures/htv145_receive_edge_candidate_calibration_20260905.json`.
-      - [ ] Capture one authorized `.22` pairing attempt with serial edge
+      - [x] Capture one authorized `.22` pairing attempt with serial edge
         diagnostics and low-gain SDR. Measure actual reply onset relative to
         the request, verify the calibrated ending, and evaluate terminal
-        acceptance. The receive-only calibration does not yet establish the
-        absolute hardware-marker offset from the valve's RF frame end.
+        acceptance. The September 5 attempt captured a qualified request-end
+        marker and scheduled the reply from it plus exactly `52,550 us`.
+        At stable 20% and 50% RF-envelope thresholds, the remaining gap from
+        stock was `36.5--38.5 us`; the 10% threshold was contaminated and
+        excluded. The exact final reply retained `163.5 us` low tone and
+        `0.310` sample edge RMS without clipping. The valve again stopped at
+        `5/6` and repeated `84/03` through `85/83`; the node was disarmed.
+        See `research/fixtures/htv145_receive_edge_terminal_retry_20260905.json`.
+      - [ ] Obtain a fresh stock-gateway control pairing with this valve and
+        current physical setup before further fine timing or waveform changes.
+        Confirm stock still produces terminal `84/2c`, then compare the complete
+        current exchange against `.22`. Preserve the calibrated candidate;
+        do not infer that the remaining timing difference is causal. Existing
+        evidence already favors sharp 2-FSK and the `0x45` deviation family
+        over GFSK or `0x44`.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

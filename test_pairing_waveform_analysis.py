@@ -28,6 +28,24 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_received_edge_anchor_does_not_imply_terminal_acceptance(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_receive_edge_terminal_retry_20260905.json").read_text())
+        identity = fixture["association"]
+        observation = fixture["receive_edge_observation"]
+        self.assertTrue(observation["edge_valid"])
+        self.assertEqual(52_550, observation["reply_start_at_us"] -
+                         observation["packet_end_us"])
+        self.assertEqual(40, observation["fifo_polled_us"] -
+                         observation["packet_end_us"])
+        verdict = terminal_exchange_evidence(
+            fixture["requests"], fixture["replies"],
+            controller_endpoint=bytes.fromhex(identity["controller_endpoint"]),
+            paired_endpoint=bytes.fromhex(identity["paired_endpoint"]),
+        )
+        self.assertFalse(verdict["terminal_exchange_observed"])
+        self.assertTrue(fixture["node_result"]["disarmed_after_trial"])
+
     def test_stock_length_stable_final_reply_does_not_imply_terminal_pairing(self):
         fixture = json.loads((Path(__file__).parent /
             "research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json").read_text())

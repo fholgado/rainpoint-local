@@ -496,6 +496,25 @@ absolute marker timing relative to a valve's RF frame end and terminal
 acceptance still require the controlled pairing capture. Evidence is in
 [`htv145_receive_edge_candidate_calibration_20260905.json`](../research/fixtures/htv145_receive_edge_candidate_calibration_20260905.json).
 
+The first authorized live `.22` trial also stopped at `5/6`. Serial evidence
+confirmed a qualified packet-end signal after `13,615 us` of observed high
+level, followed by the FIFO poll `40 us` later. The final reply used the edge
+plus exactly `52,550 us`, with no fallback. SDR recovered its exact stock
+bytes, `163.5 us` low-tone ending, `0.310` sample edge-fit RMS, and no clipping.
+At stable 20% and 50% envelope thresholds, local request-RF-end to reply-onset
+was `52.404--52.4085 ms`, compared with `52.3655--52.372 ms` stock. The residual
+was `36.5--38.5 us`. The 10% local threshold picked up weak residual energy
+after the packet and was excluded from timing conclusions.
+
+The valve nevertheless emitted the same `84/03`, `84/83`, `85/03`, `85/83`
+retry family. Hardware marker acquisition and the timing change are therefore
+demonstrated, while terminal acceptance remains unproven. The initial serial
+preflight aborted before arming because fresh Wi-Fi authentication had not
+returned; a bounded retry waited for authentication and performed exactly one
+authorized arm. The radio was verified disarmed with its persistent sensor
+ACK authorization afterward. Evidence is in
+[`htv145_receive_edge_terminal_retry_20260905.json`](../research/fixtures/htv145_receive_edge_terminal_retry_20260905.json).
+
 ## Evidence and implementation
 
 - Receive decode and research command builder:
