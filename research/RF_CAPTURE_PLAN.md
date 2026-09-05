@@ -92,6 +92,62 @@ at about 179 seconds in an earlier 180-second recording, leaving the successful
 exchange outside the file. The five-minute capture retained the complete reset,
 gateway boot, pairing, and post-enrollment idle tail.
 
+## HTV145 stock pairing and dry control comparison
+
+Use this procedure for the fresh stock comparison after candidate `.22`.
+The [canonical roadmap](../PROJECT_ROADMAP.md) tracks completion. The user
+requested watering-command captures in the same session as the new pairing;
+the single-zone test valve is dry.
+
+1. Keep the valve, stock gateway, and SDR positions documented and fixed.
+   Verify custom pairing and control transmitters are disarmed for this valve;
+   preserve existing sensor ACK ownership. Record firmware and battery condition.
+2. Start continuous raw IQ before stock gateway startup or any pairing gesture.
+   Use 433.7 MHz center, 2 Msps, and the established low gain of 0.9; check that
+   both directions are visible without clipping. Allow at least ten minutes of
+   recording and enough disk space (about 2.4 GB per ten minutes). Extend the
+   bounded recording if setup runs long so it includes every command and the
+   final idle tail. Record UTC action markers and capture-relative times.
+3. Perform one user-assisted stock pairing. Retain the entire exchange,
+   association endpoints, selector, carrier, app result, and LED observation.
+   Require the complete valve-originated terminal request and matching
+   controller reply for the captured branch; the counter-2 branch uses
+   `84/2c/80/99` and `84/6c/81/80/19`. Validate other stock branches against
+   their own transcripts rather than imposing counter-2 bytes.
+   A white LED alone is insufficient. If terminal evidence is missing, retain
+   the attempt for diagnosis and defer the control sequence.
+4. After terminal enrollment and an idle baseline, use only the stock app to
+   issue the following actions on the single-zone test valve. Keep the same
+   association throughout, with at least 30 seconds of confirmed idle between
+   runs. Record actual action times rather than assuming the planned spacing.
+
+   | Run | Requested duration | Stop action | Comparison |
+   |---|---|---|---|
+   | A | 60 seconds | Let the valve stop automatically | Open acknowledgment, autonomous stop, and final report/ACK exchange |
+   | B | 120 seconds | Send stock Stop after about 30 seconds of observed opening | Duration encoding and explicit close/acknowledgment |
+   | C | 60 seconds | Send stock Stop after about 20 seconds of observed opening | Repeat A's duration to distinguish counter changes from duration, and repeat explicit close |
+
+   Record audible/visible motor movement, app state, and RF state separately.
+   If an open is unconfirmed, do not stack further opens or treat a subsequent
+   close as accepted-control evidence. Use the stock stop path if needed and
+   retain the unresolved outcome. Confirm idle before proceeding.
+5. Continue recording for at least 60 seconds after the last confirmed stop.
+   Retain any delayed reports, gateway acknowledgments, and retries. Verify
+   the valve is idle and custom pairing/control remains disarmed when done.
+6. Decode both RF directions using endpoints and carriers from this fresh
+   association. For each action retain exact frame bytes and CRC/residue,
+   wake length, request/response timing, retries, command counter, duration,
+   action/result fields, and subsequent state. Distinguish an immediate
+   command response from a later state report and its gateway ACK; an app
+   indication alone does not establish RF acceptance. Check whether opens
+   advance the counter and closes retain it, and whether autonomous stop
+   involves any gateway transmission.
+7. Compare the complete stock pairing with `.22`, then compare accepted stock
+   controls with the existing stock fixtures and partial-pairing local probes.
+   Preserve raw IQ privately and promote minimal exchanges to consistently
+   redacted fixtures. This establishes a current stock baseline; successful
+   stock control alone does not prove that local control requires step 6.
+
 ## Controlled capture sequence
 
 Place the receiver close enough to see both hub and accessories without

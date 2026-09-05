@@ -486,8 +486,11 @@ through the stock gateway.
 4. Continue capturing for at least ten minutes after the app declares success.
 5. Record every device-visible transition and the valve entry created in the
    cloud integration/HA, including model and identity metadata.
-6. Trigger no watering during this phase unless the vendor workflow makes it
-   unavoidable; if it does, keep the valve dry and record actuator movement.
+6. For an enrollment-only trial, trigger no watering unless the vendor workflow
+   makes it unavoidable; keep the valve dry and record actuator movement.
+   For the user-requested combined HTV145 pairing/control comparison, follow
+   [the stock pairing and dry control procedure](RF_CAPTURE_PLAN.md#htv145-stock-pairing-and-dry-control-comparison)
+   after terminal enrollment, preserving one continuous recording and association.
 7. If enrollment creates multiple app or HA entities, record their shared
    parent, per-zone identifiers, and port numbering before renaming anything.
 

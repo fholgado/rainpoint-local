@@ -727,11 +727,18 @@ observation before it changes transmitted firmware.
         `0.310` sample edge RMS without clipping. The valve again stopped at
         `5/6` and repeated `84/03` through `85/83`; the node was disarmed.
         See `research/fixtures/htv145_receive_edge_terminal_retry_20260905.json`.
-      - [ ] Obtain a fresh stock-gateway control pairing with this valve and
-        current physical setup before further fine timing or waveform changes.
-        Confirm stock still produces terminal `84/2c`, then compare the complete
-        current exchange against `.22`. Preserve the calibrated candidate;
-        do not infer that the remaining timing difference is causal. Existing
+      - [ ] Obtain a fresh stock-gateway pairing and dry watering-command capture
+        with this valve and current physical setup before further fine timing
+        or waveform changes.
+        Confirm stock still produces the terminal exchange (`84/2c` for the
+        counter-2 branch), then compare the complete current exchange against
+        `.22`. In the same recording and association, capture a 60-second
+        automatic stop, a 120-second open stopped early, and a repeated
+        60-second open stopped early. Retain command responses, state reports,
+        gateway ACKs, counter progression, and final idle confirmation using
+        [the stock pairing/control procedure](research/RF_CAPTURE_PLAN.md#htv145-stock-pairing-and-dry-control-comparison).
+        Preserve the calibrated candidate; do not infer that the remaining
+        timing difference is causal. Existing
         evidence already favors sharp 2-FSK and the `0x45` deviation family
         over GFSK or `0x44`.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
@@ -1197,7 +1204,9 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       command-family high marker reverses by association while request action
       byte `82/81` and response state marker `cf/4f` remain stable.
 - [ ] With fresh batteries, obtain new valve-originated idle and positively
-      confirmed stock-command evidence.
+      confirmed stock-command evidence. Use the same-session stock pairing,
+      automatic-stop, and explicit-close capture procedure linked above;
+      record battery condition without assuming it has already been changed.
 - [ ] Physically accept exactly one bounded local open on its evidenced carrier,
       with an immediate response or independent active-state fallback.
 - [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware
