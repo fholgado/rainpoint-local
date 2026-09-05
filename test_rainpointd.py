@@ -36,6 +36,31 @@ from rainpointd.valve_protocol import ValveLink, build_open_frame
 
 
 class GatewayTest(unittest.TestCase):
+    def test_single_zone_seed_and_restart_have_no_multi_zone_fields(self):
+        from rainpointd.device_catalog import DeviceCatalog, ValveDefinition
+        catalog = DeviceCatalog(valves=(ValveDefinition(
+            "1122338f", "a1234580", "single", "Single-zone", model="HTV145FRF"
+        ), ValveDefinition(
+            "a2345680", "92345613", "four", "Four-zone", model="HTV405FRF"
+        )))
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "events.sqlite3")
+            gateway = Gateway(storage_path=path)
+            FrameIngestor(gateway, catalog=catalog).seed()
+            devices = {d["device_id"]: d for d in gateway.devices()}
+            self.assertFalse(any(k.startswith("zone_") for k in devices["single"]["state"]))
+            self.assertIn("zone_4_is_watering", devices["four"]["state"])
+            gateway.observe_decoded(
+                device_id="single", name="Single-zone", model="HTV145FRF", frame="old-snapshot",
+                state={"is_watering": False, "zone_4_is_watering": None},
+            )
+            gateway.close()
+            restored = Gateway(storage_path=path)
+            single = next(d for d in restored.devices() if d["device_id"] == "single")
+            self.assertNotIn("zone_4_is_watering", single["state"])
+            self.assertIs(single["state"]["is_watering"], False)
+            restored.close()
+
     HTV405_OPEN_RESPONSE_SEQUENCE_6 = (
         "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
         "00000000000000005878"
@@ -746,7 +771,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(18, restored._store.schema_version())
+            self.assertEqual(19, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1602,7 +1627,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(18, gateway.info()["storage_schema_version"])
+            self.assertEqual(19, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1613,7 +1638,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(18, migrated.info()["storage_schema_version"])
+            self.assertEqual(19, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]

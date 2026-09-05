@@ -1,0 +1,200 @@
+{
+  "date": "2026-09-05",
+  "scope": "Offline reanalysis of accepted stock selector-6 command windows against the failed candidate .15 open; synthetic endpoint substitution with recomputed trailers.",
+  "source_capture": "htv145-stock-pairing-20260828-152022/continuous_433.7M_2000k.cu8",
+  "source_capture_sha256": "8241fdf614488a2865b17718e7ec2465ca817a1f494898772786965d977ebd59",
+  "sample_rate_sps": 2000000,
+  "capture_center_hz": 433700000,
+  "identity": {
+    "controller_endpoint": "c123458f",
+    "valve_endpoint": "d1234580",
+    "redacted": true
+  },
+  "windows": [
+    {
+      "role": "stock-open",
+      "source_start_seconds": 25,
+      "commands": [
+        {
+          "decoded": {
+            "command_marker_inverted": true,
+            "duration_seconds": 300,
+            "next_sequence": 130,
+            "sequence": 129,
+            "watering": true
+          },
+          "frame": "79f4882f28c123458fd1234580819082808100960080000000000000000000000000000008e9",
+          "observed_wake_symbols": [
+            446,
+            648,
+            874,
+            894,
+            908,
+            910,
+            932,
+            970,
+            1210,
+            1364,
+            1366,
+            1382,
+            2400
+          ],
+          "phase_count": 179,
+          "trailer_residue": "c713",
+          "wake_symbol_histogram": {
+            "446": 1,
+            "648": 1,
+            "874": 1,
+            "894": 1,
+            "908": 1,
+            "910": 1,
+            "932": 13,
+            "970": 1,
+            "1210": 1,
+            "1364": 1,
+            "1366": 1,
+            "1382": 1,
+            "2400": 155
+          }
+        }
+      ],
+      "responses": [
+        {
+          "decoded": {
+            "command_marker_inverted": true,
+            "next_sequence": 130,
+            "sequence": 129,
+            "watering": true
+          },
+          "frame": "79f4882f28d1234580c123458f81d0868010cf80000000409600d69600800000000000009047",
+          "observed_wake_symbols": [
+            221,
+            267,
+            320
+          ],
+          "phase_count": 92,
+          "trailer_residue": "c713",
+          "wake_symbol_histogram": {
+            "221": 1,
+            "267": 1,
+            "320": 90
+          }
+        }
+      ],
+      "window_sha256": "d116d7e3d3ac6a854f330b007713b9285e96bff696f10d183a672c7f40de554a"
+    },
+    {
+      "role": "stock-close",
+      "source_start_seconds": 47,
+      "commands": [
+        {
+          "decoded": {
+            "command_marker_inverted": true,
+            "next_sequence": 130,
+            "sequence": 130,
+            "watering": false
+          },
+          "frame": "79f4882f28c123458fd12345808210818081000000000000000000000000000000000000231d",
+          "observed_wake_symbols": [
+            506,
+            908,
+            1046,
+            1380,
+            2400
+          ],
+          "phase_count": 90,
+          "trailer_residue": "4f03",
+          "wake_symbol_histogram": {
+            "506": 1,
+            "908": 2,
+            "1046": 1,
+            "1380": 1,
+            "2400": 85
+          }
+        }
+      ],
+      "responses": [
+        {
+          "decoded": {
+            "command_marker_inverted": true,
+            "next_sequence": 130,
+            "sequence": 130,
+            "watering": false
+          },
+          "frame": "79f4882f28d1234580c123458f82508680104f8000000040800056960080000000000000ba8a",
+          "observed_wake_symbols": [
+            293,
+            299,
+            320
+          ],
+          "phase_count": 91,
+          "trailer_residue": "c713",
+          "wake_symbol_histogram": {
+            "293": 1,
+            "299": 1,
+            "320": 89
+          }
+        }
+      ],
+      "window_sha256": "9afc05de0ce307c0984e077b34c8fb5946d2705a9438466d4fac785a13ab02db"
+    },
+    {
+      "role": "local-open",
+      "source_start_seconds": 61,
+      "commands": [
+        {
+          "decoded": {
+            "command_marker_inverted": true,
+            "duration_seconds": 60,
+            "next_sequence": 130,
+            "sequence": 129,
+            "watering": true
+          },
+          "frame": "79f4882f28c123458fd12345808190828081009e00000000000000000000000000000000dbeb",
+          "observed_wake_symbols": [
+            8,
+            89,
+            273,
+            292,
+            517,
+            700,
+            719,
+            801,
+            985,
+            1004,
+            1086,
+            1200
+          ],
+          "phase_count": 263,
+          "trailer_residue": "c713",
+          "wake_symbol_histogram": {
+            "8": 1,
+            "89": 1,
+            "273": 1,
+            "292": 1,
+            "517": 1,
+            "700": 1,
+            "719": 1,
+            "801": 1,
+            "985": 1,
+            "1004": 1,
+            "1086": 1,
+            "1200": 252
+          }
+        }
+      ],
+      "responses": []
+    }
+  ],
+  "findings": {
+    "stock_command_wake_symbols": 2400,
+    "local_candidate15_wake_symbols": 1200,
+    "missing_wake_seconds": 0.06,
+    "selector6_open_residue": "c713",
+    "selector6_close_residue": "4f03",
+    "accepted_open_advances_counter": true,
+    "accepted_close_retains_counter": true,
+    "clipped_stock_capture_suitable_for_precise_analog_comparison": false,
+    "causal_explanation_of_local_silence_proven": false
+  }
+}

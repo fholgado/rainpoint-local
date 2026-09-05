@@ -634,8 +634,9 @@ observation before it changes transmitted firmware.
       with the same retries. Capture
       `captures/continuous/20260904-171403/continuous.cu8` has SHA-256
       `1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1`.
-      The burst measured `31.3505 ms` versus `31.358 ms` stock, which excludes
-      final-low tail length as the remaining condition.
+      The burst measured `31.3505 ms` versus `31.358 ms` stock, which shows that
+      matching the tail with RMT alone was insufficient. A matched tail together
+      with FIFO edge stability remains untested.
     - [x] Calibrate isolated candidate `.12` without addressing the valve.
       Freeze the complete accepted prefix and move only zero-based reply step
       4 from ESP32 RMT to CC1101 FIFO hardware clocking. Candidate `.11` still
@@ -993,6 +994,16 @@ same time without conflicting authority.
       confirmation window. The installed script now validates the gateway-
       published duration range up front and no longer adds a redundant
       ten-second duration-entity polling delay before submitting the request.
+- [x] Design morning synchronization with direct daytime commands. The proposal
+      reuses one report-triggered close-0 anchor inside a bounded morning window,
+      persists counter/owner continuity, and sends a user's bounded command
+      directly when ready. It distinguishes counter validity from an asleep
+      receiver; see `research/HTV405_MORNING_SYNC_DESIGN.md`.
+- [ ] Validate that a morning-synchronized HTV405 accepts retained-counter opens
+      away from report windows after 1, 4, 8, and 12 hours with a stable owner.
+      Measure actual wake/repetition against stock and command latency before
+      implementing the proposed disabled-by-default daily schedule. Keep current
+      garden behavior until this evidence supports immediate daytime dispatch.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and
@@ -1058,6 +1069,25 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 ### HTV145
 
+- [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
+      require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
+      advances the command counter while close retains it. Replay accepted
+      open/close/open traffic across daemon restart and preserve branch polarity.
+      Invalidate legacy ambiguous counters on schema upgrade without replaying
+      pending commands. Evidence: `htv145_stock_control_shape_20260905.json`.
+- [x] Exercise corrected commands on user-confirmed dry hardware unattended.
+      Candidate `.16` sent one bounded 60-second open at assumed counter 1,
+      with three exact unclipped 2,400-symbol attempts and no confirmation.
+      Candidate `.17` close-only counters 1 and 0 each elicited valid result-3
+      replies. Their exact meaning is unknown; neither confirms physical state
+      or an accepted counter. Preserve these as negative fixtures and recognize
+      them in `.18` diagnostics. Pairing remains 5/6 and disarmed; no successful
+      local open/close pair is claimed. Evidence:
+      `research/fixtures/htv145_partial_pairing_control_replies_20260905.json`.
+- [x] Add a strict offline terminal-pairing verdict. Require the valve-originated
+      `2c 80 99` request and its matching bounded reply, separately from prefix
+      acceptance; keep the unchanged low-gain pairing repeat in the enrollment
+      gates above as the next physical discriminator.
 - [x] Test whether the accepted `5/6` association already permits a bounded
       open, independently of terminal enrollment. On 2026-09-05 the user
       confirmed the valve was dry and approved one 60-second open. Candidate
@@ -1084,6 +1114,12 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 ### HA and irrigation behavior
 
+- [x] Remove the HTV145's four phantom zones while preserving its single overall
+      watering, battery, and usage entities and HTV405's real zones. Integration
+      0.13.11 was locally validated, deployed after a successful full HA backup,
+      checked with `ha core check`, and restarted. The live entity registry has
+      zero obsolete single-zone `zone_*` entries. Daemon projection cleanup is
+      prepared locally; the garden gateway was not upgraded for this UI fix.
 - [ ] Confirm HA state changes only from valve responses or independent state
       telemetry, never from command intent alone.
 - [ ] Validate one-active-zone enforcement, per-zone durations, scheduled local

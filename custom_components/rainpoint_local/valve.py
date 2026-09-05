@@ -9,6 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import RainPointLocalError
+from .api_models import multi_zone_numbers
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
@@ -33,7 +34,7 @@ async def async_setup_entry(
         for device_id, device in coordinator.data.items():
             if "bounded_valve_control" not in device.get("capabilities", []):
                 continue
-            for zone in range(1, 5):
+            for zone in multi_zone_numbers(device):
                 identity = (device_id, zone)
                 if identity in known:
                     continue

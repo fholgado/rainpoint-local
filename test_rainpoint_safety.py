@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import binascii
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -1386,6 +1389,115 @@ class Htv405ControlCoordinatorTest(unittest.TestCase):
 
 
 class Htv145ControlCoordinatorTest(unittest.TestCase):
+    def test_schema_upgrade_invalidates_old_counter_without_replaying(self):
+        import sqlite3
+
+        command = self.coordinator.request_open(
+            self.profile, duration_seconds=60,
+            started_at="2026-08-24T12:00:20+00:00",
+        )
+        path = Path(self.temporary_directory.name) / "events.sqlite3"
+        self.store.close()
+        with sqlite3.connect(path) as connection:
+            connection.execute("ALTER TABLE htv145_control_state DROP COLUMN command_marker_inverted")
+            connection.execute("PRAGMA user_version = 18")
+        self.store = SQLiteEventStore(path)
+        self.coordinator = Htv145ControlCoordinator(
+            store=self.store, sender=self.sender, enabled=True
+        )
+        state = self.store.htv145_control_states(self.profile.valve_endpoint)[0]
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["next_sequence"])
+        self.assertEqual(command["command_id"], state["pending_command_id"])
+        self.assertFalse(state["command_marker_inverted"])
+        self.sent.clear()
+        with self.assertRaisesRegex(RuntimeError, "startup will not replay"):
+            self.coordinator.start(
+                self.profile, observed_at="2026-08-24T12:00:25+00:00"
+            )
+        self.assertEqual([], self.sent)
+
+    def recorded_error(self, sequence=0x81):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_partial_pairing_control_replies_20260905.json").read_text())
+        frame = bytearray.fromhex(fixture["trials"][1]["valid_valve_frames"][0]["frame"])
+        frame[5:9] = self.profile.link.valve_endpoint
+        frame[9:13] = self.profile.link.controller_endpoint
+        frame[13] = sequence
+        frame[-2:] = (binascii.crc_hqx(frame[:-2], 0) ^ 0xC713).to_bytes(2, "big")
+        return bytes(frame)
+
+    def test_negative_result_clears_counter_without_confirming_state(self):
+        command = self.coordinator.request_close(
+            self.profile, started_at="2026-08-24T12:00:20+00:00"
+        )
+        before = self.store.htv145_control_states(self.profile.valve_endpoint)[0]
+        error = self.recorded_error()
+        state = self.coordinator.observe_candidate_status(
+            self.profile,
+            {"type": "htv145_control_candidate", "node_id": self.profile.node_id,
+             "command_id": command["command_id"], "state": "negative_command_response",
+             "frame": error.hex()},
+            observed_at="2026-08-24T12:00:21+00:00",
+        )
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["pending_command_id"])
+        self.assertEqual("negative_command_result_3", state["last_result"])
+        self.assertEqual(error.hex(), state["last_response_frame"])
+        self.assertEqual(before["confirmed_at"], state["confirmed_at"])
+        self.assertEqual(before["confirmed_watering"], state["confirmed_watering"])
+        with self.assertRaisesRegex(RuntimeError, "counter"):
+            self.coordinator.request_open(
+                self.profile, duration_seconds=60,
+                started_at="2026-08-24T12:01:00+00:00",
+            )
+
+    def test_wrong_counter_error_preserves_pending_command(self):
+        command = self.coordinator.request_close(
+            self.profile, started_at="2026-08-24T12:00:20+00:00"
+        )
+        with self.assertRaisesRegex(ValueError, "no matching durable reservation"):
+            self.coordinator.observe_frame(
+                self.profile, self.recorded_error(0x80),
+                observed_at="2026-08-24T12:00:21+00:00",
+            )
+        state = self.store.htv145_control_states(self.profile.valve_endpoint)[0]
+        self.assertEqual(command["command_id"], state["pending_command_id"])
+
+    def test_stock_open_close_open_continuity_survives_restart(self):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_selector6_stock_duration_commands_20260828.json").read_text())
+        self.profile = replace(self.profile, command_marker_inverted=True)
+        self.coordinator.configure(self.profile, observed_at="2026-08-24T12:00:00+00:00")
+        self.coordinator.observe_frame(self.profile, self.IDLE, observed_at="2026-08-24T12:00:01+00:00")
+        self.coordinator.synchronize_from_passive_command(
+            self.profile, build_open_frame(self.profile.link, 0x80, 300, 0xc713, command_marker_inverted=True),
+            observed_at="2026-08-24T12:00:02+00:00",
+        )
+        self.coordinator.start(self.profile, observed_at="2026-08-24T12:00:03+00:00")
+        for index, transaction in enumerate(fixture["transactions"]):
+            started_at = f"2026-08-24T12:0{index + 1}:00+00:00"
+            if transaction["action"] == "open":
+                command = self.coordinator.request_open(
+                    self.profile, duration_seconds=transaction["duration_seconds"], started_at=started_at
+                )
+            else:
+                command = self.coordinator.request_close(self.profile, started_at=started_at)
+            self.assertEqual(int(transaction["command_sequence"], 16), command["expected_sequence"])
+            state = self.coordinator.observe_frame(
+                self.profile, bytes.fromhex(transaction["response_frame"]),
+                observed_at=f"2026-08-24T12:0{index + 1}:01+00:00",
+            )
+            self.assertTrue(state["counter_synchronized"])
+            self.coordinator = Htv145ControlCoordinator(store=self.store, sender=self.sender, enabled=True)
+            restored = self.coordinator.start(self.profile, observed_at=f"2026-08-24T12:0{index + 1}:02+00:00")
+            self.assertEqual(state["next_sequence"], restored[1]["next_sequence"])
+            self.assertTrue(restored[0]["command_marker_inverted"])
+
+    def test_branch_mismatch_cannot_authenticate_counter(self):
+        wrong_branch = build_open_frame(self.profile.link, 0x80, 300, 0xc713, command_marker_inverted=True)
+        with self.assertRaisesRegex(ValueError, "marker differs"):
+            self.coordinator.synchronize_from_passive_command(self.profile, wrong_branch, observed_at="2026-08-24T12:00:03+00:00")
+
+
     IDLE = bytes.fromhex(
         "79f4882f28b9840280b42d008f970107858b00804f998180004080005680"
         "00000000000049ef"
@@ -1524,7 +1636,9 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
             observed_at="2026-08-24T12:00:27+00:00",
         )
         self.assertEqual(0x9B, self.ACTIVE_REPORT[13])
-        self.assertEqual(0x82, confirmed["next_sequence"])
+        self.assertIsNone(confirmed["next_sequence"])
+        self.assertFalse(confirmed["counter_synchronized"])
+        self.assertTrue(confirmed["confirmed_watering"])
         self.assertEqual(
             "matching_independent_state_report",
             confirmed["counter_source"],

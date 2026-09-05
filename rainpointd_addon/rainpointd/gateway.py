@@ -47,6 +47,7 @@ from .valve_pairing_protocol import (
     build_htv405_profile,
 )
 from .valve_protocol import (
+    decode_htv145_gateway_command,
     decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
     htv405_command_response_endpoint,
@@ -738,6 +739,19 @@ class Gateway:
             )
         except ValueError as error:
             raise ValueError("invalid HTV145 evidence frame or timestamp") from error
+        command_evidence = decode_htv145_gateway_command(passive, profile.link)
+        if command_evidence is None:
+            raise ValueError("passive frame is not an HTV145 command on this link")
+        profile = Htv145ControlProfile(
+            node_id=profile.node_id,
+            controller_endpoint=profile.controller_endpoint,
+            valve_endpoint=profile.valve_endpoint,
+            center_hz=profile.center_hz,
+            power_dbm=profile.power_dbm,
+            invert=profile.invert,
+            trailer_residual=profile.trailer_residual,
+            command_marker_inverted=bool(command_evidence["command_marker_inverted"]),
+        )
         with self._lock:
             if not self._htv145_acceptance_enabled:
                 raise PermissionError("HTV145 dry-valve acceptance is disabled")
@@ -6371,6 +6385,11 @@ class Gateway:
                     )
                 if canonical_state:
                     state = canonical_state
+            if event.get("model") == HTV145_MODEL:
+                # Legacy ingestors seeded all valves with four-zone fields.
+                # Correct the projection without rewriting raw observations.
+                state = {key: value for key, value in state.items()
+                         if not key.startswith("zone_")}
             device = {
                 "device_id": event["device_id"],
                 "name": (

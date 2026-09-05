@@ -25,6 +25,21 @@ from rainpointd.valve_protocol import (  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_htv145_stock_close_preserves_next_open_counter(self):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_selector6_stock_duration_commands_20260828.json").read_text())
+        link = ValveLink(
+            bytes.fromhex(fixture["association"]["controller_endpoint"]),
+            bytes.fromhex(fixture["association"]["valve_endpoint"]),
+        )
+        transactions = fixture["transactions"]
+        for previous, following in zip(transactions, transactions[1:]):
+            request = bytes.fromhex(previous.get("request_frame") or previous["request_frames"][0]["raw"])
+            response = bytes.fromhex(previous["response_frame"])
+            expected = int(following["command_sequence"], 16)
+            with self.subTest(action=previous["action"], sequence=previous["command_sequence"]):
+                self.assertEqual(expected, decode_htv145_gateway_command(request, link)["next_sequence"])
+                self.assertEqual(expected, decode_htv145_command_response(response, link)["next_sequence"])
+
     def test_htv145_partial_enrollment_open_is_intent_not_confirmation(self):
         fixture = json.loads((
             ROOT / "research/fixtures/htv145_partial_pairing_dry_open_20260905.json"

@@ -40,7 +40,10 @@ SUPERVISED_VALVE_CONTROL_COMMANDS = (
 )
 
 HTV145_PAIRING_CAPABILITIES = (b"htv145_pairing_tx_candidate",)
-HTV145_CONTROL_COMMANDS = (b"htv145_dry_open_probe", b"htv145_control_open")
+HTV145_CONTROL_COMMANDS = (
+    b"htv145_dry_open_probe", b"htv145_dry_close_probe",
+    b"htv145_dry_close", b"htv145_control_open",
+)
 
 
 def main() -> int:

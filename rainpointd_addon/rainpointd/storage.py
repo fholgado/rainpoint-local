@@ -14,8 +14,9 @@ from .product_identity import (
     HTV145_MODEL,
     hcs02x_identity,
 )
+from .valve_protocol import next_htv145_command_sequence
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -228,6 +229,9 @@ class SQLiteEventStore:
             version = 17
         if version == 17:
             self._migrate_v17_to_v18()
+            version = 18
+        if version == 18:
+            self._migrate_v18_to_v19()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -582,6 +586,25 @@ class SQLiteEventStore:
                         f"ALTER TABLE valve_registry ADD COLUMN {name} {sql_type}"
                     )
             self._connection.execute("PRAGMA user_version = 18")
+
+    def _migrate_v18_to_v19(self) -> None:
+        """Retain HTV145 branch polarity and discard old ambiguous counters."""
+        with self._connection:
+            columns = {str(row[1]) for row in self._connection.execute(
+                "PRAGMA table_info(htv145_control_state)"
+            )}
+            if "command_marker_inverted" not in columns:
+                self._connection.execute(
+                    "ALTER TABLE htv145_control_state ADD COLUMN "
+                    "command_marker_inverted INTEGER NOT NULL DEFAULT 0"
+                )
+            # Older code advanced after closes and authenticated telemetry.
+            # Leave pending reservations intact; never replay them on upgrade.
+            self._connection.execute(
+                "UPDATE htv145_control_state SET next_sequence = NULL, "
+                "counter_synchronized = 0, counter_source = NULL"
+            )
+            self._connection.execute("PRAGMA user_version = 19")
 
     def _migrate_v7_to_v8(self) -> None:
         """Persist direction-independent multi-zone valve RF links."""
@@ -2997,6 +3020,7 @@ class SQLiteEventStore:
         result = [dict(row) for row in rows]
         for item in result:
             item["invert"] = bool(item["invert"])
+            item["command_marker_inverted"] = bool(item["command_marker_inverted"])
             item["counter_synchronized"] = bool(
                 item["counter_synchronized"]
             )
@@ -3017,14 +3041,15 @@ class SQLiteEventStore:
         invert: bool,
         trailer_residual: int,
         updated_at: str,
+        command_marker_inverted: bool = False,
     ) -> dict[str, Any]:
         """Persist an association-specific profile with control unsynchronized."""
         cursor = self._connection.execute(
             """
             INSERT INTO htv145_control_state(
                 valve_endpoint, controller_endpoint, node_id, center_hz,
-                power_dbm, invert, trailer_residual, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                power_dbm, invert, trailer_residual, updated_at, command_marker_inverted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(valve_endpoint) DO UPDATE SET
                 controller_endpoint=excluded.controller_endpoint,
                 node_id=excluded.node_id,
@@ -3032,6 +3057,7 @@ class SQLiteEventStore:
                 power_dbm=excluded.power_dbm,
                 invert=excluded.invert,
                 trailer_residual=excluded.trailer_residual,
+                command_marker_inverted=excluded.command_marker_inverted,
                 next_sequence=NULL,
                 counter_synchronized=0,
                 counter_source=NULL,
@@ -3057,6 +3083,7 @@ class SQLiteEventStore:
                 int(invert),
                 trailer_residual,
                 updated_at,
+                int(command_marker_inverted),
             ),
         )
         if not cursor.rowcount:
@@ -3240,11 +3267,15 @@ class SQLiteEventStore:
             or bool(watering) != expected_watering
         ):
             raise ValueError("HTV145 confirmation does not match reservation")
-        next_sequence = 0x80 | ((sequence + 1) & 0x1F)
+        counter_confirmed = confirmation == "matching_immediate_response"
+        next_sequence = (
+            next_htv145_command_sequence(sequence, watering=watering)
+            if counter_confirmed else None
+        )
         cursor = self._connection.execute(
             """
             UPDATE htv145_control_state SET
-                next_sequence = ?, counter_synchronized = 1,
+                next_sequence = ?, counter_synchronized = ?,
                 counter_source = ?, pending_command_id = NULL,
                 pending_action = NULL, pending_sequence = NULL,
                 pending_duration_seconds = NULL, pending_started_at = NULL,
@@ -3257,6 +3288,7 @@ class SQLiteEventStore:
             """,
             (
                 next_sequence,
+                int(counter_confirmed),
                 confirmation,
                 int(watering),
                 int(watering),
@@ -3281,6 +3313,7 @@ class SQLiteEventStore:
         command_id: str,
         reason: str,
         observed_at: str,
+        frame: str | None = None,
     ) -> dict[str, Any]:
         """Clear a failed reservation and make the counter unusable."""
         cursor = self._connection.execute(
@@ -3294,10 +3327,11 @@ class SQLiteEventStore:
                     WHEN pending_action = 'open' THEN expected_idle_at
                     ELSE NULL
                 END,
-                last_result = ?, updated_at = ?
+                last_result = ?, last_response_frame = COALESCE(?, last_response_frame),
+                updated_at = ?
             WHERE valve_endpoint = ? AND pending_command_id = ?
             """,
-            (reason, observed_at, valve_endpoint, command_id),
+            (reason, frame, observed_at, valve_endpoint, command_id),
         )
         if not cursor.rowcount:
             raise ValueError("HTV145 failure does not match reservation")

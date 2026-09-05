@@ -7,11 +7,13 @@
 
 namespace rainpoint {
 
-// Stock HTV145 opens use a 1,200-symbol command wake. One retained logical
+// Stock selector-6 opens and closes use a 2,400-symbol command wake, measured
+// directly from the retained CU8 (2,399 alternating transitions before sync).
+// The earlier 1,200-symbol assumption truncated that wake by 60 ms. One logical
 // open contained three byte-identical attempts at these offsets. The attempts
 // are one bounded RF burst; a controller must never create a second logical
 // open merely because its acknowledgement was missed.
-constexpr std::uint16_t kHtv145CommandWakeSymbols = 1'200;
+constexpr std::uint16_t kHtv145CommandWakeSymbols = 2'400;
 constexpr std::array<std::uint32_t, 3> kHtv145CommandAttemptOffsetsMs = {
     0,
     730,
@@ -19,6 +21,15 @@ constexpr std::array<std::uint32_t, 3> kHtv145CommandAttemptOffsetsMs = {
 };
 constexpr std::uint32_t kHtv145ImmediateResponseWindowMs = 3'000;
 constexpr std::uint32_t kHtv145StateConfirmationWindowMs = 15'000;
+constexpr std::uint32_t kHtv145MinimumCommandIntervalMs = 15'000;
+
+inline bool htv145CommandIntervalElapsed(std::uint32_t last, std::uint32_t now) {
+    return now - last >= kHtv145MinimumCommandIntervalMs;
+}
+
+inline bool validHtv145DryProbeDuration(bool watering, std::uint32_t seconds) {
+    return watering ? seconds == 60 : seconds == 0;
+}
 
 struct Htv145Link {
     std::array<std::uint8_t, 4> controllerEndpoint{};
@@ -28,6 +39,12 @@ struct Htv145Link {
 struct Htv145CommandResponse {
     std::uint8_t sequence = 0;
     bool watering = false;
+    bool commandMarkerInverted = false;
+};
+
+struct Htv145CommandError {
+    std::uint8_t sequence = 0;
+    std::uint8_t resultCode = 0;
 };
 
 inline bool validHtv145Link(const Htv145Link& link) {
@@ -54,8 +71,13 @@ inline bool validHtv145Sequence(std::uint8_t sequence) {
     return sequence >= 0x80 && sequence <= 0x9f;
 }
 
-inline std::uint8_t nextHtv145CommandSequence(std::uint8_t sequence) {
-    return static_cast<std::uint8_t>(0x80U | ((sequence + 1U) & 0x1fU));
+inline std::uint8_t nextHtv145CommandSequence(
+    std::uint8_t sequence, bool watering
+) {
+    // Stock selector-6 trace: open 81, close 82, open 82, close 83.
+    return watering
+        ? static_cast<std::uint8_t>(0x80U | ((sequence + 1U) & 0x1fU))
+        : sequence;
 }
 
 inline bool encodeHtv145Duration(
@@ -140,6 +162,9 @@ struct Htv145ControlProfile {
     Htv145Link link{};
     std::uint16_t trailerResidual = 0;
     bool commandMarkerInverted = false;
+    // The accepted selector-6 close frames use 4f03 while their opens use
+    // c713. Preserve separate action residues instead of reusing the open's.
+    std::uint16_t closeTrailerResidual = 0x4f03;
 };
 
 inline bool buildHtv145ControlFrame(
@@ -155,7 +180,7 @@ inline bool buildHtv145ControlFrame(
             frame, profile.commandMarkerInverted
         )
         : buildHtv145CloseFrame(
-            profile.link, sequence, profile.trailerResidual, frame,
+            profile.link, sequence, profile.closeTrailerResidual, frame,
             profile.commandMarkerInverted
         );
 }
@@ -181,6 +206,35 @@ inline bool decodeHtv145CommandResponse(
     // Offset 14's high marker flips between the selector-5 and selector-6
     // associations. Offset 18 remains cf=watering and 4f=idle in both.
     response.watering = (frame[18] & 0x80U) != 0;
+    response.commandMarkerInverted =
+        ((frame[14] & 0x80U) != 0) == response.watering;
+    return true;
+}
+
+inline bool decodeHtv145CommandError(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    const Htv145Link& link,
+    Htv145CommandError& error
+) {
+    // Exact non-success family captured after both dry close probes. Its
+    // idle-looking fields do not prove a physical close or counter acceptance.
+    constexpr std::array<std::uint8_t, 22> body = {
+        0x50, 0x86, 0x83, 0x00, 0x4f, 0x80, 0x00, 0x00,
+        0x00, 0x40, 0x80, 0x00, 0x56, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
+        !htv145RouteMatches(frame, link.valveEndpoint, link.controllerEndpoint) ||
+        !validHtv145Sequence(frame[13])) {
+        return false;
+    }
+    for (std::size_t index = 0; index < body.size(); ++index) {
+        if (frame[14 + index] != body[index]) {
+            return false;
+        }
+    }
+    error.sequence = frame[13];
+    error.resultCode = 3;
     return true;
 }
 

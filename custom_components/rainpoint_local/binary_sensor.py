@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+from .api_models import multi_zone_numbers
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
 from .node_entity import RainPointRadioNodeEntity
@@ -77,7 +78,7 @@ def _entities_for_device(
         entities.append(
             ("watering", RainPointWateringBinarySensor(coordinator, device_id))
         )
-    for zone in range(1, 5):
+    for zone in multi_zone_numbers(device):
         key = f"zone_{zone}_is_watering"
         if key in device.get("state", {}):
             entities.append(

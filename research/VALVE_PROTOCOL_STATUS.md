@@ -18,7 +18,8 @@ this document preserves the physical evidence behind their support status.
   is not new enrollment, even if the valve gives the same visible success LED.
 - **Logical command** is one requested operation. It may contain a bounded set
   of byte-identical RF attempts; those attempts are not separate opens.
-- **Command response** authenticates the outbound command sequence.
+- **Accepted command response** authenticates the outbound command sequence.
+  A negative command result never supplies physical-state or counter proof.
 - **State report** independently proves watering or idle state. Its telemetry
   sequence never supplies the next command counter.
 
@@ -30,7 +31,7 @@ this document preserves the physical evidence behind their support status.
 | Duration decode | Confirmed two-byte biased requested/remaining counters; command construction across the low-byte bit-7 boundary remains unresolved | Confirmed for whole-minute commands |
 | Zone selection | Confirmed for Zones 1--4; association-profile-specific packing | One zone |
 | Local new enrollment | 18-step exchange physically reproduced | Not yet reproduced locally |
-| Local bounded open | Physically confirmed on Zones 1--4 | Constructed and compile-tested; physical acceptance pending |
+| Local bounded open | Physically confirmed on Zones 1--4 | Corrected 2,400-symbol dry open unconfirmed; close probes returned result 3 |
 | Immediate command response | Physically confirmed | Stock response structure and timing confirmed |
 | Independent state fallback | Physically confirmed | Stock behavior confirmed |
 | Automatic stop | Physically confirmed | Stock behavior confirmed; local acceptance pending |

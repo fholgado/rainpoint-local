@@ -125,6 +125,38 @@ def _matches(
     )
 
 
+def terminal_exchange_evidence(
+    requests: list[dict[str, Any]], replies: list[dict[str, Any]],
+    *, controller_endpoint: bytes, paired_endpoint: bytes,
+) -> dict[str, bool]:
+    """Require the valve's terminal family and its matching bounded reply."""
+    terminals = []
+    for event in requests:
+        raw = event.get("frame", "")
+        if not _matches(raw, endpoint_a=controller_endpoint,
+                        endpoint_b=paired_endpoint, body_prefix=b""):
+            continue
+        frame = bytes.fromhex(raw)
+        if (frame[13] in range(0x80, 0xa0) and frame[14] & 0x7f == 0x2c
+                and frame[15:17] == bytes.fromhex("8099")
+                and not any(frame[17:36])):
+            terminals.append(event)
+    for request in terminals:
+        for reply in replies:
+            raw = reply.get("frame", "")
+            if not _matches(raw, endpoint_a=paired_endpoint,
+                            endpoint_b=controller_endpoint, body_prefix=b""):
+                continue
+            frame = bytes.fromhex(raw)
+            if (frame[13] == bytes.fromhex(request["frame"])[13]
+                    and frame[14] & 0x7f == 0x6c
+                    and frame[15:18] == bytes.fromhex("818019")
+                    and not any(frame[18:36])
+                    and 0 <= reply["start_seconds"] - request["end_seconds"] <= 0.2):
+                return {"terminal_request_observed": True, "terminal_exchange_observed": True}
+    return {"terminal_request_observed": bool(terminals), "terminal_exchange_observed": False}
+
+
 def _factory_matches(frame_hex: str, factory_endpoint: bytes) -> bool:
     """Match the HTV145 factory family while allowing its sweep counter."""
     try:
@@ -563,6 +595,10 @@ def analyze(
         "paired_response_count": len(paired_responses),
         "configuration_response_count": len(configuration_responses),
         "stage_0_verdict": stage_0_verdict,
+        **terminal_exchange_evidence(
+            paired_requests, paired_responses,
+            controller_endpoint=controller_endpoint, paired_endpoint=paired_endpoint,
+        ),
         "stage_0_failure_count": len(stage_0_failures),
         "factory_requests": requests,
         "assignments": assignments,
@@ -592,6 +628,8 @@ def main() -> int:
     parser.add_argument("--controller-endpoint", type=_endpoint, required=True)
     parser.add_argument("--start-seconds", type=float, default=0.0)
     parser.add_argument("--duration-seconds", type=float)
+    parser.add_argument("--require-terminal", action="store_true",
+                        help="Fail unless the valve's terminal request and matching reply are both recorded")
     parser.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE)
     parser.add_argument(
         "--capture-center", type=int, default=DEFAULT_CAPTURE_CENTER_HZ
@@ -637,7 +675,10 @@ def main() -> int:
         "duration_seconds": args.duration_seconds,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if result["stage_0_verdict"] == "accepted" else 1
+    accepted = result["stage_0_verdict"] == "accepted"
+    if args.require_terminal:
+        accepted = accepted and result["terminal_exchange_observed"]
+    return 0 if accepted else 1
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ class FrameIngestor:
         self._catalog_override = catalog
         self.receiver_id = receiver_id
         self._valve_states: dict[str, dict[str, Any]] = {
-            valve.device_id: self._empty_valve_state()
+            valve.device_id: self._empty_valve_state(valve.model)
             for valve in self.catalog.valves
         }
 
@@ -41,7 +41,7 @@ class FrameIngestor:
         return self._catalog_override or self.gateway.catalog
 
     @staticmethod
-    def _empty_valve_state() -> dict[str, Any]:
+    def _empty_valve_state(model: str) -> dict[str, Any]:
         state: dict[str, Any] = {
             "valve_state": None,
             "is_watering": None,
@@ -51,7 +51,7 @@ class FrameIngestor:
             "battery_status": None,
             "battery_percent": None,
         }
-        for zone in range(1, 5):
+        for zone in range(1, 5) if model == "HTV405FRF" else ():
             state[f"zone_{zone}_is_watering"] = None
             state[f"zone_{zone}_remaining_seconds"] = None
             state[f"zone_{zone}_duration_seconds"] = None
@@ -189,7 +189,7 @@ class FrameIngestor:
                 if valve is None:
                     continue
                 valve_state = self._valve_states.setdefault(
-                    valve.device_id, self._empty_valve_state()
+                    valve.device_id, self._empty_valve_state(valve.model)
                 )
                 zone = decoded.get("zone")
                 if isinstance(zone, int) and 1 <= zone <= 4:

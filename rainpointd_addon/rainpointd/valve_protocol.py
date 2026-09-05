@@ -441,6 +441,12 @@ def next_sequence(sequence: int) -> int:
     return 0x80 | ((sequence + 1) & 0x1F)
 
 
+def next_htv145_command_sequence(sequence: int, *, watering: bool) -> int:
+    """Accepted opens advance the session; accepted closes retain its counter."""
+    _validate_sequence(sequence)
+    return next_sequence(sequence) if watering else sequence
+
+
 def _ordinary_frame_valid(frame: bytes) -> bool:
     if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
         return False
@@ -494,7 +500,7 @@ def decode_htv145_gateway_command(
             return None
         return {
             "sequence": frame[13],
-            "next_sequence": next_sequence(frame[13]),
+            "next_sequence": next_htv145_command_sequence(frame[13], watering=True),
             "watering": True,
             "duration_seconds": duration_seconds,
             "command_marker_inverted": frame[14] == 0x90,
@@ -506,7 +512,7 @@ def decode_htv145_gateway_command(
     ):
         return {
             "sequence": frame[13],
-            "next_sequence": next_sequence(frame[13]),
+            "next_sequence": next_htv145_command_sequence(frame[13], watering=False),
             "watering": False,
             "command_marker_inverted": frame[14] == 0x10,
         }
@@ -538,11 +544,35 @@ def decode_htv145_command_response(
     watering = bool(frame[18] & 0x80)
     result: dict[str, int | bool] = {
         "sequence": frame[13],
-        "next_sequence": next_sequence(frame[13]),
+        "next_sequence": next_htv145_command_sequence(frame[13], watering=watering),
         "watering": watering,
         "command_marker_inverted": bool(frame[14] & 0x80) == watering,
     }
     return result
+
+
+def decode_htv145_command_error(
+    frame: bytes, link: ValveLink
+) -> dict[str, int] | None:
+    """Recognize the captured result-code-3 reply without inferring state.
+
+    Both close probes after 5/6 enrollment elicited this exact family. Its
+    meaning beyond a non-success command result is unresolved; in particular,
+    its idle-looking bytes must not confirm a close or authenticate a counter.
+    Keep this recognizer narrow until another result layout is captured.
+    """
+    if (
+        not _ordinary_frame_valid(frame)
+        or not _route_matches(
+            frame, link.valve_endpoint, link.controller_endpoint
+        )
+        or frame[13] not in range(0x80, 0xA0)
+        or frame[14:36] != bytes.fromhex(
+            "508683004f8000000040800056800000000000000000"
+        )
+    ):
+        return None
+    return {"sequence": frame[13], "result_code": 3}
 
 
 def decode_htv145_state_report(

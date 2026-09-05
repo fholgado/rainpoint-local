@@ -21,6 +21,19 @@ spec.loader.exec_module(api_models)
 
 
 class APIModelsTest(unittest.TestCase):
+    def test_valve_topology_and_obsolete_entity_ids(self):
+        single = {"model": "HTV145FRF", "state": {"zone_4_is_watering": None}}
+        four = {"model": "HTV405FRF"}
+        self.assertEqual((), api_models.multi_zone_numbers(single))
+        self.assertEqual((1, 2, 3, 4), api_models.multi_zone_numbers(four))
+        self.assertEqual((), api_models.multi_zone_numbers({}))
+        obsolete = api_models.unsupported_device_entity_ids("single", single)
+        self.assertEqual(12, len(obsolete))
+        self.assertIn("single_zone_4_watering", obsolete)
+        self.assertNotIn("single_watering", obsolete)
+        self.assertNotIn("single_last_usage", obsolete)
+        self.assertEqual({"four_last_usage"}, api_models.unsupported_device_entity_ids("four", four))
+
     def test_gateway_metadata_parses_capability_contract(self) -> None:
         metadata = api_models.GatewayMetadata.from_payload(
             {

@@ -10,6 +10,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import RainPointLocalClient, RainPointLocalError
+from .api_models import unsupported_device_entity_ids
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LEGACY_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -132,9 +133,9 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
         unsupported_unique_ids = {
-            f"{device_id}_last_usage"
+            unique_id
             for device_id, device in devices.items()
-            if device.get("model") == "HTV405FRF"
+            for unique_id in unsupported_device_entity_ids(device_id, device)
         }
         local_ids_by_registry_id: dict[str, str] = {}
         for device_entry in dr.async_entries_for_config_entry(

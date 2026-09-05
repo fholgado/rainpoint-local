@@ -9,6 +9,9 @@ import unittest
 from pathlib import Path
 
 from tools.generate_rainpoint_iq import command_symbols, generate_cu8
+from tools.analyze_htv145_pairing_iq import terminal_exchange_evidence
+from tools.analyze_htv145_control_iq import summarize_matches
+from rainpointd.valve_protocol import ValveLink
 
 
 MODULE_PATH = Path(__file__).parent / "tools" / "analyze_pairing_waveform.py"
@@ -25,6 +28,54 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_partial_association_close_replies_are_errors_not_acceptance(self):
+        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_partial_pairing_control_replies_20260905.json").read_text())
+        link = ValveLink(bytes.fromhex(fixture["identity"]["controller_endpoint"]),
+                         bytes.fromhex(fixture["identity"]["valve_endpoint"]))
+        for trial in fixture["trials"][1:]:
+            response = trial["valid_valve_frames"][0]
+            match = {"frame_hex": response["frame"], "phase_count": response["phase_count"],
+                     "alternating_wake_symbols": [], "alternating_wake_symbol_histogram": {}}
+            result = summarize_matches([match], link)
+            self.assertEqual([], result["responses"])
+            self.assertEqual({"sequence": trial["sequence"], "result_code": 3},
+                             result["errors"][0]["decoded"])
+            corrupt = {**match, "frame_hex": response["frame"][:-4] + "0000"}
+            self.assertEqual([], summarize_matches([corrupt], link)["errors"])
+            wrong_route = ValveLink(link.valve_endpoint, link.controller_endpoint)
+            self.assertEqual([], summarize_matches([match], wrong_route)["errors"])
+
+    def test_stock_terminal_exchange_is_required_not_assignment_or_retry(self):
+        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_counter2_stock_enrollment_20260901.json").read_text())
+        exchange = fixture["exchanges"][-1]
+        kwargs = {key: bytes.fromhex(fixture["association"][key])
+                  for key in ("controller_endpoint", "paired_endpoint")}
+        request = {"frame": exchange["request_frame"], "end_seconds": exchange["request_end_seconds"]}
+        reply = {"frame": exchange["reply_frame"], "start_seconds": exchange["reply_start_seconds"]}
+        self.assertEqual({"terminal_request_observed": True, "terminal_exchange_observed": True},
+                         terminal_exchange_evidence([request], [reply], **kwargs))
+        self.assertFalse(terminal_exchange_evidence([request], [], **kwargs)["terminal_exchange_observed"])
+        self.assertFalse(terminal_exchange_evidence([request], [{**reply, "start_seconds": request["end_seconds"] + 1}], **kwargs)["terminal_exchange_observed"])
+        retry = {**request, "frame": fixture["exchanges"][-2]["request_frame"]}
+        self.assertFalse(terminal_exchange_evidence([retry], [reply], **kwargs)["terminal_request_observed"])
+        corrupted = {**request, "frame": request["frame"][:-4] + "0000"}
+        self.assertFalse(terminal_exchange_evidence([corrupted], [reply], **kwargs)["terminal_request_observed"])
+
+    def test_control_analysis_distinguishes_stock_wake_and_unconfirmed_intent(self):
+        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_stock_control_shape_20260905.json").read_text())
+        link = ValveLink(bytes.fromhex(fixture["identity"]["controller_endpoint"]),
+                         bytes.fromhex(fixture["identity"]["valve_endpoint"]))
+        for window in fixture["windows"]:
+            matches = [{"frame_hex": c["frame"], "phase_count": c["phase_count"],
+                        "alternating_wake_symbols": c["observed_wake_symbols"],
+                        "alternating_wake_symbol_histogram": c["wake_symbol_histogram"]}
+                       for c in window["commands"] + window["responses"]]
+            result = summarize_matches(matches, link)
+            command = result["commands"][0]
+            dominant_wake = int(max(command["wake_symbol_histogram"], key=command["wake_symbol_histogram"].get))
+            self.assertEqual(1200 if window["role"] == "local-open" else 2400, dominant_wake)
+            self.assertEqual(0 if window["role"] == "local-open" else 1, len(result["responses"]))
+
     @unittest.skipUnless(
         MODULE.np is not None,
         "NumPy is an optional dependency used only for IQ analysis",

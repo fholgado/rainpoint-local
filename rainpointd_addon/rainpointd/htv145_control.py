@@ -20,6 +20,7 @@ from .valve_protocol import (
     TRAILER_RESIDUES,
     ValveLink,
     decode_htv145_command_response,
+    decode_htv145_command_error,
     decode_htv145_gateway_command,
     decode_htv145_state_report,
     decode_htv145_terminal_idle_report,
@@ -41,6 +42,7 @@ class Htv145ControlProfile:
     power_dbm: int
     invert: bool
     trailer_residual: int
+    command_marker_inverted: bool = False
 
     def __post_init__(self) -> None:
         if not _NODE_ID.fullmatch(self.node_id):
@@ -56,6 +58,8 @@ class Htv145ControlProfile:
             raise ValueError("HTV145 transmit power is outside CC1101 bounds")
         if not isinstance(self.invert, bool):
             raise ValueError("HTV145 inversion flag must be a boolean")
+        if not isinstance(self.command_marker_inverted, bool):
+            raise ValueError("HTV145 command marker must be a boolean")
         if self.trailer_residual not in TRAILER_RESIDUES:
             raise ValueError("unknown HTV145 trailer residual")
 
@@ -98,6 +102,7 @@ class Htv145ControlCoordinator:
             power_dbm=profile.power_dbm,
             invert=profile.invert,
             trailer_residual=profile.trailer_residual,
+            command_marker_inverted=profile.command_marker_inverted,
             updated_at=observed_at,
         )
 
@@ -112,6 +117,8 @@ class Htv145ControlCoordinator:
         decoded = decode_htv145_gateway_command(frame, profile.link)
         if decoded is None:
             raise ValueError("frame is not a matching HTV145 gateway command")
+        if decoded["command_marker_inverted"] != profile.command_marker_inverted:
+            raise ValueError("passive command marker differs from HTV145 association")
         return self.store.synchronize_htv145_control_counter(
             valve_endpoint=profile.valve_endpoint,
             next_sequence=int(decoded["next_sequence"]),
@@ -142,6 +149,7 @@ class Htv145ControlCoordinator:
             power_dbm=profile.power_dbm,
             invert=profile.invert,
             trailer_residual=profile.trailer_residual,
+            command_marker_inverted=profile.command_marker_inverted,
         )
         commands = [configure]
         if state["counter_synchronized"]:
@@ -201,8 +209,24 @@ class Htv145ControlCoordinator:
         """Persist state and resolve a reservation only with matching evidence."""
         state = self._state(profile.valve_endpoint)
         self._require_profile(state, profile)
+        error = decode_htv145_command_error(frame, profile.link)
+        if error is not None:
+            if (
+                state["pending_command_id"] is None
+                or error["sequence"] != state["pending_sequence"]
+            ):
+                raise ValueError("HTV145 error has no matching durable reservation")
+            return self.store.fail_htv145_command(
+                valve_endpoint=profile.valve_endpoint,
+                command_id=state["pending_command_id"],
+                reason=f"negative_command_result_{error['result_code']}",
+                observed_at=observed_at,
+                frame=frame.hex(),
+            )
         response = decode_htv145_command_response(frame, profile.link)
         if response is not None:
+            if response["command_marker_inverted"] != profile.command_marker_inverted:
+                raise ValueError("response marker differs from HTV145 association")
             if state["pending_command_id"] is None:
                 raise ValueError("HTV145 response has no durable reservation")
             return self.store.confirm_htv145_command(
@@ -223,8 +247,8 @@ class Htv145ControlCoordinator:
         if state["pending_command_id"] is not None:
             expected_watering = state["pending_action"] == "open"
             if watering == expected_watering:
-                # The report's sequence belongs to the telemetry stream. The
-                # confirmed counter is the exact sequence already reserved.
+                # Telemetry proves physical state but cannot authenticate the
+                # reserved command counter. The store clears its sync gate.
                 return self.store.confirm_htv145_command(
                     valve_endpoint=profile.valve_endpoint,
                     command_id=state["pending_command_id"],
@@ -273,11 +297,17 @@ class Htv145ControlCoordinator:
             )
         status = message.get("state")
         frame_hex = message.get("frame")
-        if status == "confirmed" and isinstance(frame_hex, str):
+        if status in {"confirmed", "negative_command_response"} and isinstance(
+            frame_hex, str
+        ):
             try:
                 frame = bytes.fromhex(frame_hex)
             except ValueError as error:
                 raise ValueError("candidate returned invalid frame hex") from error
+            if status == "negative_command_response" and (
+                decode_htv145_command_error(frame, profile.link) is None
+            ):
+                raise ValueError("candidate error lacks a matching negative reply")
             return self.observe_frame(profile, frame, observed_at=observed_at)
         if status in {
             "transmit_failed",
@@ -359,6 +389,7 @@ class Htv145ControlCoordinator:
             "power_dbm": profile.power_dbm,
             "invert": profile.invert,
             "trailer_residual": profile.trailer_residual,
+            "command_marker_inverted": profile.command_marker_inverted,
         }
         if any(state[key] != value for key, value in fields.items()):
             raise ValueError("HTV145 profile differs from durable association")

@@ -328,6 +328,7 @@ struct Htv145ControlCandidate {
     std::uint32_t immediateResponseDeadlineMs = 0;
     std::uint32_t stateConfirmationDeadlineMs = 0;
     std::uint16_t trailerResidual = 0;
+    std::uint16_t closeTrailerResidual = 0x4f03;
     std::int8_t powerDbm = 0;
     std::uint8_t nextSequence = 0;
     std::uint8_t transmittedSequence = 0;
@@ -351,6 +352,8 @@ struct Htv145ControlCandidate {
 };
 
 Htv145ControlCandidate htv145ControlCandidate;
+bool htv145CommandIssued = false;
+std::uint32_t lastHtv145CommandStartedAtMs = 0;
 #endif
 
 #if RAINPOINT_RADIO_COUNT == 1
@@ -2081,6 +2084,9 @@ const char* htv145CandidateFailureClass(const char* state) {
     if (strcmp(state, "conflicting_command_response") == 0) {
         return "conflicting_authenticated_response";
     }
+    if (strcmp(state, "negative_command_response") == 0) {
+        return "valve_result_code_3_meaning_unresolved";
+    }
     if (strcmp(state, "gateway_connection_lost_counter_unsynchronized") == 0) {
         return htv145ControlCandidate.successfulAttempts > 0
             ? "gateway_lost_after_transmission"
@@ -2098,14 +2104,17 @@ const char* htv145CandidateFailureClass(const char* state) {
     return "transmitted_no_matching_response_or_state";
 }
 
-void failHtv145Candidate(const char* state) {
+void failHtv145Candidate(
+    const char* state,
+    const std::array<std::uint8_t, rainpoint::kFrameBytes>* frame = nullptr
+) {
     // Once any attempt may have reached the air, failure to observe the valve
     // makes the outbound counter ambiguous. Fail closed and require a new
     // passive stock/local synchronization before accepting another command.
     htv145ControlCandidate.counterAuthenticated = false;
     htv145ControlCandidate.pending = false;
     reportHtv145CandidateStatus(
-        state, nullptr, nullptr, htv145CandidateFailureClass(state)
+        state, nullptr, frame, htv145CandidateFailureClass(state)
     );
     restoreHtv145CandidateReceive();
     htv145ControlCandidate.commandId.clear();
@@ -2120,7 +2129,8 @@ void confirmHtv145Candidate(
     if (sequenceConfirmed) {
         htv145ControlCandidate.nextSequence =
             rainpoint::nextHtv145CommandSequence(
-                htv145ControlCandidate.transmittedSequence
+                htv145ControlCandidate.transmittedSequence,
+                htv145ControlCandidate.commandWatering
             );
         htv145ControlCandidate.counterAssumed = false;
     }
@@ -2183,8 +2193,12 @@ bool startHtv145Candidate(
     bool assumedDryProbe = false
 ) {
     if (!htv145ControlCandidate.configured ||
+        !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
+        (htv145CommandIssued && !rainpoint::htv145CommandIntervalElapsed(
+            lastHtv145CommandStartedAtMs, millis())) ||
         (!htv145ControlCandidate.counterAuthenticated && !assumedDryProbe) ||
-        (assumedDryProbe && (!watering || durationSeconds != 60)) ||
+        (assumedDryProbe && !rainpoint::validHtv145DryProbeDuration(
+            watering, durationSeconds)) ||
         htv145ControlCandidate.pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         return false;
@@ -2193,7 +2207,8 @@ bool startHtv145Candidate(
     const rainpoint::Htv145ControlProfile profile{
         htv145ControlCandidate.link,
         htv145ControlCandidate.trailerResidual,
-        htv145ControlCandidate.commandMarkerInverted
+        htv145ControlCandidate.commandMarkerInverted,
+        htv145ControlCandidate.closeTrailerResidual
     };
     const bool built = rainpoint::buildHtv145ControlFrame(
         profile, htv145ControlCandidate.nextSequence, watering,
@@ -2220,6 +2235,8 @@ bool startHtv145Candidate(
     htv145ControlCandidate.immediateResponseWindowClosed = false;
     htv145ControlCandidate.pending = true;
     htv145ControlCandidate.burstStartedAtMs = millis();
+    htv145CommandIssued = true;
+    lastHtv145CommandStartedAtMs = htv145ControlCandidate.burstStartedAtMs;
     htv145ControlCandidate.immediateResponseDeadlineMs =
         htv145ControlCandidate.burstStartedAtMs +
         rainpoint::kHtv145ImmediateResponseWindowMs;
@@ -2235,7 +2252,17 @@ bool startHtv145Candidate(
 // Serial-only, explicit one-minute dry-valve experiment. This does not arm
 // pairing, authenticate a guessed counter, or add a production HA control.
 bool handleHtv145DryOpenProbe(const String& command) {
-    if (!command.startsWith("htv145_dry_open_probe ")) {
+    if (command == "htv145_dry_close") {
+        // Use only the counter authenticated by this test's open response.
+        // startHtv145Candidate also enforces the 15-second hardware interval.
+        if (!htv145ControlCandidate.commandWatering ||
+            !startHtv145Candidate(String("dry-close-") + millis(), false, 0)) {
+            emitLine("{\"type\":\"command_error\",\"error\":\"htv145_dry_close_not_started\"}");
+        }
+        return true;
+    }
+    const bool closeProbe = command.startsWith("htv145_dry_close_probe ");
+    if (!closeProbe && !command.startsWith("htv145_dry_open_probe ")) {
         return false;
     }
     char controller[9]{};
@@ -2250,7 +2277,9 @@ bool handleHtv145DryOpenProbe(const String& command) {
     rainpoint::Htv145Link link{};
     const int fields = sscanf(
         command.c_str(),
-        "htv145_dry_open_probe %8s %8s %lu %x %x %d %d %d %c",
+        closeProbe
+            ? "htv145_dry_close_probe %8s %8s %lu %x %x %d %d %d %c"
+            : "htv145_dry_open_probe %8s %8s %lu %x %x %d %d %d %c",
         controller, valve, &center, &sequence, &residue, &power,
         &invert, &marker, &extra
     );
@@ -2278,12 +2307,17 @@ bool handleHtv145DryOpenProbe(const String& command) {
     htv145ControlCandidate.centerHz = static_cast<std::uint32_t>(center);
     htv145ControlCandidate.powerDbm = static_cast<std::int8_t>(power);
     htv145ControlCandidate.trailerResidual = static_cast<std::uint16_t>(residue);
+    if (closeProbe) {
+        htv145ControlCandidate.closeTrailerResidual =
+            static_cast<std::uint16_t>(residue);
+    }
     htv145ControlCandidate.nextSequence = static_cast<std::uint8_t>(sequence);
     htv145ControlCandidate.invert = invert != 0;
     htv145ControlCandidate.commandMarkerInverted = marker != 0;
     htv145ControlCandidate.configured = true;
     if (!startHtv145Candidate(
-            String("dry-open-") + millis(), true, 60, true
+            String(closeProbe ? "dry-close-probe-" : "dry-open-") + millis(),
+            !closeProbe, closeProbe ? 0 : 60, true
         )) {
         emitLine("{\"type\":\"command_error\",\"error\":\"htv145_dry_open_probe_not_started\"}");
     }
@@ -2309,12 +2343,24 @@ void observeHtv145CandidateFrame(
             return;
         }
     }
+    rainpoint::Htv145CommandError error{};
+    if (rainpoint::decodeHtv145CommandError(
+            frame, htv145ControlCandidate.link, error
+        )) {
+        ++htv145ControlCandidate.classifiedResponseFrames;
+        if (error.sequence == htv145ControlCandidate.transmittedSequence) {
+            failHtv145Candidate("negative_command_response", &frame);
+        }
+        return;
+    }
     rainpoint::Htv145CommandResponse response{};
     if (rainpoint::decodeHtv145CommandResponse(
             frame, htv145ControlCandidate.link, response
         )) {
         ++htv145ControlCandidate.classifiedResponseFrames;
         if (response.sequence != htv145ControlCandidate.transmittedSequence ||
+            response.commandMarkerInverted !=
+                htv145ControlCandidate.commandMarkerInverted ||
             response.watering != htv145ControlCandidate.commandWatering) {
             failHtv145Candidate("conflicting_command_response");
             return;
@@ -2487,6 +2533,7 @@ void handleNetworkCommand() {
         long powerDbm = 0;
         long trailerResidual = 0;
         bool invert = false;
+        bool commandMarkerInverted = false;
         if (!parseRawHexEndpoint(controller, link.controllerEndpoint) ||
             !parseRawHexEndpoint(valve, link.valveEndpoint) ||
             !rainpoint::validHtv145Link(link) ||
@@ -2502,6 +2549,7 @@ void handleNetworkCommand() {
             ) ||
             (trailerResidual != 0xc713 && trailerResidual != 0x4f03) ||
             !jsonBoolField(command, "invert", invert) ||
+            !jsonBoolField(command, "command_marker_inverted", commandMarkerInverted) ||
             htv145ControlCandidate.pending ||
             currentPairingState() == rainpoint::PairingSessionState::Armed ||
             !primaryRadio.prepareTransmit()) {
@@ -2522,6 +2570,7 @@ void handleNetworkCommand() {
         htv145ControlCandidate.trailerResidual =
             static_cast<std::uint16_t>(trailerResidual);
         htv145ControlCandidate.invert = invert;
+        htv145ControlCandidate.commandMarkerInverted = commandMarkerInverted;
         htv145ControlCandidate.configured = true;
         htv145ControlCandidate.commandId = commandId;
         reportHtv145CandidateStatus("configured_counter_required");

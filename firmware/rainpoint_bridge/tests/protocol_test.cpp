@@ -2178,7 +2178,29 @@ int main() {
     assert(!rainpoint::buildHtv145ControlFrame(
         selector6Control, 0x81, true, 61, controlProfileFrame
     ));
-    assert(rainpoint::kHtv145CommandWakeSymbols == 1'200);
+    // The stock selector-6 CU8 command windows contain 2,399 alternating
+    // transitions before sync, independently of the exact decoded payload.
+    assert(rainpoint::kHtv145CommandWakeSymbols == 2'400);
+    assert(!rainpoint::htv145CommandIntervalElapsed(100, 15'099));
+    assert(rainpoint::htv145CommandIntervalElapsed(100, 15'100));
+    assert(rainpoint::htv145CommandIntervalElapsed(0xfffffff0U, 14'984));
+    assert(rainpoint::validHtv145DryProbeDuration(true, 60));
+    assert(rainpoint::validHtv145DryProbeDuration(false, 0));
+    assert(!rainpoint::validHtv145DryProbeDuration(true, 0));
+    assert(!rainpoint::validHtv145DryProbeDuration(true, 120));
+    assert(!rainpoint::validHtv145DryProbeDuration(false, 60));
+    const rainpoint::Htv145Link redactedControlLink{
+        {{0xc1, 0x23, 0x45, 0x8f}}, {{0xd1, 0x23, 0x45, 0x80}},
+    };
+    const rainpoint::Htv145ControlProfile redactedSelector6Control{
+        redactedControlLink, 0xc713, true
+    };
+    assert(rainpoint::buildHtv145ControlFrame(
+        redactedSelector6Control, 0x82, false, 0, controlProfileFrame
+    ));
+    assert(controlProfileFrame == fromHex(
+        "79f4882f28c123458fd12345808210818081000000000000000000000000000000000000231d"
+    ));
     assert((
         rainpoint::kHtv145CommandAttemptOffsetsMs ==
         std::array<std::uint32_t, 3>{{0, 730, 1'670}}
@@ -2215,7 +2237,10 @@ int main() {
     assert(!rainpoint::buildHtv145OpenFrame(
         htv145Link, 0x7f, 60, 0xc713, htv145Frame
     ));
-    assert(rainpoint::nextHtv145CommandSequence(0x9f) == 0x80);
+    assert(rainpoint::nextHtv145CommandSequence(0x9f, true) == 0x80);
+    assert(rainpoint::nextHtv145CommandSequence(0x9f, false) == 0x9f);
+    assert(rainpoint::nextHtv145CommandSequence(0x81, true) == 0x82);
+    assert(rainpoint::nextHtv145CommandSequence(0x82, false) == 0x82);
 
     rainpoint::Htv145CommandResponse htv145Response{};
     const auto htv145OpenResponse = fromHex(
@@ -2265,6 +2290,26 @@ int main() {
     ));
     assert(htv145Response.sequence == 0x83);
     assert(!htv145Response.watering);
+    assert(htv145Response.commandMarkerInverted);
+
+    auto negativeClose = fromHex(
+        "79f4882f28d1234580c123458f81508683004f8000000040800056800000000000000000d990"
+    );
+    rainpoint::Htv145CommandError htv145Error{};
+    assert(rainpoint::decodeHtv145CommandError(
+        negativeClose, redactedControlLink, htv145Error
+    ));
+    assert(htv145Error.sequence == 0x81 && htv145Error.resultCode == 3);
+    assert(!rainpoint::decodeHtv145CommandResponse(
+        negativeClose, redactedControlLink, htv145Response
+    ));
+    assert(!rainpoint::decodeHtv145CommandError(
+        negativeClose, htv145Link, htv145Error
+    ));
+    negativeClose[37] ^= 1;
+    assert(!rainpoint::decodeHtv145CommandError(
+        negativeClose, redactedControlLink, htv145Error
+    ));
 
     bool htv145Watering = false;
     const auto htv145ActiveState = fromHex(

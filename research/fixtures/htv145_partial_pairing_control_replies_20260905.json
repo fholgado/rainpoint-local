@@ -1,0 +1,144 @@
+{
+  "date": "2026-09-05",
+  "scope": "User-authorized dry-valve probes after incomplete 5/6 enrollment. Synthetic endpoints and recomputed trailers; raw recordings remain private and untracked.",
+  "identity": {
+    "controller_endpoint": "c123458f",
+    "valve_endpoint": "d1234580",
+    "redacted": true
+  },
+  "trials": [
+    {
+      "role": "open",
+      "sequence": 129,
+      "duration_seconds": 60,
+      "candidate": ".16",
+      "command_wake_symbols": 2400,
+      "capture": "20260905-045529/continuous.cu8",
+      "capture_sha256": "3b301d990067de3d4b62dae3a5d9fe8c89dabe3a2034fb6761a7dc0c88909762",
+      "firmware_sha256": "4f879119313b51e8cdd3022b944bfd58294a6fcbf348fb8f8f56a8aba381ec77",
+      "result": "unconfirmed",
+      "valid_valve_frames": [],
+      "node_summary": {
+        "attempts_sent": 3,
+        "observed_frames": 4,
+        "matching_route_frames": 0,
+        "invalid_trailer_frames": 0,
+        "classified_response_frames": 0,
+        "classified_state_frames": 0,
+        "failure_class": "state_confirmation_missed_after_no_immediate_response"
+      }
+    },
+    {
+      "role": "close",
+      "sequence": 129,
+      "duration_seconds": 0,
+      "candidate": ".17",
+      "command_wake_symbols": 2400,
+      "capture": "20260905-050257/continuous.cu8",
+      "capture_sha256": "ba9dcc388460401ea8889c8d074581e1868de6d4e477a6f6ccfa8fd9d8537c49",
+      "firmware_sha256": "e9271f4551778a67c41e8af89a1d37a3323fe54bdebe7b7d591fe5c13219498e",
+      "result": "negative_result_code_3",
+      "valid_valve_frames": [
+        {
+          "frame": "79f4882f28d1234580c123458f81508683004f8000000040800056800000000000000000d990",
+          "trailer_residue": "c713",
+          "phase_count": 278,
+          "window_start_seconds": 50,
+          "decision_center_hz": 434351500
+        }
+      ],
+      "node_summary": {
+        "attempts_sent": 3,
+        "observed_frames": 7,
+        "matching_route_frames": 3,
+        "invalid_trailer_frames": 0,
+        "classified_response_frames": 0,
+        "classified_state_frames": 0,
+        "failure_class": "corrupt_or_foreign_matching_route_response"
+      }
+    },
+    {
+      "role": "close",
+      "sequence": 128,
+      "duration_seconds": 0,
+      "candidate": ".17",
+      "command_wake_symbols": 2400,
+      "capture": "20260905-051341/continuous.cu8",
+      "capture_sha256": "be8500ec2738b4d094addd59e0df7ede39738e5169df97449528c8eb796f8473",
+      "firmware_sha256": "e9271f4551778a67c41e8af89a1d37a3323fe54bdebe7b7d591fe5c13219498e",
+      "result": "negative_result_code_3",
+      "valid_valve_frames": [
+        {
+          "frame": "79f4882f28d1234580c123458f80508683004f8000000040800056800000000000000000bc9b",
+          "trailer_residue": "c713",
+          "phase_count": 277,
+          "window_start_seconds": 50,
+          "decision_center_hz": 434351500
+        },
+        {
+          "frame": "79f4882f28d1234580c123458f9182810600800000000000000000000000000000000000df09",
+          "trailer_residue": "4f03",
+          "phase_count": 97,
+          "window_start_seconds": 100,
+          "decision_center_hz": 433143000
+        },
+        {
+          "frame": "79f4882f28d1234580c123458f90028106008000000000000000000000000000000000008887",
+          "trailer_residue": "c713",
+          "phase_count": 96,
+          "window_start_seconds": 100,
+          "decision_center_hz": 433143000
+        },
+        {
+          "frame": "79f4882f28d1234580c123458f9102810600800000000000000000000000000000000000ed8c",
+          "trailer_residue": "c713",
+          "phase_count": 96,
+          "window_start_seconds": 100,
+          "decision_center_hz": 433143000
+        },
+        {
+          "frame": "79f4882f28d1234580c123458f9202810600800000000000000000000000000000000000ca81",
+          "trailer_residue": "4f03",
+          "phase_count": 96,
+          "window_start_seconds": 100,
+          "decision_center_hz": 433143000
+        },
+        {
+          "frame": "79f4882f28d1234580c123458f9082810600800000000000000000000000000000000000ba02",
+          "trailer_residue": "4f03",
+          "phase_count": 95,
+          "window_start_seconds": 100,
+          "decision_center_hz": 433143000
+        }
+      ],
+      "node_summary": {
+        "attempts_sent": 3,
+        "observed_frames": 7,
+        "matching_route_frames": 3,
+        "invalid_trailer_frames": 0,
+        "classified_response_frames": 0,
+        "classified_state_frames": 0,
+        "failure_class": "corrupt_or_foreign_matching_route_response"
+      }
+    }
+  ],
+  "interpretation": {
+    "local_control_accepted": false,
+    "result_code_3_meaning": "Unknown; negative command-result family, not an accepted idle state or an authenticated next counter.",
+    "pairing_requirement": "Unresolved: partial association, assumed counter and other command fields remain possible causes.",
+    "capture_parameters": {
+      "sample_rate_sps": 2000000,
+      "center_hz": 433700000,
+      "gain_db": 0.9
+    }
+  },
+  "diagnostic_followup": {
+    "candidate": ".18",
+    "firmware_sha256": "ff8a0632f32344450c1c661c40f611752273b3d9d8948ccb5156de2ce5938368",
+    "pairing_profile_changed": false,
+    "installed_on_test_node": true,
+    "pairing_armed": false,
+    "new_rf_control_trials": 0,
+    "scope": "Strict negative-result classification; no claim of live accepted control."
+  }
+}

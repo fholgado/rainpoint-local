@@ -1,5 +1,15 @@
 # Changelog
 
+## Integration 0.13.11
+
+- Correct the HTV145 single-zone display, including removing the legacy
+  four-zone entities from the HA registry. Preserve overall watering, battery,
+  usage, identity, and the HTV405's four real zones.
+- The gateway/firmware research changes accompanying this integration update
+  remain unreleased: corrected HTV145 command wake, close trailer and counter
+  semantics, persistent branch polarity, a strict terminal-pairing analyzer,
+  and explicit handling of the captured result-code-3 negative replies.
+
 ## 0.33.43 / Integration 0.13.10 / Firmware 0.15.7
 
 - Queue the non-actuating HTV405 close-`0` synchronization anchor until the

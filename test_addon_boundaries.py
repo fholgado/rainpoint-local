@@ -22,7 +22,9 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertIn("!rfMaintenance.transmitAllowed()", probe)
         self.assertIn("!wifiTransport.authenticated()", probe)
         self.assertIn("fields != 8", probe)
-        self.assertIn("true, 60, true", probe)
+        self.assertIn("!closeProbe, closeProbe ? 0 : 60, true", probe)
+        self.assertRegex(source, r"validHtv145DryProbeDuration\(\s*watering, durationSeconds\)")
+        self.assertIn("htv145CommandIntervalElapsed(", source)
         self.assertIn("commandMarkerInverted = marker != 0", probe)
         self.assertNotIn("counterAuthenticated = true", probe)
         self.assertIn(r'\"counter_assumed\":', source)
@@ -639,7 +641,7 @@ class AddonBoundaryTest(unittest.TestCase):
             'description.state_key == "last_usage_liters"', sensor_source
         )
         self.assertIn(
-            'f"{device_id}_last_usage"', coordinator_source
+            'unsupported_device_entity_ids(device_id, device)', coordinator_source
         )
         self.assertIn("entity_registry.async_remove", coordinator_source)
 

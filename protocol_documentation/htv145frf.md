@@ -362,22 +362,63 @@ Association branch markers are:
 Duration extension byte 21 is determined only by the packed duration value,
 not by this selector branch.
 
+Both stock opens and closes use **2,400 alternating wake symbols** (2,399
+transitions before sync), about `135.36 ms` including the frame. Candidate
+`.15` used only 1,200 symbols; its earlier silence did not test the stock wake.
+The accepted selector-6 opens use trailer residue `c713`, while closes use
+`4f03`; preserve them separately in the association profile.
+
 One logical stock command is three byte-identical RF attempts at approximately
 `0`, `0.729210`, and `1.668479` seconds. The controller waits for a matching
 response; it does not issue repeated logical opens in rapid succession.
 
-The response echoes the command sequence, and the next command advances modulo
-the five-bit field. Only a passive stock command or a matching response to a
+An accepted open response advances the command sequence modulo the five-bit
+field; an accepted close retains it. The stock sequence is open `81`, close
+`82`, open `82`, close `83`. Only a passive stock command or a matching response to a
 pending local command can synchronize or advance that counter; periodic
 telemetry cannot.
 
 Local command acceptance has not been demonstrated, so transmit is not exposed
-as supported functionality. An isolated dry-valve test after `5/6` enrollment
-sent one 60-second selector-6 open using assumed command sequence `1`. The
-SDR recovered all three exact RF attempts without clipping but observed no
-command response or later valve state. This does not prove that the missing
-terminal pairing step blocks control: the assumed counter and command waveform
-are not yet independently validated on this partial association.
+as supported functionality. Following the original `.15` trial, candidate `.16`
+sent one user-authorized 60-second open with the corrected 2,400-symbol wake and
+assumed counter `1`. SDR recovered three exact commands, with approximately
+`135.25 ms` duration and no clipping, but no matching valve response or later
+state across five investigated carriers through the nominal automatic-stop time.
+
+Two separate `.17` close-only probes used counters `1` and `0`, marker `10`,
+residue `4f03`, and the corrected wake. Each elicited three valid matching-route
+frames in node diagnostics. SDR recovered the same negative result family,
+with normalized bytes `14..18 = 50 86 83 00 4f` and the submitted sequence
+echoed at byte 13. Successful stock replies instead have `86 80` at bytes
+15--16. The exact meaning of result code `3` remains unresolved. Its
+idle-looking marker does **not** confirm a physical close or authenticate the
+next counter. Addressed `02/82 81 06` association traffic also appeared later
+on the lower carrier after the counter-0 probe.
+
+This establishes command reception and a valve-originated non-success result,
+not a supported local open/close pair or proof that step 6 is mandatory. The
+counter guesses, association state, and other command fields remain separate
+possible causes. Candidate `.18` recognizes the captured negative family,
+retains the frame in failure diagnostics, and stops its pending command without
+authenticating the counter. It changes no pairing payload, timing, or RF driver.
+
+The read-only `tools/analyze_htv145_control_iq.py` separates commands, accepted
+responses, and negative replies, including wake histograms. The pairing analyzer's
+`--require-terminal` mode additionally requires a valid terminal `2c 80 99`
+request and its matching `6c 81 80 19` reply; assignment acceptance alone cannot
+produce a successful terminal verdict. These are exchange gates, not proof of
+retained operation after a subsequent restart.
+
+For the next physical pairing operation, use the unchanged `.14` pairing path
+also present in `.18`, confirm fresh gateway authentication and a disarmed node,
+and start a bounded continuous capture at the proven reduced SDR gain before the
+user's pairing gesture. After that fresh trial, disarm and evaluate terminal
+traffic with `--require-terminal`. An unclipped repeat must precede any new
+waveform conclusion. Matching the tail with RMT and reducing jitter with FIFO
+were separate unsuccessful tests; matching **both together** remains untested.
+If the clean repeat still fails, an impossible-endpoint calibration must first
+demonstrate an actual on-air FIFO low-tail extension. Waiting after
+`TXFIFO_UNDERFLOW` cannot supply it. Preserve the accepted prefix throughout.
 
 ## Evidence and implementation
 
@@ -397,6 +438,10 @@ are not yet independently validated on this partial association.
   `research/fixtures/htv145_configuration_phy_calibration_20260903.json`
 - Command and duration evidence:
   `research/fixtures/htv145_selector6_stock_duration_commands_20260828.json`
+- Stock control wake/counter reanalysis:
+  `research/fixtures/htv145_stock_control_shape_20260905.json`
+- Partial-association corrected control and negative replies:
+  `research/fixtures/htv145_partial_pairing_control_replies_20260905.json`
 - Battery and usage evidence:
   `research/fixtures/htv145_cloud_rf_battery_usage_correlation_20260824.json`
 - Evidence ledger: [`../research/VALVE_PROTOCOL_STATUS.md`](../research/VALVE_PROTOCOL_STATUS.md)

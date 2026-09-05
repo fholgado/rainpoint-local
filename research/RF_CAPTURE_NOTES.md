@@ -958,3 +958,72 @@ The isolated serial syntax is
 Duration is fixed to 60 seconds. It requires an authenticated test node, normal
 RF mode, no active pairing or command, explicit non-default endpoints, and a
 user-approved dry-valve trial. It never auto-runs on boot or re-arms pairing.
+
+## 2026-09-05 — stock control wake correction and partial-association replies
+
+The user authorized unattended open/close trials and confirmed dry hardware.
+The latest `.14` pairing capture was reanalyzed independently: assignment and
+configuration acceptance are present, but the terminal request is absent.
+Pairing was never armed during this work. The accepted prefix and radio driver
+were unchanged across the `.16`–`.18` control/diagnostic builds.
+
+Read-only windows from the retained stock selector-6 recording exposed a
+concrete discrepancy in the prior `.15` open. Stock opens **and closes** contain
+2,400 alternating wake symbols; `.15` sent 1,200. Exact-sync phase histograms
+favored 2,400 in 155 stock-open and 85 stock-close alignments, versus 1,200 in
+252 local-open alignments. The stock recording is heavily clipped, so these
+are decoded digital/wake-count conclusions, not new analog timing acceptance.
+Accepted command/response fixtures also establish open `81`, close `82`, open
+`82`, close `83`: close retains the counter, and its selector-6 trailer residue
+is `4f03`, independently of the open's `c713`. Redacted evidence is in
+`fixtures/htv145_stock_control_shape_20260905.json`.
+
+Candidate `.16` sent one 60-second open at assumed counter 1 at 08:56:26 UTC.
+Three exact attempts began at capture seconds 55.572987, 56.303275, and
+57.243151, with durations 135.244, 135.250, and 135.242 ms and zero clipping.
+The corrected wake was verified. No matching response or later state was
+recovered across five carriers in seconds 50–150. The harness sent no early
+close because no open was authenticated.
+
+Candidate `.17` then sent one close-only probe at counter 1 at 09:03:55 UTC,
+and a separate counter-0 close at approximately 09:14:47 UTC. Both used a
+2,400-symbol wake, selector-6 marker `10`, residue `4f03`, and zero duration.
+Each node audit counted three matching-route frames with valid trailers, but
+zero classified responses. The independent SDR scan recovered `81/80 50 86
+83 00 4f ...` replies: the sequence echoes the submitted command, while result
+byte `83` differs from the successful stock family's `80`. These are evidence
+of reception and a non-success result, not physical idle or counter acceptance.
+The meaning of code 3 is unresolved. After the counter-0 reply, addressed
+`90/91/92 02/82 81 06 ...` association traffic appeared on the lower carrier.
+Further counter guesses were not justified by these two identical outcomes.
+
+Candidate `.18` recognizes only this captured negative family, emits its exact
+frame in failure diagnostics, stops the pending burst, and invalidates counter
+readiness without changing physical-state confirmation. Wrong-route, bad-CRC,
+and wrong-reservation replies cannot authenticate control. The daemon mirrors
+that separation and preserves branch polarity and the corrected close counter
+through restart. Schema 19 invalidates legacy ambiguous HTV145 counters while
+retaining unresolved reservations; it does not replay them.
+
+The MAC-identified USB test node was flashed at its existing application
+partition, preserving its saved configuration. Flash verification passed, and
+the gateway confirmed `.18` connected with pairing disarmed. Its SHA-256 is
+`ff8a0632f32344450c1c661c40f611752273b3d9d8948ccb5156de2ce5938368`.
+Both garden nodes remained connected on firmware 0.15.7. Raw captures and
+private backups remain untracked under the persistent single-zone working
+copy's `output/overnight-single-zone`; checksums and synthetic-route negative
+frames are preserved in
+`fixtures/htv145_partial_pairing_control_replies_20260905.json`.
+
+Integration 0.13.11 was locally validated and deployed after a successful full
+HA backup. `ha core check` and restart succeeded. The saved entity registry now
+contains zero phantom single-zone zone entities, retains overall watering and
+usage, and retains all four HTV405 watering/control/duration sets. The daemon
+changes were not deployed, and the HTV405 morning-sync proposal remains a
+proposal. Its rationale and experiment are in `HTV405_MORNING_SYNC_DESIGN.md`;
+active completion gates remain exclusively in `../PROJECT_ROADMAP.md`.
+
+The complete Python suite passed 410 tests (two optional NumPy tests skipped);
+the NumPy-enabled waveform suite separately passed all 11 tests. Both native
+protocol executables passed. Research `.18`, standard supervised, and
+non-control production images built and passed their binary boundary checks.
