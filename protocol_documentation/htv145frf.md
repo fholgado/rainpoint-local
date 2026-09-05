@@ -227,8 +227,9 @@ frame, carrier, 320-symbol wake, and schedule, but candidate `.10` lasted
 `31.2285 ms` versus `31.358 ms` stock. Candidate `.11` added only the proven
 `115 us` final-low hold and brought the burst to `31.3505 ms`, within `7.5 us`
 of stock. The valve nevertheless emitted the same `84/03`, `84/83`, `85/03`,
-and `85/83` retry family instead of the stock terminal `84/2c` request. Tail
-duration is therefore excluded at this boundary. The remaining measured
+and `85/83` retry family instead of the stock terminal `84/2c` request. Matching
+tail duration alone was insufficient; interactions with other waveform
+differences remain untested. The remaining measured
 discriminator is symbol-edge stability: `.11` transition-fit RMS was `3.802`
 samples versus `0.5531` stock. Two impossible-endpoint candidate `.12`
 captures recovered the exact reply and all 320 wake symbols with FIFO RMS
@@ -239,11 +240,16 @@ proved why: the CC1101 had already entered `TXFIFO_UNDERFLOW` before the driver
 delay, so increasing it to `207 us` left the on-air tail unchanged at `69 us`.
 Candidate `.14` retains the complete accepted prefix and exact FIFO waveform
 while removing that ineffective off-air delay so receive mode is restored
-immediately. Since `.11` already falsified tail length as the missing acceptance
-condition, the next discriminating observation is a controlled live `.14` trial.
+immediately. Since matching the tail alone did not restore acceptance in `.11`,
+the next discriminating observation was a controlled live `.14` trial.
 Its impossible-endpoint calibration recovered the exact frame, all 320 wake
 symbols, and transition-fit RMS `0.337` samples without clipping; the node then
-restored receive successfully.
+restored receive successfully. The first approved live `.14` trial again
+reached `5/6`, with the exact step-4 reply followed by `84/03` and `85/03`
+lower-carrier retries, not terminal `84/2c`. Its SDR recording clipped heavily,
+so decoded frame contents establish the exchange but precise analog waveform
+comparisons are inconclusive. Hardware-clocked step 4 has not yet demonstrated
+terminal acceptance. The accepted assignment/configuration prefix stays frozen.
 Evidence is in
 [`research/fixtures/htv145_fifo_configuration_acceptance_20260904.json`](../research/fixtures/htv145_fifo_configuration_acceptance_20260904.json).
 

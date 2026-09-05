@@ -811,7 +811,8 @@ capture, `captures/continuous/20260904-171403/continuous.cu8` (SHA-256
 `1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1`),
 again stopped at `5/6` and produced the same `84/03`, `84/83`, `85/03`, and
 `85/83` retry family. The local burst now measured `31.3505 ms`, within
-`7.5 us` of stock, so tail length is falsified as the missing condition.
+`7.5 us` of stock, so matching tail length alone did not restore acceptance.
+This does not exclude a tail-length interaction with another waveform defect.
 
 The largest remaining measured difference is timing stability inside the
 burst. Candidate `.11` had transition-fit RMS `3.802` samples and symbol
@@ -862,3 +863,49 @@ terminal `84/2c` request.
 Reference evidence:
 `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.
 `fixtures/htv145_fifo_configuration_acceptance_20260904.json`.
+
+### HTV145 candidate `.14` live result — 2026-09-05
+
+The approved five-minute trial was verified armed on both gateway and test
+node before the user acted, with the frozen counter-2 profile and `122759 Hz`
+frequency correction. No firmware was changed for this attempt. Receive-only
+SDR capture `captures/continuous/20260905-034351/continuous.cu8` used
+`433.7 MHz`, `2 Msps`, and `7.7 dB` gain. Its generated
+`pairing-analysis.json` covers capture seconds `60..90`.
+The completed 360-second raw capture has SHA-256
+`ae2b89002148550081b52e5fa21e22587be5269ff5a08f6775bcfd2ca9b133c1`.
+
+The recording recovered this ordered exchange (seconds from capture start):
+
+| Event | Start (s) | Result |
+| --- | ---: | --- |
+| Factory sweep counter 2 | 69.558750 | Assignment followed after 50.100 ms from request end |
+| Assignment | 69.640050 | Selector 6 / response channel 12 |
+| Addressed stage-1 request | 71.039350 | Proven prefix accepted |
+| Configuration frame, excluding long wake | 74.023600 | Exact `81/10` configuration recovered |
+| Valve configuration response | 74.278450 | Exact `81/50` recovered |
+| Addressed `83/02` request | 75.965100 | Matching reply recovered |
+| Addressed `83/83` request | 77.035250 | Step-4 FIFO reply followed |
+| Step-4 FIFO reply | 77.119600 | Exact expected frame; no terminal acceptance |
+| Valve retry `84/03` | 77.966600 | Same failure boundary |
+| Valve retry `85/03` | 80.057350 | Same failure boundary |
+
+Node progress was `5/6`, with no node failure reason and no terminal
+confirmation. The gateway and node were then disarmed; this was not an expired
+or unarmed user gesture. No valve-control command was sent.
+
+The reply inventory measured `31.294 ms` and wake transition-fit RMS
+`0.336180` samples, consistent with FIFO clocking. However, its ADC rail fraction
+was `0.491132`, unlike the clean impossible-endpoint calibration. The exact
+CRC-validated frame is useful evidence, but precise tone/deviation estimates
+from this clipped burst are not acceptance-quality measurements. This test
+does not establish that SDR clipping caused the valve to reject the reply.
+Repeat at lower receiver gain with the same firmware and RF profile; do not
+change the proven prefix or claim that separate tail-only and FIFO-only trials
+have excluded a combined waveform requirement.
+
+The reproducible terminal gate is the bounded analyzer followed by a check for
+valve-originated `84/2c` in `paired_requests`. This trial returned
+`stage_0_verdict=accepted`, `configuration_response_count=1`, and
+`terminal_request_observed=false` (gate exit status 1). A white LED flash is
+not a substitute for that terminal packet.

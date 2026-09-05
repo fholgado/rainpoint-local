@@ -161,6 +161,30 @@
     "receive_restored": true,
     "result": "calibrated for an explicitly approved live trial; terminal enrollment is not yet proven"
   },
+  "step_4_fifo_live_trial": {
+    "date": "2026-09-05",
+    "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.14",
+    "capture_path": "captures/continuous/20260905-034351/continuous.cu8",
+    "sha256": "ae2b89002148550081b52e5fa21e22587be5269ff5a08f6775bcfd2ca9b133c1",
+    "gain_db": 7.7,
+    "analysis_start_seconds": 60,
+    "analysis_duration_seconds": 30,
+    "armed_verified_before_user_gesture": true,
+    "disarmed_after_trial": true,
+    "node_progress": "5/6",
+    "configuration_accepted": true,
+    "terminal_request_observed": false,
+    "step_4_reply": "79f4882f28b42d008fb984028083c3008000000000000000000000000000000000000000221c",
+    "step_4_reply_start_seconds": 77.1196,
+    "request_end_to_reply_start_ms": 53.15,
+    "observed_lower_carrier_retry_pattern": ["840301", "850301"],
+    "burst_duration_ms": 31.294,
+    "transition_fit_rms_samples": 0.33618,
+    "adc_rail_fraction": 0.491132,
+    "adc_clipped": true,
+    "precise_analog_comparison_valid": false,
+    "result": "no terminal progression; exact frame recovered but heavily clipped SDR waveform requires an unchanged-firmware repeat at lower receiver gain"
+  },
   "identity": {
     "factory_endpoint": "342d008f",
     "paired_endpoint": "b42d008f",
@@ -221,8 +245,8 @@
       "wake_transitions": 319,
       "symbol_rate_sps": 19999.105
     },
-    "tail_discriminator_result": "falsified by candidate .11; its duration was within 7.5 us of stock without terminal progress",
-    "isolated_next_candidate": "retain the complete accepted prefix and exact FIFO waveform while removing candidate-.13's ineffective post-underflow wait; then perform the explicitly approved live FIFO-edge trial"
+    "tail_discriminator_result": "matching tail length alone was insufficient in candidate .11; an interaction with other waveform differences remains untested",
+    "isolated_next_candidate": "repeat candidate .14 unchanged at lower SDR gain after explicit approval; preserve the accepted prefix and require an unclipped recording before precise analog conclusions"
   },
-  "conclusion": "FIFO clocking is causally supported by two unchanged clean trials: candidate .10 produced the valve-originated post-configuration 81/50 request and advanced from 2/6 to 5/6 both times. Candidate .11 matched the stock step-4 burst duration within 7.5 us but still stopped at 5/6 with the same retry family, falsifying final-low tail length as the remaining cause. Two impossible-endpoint candidate-.12 captures recovered the exact frame and all 320 wake symbols while reducing transition-fit RMS from 3.802 RMT samples to 0.430--0.459 FIFO samples. Two candidate-.13 trials reduced RMS further to 0.320--0.325 samples but proved that a delay after TXFIFO_UNDERFLOW cannot extend the 69 us on-air tail. Candidate .14 removes that ineffective off-air delay; its exact frame, 320-symbol wake, 0.337-sample RMS, and successful receive restoration are calibrated for the next explicitly approved live trial. Terminal enrollment is not yet proven."
+  "conclusion": "Two unchanged clean candidate-.10 trials accepted the FIFO configuration and advanced from 2/6 to 5/6, freezing that prefix. Candidate .11 matched the stock step-4 tail without terminal progress: tail matching alone was insufficient, not proof that waveform interactions are irrelevant. Candidate-.12/.13 calibrations recovered exact FIFO frames with low jitter; a delay after TXFIFO_UNDERFLOW did not extend the RF tail. Candidate .14 removed that ineffective delay. Its first approved live trial again reached 5/6 and recovered the exact reply followed by lower-carrier retries, but its SDR waveform clipped heavily. Repeat the unchanged firmware at lower receiver gain before further analog conclusions. Terminal enrollment is not yet proven."
 }

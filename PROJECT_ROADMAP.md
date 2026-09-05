@@ -661,10 +661,19 @@ observation before it changes transmitted firmware.
       impossible-endpoint frame, all 320 wake symbols, and transition-fit RMS
       `0.337` samples without clipping. The driver observed the expected
       `TXFIFO_UNDERFLOW`, restored receive, and reported success.
-    - [ ] Exercise controlled live candidate `.14` after explicit approval.
-      The acceptance signal remains the valve's terminal `84/2c` request and
-      node progress `6/6`; repeat `.14` unchanged before declaring enrollment
-      supported. Do not arm this trial without the user present.
+    - [x] Exercise controlled live candidate `.14` after explicit approval.
+      The 2026-09-05 trial again reached `5/6`: the SDR recovered the exact
+      configuration response and step-4 reply, followed by lower-carrier
+      `84/03` and `85/03` retries rather than terminal `84/2c`. The node was
+      verified armed before the gesture and disarmed after the trial.
+      This completed the experiment, not the enrollment gate. Its step-4
+      capture clipped heavily (`adc_rail_fraction=0.491132`), so it cannot
+      establish a precise analog match to stock.
+    - [ ] Repeat `.14` with reduced SDR gain and no firmware/profile changes.
+      Establish an unclipped recording before further waveform conclusions.
+      The acceptance signal remains valve-originated terminal `84/2c` and
+      node progress `6/6`; require two unchanged successful progressions
+      before declaring enrollment supported. Ask before every arm.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
