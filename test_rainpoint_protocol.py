@@ -28,6 +28,28 @@ from rainpointd.valve_protocol import (  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_archived_htv405_selector6_capture_contains_state_reports(self):
+        fixture = json.loads((
+            ROOT / "research/fixtures/htv405_stock_selector6_control.json"
+        ).read_text())
+        cases = (
+            ("active_report", 0x4F03, {
+                "zone": 1, "is_watering": True,
+                "duration_seconds": 120, "remaining_seconds": 114,
+            }),
+            ("idle_report", 0xC713, {"zone": 0, "is_watering": False}),
+        )
+        for name, residue, expected in cases:
+            with self.subTest(report=name):
+                report = fixture[name]
+                frame = bytes.fromhex(report["frame"])
+                self.assertEqual(residue, int(report["trailer_residual"], 16))
+                self.assertEqual(residue, binascii.crc_hqx(frame[:-2], 0)
+                                 ^ int.from_bytes(frame[-2:], "big"))
+                self.assertTrue(is_htv405_link_frame(frame))
+                self.assertEqual(expected, decode_htv405_control_frame(frame))
+                self.assertIsNone(decode_htv405_gateway_command_response(frame))
+
     def test_htv145_selector2_stock_commands_have_independent_positive_responses(self):
         fixture = json.loads((ROOT / "research/fixtures/htv145_selector2_stock_pairing_control_20260905.json").read_text())
         association = fixture["association"]

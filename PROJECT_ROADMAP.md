@@ -122,6 +122,11 @@ not a gateway lifecycle mutation.
       acceptance trial.
 - [x] Complete three consecutive HA-initiated new-enrollment trials on unchanged
       final firmware.
+- [ ] Qualify the retained HTV405 RX recovery correction in firmware 0.15.13
+      during the next authorized pairing trial. Successful replies already
+      restore reception; the loop now preserves the FIFO through status
+      reporting instead of flushing a possible next request. Host validation
+      cannot prove the live timing; the HTV145 receive sequence is unchanged.
 - [x] Pair once under a generated custom controller identity and create exactly
       one capability-correct HA device.
 - [ ] Confirm HA removal clears all four zone controls, duration entities,
@@ -1471,6 +1476,12 @@ and publication/security gates are documented and enforced.
 - [ ] Clean merged branches, temporary worktrees, deployment backups, and stale
       firmware catalogs after preserving the minimum rollback artifacts and
       redacted fixtures.
+  - 2026-09-05: reconciled the original checkout's 13 pending files with the
+    single-zone history, which includes the older roadmap clone. Preserved the
+    original local patch, promoted the redacted stock report fixture, retained
+    the HA RF-platform snapshot, and documented superseded experiments in
+    [the consolidation record](research/WORKSPACE_CONSOLIDATION_20260905.md).
+    Raw captures and physical rollback artifacts remain local.
   - 2026-09-01: moved three duplicate-slug RainPoint source backups out of the
     Supervisor-scanned `/addons` directory and removed macOS AppleDouble files
     that prevented translation parsing. The contributor guide now fixes both

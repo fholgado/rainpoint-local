@@ -65,7 +65,7 @@ jobs:
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
-            /tmp/rainpoint-firmware-manifest.json --version 0.15.12 --environment rainpoint_bridge
+            /tmp/rainpoint-firmware-manifest.json --version 0.15.13 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify

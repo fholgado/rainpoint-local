@@ -1,0 +1,49 @@
+{
+  "captured_at": "2026-08-19",
+  "model": "HTV405FRF",
+  "association": {
+    "controller_endpoint": "aa110280",
+    "valve_endpoint": "a1b2c313",
+    "stock_selector_branch": 6
+  },
+  "trial": {
+    "zone": 1,
+    "requested_duration_seconds": 120,
+    "manual_stop_after_approximately_seconds": 45,
+    "stock_gateway_distance_from_sdr_feet": 5,
+    "valve_distance_from_sdr_feet": 5,
+    "capture_center_hz": 433700000,
+    "sample_rate_sps": 2000000,
+    "raw_archive": "rainpoint-htv405-stock-zone1-control-20260819.tar"
+  },
+  "interpretation": "Later crossed stock command/state captures identify both 07/86/05 frames as valve state reports on the ordinary link. Their sequences, 320-symbol wake and measured carrier are telemetry evidence, not a command counter or gateway transmit recipe. The active report decodes Zone 1, requested 120 seconds and remaining 114 seconds; idle clears the active outlet. Recomputing the original active frame gives residue 4f03, correcting the old c713 label; idle retains c713.",
+  "redaction": "RF endpoints replaced with synthetic identities and ordinary CRC trailers recomputed with the measured original residue; local Home Assistant backup identifier removed.",
+  "active_report": {
+    "capture_file": "g013_433.7M_2000k.cu8",
+    "observed_channel_center_hz": 433141727,
+    "wake_symbols": 320,
+    "sequence": 9,
+    "repeat": true,
+    "branch_marker": "86",
+    "trailer_residual": "4f03",
+    "frame": "79f4882f28aa110280a1b2c31309810786058090cf8000000040b90056bc00000000000044b5",
+    "original_note_trailer_residual": "c713",
+    "state_marker": "05"
+  },
+  "idle_report": {
+    "capture_file": "g020_433.7M_2000k.cu8",
+    "observed_channel_center_hz": 433141711,
+    "wake_symbols": 320,
+    "sequence": 10,
+    "repeat": false,
+    "branch_marker": "86",
+    "trailer_residual": "c713",
+    "frame": "79f4882f28aa110280a1b2c3130a0107860580804f8000000040800056800000000000004c2e",
+    "state_marker": "05"
+  },
+  "original_hypothesis": "The August 19 working note called these open/close commands and inferred a command counter from sequences 9 and 10.",
+  "superseding_evidence": [
+    "htv405_stock_cloud_control_matrix_20260824.json",
+    "../../protocol_documentation/htv405frf.md"
+  ]
+}

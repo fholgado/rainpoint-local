@@ -3283,6 +3283,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+    bool htv405PairingReplyRestoredReceive = false;
     bool valveProbeTransmitted = false;
     if (&radio == &primaryRadio) {
         valveProbeTransmitted = observeValveProbeFrame(
@@ -3401,6 +3402,9 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
                     );
                 }
             }
+            // A successful transmit restored RX before status reporting. The
+            // valve can already be sending its next request, so preserve it.
+            htv405PairingReplyRestoredReceive = sent;
             finishActiveValvePairingReply(sent, millis());
             reportPairingStatus(sent ? "reply_transmitted" : "transmit_failed");
         } else if (activeValvePairingCompletedSteps() > beforeStep) {
@@ -3595,10 +3599,10 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
             );
         }
     }
-    if (deferReceiveRecovery) {
-        // A successful reply already restored RX; repeating recovery here is
-        // harmless and keeps non-matching/no-reply valve frames on the normal
-        // receive path without delaying the time-critical transmit start.
+    if (deferReceiveRecovery && !htv405PairingReplyRestoredReceive) {
+        // Recover after HTV405 no-reply/failed frames. Successful HTV405 replies
+        // already restored RX; flushing again could discard the next request.
+        // Keep the separately qualified HTV145 receive sequence unchanged.
         radio.recoverReceive();
     }
     printPacket(name, frame, packet, radio);

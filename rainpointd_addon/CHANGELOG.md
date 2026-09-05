@@ -1,5 +1,13 @@
 # Changelog
 
+## Firmware 0.15.13
+
+- Preserve the RX FIFO after a successful HTV405 pairing reply; the transmit
+  driver already restored reception, and another flush can discard the next
+  request during status reporting. The HTV145 receive sequence is unchanged.
+- Consolidate the older workspace's RF-platform research and redacted HTV405
+  report capture, correcting its command interpretation and active CRC label.
+
 ## 0.34.3 / Firmware 0.15.12
 
 - Persist the accepted HTV145 selector-6 control recipe, positive command counters,
