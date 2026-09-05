@@ -444,6 +444,26 @@ the exact terminal request/reply exchange. Matching the ending and edge timing
 on an unused address does not prove terminal enrollment or control acceptance.
 The live gates are tracked in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
+The first authorized live `.21` trial on September 5 again reached `5/6` and
+the user observed a white LED. All four ordinary replies after assignment
+matched the successful stock counter-2 exchange byte for byte. The final reply
+had a `162.5 us` low-tone ending, `0.323` sample edge-fit RMS, 319 wake
+transitions, and no clipping; the calibrated ending therefore did appear on
+air during real pairing. The valve still sent `84/03`, `84/83`, `85/03`, and
+`85/83`, with no terminal request in the bounded capture. Matching the ending
+and edge stability together was insufficient in this attempt.
+
+A separate same-method comparison of channel-filtered RF envelopes measured
+`52.4745--52.5025 ms` between request RF cessation and local reply onset, versus
+`52.362--52.372 ms` stock. Across identical envelope thresholds, local was
+`112.5--131 us` later. These RF-burst gaps differ from the nominal decoded-frame
+gap used by the scheduler. The driver currently timestamps a complete RX FIFO
+when software polls it, which is a possible source of latency. This single
+comparison identifies a measurable remaining difference; it does not establish
+causation or justify an unmeasured constant timing shift. Raw capture hashes,
+redacted frames, waveform measurements, and the comparison are preserved in
+[`htv145_calibrated_tail_terminal_retry_20260905.json`](../research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json).
+
 ## Evidence and implementation
 
 - Receive decode and research command builder:

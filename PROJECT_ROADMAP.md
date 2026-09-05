@@ -693,10 +693,21 @@ observation before it changes transmitted firmware.
       `157--164 us` versus `160.5 us` stock, with `0.309--0.318` sample edge
       RMS and no clipping. Candidate `.21` applies the setting only to reply 4.
       See `research/fixtures/htv145_fifo_active_tail_calibration_20260905.json`.
-    - [ ] Test the calibrated `.21` stage-4 ending in a user-assisted pairing
-      attempt. Require the valve-originated terminal `84/2c` exchange and
-      `6/6`, then a second unchanged successful progression before claiming
-      support. Calibration alone does not establish valve acceptance.
+    - [x] Test the calibrated `.21` stage-4 ending in one user-assisted pairing
+      attempt. The September 5 trial again reached `5/6` with a white LED,
+      followed by `84/03` through `85/83` retries. The real final reply matched
+      stock bytes and measured `162.5 us` of low tone with `0.323` sample edge
+      RMS and no clipping. This proves the ending correction transferred to
+      the live exchange; matching both ending and edge stability was still
+      insufficient for terminal acceptance. The node was disarmed afterward.
+      See `research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json`.
+    - [ ] Characterize final-reply scheduling against the actual receive edge
+      before another candidate. Same-method filtered RF envelopes place `.21`
+      about `113--131 us` later than stock; the software FIFO-poll timestamp
+      is a possible contributor, not a proven cause. Preserve the accepted
+      prefix and measured ending; do not select a fixed timing correction from
+      this one observation alone. Terminal `84/2c`, `6/6`, and two unchanged
+      successful progressions remain required before claiming support.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

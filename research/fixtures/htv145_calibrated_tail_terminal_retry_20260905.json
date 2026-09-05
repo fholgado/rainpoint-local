@@ -1,0 +1,207 @@
+{
+  "date": "2026-09-05",
+  "scope": "One explicitly authorized user-assisted candidate-.21 pairing attempt after successful unused-address calibration.",
+  "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.21",
+  "redaction": "Association endpoints replaced with synthetic values; original CRC residues preserved. Node and transaction IDs omitted. Raw IQ and private diagnostics retained locally.",
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380"
+  },
+  "capture": {
+    "sha256": "53a0772513919187154f2698fc2884bc70fef7ef5f789bec0b50700b495d9d94",
+    "size_bytes": 442236928,
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9,
+    "filtered_request_analysis_window_seconds": [
+      55,
+      110.559232
+    ]
+  },
+  "operator_observation": {
+    "led": "white/success",
+    "stock_gateway": "unplugged per operator session confirmation"
+  },
+  "node_result": {
+    "maximum_completed_steps": 5,
+    "step_count": 6,
+    "stage_0_accepted": true,
+    "disarmed_after_trial": true
+  },
+  "requests": [
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000001c71",
+      "sync_seconds": 65.908123,
+      "end_seconds": 65.923323,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f830281060080000000000000000000000000000000000012c3",
+      "sync_seconds": 70.833803,
+      "end_seconds": 70.849003,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189",
+      "sync_seconds": 71.903982,
+      "end_seconds": 71.919182,
+      "crc_residue": "c713"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f8403018600800000000000000000000000000000000000081c",
+      "sync_seconds": 72.835747,
+      "end_seconds": 72.850947,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f84830186008000000000000000000000000000000000003a99",
+      "sync_seconds": 73.928215,
+      "end_seconds": 73.943415,
+      "crc_residue": "c713"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85030186008000000000000000000000000000000000006d17",
+      "sync_seconds": 74.926675,
+      "end_seconds": 74.941875,
+      "crc_residue": "4f03"
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85830186008000000000000000000000000000000000005f92",
+      "sync_seconds": 75.925485,
+      "end_seconds": 75.940685,
+      "crc_residue": "c713"
+    }
+  ],
+  "replies": [
+    {
+      "center_hz": 434351500,
+      "end_seconds": 66.0234,
+      "frame": "79f4882f28b1c2d38fa1b2c38082c1010000800000000000000000000000000000000000e3f2",
+      "phase_count": 88,
+      "start_seconds": 65.9922
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 68.90705,
+      "frame": "79f4882f28b1c2d38fa1b2c3808110010100000000000000000000000000000000000000a902",
+      "phase_count": 74,
+      "start_seconds": 68.87585
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 70.93385,
+      "frame": "79f4882f28b1c2d38fa1b2c380834287802c0105000f0000000000000000000000000000a968",
+      "phase_count": 86,
+      "start_seconds": 70.90265
+    },
+    {
+      "center_hz": 434351500,
+      "end_seconds": 72.003,
+      "frame": "79f4882f28b1c2d38fa1b2c38083c30080000000000000000000000000000000000000008d4b",
+      "phase_count": 74,
+      "start_seconds": 71.9718
+    }
+  ],
+  "configuration_response": {
+    "center_hz": 434351500,
+    "end_seconds": 69.16185,
+    "frame": "79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d",
+    "phase_count": 27,
+    "start_seconds": 69.13065
+  },
+  "final_reply_waveform": {
+    "frame_equal_to_stock": true,
+    "adc_rail_fraction": 0.0,
+    "burst_duration_ms": 31.383,
+    "channel_center_hz": 434351622,
+    "deviation_hz": 41252,
+    "wake_symbols": 320,
+    "wake_transitions": 319,
+    "symbol_rate_sps": 19983.044,
+    "transition_fit_rms_samples": 0.322758,
+    "post_frame_low_tone_us": 162.5,
+    "stock_reference_post_frame_low_tone_us": 160.5,
+    "active_fifo_delay_us": 910
+  },
+  "verdict": {
+    "terminal_request_observed": false,
+    "terminal_exchange_observed": false,
+    "enrollment_complete": false
+  },
+  "findings": [
+    "The exact final reply had a 162.5 us low-tone ending, only 2 us from stock, and 0.323 sample FIFO edge-fit RMS without clipping. This transfers the calibration to the real pairing exchange.",
+    "The valve still sent 84/03, 84/83, 85/03, and 85/83 instead of terminal 84/2c. Matching the ending and edge stability together was insufficient in this attempt.",
+    "The wideband analyzer did not recover the quiet assignment exchange and must not be used to call stage 0 rejected. Narrow-channel exact-sync/CRC decoding recovered the addressed stage-1 request; the radio independently reported stage-0 acceptance and 5/6.",
+    "Do not declare remaining analog or session differences eliminated. Preserve the accepted prefix and calibrated final ending while measuring the next discriminator before another arm.",
+    "All four recovered ordinary replies following assignment are byte-for-byte equal to the successful stock counter-2 exchange before redaction. The final response still begins roughly 0.13 ms later relative to request RF cessation; receive timestamp accuracy is a concrete next discriminator, not a confirmed cause."
+  ],
+  "remaining_reply_timing_comparison": {
+    "scope": "Offline zero-phase channel-filtered envelope comparison, same method for stock/local. This measures RF-burst gap, not nominal decoded frame gap. No schedule adjustment selected from this alone.",
+    "stock_window_original_origin_seconds": 122,
+    "results": [
+      {
+        "source": "stock",
+        "signal_to_noise_amplitude": {
+          "request": 18.003236592485,
+          "reply": 283.5627433402681
+        },
+        "measurements": [
+          {
+            "envelope_fraction": 0.1,
+            "request_rf_end_seconds": 17.592418,
+            "reply_rf_start_seconds": 17.644779999999997,
+            "gap_ms": 52.362
+          },
+          {
+            "envelope_fraction": 0.2,
+            "request_rf_end_seconds": 17.5924165,
+            "reply_rf_start_seconds": 17.644782,
+            "gap_ms": 52.3655
+          },
+          {
+            "envelope_fraction": 0.5,
+            "request_rf_end_seconds": 17.592412999999997,
+            "reply_rf_start_seconds": 17.644785,
+            "gap_ms": 52.372
+          }
+        ]
+      },
+      {
+        "source": "local",
+        "signal_to_noise_amplitude": {
+          "request": 12.713927276895182,
+          "reply": 175.4877355510007
+        },
+        "measurements": [
+          {
+            "envelope_fraction": 0.1,
+            "request_rf_end_seconds": 71.919359,
+            "reply_rf_start_seconds": 71.9718335,
+            "gap_ms": 52.4745
+          },
+          {
+            "envelope_fraction": 0.2,
+            "request_rf_end_seconds": 71.919338,
+            "reply_rf_start_seconds": 71.9718345,
+            "gap_ms": 52.4965
+          },
+          {
+            "envelope_fraction": 0.5,
+            "request_rf_end_seconds": 71.9193345,
+            "reply_rf_start_seconds": 71.971837,
+            "gap_ms": 52.5025
+          }
+        ]
+      }
+    ],
+    "local_minus_stock_gap_us": [
+      112.5,
+      131.0,
+      130.5
+    ],
+    "stock_window_sha256": "fbf1e0b0ceebbaff0e9892b0f220ec30bc142300bd7b60c8e2e286fa1e781500",
+    "interpretation": "Same-method RF envelope comparison places the local reply approximately 113--131 us later after request RF cessation. This is a measurable remaining difference, not proof of causation. The receive timestamp currently comes from a software FIFO poll; characterize its relation to the RF edge before applying a timing correction."
+  }
+}

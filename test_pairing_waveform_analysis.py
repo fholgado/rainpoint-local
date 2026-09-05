@@ -28,6 +28,23 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_stock_length_stable_final_reply_does_not_imply_terminal_pairing(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json").read_text())
+        identity = fixture["association"]
+        verdict = terminal_exchange_evidence(
+            fixture["requests"], fixture["replies"],
+            controller_endpoint=bytes.fromhex(identity["controller_endpoint"]),
+            paired_endpoint=bytes.fromhex(identity["paired_endpoint"]),
+        )
+        self.assertFalse(verdict["terminal_request_observed"])
+        self.assertFalse(verdict["terminal_exchange_observed"])
+        wave = fixture["final_reply_waveform"]
+        self.assertLessEqual(abs(wave["post_frame_low_tone_us"] -
+                                 wave["stock_reference_post_frame_low_tone_us"]), 10)
+        self.assertLess(wave["transition_fit_rms_samples"], 1)
+        self.assertEqual(0, wave["adc_rail_fraction"])
+
     def test_active_fifo_tail_calibration_preserves_frame_and_matches_stock(self):
         fixture = json.loads((Path(__file__).parent /
             "research/fixtures/htv145_fifo_active_tail_calibration_20260905.json").read_text())
