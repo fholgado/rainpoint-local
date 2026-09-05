@@ -1,0 +1,265 @@
+{
+  "date": "2026-09-05",
+  "scope": "One explicitly authorized selector-2 candidate-.2 pairing attempt. The valve rejected the initial assignment; no control command was sent.",
+  "redaction": "Synthetic association endpoints; original CRC residues preserved. Node, transaction and SDR serial identities omitted. Raw evidence retained locally.",
+  "firmware_version": "0.15.4-htv145-pairing-selector2-candidate.2",
+  "firmware": {
+    "sha256": "e122ab2dda0b54e92685f030bbbae20288ffdaf1ef14d8e62e6f14bda285fbb4",
+    "size_bytes": 981344
+  },
+  "stock_reference": "htv145_selector2_stock_pairing_control_20260905.json",
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380",
+    "accepted_factory_counter_candidate": 0,
+    "assignment_selector": 2,
+    "assigned_channel_candidate": 4
+  },
+  "capture": {
+    "sha256": "247ef1f34dfcaddd1c29b0469365322fc050742823d889e1d231a555f589c69e",
+    "size_bytes": 775684096,
+    "started_at": "2026-09-05T19:15:59.304176+00:00",
+    "finished_at": "2026-09-05T19:19:14.018767+00:00",
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9
+  },
+  "operator_observation": {
+    "reported_result": "Fail.",
+    "led_color": null,
+    "stock_gateway": "unplugged per operator confirmation"
+  },
+  "node_result": {
+    "maximum_completed_steps": 1,
+    "step_count": 6,
+    "stage_0_accepted": false,
+    "stage_0_rejected": true,
+    "disarmed_after_trial": true
+  },
+  "requests": [
+    {
+      "sync_seconds": 147.651013,
+      "frame": "79f4882f288000000031c2d38f80808402ff8f970080bf0600000000000000000000000057be",
+      "residue": "c713",
+      "phase_count": 42
+    },
+    {
+      "sync_seconds": 153.237645,
+      "frame": "79f4882f288000000031c2d38f82008402ff8f970080bf06000000000000000000000000273d",
+      "residue": "c713",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 159.237695,
+      "frame": "79f4882f288000000031c2d38f83808402ff8f970080bf0600000000000000000000000070b3",
+      "residue": "4f03",
+      "phase_count": 42
+    }
+  ],
+  "waveform_comparison": [
+    {
+      "source": "stock",
+      "assignment_frame": "79f4882f28b1c2d38fa1b2c38080c0858500827000d7eea50d0300800000000000000000fdf8",
+      "channel_center_hz": 433582307,
+      "deviation_hz": 40253,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 159.5,
+      "adc_rail_fraction": 0.0,
+      "transition_fit_rms_samples": 0.544902,
+      "filtered_request_center_hz": 433143024,
+      "reply_minus_request_center_hz": 439283,
+      "signal_to_noise_amplitude": {
+        "request": 15.453408197982398,
+        "reply": 134.1880347427896
+      },
+      "measurements": [
+        {
+          "envelope_fraction": 0.1,
+          "request_rf_end_seconds": 276.2895105,
+          "reply_rf_start_seconds": 276.335102,
+          "gap_us": 45591.5
+        },
+        {
+          "envelope_fraction": 0.2,
+          "request_rf_end_seconds": 276.2887195,
+          "reply_rf_start_seconds": 276.335104,
+          "gap_us": 46384.5
+        },
+        {
+          "envelope_fraction": 0.3,
+          "request_rf_end_seconds": 276.2887175,
+          "reply_rf_start_seconds": 276.3351055,
+          "gap_us": 46388.0
+        },
+        {
+          "envelope_fraction": 0.4,
+          "request_rf_end_seconds": 276.2887165,
+          "reply_rf_start_seconds": 276.3351065,
+          "gap_us": 46390.0
+        },
+        {
+          "envelope_fraction": 0.5,
+          "request_rf_end_seconds": 276.2887155,
+          "reply_rf_start_seconds": 276.335108,
+          "gap_us": 46392.5
+        },
+        {
+          "envelope_fraction": 0.6,
+          "request_rf_end_seconds": 276.288714,
+          "reply_rf_start_seconds": 276.3351105,
+          "gap_us": 46396.5
+        },
+        {
+          "envelope_fraction": 0.7,
+          "request_rf_end_seconds": 276.28871300000003,
+          "reply_rf_start_seconds": 276.33515850000003,
+          "gap_us": 46445.5
+        },
+        {
+          "envelope_fraction": 0.8,
+          "request_rf_end_seconds": 276.28871100000003,
+          "reply_rf_start_seconds": 276.33547,
+          "gap_us": 46759.0
+        }
+      ]
+    },
+    {
+      "source": "local",
+      "assignment_frame": "79f4882f28b1c2d38fa1b2c38080c0858500827000cdfaa50d0300800000000000000000e2bc",
+      "channel_center_hz": 433582424,
+      "deviation_hz": 41359,
+      "burst_duration_ms": 31.355,
+      "post_frame_low_tone_us": 162.0,
+      "adc_rail_fraction": 0.0,
+      "transition_fit_rms_samples": 3.595669,
+      "filtered_request_center_hz": 433142540,
+      "reply_minus_request_center_hz": 439884,
+      "signal_to_noise_amplitude": {
+        "request": 5.283134644915075,
+        "reply": 182.77971418477398
+      },
+      "measurements": [
+        {
+          "envelope_fraction": 0.1,
+          "request_rf_end_seconds": 147.667191,
+          "reply_rf_start_seconds": 147.713112,
+          "gap_us": 45921.0
+        },
+        {
+          "envelope_fraction": 0.2,
+          "request_rf_end_seconds": 147.667186,
+          "reply_rf_start_seconds": 147.7131135,
+          "gap_us": 45927.5
+        },
+        {
+          "envelope_fraction": 0.3,
+          "request_rf_end_seconds": 147.6663665,
+          "reply_rf_start_seconds": 147.713114,
+          "gap_us": 46747.5
+        },
+        {
+          "envelope_fraction": 0.4,
+          "request_rf_end_seconds": 147.666365,
+          "reply_rf_start_seconds": 147.713115,
+          "gap_us": 46750.0
+        },
+        {
+          "envelope_fraction": 0.5,
+          "request_rf_end_seconds": 147.666364,
+          "reply_rf_start_seconds": 147.7131155,
+          "gap_us": 46751.5
+        },
+        {
+          "envelope_fraction": 0.6,
+          "request_rf_end_seconds": 147.6663625,
+          "reply_rf_start_seconds": 147.713116,
+          "gap_us": 46753.5
+        },
+        {
+          "envelope_fraction": 0.7,
+          "request_rf_end_seconds": 147.666361,
+          "reply_rf_start_seconds": 147.7131165,
+          "gap_us": 46755.5
+        },
+        {
+          "envelope_fraction": 0.8,
+          "request_rf_end_seconds": 147.66636,
+          "reply_rf_start_seconds": 147.713117,
+          "gap_us": 46757.0
+        }
+      ]
+    }
+  ],
+  "reply_timing_comparison": {
+    "method": "Same zero-phase 100--125 kHz low-pass and 11-sample envelope smoothing for stock/local. RF cessation to reply onset, not decoded frame gap.",
+    "envelope_fractions": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8
+    ],
+    "local_minus_stock_gap_us": [
+      329.5,
+      -457.0,
+      359.5,
+      360.0,
+      359.0,
+      357.0,
+      310.0,
+      -2.0
+    ],
+    "usable_envelope_fractions": [
+      0.3,
+      0.4,
+      0.5,
+      0.6
+    ],
+    "usable_local_minus_stock_gap_us": [
+      359.5,
+      360.0,
+      359.0,
+      357.0
+    ],
+    "limitation": "Low thresholds are noise-contaminated; high thresholds are sensitive to the weak packet ending. The stable middle range establishes a timing difference, not its causal role in rejection."
+  },
+  "verdict": {
+    "stage_0_accepted": false,
+    "terminal_exchange_observed": false,
+    "enrollment_complete": false,
+    "control_commands_sent": 0
+  },
+  "runner_incident_before_physical_trial": {
+    "capture": {
+      "sha256": "2975c28d25f29b0d6acc866598d161610be4e66c4a548158db7fefebc0ac92dc",
+      "size_bytes": 431489024
+    },
+    "new_assignment_transmissions": 0,
+    "description": "The first arm timed out early because stale progress from another command started the 45-second tail. It received no new valve request and transmitted no assignment. The runner was fixed to require its command ID; the user explicitly authorized the rearm above."
+  },
+  "parked_followup": {
+    "version": "0.15.4-htv145-pairing-selector2-candidate.3",
+    "artifact": {
+      "sha256": "32ff40ecf181aa6adb2d5de72999124b15d9dfdbe56c23639a843a02dcf8b406",
+      "size_bytes": 981344
+    },
+    "only_protocol_change": "Initial reply delay 46550 to 46200 us (-350 us).",
+    "validation": "Research build and firmware boundaries passed; 432 Python tests passed with two optional skips; selector-2 native protocol test passed.",
+    "flashed": false,
+    "pairing_armed": false,
+    "disposition": "Source patch and binary preserved locally, source restored to candidate .2. Refocus on candidate .22 accepted prefix and final-exchange comparison."
+  },
+  "findings": [
+    "The assignment payload matches stock except live clock bytes 21 and 22, before CRC and endpoint redaction.",
+    "Assignment carrier difference relative to the valve oscillator is +601 Hz; post-frame low tone is 162 us local versus 159.5 us stock. No ADC clipping.",
+    "Filtered CRC-valid counter-2 and counter-3 factory requests follow the assignment; no addressed stage-1 continuation was recovered, and the node independently reports stage_0_rejected.",
+    "The broad decoder missed weak factory frames and produced no_assignment_trial. Its incomplete inventory must not supersede filtered CRC evidence and the node result.",
+    "The scanner covers the lower factory carrier only; it does not establish whether counter-1 traffic occurred on the other carrier.",
+    "The full clock encoding and captured assignment byte 25 remain unresolved. No evidence establishes timing as the rejection cause."
+  ]
+}

@@ -608,6 +608,38 @@ HTV405 control disabled. Selector 6 and candidate `.22` retain their existing
 payloads, carriers and timing. All variants use the one supported
 `rainpoint_bridge` environment.
 
+The first physical candidate `.2` assignment was rejected. The node transmitted
+one assignment, then observed the valve continue its factory sweep and reported
+`stage_0_rejected` at `1/6`. The operator reported "Fail."; no specific LED color
+was supplied. Filtered CRC-valid counter-2 and counter-3 requests corroborate the
+failure. The broad decoder missed those quiet requests, so its incomplete
+`no_assignment_trial` verdict is not the physical result. No valve control was
+sent, and the radio was verified disarmed afterward.
+
+Before endpoint redaction and CRC, the assignment differs from fresh stock only
+at live clock bytes 21 and 22. Relative to each recording's valve oscillator,
+the assignment carrier differs by +601 Hz. The local low-tone ending is 162 us
+versus stock 159.5 us, with no clipping. Using the same channel filter and
+envelope method, stable 30--60% thresholds put the local first reply
+357--360 us later. Lower thresholds are contaminated by noise and higher ones
+are sensitive to the weak request ending. This is a measured difference, not an
+established rejection cause; clock flags and assignment byte 25 remain uncertain.
+
+A `.3` candidate advancing only the initial software deadline by 350 us was
+built and tested, then parked without flashing or arming. Its source patch and
+binary are preserved locally; tracked firmware retains `.2`. The existing `.22`
+artifact and successful counter-2/selector-6 stock capture remain available for
+the final-exchange investigation. Priority and acceptance gates are maintained
+in the [canonical roadmap](../PROJECT_ROADMAP.md).
+
+An earlier arm in this session transmitted no assignment: stale progress from
+another command prematurely started the recorder's 45-second tail. The runner
+now scopes progress and completion to its own command ID. The user explicitly
+authorized the subsequent physical attempt described above. Both recordings,
+the redacted failed exchange, threshold sensitivity and parked-candidate state
+are recorded in
+[`htv145_selector2_assignment_rejection_20260905.json`](../research/fixtures/htv145_selector2_assignment_rejection_20260905.json).
+
 The native selector-2 regression reproduces all six stock responses (including
 the separate long configuration), consumes the valve's configuration response,
 and reaches completion only after `82 ac 80 99` / `82 ec 81 80 19`. It first

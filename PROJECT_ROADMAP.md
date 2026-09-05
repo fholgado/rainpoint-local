@@ -756,13 +756,30 @@ observation before it changes transmitted firmware.
           Production and supervised builds exclude its calibration command.
           Calibration evidence:
           `research/fixtures/htv145_selector2_candidate_calibration_20260905.json`.
-        - [ ] Run the specifically authorized matched-branch attempt with the
-          stock gateway unplugged and continuous low-gain SDR plus serial
-          diagnostics. Require the terminal exchange before the close-first,
-          one-minute dry open and early-close sequence; retain direct command
-          acknowledgments and later idle evidence. Select each command's
-          marker and counter explicitly from evidence, including the stock
-          close retaining its open counter. A white LED is not this gate.
+        - [x] Run one specifically authorized selector-2 attempt with the stock
+          gateway unplugged and continuous low-gain SDR plus serial diagnostics.
+          Candidate `.2` transmitted its assignment, then the valve continued
+          its factory sweep and the node reported `stage_0_rejected`, `1/6`.
+          The operator reported failure. No control command was sent. A prior
+          arm received no new request and ended early on stale command progress;
+          command-ID scoping was fixed before the explicitly authorized rearm.
+          The live assignment matched stock apart from clock bytes; its
+          oscillator-relative carrier differed by 601 Hz and the stable RF
+          envelope gaps were 357--360 us later. Timing is not a proven cause.
+          Evidence: `research/fixtures/htv145_selector2_assignment_rejection_20260905.json`.
+        - [ ] Prioritize the accepted counter-2/selector-6 `.22` prefix and
+          isolate its final-exchange failure using the existing successful
+          September 1 stock recording for that same branch. Preserve the
+          accepted prefix; identify a discriminating measurement before
+          selecting another RF change or requesting a new gesture. The
+          selector-2 `.3` initial-delay adjustment was built and tested, but
+          parked without flashing or arming after the user questioned this
+          detour. Its patch and binary remain local; it is not the next trial.
+        - [ ] After terminal acceptance, run the close-first, one-minute dry
+          open and early-close sequence with continuous RF/serial capture.
+          Retain direct acknowledgments and later idle evidence. Select each
+          marker and counter explicitly, including stock close retaining its
+          open counter. A white LED alone is not this gate.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
