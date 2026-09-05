@@ -36,6 +36,9 @@ struct FifoCalibrationDiagnostics {
     bool txFifoUnderflowObserved = false;
     std::uint8_t mainStateAfterStream = 0xff;
     bool receiveConfigurationRestored = false;
+    bool fifoEmptyObserved = false;
+    bool stoppedWhileTransmitting = false;
+    std::uint32_t fifoEmptyToStopUs = 0;
 };
 
 class Cc1101 {
@@ -92,7 +95,8 @@ public:
         std::uint8_t deviationRegister = 0x45,
         std::uint32_t startAtMicros = 0,
         FifoCalibrationDiagnostics* diagnostics = nullptr,
-        std::uint16_t postFrameLowHoldMicros = 0
+        std::uint16_t postFrameLowHoldMicros = 0,
+        std::uint16_t activeTailDelayUs = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
     void recoverReceive();

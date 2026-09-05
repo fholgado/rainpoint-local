@@ -1,0 +1,727 @@
+{
+  "date": "2026-09-05",
+  "scope": "Unused-address HTV145 zero-based reply-4 calibration. No enrollment or valve control attempted by these probes.",
+  "redaction": "Endpoints were synthetic on air, compiled into the calibration command. Installation and node identifiers omitted; raw IQ and private serial logs retained locally.",
+  "sample_rate_sps": 2000000,
+  "capture_center_hz": 433700000,
+  "stock_reference": {
+    "fixture": "htv145_fifo_configuration_acceptance_20260904.json",
+    "post_frame_low_tone_us": 160.5
+  },
+  "selected_active_delay_us": 910,
+  "capture_method": "Exact decoded frame locates sync; threshold-derived ending uses the same 20 ksymbol/s reference as stock. FIFO wake transitions measured independently from unfiltered IQ.",
+  "captures": [
+    {
+      "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.19",
+      "sha256": "8bb06aedf2bead52e63f4bcb97cdfa18b8957338a3bf10a9c02702f87de4c613",
+      "size_bytes": 34340864,
+      "gain_db": 0.9,
+      "power_dbm": 10,
+      "trials": [
+        {
+          "active_delay_us": 0,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.292,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmit_failed",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 78,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 22,
+            "receive_restored": true,
+            "active_tail_delay_us": 0,
+            "power_dbm": 10,
+            "fifo_empty_observed": false,
+            "stopped_while_transmitting": false,
+            "fifo_empty_to_stop_us": 0
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 69.5,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.009,
+            "symbol_duration_us": 50.042514,
+            "transition_fit_rms_samples": 0.309469,
+            "transition_fit_p95_abs_samples": 0.543427,
+            "transition_fit_p99_abs_samples": 0.656984,
+            "transition_fit_max_abs_samples": 0.733127,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310124,
+            "high_tone_hz": 434392765,
+            "channel_center_hz": 434351444,
+            "deviation_hz": 41321,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41320.719,
+              "error_hz": 60.953
+            }
+          }
+        },
+        {
+          "active_delay_us": 500,
+          "exact_frame_recovered": false,
+          "burst_duration_ms": 30.98,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 500,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 528
+          },
+          "finding": "500 us stopped too early: dominant decode ended 55c0 instead of 55c8; packet was truncated."
+        }
+      ]
+    },
+    {
+      "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.19",
+      "sha256": "2564dfdbf28929d2d240e7bc4960504a2c5c175e37d43323a50c59ea86269085",
+      "size_bytes": 34603008,
+      "gain_db": 0.9,
+      "power_dbm": 10,
+      "trials": [
+        {
+          "active_delay_us": 800,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.284,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 800,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 828
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 57.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.037,
+            "symbol_duration_us": 50.042444,
+            "transition_fit_rms_samples": 0.318596,
+            "transition_fit_p95_abs_samples": 0.57008,
+            "transition_fit_p99_abs_samples": 0.677122,
+            "transition_fit_max_abs_samples": 0.88443,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310162,
+            "high_tone_hz": 434392624,
+            "channel_center_hz": 434351393,
+            "deviation_hz": 41231,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41231.375,
+              "error_hz": -28.391
+            }
+          }
+        },
+        {
+          "active_delay_us": 800,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.674,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 800,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 824
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 51.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.037,
+            "symbol_duration_us": 50.042443,
+            "transition_fit_rms_samples": 0.309055,
+            "transition_fit_p95_abs_samples": 0.543918,
+            "transition_fit_p99_abs_samples": 0.636654,
+            "transition_fit_max_abs_samples": 0.775279,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310121,
+            "high_tone_hz": 434392728,
+            "channel_center_hz": 434351425,
+            "deviation_hz": 41303,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41303.438,
+              "error_hz": 43.672
+            }
+          }
+        }
+      ]
+    },
+    {
+      "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.20",
+      "sha256": "2167e10b33888eaa917e944c50eff2ce1a58541ab8e0cca23f02c40ec80b90e6",
+      "size_bytes": 46923776,
+      "gain_db": 0.9,
+      "power_dbm": 10,
+      "trials": [
+        {
+          "active_delay_us": 906,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.388,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 906,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 934
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 164.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.021,
+            "symbol_duration_us": 50.042484,
+            "transition_fit_rms_samples": 0.308659,
+            "transition_fit_p95_abs_samples": 0.534492,
+            "transition_fit_p99_abs_samples": 0.65005,
+            "transition_fit_max_abs_samples": 0.740544,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310318,
+            "high_tone_hz": 434392826,
+            "channel_center_hz": 434351572,
+            "deviation_hz": 41254,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41254.25,
+              "error_hz": -5.516
+            }
+          }
+        },
+        {
+          "active_delay_us": 906,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.784,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 906,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 931
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 157.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.037,
+            "symbol_duration_us": 50.042444,
+            "transition_fit_rms_samples": 0.320467,
+            "transition_fit_p95_abs_samples": 0.561822,
+            "transition_fit_p99_abs_samples": 0.714087,
+            "transition_fit_max_abs_samples": 0.886296,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310195,
+            "high_tone_hz": 434392783,
+            "channel_center_hz": 434351489,
+            "deviation_hz": 41294,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41294.062,
+              "error_hz": 34.297
+            }
+          }
+        },
+        {
+          "active_delay_us": 906,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.773,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 906,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 926
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 150.5,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.028,
+            "symbol_duration_us": 50.042466,
+            "transition_fit_rms_samples": 0.315072,
+            "transition_fit_p95_abs_samples": 0.544902,
+            "transition_fit_p99_abs_samples": 0.710569,
+            "transition_fit_max_abs_samples": 0.790054,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310295,
+            "high_tone_hz": 434392632,
+            "channel_center_hz": 434351463,
+            "deviation_hz": 41168,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41168.375,
+              "error_hz": -91.391
+            }
+          }
+        }
+      ]
+    },
+    {
+      "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.20",
+      "sha256": "1ac06f65a7d33e84d4b268f89c7b5e3dde58eab94502af4e1546acca5f33518b",
+      "size_bytes": 46923776,
+      "gain_db": 0.9,
+      "power_dbm": 10,
+      "trials": [
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.389,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 938
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 163.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.033,
+            "symbol_duration_us": 50.042454,
+            "transition_fit_rms_samples": 0.308965,
+            "transition_fit_p95_abs_samples": 0.529815,
+            "transition_fit_p99_abs_samples": 0.665488,
+            "transition_fit_max_abs_samples": 0.743425,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310367,
+            "high_tone_hz": 434392592,
+            "channel_center_hz": 434351479,
+            "deviation_hz": 41112,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41112.469,
+              "error_hz": -147.297
+            }
+          }
+        },
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.788,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 935
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 164.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.017,
+            "symbol_duration_us": 50.042494,
+            "transition_fit_rms_samples": 0.31092,
+            "transition_fit_p95_abs_samples": 0.541217,
+            "transition_fit_p99_abs_samples": 0.625697,
+            "transition_fit_max_abs_samples": 0.747833,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310487,
+            "high_tone_hz": 434392712,
+            "channel_center_hz": 434351600,
+            "deviation_hz": 41112,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41112.312,
+              "error_hz": -147.453
+            }
+          }
+        },
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.781,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 931
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 157.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.045,
+            "symbol_duration_us": 50.042423,
+            "transition_fit_rms_samples": 0.317641,
+            "transition_fit_p95_abs_samples": 0.570656,
+            "transition_fit_p99_abs_samples": 0.683841,
+            "transition_fit_max_abs_samples": 0.702613,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310304,
+            "high_tone_hz": 434392668,
+            "channel_center_hz": 434351486,
+            "deviation_hz": 41182,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41182.031,
+              "error_hz": -77.734
+            }
+          }
+        }
+      ]
+    },
+    {
+      "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.21",
+      "sha256": "eb67357cf3f75c9f4ec44dc980fe83eab1d9ae14d1a6a578ff9b48649a5c61fe",
+      "size_bytes": 46923776,
+      "gain_db": 0.9,
+      "power_dbm": 10,
+      "trials": [
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.386,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 938
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 163.5,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.069,
+            "symbol_duration_us": 50.042364,
+            "transition_fit_rms_samples": 0.309015,
+            "transition_fit_p95_abs_samples": 0.537975,
+            "transition_fit_p99_abs_samples": 0.621234,
+            "transition_fit_max_abs_samples": 0.791063,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310363,
+            "high_tone_hz": 434392647,
+            "channel_center_hz": 434351505,
+            "deviation_hz": 41142,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41141.719,
+              "error_hz": -118.047
+            }
+          }
+        },
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.79,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 935
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 163.5,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.049,
+            "symbol_duration_us": 50.042413,
+            "transition_fit_rms_samples": 0.31197,
+            "transition_fit_p95_abs_samples": 0.550303,
+            "transition_fit_p99_abs_samples": 0.627836,
+            "transition_fit_max_abs_samples": 0.768585,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310308,
+            "high_tone_hz": 434392638,
+            "channel_center_hz": 434351473,
+            "deviation_hz": 41165,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41164.906,
+              "error_hz": -94.859
+            }
+          }
+        },
+        {
+          "active_delay_us": 910,
+          "exact_frame_recovered": true,
+          "burst_duration_ms": 31.782,
+          "adc_rail_fraction": 0.0,
+          "diagnostics": {
+            "type": "htv145_fifo_step4_calibration",
+            "state": "transmitted",
+            "center_hz": 434398811,
+            "wake_symbols": 320,
+            "synthesizer_ready": true,
+            "tx_strobe_accepted": true,
+            "bytes_queued": 79,
+            "fifo_refills": 1,
+            "tx_fifo_underflow_observed": false,
+            "main_state_after_stream": 1,
+            "receive_restored": true,
+            "active_tail_delay_us": 910,
+            "power_dbm": 10,
+            "fifo_empty_observed": true,
+            "stopped_while_transmitting": true,
+            "fifo_empty_to_stop_us": 931
+          },
+          "frame": "79f4882f28deadc08ff00dca8083c300800000000000000000000000000000000000000055c8",
+          "post_frame_low_tone_us": 157.0,
+          "post_frame_tone": "low",
+          "wake": {
+            "requested_symbols": 320,
+            "recovered_transitions": 319,
+            "symbol_rate_sps": 19983.039,
+            "symbol_duration_us": 50.042439,
+            "transition_fit_rms_samples": 0.323094,
+            "transition_fit_p95_abs_samples": 0.582524,
+            "transition_fit_p99_abs_samples": 0.687611,
+            "transition_fit_max_abs_samples": 0.759811,
+            "transition_interval_min_samples": 99,
+            "transition_interval_max_samples": 101
+          },
+          "fsk": {
+            "low_tone_hz": 434310315,
+            "high_tone_hz": 434392598,
+            "channel_center_hz": 434351456,
+            "deviation_hz": 41142,
+            "closest_deviation_register": {
+              "register": 69,
+              "register_hex": "0x45",
+              "expected_hz": 41259.766,
+              "measured_hz": 41141.625,
+              "error_hz": -118.141
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "calibrated": true,
+    "terminal_pairing_proven": false,
+    "control_proven": false
+  },
+  "findings": [
+    "FIFO threshold on GDO1/MISO supplies an active timing marker; one zero byte follows the unchanged frame and SIDLE stops the RF before underflow. The 910 us value is empirically calibrated, not an assumed byte latency.",
+    "All three unchanged 910 us probes recovered the exact packet and 319 wake transitions, without clipping, with 157--164 us of final low tone and 0.309--0.318 sample edge-fit RMS.",
+    "Candidate .21 changes only the live zero-based reply-4 ending. Physical terminal enrollment still requires a new valve-originated terminal exchange.",
+    "The natural baseline recovered a complete RF frame despite transmit_failed diagnostics (MARCSTATE 0x16 after streaming); a transmitter result alone is insufficient evidence of packet integrity or valve acceptance.",
+    "The installed .21 image repeated the three 910 us probes: 157, 163.5, and 163.5 us low tone, with 0.309--0.323 sample edge-fit RMS and no clipping. This is a firmware calibration result, not a live pairing verdict."
+  ],
+  "installed_candidate": {
+    "version": "0.15.4-htv145-pairing-counter2-candidate.21",
+    "sha256": "a4819e46fa3359c2efb29dab11b9f16db80c5830586447519d60a3e947f8bf18",
+    "size_bytes": 977904,
+    "post_flash_calibration_passed": true
+  }
+}

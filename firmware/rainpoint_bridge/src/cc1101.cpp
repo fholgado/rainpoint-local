@@ -1,5 +1,6 @@
 #include "cc1101.h"
 #include "rainpoint_htv145_pairing.h"
+#include "rainpoint_fifo_calibration.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_valve_pairing.h"
 
@@ -14,6 +15,7 @@ constexpr std::uint8_t kReadBurst = 0xc0;
 constexpr std::uint8_t kReadSingle = 0x80;
 
 constexpr std::uint8_t kIocfg2 = 0x00;
+constexpr std::uint8_t kIocfg1 = 0x01;
 constexpr std::uint8_t kIocfg0 = 0x02;
 constexpr std::uint8_t kFifoThreshold = 0x03;
 constexpr std::uint8_t kSync1 = 0x04;
@@ -847,7 +849,8 @@ bool Cc1101::transmitFifoCalibration(
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
     FifoCalibrationDiagnostics* diagnostics,
-    std::uint16_t postFrameLowHoldMicros
+    std::uint16_t postFrameLowHoldMicros,
+    std::uint16_t activeTailDelayUs
 ) {
     if (diagnostics != nullptr) {
         *diagnostics = FifoCalibrationDiagnostics{};
@@ -861,6 +864,7 @@ bool Cc1101::transmitFifoCalibration(
     (void)startAtMicros;
     (void)diagnostics;
     (void)postFrameLowHoldMicros;
+    (void)activeTailDelayUs;
     ++blockedTransmitCount_;
     return false;
 #else
@@ -871,7 +875,9 @@ bool Cc1101::transmitFifoCalibration(
         centerFrequencyHz < 433'000'000 ||
         centerFrequencyHz > 435'000'000 ||
         deviationRegister != kOrdinaryDeviationRegister ||
-        postFrameLowHoldMicros > 500) {
+        postFrameLowHoldMicros > 500 ||
+        activeTailDelayUs > kMaxFifoActiveTailDelayUs ||
+        (activeTailDelayUs != 0 && postFrameLowHoldMicros != 0)) {
         ++blockedTransmitCount_;
         return false;
     }
@@ -889,6 +895,13 @@ bool Cc1101::transmitFifoCalibration(
     writeRegister(kPacketControl0, 0x02);
     writeRegister(kPacketControl1, 0x00);
     writeRegister(kIocfg0, 0x05);
+    if (activeTailDelayUs != 0) {
+        // TI Table 41: GDO1 exposes the TX FIFO threshold while CS is high.
+        // Threshold 1 falls as the final padding byte leaves the FIFO. Using
+        // MISO avoids changing the RMT/GDO0 wiring used by the frozen prefix.
+        writeRegister(kFifoThreshold, 0x4f);
+        writeRegister(kIocfg1, 0x02);
+    }
     writeRegister(kModemConfig2, 0x00);
     writeRegister(kMainStateMachine1, kTransmitMainStateMachine1);
     writeRegister(kChannelNumber, 0);
@@ -922,11 +935,8 @@ bool Cc1101::transmitFifoCalibration(
         writeRegister(kMainStateMachine0, 0x18);
     }
 
-    const std::size_t wakeBytes = wakeSymbols / 8;
-    std::vector<std::uint8_t> stream(wakeBytes + frame.size(), 0x55);
-    for (std::size_t index = 0; index < frame.size(); ++index) {
-        stream[wakeBytes + index] = frame[index];
-    }
+    std::vector<std::uint8_t> stream;
+    buildFifoCalibrationStream(frame, wakeSymbols, activeTailDelayUs, stream);
 
     strobe(kFlushTx);
     constexpr std::size_t kFifoCapacity = 64;
@@ -959,6 +969,7 @@ bool Cc1101::transmitFifoCalibration(
     }
 
     bool underflowObserved = false;
+    bool activeTailStopped = false;
     const std::uint32_t streamStartedAt = micros();
     const std::uint32_t timeoutMicros = static_cast<std::uint32_t>(
         stream.size() * 8U * kSymbolMicros + 25'000U
@@ -980,6 +991,28 @@ bool Cc1101::transmitFifoCalibration(
             break;
         }
         const std::size_t fifoBytes = rawFifoBytes & 0x7fU;
+        if (activeTailDelayUs != 0 && bytesQueued == stream.size() &&
+            fifoBytes <= 4) {
+            // Only the last few bytes use tight GPIO polling. The complete
+            // payload still comes from the radio's hardware data clock.
+            const std::uint32_t waitStartedAt = micros();
+            while (digitalRead(misoPin_) == HIGH &&
+                   micros() - waitStartedAt < 3'000) {}
+            const bool emptyObserved = digitalRead(misoPin_) == LOW;
+            const std::uint32_t emptyAt = micros();
+            if (emptyObserved) delayMicroseconds(activeTailDelayUs);
+            const std::uint8_t beforeStop = readStatus(kMainState) & 0x1f;
+            activeTailStopped = emptyObserved && beforeStop == kMainStateTx;
+            const std::uint32_t stopAt = micros();
+            const bool stopped = strobe(kIdle) != 0xff;
+            sent = activeTailStopped && stopped;
+            if (diagnostics != nullptr) {
+                diagnostics->fifoEmptyObserved = emptyObserved;
+                diagnostics->stoppedWhileTransmitting = activeTailStopped;
+                diagnostics->fifoEmptyToStopUs = stopAt - emptyAt;
+            }
+            break;
+        }
         if (bytesQueued < stream.size() && fifoBytes <= kRefillThreshold) {
             const std::size_t available = kFifoCapacity - fifoBytes;
             const std::size_t remaining = stream.size() - bytesQueued;
@@ -991,7 +1024,8 @@ bool Cc1101::transmitFifoCalibration(
         }
         delayMicroseconds(50);
     }
-    sent = sent && underflowObserved && bytesQueued == stream.size();
+    sent = sent && (activeTailDelayUs != 0 ? activeTailStopped : underflowObserved) &&
+        bytesQueued == stream.size();
     if (diagnostics != nullptr) {
         diagnostics->bytesQueued = bytesQueued;
         diagnostics->fifoRefills = fifoRefills;
@@ -1008,6 +1042,7 @@ bool Cc1101::transmitFifoCalibration(
     }
     enterIdle();
     strobe(kFlushTx);
+    if (activeTailDelayUs != 0) writeRegister(kIocfg1, 0x2e);
     const bool restored = restoreReceiveConfiguration(receiveChannel);
     if (diagnostics != nullptr) {
         diagnostics->receiveConfigurationRestored = restored;

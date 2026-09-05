@@ -28,6 +28,30 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_active_fifo_tail_calibration_preserves_frame_and_matches_stock(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_fifo_active_tail_calibration_20260905.json").read_text())
+        target = fixture["stock_reference"]["post_frame_low_tone_us"]
+        trials = [trial for capture in fixture["captures"]
+                  for trial in capture["trials"]]
+        selected = [trial for trial in trials
+                    if trial["active_delay_us"] == fixture["selected_active_delay_us"]]
+        self.assertGreaterEqual(len(selected), 3)
+        for trial in selected:
+            self.assertTrue(trial["exact_frame_recovered"])
+            self.assertEqual(0, trial["adc_rail_fraction"])
+            self.assertEqual("low", trial["post_frame_tone"])
+            self.assertLessEqual(abs(trial["post_frame_low_tone_us"] - target), 10)
+            self.assertEqual(319, trial["wake"]["recovered_transitions"])
+            self.assertLess(trial["wake"]["transition_fit_rms_samples"], 1)
+            self.assertTrue(trial["diagnostics"]["stopped_while_transmitting"])
+            self.assertTrue(trial["diagnostics"]["receive_restored"])
+        # A successful TX diagnostic is not proof of a complete RF packet.
+        truncated = next(trial for trial in trials if trial["active_delay_us"] == 500)
+        self.assertEqual("transmitted", truncated["diagnostics"]["state"])
+        self.assertFalse(truncated["exact_frame_recovered"])
+        self.assertFalse(fixture["verdict"]["terminal_pairing_proven"])
+
     def test_low_gain_live_retry_capture_is_not_terminal_enrollment(self):
         fixture = json.loads((Path(__file__).parent /
             "research/fixtures/htv145_low_gain_terminal_retry_20260905.json").read_text())

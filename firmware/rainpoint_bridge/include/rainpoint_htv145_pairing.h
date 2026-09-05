@@ -77,14 +77,18 @@ constexpr std::uint16_t kStep1PostFrameLowHoldAdjustmentUs = 115;
 // reply is byte-, carrier-, wake-, and schedule-identical to stock, but the
 // captured burst ends about 130 us earlier and the valve never emits the stock
 // final 84/2c request. Candidate .11 matched the stock total duration within
-// 7.5 us but still stopped at the same boundary, excluding tail length as the
-// cause. The constant remains part of the frozen measured profile while .12
+// 7.5 us but still stopped at the same boundary, so tail length alone was
+// insufficient. The constant remains part of the frozen profile while .12
 // isolates hardware-clocked FIFO transmission for zero-based step 4.
 constexpr std::uint16_t kStep4PostFrameLowHoldAdjustmentUs = 115;
 // FIFO underflow occurs only after the CC1101 has already stopped transmitting.
 // Candidate .13 proved that delaying in that state cannot extend the on-air
 // tail: both 207 us trials remained at 69 us. Restore receive immediately.
 constexpr std::uint16_t kStep4FifoPostFrameLowHoldAdjustmentUs = 0;
+// Three candidate-.20 unused-address captures measured 157--164 us of low
+// tone (stock 160.5 us) with stable FIFO edges. Candidate .21 applies this
+// active stop only to reply 4; the accepted earlier exchanges stay frozen.
+constexpr std::uint16_t kStep4FifoActiveTailDelayUs = 910;
 // The accepted stock counter-2 configuration frame retains its final low FSK
 // tone for about 201.5 us, while candidate .4 retained only about 78.5 us.
 // Apply the already proven stage-0 correction to the delayed configuration

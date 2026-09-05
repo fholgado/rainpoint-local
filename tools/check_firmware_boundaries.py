@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 FORBIDDEN_BENCH_COMMANDS = (
+    b"htv145_fifo_step4_calibration",
     b"pairing_arm_b",
     b"pairing_probe_b",
     b"pairing_offset_hz",

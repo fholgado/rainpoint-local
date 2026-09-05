@@ -682,11 +682,21 @@ observation before it changes transmitted firmware.
       and a `70 us` post-frame low tone versus `160.5 us` stock. Offline channel
       filtering recovered the quiet valve requests that wideband demodulation
       missed. See `research/fixtures/htv145_low_gain_terminal_retry_20260905.json`.
-    - [ ] Calibrate the stage-4 reply with both FIFO edge stability and the
+    - [x] Calibrate the stage-4 reply with both FIFO edge stability and the
       stock post-frame low-tone duration. Keep the accepted prefix unchanged;
       measure against impossible endpoints first. Extending a wait after FIFO
       underflow has already been disproven; any extension must occur while RF
       is active. Arm another valve trial only after measuring the candidate.
+      On September 5, a research-only active FIFO stop with one zero padding
+      byte and a measured `910 us` delay recovered the exact packet in three
+      unchanged unused-address trials. Their low-tone endings were
+      `157--164 us` versus `160.5 us` stock, with `0.309--0.318` sample edge
+      RMS and no clipping. Candidate `.21` applies the setting only to reply 4.
+      See `research/fixtures/htv145_fifo_active_tail_calibration_20260905.json`.
+    - [ ] Test the calibrated `.21` stage-4 ending in a user-assisted pairing
+      attempt. Require the valve-originated terminal `84/2c` exchange and
+      `6/6`, then a second unchanged successful progression before claiming
+      support. Calibration alone does not establish valve acceptance.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the

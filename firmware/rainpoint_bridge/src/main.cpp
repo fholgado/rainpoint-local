@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "cc1101.h"
+#include "rainpoint_fifo_calibration.h"
 #include "rainpoint_ack.h"
 #if RAINPOINT_HTV145_TX_CANDIDATE == 1
 #include "rainpoint_htv145_control.h"
@@ -3582,8 +3583,17 @@ bool handleHtv145Step4FifoCalibration(const String& command) {
         return false;
     }
     const String offsetValue = command.substring(prefix.length());
-    const long frequencyOffsetHz = offsetValue.toInt();
-    if (offsetValue.isEmpty() || frequencyOffsetHz < -150'000 ||
+    long frequencyOffsetHz = 0;
+    unsigned activeTailDelayUs = 0;
+    int calibrationPowerDbm = 0;
+    char extra = 0;
+    const int fields = sscanf(offsetValue.c_str(), "%ld %u %d %c",
+                              &frequencyOffsetHz, &activeTailDelayUs,
+                              &calibrationPowerDbm, &extra);
+    if (fields != 3 ||
+        activeTailDelayUs > rainpoint::kMaxFifoActiveTailDelayUs ||
+        (calibrationPowerDbm != 0 && calibrationPowerDbm != 10) ||
+        frequencyOffsetHz < -150'000 ||
         frequencyOffsetHz > 150'000 ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         emitLine(
@@ -3641,11 +3651,12 @@ bool handleHtv145Step4FifoCalibration(const String& command) {
         frame,
         static_cast<std::uint32_t>(adjustedFrequency),
         rainpoint::kPairingWakeSymbols,
-        rainpoint::pairingPaTableValue(0),
+        rainpoint::pairingPaTableValue(calibrationPowerDbm),
         rainpoint::htv145::kOrdinaryDeviationRegister,
         micros() + 20'000,
         &diagnostics,
-        rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs
+        rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs,
+        static_cast<std::uint16_t>(activeTailDelayUs)
     );
 
     String line;
@@ -3670,6 +3681,16 @@ bool handleHtv145Step4FifoCalibration(const String& command) {
     line += diagnostics.mainStateAfterStream;
     line += ",\"receive_restored\":";
     line += diagnostics.receiveConfigurationRestored ? "true" : "false";
+    line += ",\"active_tail_delay_us\":";
+    line += activeTailDelayUs;
+    line += ",\"power_dbm\":";
+    line += calibrationPowerDbm;
+    line += ",\"fifo_empty_observed\":";
+    line += diagnostics.fifoEmptyObserved ? "true" : "false";
+    line += ",\"stopped_while_transmitting\":";
+    line += diagnostics.stoppedWhileTransmitting ? "true" : "false";
+    line += ",\"fifo_empty_to_stop_us\":";
+    line += diagnostics.fifoEmptyToStopUs;
     line += "}";
     emitLine(line);
     return true;
@@ -4141,7 +4162,8 @@ void processHtv145PairingFrame(
                 packet.receivedAtMicros +
                     rainpoint::htv145::replyStartDelayUs(replyStep),
                 nullptr,
-                rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs
+                rainpoint::htv145::kStep4FifoPostFrameLowHoldAdjustmentUs,
+                rainpoint::htv145::kStep4FifoActiveTailDelayUs
             );
         } else
 #endif

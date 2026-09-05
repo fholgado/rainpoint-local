@@ -4,6 +4,7 @@
 #include <string>
 
 #include "rainpoint_protocol.h"
+#include "rainpoint_fifo_calibration.h"
 #include "rainpoint_pairing.h"
 #include "rainpoint_htv145_pairing.h"
 #include "rainpoint_valve_pairing.h"
@@ -62,6 +63,22 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    std::array<std::uint8_t, rainpoint::kFrameBytes> calibrationFrame{};
+    for (std::size_t index = 0; index < calibrationFrame.size(); ++index)
+        calibrationFrame[index] = static_cast<std::uint8_t>(index);
+    std::vector<std::uint8_t> naturalStream, activeTailStream;
+    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 0, naturalStream));
+    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 500, activeTailStream));
+    assert(naturalStream.size() == 78 && activeTailStream.size() == 79);
+    assert(std::equal(naturalStream.begin(), naturalStream.end(), activeTailStream.begin()));
+    assert(activeTailStream.back() == 0);
+    assert(std::equal(calibrationFrame.begin(), calibrationFrame.end(), naturalStream.begin() + 40));
+    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 2'400, 0, naturalStream));
+    assert(naturalStream.size() == 338);
+    assert(!rainpoint::buildFifoCalibrationStream(calibrationFrame, 319, 0, activeTailStream));
+    assert(rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 906, activeTailStream));
+    assert(activeTailStream.size() == 79 && activeTailStream.back() == 0);
+    assert(!rainpoint::buildFifoCalibrationStream(calibrationFrame, 320, 1'201, activeTailStream));
     assert(rainpoint::isHtv405NetworkCommand("valve_control_cancel_wait"));
     assert(rainpoint::isHtv405NetworkCommand("valve_control_close"));
     assert(!rainpoint::isHtv405NetworkCommand("valve_open"));

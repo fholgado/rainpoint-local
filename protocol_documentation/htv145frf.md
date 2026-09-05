@@ -409,16 +409,40 @@ request and its matching `6c 81 80 19` reply; assignment acceptance alone cannot
 produce a successful terminal verdict. These are exchange gates, not proof of
 retained operation after a subsequent restart.
 
-For the next physical pairing operation, use the unchanged `.14` pairing path
-also present in `.18`, confirm fresh gateway authentication and a disarmed node,
-and start a bounded continuous capture at the proven reduced SDR gain before the
-user's pairing gesture. After that fresh trial, disarm and evaluate terminal
-traffic with `--require-terminal`. An unclipped repeat must precede any new
-waveform conclusion. Matching the tail with RMT and reducing jitter with FIFO
-were separate unsuccessful tests; matching **both together** remains untested.
-If the clean repeat still fails, an impossible-endpoint calibration must first
-demonstrate an actual on-air FIFO low-tail extension. Waiting after
-`TXFIFO_UNDERFLOW` cannot supply it. Preserve the accepted prefix throughout.
+The September 5 reduced-gain `.18` repeat removed clipping as a limitation:
+the exact final reply still had a `70 us` ending, stable FIFO edges, and the
+same non-terminal retries. Candidate `.20` then calibrated an active FIFO stop
+against compiled unused endpoints. One zero byte follows the unchanged frame.
+The CC1101 exposes its TX FIFO threshold on GDO1/MISO while chip select is high;
+the driver selects threshold one, watches that GPIO edge, delays a bounded
+interval, verifies TX is still active, and strobes SIDLE. It restores GDO1 and
+the receive configuration afterward. This uses the existing MISO connection;
+see the [TI CC1101 datasheet, Table 41](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
+
+The initial `500 us` active delay truncated the last byte despite a successful
+TX diagnostic. At `800 us` the exact packet returned, but its ending remained
+only `51--57 us`. Three unchanged `910 us` probes recovered the exact frame and
+319 wake transitions, with `157--164 us` of low tone against `160.5 us` stock,
+`0.309--0.318` sample transition-fit RMS, no clipping, and receive restored.
+The delay is an empirical setting for this test radio; do not interpret it as
+a universal FIFO byte latency or automatically apply it to other boards.
+Measurements and capture hashes are preserved in
+[`htv145_fifo_active_tail_calibration_20260905.json`](../research/fixtures/htv145_fifo_active_tail_calibration_20260905.json).
+
+Candidate `.21` applies this active stop only to zero-based reply 4, preserving
+the accepted assignment/configuration prefix, frame bytes, and reply schedule.
+The serial-only research calibration command requires three arguments:
+`htv145_fifo_step4_calibration OFFSET_HZ ACTIVE_DELAY_US POWER_DBM`.
+Delay zero selects the natural baseline; other delays are bounded to `1200 us`,
+power is `0` or `10 dBm`, and the command refuses an armed pairing session.
+It is compiled out of production and supervised firmware.
+
+For a physical pairing trial, verify the expected firmware, fresh gateway
+authentication, and a disarmed node; start a bounded continuous capture at the
+proven reduced SDR gain before the user's gesture. Disarm afterward and require
+the exact terminal request/reply exchange. Matching the ending and edge timing
+on an unused address does not prove terminal enrollment or control acceptance.
+The live gates are tracked in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 ## Evidence and implementation
 
