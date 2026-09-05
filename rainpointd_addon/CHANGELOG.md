@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.34.2 / Integration 0.14.0 / Firmware 0.15.11
+
+- Use the existing known-idle authorization with a fresh link report for morning
+  synchronization. A link report establishes an RF opportunity without claiming
+  new physical-state evidence. The initial strict idle-report-only wait stalled
+  during a live selector-07-only interval.
+- Require explicit known-idle authorization in the bounded radio command. Any
+  watering report invalidates that attempt, and watering heard by another
+  receiver cancels the exact owner-node wait before clearing its reservation.
+
 ## Firmware 0.15.10
 
 - Route exact queued-wait cancellation through the supervised firmware command

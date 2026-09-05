@@ -888,6 +888,20 @@ class Gateway:
         except (KeyError, RuntimeError, ValueError):
             return
 
+    def _observe_htv405_state_report_locked(
+        self, *, valve_endpoint: str, watering: bool, zone: int | None, observed_at: str,
+    ) -> dict | None:
+        assert self._store is not None
+        if watering:
+            registration = next((item for item in self._store.valve_registry()
+                if item["valve_endpoint"] == valve_endpoint), None)
+            if registration is not None:
+                # Preserve the original command ID until the owner receives
+                # cancellation, even when a different receiver heard watering.
+                self._cancel_morning_sync_wait_locked(registration)
+        return self._store.observe_htv405_state_report(
+            valve_endpoint=valve_endpoint, watering=watering, zone=zone, observed_at=observed_at)
+
     def _morning_sync_registration_locked(self, device_id: str) -> dict:
         if self._store is None:
             raise RuntimeError("HTV405 storage is unavailable")
@@ -3254,7 +3268,7 @@ class Gateway:
                 zone = decoded.get("active_zone", decoded.get("zone"))
                 if not isinstance(zone, int) or isinstance(zone, bool):
                     zone = None
-                self._store.observe_htv405_state_report(
+                self._observe_htv405_state_report_locked(
                     valve_endpoint=str(decoded["rf_endpoint_b"]).lower(),
                     watering=bool(decoded["is_watering"]),
                     zone=zone,
@@ -4894,7 +4908,7 @@ class Gateway:
             if not isinstance(zone, int) or isinstance(zone, bool):
                 zone = None
             with self._lock:
-                self._store.observe_htv405_state_report(
+                self._observe_htv405_state_report_locked(
                     valve_endpoint=str(registration["valve_endpoint"]),
                     watering=watering,
                     zone=zone,

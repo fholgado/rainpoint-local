@@ -3226,6 +3226,7 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.configure_morning(now)
         self.complete_morning(now)
         self.assertTrue(self.commands[-1][1]["idle_only"])
+        self.assertTrue(self.commands[-1][1]["confirmed_idle"])
         self.assertEqual(1800, self.commands[-1][1]["wait_timeout_seconds"])
         self.assertNotIn("valve_control_open", [c[1]["type"] for c in self.commands])
         gateway = self.server.gateway
@@ -3315,6 +3316,21 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         gateway._store.update_valve_phase(valve_endpoint=self.VALVE_ENDPOINT, sequence=6, repeat=False, next_sequence=7, next_repeat=False, observed_at=(later+timedelta(minutes=2)).isoformat(), frame="idle-evidence")
         gateway.request_htv405_morning_sync(device_id=self.DEVICE_ID, now=later+timedelta(minutes=3))
         self.assertEqual("valve_control_close", self.commands[-1][1]["type"])
+
+    def test_morning_watering_on_another_receiver_cancels_radio_wait(self):
+        now = datetime(2026, 9, 5, 9, 30, tzinfo=timezone.utc)
+        self.configure_morning(now)
+        gateway = self.server.gateway
+        gateway.run_htv405_morning_sync(now=now)
+        command_id = self.commands[-1][1]["command_id"]
+        self.commands.clear()
+        gateway.observe_decoded(device_id=self.DEVICE_ID, name="Test valve", model="HTV405FRF",
+            frame="independent-watering-report", state={"rf_endpoint_b":self.VALVE_ENDPOINT,
+                "rf_node_id":self.SECOND_NODE_ID, "rf_frame_accepted":True,
+                "is_watering":True, "active_zone":2, "valve_state":"watering"},
+            observed_at=(now+timedelta(seconds=5)).isoformat())
+        self.assertEqual([(self.NODE_ID, {"type":"valve_control_cancel_wait", "command_id":command_id})], self.commands)
+        self.assertEqual("failed", gateway._store.valve_registry()[0]["control_transaction_state"])
 
     def test_morning_settings_http_authentication_and_validation(self):
         path=f"/api/v1/devices/{self.DEVICE_ID}/valve/morning-sync"

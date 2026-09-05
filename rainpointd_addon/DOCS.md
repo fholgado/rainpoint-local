@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.34.1 supports authenticated network radio nodes, receive-only USB
+Version 0.34.2 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -33,14 +33,15 @@ overwriting the last definitive zone or watering state.
 
 Integration 0.14.0 exposes a per-valve **Morning sync and direct watering** switch,
 **Morning sync starts** local time, and a **Morning sync window** of 15–120 minutes.
-Enabling requires firmware 0.15.10 with `htv405_bounded_sync_wait`; the switch is
+Enabling requires firmware 0.15.11 with `htv405_bounded_sync_wait`; the switch is
 initially off. The HA controls supply Home Assistant's configured timezone.
 Choose a window before the first scheduled watering, long enough to include a
 routine valve report. Physical daytime reception must be validated before
 using this option for unattended garden watering.
 
 During the window the gateway queues one close-0 synchronization. The radio
-transmits only on a fresh idle report and independently expires the wait. A
+uses the gateway's known-idle authorization and transmits at a fresh link report;
+it independently expires the wait. Any watering report cancels the attempt. A
 matching idle response makes **Watering readiness** Ready and records **Last
 successful sync**. Run Now then sends the bounded open immediately with the
 retained counter. An unanswered open is never automatically retried.

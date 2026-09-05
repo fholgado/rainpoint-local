@@ -301,7 +301,7 @@ class Htv405ControlCoordinator:
                     if action in {"synchronized_open", "morning_sync"}
                     else {}
                 ),
-                **({"wait_timeout_seconds": wait_seconds, "idle_only": True}
+                **({"wait_timeout_seconds": wait_seconds, "idle_only": True, "confirmed_idle": True}
                    if action == "morning_sync" else {}),
                 **(
                     {"duration_seconds": duration_seconds}

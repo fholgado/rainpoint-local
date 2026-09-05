@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-09-05",
+  "model": "HTV405FRF",
+  "scope": "Known-idle report-triggered synchronization followed by one direct one-minute Zone 1 open and valve-owned automatic idle",
+  "redaction": "Controller, companion, and valve endpoints replaced with synthetic identities; each captured CRC residue preserved by recomputing the trailer. Node and transaction identities omitted. Raw captures retained locally.",
+  "versions": {
+    "gateway": "0.34.2",
+    "integration": "0.14.0",
+    "firmware": "0.15.11"
+  },
+  "association": {
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380",
+    "valve_endpoint": "94a1b213"
+  },
+  "synchronization": {
+    "requested_at": "2026-09-05T13:02:58.949705+00:00",
+    "opportunity": {
+      "observed_at": "2026-09-05T13:06:18.430893+00:00",
+      "frame": "79f4882f28a1b2c38094a1b213098107820700804f8000000040800056800000000000002d33",
+      "trailer_residue": "c713",
+      "expected": {
+        "link_report": true,
+        "state_report": false
+      }
+    },
+    "anchor_transmitted_at": "2026-09-05T13:06:18.665597+00:00",
+    "response": {
+      "observed_at": "2026-09-05T13:06:18.957727+00:00",
+      "frame": "79f4882f28a1b2c38094a1b21300508683104f80000000408000568000000000000000007aeb",
+      "trailer_residue": "4f03",
+      "expected": {
+        "rf_control_response_sequence": 0,
+        "rf_next_control_sequence": 0,
+        "rf_control_response_zone": 1,
+        "rf_control_response_watering": false
+      }
+    },
+    "confirmed_at": "2026-09-05T13:06:18.992837+00:00"
+  },
+  "direct_open": {
+    "zone": 1,
+    "duration_seconds": 60,
+    "logical_open_count": 1,
+    "additional_sync_with_open_request": false,
+    "submitted_at": "2026-09-05T13:06:35.335836+00:00",
+    "transaction_started_at": "2026-09-05T13:06:35.458293+00:00",
+    "response": {
+      "observed_at": "2026-09-05T13:06:36.212680+00:00",
+      "frame": "79f4882f28a1b2c38094a1b21300d0868010cf80000000409e00569e00000000000000007efb",
+      "trailer_residue": "4f03",
+      "expected": {
+        "rf_control_response_sequence": 0,
+        "rf_next_control_sequence": 1,
+        "rf_control_response_zone": 1,
+        "rf_control_response_watering": true
+      }
+    },
+    "confirmed_at": "2026-09-05T13:06:36.245291+00:00",
+    "submission_to_authenticated_response_seconds": 0.909455
+  },
+  "independent_active_report": {
+    "observed_at": "2026-09-05T13:06:42.407149+00:00",
+    "frame": "79f4882f28a1b2c38094a1b2130a810782058090cf80000000409b00569e0000000000003daf",
+    "trailer_residue": "4f03",
+    "expected": {
+      "zone": 1,
+      "is_watering": true,
+      "duration_seconds": 60,
+      "remaining_seconds": 54
+    }
+  },
+  "independent_automatic_idle_report": {
+    "observed_at": "2026-09-05T13:07:37.943725+00:00",
+    "frame": "79f4882f28a1b2c38094a1b2130d0107820580804f80000000408000568000000000000058ab",
+    "trailer_residue": "c713",
+    "expected": {
+      "zone": 0,
+      "is_watering": false
+    }
+  },
+  "authenticated_open_to_independent_idle_seconds": 61.698434,
+  "findings": [
+    "A fresh selector-07 link report supplied the opportunity for a gateway-authorized known-idle close-0 anchor; the link report itself did not claim physical state.",
+    "The valve authenticated the idle anchor at counter 0, then accepted one direct 60-second open at counter 0 after the hardware command-spacing interval.",
+    "The valve response advanced the next counter to 1. Independent selector-05 telemetry reported Zone 1 active and then automatic idle without a submitted close.",
+    "This proves the initial sync/direct-open/automatic-idle path only. It does not establish retained-counter reachability after hours, measured RF waveform equivalence, or daily scheduling acceptance."
+  ]
+}

@@ -1016,9 +1016,15 @@ same time without conflicting authority.
       directly when ready. It distinguishes counter validity from an asleep
       receiver; see `research/HTV405_MORNING_SYNC_DESIGN.md`.
 - [x] Implement optional morning synchronization and direct daytime commands in
-      gateway `0.34.1`, integration `0.14.0`, and firmware `0.15.10`. Keep the
+      gateway `0.34.2`, integration `0.14.0`, and firmware `0.15.11`. Keep the
       feature disabled by default. Cover daily claims, bounded radio waits,
       restarts, missed windows, concurrent clicks, and uncertain opens in tests.
+- [x] Verify the initial known-idle synchronization, direct open, and automatic
+      stop on hardware. September 5 accepted close counter 0 at a fresh link
+      report, authenticated one direct Zone 1 one-minute open in 0.91 seconds,
+      and independently reported idle with next counter 1. The operator approved
+      this garden watering within a 15-minute total test budget; see
+      `research/fixtures/htv405_morning_sync_smoke_20260905.json`.
 - [ ] Validate that a morning-synchronized HTV405 accepts retained-counter opens
       away from report windows after 1, 4, 8, and 12 hours with a stable owner.
       Measure actual wake/repetition against stock and command latency before

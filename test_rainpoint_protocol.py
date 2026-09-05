@@ -21,10 +21,35 @@ from rainpointd.valve_protocol import (  # noqa: E402
     decode_htv145_command_response,
     decode_htv145_gateway_command,
     decode_htv145_state_report,
+    decode_htv405_control_frame,
+    decode_htv405_gateway_command_response,
+    is_htv405_link_frame,
 )
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_htv405_morning_sync_direct_open_and_automatic_idle_capture(self):
+        fixture = json.loads((
+            ROOT / "research/fixtures/htv405_morning_sync_smoke_20260905.json"
+        ).read_text())
+        opportunity = bytes.fromhex(fixture["synchronization"]["opportunity"]["frame"])
+        self.assertTrue(is_htv405_link_frame(opportunity))
+        self.assertIsNone(decode_htv405_control_frame(opportunity))
+        for name in ("synchronization", "direct_open"):
+            response = fixture[name]["response"]
+            with self.subTest(response=name):
+                raw = bytes.fromhex(response["frame"])
+                self.assertEqual(response["expected"], decode_htv405_gateway_command_response(raw))
+                corrupted = bytearray(raw)
+                corrupted[-1] ^= 1
+                self.assertIsNone(decode_htv405_gateway_command_response(bytes(corrupted)))
+        for name in ("independent_active_report", "independent_automatic_idle_report"):
+            report = fixture[name]
+            with self.subTest(report=name):
+                raw = bytes.fromhex(report["frame"])
+                self.assertEqual(report["expected"], decode_htv405_control_frame(raw))
+                self.assertIsNone(decode_htv405_gateway_command_response(raw))
+
     def test_htv145_stock_close_preserves_next_open_counter(self):
         fixture = json.loads((ROOT / "research/fixtures/htv145_selector6_stock_duration_commands_20260828.json").read_text())
         link = ValveLink(

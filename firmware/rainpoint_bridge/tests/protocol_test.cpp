@@ -66,21 +66,26 @@ int main() {
     assert(rainpoint::isHtv405NetworkCommand("valve_control_close"));
     assert(!rainpoint::isHtv405NetworkCommand("valve_open"));
     assert(!rainpoint::isHtv405NetworkCommand("valve_control_cancel_wait_extra"));
+    using SyncReport = rainpoint::Htv405SyncReport;
     rainpoint::Htv405SyncWait morningWait;
-    assert(!morningWait.claim(0, true));
-    assert(!morningWait.arm(0, 0));
-    assert(!morningWait.arm(0, 7'201));
-    assert(morningWait.arm(100, 30));
-    assert(!morningWait.claim(200, false)); // phase-only or active report
-    assert(morningWait.active());
-    assert(morningWait.claim(300, true));
-    assert(!morningWait.claim(301, true)); // single transmission
-    assert(morningWait.arm(100, 30));
+    assert(!morningWait.claim(0, SyncReport::Idle));
+    assert(!morningWait.arm(0, 30, false)); // no known-idle authorization
+    assert(!morningWait.arm(0, 0, true));
+    assert(!morningWait.arm(0, 7'201, true));
+    assert(morningWait.arm(100, 30, true));
+    assert(!morningWait.claim(150, SyncReport::None)); // no RF report yet
+    assert(morningWait.claim(200, SyncReport::LinkOnly)); // retained idle plus fresh link
+    assert(!morningWait.claim(201, SyncReport::Idle)); // one transmission
+    assert(morningWait.arm(100, 30, true));
+    assert(!morningWait.claim(200, SyncReport::Watering));
+    assert(!morningWait.claim(300, SyncReport::LinkOnly));
+    assert(!morningWait.claim(400, SyncReport::Idle)); // watering invalidates this attempt
+    assert(morningWait.arm(100, 30, true));
     assert(morningWait.expired(30'100));
-    assert(!morningWait.claim(30'100, true));
+    assert(!morningWait.claim(30'100, SyncReport::Idle));
     morningWait.cancel();
-    assert(!morningWait.claim(30'101, true));
-    assert(morningWait.arm(0xfffffff0U, 1));
+    assert(!morningWait.claim(30'101, SyncReport::LinkOnly));
+    assert(morningWait.arm(0xfffffff0U, 1, true));
     assert(!morningWait.expired(50));
     assert(morningWait.expired(984));
     rainpoint::RfMaintenanceState rfMaintenance;

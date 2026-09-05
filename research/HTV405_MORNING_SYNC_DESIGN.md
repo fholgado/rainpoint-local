@@ -1,7 +1,9 @@
 # HTV405 morning synchronization and immediate daytime commands
 
-Implemented behind a disabled-by-default per-valve setting in gateway 0.34.1,
-integration 0.14.0, and firmware 0.15.10. Physical acceptance is pending. Completion gates
+Implemented behind a disabled-by-default per-valve setting in gateway 0.34.2,
+integration 0.14.0, and firmware 0.15.11. The initial physical synchronization,
+direct open, and automatic idle succeeded; acceptance after hours remains pending.
+Completion gates
 live in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 Move the existing non-actuating close-0 synchronization into a bounded morning
@@ -103,3 +105,18 @@ This design intentionally does not add speculative periodic opens or active-run
 maintenance closes. If a single daily sync cannot sustain daytime reachability,
 the next design decision requires the stock idle/command capture evidence; it is
 not automatically a reason to increase maintenance transmission frequency.
+The September 5 live idle-report-only trial received continuing selector-07
+link reports but no new selector-05 state report, and expired without RF after
+30 minutes. Firmware 0.15.11 therefore retains the gateway's existing known-idle
+authorization and uses a fresh link report as the transmit opportunity. The
+link report never replaces physical state; any watering observation invalidates
+the attempt, including observations forwarded by another receiver. The deadline
+and exact cancellation remain independently enforced at the owner radio.
+
+The subsequent [September 5 captured exchange](fixtures/htv405_morning_sync_smoke_20260905.json)
+confirmed the revised path: close-0 authenticated at the fresh link opportunity,
+then one direct Zone 1 60-second command authenticated within 0.91 seconds of
+submission. Independent reports showed watering and automatic idle, leaving next
+counter 1. The operator explicitly authorized this wet garden test within a
+15-minute total watering budget. This initial result does not yet establish
+hours-long receiver reachability or retained-counter continuity.

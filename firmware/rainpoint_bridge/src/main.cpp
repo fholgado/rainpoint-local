@@ -1369,7 +1369,7 @@ void reportValveProbeError(const char* error) {
 bool transmitQueuedValveProbe(
     rainpoint::Cc1101& radio,
     std::uint32_t startAtMicros,
-    bool currentReportIdle = false
+    rainpoint::Htv405SyncReport syncReport = rainpoint::Htv405SyncReport::None
 ) {
     if (!valveControlProbe.ackQueued && !valveControlProbe.openQueued &&
         !valveControlProbe.closeQueued) {
@@ -1377,7 +1377,7 @@ bool transmitQueuedValveProbe(
     }
 
     if (valveControlProbe.closeQueued && valveControlProbe.syncWait.active()) {
-        if (!valveControlProbe.syncWait.claim(millis(), currentReportIdle)) {
+        if (!valveControlProbe.syncWait.claim(millis(), syncReport)) {
             return false;
         }
     }
@@ -1620,7 +1620,10 @@ bool observeValveProbeFrame(
     if (transmitQueuedValveProbe(
             radio,
             receivedAtMicros + rainpoint::kHtv405OrdinaryReplyStartDelayUs,
-            stateReport && !watering
+            stateReport
+                ? (watering ? rainpoint::Htv405SyncReport::Watering
+                            : rainpoint::Htv405SyncReport::Idle)
+                : rainpoint::Htv405SyncReport::LinkOnly
         )) {
         return true;
     }
@@ -2757,10 +2760,12 @@ void handleNetworkCommand() {
         long expectedSequence = -1;
         bool waitForReport = false;
         bool idleOnly = false;
+        bool confirmedIdle = false;
         long waitTimeoutSeconds = 0;
         jsonBoolField(command, "wait_for_report", waitForReport);
         jsonBoolField(command, "idle_only", idleOnly);
         if (idleOnly && (!waitForReport ||
+            !jsonBoolField(command, "confirmed_idle", confirmedIdle) || !confirmedIdle ||
             !jsonLongField(command, "wait_timeout_seconds", waitTimeoutSeconds) ||
             waitTimeoutSeconds < 1 || waitTimeoutSeconds > 7'200)) {
             reportNetworkCommandError(commandId, "invalid_morning_sync_wait");
@@ -2778,7 +2783,7 @@ void handleNetworkCommand() {
             return;
         }
         if (idleOnly) {
-            valveControlProbe.syncWait.arm(millis(), waitTimeoutSeconds);
+            valveControlProbe.syncWait.arm(millis(), waitTimeoutSeconds, confirmedIdle);
         }
         transmitValveProbeClose(
             static_cast<std::uint8_t>(zone), !waitForReport

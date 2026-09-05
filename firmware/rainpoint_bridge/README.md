@@ -126,7 +126,7 @@ To make the enabled profile and release version explicit in a release build:
 
 ```sh
 RAINPOINT_SUPERVISED_HTV405_CONTROL=1 \
-  RAINPOINT_FIRMWARE_VERSION=0.15.10 \
+  RAINPOINT_FIRMWARE_VERSION=0.15.11 \
   pio run --project-dir firmware/rainpoint_bridge
 ```
 
@@ -203,12 +203,14 @@ starts connecting.
 
 ## Bounded morning synchronization
 
-Firmware 0.15.10 advertises `htv405_bounded_sync_wait`; gateway 0.34.1 accepts
+Firmware 0.15.11 advertises `htv405_bounded_sync_wait`; gateway 0.34.2 accepts
 this capability during authenticated enrollment/reconnection. The supervised
 `valve_control_close` command can specify `wait_for_report`, `idle_only`, and
-`wait_timeout_seconds` (1–7200). The node then requires a fresh state-bearing
-idle report before transmitting and expires the queued wait independently of
-the gateway. The response listener may finish after the wait deadline if RF
+`wait_timeout_seconds` (1–7200), with `confirmed_idle: true` from the gateway's
+known-idle reservation. A fresh link report supplies the RF opportunity. Any
+watering report invalidates this attempt; the gateway also cancels it if another
+receiver hears watering. The node expires the wait independently of the gateway.
+The response listener may finish after the wait deadline if RF
 already transmitted within the window.
 
 `valve_control_cancel_wait` clears only the queued wait with the exact original
@@ -263,7 +265,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.10 --environment rainpoint_bridge
+  --version 0.15.11 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

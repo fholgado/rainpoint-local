@@ -17,26 +17,35 @@ inline bool isHtv405NetworkCommand(const char* type) {
     return false;
 }
 
+enum class Htv405SyncReport { None, LinkOnly, Idle, Watering };
+
 class Htv405SyncWait {
 public:
-    bool arm(std::uint32_t nowMs, std::uint32_t durationSeconds) {
-        if (durationSeconds < 1 || durationSeconds > 7'200) return false;
+    bool arm(std::uint32_t nowMs, std::uint32_t durationSeconds, bool confirmedIdle) {
+        if (!confirmedIdle || durationSeconds < 1 || durationSeconds > 7'200) return false;
         expiresAtMs_ = nowMs + durationSeconds * 1'000;
         active_ = true;
+        idleAuthorized_ = confirmedIdle;
         return true;
     }
     bool active() const { return active_; }
     bool expired(std::uint32_t nowMs) const {
         return active_ && static_cast<std::int32_t>(nowMs - expiresAtMs_) >= 0;
     }
-    bool claim(std::uint32_t nowMs, bool currentReportIdle) {
-        if (!active_ || expired(nowMs) || !currentReportIdle) return false;
+    bool claim(std::uint32_t nowMs, Htv405SyncReport report) {
+        // The authenticated gateway authorizes a known-idle attempt. A link
+        // report supplies the RF opportunity, not a new physical-state claim.
+        // Any observed watering permanently invalidates this queued attempt.
+        if (report == Htv405SyncReport::Watering) idleAuthorized_ = false;
+        if (!active_ || expired(nowMs) || !idleAuthorized_ ||
+                report == Htv405SyncReport::None) return false;
         active_ = false;
         return true;
     }
     void cancel() { active_ = false; }
 private:
     bool active_ = false;
+    bool idleAuthorized_ = false;
     std::uint32_t expiresAtMs_ = 0;
 };
 
