@@ -61,6 +61,8 @@ jobs:
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
       - name: Build the standard radio-node firmware
+        env:
+          RAINPOINT_SUPERVISED_HTV405_CONTROL: "0"
         run: >-
           pio run --project-dir firmware/rainpoint_bridge
           --environment rainpoint_bridge
@@ -119,4 +121,23 @@ jobs:
       - name: Verify the HTV145 counter-2 candidate boundary
         run: >-
           python tools/check_firmware_boundaries.py --htv145-pairing
+          firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+      - name: Build the isolated HTV145 dry-open probe
+        run: |
+          RAINPOINT_SUPERVISED_HTV405_CONTROL=0 \
+            RAINPOINT_RESEARCH_BENCH=1 \
+            RAINPOINT_HTV145_PAIRING_CANDIDATE=1 \
+            RAINPOINT_HTV145_POST_FRAME_TAIL_CANDIDATE=1 \
+            RAINPOINT_HTV145_DELAYED_PREARM_CANDIDATE=1 \
+            RAINPOINT_HTV145_FIFO_CONFIGURATION_CANDIDATE=1 \
+            RAINPOINT_HTV145_STEP4_TAIL_CANDIDATE=1 \
+            RAINPOINT_HTV145_STEP4_FIFO_CANDIDATE=1 \
+            RAINPOINT_HTV145_FACTORY_COUNTER_CANDIDATE=2 \
+            RAINPOINT_HTV145_TX_CANDIDATE=1 \
+            pio run --project-dir firmware/rainpoint_bridge \
+            --environment rainpoint_bridge
+      - name: Verify the isolated HTV145 dry-open boundary
+        run: >-
+          python tools/check_firmware_boundaries.py --htv145-pairing
+          --htv145-control
           firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

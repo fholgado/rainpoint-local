@@ -40,11 +40,13 @@ SUPERVISED_VALVE_CONTROL_COMMANDS = (
 )
 
 HTV145_PAIRING_CAPABILITIES = (b"htv145_pairing_tx_candidate",)
+HTV145_CONTROL_COMMANDS = (b"htv145_dry_open_probe", b"htv145_control_open")
 
 
 def main() -> int:
     supervised = False
     htv145_pairing = False
+    htv145_control = False
     arguments = sys.argv[1:]
     while arguments and arguments[0].startswith("--"):
         option = arguments.pop(0)
@@ -52,13 +54,15 @@ def main() -> int:
             supervised = True
         elif option == "--htv145-pairing":
             htv145_pairing = True
+        elif option == "--htv145-control":
+            htv145_control = True
         else:
             print(f"unknown option: {option}")
             return 2
     if len(arguments) != 1:
         print(
             "usage: check_firmware_boundaries.py "
-            "[--supervised] [--htv145-pairing] FIRMWARE_BIN"
+            "[--supervised] [--htv145-pairing] [--htv145-control] FIRMWARE_BIN"
         )
         return 2
     firmware = Path(arguments[0]).read_bytes()
@@ -101,6 +105,16 @@ def main() -> int:
         leaked.extend(
             value.decode()
             for value in HTV145_PAIRING_CAPABILITIES
+            if value in firmware
+        )
+    if htv145_control:
+        missing.extend(
+            value.decode() for value in HTV145_CONTROL_COMMANDS
+            if value not in firmware
+        )
+    else:
+        leaked.extend(
+            value.decode() for value in HTV145_CONTROL_COMMANDS
             if value in firmware
         )
     if leaked:

@@ -909,3 +909,52 @@ valve-originated `84/2c` in `paired_requests`. This trial returned
 `stage_0_verdict=accepted`, `configuration_response_count=1`, and
 `terminal_request_observed=false` (gate exit status 1). A white LED flash is
 not a substitute for that terminal packet.
+
+### HTV145 open after partial enrollment — 2026-09-05
+
+The user proposed testing control despite incomplete enrollment, noting that
+HTV405 does not require every stock tail stage. This is a valid independent
+acceptance test: the user confirmed dry hardware and approved one 60-second
+open, not another pairing arm or a counter sweep.
+
+Candidate `.15` preserves `.14` pairing, adds the existing research control
+builder through a serial-only bounded probe, and explicitly threads the
+selector-6 command-family marker through the runtime builder. The older runtime
+path omitted that builder parameter and defaulted to selector 5. This mismatch
+was corrected before transmission, not presented as the cause of any earlier
+physical failure. An assumed sequence stays unauthenticated unless a matching
+command response echoes it; independent state telemetry is not counter proof.
+
+The catalog and artifact were staged with a catalog backup and `.14` retained
+for rollback. The running gateway caches releases, so its OTA request rejected
+the newly staged release before transmission. Rather than restart the garden
+gateway, the MAC-verified USB test node was flashed directly. Its saved Wi-Fi
+configuration and identity remained intact; both garden radios stayed on
+`0.15.7`. Opening USB reset the test node, so the probe waited for fresh gateway
+authentication before sending anything. No valve battery cycle or pairing arm
+occurred during this test.
+
+At `08:07:18.995 UTC`, one logical open used wire sequence `81` (assumed counter
+1), selector-6 marker `90`, duration `9e 00 / 00`, and residue `c713`. The node
+sent three identical attempts and timed out after 15 seconds without a matching
+route response or watering report. SDR capture
+`captures/continuous/20260905-040616/continuous.cu8` recovered the exact frame at
+61.548566, 62.278109, and 63.217878 seconds. Unlike the preceding clipped pairing
+capture, all three command bursts had zero ADC rail fraction. The first burst
+measured `434.351461 MHz`, `41.235 kHz` deviation, `1,200` wake symbols, and
+`20,000.574 symbols/s`. Hardware timing is still a discriminator: this existing
+command path uses RMT and measured transition-fit RMS `3.596877` samples.
+
+No response or later state was decoded on the five investigated carriers during
+capture seconds `55..150`, covering the immediate response window and the
+nominal automatic-stop time. No additional open, counter guess, or close was
+sent. A negative result with an assumed counter cannot distinguish lack of
+authorization from a counter or PHY mismatch; it is not an explicit rejection.
+Source hash, exact frame, and measured results are in
+`fixtures/htv145_partial_pairing_dry_open_20260905.json`.
+
+The isolated serial syntax is
+`htv145_dry_open_probe CONTROLLER VALVE CENTER_HZ SEQUENCE_HEX RESIDUE_HEX POWER_DBM INVERT MARKER_INVERTED`.
+Duration is fixed to 60 seconds. It requires an authenticated test node, normal
+RF mode, no active pairing or command, explicit non-default endpoints, and a
+user-approved dry-valve trial. It never auto-runs on boot or re-arms pairing.

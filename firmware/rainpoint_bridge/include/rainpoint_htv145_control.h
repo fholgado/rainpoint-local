@@ -136,6 +136,30 @@ inline bool buildHtv145CloseFrame(
     return true;
 }
 
+struct Htv145ControlProfile {
+    Htv145Link link{};
+    std::uint16_t trailerResidual = 0;
+    bool commandMarkerInverted = false;
+};
+
+inline bool buildHtv145ControlFrame(
+    const Htv145ControlProfile& profile,
+    std::uint8_t sequence,
+    bool watering,
+    std::uint32_t durationSeconds,
+    std::array<std::uint8_t, kFrameBytes>& frame
+) {
+    return watering
+        ? buildHtv145OpenFrame(
+            profile.link, sequence, durationSeconds, profile.trailerResidual,
+            frame, profile.commandMarkerInverted
+        )
+        : buildHtv145CloseFrame(
+            profile.link, sequence, profile.trailerResidual, frame,
+            profile.commandMarkerInverted
+        );
+}
+
 inline bool decodeHtv145CommandResponse(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     const Htv145Link& link,

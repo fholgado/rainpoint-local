@@ -3,8 +3,8 @@
 The `HTV145FRF` is a single-zone valve with a pairing and command protocol
 distinct from the HTV405. Receive-side telemetry, duration, water usage, and
 categorical battery state are decoded. Local enrollment remains research-only:
-the valve now accepts the local association and first ordinary continuation,
-but the delayed configuration and terminal stages are not yet complete.
+the valve accepts the local association, delayed configuration, and following
+continuation through the stage-4 request. The terminal stage remains unproven.
 
 ## Identity
 
@@ -94,9 +94,10 @@ The following boundaries are physically established:
 | Boundary | Device-originated evidence | Status |
 |---|---|---|
 | Stage 0 assignment | Valve sends its addressed stage-1 request; white LED follows | Accepted in two unchanged trials; frozen |
-| Ordinary stage-1 reply | Payload, carrier, symbol rate, timing, and final low-tone hold now match stock; `.8` measured 149.5 us versus 160.5 us stock and produced no immediate stage-1 retry | Intermediate behavior reproduced, but not independently sufficient to prove acceptance |
-| Delayed stage-1a configuration | Valve must emit `81 50` and advance | Candidates `.4`--`.8` retained two completed steps but produced no `81 50`; not accepted |
-| Stages 3--5 and retained telemetry | Each next addressed request, then ordinary paired telemetry | Not yet tested locally |
+| Ordinary stage-1 reply and delayed stage-1a configuration | Valve emits `81 50`, then its addressed stage-3 request | Accepted twice unchanged with `.10`; frozen |
+| Stage-3 reply | Valve sends the addressed stage-4 request | Accepted with the frozen prefix |
+| Stage-4 reply / stage-5 terminal | Expected `84/2c` request is absent; retries follow | Not accepted; node progress remains `5/6` |
+| Retained telemetry and local control | Ordinary paired reports and matching command responses | Not established |
 
 The white LED is the most difficult and useful breakpoint: it is positive
 device-side proof that the initial association was accepted. It is not proof
@@ -370,8 +371,13 @@ the five-bit field. Only a passive stock command or a matching response to a
 pending local command can synchronize or advance that counter; periodic
 telemetry cannot.
 
-Local commands have not been accepted by the physical valve, so transmit is
-not exposed as supported functionality.
+Local command acceptance has not been demonstrated, so transmit is not exposed
+as supported functionality. An isolated dry-valve test after `5/6` enrollment
+sent one 60-second selector-6 open using assumed command sequence `1`. The
+SDR recovered all three exact RF attempts without clipping but observed no
+command response or later valve state. This does not prove that the missing
+terminal pairing step blocks control: the assumed counter and command waveform
+are not yet independently validated on this partial association.
 
 ## Evidence and implementation
 

@@ -12,6 +12,23 @@ ROOT = Path(__file__).parent
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_htv145_dry_probe_is_explicit_and_does_not_authenticate_guess(self):
+        source = (
+            ROOT / "firmware/rainpoint_bridge/src/main.cpp"
+        ).read_text()
+        probe = source.split("bool handleHtv145DryOpenProbe(", 1)[1].split(
+            "void observeHtv145CandidateFrame", 1
+        )[0]
+        self.assertIn("!rfMaintenance.transmitAllowed()", probe)
+        self.assertIn("!wifiTransport.authenticated()", probe)
+        self.assertIn("fields != 8", probe)
+        self.assertIn("true, 60, true", probe)
+        self.assertIn("commandMarkerInverted = marker != 0", probe)
+        self.assertNotIn("counterAuthenticated = true", probe)
+        self.assertIn(r'\"counter_assumed\":', source)
+        self.assertIn("counterAuthenticated = sequenceConfirmed", source)
+        self.assertIn("rainpoint::buildHtv145ControlFrame(", source)
+
     def test_ha_valve_controls_expose_and_guard_synchronized_transactions(
         self,
     ) -> None:

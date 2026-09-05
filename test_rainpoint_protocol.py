@@ -25,6 +25,29 @@ from rainpointd.valve_protocol import (  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_htv145_partial_enrollment_open_is_intent_not_confirmation(self):
+        fixture = json.loads((
+            ROOT / "research/fixtures/htv145_partial_pairing_dry_open_20260905.json"
+        ).read_text())
+        command = fixture["command"]
+        link = ValveLink(
+            bytes.fromhex(command["controller_endpoint"]),
+            bytes.fromhex(command["valve_endpoint"]),
+        )
+        frame = build_open_frame(
+            link, int(command["sequence_wire"], 16),
+            command["duration_seconds"], int(command["trailer_residue"], 16),
+            command_marker_inverted=command["command_marker_inverted"],
+        )
+        self.assertEqual(frame.hex(), command["frame"])
+        decoded = decode_htv145_gateway_command(frame, link)
+        self.assertEqual(decoded["duration_seconds"], 60)
+        self.assertIsNone(decode_htv145_command_response(frame, link))
+        self.assertIsNone(decode_htv145_state_report(frame, link))
+        self.assertFalse(command["counter_authenticated"])
+        self.assertFalse(fixture["observations"]["confirmed_open"])
+        self.assertFalse(fixture["observations"]["explicit_valve_rejection_observed"])
+
     def test_generated_controller_identity_decodes_routine_ack(self) -> None:
         frame = bytearray.fromhex(
             "79f4882f28ce6280243984028097418100010000000000000000000000000000000000005242"

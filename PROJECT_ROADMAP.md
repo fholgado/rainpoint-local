@@ -1058,6 +1058,17 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 ### HTV145
 
+- [x] Test whether the accepted `5/6` association already permits a bounded
+      open, independently of terminal enrollment. On 2026-09-05 the user
+      confirmed the valve was dry and approved one 60-second open. Candidate
+      `.15` preserves `.14` pairing and adds only an isolated serial probe.
+      It carries the selector-6 command marker into the runtime builder and
+      labels counter `1` as assumed, not authenticated. Three exact stock-style
+      attempts were recovered without clipping at `434.351461 MHz`; neither
+      node nor SDR observed a matching response or later state report. This
+      is an inconclusive authorization test, not evidence of an explicit
+      valve rejection or proof that full enrollment is required. Fixture:
+      `research/fixtures/htv145_partial_pairing_dry_open_20260905.json`.
 - [x] Capture and decode stock 300- and 900-second opens on the retained
       selector-6 association. Both received immediate valve responses; the
       duration fields are `96 00` and `c2 01`. The capture also proves the

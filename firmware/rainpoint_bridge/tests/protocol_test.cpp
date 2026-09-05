@@ -2157,6 +2157,27 @@ int main() {
         {{0xb9, 0x84, 0x02, 0x80}},
     };
     assert(rainpoint::validHtv145Link(htv145Link));
+    // The runtime profile must carry the selector-6 marker all the way to
+    // the builder; its default selector-5 marker is not interchangeable.
+    const rainpoint::Htv145ControlProfile selector6Control{
+        htv145Link, 0xc713, true
+    };
+    std::array<std::uint8_t, rainpoint::kFrameBytes> controlProfileFrame{};
+    assert(rainpoint::buildHtv145ControlFrame(
+        selector6Control, 0x81, true, 300, controlProfileFrame
+    ));
+    assert(controlProfileFrame == fromHex(
+        "79f4882f28b42d008fb984028081908280810096008000000000000000000000000000002fde"
+    ));
+    assert(rainpoint::buildHtv145ControlFrame(
+        selector6Control, 0x81, true, 60, controlProfileFrame
+    ));
+    assert(controlProfileFrame[14] == 0x90);
+    assert(controlProfileFrame[19] == 0x9e);
+    assert(controlProfileFrame[20] == 0 && controlProfileFrame[21] == 0);
+    assert(!rainpoint::buildHtv145ControlFrame(
+        selector6Control, 0x81, true, 61, controlProfileFrame
+    ));
     assert(rainpoint::kHtv145CommandWakeSymbols == 1'200);
     assert((
         rainpoint::kHtv145CommandAttemptOffsetsMs ==
