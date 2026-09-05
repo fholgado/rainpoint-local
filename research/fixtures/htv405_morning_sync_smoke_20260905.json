@@ -85,5 +85,26 @@
     "The valve authenticated the idle anchor at counter 0, then accepted one direct 60-second open at counter 0 after the hardware command-spacing interval.",
     "The valve response advanced the next counter to 1. Independent selector-05 telemetry reported Zone 1 active and then automatic idle without a submitted close.",
     "This proves the initial sync/direct-open/automatic-idle path only. It does not establish retained-counter reachability after hours, measured RF waveform equivalence, or daily scheduling acceptance."
-  ]
+  ],
+  "follow_up_observation": {
+    "scope": "Intervening Zone 4 command, not issued by the controlled test harness; origin not established by this event excerpt",
+    "zone": 4,
+    "duration_seconds": 60,
+    "transaction_started_at": "2026-09-05T14:00:58.288700+00:00",
+    "authenticated_at": "2026-09-05T14:00:59.137607+00:00",
+    "response": {
+      "observed_at": "2026-09-05T14:00:59.102129+00:00",
+      "frame": "79f4882f28a1b2c38094a1b21301d0868040cf80000000409e00569e000000000000000062c9",
+      "trailer_residue": "c713"
+    },
+    "independent_automatic_idle": {
+      "observed_at": "2026-09-05T14:02:00.922416+00:00",
+      "frame": "79f4882f28a1b2c38094a1b2130d8107820580804f8000000040800056800000000000006a2e",
+      "trailer_residue": "4f03"
+    },
+    "accepted_counter": 1,
+    "next_counter": 2,
+    "started_to_authenticated_seconds": 0.848907,
+    "controlled_trial_result": "Stopped before the scheduled 1-hour test because the intervening transaction invalidated the experiment precondition. No additional test open issued; morning mode restored off."
+  }
 }

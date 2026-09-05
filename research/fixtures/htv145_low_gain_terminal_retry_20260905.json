@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-05",
+  "scope": "One user-assisted unchanged single-zone pairing repeat with lower receiver gain; pairing transmit profile unchanged from candidate .14",
+  "firmware_version": "0.15.4-htv145-pairing-counter2-candidate.18",
+  "redaction": "All association endpoints are synthetic, with original CRC residue preserved. Node and transaction identifiers omitted. Raw IQ retained locally.",
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380"
+  },
+  "capture": {
+    "sha256": "44bd8c018778c0d8f58eec2a044cf6a9d37b387608f7daaf7b887cc534bcc1a0",
+    "size_bytes": 367263744,
+    "sample_rate_sps": 2000000,
+    "center_hz": 433700000,
+    "gain_db": 0.9
+  },
+  "operator_observation": {
+    "led": "white/success",
+    "stock_gateway": "unplugged"
+  },
+  "node_result": {
+    "maximum_completed_steps": 5,
+    "step_count": 6,
+    "stage_0_accepted": true,
+    "disarmed_after_trial": true
+  },
+  "recovery_method": {
+    "raw_wideband_decode": "Recovered gateway replies and valve configuration response; failed to recover the quieter lower-carrier requests. This initial decoder limitation must not be called a stage-0 rejection.",
+    "lower_carrier_decode": "433.143 MHz digital downconversion, 100-125 kHz low-pass transition, decimate 5, exact sync and CRC validation",
+    "validation": "Every included frame has exact sync and a valid c713 or 4f03 CRC residue. Digital filtering was offline only; waveform measurements use unfiltered IQ."
+  },
+  "requests": [
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000001c71",
+      "start_seconds": 46.934873,
+      "end_seconds": 46.966073
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f830281060080000000000000000000000000000000000012c3",
+      "start_seconds": 51.860573,
+      "end_seconds": 51.891773
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f83830186008000000000000000000000000000000000001189",
+      "start_seconds": 52.930805,
+      "end_seconds": 52.962005
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f8403018600800000000000000000000000000000000000081c",
+      "start_seconds": 53.862055,
+      "end_seconds": 53.893255
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f84830186008000000000000000000000000000000000003a99",
+      "start_seconds": 54.954357,
+      "end_seconds": 54.985557
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85030186008000000000000000000000000000000000006d17",
+      "start_seconds": 55.95252,
+      "end_seconds": 55.98372
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f85830186008000000000000000000000000000000000005f92",
+      "start_seconds": 56.951375,
+      "end_seconds": 56.982575
+    }
+  ],
+  "replies": [
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38082c1010000800000000000000000000000000000000000e3f2",
+      "start_seconds": 47.0357,
+      "end_seconds": 47.066900000000004
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808110010100000000000000000000000000000000000000a902",
+      "start_seconds": 49.91935,
+      "end_seconds": 49.95055
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c380834287802c0105000f0000000000000000000000000000a968",
+      "start_seconds": 51.94615,
+      "end_seconds": 51.97735
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38083c30080000000000000000000000000000000000000008d4b",
+      "start_seconds": 53.015299999999996,
+      "end_seconds": 53.0465
+    }
+  ],
+  "configuration_response": {
+    "frame": "79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d",
+    "start_seconds": 50.17425
+  },
+  "final_reply_waveform": {
+    "adc_rail_fraction": 0.0,
+    "burst_duration_ms": 31.2935,
+    "channel_center_hz": 434351244,
+    "deviation_hz": 41191,
+    "wake_symbols": 320,
+    "transition_fit_rms_samples": 0.315842,
+    "post_frame_low_tone_us": 70.0,
+    "stock_reference_post_frame_low_tone_us": 160.5,
+    "stock_reference_fixture": "htv145_fifo_configuration_acceptance_20260904.json"
+  },
+  "verdict": {
+    "terminal_request_observed": false,
+    "terminal_exchange_observed": false,
+    "enrollment_complete": false
+  },
+  "findings": [
+    "White LED and the accepted prefix do not prove terminal enrollment. The valve repeated 84/03, 84/83, 85/03, and 85/83 after the exact final local reply.",
+    "The reduced-gain repeat removes clipping as a limitation of this outgoing waveform measurement and confirms stable FIFO edges.",
+    "The remaining measured low-tone ending differs by 90.5 microseconds from stock. Matching that ending together with FIFO edge stability remains an untested causal discriminator."
+  ]
+}

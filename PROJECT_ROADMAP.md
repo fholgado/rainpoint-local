@@ -670,11 +670,23 @@ observation before it changes transmitted firmware.
       This completed the experiment, not the enrollment gate. Its step-4
       capture clipped heavily (`adc_rail_fraction=0.491132`), so it cannot
       establish a precise analog match to stock.
-    - [ ] Repeat `.14` with reduced SDR gain and no firmware/profile changes.
+    - [x] Repeat `.14` with reduced SDR gain and no pairing-profile changes.
       Establish an unclipped recording before further waveform conclusions.
       The acceptance signal remains valve-originated terminal `84/2c` and
       node progress `6/6`; require two unchanged successful progressions
       before declaring enrollment supported. Ask before every arm.
+      The September 5 candidate `.18` repeat preserved `.14` pairing and used
+      `0.9 dB` SDR gain. The user reported a white LED; node and recovered RF
+      still proved only `5/6`, with the same `84/03` through `85/83` retries.
+      The final reply had no clipping, FIFO transition-fit RMS `0.316` samples,
+      and a `70 us` post-frame low tone versus `160.5 us` stock. Offline channel
+      filtering recovered the quiet valve requests that wideband demodulation
+      missed. See `research/fixtures/htv145_low_gain_terminal_retry_20260905.json`.
+    - [ ] Calibrate the stage-4 reply with both FIFO edge stability and the
+      stock post-frame low-tone duration. Keep the accepted prefix unchanged;
+      measure against impossible endpoints first. Extending a wait after FIFO
+      underflow has already been disproven; any extension must occur while RF
+      is active. Arm another valve trial only after measuring the candidate.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
@@ -1030,6 +1042,13 @@ same time without conflicting authority.
       Measure actual wake/repetition against stock and command latency before
       enabling the daily schedule for garden watering. Keep current
       garden behavior until this evidence supports immediate daytime dispatch.
+      The September 5 controlled soak stopped before its first scheduled open:
+      an intervening Zone 4 one-minute direct command at 14:00:58 UTC changed
+      the retained counter. That command authenticated in `0.849 s`, advanced
+      counter `1` to `2`, and completed with independent idle evidence. It is
+      useful daytime evidence about 55 minutes after sync, but does not complete
+      the controlled interval gate. Further test opens were cancelled and
+      morning mode restored off; only the initial one-minute test was issued.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and

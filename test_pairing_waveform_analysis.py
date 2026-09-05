@@ -28,6 +28,18 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
+    def test_low_gain_live_retry_capture_is_not_terminal_enrollment(self):
+        fixture = json.loads((Path(__file__).parent /
+            "research/fixtures/htv145_low_gain_terminal_retry_20260905.json").read_text())
+        identity = fixture["association"]
+        verdict = terminal_exchange_evidence(
+            fixture["requests"], fixture["replies"],
+            controller_endpoint=bytes.fromhex(identity["controller_endpoint"]),
+            paired_endpoint=bytes.fromhex(identity["paired_endpoint"]),
+        )
+        self.assertEqual({"terminal_request_observed": False,
+                          "terminal_exchange_observed": False}, verdict)
+
     def test_partial_association_close_replies_are_errors_not_acceptance(self):
         fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_partial_pairing_control_replies_20260905.json").read_text())
         link = ValveLink(bytes.fromhex(fixture["identity"]["controller_endpoint"]),
