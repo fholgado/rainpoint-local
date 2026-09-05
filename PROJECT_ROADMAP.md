@@ -727,20 +727,25 @@ observation before it changes transmitted firmware.
         `0.310` sample edge RMS without clipping. The valve again stopped at
         `5/6` and repeated `84/03` through `85/83`; the node was disarmed.
         See `research/fixtures/htv145_receive_edge_terminal_retry_20260905.json`.
-      - [ ] Obtain a fresh stock-gateway pairing and dry watering-command capture
-        with this valve and current physical setup before further fine timing
-        or waveform changes.
-        Confirm stock still produces the terminal exchange (`84/2c` for the
-        counter-2 branch), then compare the complete current exchange against
-        `.22`. In the same recording and association, capture a 60-second
-        automatic stop, a 120-second open stopped early, and a repeated
-        60-second open stopped early. Retain command responses, state reports,
-        gateway ACKs, counter progression, and final idle confirmation using
-        [the stock pairing/control procedure](research/RF_CAPTURE_PLAN.md#htv145-stock-pairing-and-dry-control-comparison).
-        Preserve the calibrated candidate; do not infer that the remaining
-        timing difference is causal. Existing
-        evidence already favors sharp 2-FSK and the `0x45` deviation family
-        over GFSK or `0x44`.
+      - [x] Obtain a fresh stock-gateway pairing and dry watering-command capture.
+        September 5 stock pairing completed the terminal request/reply on
+        counter 0, selector 2, channel 4 (`433.4715 MHz`). Three cloud-integration
+        opens (60, 120, 60 seconds), one automatic stop, and two explicit early
+        closes succeeded. All five commands have independent positive valve
+        responses; subsequent reports and gateway ACKs are retained. HA access
+        setup required a capture rollover before controls, with the same
+        association preserved and no commands during the gap. The original
+        duration was restored, the valve confirmed idle, and custom nodes
+        remained disarmed. Fixture:
+        `research/fixtures/htv145_selector2_stock_pairing_control_20260905.json`.
+      - [ ] Align the stock/local association branch before another fine timing
+        comparison. This fresh success used selector 2/channel 4; `.22` used
+        selector 6/channel 12 and factory counter 2. Preserve the calibrated
+        candidate while identifying the smallest measured branch comparison.
+        Also account for the first stock open's `0x90` marker followed by
+        `0x10` opens in the same association; a fixed association-wide marker
+        assumption is not established. Existing evidence still favors sharp
+        2-FSK and the `0x45` deviation family over GFSK or `0x44`.
 - [x] Require explicit user approval before every RF pairing arm. Analysis,
       builds, OTA staging, and receive-only SDR capture may proceed unattended,
       but the gateway must not enter a transmit-armed pairing state until the
@@ -1207,6 +1212,9 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       confirmed stock-command evidence. Use the same-session stock pairing,
       automatic-stop, and explicit-close capture procedure linked above;
       record battery condition without assuming it has already been changed.
+      September 5 supplied positive responses for all five stock commands and
+      final idle evidence. The cloud reported 100% battery, but physical battery
+      replacement was not reconfirmed; that qualification remains open.
 - [ ] Physically accept exactly one bounded local open on its evidenced carrier,
       with an immediate response or independent active-state fallback.
 - [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware

@@ -515,6 +515,61 @@ authorized arm. The radio was verified disarmed with its persistent sensor
 ACK authorization afterward. Evidence is in
 [`htv145_receive_edge_terminal_retry_20260905.json`](../research/fixtures/htv145_receive_edge_terminal_retry_20260905.json).
 
+## Fresh stock pairing and cloud control baseline (2026-09-05)
+
+Stock pairing completed again with the current valve and radio placement. This
+attempt accepted factory counter `0`, assignment selector `2`, and response
+channel `4` near `433.4715 MHz`. The full exchange includes terminal valve
+`82/ac/80/99` and gateway `82/ec/81/80/19`. The offline analyzer now recognizes
+this captured controller-route assignment and derives its channel instead of
+misclassifying it as missing. It previously recognized assignment selectors
+5/6 only. This changes analysis, not transmitted firmware.
+
+The user authorized dry watering through the existing HA cloud integration.
+Reloading that integration restored its stale unavailable entities. One
+association then supplied these accepted transactions:
+
+| Run | Requested duration | Command counter | Result |
+|---|---:|---|---|
+| A | 60 seconds | Open `81` | Automatic stop; no explicit close sent |
+| B | 120 seconds | Open `82`, close `82` | Explicit stop before the timer expired |
+| C | 60 seconds | Open `83`, close `83` | Repeated duration and successful explicit stop |
+
+All five commands have CRC-valid direct valve responses with matching counters
+and the expected `cf` watering or `4f` idle state. The immediate response uses
+the assigned command channel. Command sync to response sync measured
+`267.280--273.178 ms`; this is not an RF-end-to-onset delay. The first open has
+two exact observed transmissions, with the response following the repeat.
+The broad decoder missed these weaker replies; narrow-channel extraction
+recovered them. An empty wideband response list alone is not rejection evidence.
+
+The later watering/idle reports use the lower carrier and receive separate
+320-symbol gateway `41/c1` acknowledgments on the assigned channel. Final
+session summaries receive `42/c2` acknowledgments. These report sequences are
+distinct from the command counter echoed in the immediate response. Opens
+advanced command counters while both explicit closes retained them. Open/close
+wakes again fit the 2,400-symbol form.
+
+The first open used marker `90` and the later opens used `10` without another
+pairing in between. Preserve both observations; they do not justify treating
+marker polarity as a fixed property of the association. No local pairing or
+control candidate was changed or armed from this observation.
+
+Cloud access setup required a recorder rollover before any watering command.
+The complete pairing and complete control sequence therefore occupy two raw
+files with the same association, with no command during the gap. Explicit
+close command syncs occurred `49.397` and `36.762` seconds after their respective
+open command syncs; these actual timings supersede the planned approximate
+30/20-second UI targets. The cloud duration was restored to its original value,
+the valve reported idle, and all custom nodes were connected/disarmed afterward.
+
+This confirms a current successful stock baseline. It does not establish why
+local `.22` stops at 5/6: that candidate used counter 2, selector 6, and channel
+12. Compare consistent association branches before inferring a timing cause.
+The redacted transcript, both raw hashes, five positive responses, reports,
+and report acknowledgments are retained in
+[`htv145_selector2_stock_pairing_control_20260905.json`](../research/fixtures/htv145_selector2_stock_pairing_control_20260905.json).
+
 ## Evidence and implementation
 
 - Receive decode and research command builder:

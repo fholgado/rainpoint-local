@@ -185,12 +185,13 @@ def _assignment_matches(
     companion_endpoint: bytes,
     controller_endpoint: bytes,
 ) -> bool:
-    """Match either complete stock HTV145 assignment branch.
+    """Match the captured stock HTV145 assignment branches.
 
     Counter-0 selector-5 enrollment addresses the companion endpoint. The
     accepted counter-2 selector-6 branch addresses the controller route
     directly. Requiring the counter, selector, and endpoint from only the
-    first capture made the second accepted exchange invisible.
+    first capture made the second accepted exchange invisible. The September 5
+    selector-2 capture also addresses the controller route directly.
     """
     try:
         frame = bytes.fromhex(frame_hex)
@@ -204,7 +205,8 @@ def _assignment_matches(
         and frame[13] & 0x80
         and frame[14] & 0x7F == 0x40
         and frame[15:17] == bytes.fromhex("8585")
-        and frame[18] & 0x7F in {0x05, 0x06}
+        and frame[18] & 0x7F in {0x02, 0x05, 0x06}
+        and (frame[18] & 0x7F != 0x02 or frame[9:13] == controller_endpoint)
         and frame[19] & 0x70 == 0x70
         and frame[20] == 0x00
         and (
@@ -253,7 +255,7 @@ def _assigned_response_channel(
     *,
     controller_endpoint: bytes,
 ) -> tuple[int, int] | None:
-    """Decode the selector-6 continuation subchannel from an assignment."""
+    """Decode the captured selector-2/6 controller-route subchannels."""
     try:
         frame = bytes.fromhex(frame_hex)
     except ValueError:
@@ -261,7 +263,7 @@ def _assigned_response_channel(
     if (
         len(frame) != 38
         or frame[9:13] != controller_endpoint
-        or frame[18] & 0x7F != 0x06
+        or frame[18] & 0x7F not in {0x02, 0x06}
     ):
         return None
     channel = 2 * (frame[18] & 0x7F) + bool(frame[19] & 0x80)

@@ -116,8 +116,11 @@ the single-zone test valve is dry.
    their own transcripts rather than imposing counter-2 bytes.
    A white LED alone is insufficient. If terminal evidence is missing, retain
    the attempt for diagnosis and defer the control sequence.
-4. After terminal enrollment and an idle baseline, use only the stock app to
-   issue the following actions on the single-zone test valve. Keep the same
+4. After terminal enrollment and an idle baseline, use the stock app or the
+   existing HA HomGar/RainPoint Cloud integration to command the stock gateway.
+   For HA, verify the device is HTV145FRF, confirm the duration unit, and save
+   the original duration setting before changing it. Issue the following
+   actions on the single-zone test valve. Keep the same
    association throughout, with at least 30 seconds of confirmed idle between
    runs. Record actual action times rather than assuming the planned spacing.
 
@@ -134,6 +137,7 @@ the single-zone test valve is dry.
 5. Continue recording for at least 60 seconds after the last confirmed stop.
    Retain any delayed reports, gateway acknowledgments, and retries. Verify
    the valve is idle and custom pairing/control remains disarmed when done.
+   Restore the original HA duration setting if it was changed for the trial.
 6. Decode both RF directions using endpoints and carriers from this fresh
    association. For each action retain exact frame bytes and CRC/residue,
    wake length, request/response timing, retries, command counter, duration,

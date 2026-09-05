@@ -1,0 +1,589 @@
+{
+  "model": "HTV145FRF",
+  "capture_date": "2026-09-05",
+  "scope": "Stock gateway baseline on dry single-zone hardware; no local control acceptance is claimed.",
+  "redaction": "Consistent synthetic RF endpoints; original CRC residues preserved.",
+  "captures": {
+    "pairing": {
+      "sha256": "87cbedafedd64823a098956f42e9654649eb5457d653c15afa17ce92c2d4ce29",
+      "bytes": 3299082240,
+      "duration_seconds": 824.77056,
+      "sample_rate_sps": 2000000,
+      "center_hz": 433700000,
+      "gain_db": 0.9,
+      "stop": "operator-owned recorder stopped after required evidence; original 900-second cap not exhausted"
+    },
+    "controls": {
+      "sha256": "cddecbec166309e183e6a44502c11c37c3e8513a62abdf90f19b81c48b161ebd",
+      "bytes": 2261254144,
+      "duration_seconds": 565.313536,
+      "sample_rate_sps": 2000000,
+      "center_hz": 433700000,
+      "gain_db": 0.9,
+      "stop": "operator-owned recorder stopped after required evidence; original 900-second cap not exhausted"
+    }
+  },
+  "association": {
+    "factory_endpoint": "31c2d38f",
+    "paired_endpoint": "b1c2d38f",
+    "controller_endpoint": "a1b2c380",
+    "companion_endpoint": "21b2c380",
+    "factory_counter": 0,
+    "assignment_selector": 2,
+    "assigned_response_channel": 4,
+    "assigned_response_center_hz": 433471500
+  },
+  "pairing": {
+    "terminal_request_observed": true,
+    "terminal_exchange_observed": true,
+    "frames": [
+      {
+        "frame": "79f4882f288000000031c2d38f80808402ff8f970080bf0600000000000000000000000057be",
+        "center_hz": 433143000,
+        "sync_seconds": 276.2733,
+        "wake_symbols": 320,
+        "role": "factory_requests"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c38080c0858500827000d7eea50d0300800000000000000000fdf8",
+        "center_hz": 433581500,
+        "sync_seconds": 276.3510995,
+        "wake_symbols": 320,
+        "role": "assignment"
+      },
+      {
+        "frame": "79f4882f28a1b2c380b1c2d38f810107822580804f8000000040800056800000000000005725",
+        "center_hz": 433143000,
+        "sync_seconds": 277.84915,
+        "wake_symbols": 320,
+        "role": "paired_requests"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c3808141010000800000000000000000000000000000000000f67a",
+        "center_hz": 433471500,
+        "sync_seconds": 277.9504,
+        "wake_symbols": 320,
+        "role": "paired_responses"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c3808110010100000000000000000000000000000000000000a902",
+        "center_hz": 433471500,
+        "sync_seconds": 281.04985,
+        "wake_symbols": 2400,
+        "role": "paired_responses"
+      },
+      {
+        "frame": "79f4882f28a1b2c380b1c2d38f8150008000000000000000000000000000000000000000303d",
+        "center_hz": 433471500,
+        "sync_seconds": 281.3107,
+        "wake_symbols": 320,
+        "role": "configuration_responses"
+      },
+      {
+        "frame": "79f4882f28a1b2c380b1c2d38f81828102008000000000000000000000000000000000003c9c",
+        "center_hz": 433143000,
+        "sync_seconds": 282.79235,
+        "wake_symbols": 320,
+        "role": "paired_requests"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c38081c287802c0105000f0000000000000000000000000000d9eb",
+        "center_hz": 433471500,
+        "sync_seconds": 282.86125000000004,
+        "wake_symbols": 320,
+        "role": "paired_responses"
+      },
+      {
+        "frame": "79f4882f28a1b2c380b1c2d38f820301820080000000000000000000000000000000000018db",
+        "center_hz": 433143000,
+        "sync_seconds": 283.84515000000005,
+        "wake_symbols": 320,
+        "role": "paired_requests"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c3808243008000000000000000000000000000000000000000dac5",
+        "center_hz": 433471500,
+        "sync_seconds": 283.93015,
+        "wake_symbols": 320,
+        "role": "paired_responses"
+      },
+      {
+        "frame": "79f4882f28a1b2c380b1c2d38f82ac8099000000000000000000000000000000000000000b53",
+        "center_hz": 433143000,
+        "sync_seconds": 284.80010000000004,
+        "wake_symbols": 320,
+        "role": "paired_requests"
+      },
+      {
+        "frame": "79f4882f28b1c2d38fa1b2c38082ec818019000000000000000000000000000000000000d811",
+        "center_hz": 433471500,
+        "sync_seconds": 284.88105,
+        "wake_symbols": 320,
+        "role": "paired_responses"
+      }
+    ]
+  },
+  "controls": [
+    {
+      "run": "A",
+      "requested_seconds": 60,
+      "stop": "automatic",
+      "positive_watering_report": true,
+      "positive_idle_report": true,
+      "commands": [
+        {
+          "action": "open",
+          "frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+          "decoded": {
+            "command_marker_inverted": true,
+            "duration_seconds": 60,
+            "next_sequence": 130,
+            "sequence": 129,
+            "watering": true
+          },
+          "trailer_residue": "4f03",
+          "observed_wake_symbols": [
+            732,
+            900,
+            910,
+            934,
+            974,
+            1304,
+            1369,
+            1376,
+            1379,
+            2382,
+            2399,
+            2401
+          ]
+        }
+      ]
+    },
+    {
+      "run": "B",
+      "requested_seconds": 120,
+      "stop": "explicit_early_close",
+      "positive_watering_report": true,
+      "positive_idle_report": true,
+      "commands": [
+        {
+          "action": "open",
+          "frame": "79f4882f28b1c2d38fa1b2c380821082808100bc00000000000000000000000000000000d3d5",
+          "decoded": {
+            "command_marker_inverted": false,
+            "duration_seconds": 120,
+            "next_sequence": 131,
+            "sequence": 130,
+            "watering": true
+          },
+          "trailer_residue": "4f03",
+          "observed_wake_symbols": [
+            828,
+            911,
+            922,
+            1380,
+            2399,
+            2401
+          ]
+        },
+        {
+          "action": "close",
+          "frame": "79f4882f28b1c2d38fa1b2c380829081808100000000000000000000000000000000000099f8",
+          "decoded": {
+            "command_marker_inverted": false,
+            "next_sequence": 130,
+            "sequence": 130,
+            "watering": false
+          },
+          "trailer_residue": "c713",
+          "observed_wake_symbols": [
+            848,
+            897,
+            926,
+            1182,
+            1366,
+            2368,
+            2399,
+            2401
+          ]
+        }
+      ]
+    },
+    {
+      "run": "C",
+      "requested_seconds": 60,
+      "stop": "explicit_early_close",
+      "positive_watering_report": true,
+      "positive_idle_report": true,
+      "commands": [
+        {
+          "action": "open",
+          "frame": "79f4882f28b1c2d38fa1b2c3808310828081009e00000000000000000000000000000000ab18",
+          "decoded": {
+            "command_marker_inverted": false,
+            "duration_seconds": 60,
+            "next_sequence": 132,
+            "sequence": 131,
+            "watering": true
+          },
+          "trailer_residue": "4f03",
+          "observed_wake_symbols": [
+            832,
+            883,
+            898,
+            1334,
+            1352,
+            2368,
+            2399,
+            2401
+          ]
+        },
+        {
+          "action": "close",
+          "frame": "79f4882f28b1c2d38fa1b2c3808390818081000000000000000000000000000000000000fcf3",
+          "decoded": {
+            "command_marker_inverted": false,
+            "next_sequence": 131,
+            "sequence": 131,
+            "watering": false
+          },
+          "trailer_residue": "c713",
+          "observed_wake_symbols": [
+            670,
+            904,
+            918,
+            1326,
+            1372,
+            1376,
+            2399,
+            2401
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "HA access and cloud refresh required a capture rollover before controls. Both files use the same unchanged association; no watering command was issued during the rollover.",
+    "The cloud integration applies optimistic UI state, so success also requires valve-originated RF and subsequent MQTT/state observations.",
+    "The original analyzer recognized only assignment selectors 5/6 and missed this CRC-valid selector-2 assignment; terminal request and reply were independently decoded.",
+    "This stock branch differs from local candidate .22 in sweep counter and selector/carrier. It is not a matched-branch timing comparison.",
+    "First open was transmitted with marker 0x90; later opens used 0x10 in the same association. A fixed association-wide marker interpretation is not established by this session."
+  ],
+  "final_state": {
+    "valve_idle_report_observed": true,
+    "custom_radios_disarmed": true,
+    "cloud_duration_original_minutes": 20,
+    "cloud_duration_restored_minutes": 20,
+    "garden_htv405_commands_issued": 0
+  },
+  "valve_reports": [
+    {
+      "sync_seconds": 134.616582,
+      "frame": "79f4882f28a1b2c380b1c2d38f83810782058090cf80000000409b80569e0000000000000c2f",
+      "residue": "4f03",
+      "phase_count": 40
+    },
+    {
+      "sync_seconds": 190.682592,
+      "frame": "79f4882f28a1b2c380b1c2d38f840107820580804f8000000040800056800000000000005e89",
+      "residue": "4f03",
+      "phase_count": 43
+    },
+    {
+      "sync_seconds": 192.637,
+      "frame": "79f4882f28a1b2c380b1c2d38f848107820580804f8000000040800056800000000000006c0c",
+      "residue": "c713",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 199.196343,
+      "frame": "79f4882f28a1b2c380b1c2d38f850207820080c570a50d10800000001e000000000000003e62",
+      "residue": "c713",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 268.632943,
+      "frame": "79f4882f28a1b2c380b1c2d38f85810782058090cf8000000040b98056bc00000000000023b6",
+      "residue": "c713",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 319.186857,
+      "frame": "79f4882f28a1b2c380b1c2d38f8682078200808c71250d1080000000180000000000000030f1",
+      "residue": "4f03",
+      "phase_count": 42
+    },
+    {
+      "sync_seconds": 318.12596,
+      "frame": "79f4882f28a1b2c380b1c2d38f860107820580804f8000000040800056800000000000001c8f",
+      "residue": "c713",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 389.68415,
+      "frame": "79f4882f28a1b2c380b1c2d38f87010782058090cf80000000409b80569e00000000000032b7",
+      "residue": "4f03",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 426.16852,
+      "frame": "79f4882f28a1b2c380b1c2d38f878107820580804f8000000040800056800000000000004b01",
+      "residue": "4f03",
+      "phase_count": 41
+    },
+    {
+      "sync_seconds": 429.16007,
+      "frame": "79f4882f28a1b2c380b1c2d38f880207820080ccf1250d108000000011800000000000005ec1",
+      "residue": "4f03",
+      "phase_count": 41
+    }
+  ],
+  "gateway_report_acknowledgments": [
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38083c1010001000000000000000000000000000000000000bff9",
+      "sync_seconds": 134.689878,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 97,
+      "wake_symbols": [
+        54,
+        250,
+        294,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 96
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808441010001000000000000000000000000000000000000a66c",
+      "sync_seconds": 190.760157,
+      "center_hz": 433471500,
+      "residue": "c713",
+      "phase_count": 96,
+      "wake_symbols": [
+        295,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38084c101000100000000000000000000000000000000000094e9",
+      "sync_seconds": 192.710078,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 96,
+      "wake_symbols": [
+        150,
+        286,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38085420080000000000000000000000000000000000000009c0d",
+      "sync_seconds": 199.27988900000003,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 96,
+      "wake_symbols": [
+        278,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38085c1010001000000000000000000000000000000000000f1e2",
+      "sync_seconds": 268.70050899999995,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 96,
+      "wake_symbols": [
+        294,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808641010001000000000000000000000000000000000000e46a",
+      "sync_seconds": 318.2009645,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 97,
+      "wake_symbols": [
+        80,
+        293,
+        294,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 96
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38086c20080000000000000000000000000000000000000008985",
+      "sync_seconds": 319.27065250000004,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 97,
+      "wake_symbols": [
+        130,
+        267,
+        268,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 96
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38087410100010000000000000000000000000000000000008161",
+      "sync_seconds": 389.75144,
+      "center_hz": 433471500,
+      "residue": "4f03",
+      "phase_count": 96,
+      "wake_symbols": [
+        294,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c38087c1010001000000000000000000000000000000000000b3e4",
+      "sync_seconds": 426.2414595,
+      "center_hz": 433471500,
+      "residue": "c713",
+      "phase_count": 97,
+      "wake_symbols": [
+        86,
+        287,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 96
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808842008000000000000000000000000000000000000000ed20",
+      "sync_seconds": 429.231237,
+      "center_hz": 433471500,
+      "residue": "c713",
+      "phase_count": 96,
+      "wake_symbols": [
+        226,
+        283,
+        319,
+        321
+      ],
+      "sync_phase_spread_samples": 95
+    }
+  ],
+  "command_transactions": [
+    {
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+      "command_sync_seconds": 128.469182,
+      "response_sync_seconds": 128.74119,
+      "sync_to_sync_ms": 272.008,
+      "command": {
+        "sequence": 129,
+        "next_sequence": 130,
+        "watering": true,
+        "duration_seconds": 60,
+        "command_marker_inverted": true
+      },
+      "response": {
+        "sequence": 129,
+        "next_sequence": 130,
+        "watering": true,
+        "command_marker_inverted": true
+      }
+    },
+    {
+      "command_frame": "79f4882f28b1c2d38fa1b2c380821082808100bc00000000000000000000000000000000d3d5",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f8250868010cf8000000040bc0056bc00000000000000007cbb",
+      "command_sync_seconds": 262.183162,
+      "response_sync_seconds": 262.451928,
+      "sync_to_sync_ms": 268.766,
+      "command": {
+        "sequence": 130,
+        "next_sequence": 131,
+        "watering": true,
+        "duration_seconds": 120,
+        "command_marker_inverted": false
+      },
+      "response": {
+        "sequence": 130,
+        "next_sequence": 131,
+        "watering": true,
+        "command_marker_inverted": false
+      }
+    },
+    {
+      "command_frame": "79f4882f28b1c2d38fa1b2c380829081808100000000000000000000000000000000000099f8",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f82d08680104f8000000040800056bc00000000000000006ebd",
+      "command_sync_seconds": 311.58021,
+      "response_sync_seconds": 311.84749,
+      "sync_to_sync_ms": 267.28,
+      "command": {
+        "sequence": 130,
+        "next_sequence": 130,
+        "watering": false,
+        "command_marker_inverted": false
+      },
+      "response": {
+        "sequence": 130,
+        "next_sequence": 130,
+        "watering": false,
+        "command_marker_inverted": false
+      }
+    },
+    {
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808310828081009e00000000000000000000000000000000ab18",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f8350868010cf80000000409e00569e00000000000000001061",
+      "command_sync_seconds": 383.135353,
+      "response_sync_seconds": 383.403957,
+      "sync_to_sync_ms": 268.604,
+      "command": {
+        "sequence": 131,
+        "next_sequence": 132,
+        "watering": true,
+        "duration_seconds": 60,
+        "command_marker_inverted": false
+      },
+      "response": {
+        "sequence": 131,
+        "next_sequence": 132,
+        "watering": true,
+        "command_marker_inverted": false
+      }
+    },
+    {
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808390818081000000000000000000000000000000000000fcf3",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f83d08680104f80000000408000569e00000000000000006a2d",
+      "command_sync_seconds": 419.897652,
+      "response_sync_seconds": 420.17083,
+      "sync_to_sync_ms": 273.178,
+      "command": {
+        "sequence": 131,
+        "next_sequence": 131,
+        "watering": false,
+        "command_marker_inverted": false
+      },
+      "response": {
+        "sequence": 131,
+        "next_sequence": 131,
+        "watering": false,
+        "command_marker_inverted": false
+      }
+    }
+  ],
+  "interpretation": [
+    "All three opens and both explicit closes have CRC-valid direct valve responses with the matching command counter and expected cf/4f watering bit.",
+    "Command counters are 0x81, 0x82, 0x83 for opens; closes retain 0x82 and 0x83. The first open has two exact observed transmissions before its response.",
+    "Direct command responses use the assigned 433.4715 MHz channel, about 267--274 ms from command sync to response sync. This is not an RF-end-to-onset measurement.",
+    "Later watering/idle reports use the lower channel and receive separate 320-symbol gateway acknowledgments on the assigned channel; final summaries are also acknowledged.",
+    "The wideband decoder missed weak direct responses. Channel-filtered exact-sync/CRC recovery found all five; an empty broad decoder response list is not a negative control result."
+  ]
+}

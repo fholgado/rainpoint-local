@@ -634,6 +634,40 @@ class HCS026PairingProtocolTest(unittest.TestCase):
         self.assertTrue(trial["counter_echoed"])
         self.assertTrue(trial["stage_1_observed"])
 
+    def test_htv145_iq_analyzer_accepts_captured_selector_2_terminal_exchange(self) -> None:
+        fixture = json.loads((ROOT / "research/fixtures/htv145_selector2_stock_pairing_control_20260905.json").read_text())
+        association = fixture["association"]
+        chunks = []
+        for row in fixture["pairing"]["frames"]:
+            command, _ = generate_command(
+                bytes.fromhex(row["frame"]),
+                wake_symbols=row["wake_symbols"],
+                channel_center_hz=row["center_hz"],
+                leading_silence_ms=5 if not chunks else 0,
+                trailing_silence_ms=55,
+            )
+            chunks.append(command)
+        with tempfile.NamedTemporaryFile(suffix=".cu8") as capture:
+            capture.write(b"".join(chunks))
+            capture.flush()
+            result = analyze_htv145_pairing_capture(
+                Path(capture.name),
+                **{key: bytes.fromhex(association[key]) for key in (
+                    "factory_endpoint", "paired_endpoint", "companion_endpoint", "controller_endpoint"
+                )},
+                origin_seconds=0,
+                sample_rate=2_000_000,
+                capture_center_hz=433_700_000,
+                request_center_hz=HTV145_REQUEST_CENTER_HZ,
+                assignment_center_hz=433_581_500,
+                response_center_hz=434_351_500,
+            )
+        self.assertEqual(1, result["assignment_count"])
+        self.assertEqual([433_471_500], result["assigned_response_centers_hz"])
+        self.assertEqual(2, result["trials"][0]["assignment_selector"])
+        self.assertEqual(4, result["trials"][0]["assigned_response_channel"])
+        self.assertTrue(result["terminal_exchange_observed"])
+
     def test_htv145_raw_stage0_fixture_agrees_with_independent_outcomes(
         self,
     ) -> None:

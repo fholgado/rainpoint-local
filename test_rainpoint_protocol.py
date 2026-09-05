@@ -28,6 +28,32 @@ from rainpointd.valve_protocol import (  # noqa: E402
 
 
 class RainPointProtocolTest(unittest.TestCase):
+    def test_htv145_selector2_stock_commands_have_independent_positive_responses(self):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_selector2_stock_pairing_control_20260905.json").read_text())
+        association = fixture["association"]
+        link = ValveLink(bytes.fromhex(association["paired_endpoint"]),
+                         bytes.fromhex(association["controller_endpoint"]))
+        expected = [(0x81, True, 60), (0x82, True, 120), (0x82, False, None),
+                    (0x83, True, 60), (0x83, False, None)]
+        self.assertEqual(len(expected), len(fixture["command_transactions"]))
+        for row, (counter, watering, duration) in zip(fixture["command_transactions"], expected):
+            with self.subTest(counter=counter, watering=watering):
+                request = bytes.fromhex(row["command_frame"])
+                response = bytes.fromhex(row["response_frame"])
+                command = decode_htv145_gateway_command(request, link)
+                accepted = decode_htv145_command_response(response, link)
+                self.assertIsNotNone(command)
+                self.assertIsNotNone(accepted)
+                self.assertEqual(counter, command["sequence"])
+                self.assertEqual(counter, accepted["sequence"])
+                self.assertEqual(watering, command["watering"])
+                self.assertEqual(watering, accepted["watering"])
+                self.assertEqual(duration, command.get("duration_seconds"))
+                self.assertEqual(counter + int(watering), accepted["next_sequence"])
+                damaged = bytearray(response)
+                damaged[-1] ^= 1
+                self.assertIsNone(decode_htv145_command_response(bytes(damaged), link))
+
     def test_htv405_morning_sync_direct_open_and_automatic_idle_capture(self):
         fixture = json.loads((
             ROOT / "research/fixtures/htv405_morning_sync_smoke_20260905.json"
