@@ -7,7 +7,7 @@ import importlib.util
 import sys
 import types
 import unittest
-from unittest.mock import Mock, call
+from unittest.mock import AsyncMock, Mock, call
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -33,11 +33,56 @@ from rainpoint_local.api_models import multi_zone_numbers, unsupported_device_en
 def _integration_function(filename, name, namespace):
     """Exercise the actual HA callback with registry/entity APIs stubbed."""
     tree = ast.parse((PACKAGE / filename).read_text())
-    function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+    function = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
     module = ast.parse("from __future__ import annotations")
     module.body.append(function)
     exec(compile(module, str(PACKAGE / filename), "exec"), namespace)
     return namespace[name]
+
+
+class ValveCommandRefreshTest(unittest.IsolatedAsyncioTestCase):
+    async def test_command_publishes_new_transaction_despite_refresh_cooldown(self):
+        """Replay the old sync snapshot that caused a confirmed run to alert.
+
+        HA's debounced request can return without fetching during its cooldown.
+        The valve service must publish the authoritative post-command snapshot
+        before returning, including when that snapshot is not yet confirmed.
+        """
+        for method, action in (("async_open_valve", "open_htv405_zone"),
+                               ("async_close_valve", "close_htv405_zone")):
+            for outcome in ("waiting_for_confirmation", "watering_confirmed", "failed"):
+                with self.subTest(method=method, outcome=outcome):
+                    old_id = "previous-synchronization"
+                    snapshot = {"rf_control_start_available": True,
+                                "rf_control_transaction_id": old_id,
+                                "rf_control_transaction_state": "completed"}
+                    gateway_snapshot = {**snapshot,
+                                        "rf_control_transaction_id": "new-command",
+                                        "rf_control_transaction_state": outcome}
+                    async def refresh():
+                        snapshot.clear()
+                        snapshot.update(gateway_snapshot)
+                    coordinator = types.SimpleNamespace(
+                        htv405_run_minutes={("four", 1): 15},
+                        client=types.SimpleNamespace(**{action: AsyncMock()}),
+                        # A throttled request returns before the next refresh.
+                        async_request_refresh=AsyncMock(),
+                        async_refresh=AsyncMock(side_effect=refresh),
+                    )
+                    entity = types.SimpleNamespace(coordinator=coordinator,
+                        decoded_state=snapshot, device_id="four", _zone=1, _token="test-token")
+                    callback = _integration_function("valve.py", method, {
+                        "HomeAssistantError": RuntimeError,
+                        "RainPointLocalError": ValueError,
+                        "DEFAULT_BOUNDED_RUN_MINUTES": 1,
+                    })
+                    await callback(entity)
+                    # Run Now's five-second new-ID guard must not mistake the
+                    # previous completed sync for this command's result.
+                    self.assertNotEqual(old_id, snapshot["rf_control_transaction_id"])
+                    self.assertEqual(outcome, snapshot["rf_control_transaction_state"])
+                    coordinator.async_refresh.assert_awaited_once()
+                    getattr(coordinator.client, action).assert_awaited_once()
 
 
 class IntegrationMigrationTest(unittest.TestCase):

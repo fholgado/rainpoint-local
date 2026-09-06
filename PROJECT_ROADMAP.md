@@ -1126,6 +1126,18 @@ same time without conflicting authority.
       confirmation window. The installed script now validates the gateway-
       published duration range up front and no longer adds a redundant
       ten-second duration-entity polling delay before submitting the request.
+- [x] Prevent false Run Now failures caused by a throttled HA state refresh.
+      On September 6, the 09:55 request was valve-confirmed at 09:55:04.755,
+      but the script alerted at 09:55:09 while still reading the previous
+      **Synchronization completed** transaction. The valve service had awaited
+      HA's debounced refresh request (up to a ten-second cooldown), not a
+      completed fetch; the script's new-ID deadline was five seconds.
+      Integration `0.14.2` makes open/close await an immediate authoritative
+      refresh before returning. A callback regression reproduces the stale-ID
+      failure and covers pending, confirmed, and failed responses without
+      inventing successful watering. No RF payload, counter, retry, or watering
+      duration changes are involved. Deployment verification is non-actuating;
+      the next normal user run remains the live notification acceptance check.
 - [x] Design morning synchronization with direct daytime commands. The proposal
       reuses one report-triggered close-0 anchor inside a bounded morning window,
       persists counter/owner continuity, and sends a user's bounded command

@@ -1,5 +1,13 @@
 # Changelog
 
+## Integration 0.14.2
+
+- Refresh authoritative valve transaction state immediately after open/close
+  requests. HA's ten-second refresh cooldown could otherwise leave Run Now
+  reading an older synchronization result and send a false critical alert
+  despite a confirmed watering run. Pending and failed responses remain
+  distinct from watering confirmation; RF commands and retries are unchanged.
+
 ## 0.34.5 / Integration 0.14.1 / Firmware 0.15.14
 
 - Pre-fill known sensors’ pairing details with their saved name and HA area.
