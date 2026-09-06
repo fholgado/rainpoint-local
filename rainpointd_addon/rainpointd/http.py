@@ -242,7 +242,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     return
                 node_prefix = f"{base}/nodes/"
-                node_suffix = parsed.path[len(node_prefix) :]
+                node_suffix = parsed.path[len(node_prefix) :] if node_path else ""
                 node_id, separator, node_action = node_suffix.rpartition("/")
                 if separator and node_action == "identify":
                     result = self.server.gateway.identify_radio_node(

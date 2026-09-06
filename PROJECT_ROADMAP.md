@@ -1242,6 +1242,10 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 ### HTV145
 
+- [x] Correct the valve-owner revoke HTTP route collision with node revocation
+      (gateway 0.34.8). A real HTTP regression reproduces the misrouting; require
+      correlated owner revocation before a new physical pairing trial.
+
 - [ ] Test whether an idle close establishes a deliberately different command
       counter on the dry one-zone valve. Packet preparation and conditional
       trial sequence are in `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.

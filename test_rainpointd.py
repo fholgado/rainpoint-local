@@ -2910,6 +2910,16 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         with urlopen(request, timeout=2) as response:
             return json.load(response)
 
+    def test_valve_owner_revoke_does_not_collide_with_node_revoke(self):
+        from unittest.mock import patch
+        gateway = self.server.gateway
+        body = {"valve_endpoint": "a1b2c380"}
+        with patch.object(gateway, "htv145_control", return_value={"state": "awaiting_owner_revocation"}) as valve_revoke, patch.object(gateway, "revoke_radio_node", return_value={"revoked": False}) as node_revoke:
+            result = self.post_json("/api/v1/research/htv145-control/revoke", body)
+            self.assertEqual({"state": "awaiting_owner_revocation"}, result)
+            valve_revoke.assert_called_once_with("revoke", body)
+            node_revoke.assert_not_called()
+
     def test_persistent_control_http_is_authenticated_and_uses_accepted_counter(self):
         gateway = self.server.gateway
         gateway.update_node(self.NODE_ID, capabilities=["rx", "htv145_control_tx_candidate", "htv145_report_ack_tx"])

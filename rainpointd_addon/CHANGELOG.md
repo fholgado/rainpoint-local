@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.34.8 / Integration 0.14.3
+
+- Scope node action routing to the nodes URL prefix. One-zone owner revocation
+  now reaches its control coordinator instead of the unrelated node-revoke
+  handler, allowing acknowledged ownership release before a fresh pairing.
+
 ## 0.34.7 / Integration 0.14.3 / HTV145 candidate 0.15.16
 
 - Remove the temporary idle-close counter probe after its baseline returned
