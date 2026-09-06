@@ -203,7 +203,11 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
             )
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error
-        await self.coordinator.async_request_refresh()
+        # Run Now waits for this command's transaction ID. A debounced request
+        # can return with the previous snapshot during HA's refresh cooldown.
+        # Fetch authoritative state before returning; never infer watering from
+        # the successful POST itself.
+        await self.coordinator.async_refresh()
 
     async def async_close_valve(self, **kwargs) -> None:
         """Stop this zone early when it is confirmed active."""
@@ -215,4 +219,4 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
             )
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()

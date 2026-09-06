@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.34.7 / Integration 0.14.2 / HTV145 candidate 0.15.16
+## 0.34.7 / Integration 0.14.3 / HTV145 candidate 0.15.16
 
 - Remove the temporary idle-close counter probe after its baseline returned
   result 3. Keep the counter unknown; no different-counter probe or open ran.
@@ -11,6 +11,14 @@
   reloads already authenticated state; it does not send an RF recovery probe.
 - Keep unknown counters, stale idle state, pending commands and unavailable
   owners blocked. No four-zone schedule or anchor is applied to the one-zone valve.
+
+## Integration 0.14.2
+
+- Refresh authoritative valve transaction state immediately after open/close
+  requests. HA's ten-second refresh cooldown could otherwise leave Run Now
+  reading an older synchronization result and send a false critical alert
+  despite a confirmed watering run. Pending and failed responses remain
+  distinct from watering confirmation; RF commands and retries are unchanged.
 
 ## 0.34.5 / Integration 0.14.1 / Firmware 0.15.14
 

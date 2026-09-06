@@ -862,7 +862,7 @@ with byte 17 `00` or `10` neither authenticate a counter nor prove physical idle
 
 ### Retained-counter controls in Home Assistant
 
-Gateway 0.34.6 and integration 0.14.2 expose Counter status, Next command counter,
+Gateway 0.34.7 and integration 0.14.3 expose Counter status, Next command counter,
 and Restore retained counter for an enrolled one-zone control/ACK owner. The
 button calls the authenticated `/devices/{device_id}/valve/restore-counter`
 route. The gateway resolves the exact enrolled endpoint pair and requires an
