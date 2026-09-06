@@ -4,8 +4,10 @@ Question: does the locally paired selector-6 HTV145 accept an idle close with a
 counter different from its retained command counter, and then accept an open
 using that newly established counter, as the HTV405 does?
 
-The retained-counter UI cannot answer this question: restoring a radio's saved
-counter is not a valve exchange.
+The September 6 follow-up and clean runtime verification below establish a
+close-only recovery method. The original experimental procedures are historical
+evidence; use the supported Sync counter operation for current recovery. Merely
+restoring a radio's saved counter is not a valve exchange.
 Status and completion gates remain in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 ## Original numeric-counter sequence (superseded)
@@ -52,12 +54,13 @@ RF evidence; a three-second immediate-response window defines probe acceptance.
 - A positive close reply without the subsequent open does not establish usable
   synchronization. Log it as partial evidence, not success.
 
-## Execution boundary
+## Original experiment execution boundary (retired)
 
-`tools/prepare_htv145_counter_anchor.py` produces exact candidate packets and
-conditional stages from the live association and readiness snapshot. It is
-preparation only and has no transmitter. The current runtime suppresses idle
-closes and only permits its authenticated counter; do not bypass these checks by
+The temporary packet-preparation tool produced candidate packets and conditional
+stages from the live association and readiness snapshot. It has been removed
+following qualification; use the supported sync path documented below. At the
+time of this original experiment, the runtime suppressed idle closes and only
+permitted its authenticated counter; do not bypass these checks by
 labelling the experimental counter authenticated or reusing old exchange frames.
 
 Before live execution, add an isolated dry-trial reservation that distinguishes
@@ -319,3 +322,9 @@ independent idle, and the enabled morning policy without another actuator
 command. Both one-zone catalog aliases now project the same Ready sync state;
 four-zone defaults no longer overwrite registered HTV145 devices. The existing
 four-zone schedule remained Ready at 05:30 Eastern.
+
+The post-qualification cleanup also removed the obsolete packet-preparation tool
+and completed one-use local probe/bootstrap/control runners. The unused
+next-phase packet generator was also removed; its test compares recorded frames. Captured RF, result
+records, source-diff evidence and passive analysis tools remain preserved. Tests
+now exercise the supported idle-anchor decoder and durable coordinator directly.

@@ -1270,7 +1270,9 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       bounded queue and optional daily calendar policy; never water to sync,
       reseed from telemetry counters, or replay a transmitted anchor on restart.
       A final gateway rebuild preserved the recovered counter, radio
-      authentication and enabled morning policy without actuation. Redacted
+      authentication and enabled morning policy without actuation. Removed the
+      obsolete packet-preparation helper and completed local trial runners after
+      qualification; retain raw evidence and supported decoder regressions. Redacted
       runtime proof is in
       `research/fixtures/htv145_idle_result3_counter_recovery_20260906.json`.
 - [ ] Qualify and persist the complete one-zone command phase, including the

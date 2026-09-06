@@ -2,8 +2,9 @@
 """Compare recorded HTV145 command phases; no device access or transmission.
 
 The six-bit interpretation is a research hypothesis. Recorded stock commands
-support monotonic progression locally; wraparound and arbitrary recovery remain
-unqualified. Never promote its predicted phase to authenticated runtime state.
+support monotonic progression locally; alternating control and anchor rollover
+are qualified, while arbitrary action ordering remains unqualified. Analysis
+never authenticates a runtime counter.
 """
 from __future__ import annotations
 import argparse
@@ -12,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rainpointd_addon'))
-from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response, build_close_frame
+from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response
 
 
 def command_phase(frame: bytes, link: ValveLink) -> int:
@@ -37,13 +38,6 @@ def analyze_transactions(rows: list[dict], link: ValveLink) -> dict:
     return {'scope': 'offline phase-progression hypothesis; no counter authenticated',
             'commands': commands, 'adjacent_progression': adjacent,
             'all_adjacent_increment': bool(adjacent) and all(adjacent)}
-
-
-def predicted_next_close(last_accepted_command: bytes, link: ValveLink, residue: int) -> bytes:
-    """Prepare one unverified next-phase close for review, never for auto-enrollment."""
-    phase = (command_phase(last_accepted_command, link) + 1) % 64
-    return build_close_frame(link, 0x80 | (phase >> 1), residue,
-                             command_marker_inverted=not bool(phase & 1))
 
 
 def main() -> None:

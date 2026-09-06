@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent / "rainpointd_addon"))
 
 from tools.valve_trial_analysis import (
     analyze_valve_transactions,
@@ -26,7 +30,7 @@ def frame(source: str, destination: str, message: int, *, zone: int = 0,
     return value.hex()
 
 
-class CounterAnchorPreparationTests(unittest.TestCase):
+class CounterRecoveryEvidenceTests(unittest.TestCase):
     def test_active_counter_anchors_support_followup_and_wraparound(self):
         import json
         from pathlib import Path
@@ -64,9 +68,10 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         self.assertEqual(1, len(summary['errors']))
         self.assertEqual([], summary['responses'])
 
-    def test_anchor_acceptance_requires_immediate_matching_idle_response(self):
+    def test_supported_anchor_decoder_requires_matching_zero_idle_response(self):
         import binascii
-        from tools.prepare_htv145_counter_anchor import anchor_reply_matches, Htv145ControlProfile
+        from rainpointd.htv145_control import Htv145ControlProfile
+        from rainpointd.valve_protocol import decode_htv145_idle_anchor_response
         profile = Htv145ControlProfile(node_id="rp-001122334455", controller_endpoint="b1c2d38f",
             valve_endpoint="a1b2c380", center_hz=434398811, power_dbm=10, invert=False,
             trailer_residual=0x4f03, close_trailer_residual=0x4f03,
@@ -75,17 +80,15 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         residue = binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(raw[-2:], "big")
         raw[13] = 0x80; raw[14] = 0x50; raw[18] = 0x4f
         raw[-2:] = (binascii.crc_hqx(raw[:-2], 0) ^ residue).to_bytes(2, "big")
-        self.assertTrue(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=0.5))
-        self.assertFalse(anchor_reply_matches(profile, 0x83, bytes(raw), response_age_seconds=0.5))
-        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=3.1))
-        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=-0.1))
+        self.assertEqual({"sequence": 0x80, "result_code": 0}, decode_htv145_idle_anchor_response(bytes(raw), profile.link))
         raw[5] ^= 1
-        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=0.5))
+        self.assertIsNone(decode_htv145_idle_anchor_response(bytes(raw), profile.link))
 
     def test_captured_baseline_negative_cannot_authenticate_anchor(self):
         import json
         from pathlib import Path
-        from tools.prepare_htv145_counter_anchor import anchor_reply_matches, Htv145ControlProfile
+        from rainpointd.htv145_control import Htv145ControlProfile
+        from rainpointd.valve_protocol import decode_htv145_idle_anchor_response
         from rainpointd.valve_protocol import decode_htv145_command_error, decode_htv145_gateway_command
         fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_counter_anchor_baseline_negative_20260906.json").read_text())
         profile = Htv145ControlProfile(node_id="rp-001122334455",
@@ -96,7 +99,7 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         command, reply = [bytes.fromhex(row["frame_hex"]) for row in fixture["frames"]]
         self.assertFalse(decode_htv145_gateway_command(command, profile.link)["watering"])
         self.assertEqual({"sequence": 0x83, "result_code": 3}, decode_htv145_command_error(reply, profile.link))
-        self.assertFalse(anchor_reply_matches(profile, 0x83, reply, response_age_seconds=0.375))
+        self.assertIsNone(decode_htv145_idle_anchor_response(reply, profile.link))
 
     def test_fresh_pairing_control_baseline_has_matching_open_close_and_idle(self):
         import json
@@ -116,7 +119,7 @@ class CounterAnchorPreparationTests(unittest.TestCase):
     def test_recorded_stock_commands_advance_counter_and_marker_together(self):
         import json
         from pathlib import Path
-        from tools.analyze_htv145_command_phase import analyze_transactions, command_phase, predicted_next_close
+        from tools.analyze_htv145_command_phase import analyze_transactions, command_phase
         from rainpointd.valve_protocol import ValveLink
         root = Path(__file__).parent / "research/fixtures"
         stock = json.loads((root / "htv145_selector2_stock_pairing_control_20260905.json").read_text())
@@ -135,35 +138,12 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         reply = bytes.fromhex(rejected["response_frame"])
         self.assertIsNone(decode_htv145_command_response(reply, link))
         self.assertEqual(3, decode_htv145_command_error(reply, link)["result_code"])
-        candidate = predicted_next_close(accepted_close, link, 0x4f03)
+        next_phase = json.loads((root / "htv145_next_phase_idle_close_rejection_20260906.json").read_text())
+        candidate = bytes.fromhex(next_phase["command_frame"])
         self.assertEqual(5, command_phase(candidate, link))
         self.assertEqual(0x82, candidate[13])
         self.assertEqual(0x90, candidate[14])
         self.assertEqual(accepted_close[15:36], candidate[15:36])
-
-    def test_probe_differs_from_baseline_and_only_one_open_is_bounded(self):
-        from tools.prepare_htv145_counter_anchor import prepare, Htv145ControlProfile
-        from rainpointd.valve_protocol import decode_htv145_gateway_command
-        profile = Htv145ControlProfile(node_id="rp-001122334455", controller_endpoint="b1c2d38f",
-            valve_endpoint="a1b2c380", center_hz=434398811, power_dbm=10, invert=False,
-            trailer_residual=0x4f03, close_trailer_residual=0x4f03,
-            command_marker_inverted=True, report_ack_center_hz=434398811)
-        readiness = {"ready": True, "counter_synchronized": True, "state": {
-            "node_id": profile.node_id, "controller_endpoint": profile.controller_endpoint,
-            "valve_endpoint": profile.valve_endpoint, "confirmed_at": "2026-09-06T14:00:00+00:00"}}
-        for baseline in (0x80, 0x83, 0x9f):
-            readiness['next_sequence'] = baseline
-            plan = prepare(profile, readiness)
-            self.assertNotEqual(baseline, plan['probe_counter'])
-            decoded = [decode_htv145_gateway_command(bytes.fromhex(s['frame']), profile.link)
-                       for s in plan['steps']]
-            self.assertEqual([False, False, True, False], [d['watering'] for d in decoded])
-            self.assertEqual(60, decoded[2]['duration_seconds'])
-            self.assertEqual(decoded[2]['next_sequence'], decoded[3]['sequence'])
-        readiness['counter_synchronized'] = False
-        with self.assertRaises(ValueError):
-            prepare(profile, readiness)
-
 
 class ValveTrialAnalysisTests(unittest.TestCase):
     def test_distinguishes_retained_rejoin_from_new_assignment(self) -> None:
