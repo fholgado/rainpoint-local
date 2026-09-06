@@ -208,6 +208,17 @@ configuration and authenticated counters, sends daytime commands directly, and
 requires correlated owner revocation before reassignment. Morning readiness is
 observation-only for HTV145: do not borrow HTV405's idle-close-zero RF anchor.
 Counter ambiguity blocks commands until new positive evidence is available.
+When OTA adds ACK support to an existing dry association, gateway 0.34.4 can
+upgrade its pre-ACK trial profile after those evidence gates pass. Changing radios
+also requires a live authenticated handshake confirming the old trial radio no
+longer supports HTV145 control or ACKs. Pending work and existing ACK owners
+cannot be replaced this way.
+For an overnight ACK observation, keep the stock gateway unplugged, retain the
+current association, and log received reports plus ACK transmit/failure events
+without watering. Use a bounded independent IQ capture to verify emitted frames;
+compare subsequent sequence/retry behavior before claiming valve acceptance.
+Do not store continuous raw IQ all night or reseed the command counter from
+telemetry sequence numbers.
 The management interface and qualification boundary are described in the
 [HTV145 protocol document](../protocol_documentation/htv145frf.md); live acceptance
 status remains only in the [roadmap](../PROJECT_ROADMAP.md).

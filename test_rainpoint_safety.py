@@ -1922,6 +1922,67 @@ class Htv145RuntimeTest(unittest.TestCase):
         self.assertEqual(["htv145_control_configure", "htv145_control_sync"], [c["type"] for _, c in self.sent])
         self.assertEqual(0x82, self.sent[-1][1]["next_sequence"])
 
+    def test_enrollment_upgrades_same_radio_legacy_profile_without_actuation(self):
+        from dataclasses import replace
+        legacy = replace(self.profile, report_ack_center_hz=None)
+        self.coordinator.configure(legacy, observed_at="2026-09-05T11:00:00+00:00")
+        result = self.enroll()
+        self.assertTrue(result["ready"])
+        self.assertEqual(self.profile.report_ack_center_hz, result["state"]["report_ack_center_hz"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [command["type"] for _, command in self.sent])
+
+    def test_legacy_upgrade_rejects_changed_owner_pending_and_stale_evidence(self):
+        from dataclasses import replace
+        legacy = replace(self.profile, report_ack_center_hz=None)
+        original = self.coordinator.configure(legacy, observed_at="2026-09-05T11:00:00+00:00")
+        # A prior trial must not disappear or change owner during enrollment.
+        cases = {
+            "node_id": "rp-665544332211",
+            "controller_endpoint": "aabbcc8f",
+            "pending_command_id": "old-trial-command",
+            "revocation_command_id": "old-revocation",
+            "last_command_started_at": "2026-09-05T12:00:00+00:00",
+            "report_ack_center_hz": self.profile.report_ack_center_hz,
+        }
+        for field, value in cases.items():
+            with self.subTest(field=field):
+                with self.store._connection:
+                    self.store._connection.execute(
+                        f"UPDATE htv145_control_state SET {field} = ?", (value,))
+                before = self.store.htv145_control_states()
+                with self.assertRaises((ValueError, RuntimeError)):
+                    self.enroll()
+                self.assertEqual(before, self.store.htv145_control_states())
+                self.assertEqual([], self.sent)
+                with self.store._connection:
+                    self.store._connection.execute(
+                        f"UPDATE htv145_control_state SET {field} = ?", (original[field],))
+
+    def test_legacy_radio_replacement_requires_verified_removal_of_htv145_support(self):
+        from dataclasses import replace
+        old_node_id = "rp-665544332211"
+        legacy = replace(self.profile, node_id=old_node_id, report_ack_center_hz=None)
+        self.coordinator.configure(legacy, observed_at="2026-09-05T11:00:00+00:00")
+        retired = {**self.node, "capabilities": ["rx", "routine_sensor_ack_tx"]}
+        self.runtime.node = lambda node_id: retired if node_id == old_node_id else self.node
+        for changes in ({"connected": False}, {"authenticated": False},
+                        {"capabilities": None}, {"capabilities": ["htv145_control_tx_candidate"]},
+                        {"capabilities": ["htv145_report_ack_tx"]}):
+            with self.subTest(changes=changes):
+                original = dict(retired)
+                retired.update(changes)
+                with self.assertRaises(RuntimeError):
+                    self.enroll()
+                self.assertEqual(old_node_id, self.store.htv145_control_states()[0]["node_id"])
+                self.assertEqual([], self.sent)
+                retired.clear(); retired.update(original)
+        result = self.enroll()
+        self.assertTrue(result["ready"])
+        self.assertEqual(self.profile.node_id, result["state"]["node_id"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [command["type"] for _, command in self.sent])
+
     def test_direct_command_and_summary_retry_leave_counter_and_current_state_intact(self):
         self.enroll(); self.sent.clear()
         command = self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")

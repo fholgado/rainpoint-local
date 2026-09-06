@@ -51,10 +51,28 @@ class Htv145Runtime:
         if (times[2] - times[1]).total_seconds() > 3600:
             raise ValueError("HTV145 idle evidence is stale")
         states = self.coordinator.store.htv145_control_states()
-        if any(s["valve_endpoint"] == profile.valve_endpoint or
-               (s["node_id"] == profile.node_id and s["report_ack_center_hz"] is not None)
+        if any(s["report_ack_center_hz"] is not None and
+               (s["valve_endpoint"] == profile.valve_endpoint or s["node_id"] == profile.node_id)
                for s in states):
             raise RuntimeError("revoke existing HTV145 ownership before enrollment")
+        previous = next((s for s in states if s["valve_endpoint"] == profile.valve_endpoint), None)
+        if previous is not None:
+            # Pre-ACK dry trials have no report owner to revoke. Preserve the
+            # association and unresolved work, even when retiring an old trial.
+            if (previous["controller_endpoint"] != profile.controller_endpoint or
+                    previous["pending_command_id"] or previous["revocation_command_id"]):
+                raise RuntimeError("legacy HTV145 trial must be settled on the same association before enrollment")
+            if previous["node_id"] != profile.node_id:
+                old_node = self.node(previous["node_id"])
+                capabilities = old_node.get("capabilities")
+                if not (old_node.get("connected") is True and old_node.get("authenticated") is True
+                        and isinstance(capabilities, list)
+                        and "htv145_control_tx_candidate" not in capabilities
+                        and "htv145_report_ack_tx" not in capabilities):
+                    raise RuntimeError("legacy HTV145 owner must have verified removal of control/ACK support")
+            if (previous["last_command_started_at"] and
+                    times[0] <= datetime.fromisoformat(previous["last_command_started_at"])):
+                raise ValueError("HTV145 exchange predates the last local command")
         # Validate the entire exchange before persisting the owner.
         from .valve_protocol import decode_htv145_gateway_command, decode_htv145_command_response
         request = decode_htv145_gateway_command(command, profile.link)

@@ -1293,6 +1293,11 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
         without replay and observation-only morning readiness. Recorded exchange,
         HTTP/TCP, ownership and overdue-anomaly regression tests cover this path.
         Repeat live commands across restart remain a physical qualification gate.
+        Gateway 0.34.4 permits enrollment of pre-ACK dry trials after
+        positive exchange and fresh idle evidence, without actuation. Regression
+        tests reject unverified owner changes, pending work, stale evidence and
+        replacement of an existing ACK owner. An old trial radio may be retired
+        only after its live handshake confirms removal of HTV145 support.
   - [x] Implement HTV145 report/summary ACK handling with one persistent owner.
         Unacknowledged 60-second summaries repeated during the second run and
         cannot be used as new elapsed-duration evidence. Preserve the captured

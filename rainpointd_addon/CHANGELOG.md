@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.34.4 / Firmware 0.15.13
+
+- Allow an existing dry HTV145 trial without report-ACK ownership to enroll
+  after the radio gains ACK support. Require the same association,
+  no pending command or revocation, a positive exchange newer than the last
+  local command, and fresh idle evidence. Keep existing ACK owners protected.
+  An older trial radio can be replaced only after its authenticated connection
+  confirms control/ACK support was removed. Enrollment restores configuration
+  and counter without watering.
+
 ## Firmware 0.15.13
 
 - Preserve the RX FIFO after a successful HTV405 pairing reply; the transmit

@@ -833,6 +833,15 @@ commands); do not reverse them by guessing from their product suffix. Obtain
 all identities and calibration from the association under test. Runtime selector-6
 uses `command_marker_inverted=true` and both residues `0x4f03`.
 
+Gateway 0.34.4 also permits upgrading a pre-ACK dry-trial profile on the same
+association. The old profile must have no report-ACK owner, pending
+command or revocation; exchange evidence must postdate its last local command.
+Changing radios additionally requires a live authenticated handshake from the
+old radio confirming that its firmware no longer supports HTV145 control or ACKs.
+An existing ACK owner still requires correlated revocation before replacement.
+This upgrade uses the same independent idle and positive-exchange gates and
+never opens or closes the valve.
+
 The daemon's maintenance tick restores configuration/counters after connection
 changes and expires unresolved reservations without replay. Daytime requests do
 not wait for a valve report before sending. A fresh idle observation is required
