@@ -1247,23 +1247,23 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       correlated owner revocation before a new physical pairing trial. The
       candidate 0.15.17 network filter also admits the implemented revoke command.
 
-- [ ] Test whether an idle close establishes a deliberately different command
-      counter on the dry one-zone valve. Packet preparation and conditional
-      trial sequence are in `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.
-      September 6 isolated trial stopped on a result-3 baseline close at 0x83;
-      independent IQ confirmed the exchange. No different counter or open was
-      attempted. Temporary probe paths were removed; counter remains unknown.
-      A later fresh pairing supplied a positive 60-second open at 0x81, active
-      early close at 0x82, and independent idle. Both exchanges were recovered
-      from IQ; 0x82 is freshly authenticated. Idle-close anchoring is still
-      untested on that fresh baseline. Its later exact 82/10 idle repeat returned
-      result 3; no zero-counter probe or opening followed. Counter is unknown.
+- [x] Test the HTV405 idle-close counter-anchor method on the dry one-zone valve.
+      September 6 report-triggered phase 5 and later phases 6, 0 and 1 idle
+      closes all returned result 3. The same zero close succeeded while watering.
+      Two active anchors at phases 0 and 62 were followed by positively
+      acknowledged opens and early closes, including phase 63 -> 0 rollover;
+      independent IQ and telemetry verify both complete recovery sequences.
+      Active recovery is qualified on this specimen; a non-watering morning
+      anchor is not. Evidence: `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md` and
+      `research/fixtures/htv145_active_counter_recovery_20260906.json`.
 - [ ] Qualify and persist the complete one-zone command phase, including the
-      high marker bit. Five raw stock commands progress 81/90, 82/10, 82/90,
-      83/10, 83/90; the repeated local close reused phase 4. Test the predicted
-      82/90 idle close before changing runtime counter/polarity semantics or
-      claiming idle-close recovery. Evidence and offline analysis are in
-      `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.
+      high marker bit, for arbitrary action sequences. Stock consecutive opens
+      demonstrate why fixed action polarity is not a general phase model.
+      The September 6 active-anchor trials verify normal alternating controls
+      and rollover, but the next-phase idle close still rejects. Keep automatic
+      one-zone morning checks limited to retained counter/owner restoration;
+      do not reuse the four-zone idle anchor or add synchronization watering.
+      Any recovery from an unknown counter while idle needs separate evidence.
 
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open

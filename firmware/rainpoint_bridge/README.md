@@ -80,7 +80,7 @@ python tools/check_firmware_boundaries.py --supervised --htv145-pairing \
 ```
 
 Production version is `0.15.14`; the isolated image is
-`0.15.19-htv145-control.1`. `RAINPOINT_FIRMWARE_VERSION` may label a reproducible
+`0.15.22-htv145-control.1`. `RAINPOINT_FIRMWARE_VERSION` may label a reproducible
 artifact. Retired research, selector, factory-counter, timing, tail and PHY flags
 are rejected. Their captures remain under `research/fixtures`; Git retains the
 old implementation and the exact `.22` binary remains a separate rollback artifact.

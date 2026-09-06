@@ -27,6 +27,43 @@ def frame(source: str, destination: str, message: int, *, zone: int = 0,
 
 
 class CounterAnchorPreparationTests(unittest.TestCase):
+    def test_active_counter_anchors_support_followup_and_wraparound(self):
+        import json
+        from pathlib import Path
+        from tools.analyze_htv145_command_phase import command_phase
+        from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response, decode_htv145_command_error, decode_htv145_state_report
+        fixture = json.loads((Path(__file__).parent / 'research/fixtures/htv145_active_counter_recovery_20260906.json').read_text())
+        link = ValveLink(bytes.fromhex(fixture['controller_endpoint']), bytes.fromhex(fixture['valve_endpoint']))
+        rows = fixture['command_transactions']
+        self.assertEqual([5, 0, 1, 2, 3, 62, 63, 0], [command_phase(bytes.fromhex(r['command_frame']), link) for r in rows])
+        for row in rows:
+            command = decode_htv145_gateway_command(bytes.fromhex(row['command_frame']), link)
+            response = bytes.fromhex(row['response_frame'])
+            reply = decode_htv145_command_response(response, link)
+            self.assertIsNone(decode_htv145_command_error(response, link))
+            for key in ('sequence', 'watering', 'command_marker_inverted'):
+                self.assertEqual(command[key], reply[key])
+            self.assertEqual(row['watering'], decode_htv145_state_report(bytes.fromhex(row['independent_state_frame']), link)['watering'])
+            self.assertGreater(row['independent_state_at'], row['observed_at'])
+        self.assertNotEqual(rows[1]['phase'], (rows[0]['phase'] + 1) % 64)
+        self.assertNotEqual(rows[5]['phase'], (rows[4]['phase'] + 1) % 64)
+        self.assertEqual(0x80, decode_htv145_command_response(bytes.fromhex(rows[6]['response_frame']), link)['next_sequence'])
+
+    def test_next_phase_negative_marker_is_not_a_timeout_or_acceptance(self):
+        import json
+        from pathlib import Path
+        from tools.analyze_htv145_control_iq import summarize_matches
+        from rainpointd.valve_protocol import ValveLink, decode_htv145_command_error, decode_htv145_command_response
+        fixture = json.loads((Path(__file__).parent / 'research/fixtures/htv145_next_phase_idle_close_rejection_20260906.json').read_text())
+        link = ValveLink(bytes.fromhex(fixture['controller_endpoint']), bytes.fromhex(fixture['valve_endpoint']))
+        response = bytes.fromhex(fixture['response_frame'])
+        self.assertEqual({'sequence': 0x82, 'result_code': 3}, decode_htv145_command_error(response, link))
+        self.assertIsNone(decode_htv145_command_response(response, link))
+        summary = summarize_matches([dict(frame_hex=response.hex(), phase_count=136,
+            alternating_wake_symbol_histogram={'321': 136}, alternating_wake_symbols=[321])], link)
+        self.assertEqual(1, len(summary['errors']))
+        self.assertEqual([], summary['responses'])
+
     def test_anchor_acceptance_requires_immediate_matching_idle_response(self):
         import binascii
         from tools.prepare_htv145_counter_anchor import anchor_reply_matches, Htv145ControlProfile

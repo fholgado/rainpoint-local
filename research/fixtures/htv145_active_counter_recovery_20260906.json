@@ -1,0 +1,133 @@
+{
+  "description": "Two dry active-close anchors at phases 0 and 62, followed by successful bounded controls including 63-to-0 wraparound. Same anchors were not accepted while idle. Synthetic endpoints; original CRC residues preserved.",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "command_transactions": [
+    {
+      "name": "phase5-open",
+      "phase": 5,
+      "watering": true,
+      "observed_at": "2026-09-06T17:30:48.040112+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808290828081009e000000000000000000000000000000007486",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf80000000409e00569e000000000000000047ef",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f86010786058090cf80000000409a00569e0000000000005187",
+      "independent_state_at": "2026-09-06T17:30:57.623204+00:00",
+      "independent_watering": true
+    },
+    {
+      "name": "active-phase0-close",
+      "phase": 0,
+      "watering": false,
+      "observed_at": "2026-09-06T17:31:11.308082+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808010818081000000000000000000000000000000000000616b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80508680104f80000000408000569e00000000000000007fa5",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f878107860580804f80000000408000568000000000000015dd",
+      "independent_state_at": "2026-09-06T17:31:21.350011+00:00",
+      "independent_watering": false
+    },
+    {
+      "name": "recovered-phase1-open",
+      "phase": 1,
+      "watering": true,
+      "observed_at": "2026-09-06T17:31:34.590363+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808090828081009e00000000000000000000000000000000be90",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80d0868010cf80000000409e00569e000000000000000005e9",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f89810786058090cf80000000409980569e0000000000005e54",
+      "independent_state_at": "2026-09-06T17:31:44.820625+00:00",
+      "independent_watering": true
+    },
+    {
+      "name": "recovered-phase2-close",
+      "phase": 2,
+      "watering": false,
+      "observed_at": "2026-09-06T17:31:57.785944+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c38081108180810000000000000000000000000000000000000460",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f81508680104f80000000408000569e00000000000000001aae",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f8b8107860580804f80000000408000568000000000000001fb",
+      "independent_state_at": "2026-09-06T17:32:07.815859+00:00",
+      "independent_watering": false
+    },
+    {
+      "name": "wrap-phase3-open",
+      "phase": 3,
+      "watering": true,
+      "observed_at": "2026-09-06T17:34:04.543421+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f8f810786058090cf80000000409980569e000000000000104f",
+      "independent_state_at": "2026-09-06T17:34:14.832448+00:00",
+      "independent_watering": true
+    },
+    {
+      "name": "active-phase62-close",
+      "phase": 62,
+      "watering": false,
+      "observed_at": "2026-09-06T17:34:27.909531+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3809f108180810000000000000000000000000000000000006236",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f9f508680104f80000000408000569e00000000000000007cf8",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f918107860580804f8000000040800056800000000000006bb0",
+      "independent_state_at": "2026-09-06T17:34:37.815184+00:00",
+      "independent_watering": false
+    },
+    {
+      "name": "wrap-phase63-open",
+      "phase": 63,
+      "watering": true,
+      "observed_at": "2026-09-06T17:34:51.363589+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3809f90828081009e00000000000000000000000000000000bdcd",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f9fd0868010cf80000000409e00569e000000000000000006b4",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f93810786058090cf80000000409980569e000000000000341f",
+      "independent_state_at": "2026-09-06T17:35:01.322661+00:00",
+      "independent_watering": true
+    },
+    {
+      "name": "wrap-phase0-close",
+      "phase": 0,
+      "watering": false,
+      "observed_at": "2026-09-06T17:35:14.402228+00:00",
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808010818081000000000000000000000000000000000000616b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80508680104f80000000408000569e00000000000000007fa5",
+      "independent_state_frame": "79f4882f28a1b2c380b1c2d38f958107860580804f80000000408000568000000000000067ad",
+      "independent_state_at": "2026-09-06T17:35:24.331649+00:00",
+      "independent_watering": false
+    }
+  ],
+  "idle_close_transactions": [
+    {
+      "phase": 5,
+      "command_frame": "79f4882f28b1c2d38fa1b2c380829081808100000000000000000000000000000000000011e8",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f82d08683104f8000000040800056800000000000000000717a",
+      "requested_at": "2026-09-06T17:17:15.008501+00:00",
+      "idle_before_frame": "79f4882f28a1b2c380b1c2d38f9e8107860700804f800000004080005680000000000000139b",
+      "idle_before_at": "2026-09-06T17:17:14.862983+00:00",
+      "result_code": 3
+    },
+    {
+      "phase": 6,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808310818081000000000000000000000000000000000000ce76",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f83508683104f800000004080005680000000000000000026f4",
+      "requested_at": "2026-09-06T17:18:25.331021+00:00",
+      "idle_before_frame": "79f4882f28a1b2c380b1c2d38f9e8107860700804f800000004080005680000000000000139b",
+      "idle_before_at": "2026-09-06T17:17:14.862983+00:00",
+      "result_code": 3
+    },
+    {
+      "phase": 0,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808010818081000000000000000000000000000000000000616b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80508683104f800000004080005680000000000000000001f9",
+      "requested_at": "2026-09-06T17:20:57.741715+00:00",
+      "idle_before_frame": "79f4882f28a1b2c380b1c2d38f9e8107860700804f800000004080005680000000000000139b",
+      "idle_before_at": "2026-09-06T17:17:14.862983+00:00",
+      "result_code": 3
+    },
+    {
+      "phase": 1,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808090818081000000000000000000000000000000000000dbfe",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80d08683104f8000000040800056800000000000000000337c",
+      "requested_at": "2026-09-06T17:22:09.564315+00:00",
+      "idle_before_frame": "79f4882f28a1b2c380b1c2d38f9e8107860700804f800000004080005680000000000000139b",
+      "idle_before_at": "2026-09-06T17:17:14.862983+00:00",
+      "result_code": 3
+    }
+  ]
+}

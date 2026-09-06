@@ -8,7 +8,11 @@ The retained-counter UI cannot answer this question: restoring a radio's saved
 counter is not a valve exchange.
 Status and completion gates remain in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
-## Controlled sequence
+## Original numeric-counter sequence (superseded)
+
+This original procedure used a numeric counter and fixed action marker. The
+command-phase tests below supersede those assumptions; it is retained to explain
+the earlier captures, not as an executable recovery recipe.
 
 Use only the dry one-zone valve and its current ACK owner, with the stock gateway
 off. Preserve the existing association and calibrated selector-6 packet shape.
@@ -175,3 +179,75 @@ Cleanup validation: 455 Python tests passed (two optional skips), and the native
 protocol test passed. No firmware change was needed for this trial. The clean
 gateway removes the temporary route, leaves counter authentication false after
 result 3, and preserves the existing single ACK owner and idle telemetry.
+
+
+## Next-phase and fixed-zero idle-close comparison, September 6
+
+With the same selector-6 association, ACK owner, carrier, residue and 2,400-symbol
+wake, a report-triggered phase-5 close (`82/90`) received result 3 at 17:17 UTC.
+Subsequent close-only probes at phase 6 (`83/10`), phase 0 (`80/10`) and phase 1
+(`80/90`) also received result 3. Independent IQ recovered every request and
+negative reply. Thus neither the predicted next phase nor either zero-counter
+marker established an idle-close anchor. These replies do not establish whether
+rejected commands advance state, or whether the valve rejects closes while idle.
+
+The phase-5/phase-1 replies use marker `d0`, which the original strict negative
+reply decoder omitted. The radio heard CRC-valid matching-route frames but called
+that an unclassified response timeout. The new redacted fixture
+`fixtures/htv145_next_phase_idle_close_rejection_20260906.json` reproduces the gap;
+both Python and native decoders now recognize the captured negative family with
+either marker, without treating it as positive state or counter evidence.
+
+The next isolated discriminator is a single 60-second dry open at phase 5,
+predicted from the last positively accepted phase-4 close. This is explicitly an
+assumed phase, not synchronization. A durable one-use permit is consumed before
+dispatch; restart cannot replay the opening. Ordinary controls remain blocked.
+Only a direct matching positive reply permits follow-up phase control. If accepted,
+compare an active close at deliberately different phase 0 with the expected phase-6
+close, spaced at least 15 seconds apart and within the original timer. A successful
+phase-0 close must be followed by a positively acknowledged phase-1 bounded open,
+phase-2 early close and independent idle before claiming usable active recovery.
+A negative or unanswered opening ends this discriminator without another opening.
+
+
+## Active recovery and rollover results
+
+The phase-5 assumed open received a positive immediate reply at 17:30:48 UTC,
+then independent watering telemetry. An active phase-0 close succeeded at
+17:31:11, despite the identical phase-0 idle close having returned result 3.
+The phase-1 open and phase-2 early close both succeeded with subsequent
+independent watering and idle reports. This proves usable active recovery on
+this unchanged association; the earlier rejected closes did not prevent the
+predicted phase-5 open.
+
+A second sequence accepted phase-3 open, deliberately different phase-62 close,
+phase-63 open and phase-0 close across rollover. All eight positive request/reply
+pairs from both trials were independently recovered from low-gain command-channel
+IQ. Every stage has a subsequent matching independent state report. The redacted
+fixture is `fixtures/htv145_active_counter_recovery_20260906.json`.
+
+The proven distinction is operational: the tested arbitrary anchors are accepted
+while watering and rejected while idle. This does not establish the meaning of
+all result-3 responses or prove that all 64 phases are interchangeable. Neither
+ordinary reports nor their ACKs authorize a guessed command counter. A daily
+one-zone idle-close synchronization, like the four-zone method, is unsupported
+by this evidence; do not introduce unwanted watering merely to synchronize.
+
+The gateway adopted the final positive phase-0 close from its own persisted RF
+event, after validating the matching command and subsequent idle. The temporary
+handoff rejected stale/nonlatest/negative replies and sent no RF. Normal next
+numeric counter is `0x80`, with the existing qualified open marker. Cleanup
+removes phase probes, the durable assumed-open permit and the handoff action;
+the matching positive exchange replaces the consumed experimental permit in
+persistent state. Release 0.34.11 and clean candidate 0.15.22 retain only the
+negative-marker diagnostic fix and regression evidence.
+
+
+After clean gateway 0.34.11 and candidate 0.15.22 deployment, a normal 60-second
+open at numeric counter `0x80` and early close at `0x81` both received matching
+positive replies and subsequent independent watering/idle telemetry. The gateway
+retained synchronized next counter `0x81`. The first preflight attempt sent no
+command because the external SDR had disappeared from USB enumeration. The
+successful clean-runtime check used the radio's received RF frames and separate
+valve state reports; unlike the eight recovery exchanges above, it has no
+independent SDR capture.

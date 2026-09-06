@@ -2369,5 +2369,10 @@ int main() {
     assert(rainpoint::decodeHtv145CommandError(result3, ackLink, htv145Error));
     assert(!rainpoint::decodeHtv145CommandResponse(result3, ackLink, htv145Response));
     assert(!rainpoint::buildHtv145ReportAck(result3, ackLink, 0x4f03, reportAck));
+    const auto alternateMarkerError = fromHex("79f4882f28a1b2c380b1c2d38f82d08683104f8000000040800056800000000000000000717a");
+    assert(rainpoint::decodeHtv145CommandError(alternateMarkerError, ackLink, htv145Error));
+    assert(htv145Error.sequence == 0x82 && htv145Error.resultCode == 3);
+    assert(!rainpoint::decodeHtv145CommandResponse(alternateMarkerError, ackLink, htv145Response));
+    assert(!rainpoint::buildHtv145ReportAck(alternateMarkerError, ackLink, 0x4f03, reportAck));
     return 0;
 }

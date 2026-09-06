@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.34.11 / Integration 0.14.3 / HTV145 candidate 0.15.22
+
+- Recognize recorded one-zone result-3 replies with either counter marker, so
+  alternate-marker rejection is not misreported as an unclassified timeout.
+- Preserve two dry active-close counter-recovery sequences, including rollover,
+  with independent RF and state evidence. Idle closes still reject; the four-zone
+  morning idle-anchor procedure is not qualified for the one-zone valve.
+- Remove all temporary phase probes, assumed-open permits and counter-handoff
+  routes after qualification. Normal counter and single-owner ACK guards remain.
+
 ## 0.34.10 / Integration 0.14.3
 
 - Remove the temporary idle-close baseline route after the recorded dry trial.

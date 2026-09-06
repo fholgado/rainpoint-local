@@ -221,7 +221,7 @@ inline bool decodeHtv145CommandError(
     const Htv145Link& link,
     Htv145CommandError& error
 ) {
-    // Exact non-success family captured after both dry close probes. Its
+    // Non-success family captured with both 50 and d0 command markers. Its
     // idle-looking fields do not prove a physical close or counter acceptance.
     constexpr std::array<std::uint8_t, 22> body = {
         0x50, 0x86, 0x83, 0x00, 0x4f, 0x80, 0x00, 0x00,
@@ -234,6 +234,9 @@ inline bool decodeHtv145CommandError(
         return false;
     }
     for (std::size_t index = 0; index < body.size(); ++index) {
+        if (index == 0 && (frame[14] == 0x50 || frame[14] == 0xd0)) {
+            continue;
+        }
         if (index == 3 && (frame[17] == 0 || frame[17] == 0x10)) {
             continue;
         }

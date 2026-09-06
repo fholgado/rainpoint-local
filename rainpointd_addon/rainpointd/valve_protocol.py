@@ -556,8 +556,8 @@ def decode_htv145_command_error(
 ) -> dict[str, int] | None:
     """Recognize the captured result-code-3 reply without inferring state.
 
-    Both close probes after 5/6 enrollment elicited this exact family. Its
-    meaning beyond a non-success command result is unresolved; in particular,
+    Idle close probes after 5/6 enrollment elicited this family with both
+    50 and d0 markers. Its meaning beyond a non-success result is unresolved; in particular,
     its idle-looking bytes must not confirm a close or authenticate a counter.
     Keep this recognizer narrow until another result layout is captured.
     """
@@ -567,9 +567,10 @@ def decode_htv145_command_error(
             frame, link.valve_endpoint, link.controller_endpoint
         )
         or frame[13] not in range(0x80, 0xA0)
-        or frame[14:36] not in {
-            bytes.fromhex("508683004f8000000040800056800000000000000000"),
-            bytes.fromhex("508683104f8000000040800056800000000000000000"),
+        or frame[14] not in {0x50, 0xD0}
+        or frame[15:36] not in {
+            bytes.fromhex("8683004f8000000040800056800000000000000000"),
+            bytes.fromhex("8683104f8000000040800056800000000000000000"),
         }
     ):
         return None

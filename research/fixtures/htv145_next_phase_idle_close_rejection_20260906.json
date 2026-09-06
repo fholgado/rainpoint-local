@@ -1,0 +1,10 @@
+{
+  "description": "Dry next-phase idle close 82/90 was transmitted with stock wake and received result 3. Synthetic association endpoints; CRC residues preserved. No watering followed.",
+  "observed_at": "2026-09-06T17:17:15.008501+00:00",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "phase": 5,
+  "command_frame": "79f4882f28b1c2d38fa1b2c380829081808100000000000000000000000000000000000011e8",
+  "response_frame": "79f4882f28a1b2c380b1c2d38f82d08683104f8000000040800056800000000000000000717a",
+  "result_code": 3
+}

@@ -900,3 +900,27 @@ result 3. The predicted next close is `82/90`, but it is not yet physically
 qualified. Keep the runtime counter unknown after this rejection and do not
 apply the hypothesis as authenticated state. See the counter-anchor experiment
 for evidence and the canonical roadmap for the qualification gate.
+
+
+### Active counter anchors versus idle closes (September 6)
+
+Dry testing on the retained selector-6 association distinguishes two cases.
+Idle closes at combined phases 5, 6, 0 and 1 all elicited result 3; a 60-second
+open at phase 5 then succeeded. While watering, a deliberately different phase-0
+close succeeded, followed by successful phase-1 open and phase-2 close. A second
+active anchor at phase 62 supported a phase-63 open and phase-0 close across
+rollover. Independent IQ contains all eight positive exchanges, and independent
+telemetry confirms the resulting state after every command. See
+`research/fixtures/htv145_active_counter_recovery_20260906.json` and the
+[counter-anchor experiment](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).
+
+This qualifies active counter assignment on the tested specimen. It does not
+qualify the HTV405 non-watering morning anchor for HTV145, all possible command
+phases, or arbitrary action ordering. Normal daytime control can retain the
+positively established counter; an unknown idle counter remains a separate gate
+in [the roadmap](../PROJECT_ROADMAP.md).
+
+Result-3 responses use either `50` or `d0` at byte 14. Both forms must be reported
+as explicit negative results, never as a positive close or a counter-authentication
+signal. The earlier decoder recognized only `50`, turning valid `d0` rejections
+into misleading unclassified-response timeouts.
