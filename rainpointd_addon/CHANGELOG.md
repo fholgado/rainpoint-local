@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.34.8 / Integration 0.14.3
+## 0.34.8 / Integration 0.14.3 / HTV145 candidate 0.15.17
+
+- Admit the existing HTV145 owner-revoke command through the research firmware
+  network filter, allowing its exact non-RF acknowledgment to reach the gateway.
 
 - Scope node action routing to the nodes URL prefix. One-zone owner revocation
   now reaches its control coordinator instead of the unrelated node-revoke

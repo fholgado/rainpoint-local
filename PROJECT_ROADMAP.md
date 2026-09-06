@@ -1244,7 +1244,8 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 - [x] Correct the valve-owner revoke HTTP route collision with node revocation
       (gateway 0.34.8). A real HTTP regression reproduces the misrouting; require
-      correlated owner revocation before a new physical pairing trial.
+      correlated owner revocation before a new physical pairing trial. The
+      candidate 0.15.17 network filter also admits the implemented revoke command.
 
 - [ ] Test whether an idle close establishes a deliberately different command
       counter on the dry one-zone valve. Packet preparation and conditional

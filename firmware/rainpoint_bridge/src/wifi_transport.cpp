@@ -276,6 +276,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
              type == "htv145_control_sync" ||
              type == "htv145_control_open" ||
              type == "htv145_control_close" ||
+             type == "htv145_control_revoke" ||
              type == "htv145_control_status"
 #endif
          || isHtv405NetworkCommand(type.c_str())

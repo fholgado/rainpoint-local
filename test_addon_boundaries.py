@@ -42,6 +42,12 @@ class AddonBoundaryTest(unittest.TestCase):
         for capability in ("routine_ack_configure", "htv405_routine_ack_configure", "firmware_update_start",
                            "htv145_control_open", "htv145_control_revoke"):
             self.assertIn(capability, source)
+        # Implemented research commands must be reachable through the authenticated transport.
+        import re
+        transport = (root / "src/wifi_transport.cpp").read_text()
+        handled = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', source))
+        admitted = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', transport))
+        self.assertLessEqual(handled, admitted)
         self.assertIn("!htv145ControlCandidate.counterAuthenticated", source)
         self.assertIn("!rfMaintenance.transmitAllowed()", source)
         self.assertIn("!wifiTransport.authenticated()", source)

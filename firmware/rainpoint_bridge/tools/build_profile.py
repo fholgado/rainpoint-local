@@ -21,7 +21,7 @@ if retired:
     raise ValueError("Retired firmware flags: " + ", ".join(sorted(retired)))
 enabled = value == "1"
 version = os.environ.get("RAINPOINT_FIRMWARE_VERSION",
-                         "0.15.16-htv145-control.1" if enabled else "0.15.14")
+                         "0.15.17-htv145-control.1" if enabled else "0.15.14")
 if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", version):
     raise ValueError("RAINPOINT_FIRMWARE_VERSION is invalid")
 variant = "htv145-control-candidate" if enabled else "unified"
