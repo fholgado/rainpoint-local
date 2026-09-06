@@ -2,7 +2,9 @@
 
 ## Working copy
 
-- Work from a persistent Git clone, never treat `/private/tmp` as canonical.
+- Use the canonical repository checkout for all development. Isolate tasks with
+  Git branches in that same checkout; do not create or use additional clones,
+  worktrees, or separate task directories for development.
 - Keep `PROJECT_DEVELOPMENT_TIMELINE.local.md`, `captures/`, copied databases,
   firmware build output, and downloaded upstream snapshots untracked.
 - Preserve raw RF/IQ captures until their smallest useful exchanges have been
