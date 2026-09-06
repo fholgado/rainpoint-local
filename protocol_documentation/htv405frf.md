@@ -277,6 +277,17 @@ Battery is a declared HTV405 capability but remains unavailable locally. The
 previously suspected offset-`17` bit `0x08` is only a research candidate and
 has not been correlated to a controlled normal-to-low transition.
 
+A September 6 read-only review found 63 distinct recorded routine gateway
+ACKs with the same payload: bytes 15–17 `01 00 01`, then zeros through byte 35.
+The different pairing-ACK body `01 00 00 80 ...` belongs to another protocol
+stage and is not battery evidence. All 158 distinct recorded valve status
+frames kept the candidate bit clear (`0x05` or `0x85` at byte 17). Control
+responses use a different layout, where byte 17 selects the zone. These counts
+exclude fixture-only frames; repeated identical frames are counted once.
+See `ack_review_20260906` in
+`research/fixtures/htv405_battery_transition_20260823.json` for the evidence scope.
+
+
 HTV405 does not expose water usage. Its cloud product definition includes
 per-zone work state, alarm, event time, and duration plus chassis battery and
 RSSI, but no flow or water-volume data point. The local integration must not

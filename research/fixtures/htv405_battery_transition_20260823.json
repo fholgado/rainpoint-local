@@ -32,7 +32,10 @@
     "paired_link_selector_05": {
       "before_events": 118,
       "after_events": 17,
-      "changed_offsets": [19, 26],
+      "changed_offsets": [
+        19,
+        26
+      ],
       "interpretation": "Both offsets are already crossed against zone selection and watering countdown; neither is a battery candidate."
     }
   },
@@ -84,5 +87,43 @@
     "Home Assistant recorder history cannot validate the old-cell side: the HTV405FRF cloud battery entity was unavailable then and first reported 100 percent only after fresh batteries were installed.",
     "The cloud catalog's port-0 STA_BAT declaration establishes the semantic feature but does not locate it in the RF frame.",
     "A controlled normal-to-low voltage transition with an independently observed LCD or app state is still required. Until then Home Assistant must report HTV405 battery as unavailable rather than invent a percentage."
-  ]
+  ],
+  "ack_review_20260906": {
+    "scope": "Read-only comparison of saved gateway events 239988 through 339987, recent events 339988 through 354779, and local raw capture JSON. Counts deduplicate complete frames and require a known trailer residual. Regression fixtures were cross-referenced separately and excluded from these counts.",
+    "recorded_frame_summary": {
+      "gateway_routine_ack": {
+        "distinct_valid_frames": 63,
+        "offset_17_values": {
+          "01": 63
+        },
+        "offset_17_mask_08_set": 0,
+        "body_15_through_35": [
+          "010001000000000000000000000000000000000000"
+        ]
+      },
+      "control_response": {
+        "distinct_valid_frames": 61,
+        "offset_17_values": {
+          "10": 59,
+          "40": 2
+        },
+        "offset_17_mask_08_set": 0
+      },
+      "valve_status": {
+        "distinct_valid_frames": 158,
+        "offset_17_values": {
+          "05": 138,
+          "85": 20
+        },
+        "offset_17_mask_08_set": 0
+      }
+    },
+    "findings": [
+      "All 63 distinct recorded routine gateway ACKs had bytes 15 through 17 equal to 01 00 01 and bytes 18 through 35 zero. No varying battery field was found in that payload.",
+      "Pairing ACK fixtures also include 01 00 00 80 followed by zeros. This is a different protocol stage, not an observed battery transition.",
+      "Control-response byte 17 is the zone field; the analogous byte number cannot be assigned status-report battery semantics across families.",
+      "All 158 distinct recorded status frames kept offset 17 mask 0x08 clear. Values 0x05 and 0x85 differ in the existing profile/layout marker, not the proposed low-battery bit.",
+      "No independently labelled low-battery sample was added. Offset 17 mask 0x08 remains a hypothesis; do not expose a local battery value until a controlled transition validates it."
+    ]
+  }
 }
