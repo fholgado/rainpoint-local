@@ -169,6 +169,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             or parsed.path.endswith("/valve/node")
             or parsed.path.endswith("/valve/morning-sync")
             or parsed.path.endswith("/valve/sync-now")
+            or parsed.path.endswith("/valve/restore-counter")
         )
         htv145_control_prefix = f"{base}/research/htv145-control/"
         htv145_control_path = parsed.path.startswith(htv145_control_prefix)
@@ -449,10 +450,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "node",
                         "morning-sync",
                         "sync-now",
+                        "restore-counter",
                     }:
                         self._json(404, {"error": "not found"})
                         return
-                    if action == "morning-sync":
+                    if action == "restore-counter":
+                        result = self.server.gateway.restore_htv145_counter(device_id)
+                    elif action == "morning-sync":
                         result = self.server.gateway.configure_htv405_morning_sync(
                             device_id=device_id, settings=body,
                         )

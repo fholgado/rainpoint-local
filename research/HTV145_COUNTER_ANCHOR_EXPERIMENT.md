@@ -4,8 +4,8 @@ Question: does the locally paired selector-6 HTV145 accept an idle close with a
 counter different from its retained command counter, and then accept an open
 using that newly established counter, as the HTV405 does?
 
-The current retained-counter UI work is paused before deployment. It cannot
-answer this question: restoring a radio's saved counter is not a valve exchange.
+The retained-counter UI cannot answer this question: restoring a radio's saved
+counter is not a valve exchange.
 Status and completion gates remain in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 ## Controlled sequence
@@ -64,3 +64,39 @@ UI commands; maintain single-owner report ACKs. Positive matching evidence alone
 may restore counter certainty. A restart, capture loss, timeout, foreign command,
 or unexpected watering ends the trial without speculative counter restoration.
 Any later open needs a new evidence-based recovery if this trial is inconclusive.
+
+## September 6, 2026 result
+
+The dry baseline close at retained counter `0x83` received an explicit result-3
+reply at 14:55:46 UTC. Independent RTL-SDR IQ decoded the same close and response
+as the radio diagnostics, both with residue `4f03`. The decoder timestamps for the close and reply were about 375 ms apart. The result code's precise
+meaning remains unknown. This establishes RF reception and a negative command
+exchange, not counter authentication.
+
+The runner stopped at the baseline gate: **no different-counter close and no
+open were sent**. Thus the HTV405-style anchor remains unproven on HTV145. The
+retained counter was invalidated and must not be restored from the pre-trial
+snapshot after this actual RF rejection. A future comparison needs a newly
+verified positive baseline and investigation of why the retained baseline failed.
+
+Two preceding setup attempts emitted no RF: the first lacked an authenticated
+probe capability; the second reached the node before its saved profile was
+restored. An exact, non-transmitting rejection allowed recovery of that second
+attempt's pre-test state. Neither is valve evidence, and that recovery does not
+apply to the subsequent result-3 exchange.
+
+Temporary probe reservations, capability, API actions and firmware paths were
+removed after this trial. Clean candidate `0.15.16-htv145-control.1` retains the
+normal command and report-ACK behavior. Raw IQ, serial logs, runner and exact
+experimental source patch remain in the untracked September 6 capture output.
+The redacted minimal exchange is
+`fixtures/htv145_counter_anchor_baseline_negative_20260906.json`; its regression
+requires that result 3 cannot authenticate the anchor. RTL-SDR used automatic
+gain at 1 Msps, centered on 434.350 MHz; this is command-channel evidence.
+
+Cleanup validation: 451 Python tests passed (two optional skips), native C++
+protocol tests passed, and clean production/candidate PlatformIO builds passed.
+The clean one-zone OTA image was health-confirmed; the owner is configured with
+no pending command and no authenticated counter. Gateway 0.34.7 projects
+Recovery required with retained restoration disabled. The four-zone owner
+remains on 0.15.14, synchronized and idle, with its morning schedule enabled.

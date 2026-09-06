@@ -1,0 +1,22 @@
+{
+  "description": "Dry selector-6 baseline close at retained counter 0x83; independently decoded CU8 exchange. Endpoints replaced and CRC recomputed preserving residue.",
+  "observed_at": "2026-09-06T14:55:45Z",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "baseline_counter": 131,
+  "result_code": 3,
+  "different_counter_attempted": false,
+  "logical_opens": 0,
+  "frames": [
+    {
+      "frame_hex": "79f4882f28b1c2d38fa1b2c3808310818081000000000000000000000000000000000000ce76",
+      "capture_time": "@6.844191s",
+      "trailer_residual": "4f03"
+    },
+    {
+      "frame_hex": "79f4882f28a1b2c380b1c2d38f83508683104f800000004080005680000000000000000026f4",
+      "capture_time": "@7.218960s",
+      "trailer_residual": "4f03"
+    }
+  ]
+}

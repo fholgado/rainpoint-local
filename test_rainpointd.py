@@ -2937,6 +2937,25 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         result = self.post_json(prefix + "morning-check", {"valve_endpoint": "a1b2c380"})
         self.assertTrue(result["ready"])
         self.assertEqual([], self.commands)
+        gateway._devices["one-zone"] = {
+            "device_id": "one-zone", "model": "HTV145FRF", "name": "Test valve",
+            "state": {"rf_endpoint_a": "a1b2c380", "rf_endpoint_b": "b1c2d38f"},
+        }
+        device = next(d for d in gateway.devices(now=now) if d["device_id"] == "one-zone")
+        self.assertIn("retained_counter_restore", device["capabilities"])
+        self.assertNotIn("counter_resynchronization", device["capabilities"])
+        self.assertEqual("Retained counter ready", device["state"]["rf_retained_counter_status"])
+        route = "/api/v1/devices/one-zone/valve/restore-counter"
+        with self.assertRaises(HTTPError) as context:
+            self.post_json(route, {}, token=None)
+        self.assertEqual(401, context.exception.code)
+        self.assertEqual([], self.commands)
+        restored = self.post_json(route, {})["control"]
+        self.assertFalse(restored["rf_transmitted"])
+        self.assertEqual(0x82, restored["next_sequence"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [c["type"] for _, c in self.commands])
+        self.commands.clear()
         result = self.post_json(prefix + "open", {"valve_endpoint": "a1b2c380", "duration_seconds": 60})
         self.assertEqual("pending_valve_evidence", result["state"])
         self.assertEqual(0x82, result["command"]["expected_sequence"])

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.34.7 / Integration 0.14.2 / HTV145 candidate 0.15.16
+
+- Remove the temporary idle-close counter probe after its baseline returned
+  result 3. Keep the counter unknown; no different-counter probe or open ran.
+  Preserve the redacted RF exchange and offline acceptance regression.
+
+- Expose one-zone counter status, next command counter, and an explicit
+  Restore retained counter button for enrolled dry-trial owners. Restoration
+  reloads already authenticated state; it does not send an RF recovery probe.
+- Keep unknown counters, stale idle state, pending commands and unavailable
+  owners blocked. No four-zone schedule or anchor is applied to the one-zone valve.
+
 ## 0.34.5 / Integration 0.14.1 / Firmware 0.15.14
 
 - Pre-fill known sensors’ pairing details with their saved name and HA area.

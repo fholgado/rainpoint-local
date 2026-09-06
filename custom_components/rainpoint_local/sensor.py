@@ -111,6 +111,14 @@ def _description_supported_by_device(
 
 DESCRIPTIONS = (
     RainPointSensorDescription(
+        key="retained_counter_status", translation_key="retained_counter_status",
+        state_key="rf_retained_counter_status",
+    ),
+    RainPointSensorDescription(
+        key="retained_command_counter", translation_key="retained_command_counter",
+        state_key="rf_retained_command_counter", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointSensorDescription(
         key="soil_moisture",
         translation_key="soil_moisture",
         state_key="soil_moisture_percent",

@@ -41,6 +41,24 @@ def _integration_function(filename, name, namespace):
 
 
 class IntegrationMigrationTest(unittest.TestCase):
+    def test_one_zone_counter_capability_creates_only_retained_restore_button(self):
+        constructor = Mock()
+        add = Mock()
+        coordinator = types.SimpleNamespace(nodes={}, data={
+            "one": {"capabilities": ["retained_counter_restore"]},
+            "unqualified": {"capabilities": ["forget"]},
+        })
+        factory = _integration_function("button.py", "async_add_missing_entities", {
+            "callback": lambda fn: fn, "known": set(), "coordinator": coordinator,
+            "entry": types.SimpleNamespace(data={}, options={}), "CONF_TOKEN": "token",
+            "RainPointRestoreRetainedCounterButton": constructor, "async_add_entities": add,
+        })
+        factory()
+        constructor.assert_called_once_with(coordinator, "one", "")
+        add.assert_called_once_with([constructor.return_value])
+        factory()
+        self.assertEqual(1, constructor.call_count)
+
     def test_known_sensor_details_use_ha_customizations_and_exact_identity(self):
         entry = types.SimpleNamespace(name_by_user="Right Bed", name="Old name", area_id="garden")
         registry = Mock()

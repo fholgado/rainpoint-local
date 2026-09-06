@@ -2020,6 +2020,26 @@ class Htv145RuntimeTest(unittest.TestCase):
         self.assertEqual("expected_idle_not_observed", result["anomaly"])
         self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.sent])
 
+    def test_explicit_retained_restore_rejects_stale_idle_and_unavailable_owner(self):
+        self.enroll(); self.sent.clear()
+        with self.assertRaises(RuntimeError):
+            self.runtime.restore_retained_counter(self.profile, now="2026-09-06T09:30:00+00:00")
+        self.runtime.observe_frame(self.idle, now="2026-09-06T09:30:01+00:00")
+        self.node["connected"] = False
+        with self.assertRaises(RuntimeError):
+            self.runtime.restore_retained_counter(self.profile, now="2026-09-06T09:30:02+00:00")
+        self.assertEqual([], self.sent)
+        self.node["connected"] = True
+        self.runtime.request(self.profile, "open", now="2026-09-06T09:30:03+00:00", duration_seconds=60)
+        self.sent.clear()
+        with self.assertRaises(RuntimeError):
+            self.runtime.restore_retained_counter(self.profile, now="2026-09-06T09:30:04+00:00")
+        self.runtime.status(self.profile, now="2026-09-06T09:30:30+00:00")
+        self.runtime.observe_frame(self.idle, now="2026-09-06T09:32:00+00:00")
+        with self.assertRaises(RuntimeError):
+            self.runtime.restore_retained_counter(self.profile, now="2026-09-06T09:32:01+00:00")
+        self.assertEqual([], self.sent)
+
     def test_morning_check_preserves_known_counter_without_an_idle_close_probe(self):
         self.enroll(); self.sent.clear()
         status = self.runtime.status(self.profile, now="2026-09-06T09:30:00+00:00")

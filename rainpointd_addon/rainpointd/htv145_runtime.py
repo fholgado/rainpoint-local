@@ -108,6 +108,16 @@ class Htv145Runtime:
                       pairing_terminal_step_required=False, qualification="dry_selector6")
         return result
 
+    def restore_retained_counter(self, profile: Htv145ControlProfile, *, now: str) -> dict[str, Any]:
+        """Explicitly reload known state into the owner; never transmit an RF probe."""
+        status = self.status(profile, now=now)
+        if not status["ready"]:
+            raise RuntimeError("counter restore requires a known counter, fresh idle state and available owner")
+        commands = self.coordinator.start(profile, observed_at=now)
+        return {"state": "retained_counter_restore_requested",
+                "next_sequence": status["next_sequence"],
+                "command_id": commands[-1]["command_id"], "rf_transmitted": False}
+
     def request(self, profile: Htv145ControlProfile, action: str, *, now: str,
                 duration_seconds: int | None = None) -> dict[str, Any]:
         self.restore(profile, now=now)

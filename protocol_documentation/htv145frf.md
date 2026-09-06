@@ -858,3 +858,23 @@ include both ordinary residues; the selected local timing/residue still needs
 physical qualification. Session summaries update historical usage/duration only;
 they cannot clear current watering or confirm a pending close. Result 3 layouts
 with byte 17 `00` or `10` neither authenticate a counter nor prove physical idle.
+
+
+### Retained-counter controls in Home Assistant
+
+Gateway 0.34.6 and integration 0.14.2 expose Counter status, Next command counter,
+and Restore retained counter for an enrolled one-zone control/ACK owner. The
+button calls the authenticated `/devices/{device_id}/valve/restore-counter`
+route. The gateway resolves the exact enrolled endpoint pair and requires an
+available owner, an authenticated counter, fresh idle evidence, no overdue run,
+and no pending command or revocation. It sends configuration and counter state
+to that owner only. It neither actuates nor proves a new RF command exchange.
+An unknown counter shows Recovery required and disables restoration. The
+four-zone idle-close anchor and daily schedule are not inferred for HTV145.
+
+### September 6 counter-anchor baseline
+
+A report-triggered idle close at retained counter `0x83` elicited result 3,
+confirmed by independent IQ. No different counter or open followed. This does
+not establish whether HTV405-style anchoring works; counter certainty was
+invalidated. See [the experiment evidence](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).

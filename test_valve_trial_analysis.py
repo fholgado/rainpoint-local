@@ -45,6 +45,22 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         raw[5] ^= 1
         self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=0.5))
 
+    def test_captured_baseline_negative_cannot_authenticate_anchor(self):
+        import json
+        from pathlib import Path
+        from tools.prepare_htv145_counter_anchor import anchor_reply_matches, Htv145ControlProfile
+        from rainpointd.valve_protocol import decode_htv145_command_error, decode_htv145_gateway_command
+        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_counter_anchor_baseline_negative_20260906.json").read_text())
+        profile = Htv145ControlProfile(node_id="rp-001122334455",
+            controller_endpoint=fixture["controller_endpoint"], valve_endpoint=fixture["valve_endpoint"],
+            center_hz=434398811, power_dbm=10, invert=False,
+            trailer_residual=0x4f03, close_trailer_residual=0x4f03,
+            command_marker_inverted=True, report_ack_center_hz=434398811)
+        command, reply = [bytes.fromhex(row["frame_hex"]) for row in fixture["frames"]]
+        self.assertFalse(decode_htv145_gateway_command(command, profile.link)["watering"])
+        self.assertEqual({"sequence": 0x83, "result_code": 3}, decode_htv145_command_error(reply, profile.link))
+        self.assertFalse(anchor_reply_matches(profile, 0x83, reply, response_age_seconds=0.375))
+
     def test_probe_differs_from_baseline_and_only_one_open_is_bounded(self):
         from tools.prepare_htv145_counter_anchor import prepare, Htv145ControlProfile
         from rainpointd.valve_protocol import decode_htv145_gateway_command

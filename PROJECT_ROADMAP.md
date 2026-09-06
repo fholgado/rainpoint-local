@@ -1233,8 +1233,10 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 - [ ] Test whether an idle close establishes a deliberately different command
       counter on the dry one-zone valve. Packet preparation and conditional
       trial sequence are in `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.
-      Add isolated probe reservations and report-triggered transmission before
-      live execution; do not infer success from retained-counter restoration.
+      September 6 isolated trial stopped on a result-3 baseline close at 0x83;
+      independent IQ confirmed the exchange. No different counter or open was
+      attempted. Temporary probe paths were removed; counter remains unknown.
+      Require a new positive baseline before another comparison.
 
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
@@ -1344,6 +1346,10 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 - [ ] Promote controls into HA only after the preceding physical gates pass.
 
 ### HA and irrigation behavior
+
+- [x] Expose enrolled one-zone retained-counter status, value, and explicit
+      restoration in HA (gateway 0.34.7 / integration 0.14.2). This restores
+      known radio state only; unknown-counter RF recovery remains unproven.
 
 - [x] Remove the HTV145's four phantom zones while preserving its single overall
       watering, battery, and usage entities and HTV405's real zones. Integration

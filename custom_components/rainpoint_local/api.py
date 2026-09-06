@@ -339,6 +339,10 @@ class RainPointLocalClient:
         """Update only the supplied per-valve morning settings."""
         return await self._post(f"devices/{device_id}/valve/morning-sync", settings, token)
 
+    async def restore_retained_counter(self, token: str, *, device_id: str) -> dict[str, Any]:
+        """Reload an authenticated one-zone counter without an RF probe."""
+        return await self._post(f"devices/{device_id}/valve/restore-counter", {}, token)
+
     async def sync_htv405_now(self, token: str, *, device_id: str) -> dict[str, Any]:
         """Request bounded synchronization without a watering request."""
         return await self._post(f"devices/{device_id}/valve/sync-now", {}, token)

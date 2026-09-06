@@ -718,6 +718,23 @@ class Gateway:
             else:
                 self._schedule_matured_htv405_resyncs_locked()
 
+    def _htv145_profile_for_device(self, device: dict) -> Htv145ControlProfile | None:
+        if not self._htv145_acceptance_enabled or self._htv145_runtime is None or device.get("model") != "HTV145FRF":
+            return None
+        state = device.get("state", {})
+        endpoints = {state.get("rf_endpoint_a"), state.get("rf_endpoint_b")}
+        return next((p for p in self._htv145_runtime.profiles()
+                     if endpoints == {p.controller_endpoint, p.valve_endpoint}), None)
+
+    def restore_htv145_counter(self, device_id: str) -> dict:
+        """Expose retained-state restoration by device identity, without actuator access."""
+        with self._lock:
+            profile = self._htv145_profile_for_device(self._devices.get(device_id, {}))
+            if profile is None:
+                raise ValueError("device has no enrolled one-zone counter owner")
+            return self._htv145_runtime.restore_retained_counter(
+                profile, now=datetime.now(timezone.utc).isoformat())
+
     def htv145_control(self, action: str, body: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         """Manage one evidenced dry association under the existing runtime gate."""
         timestamp = (now or datetime.now(timezone.utc)).isoformat()
@@ -3803,6 +3820,21 @@ class Gateway:
                 )
             }
             for device_id, device in devices.items():
+                if profile := self._htv145_profile_for_device(device):
+                    status = self._htv145_runtime.status(profile, now=observed.isoformat())
+                    counter_status = (
+                        "Recovery required" if not status["counter_synchronized"]
+                        else "Radio unavailable" if not status["owner_available"]
+                        else "Command pending" if status["state"]["pending_command_id"]
+                        else "Waiting for idle report" if not status["ready"]
+                        else "Retained counter ready"
+                    )
+                    device.setdefault("state", {}).update({
+                        "rf_retained_counter_status": counter_status,
+                        "rf_retained_command_counter": status["next_sequence"] if status["counter_synchronized"] else None,
+                        "rf_retained_counter_restore_available": status["ready"],
+                    })
+                    device["capabilities"] = sorted({*device.get("capabilities", []), "retained_counter_restore"})
                 if registered := registry.get(device_id):
                     device["name"] = registered["name"]
                     device["area"] = registered["area"]

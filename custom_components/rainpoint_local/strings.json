@@ -166,6 +166,8 @@
   },
   "entity": {
     "sensor": {
+      "retained_counter_status": {"name": "Counter status"},
+      "retained_command_counter": {"name": "Next command counter"},
       "morning_sync_status": { "name": "Watering readiness" },
       "morning_sync_last_success": { "name": "Last successful sync" },
       "soil_moisture": { "name": "Soil moisture" },
@@ -233,6 +235,7 @@
       "radio_node_reboot_pending": { "name": "Reboot pending" }
     },
     "button": {
+      "restore_retained_counter": {"name": "Restore retained counter"},
       "identify_radio_node": { "name": "Identify" },
       "reboot_radio_node": { "name": "Reboot" },
       "resynchronize_valve_counter": { "name": "Resynchronize control counter" },
