@@ -132,3 +132,46 @@ protocol test passed, and clean production/research builds passed. After the
 clean OTA and gateway restart, the one-zone owner was configured, counter
 authenticated at `0x82`, idle and ready with no pending command. The four-zone
 valve remained idle and synchronized with its morning schedule enabled.
+
+## Repeated idle close and command-phase evidence
+
+The subsequent one-shot idle-close test sent exactly the previously accepted
+active-close frame: counter `0x82`, marker `0x10`, close body and residue `4f03`.
+The valve returned result 3, independently decoded from IQ. The runner stopped:
+no counter-zero probe and no open followed. The normal uncertainty rule cleared
+counter authentication; no saved counter was restored after this rejection.
+The temporary gateway route was removed in 0.34.10; firmware stayed on clean
+candidate `0.15.19-htv145-control.1`.
+
+Comparing the original stock command frames reveals a confound in the earlier
+idle-state interpretation. The five accepted commands progress as:
+
+| Action | Counter / marker | Combined phase |
+|---|---|---|
+| Open | `81/90` | 3 |
+| Open | `82/10` | 4 |
+| Close | `82/90` | 5 |
+| Open | `83/10` | 6 |
+| Close | `83/90` | 7 |
+
+The raw marker's high bit alternates even on consecutive opens. Treating it as
+a fixed pairing/action polarity loses this progression. A candidate six-bit
+command phase is `((counter & 0x1f) << 1) | (marker >> 7)`. The fresh local
+open/close pair used phases 3 and 4; the rejected idle close repeated phase 4.
+Its next-phase close would keep counter `0x82`, change marker to `0x90`, and
+recompute the trailer. This is prepared offline only. It has not been transmitted
+or used to authenticate runtime state. Wraparound and counter-zero anchoring
+also remain unqualified.
+
+This evidence supports a duplicate-phase explanation, but the exact meaning of
+result 3 and the next-phase idle close still need a controlled physical test.
+Do not conclude that idle closes are categorically unsupported, or that the
+valve forgot its association. `tools/analyze_htv145_command_phase.py` reads the
+stock fixture and checks this sequence; the regression also compares the exact
+accepted and rejected close bytes. Evidence:
+`fixtures/htv145_repeated_idle_close_rejection_20260906.json`.
+
+Cleanup validation: 455 Python tests passed (two optional skips), and the native
+protocol test passed. No firmware change was needed for this trial. The clean
+gateway removes the temporary route, leaves counter authentication false after
+result 3, and preserves the existing single ACK owner and idle telemetry.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.34.10 / Integration 0.14.3
+
+- Remove the temporary idle-close baseline route after the recorded dry trial.
+  Normal idle-close suppression and counter-evidence requirements remain intact.
+- Preserve the exact accepted/rejected close comparison and offline evidence
+  that the high marker bit participates in command progression. The predicted
+  next-phase close remains untransmitted and is not authenticated runtime state.
+
 ## 0.34.9 / Integration 0.14.3 / HTV145 candidate 0.15.19
 
 - Remove the temporary one-shot fresh-pairing baseline path after the dry trial.

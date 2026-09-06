@@ -884,3 +884,19 @@ A subsequent fresh 5/6 association on September 6 accepted a bounded open at
 replies decoded from IQ. The retained command counter is again evidence-based.
 This active-close success does not establish an idle-close synchronization rule.
 See `htv145_fresh_pairing_control_baseline_20260906.json` in research fixtures.
+
+### Counter/marker interpretation correction (September 6)
+
+Raw stock commands advance through `81/90`, `82/10`, `82/90`, `83/10`, `83/90`.
+The high marker bit therefore cannot be treated as a fixed association/action
+property. The current `command_marker_inverted` field expresses a relationship
+between action and marker for one frame; persisting it as constant does not
+represent the full observed sequence. The decoder's computed `next_sequence`
+fields in older fixtures are derived annotations, not independent RF proof.
+
+A six-bit combined command phase explains these five stock commands and the
+fresh local open/close pair. An idle repeat of the accepted `82/10` close received
+result 3. The predicted next close is `82/90`, but it is not yet physically
+qualified. Keep the runtime counter unknown after this rejection and do not
+apply the hypothesis as authenticated state. See the counter-anchor experiment
+for evidence and the canonical roadmap for the qualification gate.

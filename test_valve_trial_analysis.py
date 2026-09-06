@@ -76,6 +76,34 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         self.assertFalse(decode_htv145_state_report(bytes.fromhex(data["independent_idle_frame"]), link)["watering"])
         self.assertEqual(130, commands[-1]["next_sequence"])
 
+    def test_recorded_stock_commands_advance_counter_and_marker_together(self):
+        import json
+        from pathlib import Path
+        from tools.analyze_htv145_command_phase import analyze_transactions, command_phase, predicted_next_close
+        from rainpointd.valve_protocol import ValveLink
+        root = Path(__file__).parent / "research/fixtures"
+        stock = json.loads((root / "htv145_selector2_stock_pairing_control_20260905.json").read_text())
+        rows = stock["command_transactions"]
+        first = bytes.fromhex(rows[0]["command_frame"])
+        link = ValveLink(first[5:9], first[9:13])
+        result = analyze_transactions(rows, link)
+        self.assertEqual([3, 4, 5, 6, 7], [c["phase"] for c in result["commands"]])
+        self.assertTrue(result["all_adjacent_increment"])
+        fresh = json.loads((root / "htv145_fresh_pairing_control_baseline_20260906.json").read_text())
+        accepted_close = bytes.fromhex(fresh["commands"][1]["frame"])
+        self.assertEqual(4, command_phase(accepted_close, link))
+        rejected = json.loads((root / "htv145_repeated_idle_close_rejection_20260906.json").read_text())
+        from rainpointd.valve_protocol import decode_htv145_command_error, decode_htv145_command_response
+        self.assertEqual(accepted_close.hex(), rejected["command_frame"])
+        reply = bytes.fromhex(rejected["response_frame"])
+        self.assertIsNone(decode_htv145_command_response(reply, link))
+        self.assertEqual(3, decode_htv145_command_error(reply, link)["result_code"])
+        candidate = predicted_next_close(accepted_close, link, 0x4f03)
+        self.assertEqual(5, command_phase(candidate, link))
+        self.assertEqual(0x82, candidate[13])
+        self.assertEqual(0x90, candidate[14])
+        self.assertEqual(accepted_close[15:36], candidate[15:36])
+
     def test_probe_differs_from_baseline_and_only_one_open_is_bounded(self):
         from tools.prepare_htv145_counter_anchor import prepare, Htv145ControlProfile
         from rainpointd.valve_protocol import decode_htv145_gateway_command

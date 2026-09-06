@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-06",
+  "scope": "One report-triggered idle close repeated the prior accepted active-close bytes; explicit result 3 was independently decoded. No counter-zero probe or open followed.",
+  "redaction": "Synthetic endpoints with recomputed CRC preserving residue. Raw IQ and original runtime records retained untracked.",
+  "requested_at": "2026-09-06T16:28:45.375576+00:00",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "command_frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000ab7d",
+  "response_frame": "79f4882f28a1b2c380b1c2d38f82508683104f800000004080005680000000000000000043ff",
+  "result_code": 3,
+  "logical_opens": 0,
+  "counter_zero_attempted": false
+}

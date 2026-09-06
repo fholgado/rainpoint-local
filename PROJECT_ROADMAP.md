@@ -1256,7 +1256,14 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       A later fresh pairing supplied a positive 60-second open at 0x81, active
       early close at 0x82, and independent idle. Both exchanges were recovered
       from IQ; 0x82 is freshly authenticated. Idle-close anchoring is still
-      untested on that fresh baseline; distinguish idle from active closes.
+      untested on that fresh baseline. Its later exact 82/10 idle repeat returned
+      result 3; no zero-counter probe or opening followed. Counter is unknown.
+- [ ] Qualify and persist the complete one-zone command phase, including the
+      high marker bit. Five raw stock commands progress 81/90, 82/10, 82/90,
+      83/10, 83/90; the repeated local close reused phase 4. Test the predicted
+      82/90 idle close before changing runtime counter/polarity semantics or
+      claiming idle-close recovery. Evidence and offline analysis are in
+      `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.
 
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
