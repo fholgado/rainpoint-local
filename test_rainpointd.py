@@ -3254,6 +3254,81 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual("completed", result["control_transaction_state"])
         self.assertNotIn(self.VALVE_ENDPOINT, self.server.gateway._htv405_transaction_timers)
 
+    def test_morning_sync_accepts_idle_reply_naming_previous_zone(self):
+        now = datetime(2026, 9, 5, 9, 30, tzinfo=timezone.utc)
+        self.configure_morning(now)
+        gateway = self.server.gateway
+        self.assertEqual(1, gateway.run_htv405_morning_sync(now=now))
+        self.mark_anchor_transmitted((now + timedelta(seconds=2)).isoformat())
+        # Sep 6 capture: idle counter-zero response named the last watered zone.
+        raw = bytearray.fromhex(self.HTV405_CLOSE_RESPONSE_SEQUENCE_0)
+        residual = binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(raw[-2:], "big")
+        raw[17] = 0x40
+        raw[-2:] = (binascii.crc_hqx(raw[:-2], 0) ^ residual).to_bytes(2, "big")
+        result = gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID, raw.hex(),
+            observed_at=(now + timedelta(seconds=3)).isoformat())
+        self.assertIsNotNone(result)
+        self.assertEqual("completed", result["control_transaction_state"])
+        self.assertEqual(0, result["control_next_sequence"])
+        self.assertFalse(result["control_confirmed_watering"])
+        later = now + timedelta(hours=1)
+        opened = gateway.request_htv405_synchronized_open(
+            device_id=self.DEVICE_ID, zone=2, duration_seconds=60, now=later)
+        self.assertEqual(0, opened["expected_sequence"])
+        self.assertIsNone(gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID, self.htv405_open_response(sequence=0, zone=4),
+            observed_at=(later + timedelta(seconds=1)).isoformat()))
+
+    def test_morning_sync_previous_zone_node_response_and_rejection_guards(self):
+        now = datetime(2026, 9, 5, 9, 30, tzinfo=timezone.utc)
+        self.configure_morning(now)
+        gateway = self.server.gateway
+        gateway.run_htv405_morning_sync(now=now)
+        self.mark_anchor_transmitted((now + timedelta(seconds=2)).isoformat())
+        registration = gateway._store.valve_registry()[0]
+        raw = bytearray.fromhex(self.HTV405_CLOSE_RESPONSE_SEQUENCE_0)
+        residual = binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(raw[-2:], "big")
+        raw[17] = 0x40
+        def frame(data):
+            data[-2:] = (binascii.crc_hqx(data[:-2], 0) ^ residual).to_bytes(2, "big")
+            return data.hex()
+        valid = frame(raw)
+        for index, value in ((13, 1), (5, 0), (18, 0xcf)):
+            invalid = bytearray(raw)
+            invalid[index] = value
+            self.assertIsNone(gateway.observe_valve_control_air_response(
+                self.SECOND_NODE_ID, frame(invalid),
+                observed_at=(now + timedelta(seconds=3)).isoformat()))
+        self.assertIsNone(gateway.observe_valve_control_air_response(
+            self.SECOND_NODE_ID, valid,
+            observed_at=(now + timedelta(seconds=8)).isoformat()))
+        accepted = gateway.observe_valve_control_probe(self.NODE_ID, {
+            "type": "valve_control_probe", "state": "zone_candidate_closed_response_confirmed",
+            "command_id": registration["control_pending_command_id"],
+            "controller_endpoint": "b9840280", "valve_endpoint": self.VALVE_ENDPOINT,
+            "companion_endpoint": "39840280", "selector": 5, "center_hz": 433_518_527,
+            "confirmed_watering": False, "transmitted_zone": 1,
+            "last_confirmed_sequence": 0, "next_sequence": 0, "frame": valid,
+        }, observed_at=(now + timedelta(seconds=3)).isoformat())
+        self.assertIsNotNone(accepted)
+        self.assertEqual("completed", accepted["control_transaction_state"])
+
+    def test_morning_sync_preserves_failure_after_window(self):
+        now = datetime(2026, 9, 5, 9, 30, tzinfo=timezone.utc)
+        self.configure_morning(now)
+        gateway = self.server.gateway
+        gateway.run_htv405_morning_sync(now=now)
+        registration = gateway._store.valve_registry()[0]
+        gateway._store.fail_htv405_command(
+            valve_endpoint=self.VALVE_ENDPOINT, node_id=self.NODE_ID,
+            command_id=registration["control_pending_command_id"],
+            reason="test_specific_failure", observed_at=(now + timedelta(seconds=4)).isoformat())
+        for hours in (1, 2):
+            status = gateway._morning_sync_status_locked(
+                gateway._store.valve_registry()[0], now=now + timedelta(hours=hours))
+            self.assertEqual("test_specific_failure", status["reason"])
+
     def test_morning_sync_then_direct_daytime_open_uses_retained_counter(self):
         now = datetime(2026, 9, 5, 9, 30, tzinfo=timezone.utc)
         self.configure_morning(now)

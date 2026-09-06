@@ -64,6 +64,16 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    // A known-idle counter-zero anchor can report the last watered zone.
+    for (std::uint8_t zone = 1; zone <= 4; ++zone) {
+        assert(rainpoint::htv405ResponseZoneMatches({0, zone, false}, 1, true));
+        if (zone != 1) {
+            assert(!rainpoint::htv405ResponseZoneMatches({0, zone, false}, 1, false));
+            assert(!rainpoint::htv405ResponseZoneMatches({1, zone, false}, 1, true));
+            assert(!rainpoint::htv405ResponseZoneMatches({0, zone, true}, 1, true));
+        }
+    }
+
     rainpoint::ReceiveEndCapture receiveEdge;
     assert(!receiveEdge.take(100, rainpoint::kRadioPayloadBytes + 2).valid);
     receiveEdge.observe(10'000, 13'500);

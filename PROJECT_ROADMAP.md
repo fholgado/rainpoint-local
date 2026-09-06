@@ -1138,6 +1138,11 @@ same time without conflicting authority.
       and independently reported idle with next counter 1. The operator approved
       this garden watering within a 15-minute total test budget; see
       `research/fixtures/htv405_morning_sync_smoke_20260905.json`.
+- [x] Correct the September 6 morning-sync rejection of an idle counter-zero
+      reply naming the last watered zone. Gateway 0.34.5 and firmware 0.15.14
+      restrict the exception to known-idle morning anchors, retain strict
+      watering-zone validation, and preserve the actual failure reason.
+      See `research/HTV405_MORNING_SYNC_DESIGN.md` for the observed exchange.
 - [ ] Validate that a morning-synchronized HTV405 accepts retained-counter opens
       away from report windows after 1, 4, 8, and 12 hours with a stable owner.
       Measure actual wake/repetition against stock and command latency before

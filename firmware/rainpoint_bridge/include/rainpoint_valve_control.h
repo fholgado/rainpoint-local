@@ -70,6 +70,15 @@ struct Htv405GatewayCommandResponse {
     bool watering;
 };
 
+inline bool htv405ResponseZoneMatches(
+    const Htv405GatewayCommandResponse& response,
+    std::uint8_t transmittedZone, bool idleSyncAnchor
+) {
+    return response.zone == transmittedZone ||
+        (idleSyncAnchor && response.sequence == 0 && !response.watering &&
+         response.zone >= 1 && response.zone <= 4);
+}
+
 struct Htv405GatewayCommandRejection {
     std::uint8_t sequence;
 };

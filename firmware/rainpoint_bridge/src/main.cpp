@@ -178,6 +178,7 @@ struct ValveControlProbe {
     bool manualPhaseConfigured = false;
     bool commandCounterAuthenticated = false;
     bool commandPendingConfirmation = false;
+    bool transmittedIdleSyncAnchor = false;
     bool confirmedStateValid = false;
     bool confirmedWatering = false;
     std::uint8_t lastConfirmedSequence = 0;
@@ -1159,7 +1160,8 @@ bool transmitQueuedValveProbe(
         return false;
     }
 
-    if (valveControlProbe.closeQueued && valveControlProbe.syncWait.active()) {
+    const bool idleSyncAnchor = valveControlProbe.closeQueued && valveControlProbe.syncWait.active();
+    if (idleSyncAnchor) {
         if (!valveControlProbe.syncWait.claim(millis(), syncReport)) {
             return false;
         }
@@ -1222,6 +1224,7 @@ bool transmitQueuedValveProbe(
     // does not prove that the valve accepted the frame, so do not advance the
     // authoritative transaction phase here. The next received valve frame is
     // the only source allowed to move that state forward.
+    valveControlProbe.transmittedIdleSyncAnchor = idleSyncAnchor && commandPhase.sequence == 0;
     valveControlProbe.transmittedPhase = commandPhase;
     valveControlProbe.transmittedZone = valveControlProbe.commandZone;
     valveControlProbe.commandPendingConfirmation = true;
@@ -1270,7 +1273,8 @@ bool observeValveProbeFrame(
             );
             return false;
         }
-        if (response.zone != valveControlProbe.transmittedZone) {
+        if (!rainpoint::htv405ResponseZoneMatches(response,
+                valveControlProbe.transmittedZone, valveControlProbe.transmittedIdleSyncAnchor)) {
             reportValveProbeStatus(
                 "gateway_command_response_zone_mismatch", &frame
             );

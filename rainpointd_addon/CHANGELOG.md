@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.5 / Firmware 0.15.14
+
+- Accept an idle counter-zero morning synchronization reply naming the last
+  watered HTV405 zone. Association, counter, response window and known-idle
+  authorization remain required; normal watering controls keep strict zone
+  matching. This corrects the September 6 Zone 4 response to a Zone 1 anchor.
+- Preserve the specific daily sync failure after the morning window ends.
+
+
 ## 0.34.4 / Firmware 0.15.13
 
 - Allow an existing dry HTV145 trial without report-ACK ownership to enroll

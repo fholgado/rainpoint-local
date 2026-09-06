@@ -30,6 +30,23 @@ HTV405_ACTIVE_TRANSACTION_STATES = frozenset(
 )
 
 
+def htv405_response_zone_matches(registration: dict, *, sequence: int,
+                                zone: int, watering: bool) -> bool:
+    """Idle morning anchors may report the previously watered zone.
+
+    The command counter belongs to the association, not an individual zone.
+    Normal controls still require the requested zone in their response.
+    """
+    return registration.get("control_pending_zone") == zone or (
+        registration.get("control_transaction_purpose") == "morning_sync"
+        and registration.get("control_pending_action") == "synchronized_open_anchor"
+        and registration.get("control_pending_sequence") == sequence == 0
+        and registration.get("control_confirmed_watering") in {False, 0}
+        and not watering
+        and zone in range(1, 5)
+    )
+
+
 def htv405_idle_close_sync_candidates(last_sequence: int) -> tuple[int, ...]:
     """Return the single physically validated close-only synchronization anchor.
 
@@ -2975,7 +2992,8 @@ class SQLiteEventStore:
         if pending_id is not None and any(
             (
                 registration.get("control_pending_sequence") != sequence,
-                registration.get("control_pending_zone") != zone,
+                not htv405_response_zone_matches(
+                    registration, sequence=sequence, zone=zone, watering=watering),
                 not action_matches,
             )
         ):

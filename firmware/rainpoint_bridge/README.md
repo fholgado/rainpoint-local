@@ -79,7 +79,7 @@ python tools/check_firmware_boundaries.py --supervised --htv145-pairing \
   --htv145-control firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-Production version is `0.15.13`; the isolated image is
+Production version is `0.15.14`; the isolated image is
 `0.15.13-htv145-control.1`. `RAINPOINT_FIRMWARE_VERSION` may label a reproducible
 artifact. Retired research, selector, factory-counter, timing, tail and PHY flags
 are rejected. Their captures remain under `research/fixtures`; Git retains the

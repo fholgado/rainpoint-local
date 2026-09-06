@@ -83,6 +83,7 @@ from .storage import (
     SQLiteEventStore,
     frame_accepted,
     htv405_idle_close_sync_candidates,
+    htv405_response_zone_matches,
 )
 
 
@@ -977,9 +978,13 @@ class Gateway:
                             reason=registration.get("control_transaction_error") or "sync_failed")
         elif data.get("awaiting_confirmation"):
             data.update(ready=False, awaiting_confirmation=False, reason="sync_interrupted")
-        if registration.get("control_next_sequence") is None and not data.get("awaiting_confirmation"):
+        failed_today = (owns_transaction and transaction in {"failed", "cancelled"}
+                        and data.get("service_date") == date)
+        if failed_today:
+            data.update(ready=False, reason=registration.get("control_transaction_error") or "sync_failed")
+        if not failed_today and registration.get("control_next_sequence") is None and not data.get("awaiting_confirmation"):
             data.update(ready=False, reason="counter_unconfirmed")
-        if phase == "after" and data.get("last_success_date") != date:
+        if not failed_today and phase == "after" and data.get("last_success_date") != date:
             data.update(ready=False, reason="morning_window_missed")
         node = self._nodes.get(str(registration.get("control_node_id")), {})
         if not config["enabled"]:
@@ -4709,7 +4714,8 @@ class Gateway:
                     registration.get("control_pending_command_id"), str
                 )
                 or registration.get("control_pending_sequence") != sequence
-                or registration.get("control_pending_zone") != zone
+                or not htv405_response_zone_matches(
+                    registration, sequence=sequence, zone=zone, watering=watering)
                 or not action_matches
                 or not isinstance(pending_started_at, str)
             ):
@@ -5143,7 +5149,6 @@ class Gateway:
             or watering != response["rf_control_response_watering"]
             or not isinstance(transmitted_zone, int)
             or isinstance(transmitted_zone, bool)
-            or transmitted_zone != response["rf_control_response_zone"]
             or not isinstance(center_hz, int)
             or isinstance(center_hz, bool)
             or not 430_000_000 <= center_hz <= 440_000_000
@@ -5200,6 +5205,21 @@ class Gateway:
                 )
             ):
                 return None
+            if transmitted_zone != response["rf_control_response_zone"] and (
+                transmitted_zone != registration.get("control_pending_zone")
+                or not htv405_response_zone_matches(
+                    registration, sequence=confirmed_sequence,
+                    zone=response["rf_control_response_zone"], watering=watering)
+            ):
+                return None
+            if transmitted_zone != response["rf_control_response_zone"]:
+                try:
+                    age = (_observed_utc(timestamp) - _observed_utc(
+                        registration.get("control_pending_started_at"))).total_seconds()
+                except (TypeError, ValueError):
+                    return None
+                if not 0 <= age <= HTV405_RESPONSE_WINDOW_SECONDS:
+                    return None
             pending_id = registration.get("control_pending_command_id")
             reported_command_id = report.get("command_id")
             if (
@@ -5214,7 +5234,7 @@ class Gateway:
                     node_id=node_id,
                     sequence=confirmed_sequence,
                     next_sequence=next_sequence,
-                    zone=transmitted_zone,
+                    zone=response["rf_control_response_zone"],
                     watering=watering,
                     center_hz=center_hz,
                     observed_at=timestamp,

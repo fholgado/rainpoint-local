@@ -120,3 +120,27 @@ submission. Independent reports showed watering and automatic idle, leaving next
 counter 1. The operator explicitly authorized this wet garden test within a
 15-minute total watering budget. This initial result does not yet establish
 hours-long receiver reachability or retained-counter continuity.
+
+## September 6 previous-zone response
+
+The 05:30 Eastern schedule queued correctly. At 09:39:11.528 UTC the owner
+transmitted the counter-zero Zone 1 anchor. The valve replied idle with counter
+zero and Zone 4, the last watered zone. Firmware rejected it with
+`gateway_command_response_zone_mismatch_counter_unsynchronized` at
+09:39:11.790 UTC. This was a validation failure, not a missing scheduled run.
+Codex monitoring had stopped because account usage was exhausted; the gateway's
+scheduler continued independently.
+
+The HTV405 command counter is association-wide. Zone selection does not select
+another counter; telemetry has a separate sequence. Gateway 0.34.5 and production
+firmware 0.15.14 allow a different valid response zone only for the bounded,
+known-idle morning anchor at counter zero. Ordinary control zone matching stays
+strict. Both owner confirmations and independently received air responses use
+the same gateway predicate; a nonzero counter, watering response, wrong route,
+or expired response window cannot use the exception. Failure status retains the
+original reason after the morning window. Regression tests cover the previous-zone
+reply and subsequent shared-counter Zone 2 dispatch, without issuing live watering.
+
+Recovery is an explicit Sync now request after both gateway and owner are
+updated. It waits for the next report and sends only the idle close-zero anchor;
+restarting the gateway alone never initiates recovery transmissions.
