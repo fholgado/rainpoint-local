@@ -15,6 +15,7 @@ from .product_identity import (
     hcs02x_identity,
 )
 from .valve_protocol import next_htv145_command_sequence
+from .htv145_counter_sync import MAX_SYNC_ATTEMPTS, failed_attempt
 
 SCHEMA_VERSION = 22
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
@@ -659,7 +660,8 @@ class SQLiteEventStore:
                     or row["revocation_command_id"] is not None or row["confirmed_watering"] != 0
                     or not row["command_marker_inverted"] or row["close_trailer_residual"] != 0x4f03
                     or row["report_ack_center_hz"] is None or row["confirmed_at"] is None
-                    or not datetime.fromisoformat(data["requested_at"]) < datetime.fromisoformat(row["confirmed_at"]) <= current
+                    or not datetime.fromisoformat(data.get("report_after", data["requested_at"])) < datetime.fromisoformat(row["confirmed_at"]) <= current
+                    or data.get("attempt_count", 0) >= min(data.get("max_attempts", 1), MAX_SYNC_ATTEMPTS)
                     or not 0 <= (current - datetime.fromisoformat(row["confirmed_at"])).total_seconds() <= 5
                     or current >= datetime.fromisoformat(data["deadline"])):
                 raise RuntimeError("idle anchor requires a queued request and new independent idle report")
@@ -670,7 +672,8 @@ class SQLiteEventStore:
                 pending_duration_seconds=NULL, pending_started_at=?, last_command_started_at=?,
                 last_result='idle_anchor_pending', updated_at=? WHERE valve_endpoint=?""",
                 (command_id, started_at, started_at, started_at, valve_endpoint))
-            data.update(state="syncing", command_id=command_id, transmitted_at=started_at, reason="waiting_for_anchor_response")
+            data.update(state="syncing", command_id=command_id, transmitted_at=started_at,
+                        attempt_count=data.get("attempt_count", 0) + 1, reason="waiting_for_anchor_response")
             self._write_htv145_counter_sync(valve_endpoint, data)
         return self.htv145_control_states(valve_endpoint)[0]
 
@@ -3526,7 +3529,7 @@ class SQLiteEventStore:
             raise ValueError("HTV145 failure does not match reservation")
         data = self.htv145_counter_sync(valve_endpoint)
         if data.get("command_id") == command_id:
-            data.update(state="failed", command_id=None, deadline=None, reason=reason)
+            data = failed_attempt(data, reason=reason, observed_at=observed_at)
             self._write_htv145_counter_sync(valve_endpoint, data)
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]

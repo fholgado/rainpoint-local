@@ -264,3 +264,12 @@ Raw evidence and redacted fixtures are linked from
 [the experiment record](HTV145_COUNTER_ANCHOR_EXPERIMENT.md), which distinguishes
 independent IQ captures from the later node/gateway-only RF evidence. Project
 acceptance status remains in [the roadmap](../PROJECT_ROADMAP.md).
+
+
+The supported one-zone sync path now permits three total attempts within the
+original window after timeout or transport failure. Each retry waits for an owner
+idle report newer than the failure and respects the 15-second command interval.
+The budget survives restart and repeated button presses. Report attempts and their
+outcomes separately from the short radio burst within each attempt; stop on a
+protocol/state conflict, cancellation, budget exhaustion or window expiry. This
+policy requires no temporary probe route or packet generator.

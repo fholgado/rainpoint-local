@@ -2198,7 +2198,7 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.runtime.observe_frame(self.anchor, now=self.at(6))
         self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
         self.coordinator.readiness(self.profile, observed_at=self.at(20))
-        self.assertEqual("failed", self.sync.status(self.profile, now=self.at(20))["state"])
+        self.assertEqual("waiting_for_report", self.sync.status(self.profile, now=self.at(20))["state"])
         self.assertEqual(1, len(self.sent))
 
     def test_watering_report_aborts_anchor_and_cannot_authenticate(self):
@@ -2268,7 +2268,7 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.assertEqual(before,self.store.htv145_control_states()[0])
         self.assertEqual({},self.store.htv145_counter_sync(self.profile.valve_endpoint))
 
-    def test_anchor_dispatch_failure_is_durable_and_not_retried_on_report(self):
+    def test_anchor_dispatch_failure_retries_only_on_fresh_report_within_budget(self):
         self.queue()
         def fail(node, command):
             self.sent.append((node,command))
@@ -2279,8 +2279,12 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         state = self.store.htv145_control_states()[0]
         self.assertFalse(state["counter_synchronized"])
         self.assertIsNone(state["pending_command_id"])
-        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(20))["state"])
-        self.assertEqual(1,len(self.sent))
+        self.assertEqual("waiting_for_report",self.sync.status(self.profile,now=self.at(20))["state"])
+        self.assertEqual(2,len(self.sent))
+        self.report(40)
+        self.report(60)
+        self.assertEqual(3,len(self.sent))
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(60))["state"])
 
     def test_anchor_respects_last_command_spacing(self):
         self.queue()
@@ -2290,3 +2294,124 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.assertEqual([],self.sent)
         self.report(6)
         self.assertEqual(1,len(self.sent))
+
+
+    def fail_anchor(self, seconds, reason="idle_anchor_response_timeout"):
+        state = self.store.htv145_control_states()[0]
+        self.store.fail_htv145_command(valve_endpoint=self.profile.valve_endpoint,
+            command_id=state["pending_command_id"], reason=reason, observed_at=self.at(seconds))
+
+    def test_three_total_attempts_require_new_reports_and_preserve_deadline(self):
+        initial = self.queue()
+        for attempt, second in enumerate((1, 21, 41), 1):
+            self.report(second)
+            pending = self.sync.status(self.profile, now=self.at(second))
+            self.assertEqual(attempt, pending["attempt_count"])
+            self.assertEqual(initial["deadline"], pending["deadline"])
+            self.fail_anchor(second + 3)
+            status = self.sync.status(self.profile, now=self.at(second + 3))
+            self.assertFalse(status["ready"])
+            self.assertEqual("failed" if attempt == 3 else "waiting_for_report", status["state"])
+            # Neither a timer tick, the old report, nor an early duplicate can transmit.
+            self.sync.tick(self.profile, now=self.at(second + 4))
+            self.report(second)
+            self.report(second + 5)
+            self.assertEqual(attempt, len(self.sent))
+            # A repeated button press while waiting cannot reset the budget/window.
+            if attempt < 3:
+                repeated = self.sync.request(self.profile, now=self.at(second + 6))
+                self.assertEqual(attempt, repeated["attempt_count"])
+                self.assertEqual(initial["deadline"], repeated["deadline"])
+        self.report(80)
+        self.assertEqual(3, len(self.sent))
+        self.assertEqual(3, len({c["command_id"] for _, c in self.sent}))
+        self.assertTrue(status["reason"].startswith("attempt_limit_reached:"))
+
+    def test_retry_succeeds_on_second_report_and_late_old_status_cannot_finish_it(self):
+        self.queue(); self.report(1)
+        old_command = self.sent[-1][1]["command_id"]
+        self.fail_anchor(4)
+        self.runtime.observe_frame(self.anchor, now=self.at(5))
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.report(20)
+        self.runtime.observe_node(self.profile.node_id, {"type":"htv145_control_candidate",
+            "node_id":self.profile.node_id, "command_id":old_command, "state":"confirmed", "frame":self.anchor.hex()}, now=self.at(21))
+        self.assertIsNotNone(self.store.htv145_control_states()[0]["pending_command_id"])
+        self.runtime.observe_frame(self.anchor, now=self.at(21))
+        status = self.sync.status(self.profile, now=self.at(22))
+        self.assertTrue(status["ready"])
+        self.assertEqual(2, status["attempt_count"])
+        self.report(40)
+        self.assertEqual(2,len(self.sent))
+
+    def test_retry_budget_survives_restart_without_replaying_a_command(self):
+        from rainpointd.htv145_runtime import Htv145Runtime
+        self.queue(); self.report(1); self.fail_anchor(4)
+        self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.coordinator = Htv145ControlCoordinator(store=self.store,
+            sender=lambda n,c:self.sent.append((n,c)), enabled=True)
+        self.runtime = Htv145Runtime(self.coordinator, lambda _:self.node)
+        self.runtime.tick(now=self.at(18))
+        self.assertEqual(1,len([c for _,c in self.sent if c["type"]=="htv145_control_idle_anchor"]))
+        self.report(20)
+        self.assertEqual(2,self.runtime.counter_sync.status(self.profile,now=self.at(20))["attempt_count"])
+
+    def test_retry_window_expiry_and_cancel_stop_without_rf(self):
+        self.sync.request(self.profile, now=self.at(), wait_seconds=30)
+        self.report(1); self.fail_anchor(4)
+        self.sync.tick(self.profile, now=self.at(31))
+        self.report(32)
+        self.assertEqual(1,len(self.sent))
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(32))["state"])
+        self.sync.request(self.profile, now=self.at(40))
+        self.report(41); self.fail_anchor(44)
+        self.sync.configure(self.profile,{"enabled":False},now=self.at(45))
+        self.report(60)
+        self.assertEqual(2,len(self.sent))
+        self.assertEqual("cancelled",self.sync.status(self.profile,now=self.at(60))["state"])
+
+    def test_protocol_rejection_is_terminal_and_legacy_pending_request_is_not_retried(self):
+        self.queue(); self.report(1)
+        self.fail_anchor(2, "negative_command_result_3")
+        self.report(20)
+        self.assertEqual(1,len(self.sent))
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(20))["state"])
+        self.sync.request(self.profile,now=self.at(30)); self.report(31)
+        data=self.store.htv145_counter_sync(self.profile.valve_endpoint)
+        data.pop("max_attempts"); data.pop("attempt_count")
+        self.store.save_htv145_counter_sync(self.profile.valve_endpoint,data)
+        self.fail_anchor(34)
+        self.report(50)
+        self.assertEqual(2,len(self.sent))
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(50))["state"])
+
+
+    def test_daily_exhaustion_does_not_start_another_batch_in_same_window(self):
+        self.sync.configure(self.profile, {"enabled":True,"timezone":"America/New_York"}, now=self.at(-1))
+        self.sync.tick(self.profile,now=self.at())
+        for second in (1,21,41):
+            self.report(second); self.fail_anchor(second+3)
+        self.sync.tick(self.profile,now=self.at(100))
+        self.report(101)
+        self.assertEqual(3,len(self.sent))
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(101))["state"])
+        self.sync.tick(self.profile,now=self.at(86400))
+        status=self.sync.status(self.profile,now=self.at(86400))
+        self.assertEqual("waiting_for_report",status["state"])
+        self.assertEqual(0,status["attempt_count"])
+        self.assertEqual(3,len(self.sent))
+
+    def test_failure_at_window_end_and_status_timeout_do_not_extend_deadline(self):
+        self.sync.request(self.profile,now=self.at(),wait_seconds=3)
+        self.report(1); self.fail_anchor(4)
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(4))["state"])
+        self.report(20)
+        self.assertEqual(1,len(self.sent))
+        self.sync.request(self.profile,now=self.at(30),wait_seconds=60)
+        self.report(31)
+        status=self.sync.status(self.profile,now=self.at(50))
+        self.assertEqual("waiting_for_report",status["state"])
+        self.assertEqual(self.at(90),status["deadline"])
+        self.assertEqual(self.at(50),status["report_after"])
+        self.assertEqual("Waiting for idle report (attempt 2/3)",status["status"])

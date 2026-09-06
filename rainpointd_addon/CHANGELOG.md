@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.34.13 / Integration 0.14.4
+
+- Retry unconfirmed one-zone counter sync up to three total attempts within the
+  original window. Each attempt requires another fresh owner idle report and
+  the existing minimum command interval; no watering is used for recovery.
+- Persist the attempt budget across restarts and repeated button presses. Stop
+  after exhaustion, window expiry, cancellation, or a protocol/state conflict.
+- Show attempt progress while waiting or syncing. Existing radio firmware and
+  the four-zone schedule are unchanged.
+
 ## 0.34.12 / Integration 0.14.4 / HTV145 candidate 0.15.24
 
 - Add explicit, close-only one-zone counter sync after a new idle report from

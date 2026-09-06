@@ -951,3 +951,21 @@ state; missing replies, foreign/late frames, and telemetry alone cannot do so.
 
 See the redacted idle-recovery fixture and complete procedure in
 [the counter-anchor experiment](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).
+
+
+### Bounded retry policy
+
+Gateway 0.34.13 permits three total idle-anchor attempts per explicit or scheduled
+sync request. A missing reply or transport failure releases the old reservation
+and durably waits for another independent idle report received by the owner after
+that failure. The next attempt gets a new command ID, uses the same fixed-zero
+close, and respects the 15-second command interval. Each attempt retains the
+radio's existing bounded RF burst; that burst is not a separate queued attempt.
+
+The original window never extends. Exhausting three attempts, reaching the window
+end without enough idle reports, or cancellation ends the request. Unexpected
+watering, conflicting responses and unqualified negative replies remain terminal.
+Restart retains the budget and waits for new evidence; it never replays the old
+command. Repeated Sync counter presses while a request is active do not reset its
+budget. A new explicit request after terminal failure starts a new bounded batch.
+Older saved requests without a retry budget retain their original one-shot policy.

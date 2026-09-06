@@ -1275,6 +1275,13 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       qualification; retain raw evidence and supported decoder regressions. Redacted
       runtime proof is in
       `research/fixtures/htv145_idle_result3_counter_recovery_20260906.json`.
+- [x] Bound one-zone sync retries after missing replies or transport failures
+      to three total attempts inside the original manual/morning window
+      (gateway 0.34.13). Each retry requires a new owner idle report after the
+      preceding failure and at least 15 seconds between commands. Persist the
+      budget across restart and repeated button presses; terminate on protocol
+      conflicts, unexpected watering, cancellation, exhaustion or window expiry.
+      Regression coverage includes successful retry and failure without RF replay.
 - [ ] Qualify and persist the complete one-zone command phase, including the
       high marker bit, for arbitrary action sequences. Stock consecutive opens
       demonstrate why fixed action polarity is not a general phase model.
