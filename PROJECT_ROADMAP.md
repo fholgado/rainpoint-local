@@ -1150,6 +1150,13 @@ same time without conflicting authority.
       useful daytime evidence about 55 minutes after sync, but does not complete
       the controlled interval gate. Further test opens were cancelled and
       morning mode restored off; only the initial one-minute test was issued.
+      The operator resumed the experiment for September 6: a 05:30–06:00 Eastern
+      sync window, then one-minute Zone 1 checks 1, 4, 8, and 12 hours after
+      actual confirmation. The canonical-checkout ledger preserves prior trials
+      and charges both earlier one-minute runs to the original 15-minute budget.
+      Eight harness tests cover scheduled-sync adoption, off-report timing,
+      continuity, budget, uncertain submissions and automatic-idle evidence.
+      The resumed retention gates remain pending; no missed checkpoint is replayed.
 - [ ] Determine what causes an authenticated HTV405 counter to become stale.
       Timestamped routine-ACK outcomes and radio-node connection/reboot
       checkpoints are now durable. Hold the gateway and owner node stable and
