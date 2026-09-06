@@ -1230,6 +1230,12 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 ### HTV145
 
+- [ ] Test whether an idle close establishes a deliberately different command
+      counter on the dry one-zone valve. Packet preparation and conditional
+      trial sequence are in `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md`.
+      Add isolated probe reservations and report-triggered transmission before
+      live execution; do not infer success from retained-counter restoration.
+
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
       advances the command counter while close retains it. Replay accepted
