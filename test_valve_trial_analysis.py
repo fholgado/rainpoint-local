@@ -61,6 +61,21 @@ class CounterAnchorPreparationTests(unittest.TestCase):
         self.assertEqual({"sequence": 0x83, "result_code": 3}, decode_htv145_command_error(reply, profile.link))
         self.assertFalse(anchor_reply_matches(profile, 0x83, reply, response_age_seconds=0.375))
 
+    def test_fresh_pairing_control_baseline_has_matching_open_close_and_idle(self):
+        import json
+        from pathlib import Path
+        from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response, decode_htv145_state_report
+        data = json.loads((Path(__file__).parent / "research/fixtures/htv145_fresh_pairing_control_baseline_20260906.json").read_text())
+        link = ValveLink(bytes.fromhex(data["controller_endpoint"]), bytes.fromhex(data["valve_endpoint"]))
+        commands = [decode_htv145_gateway_command(bytes.fromhex(row["frame"]), link) for row in data["commands"]]
+        replies = [decode_htv145_command_response(bytes.fromhex(row["frame"]), link) for row in data["responses"]]
+        self.assertEqual([(129, True), (130, False)], [(c["sequence"], c["watering"]) for c in commands])
+        self.assertEqual(60, commands[0]["duration_seconds"])
+        for command in commands:
+            self.assertTrue(any(reply and all(reply[k] == command[k] for k in ("sequence", "watering", "command_marker_inverted")) for reply in replies))
+        self.assertFalse(decode_htv145_state_report(bytes.fromhex(data["independent_idle_frame"]), link)["watering"])
+        self.assertEqual(130, commands[-1]["next_sequence"])
+
     def test_probe_differs_from_baseline_and_only_one_open_is_bounded(self):
         from tools.prepare_htv145_counter_anchor import prepare, Htv145ControlProfile
         from rainpointd.valve_protocol import decode_htv145_gateway_command

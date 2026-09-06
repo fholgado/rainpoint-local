@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.34.9 / Integration 0.14.3 / HTV145 candidate 0.15.19
+
+- Remove the temporary one-shot fresh-pairing baseline path after the dry trial.
+  Preserve the normal authenticated command and acknowledged owner-revoke paths.
+
 ## 0.34.8 / Integration 0.14.3 / HTV145 candidate 0.15.17
 
 - Admit the existing HTV145 owner-revoke command through the research firmware

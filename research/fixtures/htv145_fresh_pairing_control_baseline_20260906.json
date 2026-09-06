@@ -1,0 +1,63 @@
+{
+  "date": "2026-09-06",
+  "scope": "Fresh local 5/6 association; one unverified-counter 60-second open then positively confirmed active early close. This does not test an idle-close anchor.",
+  "redaction": "Synthetic endpoints; CRC recomputed preserving original residue. Raw IQ and node records retained untracked.",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "initial_counter_authenticated": false,
+  "next_authenticated_counter": 130,
+  "logical_opens": 1,
+  "commands": [
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808190828081009e00000000000000000000000000000000db9b",
+      "decoded": {
+        "command_marker_inverted": true,
+        "duration_seconds": 60,
+        "next_sequence": 130,
+        "sequence": 129,
+        "watering": true
+      }
+    },
+    {
+      "frame": "79f4882f28b1c2d38fa1b2c3808210818081000000000000000000000000000000000000ab7d",
+      "decoded": {
+        "command_marker_inverted": true,
+        "next_sequence": 130,
+        "sequence": 130,
+        "watering": false
+      }
+    }
+  ],
+  "responses": [
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f82508680104f80000000408000569e00000000000000003da3",
+      "decoded": {
+        "command_marker_inverted": true,
+        "next_sequence": 130,
+        "sequence": 130,
+        "watering": false
+      }
+    },
+    {
+      "frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+      "decoded": {
+        "command_marker_inverted": true,
+        "next_sequence": 130,
+        "sequence": 129,
+        "watering": true
+      }
+    }
+  ],
+  "independent_idle_frame": "79f4882f28a1b2c380b1c2d38f888107860580804f80000000408000568000000000000026f6",
+  "independent_idle_at": "2026-09-06T15:53:23.351046+00:00",
+  "command_times": [
+    {
+      "action": "bootstrap-open",
+      "observed_at": "2026-09-06T15:52:56.534432+00:00"
+    },
+    {
+      "action": "close",
+      "observed_at": "2026-09-06T15:53:16.650476+00:00"
+    }
+  ]
+}

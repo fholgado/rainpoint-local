@@ -878,3 +878,9 @@ A report-triggered idle close at retained counter `0x83` elicited result 3,
 confirmed by independent IQ. No different counter or open followed. This does
 not establish whether HTV405-style anchoring works; counter certainty was
 invalidated. See [the experiment evidence](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).
+
+A subsequent fresh 5/6 association on September 6 accepted a bounded open at
+`0x81` and active early close at `0x82`, with independent idle and both direct
+replies decoded from IQ. The retained command counter is again evidence-based.
+This active-close success does not establish an idle-close synchronization rule.
+See `htv145_fresh_pairing_control_baseline_20260906.json` in research fixtures.

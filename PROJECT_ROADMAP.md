@@ -1253,7 +1253,10 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       September 6 isolated trial stopped on a result-3 baseline close at 0x83;
       independent IQ confirmed the exchange. No different counter or open was
       attempted. Temporary probe paths were removed; counter remains unknown.
-      Require a new positive baseline before another comparison.
+      A later fresh pairing supplied a positive 60-second open at 0x81, active
+      early close at 0x82, and independent idle. Both exchanges were recovered
+      from IQ; 0x82 is freshly authenticated. Idle-close anchoring is still
+      untested on that fresh baseline; distinguish idle from active closes.
 
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open

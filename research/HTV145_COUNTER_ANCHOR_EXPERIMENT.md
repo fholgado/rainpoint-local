@@ -100,3 +100,35 @@ The clean one-zone OTA image was health-confirmed; the owner is configured with
 no pending command and no authenticated counter. Gateway 0.34.7 projects
 Recovery required with retained restoration disabled. The four-zone owner
 remains on 0.15.14, synchronized and idle, with its morning schedule enabled.
+
+## Fresh baseline later on September 6
+
+After a new user-assisted pairing gesture, the clean radio again recorded the
+accepted counter-2 selector-6 prefix with five of six steps. Gateway completion
+evidence is distinct from a complete six-step RF transcript; the operator LED
+result was not recorded for this attempt.
+
+An isolated one-shot trial sent a 60-second open with explicitly **unverified**
+first-command counter `0x81`. The valve's matching positive response established
+next counter `0x82`. An active close at `0x82`, about 20 seconds later, received a
+matching positive idle response, followed by independent idle telemetry at
+15:53:23 UTC. Independent IQ recovered both commands and both replies; the
+open reply used residue `c713`, the close reply `4f03`. Command wakes clustered
+at 2,399/2,401 symbols, consistent with the intended 2,400-symbol recipe.
+
+This establishes a fresh operational command baseline, not an idle-close anchor.
+The earlier successful close was active; the rejected earlier baseline was idle.
+That state difference is now an explicit discriminator for the next comparison,
+not a reason to interpret result 3 as a counter-specific rejection. A future
+idle/different-counter trial must preserve this distinction and stop on uncertainty.
+
+The temporary bootstrap permit, HTTP actions and firmware command were removed
+again after this one open. Clean gateway 0.34.9 / candidate
+`0.15.19-htv145-control.1` retain the normal command and owner-revocation paths.
+Evidence: `fixtures/htv145_fresh_pairing_control_baseline_20260906.json`.
+
+Cleanup verification: 454 Python tests passed (two optional skips), the native
+protocol test passed, and clean production/research builds passed. After the
+clean OTA and gateway restart, the one-zone owner was configured, counter
+authenticated at `0x82`, idle and ready with no pending command. The four-zone
+valve remained idle and synchronized with its morning schedule enabled.
