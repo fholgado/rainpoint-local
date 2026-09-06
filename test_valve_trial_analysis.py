@@ -26,6 +26,49 @@ def frame(source: str, destination: str, message: int, *, zone: int = 0,
     return value.hex()
 
 
+class CounterAnchorPreparationTests(unittest.TestCase):
+    def test_anchor_acceptance_requires_immediate_matching_idle_response(self):
+        import binascii
+        from tools.prepare_htv145_counter_anchor import anchor_reply_matches, Htv145ControlProfile
+        profile = Htv145ControlProfile(node_id="rp-001122334455", controller_endpoint="b1c2d38f",
+            valve_endpoint="a1b2c380", center_hz=434398811, power_dbm=10, invert=False,
+            trailer_residual=0x4f03, close_trailer_residual=0x4f03,
+            command_marker_inverted=True, report_ack_center_hz=434398811)
+        raw = bytearray.fromhex("79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2")
+        residue = binascii.crc_hqx(raw[:-2], 0) ^ int.from_bytes(raw[-2:], "big")
+        raw[13] = 0x80; raw[14] = 0x50; raw[18] = 0x4f
+        raw[-2:] = (binascii.crc_hqx(raw[:-2], 0) ^ residue).to_bytes(2, "big")
+        self.assertTrue(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=0.5))
+        self.assertFalse(anchor_reply_matches(profile, 0x83, bytes(raw), response_age_seconds=0.5))
+        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=3.1))
+        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=-0.1))
+        raw[5] ^= 1
+        self.assertFalse(anchor_reply_matches(profile, 0x80, bytes(raw), response_age_seconds=0.5))
+
+    def test_probe_differs_from_baseline_and_only_one_open_is_bounded(self):
+        from tools.prepare_htv145_counter_anchor import prepare, Htv145ControlProfile
+        from rainpointd.valve_protocol import decode_htv145_gateway_command
+        profile = Htv145ControlProfile(node_id="rp-001122334455", controller_endpoint="b1c2d38f",
+            valve_endpoint="a1b2c380", center_hz=434398811, power_dbm=10, invert=False,
+            trailer_residual=0x4f03, close_trailer_residual=0x4f03,
+            command_marker_inverted=True, report_ack_center_hz=434398811)
+        readiness = {"ready": True, "counter_synchronized": True, "state": {
+            "node_id": profile.node_id, "controller_endpoint": profile.controller_endpoint,
+            "valve_endpoint": profile.valve_endpoint, "confirmed_at": "2026-09-06T14:00:00+00:00"}}
+        for baseline in (0x80, 0x83, 0x9f):
+            readiness['next_sequence'] = baseline
+            plan = prepare(profile, readiness)
+            self.assertNotEqual(baseline, plan['probe_counter'])
+            decoded = [decode_htv145_gateway_command(bytes.fromhex(s['frame']), profile.link)
+                       for s in plan['steps']]
+            self.assertEqual([False, False, True, False], [d['watering'] for d in decoded])
+            self.assertEqual(60, decoded[2]['duration_seconds'])
+            self.assertEqual(decoded[2]['next_sequence'], decoded[3]['sequence'])
+        readiness['counter_synchronized'] = False
+        with self.assertRaises(ValueError):
+            prepare(profile, readiness)
+
+
 class ValveTrialAnalysisTests(unittest.TestCase):
     def test_distinguishes_retained_rejoin_from_new_assignment(self) -> None:
         report = classify_htv405_retained_attempts(
