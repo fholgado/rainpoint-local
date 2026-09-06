@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.34.14 / Integration 0.14.4
+
+- Reuse the established device ID when pairing registers an existing valve
+  link, preventing duplicate Home Assistant devices while preserving history,
+  control counters, ACK ownership, and synchronization settings.
+
 ## 0.34.13 / Integration 0.14.4
 
 - Retry unconfirmed one-zone counter sync up to three total attempts within the

@@ -3635,6 +3635,17 @@ class SQLiteEventStore:
             raise KeyError(endpoint)
         return dict(row)
 
+    def migrate_valve_registry_device_id(
+        self, controller_endpoint: str, valve_endpoint: str, device_id: str
+    ) -> None:
+        """Align an exact valve link without touching its control state."""
+        self._connection.execute(
+            "UPDATE valve_registry SET device_id = ? "
+            "WHERE controller_endpoint = ? AND valve_endpoint = ?",
+            (device_id, controller_endpoint, valve_endpoint),
+        )
+        self._connection.commit()
+
     def migrate_registry_device_id(
         self, endpoint: str, device_id: str
     ) -> dict[str, Any]:

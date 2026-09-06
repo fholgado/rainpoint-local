@@ -6610,6 +6610,19 @@ class Gateway:
         valve_registrations = (
             self._store.valve_registry() if self._store else []
         )
+        # Pairing may assign a new ID to a link already in the installation
+        # catalog. Reports and registry-only devices must share the stable ID.
+        for registration in valve_registrations:
+            valve = self._base_catalog.valve_link(
+                str(registration["controller_endpoint"]),
+                str(registration["valve_endpoint"]),
+            )
+            if valve is not None and registration["device_id"] != valve.device_id:
+                self._store.migrate_valve_registry_device_id(
+                    str(registration["controller_endpoint"]),
+                    str(registration["valve_endpoint"]), valve.device_id,
+                )
+                registration["device_id"] = valve.device_id
         self.catalog = self._base_catalog.with_registries(
             registrations, valve_registrations
         )

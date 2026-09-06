@@ -61,6 +61,37 @@ class GatewayTest(unittest.TestCase):
             self.assertIs(single["state"]["is_watering"], False)
             restored.close()
 
+    def test_registered_valve_alias_preserves_catalog_identity_after_restart(self):
+        from rainpointd.device_catalog import DeviceCatalog, ValveDefinition
+        catalog = DeviceCatalog(valves=(ValveDefinition(
+            "1122338f", "a1234580", "single", "Single", model="HTV145FRF"
+        ),))
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "events.sqlite3")
+            gateway = Gateway(storage_path=path, catalog=catalog)
+            gateway.observe_decoded(
+                device_id="single", name="Single", model="HTV145FRF",
+                frame="existing-history", state={"is_watering": False},
+            )
+            gateway._store.upsert_valve_link(
+                controller_endpoint="1122338f", valve_endpoint="a1234580",
+                device_id="pairing-alias", name="My valve", model="HTV145FRF",
+                area="Garden", accepted_at="2026-09-06T12:00:00+00:00",
+            )
+            before = gateway._store.valve_registry()[0]
+            gateway._refresh_registry_catalog()
+            gateway._ensure_registered_valve_devices()
+            self.assertEqual(["single"], [d["device_id"] for d in gateway.devices()])
+            after = gateway._store.valve_registry()[0]
+            self.assertEqual({**before, "device_id": "single"}, after)
+            gateway.close()
+            restored = Gateway(storage_path=path, catalog=catalog)
+            devices = restored.devices()
+            self.assertEqual(["single"], [d["device_id"] for d in devices])
+            self.assertGreater(devices[0]["last_event_id"], 0)
+            self.assertEqual("Garden", devices[0]["area"])
+            restored.close()
+
     HTV405_OPEN_RESPONSE_SEQUENCE_6 = (
         "79f4882f28b984028094a9801306d0868010cf80000000409e00569e"
         "00000000000000005878"
@@ -885,10 +916,13 @@ class GatewayTest(unittest.TestCase):
                 trailer_residual=0xC713,
                 updated_at="2026-08-25T18:00:01+00:00",
             )
+            control_before = gateway._store.htv145_control_states()
             gateway._refresh_registry_catalog()
             gateway._ensure_registered_valve_devices()
+            self.assertEqual(control_before, gateway._store.htv145_control_states())
+            self.assertEqual("valve-1", gateway._store.valve_registry()[0]["device_id"])
 
-            forgotten = gateway.forget_registry_device("htv145-b42d008f")
+            forgotten = gateway.forget_registry_device("valve-1")
 
             self.assertEqual("b42d008f", forgotten["endpoint"])
             self.assertEqual([], gateway._store.valve_registry())
