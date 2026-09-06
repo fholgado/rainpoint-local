@@ -1253,17 +1253,33 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
       Two active anchors at phases 0 and 62 were followed by positively
       acknowledged opens and early closes, including phase 63 -> 0 rollover;
       independent IQ and telemetry verify both complete recovery sequences.
-      Active recovery is qualified on this specimen; a non-watering morning
-      anchor is not. Evidence: `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md` and
-      `research/fixtures/htv145_active_counter_recovery_20260906.json`.
+      The follow-up idle phase-0 and phase-62 anchors returned result 3 but
+      their corresponding opens and early closes succeeded, including rollover.
+      This separately qualifies non-watering idle counter assignment. Later
+      evidence uses actual node/gateway RF replies and independent state reports;
+      the exact commands match the earlier IQ-decoded frames. Evidence:
+      `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md` and both active/idle recovery
+      fixtures. Result 3 remains an ordinary-command error outside a reserved
+      fixed-zero idle anchor.
+- [x] Implement and physically verify report-triggered one-zone idle counter
+      synchronization (gateway 0.34.12 / candidate 0.15.24). Starting with an
+      unknown gateway counter, the 19:08 UTC owner idle report triggered a fixed
+      zero close; its exact result-3 reply authenticated the anchor. Normal
+      60-second open and early close then received positive replies and separate
+      watering/idle telemetry. Final next numeric counter is `0x81`. Persist a
+      bounded queue and optional daily calendar policy; never water to sync,
+      reseed from telemetry counters, or replay a transmitted anchor on restart.
+      A final gateway rebuild preserved the recovered counter, radio
+      authentication and enabled morning policy without actuation. Redacted
+      runtime proof is in
+      `research/fixtures/htv145_idle_result3_counter_recovery_20260906.json`.
 - [ ] Qualify and persist the complete one-zone command phase, including the
       high marker bit, for arbitrary action sequences. Stock consecutive opens
       demonstrate why fixed action polarity is not a general phase model.
       The September 6 active-anchor trials verify normal alternating controls
-      and rollover, but the next-phase idle close still rejects. Keep automatic
-      one-zone morning checks limited to retained counter/owner restoration;
-      do not reuse the four-zone idle anchor or add synchronization watering.
-      Any recovery from an unknown counter while idle needs separate evidence.
+      and rollover. The separately qualified fixed-zero idle anchor recovers
+      normal alternating controls without watering; it does not establish a
+      general phase model for consecutive opens or arbitrary action ordering.
 
 - [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
       require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
@@ -1354,7 +1370,9 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
         family-`86` reports and result-3 byte-17-`10` variant in decoder tests.
         Both implementations reproduce ten stock ACKs. Summary retries do not
         change current watering state; owner reassignment requires a correlated
-        revocation reply. No negative reply authenticates a counter.
+        revocation reply. Ordinary negative replies do not authenticate a
+        counter; the separately qualified fixed-zero idle-anchor reservation
+        accepts only its exact correlated result-3 variant.
   - [ ] Physically qualify the cleaned image's report/summary ACK timing/residue,
         repeated operational commands and counter restore across node/gateway
         restart on dry hardware; preserve `.22` as the rollback baseline.
@@ -1376,7 +1394,14 @@ control now that the exhaustive fixed-anchor result above defines the protocol.
 
 - [x] Expose enrolled one-zone retained-counter status, value, and explicit
       restoration in HA (gateway 0.34.7 / integration 0.14.3). This restores
-      known radio state only; unknown-counter RF recovery remains unproven.
+      known radio state only. The later qualified idle-anchor sync below
+      additionally recovers unknown counters without watering.
+
+- [x] Add real one-zone Sync counter and morning enabled/start/window/status
+      controls in HA (integration 0.14.4), preserving the existing button ID.
+      Scope four-zone registry projections to HTV405 so they cannot overwrite
+      one-zone sync state or add phantom actuator capabilities. Local API/UI
+      regressions and live source/entity verification cover the change.
 
 - [x] Remove the HTV145's four phantom zones while preserving its single overall
       watering, battery, and usage entities and HTV405's real zones. Integration

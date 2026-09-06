@@ -155,6 +155,7 @@ class ESP32NetworkServer:
             "htv145_control_sync",
             "htv145_control_open",
             "htv145_control_close",
+            "htv145_control_idle_anchor",
             "htv145_control_status",
             "htv145_control_revoke",
         }:
@@ -181,6 +182,8 @@ class ESP32NetworkServer:
             "htv405_routine_ack_revoke",
         }:
             required_capability = "htv405_routine_ack_tx"
+        elif command_type == "htv145_control_idle_anchor":
+            required_capability = "htv145_idle_anchor"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -705,6 +708,7 @@ class ESP32NetworkServer:
                         "htv405_bounded_sync_wait",
                         "htv145_control_tx_candidate",
                         "htv145_report_ack_tx",
+                        "htv145_idle_anchor",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }

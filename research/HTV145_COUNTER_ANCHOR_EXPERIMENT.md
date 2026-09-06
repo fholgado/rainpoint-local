@@ -251,3 +251,71 @@ command because the external SDR had disappeared from USB enumeration. The
 successful clean-runtime check used the radio's received RF frames and separate
 valve state reports; unlike the eight recovery exchanges above, it has no
 independent SDR capture.
+
+
+## Idle result-3 anchors followed by operational proof (September 6, 18:20 UTC)
+
+The later follow-up overturned the active-only conclusion above. On the unchanged
+association, a fresh independent idle report was followed by close phase 0
+(`80/10`). It returned result 3, but the subsequent phase-1 bounded open and
+phase-2 early close both received positive replies and independent state reports.
+A second idle close at phase 62 (`9f/10`) also returned result 3; phase-63 open
+and phase-0 early close then succeeded across rollover. Thus an idle result-3
+reply does not by itself show that the requested counter was rejected.
+
+These two operational sequences qualify a non-watering fixed-zero counter anchor
+on this specimen. They do not establish result 3's meaning for all commands. The
+production-facing candidate accepts only the captured zero-anchor response:
+ordinary trailer and association route, byte 13 `80`, byte 14 `50`, and either a
+positive idle reply or the exact result-3 body with byte 17 `10`. It must match a
+durable `idle_anchor` reservation triggered by a new independent idle report from
+the assigned ACK owner. The gateway accepts it within 3.5 seconds; the radio's RF
+window is 3 seconds. Result 3 remains an error outside that narrow context and
+never supplies physical-state evidence. Store its frame separately from the last
+independent state observation. Reports and summary ACKs never seed the counter.
+
+`fixtures/htv145_idle_result3_counter_recovery_20260906.json` preserves all six
+physical replies and the subsequent watering/idle reports. Each reply was also
+present in the gateway's durable RF event log. The external SDR was unavailable
+for these trials; there is no new independent IQ capture. All six transmitted
+command frames exactly match commands independently IQ-decoded in the preceding
+active-recovery fixture. Preserve both evidence sources and their distinct scope.
+
+Gateway 0.34.12 and candidate 0.15.24 implement explicit close-only synchronization:
+queue a bounded wait, require a new owner-received idle report, reserve before
+transmitting, send the fixed zero close, and authenticate only a matching anchor
+reply. The next normal open uses `80/90`. A missing/late reply or new watering
+report leaves the counter unknown; restart never replays a transmitted anchor.
+The optional local-calendar morning policy is disabled by default, claims at most
+one attempt per date, and skips missed windows. It never opens a valve to sync.
+Temporary arbitrary-phase and assumed-open experiment commands are removed.
+
+
+### Clean runtime verification
+
+On gateway 0.34.12 and OTA-confirmed candidate 0.15.24, an explicit Sync counter
+request at 19:03:19 UTC began with the gateway counter unknown. The owner's new
+idle report at 19:08:37.928 triggered the fixed zero close. Its exact result-3
+response at 19:08:38.444 authenticated counter `0x80` without claiming a physical
+state change. A normal bounded open at `0x80` received a positive reply at
+19:08:58.761 and independent watering at 19:09:04.784. The early close at `0x81`
+received a positive reply at 19:09:19.167 and independent idle at 19:09:25.480.
+The valve finished idle with synchronized next numeric counter `0x81`.
+
+The redacted fixture's `runtime_verification` section preserves these replies and
+independent state frames. This is node/gateway RF evidence, not a new SDR capture.
+The installation's close-only morning policy was enabled for 05:30–06:00 Eastern;
+the reusable default remains disabled. The four-zone policy was not modified.
+
+Validation: the complete CI Python suite passed 467 tests (two optional skips),
+followed by targeted migration/spacing/dispatch-failure checks and 122 API/UI tests
+after the final one-zone registry projection fix. The native protocol test and
+both production/candidate firmware builds passed. Production excludes the new
+HTV145 opcode; the candidate contains no phase/bootstrap/handoff experiment path.
+
+
+A final gateway rebuild preserved next counter `0x81`, radio authentication,
+independent idle, and the enabled morning policy without another actuator
+command. Both one-zone catalog aliases now project the same Ready sync state;
+four-zone defaults no longer overwrite registered HTV145 devices. The existing
+four-zone schedule remained Ready at 05:30 Eastern.

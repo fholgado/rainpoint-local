@@ -771,7 +771,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(21, restored._store.schema_version())
+            self.assertEqual(22, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1627,7 +1627,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(21, gateway.info()["storage_schema_version"])
+            self.assertEqual(22, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1638,7 +1638,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(21, migrated.info()["storage_schema_version"])
+            self.assertEqual(22, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -2971,6 +2971,52 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         self.assertEqual(0x82, result["command"]["expected_sequence"])
         self.assertEqual("b1c2d38f", result["command"]["controller_endpoint"])
         self.assertEqual(["htv145_control_open"], [command["type"] for _, command in self.commands])
+
+    def test_one_zone_sync_http_owner_duplicate_and_result3_confirmation(self):
+        from rainpointd.htv145_control import Htv145ControlProfile
+        gateway = self.server.gateway
+        now = datetime.now(timezone.utc)
+        profile = Htv145ControlProfile(node_id=self.NODE_ID,
+            controller_endpoint="b1c2d38f", valve_endpoint="a1b2c380", center_hz=434398811,
+            power_dbm=10, invert=False, trailer_residual=0x4f03, close_trailer_residual=0x4f03,
+            command_marker_inverted=True, report_ack_center_hz=433518905)
+        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
+        gateway._htv145_runtime.coordinator.configure(profile, observed_at=now.isoformat())
+        gateway._devices["one-zone"] = {"device_id":"one-zone", "model":"HTV145FRF", "name":"Test valve",
+            "state":{"rf_endpoint_a":"a1b2c380", "rf_endpoint_b":"b1c2d38f"}}
+        gateway.update_node(self.NODE_ID, capabilities=["rx","htv145_control_tx_candidate","htv145_report_ack_tx","htv145_idle_anchor"])
+        route = "/api/v1/devices/one-zone/valve/"
+        with self.assertRaises(HTTPError) as context:
+            self.post_json(route+"sync-now", {}, token=None)
+        self.assertEqual(401,context.exception.code)
+        self.assertEqual([],self.commands)
+        result = self.post_json(route+"sync-now", {})
+        self.assertEqual("waiting_for_report",result["control"]["state"])
+        received = (datetime.now(timezone.utc)+timedelta(seconds=1)).isoformat()
+        for node in ("rp-665544332211", self.NODE_ID):
+            gateway.observe_rf_frame(frame=fixture["initial_idle_frame"], state={"rf_node_id":node}, observed_at=received)
+        self.assertEqual(["htv145_control_idle_anchor"], [c["type"] for _,c in self.commands])
+        response_at = (datetime.fromisoformat(received)+timedelta(seconds=1)).isoformat()
+        gateway.observe_rf_frame(frame=fixture["transactions"][0]["response_frame"], state={"rf_node_id":self.NODE_ID}, observed_at=response_at)
+        state = gateway._store.htv145_control_states()[0]
+        self.assertTrue(state["counter_synchronized"])
+        self.assertEqual(128,state["next_sequence"])
+        device = next(d for d in gateway.devices(now=datetime.fromisoformat(response_at)) if d["device_id"]=="one-zone")
+        self.assertIn("morning_synchronization",device["capabilities"])
+        self.assertEqual("Ready",device["state"]["rf_morning_sync_status"])
+        self.assertTrue(device["state"]["rf_htv145_counter_sync_available"])
+        # A one-zone pairing registry entry must not overwrite sync state with
+        # four-zone defaults or manufacture four-zone actuator capabilities.
+        gateway._store.upsert_valve_link(controller_endpoint=profile.controller_endpoint,
+            valve_endpoint=profile.valve_endpoint, device_id="one-zone", name="Test valve",
+            model="HTV145FRF", area=None, accepted_at=now.isoformat())
+        registered = next(d for d in gateway.devices(now=datetime.fromisoformat(response_at)) if d["device_id"]=="one-zone")
+        self.assertEqual("Ready",registered["state"]["rf_morning_sync_status"])
+        self.assertNotIn("four_zone_valve",registered["capabilities"])
+        self.assertNotIn("bounded_valve_control",registered["capabilities"])
+        self.post_json(route+"morning-sync", {"enabled":True,"timezone":"America/New_York"})
+        self.assertTrue(gateway._store.htv145_counter_sync(profile.valve_endpoint)["config"]["enabled"])
+        self.assertEqual(1,len(self.commands))
 
     def test_one_shot_open_requires_auth_and_positive_valve_evidence(self) -> None:
         link = ValveLink(

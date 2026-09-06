@@ -274,9 +274,9 @@ class RainPointHtv405CancelWateringRequestButton(
 
 
 class RainPointRestoreRetainedCounterButton(RainPointLocalEntity, ButtonEntity):
-    """Restore already authenticated state; this is not an RF recovery anchor."""
+    """Sync capable owners; preserve RF-free restoration for legacy gateways."""
 
-    _attr_translation_key = "restore_retained_counter"
+    _attr_translation_key = "resynchronize_counter"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator, device_id: str, token: str) -> None:
@@ -286,11 +286,16 @@ class RainPointRestoreRetainedCounterButton(RainPointLocalEntity, ButtonEntity):
 
     @property
     def available(self) -> bool:
-        return bool(super().available and self.decoded_state.get("rf_retained_counter_restore_available"))
+        key = ("rf_htv145_counter_sync_available" if self.decoded_state.get("rf_htv145_counter_sync_supported")
+               else "rf_retained_counter_restore_available")
+        return bool(super().available and self.decoded_state.get(key))
 
     async def async_press(self) -> None:
         try:
-            await self.coordinator.client.restore_retained_counter(self._token, device_id=self.device_id)
+            if self.decoded_state.get("rf_htv145_counter_sync_supported"):
+                await self.coordinator.client.sync_htv405_now(self._token, device_id=self.device_id)
+            else:
+                await self.coordinator.client.restore_retained_counter(self._token, device_id=self.device_id)
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_request_refresh()

@@ -1,0 +1,115 @@
+{
+  "description": "Two idle-close result-3 anchors, each followed by a positively acknowledged 60-second open and early close with independent state reports. Both chosen anchors differ from the preceding operational counter; the second crosses rollover.",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "initial_next_sequence": 129,
+  "external_iq_available": false,
+  "command_evidence": "Requests use unchanged firmware builders and exactly match command frames independently captured in htv145_active_counter_recovery_20260906.json. No new SDR capture was available. Responses are actual radio RX frames also persisted as gateway RF events.",
+  "initial_idle_frame": "79f4882f28a1b2c380b1c2d38f9b8107860700804f8000000040800056800000000000007a8d",
+  "initial_idle_at": "2026-09-06T18:20:47.754901+00:00",
+  "transactions": [
+    {
+      "name": "idle-close-0",
+      "phase": 0,
+      "watering": false,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808010818081000000000000000000000000000000000000616b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80508683104f800000004080005680000000000000000001f9",
+      "requested_at": "2026-09-06T18:20:48.478549+00:00",
+      "response_observed_at": "2026-09-06T18:20:49.308228+00:00",
+      "result": "negative_3"
+    },
+    {
+      "name": "after-idle-result-open-1",
+      "phase": 1,
+      "watering": true,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808090828081009e00000000000000000000000000000000be90",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80d0868010cf80000000409e00569e000000000000000005e9",
+      "requested_at": "2026-09-06T18:21:08.488538+00:00",
+      "response_observed_at": "2026-09-06T18:21:09.359355+00:00",
+      "result": "positive",
+      "independent_frame": "79f4882f28a1b2c380b1c2d38f9e810786058090cf80000000409b80569e00000000000013a8",
+      "independent_at": "2026-09-06T18:21:15.444822+00:00"
+    },
+    {
+      "name": "early-close-2",
+      "phase": 2,
+      "watering": false,
+      "command_frame": "79f4882f28b1c2d38fa1b2c38081108180810000000000000000000000000000000000000460",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f81508680104f80000000408000569e00000000000000001aae",
+      "requested_at": "2026-09-06T18:21:28.566595+00:00",
+      "response_observed_at": "2026-09-06T18:21:29.354227+00:00",
+      "result": "positive",
+      "independent_frame": "79f4882f28a1b2c380b1c2d38f808107860580804f8000000040800056800000000000003ecd",
+      "independent_at": "2026-09-06T18:21:35.260481+00:00"
+    },
+    {
+      "name": "idle-close-62",
+      "phase": 62,
+      "watering": false,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3809f108180810000000000000000000000000000000000006236",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f9f508683104f800000004080005680000000000000000002a4",
+      "requested_at": "2026-09-06T18:21:48.664410+00:00",
+      "response_observed_at": "2026-09-06T18:21:49.482092+00:00",
+      "result": "negative_3"
+    },
+    {
+      "name": "after-idle-result-open-63",
+      "phase": 63,
+      "watering": true,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3809f90828081009e00000000000000000000000000000000bdcd",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f9fd0868010cf80000000409e00569e000000000000000006b4",
+      "requested_at": "2026-09-06T18:22:08.736667+00:00",
+      "response_observed_at": "2026-09-06T18:22:09.571766+00:00",
+      "result": "positive",
+      "independent_frame": "79f4882f28a1b2c380b1c2d38f83010786058090cf80000000409b00569e00000000000057d4",
+      "independent_at": "2026-09-06T18:22:15.805174+00:00"
+    },
+    {
+      "name": "early-close-0",
+      "phase": 0,
+      "watering": false,
+      "command_frame": "79f4882f28b1c2d38fa1b2c3808010818081000000000000000000000000000000000000616b",
+      "response_frame": "79f4882f28a1b2c380b1c2d38f80508680104f80000000408000569e00000000000000007fa5",
+      "requested_at": "2026-09-06T18:22:28.766173+00:00",
+      "response_observed_at": "2026-09-06T18:22:29.640410+00:00",
+      "result": "positive",
+      "independent_frame": "79f4882f28a1b2c380b1c2d38f850107860580804f800000004080005680000000000000655e",
+      "independent_at": "2026-09-06T18:22:35.781842+00:00"
+    }
+  ],
+  "runtime_verification": {
+    "gateway_version": "0.34.12",
+    "firmware_version": "0.15.24-htv145-control.1",
+    "external_iq_available": false,
+    "initial_counter_synchronized": false,
+    "requested_at": "2026-09-06T19:03:19.377082+00:00",
+    "trigger_idle_frame": "79f4882f28a1b2c380b1c2d38f890107860700804f8000000040800056800000000000003a78",
+    "trigger_idle_at": "2026-09-06T19:08:37.928852+00:00",
+    "anchor_response_frame": "79f4882f28a1b2c380b1c2d38f80508683104f800000004080005680000000000000000001f9",
+    "anchor_response_at": "2026-09-06T19:08:38.444145+00:00",
+    "confirmed_next_sequence": 128,
+    "normal_commands": [
+      {
+        "action": "open",
+        "expected_sequence": 128,
+        "requested_at": "2026-09-06T19:08:58.022746+00:00",
+        "response_frame": "79f4882f28a1b2c380b1c2d38f80d0868010cf80000000409e00569e000000000000000005e9",
+        "response_at": "2026-09-06T19:08:58.761261+00:00",
+        "independent_frame": "79f4882f28a1b2c380b1c2d38f8c810786058090cf80000000409b00569e000000000000567a",
+        "independent_at": "2026-09-06T19:09:04.784136+00:00"
+      },
+      {
+        "action": "close",
+        "expected_sequence": 129,
+        "requested_at": "2026-09-06T19:09:18.115057+00:00",
+        "response_frame": "79f4882f28a1b2c380b1c2d38f81508680104f80000000408000569e00000000000000001aae",
+        "response_at": "2026-09-06T19:09:19.167495+00:00",
+        "independent_frame": "79f4882f28a1b2c380b1c2d38f8e8107860580804f80000000408000568000000000000068ed",
+        "independent_at": "2026-09-06T19:09:25.480277+00:00"
+      }
+    ],
+    "final_counter_synchronized": true,
+    "final_next_sequence": 129,
+    "final_watering": false
+  }
+}

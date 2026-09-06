@@ -1040,6 +1040,10 @@ class Gateway:
     ) -> dict:
         """Persist a disabled-by-default per-valve morning policy."""
         with self._lock:
+            if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                result = self._htv145_runtime.counter_sync.configure(profile, settings, now=(now or datetime.now(timezone.utc)).isoformat())
+                self._event_condition.notify_all()
+                return result
             registration = self._morning_sync_registration_locked(device_id)
             assert self._store is not None
             data = self._store.morning_sync(registration["valve_endpoint"])
@@ -1123,6 +1127,10 @@ class Gateway:
     def request_htv405_morning_sync(self, *, device_id: str, now: datetime | None = None) -> dict:
         """Explicit recover-now action; never enqueue a watering command."""
         with self._lock:
+            if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                result = self._htv145_runtime.counter_sync.request(profile, now=(now or datetime.now(timezone.utc)).isoformat())
+                self._event_condition.notify_all()
+                return result
             registration = self._morning_sync_registration_locked(device_id)
             data = self._store.morning_sync(registration["valve_endpoint"])
             config = data.get("config", morning_sync.DEFAULT_CONFIG)
@@ -3237,6 +3245,11 @@ class Gateway:
 
         with self._lock:
             self._observe_morning_sync_command_locked(frame, timestamp)
+            if self._htv145_runtime is not None:
+                try:
+                    self._htv145_runtime.observe_counter_sync_report(bytes.fromhex(frame), decoded.get("rf_node_id"), now=timestamp)
+                except ValueError:
+                    pass
             duplicate = self._receiver_duplicate_locked(
                 frame=frame,
                 state=decoded,
@@ -3356,6 +3369,11 @@ class Gateway:
         with self._lock:
             self._confirm_sensor_ack_locked(decoded, timestamp)
             self._observe_morning_sync_command_locked(frame, timestamp)
+            if self._htv145_runtime is not None:
+                try:
+                    self._htv145_runtime.observe_counter_sync_report(bytes.fromhex(frame), decoded.get("rf_node_id"), now=timestamp)
+                except ValueError:
+                    pass
             duplicate = self._receiver_duplicate_locked(
                 frame=frame,
                 state=decoded,
@@ -3835,6 +3853,18 @@ class Gateway:
                         "rf_retained_counter_restore_available": status["ready"],
                     })
                     device["capabilities"] = sorted({*device.get("capabilities", []), "retained_counter_restore"})
+                    sync = self._htv145_runtime.counter_sync.status(profile, now=observed.isoformat())
+                    supported = "htv145_idle_anchor" in self._nodes.get(profile.node_id, {}).get("capabilities", [])
+                    device["state"].update({
+                        "rf_htv145_counter_sync_supported": supported,
+                        "rf_htv145_counter_sync_available": sync["available"],
+                        "rf_morning_sync_status": sync["status"],
+                        "rf_morning_sync_reason": sync.get("reason"),
+                        "rf_morning_sync_last_success_at": sync.get("last_success_at"),
+                        **{f"rf_morning_sync_{key}": value for key, value in sync["config"].items()},
+                    })
+                    if supported:
+                        device["capabilities"] = sorted({*device["capabilities"], "morning_synchronization"})
                 if registered := registry.get(device_id):
                     device["name"] = registered["name"]
                     device["area"] = registered["area"]
@@ -3857,7 +3887,7 @@ class Gateway:
                             )
                     if registered.get("model_code") is not None:
                         state["rf_model_code"] = registered["model_code"]
-                if valve_registration := valve_registry.get(device_id):
+                if device.get("model") == "HTV405FRF" and (valve_registration := valve_registry.get(device_id)):
                     state = device.setdefault("state", {})
                     confirmed_watering = valve_registration.get(
                         "control_confirmed_watering"

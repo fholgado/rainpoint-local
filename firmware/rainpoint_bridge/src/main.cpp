@@ -196,6 +196,10 @@ ValveControlProbe valveControlProbe;
 
 #if RAINPOINT_HTV145_ENABLED == 1
 struct Htv145ControlCandidate {
+    bool idleAnchor = false;
+    bool stateObserved = false;
+    bool observedWatering = false;
+    std::uint32_t stateObservedAtMs = 0;
     rainpoint::Htv145Link link{};
     std::array<std::uint8_t, rainpoint::kFrameBytes> commandFrame{};
     String commandId;
@@ -904,7 +908,7 @@ bool rfCommandMayTransmit(const String& type) {
 #if RAINPOINT_HTV145_ENABLED == 1
     if (
         type == "htv145_control_open" ||
-        type == "htv145_control_close"
+        type == "htv145_control_close" || type == "htv145_control_idle_anchor"
     ) {
         return true;
     }
@@ -1832,7 +1836,8 @@ void confirmHtv145Candidate(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame
 ) {
     const bool sequenceConfirmed =
-        strcmp(confirmation, "matching_immediate_response") == 0;
+        strcmp(confirmation, "matching_immediate_response") == 0 ||
+        strcmp(confirmation, "matching_idle_anchor_response") == 0;
     if (sequenceConfirmed) {
         htv145ControlCandidate.nextSequence =
             rainpoint::nextHtv145CommandSequence(
@@ -1895,17 +1900,26 @@ bool transmitNextHtv145CandidateAttempt() {
 bool startHtv145Candidate(
     const String& commandId,
     bool watering,
-    std::uint32_t durationSeconds
+    std::uint32_t durationSeconds,
+    bool idleAnchor = false
 ) {
     if (!htv145ControlCandidate.configured ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
         (htv145CommandIssued && !rainpoint::htv145CommandIntervalElapsed(
             lastHtv145CommandStartedAtMs, millis())) ||
-        !htv145ControlCandidate.counterAuthenticated ||
+        (!idleAnchor && !htv145ControlCandidate.counterAuthenticated) ||
         htv145ControlCandidate.pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         return false;
     }
+    if (idleAnchor && (watering || durationSeconds != 0 ||
+        !htv145ControlCandidate.stateObserved || htv145ControlCandidate.observedWatering ||
+        millis() - htv145ControlCandidate.stateObservedAtMs > 5'000 ||
+        !htv145ControlCandidate.commandMarkerInverted ||
+        htv145ControlCandidate.closeTrailerResidual != 0x4f03)) {
+        return false;
+    }
+    const std::uint8_t sequence = idleAnchor ? 0x80 : htv145ControlCandidate.nextSequence;
     std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
     const rainpoint::Htv145ControlProfile profile{
         htv145ControlCandidate.link,
@@ -1914,7 +1928,7 @@ bool startHtv145Candidate(
         htv145ControlCandidate.closeTrailerResidual
     };
     const bool built = rainpoint::buildHtv145ControlFrame(
-        profile, htv145ControlCandidate.nextSequence, watering,
+        profile, sequence, watering,
         durationSeconds, frame
     );
     if (!built) {
@@ -1923,8 +1937,9 @@ bool startHtv145Candidate(
     htv145ControlCandidate.commandFrame = frame;
     htv145ControlCandidate.commandId = commandId;
     htv145ControlCandidate.durationSeconds = durationSeconds;
-    htv145ControlCandidate.transmittedSequence =
-        htv145ControlCandidate.nextSequence;
+    htv145ControlCandidate.transmittedSequence = sequence;
+    htv145ControlCandidate.idleAnchor = idleAnchor;
+    if (idleAnchor) htv145ControlCandidate.counterAuthenticated = false;
     htv145ControlCandidate.commandWatering = watering;
     htv145ControlCandidate.attemptsSent = 0;
     htv145ControlCandidate.successfulAttempts = 0;
@@ -1973,6 +1988,17 @@ void acknowledgeHtv145Report(
 void observeHtv145CandidateFrame(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame
 ) {
+    bool observedWatering = false;
+    if (htv145ControlCandidate.configured && rainpoint::decodeHtv145StateReport(
+            frame, htv145ControlCandidate.link, observedWatering)) {
+        htv145ControlCandidate.stateObserved = true;
+        htv145ControlCandidate.stateObservedAtMs = millis();
+        htv145ControlCandidate.observedWatering = observedWatering;
+        if (htv145ControlCandidate.pending && htv145ControlCandidate.idleAnchor) {
+            if (observedWatering) failHtv145Candidate("idle_anchor_state_changed", &frame);
+            return; // Independent telemetry never confirms an anchor's counter.
+        }
+    }
     if (!htv145ControlCandidate.pending) {
         return;
     }
@@ -1988,6 +2014,13 @@ void observeHtv145CandidateFrame(
             ++htv145ControlCandidate.invalidTrailerFrames;
             return;
         }
+    }
+    if (htv145ControlCandidate.idleAnchor &&
+        rainpoint::isHtv145IdleAnchorResponse(frame, htv145ControlCandidate.link)) {
+        if (millis() - htv145ControlCandidate.burstStartedAtMs <= rainpoint::kHtv145ImmediateResponseWindowMs) {
+            confirmHtv145Candidate("matching_idle_anchor_response", frame);
+        }
+        return;
     }
     rainpoint::Htv145CommandError error{};
     if (rainpoint::decodeHtv145CommandError(
@@ -2046,6 +2079,10 @@ void pollHtv145Candidate() {
         static_cast<std::int32_t>(
             now - htv145ControlCandidate.immediateResponseDeadlineMs
         ) >= 0) {
+        if (htv145ControlCandidate.idleAnchor) {
+            failHtv145Candidate("idle_anchor_response_timeout");
+            return;
+        }
         // The fallback watering/idle report is on the ordinary telemetry
         // carrier. Restore it once the immediate response window closes.
         restoreHtv145CandidateReceive();
@@ -2256,7 +2293,7 @@ void handleNetworkCommand() {
         htv145ControlCandidate = Htv145ControlCandidate{};
         return;
     }
-    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync") {
+    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor") {
         if (jsonStringField(command, "controller_endpoint") != hexString(htv145ControlCandidate.link.controllerEndpoint.data(), 4) ||
             jsonStringField(command, "valve_endpoint") != hexString(htv145ControlCandidate.link.valveEndpoint.data(), 4)) {
             reportNetworkCommandError(commandId, "htv145_control_association_mismatch");
@@ -2280,6 +2317,12 @@ void handleNetworkCommand() {
         htv145ControlCandidate.commandId = commandId;
         reportHtv145CandidateStatus("counter_synchronized");
         htv145ControlCandidate.commandId.clear();
+        return;
+    }
+    if (type == "htv145_control_idle_anchor") {
+        if (!startHtv145Candidate(commandId, false, 0, true)) {
+            reportNetworkCommandError(commandId, "invalid_htv145_idle_anchor");
+        }
         return;
     }
     if (type == "htv145_control_open") {

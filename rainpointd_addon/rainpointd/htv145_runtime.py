@@ -1,8 +1,9 @@
-"""One durable HTV145 association per radio, with observation-only recovery.
+"""One durable HTV145 association per radio, with explicit close-only counter recovery.
 
 The management route remains gated pending repeated dry RF qualification.
 A positive exchange enrolls control independently of the six-row pairing log.
-No startup, maintenance tick or status request sends an actuator command.
+Startup and status never send actuator commands. Explicit or scheduled sync
+waits for new owner telemetry before dispatching a close-only anchor.
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
+from .htv145_counter_sync import Htv145CounterSync
 from .valve_protocol import decode_htv145_state_report
 
 
@@ -19,6 +21,7 @@ class Htv145Runtime:
         self.coordinator = coordinator
         self.node = node
         self.restored: dict[str, Any] = {}
+        self.counter_sync = Htv145CounterSync(coordinator, self._ready_node)
 
     def profiles(self) -> list[Htv145ControlProfile]:
         return [self.coordinator.restored_profile(state)
@@ -106,6 +109,7 @@ class Htv145Runtime:
             available = False
         result.update(owner_available=available, ready=result["ready"] and available,
                       pairing_terminal_step_required=False, qualification="dry_selector6")
+        result["counter_sync"] = self.counter_sync.status(profile, now=now)
         return result
 
     def restore_retained_counter(self, profile: Htv145ControlProfile, *, now: str) -> dict[str, Any]:
@@ -163,6 +167,15 @@ class Htv145Runtime:
             except (KeyError, ValueError):
                 pass
 
+    def observe_counter_sync_report(self, frame: bytes, node_id: str | None, *, now: str) -> None:
+        # Run before cross-radio deduplication: only the assigned owner can
+        # authorize the anchor, even if a neighboring receiver reported first.
+        for profile in self.profiles():
+            try:
+                self.counter_sync.observe(profile, frame, node_id, now=now)
+            except (KeyError, ValueError, RuntimeError, PermissionError, ConnectionError):
+                pass
+
     def observe_frame(self, frame: bytes, *, now: str) -> None:
         for profile in self.profiles():
             try:
@@ -175,5 +188,6 @@ class Htv145Runtime:
             self.coordinator.readiness(profile, observed_at=now)
             try:
                 self.restore(profile, now=now)
-            except (RuntimeError, ConnectionError, ValueError):
+                self.counter_sync.tick(profile, now=now)
+            except (RuntimeError, ConnectionError, ValueError, PermissionError):
                 self.restored.pop(profile.valve_endpoint, None)

@@ -577,6 +577,22 @@ def decode_htv145_command_error(
     return {"sequence": frame[13], "result_code": 3}
 
 
+def decode_htv145_idle_anchor_response(frame: bytes, link: ValveLink) -> dict[str, int] | None:
+    """Recognize counter-zero evidence ONLY for a reserved, fresh-idle anchor.
+
+    Result 3 is still a negative ordinary command result. Dry follow-up trials
+    qualify this exact idle-close context as a usable anchor, not as evidence
+    that a physical close occurred. Callers must preserve prior idle telemetry.
+    """
+    positive = decode_htv145_command_response(frame, link)
+    if positive is not None and positive["sequence"] == 0x80 and not positive["watering"] and frame[14] == 0x50:
+        return {"sequence": 0x80, "result_code": 0}
+    error = decode_htv145_command_error(frame, link)
+    if error is not None and error["sequence"] == 0x80 and frame[14] == 0x50 and frame[17] == 0x10:
+        return {"sequence": 0x80, "result_code": 3}
+    return None
+
+
 def decode_htv145_state_report(
     frame: bytes, link: ValveLink
 ) -> dict[str, int | bool] | None:

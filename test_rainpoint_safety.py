@@ -2112,3 +2112,181 @@ class Htv145RuntimeTest(unittest.TestCase):
                 observed_at="2026-09-05T12:02:00+00:00")
         self.assertEqual(433518905, self.store.htv145_control_states()[0]["report_ack_center_hz"])
         self.assertEqual([], self.sent)
+
+
+class Htv145IdleCounterSyncTest(unittest.TestCase):
+    def setUp(self):
+        Htv145RuntimeTest.setUp(self)
+        self.node["capabilities"].append("htv145_idle_anchor")
+        self.coordinator.configure(self.profile, observed_at="2026-09-06T09:00:00+00:00")
+        self.fixture = json.loads((ROOT / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
+        self.idle = bytes.fromhex(self.fixture["initial_idle_frame"])
+        self.anchor = bytes.fromhex(self.fixture["transactions"][0]["response_frame"])
+        self.sync = self.runtime.counter_sync
+        self.at = lambda seconds=0: (datetime(2026, 9, 6, 9, 30, tzinfo=timezone.utc) + timedelta(seconds=seconds)).isoformat()
+
+    def queue(self):
+        return self.sync.request(self.profile, now=self.at())
+
+    def report(self, seconds=1, node=None, frame=None):
+        self.runtime.observe_counter_sync_report(frame or self.idle,
+            node or self.profile.node_id, now=self.at(seconds))
+
+    def test_unknown_counter_waits_for_new_owner_idle_and_result3_anchors_only_counter(self):
+        self.assertEqual("waiting_for_report", self.queue()["state"])
+        self.assertEqual([], self.sent)
+        self.report(0)
+        self.report(1, node="rp-665544332211")
+        self.report(1, frame=self.watering)
+        self.assertEqual([], self.sent)
+        self.report()
+        self.assertEqual(["htv145_control_idle_anchor"], [c["type"] for _, c in self.sent])
+        before = self.store.htv145_control_states()[0]
+        self.assertEqual("idle_anchor", before["pending_action"])
+        self.assertFalse(before["counter_synchronized"])
+        self.runtime.observe_frame(self.idle, now=self.at(1.1))
+        self.assertEqual(before["pending_command_id"], self.store.htv145_control_states()[0]["pending_command_id"])
+        physical = self.store.htv145_control_states()[0]
+        self.runtime.observe_frame(self.anchor, now=self.at(2))
+        state = self.store.htv145_control_states()[0]
+        self.assertTrue(state["counter_synchronized"])
+        self.assertEqual(128, state["next_sequence"])
+        self.assertEqual(physical["confirmed_at"], state["confirmed_at"])
+        self.assertEqual(physical["last_response_frame"], state["last_response_frame"])
+        self.assertEqual(3, self.sync.status(self.profile, now=self.at(2))["result_code"])
+        self.assertEqual("Ready", self.sync.status(self.profile, now=self.at(2))["status"])
+        self.runtime.observe_frame(self.anchor, now=self.at(3))
+        self.assertEqual(1, len(self.sent))
+        self.runtime.restored[self.profile.valve_endpoint] = ("connection-1", "test")
+        request = self.runtime.request(self.profile, "open", duration_seconds=60, now=self.at(17))
+        self.assertEqual(128, request["expected_sequence"])
+        self.runtime.observe_frame(bytes.fromhex(self.fixture["transactions"][1]["response_frame"]), now=self.at(18))
+        self.assertTrue(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.assertEqual(129, self.store.htv145_control_states()[0]["next_sequence"])
+
+    def test_fixture_qualifies_two_idle_anchors_with_successful_controls_and_rollover(self):
+        from rainpointd.valve_protocol import decode_htv145_command_response, decode_htv145_command_error, decode_htv145_idle_anchor_response, decode_htv145_state_report
+        transactions = self.fixture["transactions"]
+        self.assertEqual([0,1,2,62,63,0], [t["phase"] for t in transactions])
+        runtime = self.fixture["runtime_verification"]
+        self.assertFalse(runtime["initial_counter_synchronized"])
+        self.assertEqual(128,runtime["confirmed_next_sequence"])
+        self.assertEqual(transactions[0]["response_frame"],runtime["anchor_response_frame"])
+        self.assertEqual([128,129],[c["expected_sequence"] for c in runtime["normal_commands"]])
+        self.assertTrue(runtime["final_counter_synchronized"])
+        self.assertEqual(129,runtime["final_next_sequence"])
+        self.assertFalse(runtime["final_watering"])
+
+        for index, transaction in enumerate(transactions):
+            frame = bytes.fromhex(transaction["response_frame"])
+            if index in (0,3):
+                self.assertEqual(3, decode_htv145_command_error(frame, self.profile.link)["result_code"])
+                self.assertIsNone(decode_htv145_command_response(frame, self.profile.link))
+            else:
+                self.assertEqual(transaction["watering"], decode_htv145_command_response(frame, self.profile.link)["watering"])
+                self.assertEqual(transaction["watering"], decode_htv145_state_report(bytes.fromhex(transaction["independent_frame"]), self.profile.link)["watering"])
+        self.assertEqual({"sequence":128, "result_code":3}, decode_htv145_idle_anchor_response(self.anchor, self.profile.link))
+        for offset, value in ((13,129), (14,0xd0), (17,0), (5,0xff)):
+            frame = bytearray(self.anchor); frame[offset] = value
+            frame[-2:] = (binascii.crc_hqx(frame[:-2], 0) ^ 0x4f03).to_bytes(2,"big")
+            self.assertIsNone(decode_htv145_idle_anchor_response(bytes(frame), self.profile.link))
+
+    def test_result3_without_anchor_reservation_never_authenticates(self):
+        self.runtime.observe_frame(self.anchor, now=self.at())
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.queue(); self.report()
+        self.runtime.observe_frame(self.anchor, now=self.at(6))
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.coordinator.readiness(self.profile, observed_at=self.at(20))
+        self.assertEqual("failed", self.sync.status(self.profile, now=self.at(20))["state"])
+        self.assertEqual(1, len(self.sent))
+
+    def test_watering_report_aborts_anchor_and_cannot_authenticate(self):
+        self.queue(); self.report()
+        self.runtime.observe_frame(self.watering, now=self.at(2))
+        self.runtime.observe_frame(self.anchor, now=self.at(3))
+        state = self.store.htv145_control_states()[0]
+        self.assertTrue(state["confirmed_watering"])
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["pending_command_id"])
+        self.assertEqual("failed", self.sync.status(self.profile, now=self.at(3))["state"])
+
+    def test_disabled_or_old_owner_cannot_queue_and_cancel_expiry_never_transmit(self):
+        self.node["capabilities"].remove("htv145_idle_anchor")
+        with self.assertRaises(RuntimeError): self.queue()
+        self.node["capabilities"].append("htv145_idle_anchor")
+        self.queue()
+        self.sync.configure(self.profile, {"enabled":False}, now=self.at(1))
+        self.report(2)
+        self.assertEqual([], self.sent)
+        self.sync.request(self.profile, now=self.at(3), wait_seconds=15)
+        self.sync.tick(self.profile, now=self.at(19))
+        self.report(20)
+        self.assertEqual([], self.sent)
+        self.assertEqual("failed", self.sync.status(self.profile, now=self.at(20))["state"])
+
+    def test_restart_preserves_queue_and_never_replays_pending_anchor(self):
+        from rainpointd.htv145_runtime import Htv145Runtime
+        self.queue()
+        self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.coordinator = Htv145ControlCoordinator(store=self.store, sender=lambda n,c:self.sent.append((n,c)), enabled=True)
+        self.runtime = Htv145Runtime(self.coordinator, lambda _:self.node)
+        self.runtime.tick(now=self.at(1))
+        self.assertEqual(["htv145_control_configure"], [c["type"] for _,c in self.sent])
+        self.sent.clear(); self.report(2)
+        self.assertEqual(1,len(self.sent))
+        self.runtime = Htv145Runtime(self.coordinator, lambda _:self.node)
+        self.runtime.tick(now=self.at(3))
+        self.runtime.tick(now=self.at(30))
+        self.assertEqual(1, len([c for _,c in self.sent if c["type"]=="htv145_control_idle_anchor"]))
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+
+    def test_daily_window_once_per_date_waits_for_report_and_never_catches_up(self):
+        self.sync.configure(self.profile, {"enabled":True, "timezone":"America/New_York"}, now=self.at(-60))
+        self.sync.tick(self.profile, now=self.at(-1))
+        self.assertEqual([], self.sent)
+        self.sync.tick(self.profile, now=self.at())
+        self.assertEqual("waiting_for_report", self.sync.status(self.profile, now=self.at())["state"])
+        self.assertEqual([], self.sent)
+        self.report(); self.runtime.observe_frame(self.anchor, now=self.at(2))
+        self.sync.tick(self.profile, now=self.at(60))
+        self.assertEqual(1,len(self.sent))
+        self.sync.tick(self.profile, now=self.at(86400+3600))
+        self.assertEqual(1,len(self.sent))
+        self.store.delete_htv145_control(self.profile.valve_endpoint)
+        self.assertEqual({},self.store.htv145_counter_sync(self.profile.valve_endpoint))
+
+
+    def test_schema21_migration_preserves_owner_and_counter(self):
+        before = self.store.htv145_control_states()[0]
+        self.store._connection.execute("DROP TABLE htv145_counter_sync")
+        self.store._connection.execute("PRAGMA user_version=21")
+        self.store._connection.commit(); self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.assertEqual(22,self.store.schema_version())
+        self.assertEqual(before,self.store.htv145_control_states()[0])
+        self.assertEqual({},self.store.htv145_counter_sync(self.profile.valve_endpoint))
+
+    def test_anchor_dispatch_failure_is_durable_and_not_retried_on_report(self):
+        self.queue()
+        def fail(node, command):
+            self.sent.append((node,command))
+            raise ConnectionError("radio disconnected")
+        self.coordinator.sender = fail
+        self.report()
+        self.report(20)
+        state = self.store.htv145_control_states()[0]
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["pending_command_id"])
+        self.assertEqual("failed",self.sync.status(self.profile,now=self.at(20))["state"])
+        self.assertEqual(1,len(self.sent))
+
+    def test_anchor_respects_last_command_spacing(self):
+        self.queue()
+        with self.store._connection:
+            self.store._connection.execute("UPDATE htv145_control_state SET last_command_started_at=?",(self.at(-10),))
+        self.report(1)
+        self.assertEqual([],self.sent)
+        self.report(6)
+        self.assertEqual(1,len(self.sent))

@@ -249,6 +249,19 @@ inline bool decodeHtv145CommandError(
     return true;
 }
 
+// Only meaningful inside an explicitly reserved, fresh-idle zero anchor.
+// Result 3 remains an error for every ordinary actuator command.
+inline bool isHtv145IdleAnchorResponse(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    const Htv145Link& link
+) {
+    Htv145CommandResponse response{};
+    Htv145CommandError error{};
+    if (frame[13] != 0x80 || frame[14] != 0x50) return false;
+    return (decodeHtv145CommandResponse(frame, link, response) && !response.watering)
+        || (decodeHtv145CommandError(frame, link, error) && frame[17] == 0x10);
+}
+
 inline bool decodeHtv145StateReport(
     const std::array<std::uint8_t, kFrameBytes>& frame,
     const Htv145Link& link,

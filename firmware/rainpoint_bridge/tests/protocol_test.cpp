@@ -2374,5 +2374,15 @@ int main() {
     assert(htv145Error.sequence == 0x82 && htv145Error.resultCode == 3);
     assert(!rainpoint::decodeHtv145CommandResponse(alternateMarkerError, ackLink, htv145Response));
     assert(!rainpoint::buildHtv145ReportAck(alternateMarkerError, ackLink, 0x4f03, reportAck));
+    result3[13] = 0x80;
+    rainpoint::writeTrailer(result3, 0x4f03);
+    assert(rainpoint::isHtv145IdleAnchorResponse(result3, ackLink));
+    assert(rainpoint::decodeHtv145CommandError(result3, ackLink, htv145Error));
+    result3[17] = 0;
+    rainpoint::writeTrailer(result3, 0x4f03);
+    assert(!rainpoint::isHtv145IdleAnchorResponse(result3, ackLink));
+    result3[17] = 0x10; result3[14] = 0xd0;
+    rainpoint::writeTrailer(result3, 0x4f03);
+    assert(!rainpoint::isHtv145IdleAnchorResponse(result3, ackLink));
     return 0;
 }

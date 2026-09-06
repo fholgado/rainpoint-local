@@ -845,9 +845,9 @@ never opens or closes the valve.
 The daemon's maintenance tick restores configuration/counters after connection
 changes and expires unresolved reservations without replay. Daytime requests do
 not wait for a valve report before sending. A fresh idle observation is required
-for a new open; routine report counters never reseed command counters. Unlike
-HTV405, HTV145 has no proven idle-close-zero anchor: lost counter certainty requires
-new positive command evidence. A missing idle report after the planned duration
+for a new open; routine report counters never reseed command counters. Explicit or scheduled recovery can now queue the separately qualified fixed-zero
+idle anchor described below. It waits for a new report from the assigned owner;
+status and startup alone never authorize it. A missing idle report after the planned duration
 plus 30 seconds raises an anomaly without transmitting another command.
 
 Report ACK builders accept captured family bytes `82`, `85`, `86`, reverse the
@@ -857,7 +857,8 @@ and a provisional 40 ms post-reception transmit deadline. The ten stock ACKs
 include both ordinary residues; the selected local timing/residue still needs
 physical qualification. Session summaries update historical usage/duration only;
 they cannot clear current watering or confirm a pending close. Result 3 layouts
-with byte 17 `00` or `10` neither authenticate a counter nor prove physical idle.
+with byte 17 `00` or `10` do not prove physical idle. They remain errors for
+ordinary commands; the narrowly reserved zero-anchor exception is described below.
 
 
 ### Retained-counter controls in Home Assistant
@@ -869,8 +870,12 @@ route. The gateway resolves the exact enrolled endpoint pair and requires an
 available owner, an authenticated counter, fresh idle evidence, no overdue run,
 and no pending command or revocation. It sends configuration and counter state
 to that owner only. It neither actuates nor proves a new RF command exchange.
-An unknown counter shows Recovery required and disables restoration. The
-four-zone idle-close anchor and daily schedule are not inferred for HTV145.
+An unknown counter disables this legacy RF-free restoration API. Gateway 0.34.12
+and integration 0.14.4 upgrade the same HA entity to **Sync counter** when its
+owner advertises `htv145_idle_anchor`. It calls `/devices/{device_id}/valve/sync-now`,
+which durably waits for a new owner idle report before a fixed close-only anchor.
+Morning enabled/start time/window settings use `/valve/morning-sync`; default is
+disabled, 05:30 UTC, 30 minutes. Existing four-zone policy remains separate.
 
 ### September 6 counter-anchor baseline
 
@@ -914,13 +919,35 @@ telemetry confirms the resulting state after every command. See
 `research/fixtures/htv145_active_counter_recovery_20260906.json` and the
 [counter-anchor experiment](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).
 
-This qualifies active counter assignment on the tested specimen. It does not
-qualify the HTV405 non-watering morning anchor for HTV145, all possible command
-phases, or arbitrary action ordering. Normal daytime control can retain the
-positively established counter; an unknown idle counter remains a separate gate
-in [the roadmap](../PROJECT_ROADMAP.md).
+This first trial qualified active counter assignment on the tested specimen. The
+later idle-anchor follow-up below separately qualifies non-watering recovery.
+All possible command phases and arbitrary action ordering remain outside this
+evidence; see [the roadmap](../PROJECT_ROADMAP.md).
 
 Result-3 responses use either `50` or `d0` at byte 14. Both forms must be reported
-as explicit negative results, never as a positive close or a counter-authentication
-signal. The earlier decoder recognized only `50`, turning valid `d0` rejections
+as explicit negative results for ordinary commands, never as a positive physical
+close. The following qualified reservation is the only counter-anchor exception. The earlier decoder recognized only `50`, turning valid `d0` rejections
 into misleading unclassified-response timeouts.
+
+
+### Qualified idle counter recovery (September 6 follow-up)
+
+A phase-0 idle close returned result 3, then the corresponding phase-1 open and
+phase-2 early close succeeded. An idle phase-62 close likewise returned result 3,
+followed by successful phase-63 open and phase-0 close across rollover. Each run
+had matching RF replies and independent watering/idle reports. These later trials
+have gateway/node RF evidence, but no external SDR capture. The exact transmitted
+commands match the independently captured active-recovery frames.
+
+Candidate 0.15.24 implements `htv145_control_idle_anchor` only behind the existing
+HTV145 compile gate and authenticated transport. It requires the enrolled route,
+selector-6 recipe, a locally received independent idle report no older than five
+seconds, no pending operation, and 15 seconds since the last command. It sends
+only the fixed `80/10` close with the existing bounded burst. A response must have
+counter `80`, marker `50`, and either positive idle semantics or the exact captured
+result-3/byte-17-`10` body. Only the pending anchor can authenticate this response.
+Success sets the next normal open to `80/90` and preserves independent physical
+state; missing replies, foreign/late frames, and telemetry alone cannot do so.
+
+See the redacted idle-recovery fixture and complete procedure in
+[the counter-anchor experiment](../research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md).

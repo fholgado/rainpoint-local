@@ -35,12 +35,12 @@ async def async_setup_entry(
     def async_add_missing_entities() -> None:
         entities: list[NumberEntity] = []
         for device_id, device in coordinator.data.items():
-            if "bounded_valve_control" not in device.get("capabilities", []):
-                continue
             if "morning_synchronization" in device.get("capabilities", []) and (device_id, 0) not in known:
                 known.add((device_id, 0))
                 entities.append(RainPointMorningSyncWindow(coordinator, device_id,
                     str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))))
+            if "bounded_valve_control" not in device.get("capabilities", []):
+                continue
             for zone in multi_zone_numbers(device):
                 identity = (device_id, zone)
                 if identity in known:

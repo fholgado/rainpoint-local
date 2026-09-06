@@ -21,6 +21,7 @@ from .valve_protocol import (
     ValveLink,
     decode_htv145_command_response,
     decode_htv145_command_error,
+    decode_htv145_idle_anchor_response,
     decode_htv145_gateway_command,
     decode_htv145_state_report,
     decode_htv145_terminal_idle_report,
@@ -168,7 +169,7 @@ class Htv145ControlCoordinator:
         """Morning/daytime check with no RF synchronization or actuation.
 
         Like HTV405, keep the authenticated counter for direct daytime sends.
-        HTV145 has no proven idle-close anchor: an unknown counter stays blocked.
+        An unknown counter blocks normal control until explicit recovery is confirmed.
         Expired runs raise an observation-only anomaly; never send a close.
         """
         state = self._state(profile.valve_endpoint)
@@ -231,6 +232,19 @@ class Htv145ControlCoordinator:
             self.sender(profile.node_id, command)
         return tuple(commands)
 
+    def request_idle_anchor(self, profile: Htv145ControlProfile, *, started_at: str) -> dict:
+        """Dispatch one fixed close-only anchor from a durable report-triggered request."""
+        self._require_enabled()
+        self._require_profile(self._state(profile.valve_endpoint), profile)
+        command = self._command("htv145_control_idle_anchor", controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint)
+        self.store.reserve_htv145_idle_anchor(profile.valve_endpoint, command["command_id"], started_at)
+        try:
+            self.sender(profile.node_id, command)
+        except Exception:
+            self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint, command_id=command["command_id"], reason="idle_anchor_transport_failed", observed_at=started_at)
+            raise
+        return command
+
     def request_open(
         self,
         profile: Htv145ControlProfile,
@@ -279,6 +293,11 @@ class Htv145ControlCoordinator:
         self._require_profile(state, profile)
         if state["pending_started_at"] and datetime.fromisoformat(observed_at) < datetime.fromisoformat(state["pending_started_at"]):
             raise ValueError("HTV145 evidence predates the pending command")
+        if state["pending_action"] == "idle_anchor":
+            anchor = decode_htv145_idle_anchor_response(frame, profile.link)
+            if anchor is not None:
+                return self.store.confirm_htv145_idle_anchor(profile.valve_endpoint, state["pending_command_id"],
+                    frame=frame.hex(), result_code=anchor["result_code"], observed_at=observed_at)
         error = decode_htv145_command_error(frame, profile.link)
         if error is not None:
             if (
@@ -320,6 +339,12 @@ class Htv145ControlCoordinator:
             if state[field] and evidence_time < datetime.fromisoformat(state[field]):
                 raise ValueError("HTV145 state evidence predates current command/state")
         watering = bool(report["watering"])
+        if state["pending_action"] == "idle_anchor":
+            if watering:
+                self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint,
+                    command_id=state["pending_command_id"], reason="idle_anchor_state_changed", observed_at=observed_at)
+            return self.store.observe_htv145_control_state(valve_endpoint=profile.valve_endpoint,
+                watering=watering, observed_at=observed_at, frame=frame.hex())
         if state["pending_command_id"] is not None:
             expected_watering = state["pending_action"] == "open"
             if watering == expected_watering:
@@ -391,6 +416,8 @@ class Htv145ControlCoordinator:
             "confirmation_timeout_counter_unsynchronized",
             "gateway_connection_lost_counter_unsynchronized",
             "conflicting_command_response",
+            "idle_anchor_state_changed",
+            "idle_anchor_response_timeout",
         }:
             failure_class = message.get("failure_class")
             reason = str(status)

@@ -235,6 +235,7 @@
       "radio_node_reboot_pending": { "name": "Reboot pending" }
     },
     "button": {
+      "resynchronize_counter": {"name": "Sync counter"},
       "restore_retained_counter": {"name": "Restore retained counter"},
       "identify_radio_node": { "name": "Identify" },
       "reboot_radio_node": { "name": "Reboot" },

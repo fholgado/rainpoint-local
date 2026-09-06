@@ -16,7 +16,7 @@ from .product_identity import (
 )
 from .valve_protocol import next_htv145_command_sequence
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -255,6 +255,9 @@ class SQLiteEventStore:
             version = 20
         if version == 20:
             self._migrate_v20_to_v21()
+            version = 21
+        if version == 21:
+            self._migrate_v21_to_v22()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -628,6 +631,67 @@ class SQLiteEventStore:
                 "counter_synchronized = 0, counter_source = NULL"
             )
             self._connection.execute("PRAGMA user_version = 19")
+
+    def _migrate_v21_to_v22(self) -> None:
+        """Keep one-zone close-only maintenance separate from watering intent."""
+        with self._connection:
+            self._connection.execute("CREATE TABLE IF NOT EXISTS htv145_counter_sync (valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+            self._connection.execute("PRAGMA user_version = 22")
+
+    def htv145_counter_sync(self, valve_endpoint: str) -> dict[str, Any]:
+        row = self._connection.execute("SELECT payload FROM htv145_counter_sync WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+        return json.loads(row[0]) if row is not None else {}
+
+    def _write_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
+        self._connection.execute("INSERT INTO htv145_counter_sync VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
+
+    def save_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
+        with self._connection:
+            self._write_htv145_counter_sync(valve_endpoint, payload)
+
+    def reserve_htv145_idle_anchor(self, valve_endpoint: str, command_id: str, started_at: str) -> dict:
+        """Consume an explicit queued request using fresh independent idle evidence."""
+        with self._connection:
+            row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            data = self.htv145_counter_sync(valve_endpoint)
+            current = datetime.fromisoformat(started_at)
+            if (row is None or data.get("state") != "waiting_for_report" or row["pending_command_id"] is not None
+                    or row["revocation_command_id"] is not None or row["confirmed_watering"] != 0
+                    or not row["command_marker_inverted"] or row["close_trailer_residual"] != 0x4f03
+                    or row["report_ack_center_hz"] is None or row["confirmed_at"] is None
+                    or not datetime.fromisoformat(data["requested_at"]) < datetime.fromisoformat(row["confirmed_at"]) <= current
+                    or not 0 <= (current - datetime.fromisoformat(row["confirmed_at"])).total_seconds() <= 5
+                    or current >= datetime.fromisoformat(data["deadline"])):
+                raise RuntimeError("idle anchor requires a queued request and new independent idle report")
+            if row["last_command_started_at"] and (current - datetime.fromisoformat(row["last_command_started_at"])).total_seconds() < 15:
+                raise RuntimeError("HTV145 commands require a 15-second hardware interval")
+            self._connection.execute("""UPDATE htv145_control_state SET counter_synchronized=0, counter_source=NULL,
+                pending_command_id=?, pending_action='idle_anchor', pending_sequence=128,
+                pending_duration_seconds=NULL, pending_started_at=?, last_command_started_at=?,
+                last_result='idle_anchor_pending', updated_at=? WHERE valve_endpoint=?""",
+                (command_id, started_at, started_at, started_at, valve_endpoint))
+            data.update(state="syncing", command_id=command_id, transmitted_at=started_at, reason="waiting_for_anchor_response")
+            self._write_htv145_counter_sync(valve_endpoint, data)
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def confirm_htv145_idle_anchor(self, valve_endpoint: str, command_id: str, *, frame: str, result_code: int, observed_at: str) -> dict:
+        """Confirm only the reserved counter; preserve the independent physical state."""
+        with self._connection:
+            row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            data = self.htv145_counter_sync(valve_endpoint)
+            if (row is None or row["pending_action"] != "idle_anchor" or row["pending_command_id"] != command_id
+                    or row["pending_sequence"] != 0x80 or row["confirmed_watering"] != 0
+                    or data.get("state") != "syncing" or data.get("command_id") != command_id or result_code not in {0, 3}
+                    or not 0 <= (datetime.fromisoformat(observed_at) - datetime.fromisoformat(row["pending_started_at"])).total_seconds() <= 3.5):
+                raise ValueError("idle-anchor response does not match a fresh idle reservation")
+            self._connection.execute("""UPDATE htv145_control_state SET next_sequence=128, counter_synchronized=1,
+                counter_source='matching_idle_anchor_response', pending_command_id=NULL, pending_action=NULL,
+                pending_sequence=NULL, pending_duration_seconds=NULL, pending_started_at=NULL,
+                last_result='counter_synchronized', updated_at=? WHERE valve_endpoint=?""", (observed_at, valve_endpoint))
+            data.update(state="ready", command_id=None, deadline=None, last_success_at=observed_at,
+                        confirmed_counter=0, result_code=result_code, response_frame=frame, reason="matching_idle_anchor_response")
+            self._write_htv145_counter_sync(valve_endpoint, data)
+        return self.htv145_control_states(valve_endpoint)[0]
 
     def _migrate_v20_to_v21(self) -> None:
         """Persist one-zone ACK ownership and separate action residues."""
@@ -1143,6 +1207,7 @@ class SQLiteEventStore:
                 "DELETE FROM htv145_control_state WHERE valve_endpoint = ?",
                 (device["valve_endpoint"],),
             )
+            self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint = ?", (device["valve_endpoint"],))
             self._connection.execute(
                 "DELETE FROM htv405_morning_sync WHERE valve_endpoint = ?",
                 (device["valve_endpoint"],),
@@ -3120,6 +3185,7 @@ class SQLiteEventStore:
                 "DELETE FROM htv145_control_state WHERE valve_endpoint = ? AND pending_command_id IS NULL",
                 (valve_endpoint,),
             )
+            self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint=? AND NOT EXISTS (SELECT 1 FROM htv145_control_state WHERE valve_endpoint=?)", (valve_endpoint, valve_endpoint))
 
     def htv145_control_states(
         self, valve_endpoint: str | None = None
@@ -3458,6 +3524,10 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise ValueError("HTV145 failure does not match reservation")
+        data = self.htv145_counter_sync(valve_endpoint)
+        if data.get("command_id") == command_id:
+            data.update(state="failed", command_id=None, deadline=None, reason=reason)
+            self._write_htv145_counter_sync(valve_endpoint, data)
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]
 

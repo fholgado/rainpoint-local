@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.34.12 / Integration 0.14.4 / HTV145 candidate 0.15.24
+
+- Add explicit, close-only one-zone counter sync after a new idle report from
+  its assigned radio. Accept the captured zero-anchor result 3 only within that
+  short-lived reservation; ordinary command errors remain errors.
+- Persist disabled-by-default morning scheduling, bounded report waits and
+  counter-sync outcomes. Restart never replays a transmitted anchor.
+- Upgrade the existing one-zone button to Sync counter on capable firmware,
+  with morning settings and status; keep its entity ID and legacy restore API.
+- Preserve both idle-anchor recovery trials, including rollover, and remove
+  temporary phase/bootstrap commands from the deployed sources.
+
 ## 0.34.11 / Integration 0.14.3 / HTV145 candidate 0.15.22
 
 - Recognize recorded one-zone result-3 replies with either counter marker, so

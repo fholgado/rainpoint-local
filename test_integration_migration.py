@@ -41,6 +41,24 @@ def _integration_function(filename, name, namespace):
 
 
 class ValveCommandRefreshTest(unittest.IsolatedAsyncioTestCase):
+    async def test_one_zone_sync_button_preserves_entity_and_old_gateway_fallback(self):
+        tree = ast.parse((PACKAGE / "button.py").read_text())
+        cls = next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=="RainPointRestoreRetainedCounterButton")
+        method = next(n for n in cls.body if isinstance(n,ast.AsyncFunctionDef) and n.name=="async_press")
+        module = ast.parse("from __future__ import annotations"); module.body.append(method)
+        ns = {"RainPointLocalError":ValueError,"HomeAssistantError":RuntimeError}
+        exec(compile(module,"button.py","exec"),ns)
+        for supported in (False,True):
+            client = types.SimpleNamespace(restore_retained_counter=AsyncMock(),sync_htv405_now=AsyncMock())
+            entity = types.SimpleNamespace(device_id="one",_token="test",decoded_state={"rf_htv145_counter_sync_supported":supported},
+                coordinator=types.SimpleNamespace(client=client,async_request_refresh=AsyncMock()))
+            await ns["async_press"](entity)
+            expected = client.sync_htv405_now if supported else client.restore_retained_counter
+            other = client.restore_retained_counter if supported else client.sync_htv405_now
+            expected.assert_awaited_once_with("test",device_id="one")
+            other.assert_not_awaited()
+        self.assertIn("_restore_retained_counter",ast.unparse(cls))
+
     async def test_command_publishes_new_transaction_despite_refresh_cooldown(self):
         """Replay the old sync snapshot that caused a confirmed run to alert.
 
@@ -103,6 +121,22 @@ class IntegrationMigrationTest(unittest.TestCase):
         add.assert_called_once_with([constructor.return_value])
         factory()
         self.assertEqual(1, constructor.call_count)
+
+    def test_one_zone_gets_sync_window_without_four_zone_duration_controls(self):
+        sync, duration, add = Mock(), Mock(), Mock()
+        coordinator = types.SimpleNamespace(data={"one":{"model":"HTV145FRF","capabilities":["morning_synchronization"]}})
+        factory = _integration_function("number.py","async_add_missing_entities", {
+            "callback":lambda f:f,"known":set(),"coordinator":coordinator,
+            "entry":types.SimpleNamespace(data={},options={}),"CONF_TOKEN":"token",
+            "RainPointMorningSyncWindow":sync,"RainPointHtv405ZoneDuration":duration,
+            "multi_zone_numbers":multi_zone_numbers,"async_add_entities":add})
+        factory(); factory()
+        sync.assert_called_once_with(coordinator,"one","")
+        duration.assert_not_called()
+        add.assert_called_once_with([sync.return_value])
+        import json
+        for path in ("strings.json","translations/en.json"):
+            self.assertEqual("Sync counter",json.loads((PACKAGE/path).read_text())["entity"]["button"]["resynchronize_counter"]["name"])
 
     def test_known_sensor_details_use_ha_customizations_and_exact_identity(self):
         entry = types.SimpleNamespace(name_by_user="Right Bed", name="Old name", area_id="garden")

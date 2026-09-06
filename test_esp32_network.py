@@ -2010,6 +2010,22 @@ class ESP32NetworkTest(unittest.TestCase):
         legacy_stream.close()
         legacy_connection.close()
 
+    def test_idle_anchor_requires_its_new_capability_and_authenticated_transport(self):
+        command = {"type":"htv145_control_idle_anchor","command_id":"75"*16,
+                   "controller_endpoint":"b1c2d38f","valve_endpoint":"a1b2c380"}
+        for supported in (False,True):
+            capabilities = ["rx","sensor_pairing_tx","htv145_control_tx_candidate","htv145_report_ack_tx"]
+            if supported: capabilities.append("htv145_idle_anchor")
+            connection, stream, response = self._connect(NODE_A,TOKEN_A,protocol_version=2,capabilities=capabilities)
+            self.assertEqual("node_authenticated",response["type"])
+            if supported:
+                self.server.send_command(NODE_A,command)
+                self.assertEqual(command,json.loads(stream.readline()))
+            else:
+                with self.assertRaisesRegex(ValueError,"htv145_idle_anchor"):
+                    self.server.send_command(NODE_A,command)
+            stream.close(); connection.close()
+
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,

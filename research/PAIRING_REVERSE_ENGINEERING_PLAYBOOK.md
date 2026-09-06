@@ -206,7 +206,8 @@ The persistent runtime imports a matching positive command/response exchange and
 fresh independent idle evidence, separately from pairing completion. It restores
 configuration and authenticated counters, sends daytime commands directly, and
 requires correlated owner revocation before reassignment. Morning readiness is
-observation-only for HTV145: do not borrow HTV405's idle-close-zero RF anchor.
+observation-only unless an explicit or scheduled idle-anchor request is queued.
+The September 6 follow-up below qualifies HTV145 recovery independently of HTV405.
 Counter ambiguity blocks commands until new positive evidence is available.
 When OTA adds ACK support to an existing dry association, gateway 0.34.4 can
 upgrade its pre-ACK trial profile after those evidence gates pass. Changing radios
@@ -237,3 +238,29 @@ status remains only in the [roadmap](../PROJECT_ROADMAP.md).
       control response.
 - [ ] Test retained rejoin, battery change, ACK liveness, coexistence, removal,
       and HA identity after new enrollment is stable.
+
+
+## Counter recovery after pairing — September 6 follow-up
+
+Pairing progress, control success and counter synchronization remain separate
+claims. On the qualified selector-6 one-zone association, fixed idle closes can
+return result 3 and still establish the requested counter: phase-0 close followed
+by phase-1 open/phase-2 early close worked, as did phase-62 close followed by
+phase-63 open/phase-0 close across rollover. Do not classify every result 3 as
+counter rejection, or broadly reinterpret result 3 as command success.
+
+For an enrolled owner with candidate 0.15.24, use the authenticated device
+`valve/sync-now` route or HA Sync counter button. Keep the stock gateway unplugged.
+The queued request must receive a new independent idle report from that owner,
+then send only the fixed zero close. Require the exact correlated anchor response
+before claiming sync. On dry hardware, follow with a normal 60-second bounded open
+and early close at least 15 seconds later, retaining each reply and separate state
+report. Never add watering to an unattended daily synchronization procedure.
+
+The gateway persists bounded waits and daily calendar claims; restart does not
+replay transmitted anchors and a missed morning window does not run later.
+No arbitrary-phase or assumed-open route belongs in the cleaned deployment.
+Raw evidence and redacted fixtures are linked from
+[the experiment record](HTV145_COUNTER_ANCHOR_EXPERIMENT.md), which distinguishes
+independent IQ captures from the later node/gateway-only RF evidence. Project
+acceptance status remains in [the roadmap](../PROJECT_ROADMAP.md).
