@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.34.5 / Firmware 0.15.14
+## 0.34.5 / Integration 0.14.1 / Firmware 0.15.14
+
+- Pre-fill known sensors’ pairing details with their saved name and HA area.
+  Prefer HA customizations, preserve cleared areas, and retain edits on retry.
 
 - Accept an idle counter-zero morning synchronization reply naming the last
   watered HTV405 zone. Association, counter, response window and known-idle

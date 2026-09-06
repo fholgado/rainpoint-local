@@ -90,6 +90,9 @@ not a gateway lifecycle mutation.
 
 ### HCS026-class soil sensors
 
+- [x] Pre-fill re-added known sensors with their saved name and HA area in
+      integration 0.14.1; preserve user customizations and edits on retry.
+
 - [x] Pair independent sensor identities from the HA UI without copied RF IDs,
       setup tokens, or CLI commands.
 - [x] Auto-advance the pairing flow after physical terminal evidence.

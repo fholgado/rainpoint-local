@@ -41,6 +41,27 @@ def _integration_function(filename, name, namespace):
 
 
 class IntegrationMigrationTest(unittest.TestCase):
+    def test_known_sensor_details_use_ha_customizations_and_exact_identity(self):
+        entry = types.SimpleNamespace(name_by_user="Right Bed", name="Old name", area_id="garden")
+        registry = Mock()
+        registry.async_get_device.return_value = entry
+        areas = Mock()
+        areas.async_get_area_by_name.return_value = types.SimpleNamespace(id="yard")
+        resolve = _integration_function("config_flow.py", "_known_device_details", {
+            "DOMAIN": "rainpoint_local",
+            "dr": types.SimpleNamespace(async_get=lambda _: registry),
+            "ar": types.SimpleNamespace(async_get=lambda _: areas),
+        })
+        devices = [{"device_id": "saved-sensor", "name": "Gateway name", "area": "Yard",
+                    "state": {"rf_paired_endpoint": "12345624"}}]
+        self.assertEqual({"name": "Right Bed", "area": "garden"}, resolve(None, devices, "12345624"))
+        registry.async_get_device.assert_called_with(identifiers={("rainpoint_local", "saved-sensor")})
+        self.assertEqual({}, resolve(None, devices, "99995624"))
+        entry.area_id = None
+        self.assertEqual({"name": "Right Bed"}, resolve(None, devices, "12345624"))
+        registry.async_get_device.return_value = None
+        self.assertEqual({"name": "Gateway name", "area": "yard"}, resolve(None, devices, "12345624"))
+
     def test_single_zone_factory_ignores_legacy_four_zone_keys(self):
         constructor = Mock()
         namespace = {name: constructor for name in (

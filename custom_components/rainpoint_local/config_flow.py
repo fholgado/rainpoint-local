@@ -57,6 +57,32 @@ def _selected_area(hass: Any, value: Any) -> tuple[str | None, str | None]:
     return selected, area.name
 
 
+def _known_device_details(hass: Any, devices: list[dict[str, Any]], endpoint: str) -> dict[str, str]:
+    """Resolve paired identity to saved metadata, preferring HA customization."""
+    for device in devices:
+        state = device.get("state", {})
+        if endpoint.lower() not in {
+            str(state.get("rf_endpoint", "")).lower(),
+            str(state.get("rf_paired_endpoint", "")).lower(),
+        }:
+            continue
+        entry = dr.async_get(hass).async_get_device(
+            identifiers={(DOMAIN, device["device_id"])}
+        )
+        name = (entry.name_by_user or entry.name) if entry is not None else None
+        result = {"name": name or device["name"]} if name or device.get("name") else {}
+        if entry is not None:
+            # A cleared HA area is intentional; do not restore an old gateway area.
+            area_id = entry.area_id
+        else:
+            area = ar.async_get(hass).async_get_area_by_name(device.get("area") or "")
+            area_id = area.id if area is not None else None
+        if area_id is not None:
+            result["area"] = area_id
+        return result
+    return {}
+
+
 class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a local rainpointd gateway."""
 
@@ -927,6 +953,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         device_registry.async_update_device(
                             device_entry.id,
                             name=name,
+                            name_by_user=name if device_entry.name_by_user is not None else None,
                             area_id=area_id,
                         )
                 return self.async_create_entry(title="Device paired", data={})
@@ -937,15 +964,27 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             else "RainPoint device"
         )
 
+        defaults = dict(user_input) if user_input is not None else {}
+        if user_input is None:
+            try:
+                defaults = _known_device_details(
+                    self.hass, await self._client().devices(), self._paired_endpoint
+                )
+            except RainPointLocalCannotConnect:
+                errors["base"] = "cannot_connect"
+            except RainPointLocalInvalidResponse:
+                errors["base"] = "invalid_response"
+
         return self.async_show_form(
             step_id="device_details",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         "name",
-                        default=f"{display_name} {self._paired_endpoint[-4:]}",
+                        default=defaults.get("name", f"{display_name} {self._paired_endpoint[-4:]}"),
                     ): str,
-                    vol.Optional("area"): selector.AreaSelector(),
+                    vol.Optional("area", description={"suggested_value": defaults["area"]}
+                                 if defaults.get("area") else {}): selector.AreaSelector(),
                 }
             ),
             errors=errors,
