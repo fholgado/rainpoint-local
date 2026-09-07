@@ -217,3 +217,18 @@ separately gated. See [the add-on guide](../rainpointd_addon/DOCS.md).
 - [Evidence ledger](../research/VALVE_PROTOCOL_STATUS.md) and
   [fixtures](../research/fixtures/): exact exchanges and qualification results.
 - [Roadmap](../PROJECT_ROADMAP.md): remaining physical qualification gates.
+
+## Command-phase evidence boundary
+
+The offline stock transaction corpus includes two consecutive positive opens
+whose marker polarity differs, followed by close/open/close. The derived six-bit
+phase advances through 3–7 despite changing action order. Qualified explicit
+counter anchors can jump that phase, including rollover. This supports a phase
+model independent of action; it does not qualify arbitrary action ordering on
+every association. Runtime counter recovery continues to use the narrow,
+verified idle-anchor rule.
+
+Reproduce the comparison with `tools/analyze_htv145_command_phase.py` and the
+`htv145_selector2_stock_pairing_control_20260905.json` and
+`htv145_active_counter_recovery_20260906.json` fixtures. Do not authenticate a live
+counter from this offline comparison.

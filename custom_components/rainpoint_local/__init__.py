@@ -82,9 +82,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     await _async_migrate_radio_node_metadata(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    coordinator.async_start_event_listener()
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    coordinator.async_start_event_listener()
     return True
 
 
@@ -136,9 +135,13 @@ async def async_migrate_entry(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> bool:
     """Migrate persistent configuration and obsolete integration entities."""
-    version, data, options = migrate_entry_payload(
-        entry.version, dict(entry.data), dict(entry.options)
-    )
+    try:
+        version, data, options = migrate_entry_payload(
+            entry.version, dict(entry.data), dict(entry.options)
+        )
+    except (ValueError, KeyError, TypeError):
+        _LOGGER.error("Cannot migrate RainPoint entry version %s", entry.version)
+        return False
     if version != entry.version or data != entry.data or options != entry.options:
         hass.config_entries.async_update_entry(
             entry,
@@ -165,6 +168,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)
+    elif isinstance(coordinator, RainPointLocalCoordinator):
+        coordinator.async_start_event_listener()
     return unloaded
 
 

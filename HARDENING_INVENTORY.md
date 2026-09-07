@@ -30,14 +30,14 @@ status. `PROJECT_ROADMAP.md` is the sole ordered checklist.
 | Area | Current boundary | Publication requirement |
 |---|---|---|
 | Node transport | Mutual nonce/HMAC authentication over trusted-LAN TCP | Encryption, per-session integrity/replay handling, rotation, and revocation |
-| Gateway API | Versioned HTTP API with bearer-authenticated mutations | Typed schemas/errors, scoped credentials, rate/resource limits, reviewed server transport |
+| Gateway API | Versioned HTTP API with bearer-authenticated mutations, bounded concurrency/body reads and setup attempts | Typed schemas/errors, scoped credentials, rate/resource limits, reviewed server transport |
 | OTA | Gateway-hosted, size/SHA-256 checked, health-confirmed rollback | Asymmetric release signatures plus interrupted/power-loss rollback tests |
-| HA updates | Event-triggered snapshot refresh plus periodic polling | Event-driven updates with slow reconciliation |
+| HA updates | Direct known-sensor event updates, conservative valve snapshots and periodic reconciliation | HA-native lifecycle qualification and cross-version coverage |
 | Device lifecycle | Persistent registry, suppression, reassociation, stable IDs | HA-native config-flow/entity/device-registry test harness and formal migrations |
-| Packaging | HA app supports network nodes and optional SDR | Reproducible pinned build and narrower network-only publication profile |
+| Packaging | Pinned base release and deterministic source archive with clean-install smoke test | Pinned image/APK digests and narrower network-only publication profile |
 | Protocol core | Transport-neutral ingestion but dictionary-heavy models | Installable typed protocol/identity package independent of HA and installation names |
 | Sensor operations | Physically validated pairing, recovery, and ACKs | Multi-day soak, owner reassignment, coexistence, and wider hardware-revision evidence |
-| Valve operations | Local decode and offline safety state machine | Isolated pairing, close-first test, bounded open, watchdog, and audited fail-closed integration |
+| Valve operations | Bounded acknowledged controls, counter recovery and observation-only restart | Isolated pairing, close-first test, bounded open, watchdog, and audited fail-closed integration |
 
 ## Repository disposition
 

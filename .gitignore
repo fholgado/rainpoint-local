@@ -18,3 +18,6 @@ __pycache__/
 # Local-only research material and machine-specific capture helper.
 homgar-installed/
 start_passive_capture.sh
+
+# Private installation snapshots, captures, and operation results.
+/output/

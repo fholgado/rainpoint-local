@@ -10,6 +10,7 @@ import re
 import secrets
 import threading
 import time
+import tempfile
 import uuid
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -236,6 +237,7 @@ class Gateway:
             Path(registry_token_path) if registry_token_path else None
         )
         self._claim_code = claim_code or None
+        self._claim_attempts: deque[float] = deque()
         self._base_catalog = catalog
         self.catalog = catalog
         self._firmware_catalog = firmware_catalog or FirmwareCatalog()
@@ -4657,14 +4659,20 @@ class Gateway:
         return (
             expected is not None
             and token is not None
-            and hmac.compare_digest(token, expected)
+            and hmac.compare_digest(token.encode(), expected.encode())
         )
 
     def claim_registry(self, claim_code: str) -> str:
         """Exchange a one-time standalone setup code for a management token."""
         with self._lock:
+            now = time.monotonic()
+            while self._claim_attempts and self._claim_attempts[0] <= now - 60:
+                self._claim_attempts.popleft()
+            if len(self._claim_attempts) >= 5:
+                raise PermissionError("setup claim rate limit exceeded")
+            self._claim_attempts.append(now)
             if self._claim_code is None or not hmac.compare_digest(
-                claim_code, self._claim_code
+                claim_code.encode(), self._claim_code.encode()
             ):
                 raise PermissionError("invalid or expired setup code")
             token = secrets.token_urlsafe(32)
@@ -4687,10 +4695,18 @@ class Gateway:
             return
         path = self._registry_token_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(f".{path.name}.tmp")
-        temporary.write_text(token, encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        temporary.replace(path)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                    dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(token)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.replace(path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def registry(self) -> list[dict[str, Any]]:
         """Return accepted local metadata; this is not RF pairing state."""
@@ -5743,11 +5759,13 @@ class Gateway:
                     )
             return self._pairing_snapshot(now=now)
 
-    def stop_pairing(self) -> dict[str, Any]:
+    def stop_pairing(self, *, command_id: str | None = None) -> dict[str, Any]:
         """Close the current pairing window and disarm its selected node."""
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
+            if command_id is not None and command_id != self._active_pairing_command_id:
+                raise ValueError("pairing session changed; cancellation ignored")
             self._cancel_active_pairing_node()
             self._pairing.stop()
             return self._pairing_snapshot()
@@ -5899,6 +5917,7 @@ class Gateway:
                 ),
             },
             "command_id": self._active_pairing_command_id,
+            "scoped_cancellation": True,
             "transmit_performed": self._active_pairing_node_id is not None,
             "stage": stage,
             "completed_endpoint": completed_endpoint,

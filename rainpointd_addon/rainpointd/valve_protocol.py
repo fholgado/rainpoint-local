@@ -415,7 +415,7 @@ def htv405_command_response_endpoint(companion_endpoint: str) -> str:
 
     HTV405 enrollment assigns a controller-role endpoint such as
     ``b9c40280`` alongside companion ``39840280``. Successful command
-    responses use ``b9840280``: the companion identity with its high source
+    responses use the assigned companion identity with its high source
     role bit asserted. This role identity is stable across the physically
     validated Zone 1--4 responses and must not be compared byte-for-byte with
     the configured controller role.

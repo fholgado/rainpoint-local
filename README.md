@@ -82,3 +82,5 @@ environment; production must exclude experimental transmit paths.
 
 Installation-specific captures, databases, credentials, and build output stay
 untracked. Preserve raw captures until useful exchanges have redacted fixtures.
+
+See [security boundaries](SECURITY.md) before deploying or exposing listeners.

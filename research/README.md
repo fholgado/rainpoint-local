@@ -23,9 +23,8 @@ not runtime defaults or proof that a pending physical gate has passed.
 
 - [Fixtures](fixtures/): exact redacted exchanges and measured trial outcomes.
 - [Capture journal](RF_CAPTURE_NOTES.md): chronological observations.
-- [Valve evidence ledger](VALVE_PROTOCOL_STATUS.md): evidence interpretation.
-- [One-zone counter experiment](HTV145_COUNTER_ANCHOR_EXPERIMENT.md): hypothesis
-  tests and accepted recovery evidence; the device reference defines current rules.
+- [Valve evidence index](VALVE_PROTOCOL_STATUS.md): evidence interpretation.
+- [One-zone counter experiment](HTV145_COUNTER_ANCHOR_EXPERIMENT.md): supported recovery procedure and evidence; the device reference defines current rules.
 - [Workspace consolidation](WORKSPACE_CONSOLIDATION_20260905.md): retained/superseded work.
 
 ## Designs and external research

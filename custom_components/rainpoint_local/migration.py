@@ -13,6 +13,8 @@ def migrate_entry_payload(
     options: dict[str, Any],
 ) -> tuple[int, dict[str, Any], dict[str, Any]]:
     """Return the current config-entry representation without HA side effects."""
+    if type(version) is not int or not 1 <= version <= 3:
+        raise ValueError("unsupported config-entry version")
     migrated_data = dict(data)
     migrated_options = dict(options)
 
@@ -26,4 +28,15 @@ def migrate_entry_payload(
             migrated_data[CONF_TOKEN] = str(legacy_token)
         version = 2
 
+    if version < 3:
+        host = migrated_data.get(CONF_HOST)
+        port = migrated_data.get(CONF_PORT, DEFAULT_PORT)
+        if not isinstance(host, str) or not host.strip() or type(port) is not int or not 1 <= port <= 65535:
+            raise ValueError("invalid gateway address")
+        migrated_data[CONF_HOST] = host.strip()
+        migrated_data[CONF_PORT] = port
+        legacy_token = migrated_options.pop(CONF_TOKEN, None)
+        if not migrated_data.get(CONF_TOKEN) and legacy_token:
+            migrated_data[CONF_TOKEN] = str(legacy_token)
+        version = 3
     return version, migrated_data, migrated_options

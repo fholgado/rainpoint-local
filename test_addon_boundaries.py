@@ -17,6 +17,19 @@ ROOT = Path(__file__).parent
 class AddonBoundaryTest(unittest.TestCase):
 
 
+    def test_runtime_has_no_household_identity_or_research_imports(self):
+        roots=[ROOT/"rainpointd_addon",ROOT/"custom_components/rainpoint_local",
+               ROOT/"firmware/rainpoint_bridge/src",ROOT/"firmware/rainpoint_bridge/include"]
+        forbidden=("b9840280","b42d008f","94a98013","9ce58024","soil-right-bed","192.168.",
+                   "from research", "import research", "LEGACY_HOME_CATALOG")
+        for root in roots:
+            for path in root.rglob("*"):
+                if path.suffix not in {".py",".cpp",".h"}: continue
+                source=path.read_text()
+                for text in forbidden:
+                    self.assertNotIn(text,source,msg=str(path.relative_to(ROOT)))
+        self.assertFalse((ROOT/"rainpointd_addon/rainpointd/valve_control_bench.py").exists())
+
     def test_firmware_has_one_environment_with_both_valves(self):
         root = ROOT / "firmware/rainpoint_bridge"
         self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))

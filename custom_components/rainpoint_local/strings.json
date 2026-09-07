@@ -53,7 +53,8 @@
     "progress": {
       "wait_for_device": "Listening on {node_name} for {device_name} for up to {duration_seconds} seconds. Start pairing on the device and keep it near the radio node.",
       "exchange_with_device": "A {device_name} request was detected. {node_name} is completing the model-specific pairing exchange; keep the device nearby until its LED sequence finishes.",
-      "confirm_device": "Pairing messages were sent. Waiting for {device_name} to confirm its assigned local identity."
+      "confirm_device": "Pairing messages were sent. Waiting for {device_name} to confirm its assigned local identity.",
+      "finalize_pairing": "The device accepted pairing. Waiting for {node_name} to finish and become ready for commands."
     },
     "step": {
       "init": {
@@ -144,6 +145,16 @@
           "name": "Name",
           "area": "Area"
         }
+      },
+      "pairing_review": {
+        "title": "Review pairing",
+        "description": "Pair {device_name} using {node_name}. The radio will listen for {duration_seconds} seconds after you select Start pairing.",
+        "menu_options": {
+          "start_pairing": "Start pairing",
+          "change_pairing_radio": "Change radio or timeout",
+          "change_pairing_model": "Change device model",
+          "cancel_add_device": "Cancel"
+        }
       }
     },
     "error": {
@@ -161,105 +172,266 @@
       "no_supported_devices": "This gateway does not currently advertise any user-pairable device models",
       "no_radio_nodes": "No adopted radio nodes are available to remove",
       "no_sensors": "No local HCS026 sensors are available to forget",
-      "sensor_not_found": "The selected sensor is no longer available"
+      "sensor_not_found": "The selected sensor is no longer available",
+      "add_device_cancelled": "Add device cancelled. No pairing was started."
     }
   },
   "entity": {
     "sensor": {
-      "retained_counter_status": {"name": "Counter status"},
-      "retained_command_counter": {"name": "Next command counter"},
-      "morning_sync_status": { "name": "Watering readiness" },
-      "morning_sync_last_success": { "name": "Last successful sync" },
-      "soil_moisture": { "name": "Soil moisture" },
-      "battery": { "name": "Battery" },
-      "signal_strength": { "name": "Signal strength" },
-      "valve_state": { "name": "Valve state" },
-      "control_transaction_status": { "name": "Control request status" },
-      "duration": { "name": "Reported duration" },
-      "last_usage": { "name": "Last water usage" },
-      "report_time": { "name": "Device report time" },
-      "report_count": { "name": "Reports received" },
-      "average_report_interval": { "name": "Average report interval" },
-      "last_report_interval": { "name": "Last report interval" },
-      "longest_report_gap": { "name": "Longest report gap" },
-      "reception_success": { "name": "RF reception success" },
-      "ack_state": { "name": "Gateway reply status" },
-      "ack_confirmation": { "name": "Gateway reply confirmation" },
-      "ack_observed_time": { "name": "Last reply heard over air" },
-      "ack_unconfirmed_attempts": { "name": "Unconfirmed gateway replies" },
-      "recovery_state": { "name": "Recovery status" },
-      "recovery_phase": { "name": "Recovery phase" },
-      "link_status_time": { "name": "Last gateway reply" },
-      "ack_owner": { "name": "Radio owner" },
-      "node_last_seen": { "name": "Last heartbeat" },
-      "ip_address": { "name": "IP address" },
-      "wifi_signal_strength": { "name": "Wi-Fi signal strength" },
-      "device_temperature": { "name": "Device temperature" },
-      "uptime": { "name": "Uptime" },
-      "free_heap": { "name": "Free memory" },
-      "minimum_free_heap": { "name": "Minimum free memory" },
-      "largest_free_block": { "name": "Largest free memory block" },
-      "maximum_loop_gap": { "name": "Maximum loop gap" },
-      "network_bytes_sent": { "name": "Network data sent" },
-      "network_bytes_received": { "name": "Network data received" },
-      "received_frames": { "name": "RF frames received" },
-      "duplicate_frames": { "name": "Duplicate RF frames" },
-      "invalid_messages": { "name": "Invalid network messages" },
-      "radio_packets": { "name": "Radio packets" },
-      "radio_overflows": { "name": "Radio buffer overflows" },
-      "wifi_reconnects": { "name": "Wi-Fi reconnects" },
-      "gateway_authentications": { "name": "Gateway authentications" },
-      "rf_mode": { "name": "RF operating mode" },
-      "rf_mode_requested": { "name": "Requested RF mode" },
-      "rf_mode_detail": { "name": "RF maintenance status" },
-      "rf_mode_remaining": { "name": "Receive-only time remaining" },
-      "rf_mode_changed": { "name": "RF mode last changed" },
-      "rf_blocked_transmissions": { "name": "Blocked RF transmissions" },
-      "rf_rejected_commands": { "name": "Rejected RF commands" },
-      "node_last_reboot_result": { "name": "Last reboot result" },
-      "node_last_reboot": { "name": "Last remote reboot" },
-      "routine_ack_authorized_sensors": { "name": "Acknowledged sensors" },
-      "routine_ack_transmissions": { "name": "Sensor acknowledgements sent" },
-      "routine_ack_failures": { "name": "Sensor acknowledgement failures" },
-      "sensor_recovery_transmissions": { "name": "Recovery replies" },
-      "sensor_recovery_failures": { "name": "Recovery reply failures" },
-      "sensor_recovery_completions": { "name": "Completed recoveries" }
+      "retained_counter_status": {
+        "name": "Counter status"
+      },
+      "retained_command_counter": {
+        "name": "Next command counter"
+      },
+      "morning_sync_status": {
+        "name": "Watering readiness"
+      },
+      "morning_sync_last_success": {
+        "name": "Last successful sync"
+      },
+      "soil_moisture": {
+        "name": "Soil moisture"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "signal_strength": {
+        "name": "Signal strength"
+      },
+      "valve_state": {
+        "name": "Valve state"
+      },
+      "control_transaction_status": {
+        "name": "Control request status"
+      },
+      "duration": {
+        "name": "Reported duration"
+      },
+      "last_usage": {
+        "name": "Last water usage"
+      },
+      "report_time": {
+        "name": "Device report time"
+      },
+      "report_count": {
+        "name": "Reports received"
+      },
+      "average_report_interval": {
+        "name": "Average report interval"
+      },
+      "last_report_interval": {
+        "name": "Last report interval"
+      },
+      "longest_report_gap": {
+        "name": "Longest report gap"
+      },
+      "reception_success": {
+        "name": "RF reception success"
+      },
+      "ack_state": {
+        "name": "Gateway reply status"
+      },
+      "ack_confirmation": {
+        "name": "Gateway reply confirmation"
+      },
+      "ack_observed_time": {
+        "name": "Last reply heard over air"
+      },
+      "ack_unconfirmed_attempts": {
+        "name": "Unconfirmed gateway replies"
+      },
+      "recovery_state": {
+        "name": "Recovery status"
+      },
+      "recovery_phase": {
+        "name": "Recovery phase"
+      },
+      "link_status_time": {
+        "name": "Last gateway reply"
+      },
+      "ack_owner": {
+        "name": "Radio owner"
+      },
+      "node_last_seen": {
+        "name": "Last heartbeat"
+      },
+      "ip_address": {
+        "name": "IP address"
+      },
+      "wifi_signal_strength": {
+        "name": "Wi-Fi signal strength"
+      },
+      "device_temperature": {
+        "name": "Device temperature"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "free_heap": {
+        "name": "Free memory"
+      },
+      "minimum_free_heap": {
+        "name": "Minimum free memory"
+      },
+      "largest_free_block": {
+        "name": "Largest free memory block"
+      },
+      "maximum_loop_gap": {
+        "name": "Maximum loop gap"
+      },
+      "network_bytes_sent": {
+        "name": "Network data sent"
+      },
+      "network_bytes_received": {
+        "name": "Network data received"
+      },
+      "received_frames": {
+        "name": "RF frames received"
+      },
+      "duplicate_frames": {
+        "name": "Duplicate RF frames"
+      },
+      "invalid_messages": {
+        "name": "Invalid network messages"
+      },
+      "radio_packets": {
+        "name": "Radio packets"
+      },
+      "radio_overflows": {
+        "name": "Radio buffer overflows"
+      },
+      "wifi_reconnects": {
+        "name": "Wi-Fi reconnects"
+      },
+      "gateway_authentications": {
+        "name": "Gateway authentications"
+      },
+      "rf_mode": {
+        "name": "RF operating mode"
+      },
+      "rf_mode_requested": {
+        "name": "Requested RF mode"
+      },
+      "rf_mode_detail": {
+        "name": "RF maintenance status"
+      },
+      "rf_mode_remaining": {
+        "name": "Receive-only time remaining"
+      },
+      "rf_mode_changed": {
+        "name": "RF mode last changed"
+      },
+      "rf_blocked_transmissions": {
+        "name": "Blocked RF transmissions"
+      },
+      "rf_rejected_commands": {
+        "name": "Rejected RF commands"
+      },
+      "node_last_reboot_result": {
+        "name": "Last reboot result"
+      },
+      "node_last_reboot": {
+        "name": "Last remote reboot"
+      },
+      "routine_ack_authorized_sensors": {
+        "name": "Acknowledged sensors"
+      },
+      "routine_ack_transmissions": {
+        "name": "Sensor acknowledgements sent"
+      },
+      "routine_ack_failures": {
+        "name": "Sensor acknowledgement failures"
+      },
+      "sensor_recovery_transmissions": {
+        "name": "Recovery replies"
+      },
+      "sensor_recovery_failures": {
+        "name": "Recovery reply failures"
+      },
+      "sensor_recovery_completions": {
+        "name": "Completed recoveries"
+      }
     },
     "binary_sensor": {
-      "watering": { "name": "Watering" },
-      "zone_watering": { "name": "Zone {zone} watering" },
-      "reporting": { "name": "Reporting" },
-      "control_start_available": { "name": "Control start available" },
-      "radio_node_connected": { "name": "Connected" },
-      "radio_node_tx_armed": { "name": "Pairing transmitter armed" },
-      "radio_node_reboot_pending": { "name": "Reboot pending" }
+      "watering": {
+        "name": "Watering"
+      },
+      "zone_watering": {
+        "name": "Zone {zone} watering"
+      },
+      "reporting": {
+        "name": "Reporting"
+      },
+      "control_start_available": {
+        "name": "Control start available"
+      },
+      "radio_node_connected": {
+        "name": "Connected"
+      },
+      "radio_node_tx_armed": {
+        "name": "Pairing transmitter armed"
+      },
+      "radio_node_reboot_pending": {
+        "name": "Reboot pending"
+      }
     },
     "button": {
-      "resynchronize_counter": {"name": "Sync counter"},
-      "restore_retained_counter": {"name": "Restore retained counter"},
-      "identify_radio_node": { "name": "Identify" },
-      "reboot_radio_node": { "name": "Reboot" },
-      "resynchronize_valve_counter": { "name": "Resynchronize control counter" },
-      "cancel_watering_request": { "name": "Cancel watering request" }
+      "resynchronize_counter": {
+        "name": "Sync counter"
+      },
+      "restore_retained_counter": {
+        "name": "Restore retained counter"
+      },
+      "identify_radio_node": {
+        "name": "Identify"
+      },
+      "reboot_radio_node": {
+        "name": "Reboot"
+      },
+      "resynchronize_valve_counter": {
+        "name": "Resynchronize control counter"
+      },
+      "cancel_watering_request": {
+        "name": "Cancel watering request"
+      }
     },
     "switch": {
-      "morning_sync": { "name": "Morning sync and direct watering" },
-      "radio_node_rf_transmissions": { "name": "RF transmissions" }
+      "morning_sync": {
+        "name": "Morning sync and direct watering"
+      },
+      "radio_node_rf_transmissions": {
+        "name": "RF transmissions"
+      }
     },
     "number": {
-      "single_valve_duration": { "name": "Watering duration" },
-      "morning_sync_window": { "name": "Morning sync window" },
-      "htv405_zone_duration": { "name": "Zone {zone} duration" }
+      "single_valve_duration": {
+        "name": "Watering duration"
+      },
+      "morning_sync_window": {
+        "name": "Morning sync window"
+      },
+      "htv405_zone_duration": {
+        "name": "Zone {zone} duration"
+      }
     },
     "update": {
-      "radio_node_firmware": { "name": "Firmware" }
+      "radio_node_firmware": {
+        "name": "Firmware"
+      }
     },
     "time": {
-      "morning_sync_start": { "name": "Morning sync starts" }
+      "morning_sync_start": {
+        "name": "Morning sync starts"
+      }
     },
     "valve": {
-      "single_valve": { "name": "Valve" },
-      "htv405_zone": { "name": "Zone {zone}" }
+      "single_valve": {
+        "name": "Valve"
+      },
+      "htv405_zone": {
+        "name": "Zone {zone}"
+      }
     }
   }
 }

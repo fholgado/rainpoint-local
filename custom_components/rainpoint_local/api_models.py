@@ -163,6 +163,8 @@ def pairing_completed_endpoint(payload: dict[str, Any]) -> str | None:
 
 def pairing_progress_action(payload: dict[str, Any]) -> str:
     """Map gateway pairing stages to concise Home Assistant progress text."""
+    if pairing_is_finalizing(payload):
+        return "finalize_pairing"
     stage = payload.get("stage")
     if stage in {
         "factory_detected_transmitter_required",
@@ -176,3 +178,66 @@ def pairing_progress_action(payload: dict[str, Any]) -> str:
     }:
         return "confirm_device"
     return "wait_for_device"
+
+
+def pairing_is_finalizing(payload: dict[str, Any]) -> bool:
+    """Keep accepted enrollment separate from readiness of its selected radio."""
+    if pairing_completed_endpoint(payload) is None:
+        return False
+    selected = payload.get("selected_node_id")
+    if not selected:  # Compatibility with gateways preceding node selection.
+        return False
+    nodes = payload.get("pairing_nodes", [])
+    if not isinstance(selected, str) or not isinstance(nodes, list):
+        raise APIModelError("invalid selected pairing radio")
+    node = next((node for node in nodes
+                 if isinstance(node, dict) and node.get("node_id") == selected), None)
+    return (node is None or node.get("tx_armed") is not False
+            or node.get("node_reboot_pending") is True)
+
+
+def validate_event_page(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+    """Validate a durable event page before advancing the consumer cursor."""
+    events = payload.get("events")
+    cursor = payload.get("next_since")
+    if not isinstance(events, list) or type(cursor) is not int or cursor < 0:
+        raise APIModelError("invalid events response")
+    previous = -1
+    for event in events:
+        if not isinstance(event, dict):
+            raise APIModelError("invalid event")
+        event_id = event.get("event_id")
+        if type(event_id) is not int or event_id <= previous or event_id > cursor:
+            raise APIModelError("invalid event ordering")
+        previous = event_id
+    return events, cursor
+
+
+def events_require_refresh(events: list[dict[str, Any]]) -> bool:
+    """Reconcile unknown/state events promptly; batch raw RF metrics on fallback."""
+    return any(event.get("event_type") not in {"rf_frame", "receiver_duplicate"}
+               for event in events)
+
+
+def apply_sensor_event_page(devices: dict[str, dict], events: list[dict]) -> dict[str, dict] | None:
+    """Apply known sensor observations; require snapshots for control/topology changes."""
+    result = dict(devices)
+    changed = False
+    for event in events:
+        if event.get("event_type") in {"rf_frame", "receiver_duplicate"}:
+            continue
+        device_id = event.get("device_id")
+        previous = result.get(device_id)
+        state = event.get("state")
+        if (event.get("event_type") != "device_observation" or previous is None
+                or previous.get("model") not in {"HCS026FRF", "HCS02x-compatible soil sensor"}
+                or event.get("model") != previous.get("model")
+                or not isinstance(state, dict) or not isinstance(event.get("observed_at"), str)):
+            return None
+        if int(event["event_id"]) <= int(previous.get("last_event_id") or 0):
+            continue
+        result[device_id] = {**previous, "state": {**previous.get("state", {}), **state},
+                            "observed_at": event["observed_at"], "last_event_id": event["event_id"],
+                            "available": True, "reporting": True, "report_age_seconds": 0}
+        changed = True
+    return result if changed else devices

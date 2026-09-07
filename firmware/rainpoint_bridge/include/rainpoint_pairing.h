@@ -160,7 +160,7 @@ inline bool applyPairingLocalDateTime(
     // The initial gateway reply uses the FAT/DOS clock layout, except its
     // seven-bit year is relative to 2020 rather than 1980. Seconds have
     // two-second resolution. Bytes 21..24 were confirmed across successful
-    // Sensor B enrollments on consecutive days.
+    // independently captured enrollments on consecutive days.
     const std::uint16_t packedTime = static_cast<std::uint16_t>(
         (static_cast<std::uint16_t>(value.hour) << 11) |
         (static_cast<std::uint16_t>(value.minute) << 5) |
@@ -525,7 +525,7 @@ inline bool pairingTrigger(
         return true;
     }
     // Controlled captures show two HCS026 short-message encodings here:
-    // Sensor A uses 0x81 while Sensor B uses 0x82. Both occur after the data
+    // Both 0x81 and 0x82 occur after the data
     // form (0x01) and represent the same pairing trigger.
     if (message == 2 && (frame[14] == 0x81 || frame[14] == 0x82)) {
         trigger = PairingTrigger::PairedMessage2Short;

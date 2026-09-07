@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import voluptuous as vol
@@ -31,6 +32,7 @@ from .api_models import (
     GatewayMetadata,
     PairingProfileMetadata,
     pairing_completed_endpoint,
+    pairing_is_finalizing,
     pairing_profiles,
     pairing_progress_action,
 )
@@ -86,7 +88,7 @@ def _known_device_details(hass: Any, devices: list[dict[str, Any]], endpoint: st
 class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure a local rainpointd gateway."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._hassio_discovery: dict[str, Any] | None = None
@@ -494,6 +496,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._pairing_node_name = "local radio node"
         self._pairing_duration_seconds = 120
         self._pairing_progress_action = "wait_for_device"
+        self._pairing_deadline = 0.0
+        self._pairing_request: dict[str, Any] = {}
+        self._pairing_reviewed = False
+        self._pairing_command_id: str | None = None
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -782,6 +788,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         }
         if not self._pairing_nodes and not errors:
             errors["base"] = "no_pairing_node"
+        if user_input is not None and not self._pairing_reviewed:
+            self._pairing_request = dict(user_input)
+            return await self.async_step_pairing_review()
+        self._pairing_reviewed = False
         if user_input is not None:
             node_id = str(user_input.get("node_id", ""))
             if node_id not in self._pairing_nodes:
@@ -789,7 +799,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             else:
                 try:
                     duration_seconds = int(user_input["duration_seconds"])
-                    await self._client().start_pairing(
+                    started = await self._client().start_pairing(
                         self._token,
                         duration_seconds,
                         node_id=node_id,
@@ -804,8 +814,11 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 except RainPointLocalInvalidResponse:
                     errors["base"] = "invalid_response"
                 else:
+                    self._pairing_command_id = (started.get("command_id")
+                                                if started.get("scoped_cancellation") is True else None)
                     self._pairing_node_name = self._pairing_nodes[node_id]
                     self._pairing_duration_seconds = duration_seconds
+                    self._pairing_deadline = time.monotonic() + duration_seconds + 60
                     self._pairing_progress_action = "wait_for_device"
                     self._pairing_task = self.hass.async_create_task(
                         self._async_wait_for_device()
@@ -815,7 +828,9 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         node_choices = self._pairing_nodes or {
             "": "No pairing-capable radio node connected"
         }
-        default_node = next(iter(node_choices))
+        default_node = self._pairing_request.get("node_id", next(iter(node_choices)))
+        if default_node not in node_choices:
+            default_node = next(iter(node_choices))
 
         return self.async_show_form(
             step_id="pair_device",
@@ -824,7 +839,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     vol.Required("node_id", default=default_node): vol.In(
                         node_choices
                     ),
-                    vol.Required("duration_seconds", default=120): vol.All(
+                    vol.Required("duration_seconds", default=self._pairing_request.get("duration_seconds", 120)): vol.All(
                         vol.Coerce(int), vol.Range(min=10, max=900)
                     ),
                 }
@@ -834,6 +849,30 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 "device_name": self._pairing_profile.display_name
             },
         )
+
+    async def async_step_pairing_review(self, user_input=None) -> FlowResult:
+        """Review and navigate backward before arming any radio."""
+        return self.async_show_menu(step_id="pairing_review", menu_options=[
+            "start_pairing", "change_pairing_radio", "change_pairing_model", "cancel_add_device"
+        ], description_placeholders={
+            "device_name": self._pairing_profile.display_name,
+            "node_name": self._pairing_nodes.get(self._pairing_request.get("node_id"), "Unavailable radio"),
+            "duration_seconds": str(self._pairing_request.get("duration_seconds", 120)),
+        })
+
+    async def async_step_start_pairing(self, user_input=None) -> FlowResult:
+        self._pairing_reviewed = True
+        return await self.async_step_pair_device(self._pairing_request)
+
+    async def async_step_change_pairing_radio(self, user_input=None) -> FlowResult:
+        return await self.async_step_pair_device()
+
+    async def async_step_change_pairing_model(self, user_input=None) -> FlowResult:
+        self._pairing_profile = None
+        return await self.async_step_add_device()
+
+    async def async_step_cancel_add_device(self, user_input=None) -> FlowResult:
+        return self.async_abort(reason="add_device_cancelled")
 
     async def async_step_pairing_progress(
         self, user_input: dict[str, Any] | None = None
@@ -876,16 +915,17 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
 
                 try:
                     completed_endpoint = pairing_completed_endpoint(progress)
+                    finalizing = pairing_is_finalizing(progress)
                 except APIModelError:
                     self._pairing_error = "invalid_response"
                     return
-                if completed_endpoint is not None:
+                if completed_endpoint is not None and not finalizing:
                     self._paired_endpoint = completed_endpoint
                     return
                 if progress.get("stage") == "transmitter_failed":
                     self._pairing_error = "pairing_failed"
                     return
-                if not progress.get("active"):
+                if (not progress.get("active") and not finalizing) or time.monotonic() > self._pairing_deadline:
                     self._pairing_error = "pairing_timeout"
                     return
                 next_action = pairing_progress_action(progress)
@@ -895,11 +935,13 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             try:
-                await self._client().stop_pairing(self._token)
+                if self._pairing_command_id:
+                    await self._client().stop_pairing(self._token, command_id=self._pairing_command_id)
             except (
                 RainPointLocalCannotConnect,
                 RainPointLocalInvalidResponse,
                 RainPointLocalUnauthorized,
+                RainPointLocalCommandRejected,
             ):
                 pass
             raise

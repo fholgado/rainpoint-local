@@ -84,11 +84,11 @@ class RainPointLocalClient:
             f"events?since={since}&wait={max(0, min(wait_seconds, 30))}",
             timeout_seconds=wait_seconds + 10,
         )
-        events = data.get("events")
-        next_since = data.get("next_since")
-        if not isinstance(events, list) or not isinstance(next_since, int):
-            raise RainPointLocalInvalidResponse("invalid events response")
-        return events, next_since
+        from .api_models import validate_event_page
+        try:
+            return validate_event_page(data)
+        except APIModelError as exc:
+            raise RainPointLocalInvalidResponse(str(exc)) from exc
 
     async def pairing(self) -> dict[str, Any]:
         """Return sensor-pairing progress."""
@@ -269,9 +269,9 @@ class RainPointLocalClient:
             token,
         )
 
-    async def stop_pairing(self, token: str) -> dict[str, Any]:
-        """Close the current pairing window."""
-        return await self._post("pairing/stop", {}, token)
+    async def stop_pairing(self, token: str, *, command_id: str | None = None) -> dict[str, Any]:
+        """Close the selected session without cancelling a replacement flow."""
+        return await self._post("pairing/stop", {"command_id": command_id} if command_id else {}, token)
 
     async def forget_sensor(
         self, token: str, device_id: str

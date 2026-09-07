@@ -36,6 +36,35 @@ from rainpointd.valve_protocol import ValveLink, build_open_frame
 from test_support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
 
 class GatewayTest(unittest.TestCase):
+    def test_cancelled_pairing_flow_cannot_stop_a_replacement_session(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as directory:
+            gateway=Gateway(storage_path=str(Path(directory)/"gateway.sqlite3"))
+            gateway.start_pairing(120)
+            self.assertTrue(gateway.pairing()["scoped_cancellation"])
+            gateway._active_pairing_command_id="replacement-session"
+            gateway._cancel_active_pairing_node=Mock()
+            with self.assertRaisesRegex(ValueError,"session changed"):
+                gateway.stop_pairing(command_id="old-session")
+            gateway._cancel_active_pairing_node.assert_not_called()
+            self.assertTrue(gateway.pairing()["active"])
+            gateway.stop_pairing(command_id="replacement-session")
+            gateway._cancel_active_pairing_node.assert_called_once()
+            self.assertFalse(gateway.pairing()["active"])
+            gateway.close()
+
+    def test_setup_claim_has_bounded_attempts_and_recovers_after_window(self):
+        from unittest.mock import patch
+        gateway = Gateway(claim_code="123456")
+        with patch("rainpointd.gateway.time.monotonic", return_value=100):
+            for _ in range(5):
+                with self.assertRaises(PermissionError): gateway.claim_registry("wrong")
+            with self.assertRaises(PermissionError): gateway.claim_registry("123456")
+        with patch("rainpointd.gateway.time.monotonic", return_value=161):
+            token = gateway.claim_registry("123456")
+            self.assertTrue(gateway.registry_authorized(token))
+        gateway.close()
+
     def test_fresh_install_has_no_implicit_household_devices(self):
         from rainpointd.gateway import Gateway as EmptyGateway
         with tempfile.TemporaryDirectory() as directory:
@@ -2461,6 +2490,24 @@ class HTTPAPITest(unittest.TestCase):
     def get_json(self, path: str) -> dict:
         with urlopen(f"{self.base}{path}", timeout=2) as response:
             return json.load(response)
+
+    def test_event_window_bounds_and_cursor_reset(self):
+        for query in ("since=-1", "wait=nan", "wait=inf", "wait=31"):
+            with self.assertRaises(HTTPError) as raised:
+                self.get_json("/api/v1/events?" + query)
+            self.assertEqual(400, raised.exception.code)
+        result=self.get_json("/api/v1/events?since=999999")
+        self.assertEqual([],result["events"])
+        self.assertEqual(self.server.gateway.latest_event_id(),result["next_since"])
+
+    def test_json_nonfinite_and_ambiguous_framing_rejected(self):
+        import http.client
+        for headers, body in [({"Transfer-Encoding":"chunked"},b"{}"),
+                              ({},b'{"setup_code":NaN}')]:
+            conn=http.client.HTTPConnection("127.0.0.1",self.server.server_port,timeout=2)
+            conn.request("POST","/api/v1/auth/claim",body=body,headers=headers)
+            response=conn.getresponse();self.assertEqual(400,response.status)
+            response.read();conn.close()
 
     def test_info_and_devices(self) -> None:
         info = self.get_json("/api/v1/info")

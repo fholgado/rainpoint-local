@@ -10,14 +10,14 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import RainPointLocalClient, RainPointLocalError
-from .api_models import unsupported_device_entity_ids
+from .api_models import unsupported_device_entity_ids, events_require_refresh, apply_sensor_event_page
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LEGACY_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
-    """Poll local gateway snapshots."""
+    """Refresh on state events with slow snapshot reconciliation."""
 
     def __init__(
         self,
@@ -66,13 +66,25 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
 
     async def _async_event_listener(self) -> None:
         """Long-poll the durable event cursor and refresh on change."""
+        clock = asyncio.get_running_loop().time
+        reconcile_at = clock() + DEFAULT_SCAN_INTERVAL.total_seconds()
         while True:
             try:
-                events, self._event_cursor = await self.client.events(
+                events, next_cursor = await self.client.events(
                     self._event_cursor
                 )
-                if events:
-                    await self.async_request_refresh()
+                reconcile_due = clock() >= reconcile_at
+                if events_require_refresh(events) or next_cursor < self._event_cursor or reconcile_due:
+                    updated = (apply_sensor_event_page(self.data or {}, events)
+                               if not reconcile_due and next_cursor >= self._event_cursor and self.last_update_success else None)
+                    if updated is None:
+                        await self.async_refresh()
+                        if not self.last_update_success:
+                            raise RainPointLocalError("event snapshot refresh failed")
+                        reconcile_at = clock() + DEFAULT_SCAN_INTERVAL.total_seconds()
+                    elif updated is not self.data:
+                        self.async_set_updated_data(updated)
+                self._event_cursor = next_cursor
             except RainPointLocalError as exc:
                 _LOGGER.debug("Gateway event listener retrying after: %s", exc)
                 await asyncio.sleep(5)

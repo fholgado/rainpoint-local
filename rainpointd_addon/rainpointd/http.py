@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import math
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +16,32 @@ class RainPointHTTPServer(ThreadingHTTPServer):
     """HTTP server carrying the configured gateway instance."""
 
     gateway: Gateway
+    daemon_threads = True
+
+    def __init__(self, *args, **kwargs):
+        self._request_slots = threading.BoundedSemaphore(32)
+        super().__init__(*args, **kwargs)
+
+    def get_request(self):
+        request, address = super().get_request()
+        request.settimeout(10)
+        return request, address
+
+    def process_request(self, request, client_address):
+        if not self._request_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -108,6 +136,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             try:
                 since = int(query.get("since", ["0"])[0])
                 wait_seconds = float(query.get("wait", ["0"])[0])
+                if since < 0 or not math.isfinite(wait_seconds) or not 0 <= wait_seconds <= 30:
+                    raise ValueError("invalid event window")
             except ValueError:
                 self._json(400, {"error": "since and wait must be numeric"})
                 return
@@ -116,7 +146,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "events": events,
-                    "next_since": events[-1]["event_id"] if events else since,
+                    "next_since": events[-1]["event_id"] if events else min(since, self.server.gateway.latest_event_id()),
                 },
             )
             return
@@ -359,7 +389,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self._json(201, result)
                     return
                 if parsed.path == f"{base}/pairing/stop":
-                    self._json(200, self.server.gateway.stop_pairing())
+                    self._json(200, self.server.gateway.stop_pairing(
+                        command_id=str(body["command_id"]) if body.get("command_id") is not None else None))
                     return
                 if parsed.path == f"{base}/pairing/complete":
                     transmit_performed = bool(
@@ -613,8 +644,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._json(
             405,
             {
-                "error": "gateway is read-only",
-                "detail": "control is intentionally unavailable in this milestone",
+                "error": "method not allowed",
+                "detail": "no mutation is supported at this path",
             },
         )
 
@@ -637,6 +668,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _request_json(self) -> dict[str, Any]:
         """Read one small JSON object from a metadata request."""
+        if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) > 1:
+            raise ValueError("ambiguous request body framing")
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError as error:
@@ -644,7 +677,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not 0 <= length <= 16_384:
             raise ValueError("request body exceeds 16384 bytes")
         try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                raise ValueError("incomplete request body")
+            def reject_constant(value):
+                raise ValueError("non-finite JSON number")
+            payload = json.loads(raw or b"{}", parse_constant=reject_constant)
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise ValueError("request body must be valid JSON") from error
         if not isinstance(payload, dict):

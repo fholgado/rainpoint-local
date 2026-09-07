@@ -12,7 +12,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .safety import ActionKind, SafetyAction, SafetyState, ValveSafetyController
+from rainpointd.safety import ActionKind, SafetyAction, SafetyState, ValveSafetyController
 
 
 _ENDPOINT = re.compile(r"[0-9a-f]{8}\Z")

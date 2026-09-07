@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-06
+Last reviewed: 2026-09-07
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -13,19 +13,41 @@ The verified association now uses standard firmware and HA controls, preserving
 bounded commands, counter recovery and evidence-based state. Front-garden
 installation and watering qualification follow when the user connects the valve.
 
-The selected sequence resumes afterward (numbers refer to the presented list):
+The selected unattended implementation/review pass is complete (original list numbers):
 
-- **1.** Remove installation-specific runtime assumptions.
-- **2.** Retire unused firmware/experiment paths.
-- **4.** Finish event-driven HA updates.
-- **5.** Keep pairing visibly finalizing until the radio is ready.
-- **6.** Make Add device a reversible wizard.
-- **7.** Strengthen entity/config migrations.
-- **11.** Analyze four-zone counter staleness without exceeding watering authorization.
-- **12.** Harden authorization, credential handling, and API boundaries.
-- **15.** Improve CI and clean-install verification.
-- **16.** Clean redundant branches, backups, and firmware catalogs.
-- **18.** Investigate unresolved protocol fields from retained evidence.
+- [x] **1.** Audit production defaults: empty fresh installs, accepted identity
+  recovery, explicit ACK routes, and a regression guard against household IDs.
+- [x] **2.** Move the unused bench coordinator out of the app and remove the
+  manual phase-string parser; retain authenticated counter restoration and
+  qualification tools still required by open physical gates.
+- [x] **4.** Apply known sensor events directly in HA, retain authoritative
+  snapshots for valves/topology, handle cursor resets and retry failed snapshots.
+- [x] **5.** Keep accepted pairing visibly finalizing until its selected radio is
+  disarmed and available; optional-tail failure cannot erase terminal acceptance.
+- [x] **6.** Add a pre-transmission review with model/radio Back choices and Cancel;
+  preserve selected values and scope cancellation to the flow's own command.
+- [x] **7.** Add config version 3 migration with stable identities/user options,
+  canonical credential storage and refusal of unsupported future versions.
+- [x] **11.** Review retained four-zone staleness evidence: time, reboot/reconnect
+  and ACK failures remain confounded. No additional watering was authorized or run.
+- [x] **12.** Review auth boundaries; bound HTTP concurrency, reads, event windows
+  and setup attempts; persist rotated tokens privately and atomically.
+  Encrypted sessions and signed OTA remain publication gates below.
+- [x] **15.** Add deterministic source archives, isolated fresh-install/restart
+  smoke tests, a digest-pinned base image and a CI production-container build.
+- [x] **16.** Remove merged legacy worktrees/branches and archive superseded
+  backups/firmware; retain installed images and explicit rollback releases.
+- [x] **18.** Recheck command-phase, shared-counter and battery-field evidence.
+  Unsupported battery and arbitrary action-order semantics remain unavailable.
+
+- [ ] Verify the new wizard's rendered navigation in HA after the Mac is unlocked.
+  Callback tests cover review/Back behavior and no transmission before Start.
+- [ ] Deploy staged firmware 0.16.1 and qualify restore on hardware after the
+  current soak; radios retain their installed firmware to avoid extra intervention.
+
+Gateway 0.36.0 and integration 0.16.0 contain this pass. Firmware 0.16.1 builds
+and passes native protocol/binary-boundary checks; its offer is staged only.
+Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
 not close physical gates requiring pairing gestures, power changes, SDR, or a
@@ -79,8 +101,8 @@ and version history, not this checklist.
 - [ ] Physically qualify the implemented effective/raw pairing outcome split:
   terminal acceptance remains completed when the optional tail later times out;
   pre-terminal timeout remains failed. Preserve raw diagnostics and do not cancel RF.
-- [ ] Keep the HA wizard at **Finalizing pairing** while the optional tail is
-  armed; expose controls only once disarmed and `rf_control_available=true`.
+- [x] Implement **Finalizing pairing** while the optional tail is armed; preserve
+  backend command readiness guards. Rendered/physical qualification remains above.
 
 ### Single-zone valve
 
@@ -231,13 +253,14 @@ Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
 
 ## Phase 6 — open-source hardening
 
-- [ ] Complete the production installation-assumption audit. Empty defaults,
+- [x] Complete the production installation-assumption audit. Empty defaults,
   accepted-observation identity recovery, evidence-based ACK routes and generic
   pairing profiles are implemented; historical profiles live only in tests and
   research, and replay samples are explicit `examples/` inputs.
 - [ ] Review protocol, gateway, HA, firmware, and research interfaces; introduce
   typed/versioned boundaries, structured errors, and formal HA migrations.
-- [ ] Finish event-driven HA updates with slow reconciliation fallback.
+- [x] Finish event-driven HA sensor updates with slow reconciliation fallback
+  and authoritative snapshots for valve/control/topology events.
 - [ ] Retire remaining superseded probes, temporary acceptance endpoints,
   obsolete gates, firmware artifacts, and dormant two-radio support.
 - [ ] Preserve authentication, association-bound TX, bounded duration,
@@ -258,9 +281,9 @@ research transmit paths cannot enter a release artifact.
   prevents live capture qualification.
 - [ ] Decide the research repository boundary before publication. If separated,
   keep protocol fixtures/models with production and move raw data/orchestration.
-- [ ] Clean merged branches, obsolete backups, and stale firmware catalogs after
-  retaining necessary rollback artifacts and redacted fixtures. Do not create
-  or use another development checkout.
+- [x] Clean merged branches/worktrees and archive obsolete backups/firmware.
+  The active catalog retains installed/rollback releases and the staged update;
+  raw evidence is preserved, with one canonical development checkout.
 
 Exit: concise user-oriented docs, explicit research boundaries, and independent
 capture infrastructure.

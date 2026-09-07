@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.36.0 / 2026-09-07
+
+Integration 0.16.0; unified firmware 0.16.1.
+
+- Review pairing before starting; preserve radio choices when navigating back and wait for radio readiness after acceptance.
+- Recover reset event cursors, coalesce raw RF metric refreshes and retry failed event snapshots without losing the cursor.
+- Migrate legacy credentials without replacing device IDs or user options; refuse unsupported config versions.
+- Bound concurrent HTTP requests, request-body reads, event windows and setup-code attempts.
+- Retire the standalone bench coordinator from production and replace the legacy phase-string parser with authenticated counter restoration.
+- Pin the base image release and produce deterministic source packages with isolated clean-install checks.
+
 ## 0.35.0 / 2026-09-06
 
 Integration 0.15.0; unified firmware 0.16.0.

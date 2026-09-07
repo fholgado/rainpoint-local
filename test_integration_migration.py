@@ -9,6 +9,7 @@ import types
 import unittest
 from unittest.mock import AsyncMock, Mock, call
 from pathlib import Path
+from datetime import timedelta
 
 ROOT = Path(__file__).parent
 PACKAGE = ROOT / "custom_components" / "rainpoint_local"
@@ -40,6 +41,64 @@ def _integration_function(filename, name, namespace, classname=None):
     module.body.append(function)
     exec(compile(module, str(PACKAGE / filename), "exec"), namespace)
     return namespace[name]
+
+
+class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
+    async def test_pairing_review_has_no_radio_side_effect_and_back_preserves_choice(self):
+        profile = types.SimpleNamespace(display_name="Valve")
+        flow = types.SimpleNamespace(_pairing_profile=profile, _pairing_nodes={"n":"Radio"},
+            _pairing_request={"node_id":"n", "duration_seconds":120}, async_show_menu=Mock(),
+            async_step_pair_device=AsyncMock(), async_step_add_device=AsyncMock())
+        review = _integration_function("config_flow.py", "async_step_pairing_review", {})
+        await review(flow)
+        self.assertEqual(["start_pairing", "change_pairing_radio", "change_pairing_model", "cancel_add_device"],
+                         flow.async_show_menu.call_args.kwargs["menu_options"])
+        flow.async_step_pair_device.assert_not_awaited()
+        back = _integration_function("config_flow.py", "async_step_change_pairing_radio", {})
+        await back(flow)
+        flow.async_step_pair_device.assert_awaited_once_with()
+        self.assertEqual("n", flow._pairing_request["node_id"])
+
+    async def test_event_listener_refreshes_state_and_recovers_reset_cursor(self):
+        import asyncio
+        from rainpoint_local.api_models import events_require_refresh, apply_sensor_event_page
+        for events, cursor, refresh in [([{"event_type":"rf_frame"}], 11, False),
+                                        ([{"event_type":"device_observation"}], 11, True), ([], 0, True)]:
+            coordinator = types.SimpleNamespace(_event_cursor=10, data={},
+                client=types.SimpleNamespace(events=AsyncMock(side_effect=[(events,cursor),asyncio.CancelledError()])),
+                async_refresh=AsyncMock(), last_update_success=True)
+            fn = _integration_function("coordinator.py", "_async_event_listener", {
+                "asyncio":asyncio, "RainPointLocalError":ValueError, "events_require_refresh":events_require_refresh, "apply_sensor_event_page":apply_sensor_event_page, "DEFAULT_SCAN_INTERVAL":timedelta(minutes=1)})
+            with self.assertRaises(asyncio.CancelledError): await fn(coordinator)
+            self.assertEqual(cursor, coordinator._event_cursor)
+            self.assertEqual(int(refresh),coordinator.async_refresh.await_count)
+
+    async def test_frequent_sensor_pushes_cannot_starve_reconciliation(self):
+        import asyncio
+        from rainpoint_local.api_models import events_require_refresh, apply_sensor_event_page
+        event={"event_type":"device_observation", "device_id":"soil", "model":"HCS026FRF",
+               "event_id":11,"observed_at":"2026-09-07T00:00:00+00:00","state":{"soil_moisture_percent":30}}
+        coordinator=types.SimpleNamespace(_event_cursor=10,last_update_success=True,
+            data={"soil":{"model":"HCS026FRF","state":{},"last_event_id":10}},
+            client=types.SimpleNamespace(events=AsyncMock(side_effect=[([event],11),asyncio.CancelledError()])),
+            async_refresh=AsyncMock(),async_set_updated_data=Mock())
+        fn=_integration_function("coordinator.py","_async_event_listener",{
+            "asyncio":asyncio,"RainPointLocalError":ValueError,"events_require_refresh":events_require_refresh,
+            "apply_sensor_event_page":apply_sensor_event_page,"DEFAULT_SCAN_INTERVAL":timedelta(0)})
+        with self.assertRaises(asyncio.CancelledError):await fn(coordinator)
+        coordinator.async_refresh.assert_awaited_once()
+        coordinator.async_set_updated_data.assert_not_called()
+
+    def test_migration_rejects_future_versions_and_preserves_identity_and_user_options(self):
+        for version in (0,4,True):
+            with self.assertRaises(ValueError): migrate_entry_payload(version,{}, {})
+        data={"host":" gateway ","port":8787,"registry_write_token":"current","gateway_id":"stable"}
+        options={"registry_write_token":"obsolete", "user_option":42}
+        version,new_data,new_options=migrate_entry_payload(2,data,options)
+        self.assertEqual(3,version);self.assertEqual("current",new_data["registry_write_token"])
+        self.assertEqual("stable",new_data["gateway_id"]);self.assertEqual({"user_option":42},new_options)
+        self.assertEqual((version,new_data,new_options),migrate_entry_payload(version,new_data,new_options))
+        self.assertIn("registry_write_token",options)
 
 
 class SingleValvePromotionTest(unittest.IsolatedAsyncioTestCase):
@@ -246,7 +305,7 @@ class IntegrationMigrationTest(unittest.TestCase):
             {"host": " gateway.local ", "port": "8787"},
             {"registry_write_token": "secret", "unrelated": True},
         )
-        self.assertEqual(2, version)
+        self.assertEqual(3, version)
         self.assertEqual("gateway.local", data["host"])
         self.assertEqual(8787, data["port"])
         self.assertEqual("secret", data["registry_write_token"])
@@ -256,9 +315,9 @@ class IntegrationMigrationTest(unittest.TestCase):
         original_data = {"host": "gateway.local", "port": 8787}
         original_options = {"unrelated": True}
         version, data, options = migrate_entry_payload(
-            2, original_data, original_options
+            3, original_data, original_options
         )
-        self.assertEqual((2, original_data, original_options), (version, data, options))
+        self.assertEqual((3, original_data, original_options), (version, data, options))
 
 
 if __name__ == "__main__":

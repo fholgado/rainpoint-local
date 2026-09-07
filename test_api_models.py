@@ -21,6 +21,41 @@ spec.loader.exec_module(api_models)
 
 
 class APIModelsTest(unittest.TestCase):
+    def test_sensor_events_update_without_poll_and_valves_require_snapshot(self):
+        devices={"soil":{"model":"HCS026FRF", "last_event_id":4, "name":"Garden", "state":{"soil_moisture_percent":20}}}
+        event={"event_type":"device_observation", "device_id":"soil", "model":"HCS026FRF", "event_id":5,
+               "observed_at":"2026-09-07T01:00:00+00:00", "state":{"soil_moisture_percent":30}}
+        result=api_models.apply_sensor_event_page(devices,[event])
+        self.assertEqual(30,result["soil"]["state"]["soil_moisture_percent"])
+        self.assertEqual(20,devices["soil"]["state"]["soil_moisture_percent"])
+        self.assertEqual("Garden",result["soil"]["name"])
+        self.assertIs(result,api_models.apply_sensor_event_page(result,[event]))
+        self.assertIsNone(api_models.apply_sensor_event_page({},[event]))
+        self.assertIsNone(api_models.apply_sensor_event_page(devices,[{**event,"model":"HTV145FRF"}]))
+
+    def test_finalizing_requires_selected_radio_disarmed(self):
+        progress = {"completed_endpoint": "92345613", "selected_node_id": "node",
+                    "pairing_nodes": [{"node_id": "node", "tx_armed": True}]}
+        self.assertTrue(api_models.pairing_is_finalizing(progress))
+        self.assertEqual("finalize_pairing", api_models.pairing_progress_action(progress))
+        progress["pairing_nodes"][0].update(tx_armed=False, pairing_node_state="failed",
+                                         pairing_node_failure_reason="session_timeout")
+        self.assertFalse(api_models.pairing_is_finalizing(progress))
+        self.assertEqual("92345613", api_models.pairing_completed_endpoint(progress))
+        progress["pairing_nodes"] = []
+        self.assertTrue(api_models.pairing_is_finalizing(progress))
+
+    def test_event_page_rejects_bad_cursor_and_ordering(self):
+        valid = {"events": [{"event_id": 5, "event_type": "device_observation"}], "next_since": 5}
+        self.assertEqual((valid["events"], 5), api_models.validate_event_page(valid))
+        for page in ({"events": [], "next_since": True}, {"events": [None], "next_since": 5},
+                     {"events": [{"event_id": 6}], "next_since": 5},
+                     {"events": [{"event_id": 5}, {"event_id": 4}], "next_since": 5}):
+            with self.assertRaises(api_models.APIModelError): api_models.validate_event_page(page)
+        self.assertFalse(api_models.events_require_refresh([{"event_type": "rf_frame"}]))
+        self.assertTrue(api_models.events_require_refresh(valid["events"]))
+        self.assertTrue(api_models.events_require_refresh([{"event_type": "future_state_event"}]))
+
     def test_valve_topology_and_obsolete_entity_ids(self):
         single = {"model": "HTV145FRF", "state": {"zone_4_is_watering": None}}
         four = {"model": "HTV405FRF"}

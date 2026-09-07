@@ -20,7 +20,7 @@ from rainpointd.safety import (  # noqa: E402
     SafetyState,
     ValveSafetyController,
 )
-from rainpointd.valve_control_bench import (  # noqa: E402
+from research.valve_control_bench import (  # noqa: E402
     BenchValveControlProfile,
     BenchValveControlSession,
 )

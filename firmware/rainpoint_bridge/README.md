@@ -67,7 +67,7 @@ python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The production version is `0.16.0`. Both valve families are always included;
+The production version is `0.16.1`. Both valve families are always included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
 Historical captures remain regression fixtures; preserve a verified rollback

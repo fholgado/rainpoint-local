@@ -15,7 +15,8 @@ RF actuation. Live valve paths require explicit gates and an accepted associatio
 Replay captured fixtures on loopback:
 
 ```sh
-PYTHONPATH=rainpointd_addon python3 -m rainpointd
+PYTHONPATH=rainpointd_addon python3 -m rainpointd --transport replay \
+  --replay-fixtures examples/captured-replay/fixtures.json
 ```
 
 Run a receive-only RTL-SDR gateway:
@@ -54,7 +55,10 @@ private `/data` volume.
 1. Copy `rainpointd_addon` to `/addons/rainpointd`.
 2. Reload the app store and rebuild/install `local_rainpointd`.
 3. Copy `custom_components/rainpoint_local` to the HA configuration directory.
-4. Restart HA and add **RainPoint Local**.
+4. Clear generated integration `__pycache__` directories after copying a source
+   archive, then restart HA and add **RainPoint Local**. Deterministic archives
+   retain fixed timestamps; clearing bytecode prevents equal-size edits from
+   reusing a stale cache.
 
 The app requests no HA/Supervisor API token or privileged/full-host mode. USB
 access supports the optional SDR; Wi-Fi radio nodes do not require USB.
@@ -71,7 +75,7 @@ Build and inspect the sole firmware image:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge
-python tools/check_firmware_boundaries.py \
+python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
@@ -88,3 +92,13 @@ Research capture and analysis tools remain under `tools`, but there are no
 alternative bench/candidate firmware environments. New RF behavior must first
 be represented as captured evidence and offline tests, then added to the one
 standard firmware behind the existing bounded command authority.
+
+## Release source package
+
+`python3 tools/package_release.py /tmp/rainpoint-release.tar.gz --smoke-test`
+creates a deterministic archive from tracked runtime files and checks a fresh,
+isolated installation plus restart. It excludes research, captures, credentials,
+replay examples, and firmware build output. CI compares two generated archives.
+The app base image and PlatformIO version are pinned; OS package repositories
+still determine APK revisions, so source reproducibility is not a claim of
+byte-identical container images or signed firmware.

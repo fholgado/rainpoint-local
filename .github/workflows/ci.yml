@@ -38,6 +38,15 @@ jobs:
             test_pairing_waveform_analysis.py \
             test_sensor_soak.py \
             test_valve_trial_analysis.py
+      - name: Build reproducible source package and verify clean installation
+        run: |
+          python tools/package_release.py /tmp/rainpoint-release-a.tar.gz --smoke-test
+          python tools/package_release.py /tmp/rainpoint-release-b.tar.gz
+          cmp /tmp/rainpoint-release-a.tar.gz /tmp/rainpoint-release-b.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rainpoint-source-release
+          path: /tmp/rainpoint-release-a.tar.gz
       - name: Compile hardware-independent firmware protocol tests
         run: |
           c++ -std=c++17 -Ifirmware/rainpoint_bridge/include \
@@ -65,7 +74,19 @@ jobs:
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
-            /tmp/rainpoint-firmware-manifest.json --version 0.16.0 --environment rainpoint_bridge
+            /tmp/rainpoint-firmware-manifest.json --version 0.16.1 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the production app image
+        run: docker build --build-arg BUILD_ARCH=amd64 --build-arg BUILD_VERSION=ci --tag rainpoint-ci rainpointd_addon
+      - name: Verify the packaged runtime has no installation defaults
+        run: >-
+          docker run --rm --entrypoint python3 rainpoint-ci -c
+          'from rainpointd.gateway import Gateway; from rainpointd.ingest import FrameIngestor;
+          g=Gateway(); FrameIngestor(g).seed(); assert g.devices()==[]; g.close()'

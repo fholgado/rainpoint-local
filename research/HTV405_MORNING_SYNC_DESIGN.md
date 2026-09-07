@@ -1,146 +1,59 @@
-# HTV405 morning synchronization and immediate daytime commands
+# HTV405 morning synchronization
 
-Implemented behind a disabled-by-default per-valve setting in gateway 0.34.2,
-integration 0.14.0, and firmware 0.15.11. The initial physical synchronization,
-direct open, and automatic idle succeeded; acceptance after hours remains pending.
-Completion gates
-live in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
+The gateway synchronizes during a configurable local-calendar window and retains
+one association-wide command counter for direct daytime commands. Zone selection
+does not select a different counter. Telemetry and ACK sequences are independent.
+Wire rules are in the [device reference](../protocol_documentation/htv405frf.md).
 
-Move the existing non-actuating close-0 synchronization into a bounded morning
-maintenance window. After a valve-confirmed idle response, retain the accepted
-counter and send subsequent user commands directly. A user should not routinely
-wait for a 15-minute valve report and another 15-second command interval before
-watering starts.
-
-The distinction is counter continuity versus radio reachability. September 2
-dry testing established that all 32 close counters can become the next counter,
-and that open advances it while close retains it. September 3 established that
-two off-report close-0 attempts received no response, whereas the same anchor
-at the next report succeeded. The default control path therefore waits for a
-report before every synchronized open. Morning synchronization moves that wait
-out of the normal user interaction, but does not prove that an hours-idle valve
-will receive a daytime command. The latter must be measured independently.
-
-Evidence: [protocol status](VALVE_PROTOCOL_STATUS.md),
-[overnight drift fixture](fixtures/htv405_overnight_counter_drift_20260902.json),
-and the physical synchronization gates in the roadmap. The HTV145 discovery of
-a truncated command wake is an additional reason to measure HTV405 wake length
-and repetition directly instead of calling every silence a counter failure.
-
-## Proposed behavior
+## Runtime behavior
 
 | Situation | Behavior |
-| --- | --- |
-| Morning window, known idle valve, owner online | Queue one close-0 anchor at the next report, using the existing owner-node mechanism. |
-| Matching idle response | Persist readiness, association revision, owner, next counter, and actual transmission/confirmation times. Do not open anything. |
-| Daytime request, ready, no unresolved command | Reserve the retained counter and dispatch one duration-bounded open immediately through the existing coordinator. |
-| Confirmed open | Advance the counter from the matching response, record expected automatic completion, and observe valve state. |
-| Confirmed early close | Retain its confirmed counter for the next open. Keep the 15-second hardware interval. |
-| No response after an open | Keep the run unresolved, clear readiness, and never issue a new logical open as recovery. Continue observing the bounded run. |
-| Morning sync missed or failed | Show “Needs sync” and the cause. Offer the existing cancellable report-waiting recovery as an explicit fallback. |
-| Already watering, unknown physical state, pending command, or competing RF controller | Skip maintenance; never use a scheduled close as permission to interrupt an active run. |
-| Gateway restart | Restore observations and reservations without RF replay. Reconcile readiness/ownership before accepting new work. |
+|---|---|
+| Enabled morning window, known idle valve, owner online | Queue one fixed-zero close at the next fresh owner link report. |
+| Matched idle response | Persist readiness, association, owner, counter and confirmation time. |
+| Ready daytime request | Reserve the retained counter and send one bounded open immediately. |
+| Positive open response | Advance the shared counter and observe the bounded run. |
+| Positive close response | Retain the accepted counter. |
+| Missing open response | Keep the run unresolved and clear readiness; never replay a logical open as recovery. |
+| Missed or failed sync | Show the reason and permit explicit Sync now recovery. |
+| Watering, uncertain state or pending command | Do not perform maintenance. |
+| Restart | Restore durable state without speculative RF replay. |
 
-The morning window should be configurable in local time and begin at least one
-full observed report interval plus the command-spacing margin before the first
-scheduled watering. An initial dry-test example is a 30-minute window, beginning
-45 minutes before the first planned run; choose actual times with the operator.
-Do not silently introduce an extra daily watering or an all-day radio keepalive.
+A fresh link report provides a transmit opportunity; it does not establish idle
+state. Any independent watering observation invalidates the idle authorization.
+The radio and gateway enforce the original deadline and command spacing.
+A successful zero-anchor idle reply may name the last watered zone. That narrow
+exception requires the matching association, counter zero, valid zone and idle
+state; ordinary command responses must still match the requested zone.
 
-## Coordination and persistence
+Morning scheduling is owned by the gateway, not a Codex monitor. Choose a window
+long enough to include a normal report interval and command-spacing margin.
+No daily watering or RF keepalive is introduced by synchronization.
 
-The gateway owns the maintenance decision and the durable counter; HA displays
-it and requests watering. Use one transaction lock per valve for both scheduled
-maintenance and user commands. Reuse the current report-triggered anchor and
-timeout behavior rather than creating a second RF sender. A user request racing
-maintenance either uses its completed result or sees the existing cancellable
-wait; it cannot reserve a second command concurrently.
+## Counter retention and receive reachability
 
-Store the local service date, scheduled window, association revision, owner node,
-last successful sync time, confirmed counter, and readiness reason. A unique
-service-date/association key prevents duplicate maintenance after reload or a
-daylight-saving clock change. A delayed scheduler may act only inside the window;
-it must not replay a missed morning close at an arbitrary later startup. A node
-reassignment revokes the old transmitter before installing the new owner.
+An accepted counter and a reachable valve are different facts. A timeout alone
+cannot distinguish counter rejection, a sleeping receiver, interference, a missed
+reply or a received command. Never infer counter advancement from silence.
 
-Do not equate “synced today” with unconditional permission. Pairing or route
-changes, observed stock control traffic, an unacknowledged local transmission,
-and unresolved watering invalidate readiness. Keep the existing idle/state and
-command-spacing safety gates. A plain report sequence never replaces the command
-counter. Decide the readiness lifetime from the daytime experiment, rather than
-inventing a counter expiry merely because a report is old.
+The [overnight corpus](fixtures/htv405_overnight_counter_drift_20260902.json) has
+21.93 hours between the last accepted command and first timeout, but also 33
+owner connection events, an uptime-confirmed reboot and three aggregate ACK
+failures without individual timestamps. This evidence cannot identify an expiry
+period or isolate elapsed time as the cause. The [morning smoke exchange](fixtures/htv405_morning_sync_smoke_20260905.json)
+proves an anchor followed by immediate direct control, not hours-long retention.
 
-HA can expose “Ready”, “Syncing”, “Watering”, or “Needs sync”, alongside last
-successful sync and the command's existing transaction status. The normal Run Now
-action should dispatch immediately when ready. Failure should be explicit; avoid
-hiding another long wait behind a second press or an automatic open retry.
+## Controlled retention procedure
 
-## Experiment that decides whether this works
+1. Record one authenticated counter, owner connection epoch, uptime and ACK baseline.
+2. Keep the owner and gateway stable. Record every ACK outcome and intervening command.
+3. At an authorized checkpoint, send only the currently authenticated counter
+   with a bounded duration. Require a positive reply and independent automatic idle.
+4. Label intervals containing a command, reboot, ownership change or missing
+   observations as interrupted; do not treat them as clean idle holds.
+5. Stop on a failed open. Recover separately at the next qualified idle opportunity;
+   never sweep open counters or replay missed checkpoints.
+6. Compare stock maintenance traffic only with a separately authorized capture.
 
-On the isolated dry HTV405, perform one morning report-triggered close-0 sync,
-then test the exact retained next counter at approximately 1, 4, 8, and 12 hours.
-Keep the gateway and owner node continuously running, the stock gateway off, and
-routine ACK behavior unchanged. Deliberately place requests away from the next
-report boundary. Each accepted bounded run must finish with independent idle
-evidence before the next test; log manual-button activity as a separate variable.
-
-For each request record click-to-first-RF latency, click-to-matching-response
-latency, time since the last report, payload, actual RF carrier/wake/repeat
-timings, owner reboot/connection/ACK history, and valve-owned automatic stop.
-The initial user-experience target is RF dispatch within one second when no
-hardware-spacing delay applies, and a matching response within the existing
-bounded response window. No test may create a second logical open to turn a
-timeout into apparent success.
-
-A silence does not diagnose counter drift. First verify the command on SDR and
-compare the same counter/payload at the next report opportunity. If it works only
-near a report, investigate receiver wake timing or a missing stock maintenance
-exchange. If daytime delivery is reliable with the retained counter, qualify
-the implemented direct-open path and morning scheduling, then
-run several complete dry days including restart, DST, concurrent-click, missed
-morning-window, and active-run-at-maintenance cases before enabling it for garden
-watering. Rollback is the existing explicit per-request synchronized transaction.
-
-This design intentionally does not add speculative periodic opens or active-run
-maintenance closes. If a single daily sync cannot sustain daytime reachability,
-the next design decision requires the stock idle/command capture evidence; it is
-not automatically a reason to increase maintenance transmission frequency.
-The September 5 live idle-report-only trial received continuing selector-07
-link reports but no new selector-05 state report, and expired without RF after
-30 minutes. Firmware 0.15.11 therefore retains the gateway's existing known-idle
-authorization and uses a fresh link report as the transmit opportunity. The
-link report never replaces physical state; any watering observation invalidates
-the attempt, including observations forwarded by another receiver. The deadline
-and exact cancellation remain independently enforced at the owner radio.
-
-The subsequent [September 5 captured exchange](fixtures/htv405_morning_sync_smoke_20260905.json)
-confirmed the revised path: close-0 authenticated at the fresh link opportunity,
-then one direct Zone 1 60-second command authenticated within 0.91 seconds of
-submission. Independent reports showed watering and automatic idle, leaving next
-counter 1. The operator explicitly authorized this wet garden test within a
-15-minute total watering budget. This initial result does not yet establish
-hours-long receiver reachability or retained-counter continuity.
-
-## September 6 previous-zone response
-
-The 05:30 Eastern schedule queued correctly. At 09:39:11.528 UTC the owner
-transmitted the counter-zero Zone 1 anchor. The valve replied idle with counter
-zero and Zone 4, the last watered zone. Firmware rejected it with
-`gateway_command_response_zone_mismatch_counter_unsynchronized` at
-09:39:11.790 UTC. This was a validation failure, not a missing scheduled run.
-Codex monitoring had stopped because account usage was exhausted; the gateway's
-scheduler continued independently.
-
-The HTV405 command counter is association-wide. Zone selection does not select
-another counter; telemetry has a separate sequence. Gateway 0.34.5 and production
-firmware 0.15.14 allow a different valid response zone only for the bounded,
-known-idle morning anchor at counter zero. Ordinary control zone matching stays
-strict. Both owner confirmations and independently received air responses use
-the same gateway predicate; a nonzero counter, watering response, wrong route,
-or expired response window cannot use the exception. Failure status retains the
-original reason after the morning window. Regression tests cover the previous-zone
-reply and subsequent shared-counter Zone 2 dispatch, without issuing live watering.
-
-Recovery is an explicit Sync now request after both gateway and owner are
-updated. It waits for the next report and sends only the idle close-zero anchor;
-restarting the gateway alone never initiates recovery transmissions.
+The [roadmap](../PROJECT_ROADMAP.md) owns physical qualification gates. The current
+72-hour collector is passive and cannot substitute for authorized retention probes.

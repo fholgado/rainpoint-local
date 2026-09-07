@@ -35,12 +35,8 @@ constexpr std::uint32_t kScanDwellMs = 500;
 constexpr std::uint8_t kHcs026TelemetryChannel = 0;
 constexpr std::uint32_t kHealthIntervalMs = 30'000;
 constexpr std::uint32_t kIdentifyToggleMs = 250;
-// Supervised HTV405 control. This association-normalized selector-2 base
-// plus the node's pairing calibration (97,154 Hz on the validated bench node)
-// requests 433,518,527 Hz and lands on the accepted ~433.471 MHz carrier.
-// The actual gateway-to-valve command precedes the lower-channel valve state
-// report and uses the established late selector-2 reply branch. The prior
-// probe mistakenly replayed the lower-channel state report itself.
+// Association-normalized HTV405 selector-2 command carrier base.
+// Add the selected node's measured pairing calibration.
 constexpr std::uint32_t kHtv405ControlBaseCenterHz = 433'421'373;
 constexpr std::uint32_t kValveProbeFreshPhaseMs = 90'000;
 constexpr std::uint32_t kValveProbeMinimumCloseDelayMs = 15'000;
@@ -167,7 +163,7 @@ struct ValveControlProbe {
     std::uint8_t commandAttemptsSent = 0;
     bool configured = false;
     bool phaseValid = false;
-    bool manualPhaseConfigured = false;
+    bool counterConfigured = false;
     bool commandCounterAuthenticated = false;
     bool commandPendingConfirmation = false;
     bool transmittedIdleSyncAnchor = false;
@@ -1013,16 +1009,16 @@ void reportValveProbeStatus(
     line += ",\"command_phase_source\":\"";
     line += valveControlProbe.commandCounterAuthenticated
         ? "authenticated_valve_response"
-        : (valveControlProbe.manualPhaseConfigured ? "manual_bench" : "none");
+        : (valveControlProbe.counterConfigured ? "unverified" : "none");
     line += '"';
-    if (valveControlProbe.manualPhaseConfigured) {
+    if (valveControlProbe.counterConfigured) {
         line += ",\"command_sequence\":";
         line += valveControlProbe.commandSequence;
         line += ",\"command_repeat\":";
         line += valveControlProbe.commandRepeat ? "true" : "false";
     }
     line += ",\"command_counter_valid\":";
-    line += valveControlProbe.manualPhaseConfigured ? "true" : "false";
+    line += valveControlProbe.counterConfigured ? "true" : "false";
     line += ",\"phase_valid\":";
     line += valveControlProbe.phaseValid ? "true" : "false";
     line += ",\"phase_fresh\":";
@@ -1250,7 +1246,7 @@ bool observeValveProbeFrame(
                 response.sequence, response.watering
             );
         valveControlProbe.commandRepeat = false;
-        valveControlProbe.manualPhaseConfigured = true;
+        valveControlProbe.counterConfigured = true;
         valveControlProbe.commandCounterAuthenticated = true;
         valveControlProbe.confirmedStateValid = true;
         valveControlProbe.confirmedWatering = response.watering;
@@ -1537,7 +1533,7 @@ bool transmitValveProbeOpen(
     } else if (valveControlProbe.openSent &&
             valveControlProbe.confirmedWatering) {
         reportValveProbeError("open_already_sent");
-    } else if (!valveControlProbe.manualPhaseConfigured) {
+    } else if (!valveControlProbe.counterConfigured) {
         reportValveProbeError("command_counter_unknown");
     } else if (valveControlProbe.openQueued ||
             valveControlProbe.closeQueued) {
@@ -1566,7 +1562,7 @@ bool transmitValveProbeClose(std::uint8_t zone, bool immediate) {
         reportValveProbeError("pairing_is_armed");
     } else if (valveControlProbe.commandPendingConfirmation) {
         reportValveProbeError("command_confirmation_pending");
-    } else if (!valveControlProbe.manualPhaseConfigured) {
+    } else if (!valveControlProbe.counterConfigured) {
         reportValveProbeError("command_counter_unknown");
     } else if (valveControlProbe.openQueued ||
             valveControlProbe.closeQueued) {
@@ -1587,41 +1583,19 @@ bool transmitValveProbeClose(std::uint8_t zone, bool immediate) {
     return true;
 }
 
-bool configureValveProbeCommandPhase(const String& command) {
-    constexpr std::size_t prefixLength = 18;
-    const String fields = command.substring(prefixLength);
-    const int separator = fields.indexOf(' ');
-    if (separator <= 0 || fields.indexOf(' ', separator + 1) >= 0) {
-        reportValveProbeError("invalid_phase_syntax");
-        return true;
-    }
-
-    long sequence = 0;
-    long repeat = 0;
-    if (!valveControlProbe.configured ||
-        !parseSignedLongValue(fields.substring(0, separator), sequence) ||
-        !parseSignedLongValue(fields.substring(separator + 1), repeat) ||
-        sequence < 0 || sequence > 0x1f || (repeat != 0 && repeat != 1)) {
-        reportValveProbeError("invalid_phase_values");
-        return true;
-    }
-
-    // Bench-only explicit phase control allows a physical trial to continue
-    // after a manual valve action without resetting its validated RF link.
-    // Clearing queued/sent flags here is intentional; endpoints, selector,
-    // carrier correction, and every pairing parameter remain unchanged.
-    valveControlProbe.commandSequence = static_cast<std::uint8_t>(sequence);
-    valveControlProbe.commandRepeat = repeat == 1;
-    valveControlProbe.manualPhaseConfigured = true;
-    valveControlProbe.commandCounterAuthenticated = false;
+void restoreValveControlCounter(std::uint8_t sequence) {
+    // Only the authenticated gateway path supplies an association's persisted
+    // counter. Never infer it from report markers or expose serial overrides.
+    valveControlProbe.commandSequence = sequence;
+    valveControlProbe.commandRepeat = false;
+    valveControlProbe.counterConfigured = true;
+    valveControlProbe.commandCounterAuthenticated = true;
     valveControlProbe.openQueued = false;
     valveControlProbe.closeQueued = false;
     valveControlProbe.openSent = false;
     valveControlProbe.closeSent = false;
     valveControlProbe.commandPendingConfirmation = false;
     valveControlProbe.openSentAtMs = 0;
-    reportValveProbeStatus("command_phase_configured");
-    return true;
 }
 
 
@@ -2368,14 +2342,7 @@ void handleNetworkCommand() {
             );
             return;
         }
-        String local = "valve_probe_phase ";
-        local += sequence;
-        local += " 0";
-        configureValveProbeCommandPhase(local);
-        // This path is accepted only over the authenticated protocol-v2
-        // session and the daemon supplies a counter previously confirmed by
-        // this same association. It is distinct from manual serial recovery.
-        valveControlProbe.commandCounterAuthenticated = true;
+        restoreValveControlCounter(static_cast<std::uint8_t>(sequence));
         reportValveProbeStatus("command_phase_restored_by_gateway");
         return;
     }
