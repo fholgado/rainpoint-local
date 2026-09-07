@@ -114,6 +114,9 @@ and version history, not this checklist.
 - [ ] Physically verify the new-ID handoff and subsequent ACK/control enrollment
   through the chosen node; the September 7 partial 5/6 exchange proves initial
   custom-ID acceptance, not completed HA migration or control qualification.
+  Follow-up on gateway 0.36.1 / firmware 0.16.0 confirmed the new-ID report through
+  the selected node, preserved the existing HA device, and finalized/disarmed
+  pairing. ACK/control enrollment and sustained reporting remain open.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
