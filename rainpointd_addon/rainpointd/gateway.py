@@ -777,6 +777,37 @@ class Gateway:
             runtime = self._htv145_runtime
             if not self._htv145_acceptance_enabled or runtime is None:
                 raise PermissionError("HTV145 dry control is disabled")
+            if action.startswith("qualification-"):
+                device = self._devices.get(str(body.get("device_id", "")), {})
+                if device.get("model") != HTV145_MODEL:
+                    raise ValueError("qualification requires a registered single-zone valve")
+                if action == "qualification-prepare":
+                    if body.get("dry_valve_confirmed") is not True:
+                        raise ValueError("confirm the valve is disconnected from water")
+                    registration = next((item for item in self._store.valve_registry()
+                                         if item["device_id"] == device["device_id"]), None)
+                    if registration is None or registration["model"] != HTV145_MODEL:
+                        raise ValueError("qualification requires accepted pairing evidence")
+                    profile = Htv145ControlProfile(
+                        node_id=str(body.get("node_id", "")),
+                        controller_endpoint=registration["valve_endpoint"],
+                        valve_endpoint=registration["controller_endpoint"],
+                        center_hz=int(body.get("center_hz", 0)), power_dbm=10,
+                        invert=False, trailer_residual=0x4f03,
+                        command_marker_inverted=True,
+                        report_ack_center_hz=int(body.get("report_ack_center_hz", 0)),
+                    )
+                    report = decode_htv145_state_report(bytes.fromhex(device["state"].get("raw", "")), profile.link)
+                    age = (_observed_utc(timestamp) - _observed_utc(device["observed_at"])).total_seconds()
+                    if report is None or report["watering"] or not 0 <= age <= 3600:
+                        raise ValueError("qualification requires fresh idle evidence on the accepted link")
+                    return runtime.qualification.prepare(profile, now=timestamp)
+                profile = self._htv145_profile_for_device(device)
+                if profile is None:
+                    raise ValueError("device has no provisional qualification owner")
+                if action == "qualification-status":
+                    return runtime.qualification.status(profile, now=timestamp)
+                return runtime.qualification.action(profile, action.removeprefix("qualification-"), now=timestamp)
             if action == "enroll":
                 profile = Htv145ControlProfile(**body["profile"])
                 return runtime.enroll(profile, command=bytes.fromhex(body["command_frame"]),
@@ -1081,6 +1112,8 @@ class Gateway:
         """Persist a disabled-by-default per-valve morning policy."""
         with self._lock:
             if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                if not self._htv145_runtime.qualification.qualified(profile):
+                    raise RuntimeError("finish dry qualification before changing morning sync")
                 result = self._htv145_runtime.counter_sync.configure(profile, settings, now=(now or datetime.now(timezone.utc)).isoformat())
                 self._event_condition.notify_all()
                 return result
@@ -1168,6 +1201,8 @@ class Gateway:
         """Explicit recover-now action; never enqueue a watering command."""
         with self._lock:
             if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                if not self._htv145_runtime.qualification.qualified(profile):
+                    raise RuntimeError("dry qualification owns the pending counter sync")
                 result = self._htv145_runtime.counter_sync.request(profile, now=(now or datetime.now(timezone.utc)).isoformat())
                 self._event_condition.notify_all()
                 return result
@@ -3946,10 +3981,13 @@ class Gateway:
                     })
                     confirmed = status["state"]
                     pending = confirmed["pending_command_id"] is not None
-                    control_available = bool(status["owner_available"] and status["counter_synchronized"]
+                    control_available = bool(status["public_control_qualified"] and status["owner_available"] and status["counter_synchronized"]
                         and not pending and confirmed["revocation_command_id"] is None)
+                    if not status["public_control_qualified"]:
+                        counter_status = "Dry qualification: " + str(status["dry_qualification"].get("state", "required"))
                     device["state"].update({
-                        "rf_control_enabled": True,
+                        "rf_control_enabled": status["public_control_qualified"],
+                        "rf_control_qualification_state": status["dry_qualification"].get("state", "qualified"),
                         "rf_control_available": control_available,
                         "rf_control_start_available": status["ready"],
                         "rf_control_unavailable_reason": None if control_available else counter_status,
@@ -3972,7 +4010,7 @@ class Gateway:
                     supported = "htv145_idle_anchor" in self._nodes.get(profile.node_id, {}).get("capabilities", [])
                     device["state"].update({
                         "rf_htv145_counter_sync_supported": supported,
-                        "rf_htv145_counter_sync_available": sync["available"],
+                        "rf_htv145_counter_sync_available": sync["available"] and status["public_control_qualified"],
                         "rf_morning_sync_status": sync["status"],
                         "rf_morning_sync_reason": sync.get("reason"),
                         "rf_morning_sync_last_success_at": sync.get("last_success_at"),

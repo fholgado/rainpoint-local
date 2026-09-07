@@ -209,6 +209,16 @@ it. Each attempt's bounded RF burst does not consume additional queued attempts.
 
 ## Persistence and HA boundary
 
+First-control qualification after custom-identity pairing is distinct from
+retained-counter restoration. The explicit dry-test flow revokes the old owner,
+leases one provisional report-ACK owner, and uses a new owner idle report for
+the fixed-zero anchor. It then permits two fixed 60-second runs: valve-confirmed
+open with independent automatic idle, followed by a second confirmed open,
+spaced early close, and independent idle. Public control is blocked until all
+these checks pass. No stock command or assumed pairing-reset counter seeds it.
+An interrupted/restarted qualification cannot replay a command or resume an
+unsent anchor. This uses the existing waveform and is not another pairing profile.
+
 A requested owner reboot makes control unavailable immediately, even while its
 old socket still appears connected. Reconnect must clear the pending-reboot flag.
 

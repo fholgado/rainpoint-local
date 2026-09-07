@@ -17,7 +17,7 @@ from .product_identity import (
 from .valve_protocol import next_htv145_command_sequence
 from .htv145_counter_sync import MAX_SYNC_ATTEMPTS, failed_attempt
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -259,6 +259,11 @@ class SQLiteEventStore:
             version = 21
         if version == 21:
             self._migrate_v21_to_v22()
+            version = 22
+        if version == 22:
+            with self._connection:
+                self._connection.execute("CREATE TABLE IF NOT EXISTS htv145_qualification (valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+                self._connection.execute("PRAGMA user_version = 23")
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -646,6 +651,18 @@ class SQLiteEventStore:
     def htv145_counter_sync(self, valve_endpoint: str) -> dict[str, Any]:
         row = self._connection.execute("SELECT payload FROM htv145_counter_sync WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
         return json.loads(row[0]) if row is not None else {}
+
+    def htv145_qualifications(self) -> list[dict[str, Any]]:
+        return [json.loads(row[0]) for row in self._connection.execute(
+            "SELECT payload FROM htv145_qualification ORDER BY valve_endpoint")]
+
+    def htv145_qualification(self, valve_endpoint: str) -> dict[str, Any]:
+        row = self._connection.execute("SELECT payload FROM htv145_qualification WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+        return json.loads(row[0]) if row is not None else {}
+
+    def save_htv145_qualification(self, valve_endpoint: str, payload: dict) -> None:
+        with self._connection:
+            self._connection.execute("INSERT INTO htv145_qualification VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
 
     def _write_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
         self._connection.execute("INSERT INTO htv145_counter_sync VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))

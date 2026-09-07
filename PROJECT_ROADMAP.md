@@ -133,6 +133,10 @@ and version history, not this checklist.
   fresh owner idle evidence, close-only counter establishment, and valve-confirmed
   control before enabling public commands. Preserve the proven RF pairing prefix
   and distinguish provisional test ownership from qualified runtime ownership.
+  Implementation staged in gateway 0.36.2: persistent provisional qualification,
+  fresh idle anchor, two fixed one-minute runs, response/stop verification,
+  public-control blocking and interrupted-test handling. Physical validation
+  remains required before marking this gate complete; firmware is unchanged.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.

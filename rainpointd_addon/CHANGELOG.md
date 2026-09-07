@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.36.2 / 2026-09-07
+
+- Add separately gated first-control qualification for a locally paired HTV145
+  association without stock command evidence or an inherited counter.
+- Require old-owner revocation, fresh owner idle synchronization, two fixed
+  one-minute tests, positive valve replies and independent stop evidence before
+  enabling public controls. Persist progress and interrupt unfinished tests on
+  restart; never replay a watering command.
+- Keep radio firmware and pairing waveforms unchanged. Storage schema 23 adds
+  qualification records; older-gateway rollback requires the database backup.
+
 ## 0.36.1 / 2026-09-07
 
 - Recognize a single-zone valve's first valid report against the active pairing
