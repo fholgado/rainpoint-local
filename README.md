@@ -1,287 +1,83 @@
 # RainPoint Local
 
-RainPoint Local is an open, local-first Home Assistant stack for RainPoint
-433 MHz irrigation devices. It receives sensor and valve telemetry without the
-vendor cloud, pairs and recovers supported soil sensors through custom radio
-nodes, and preserves Home Assistant identity while a user migrates from the
-stock RainPoint gateway.
+A local Home Assistant stack for RainPoint 433/434 MHz irrigation devices.
+ESP32/CC1101 radios communicate with the devices; `rainpointd` owns decoding,
+associations, ACK ownership, counters, and safety; the HA integration exposes
+telemetry and qualified controls. Normal operation does not need the vendor cloud
+or an SDR.
 
-Supervised HTV405 control is available as a disabled-by-default beta. Local
-enrollment, isolated one- and two-minute opens on all four zones, and Zone 1
-early stop have passed physical validation, including direct valve responses,
-automatic stop, and controller-counter progression. The gateway and HA expose
-every whole-minute run from 1 through 60 using the decoded packed duration
-field.
-Enabling the beta adds four HA valve entities and four duration controls, and
-requires compatible supervised firmware on the valve's assigned radio node.
+## Device support
 
-## What works today
+| Family | Current capability | Limit |
+|---|---|---|
+| HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
+| HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised beta; battery unavailable; no water-usage capability |
+| HTV145FRF | State, duration, usage, categorical battery, dry-test controls/ACKs/sync | Partial local association; ordinary HA actuation not promoted |
 
-### HCS02x soil sensors
+Read [device communication references](protocol_documentation/) for packet rules
+and [the roadmap](PROJECT_ROADMAP.md) for qualification gates. A supported codec
+or successful RF transmission is not proof of physical acceptance.
 
-- Decode moisture, confirmed full/low battery state, report time, RF endpoint,
-  signal provenance, and reporting cadence from local RF.
-- Discover compatible sensors by protocol evidence rather than household IDs.
-- Pair HCS026-class sensors from the Home Assistant UI without asking users to
-  copy RF identities or credentials.
-- Derive the stable paired endpoint from the factory announcement and retain an
-  existing HA device/entity history during reassociation.
-- Recover a known dormant sensor with a long press and one bounded gateway
-  reply—no battery removal, HA deletion, or open pairing window.
-- Persist exactly one custom radio-node ACK owner per sensor and restore all
-  assignments after gateway, network, radio-node, or OTA restart.
-- Deduplicate reception from multiple Wi-Fi radio nodes and an optional SDR
-  while retaining per-receiver coverage metrics.
+## Install on Home Assistant OS
 
-The generalized pairing path and routine acknowledgement behavior have been
-physically validated across independent HCS026 identities and the existing bed
-sensors. Multiple sensors can share pairing selector 4; selectors are not
-device slots.
+HACS installs the integration; the gateway service is a separate app/add-on.
 
-### Radio nodes
+1. Copy `rainpointd_addon` to `/addons/rainpointd`, reload the app store, and install
+   **RainPoint Local Gateway**.
+2. Install `custom_components/rainpoint_local` through HACS or copy it into HA's
+   custom components directory, then restart HA.
+3. Add **RainPoint Local**. Supervisor discovery provisions its management credential.
+4. Follow [radio onboarding](NODE_ONBOARDING.md) to commission and adopt a radio.
+5. Use the integration's **Configure** flow to add a supported device. Choose the
+   nearest suitable radio and power off the stock gateway during local enrollment.
+   Known devices retain their saved name, area, and canonical identity.
 
-- One standard ESP32/CC1101 firmware image supports receive, sensor pairing,
-  known-sensor recovery, persistent ACK assignments, Identify, diagnostics,
-  Wi-Fi commissioning, and managed OTA.
-- New nodes create a temporary Wi-Fi setup portal, are discovered in Home
-  Assistant, and use the ESP32 BOOT button for physical adoption confirmation.
-- Each node has an independent credential and makes an outbound authenticated
-  connection to the local gateway, allowing nodes to be placed near different
-  garden areas.
-- Authenticated HA controls can place every node in a bounded receive-only mode
-  for isolated stock-gateway captures, explicitly restore normal RF operation,
-  identify it, or reboot it without physical access. A driver-level guard and
-  aggregate readiness check prevent an adopted node from transmitting during
-  a declared receive-only capture.
-- OTA images are size/SHA-256 checked, health-confirmed after reboot, and use a
-  three-unconfirmed-boot rollback policy.
+Back up HA before changing configuration. Keep source backups under
+`/share/rainpoint-local/source-backups`, outside `/addons`, and exclude macOS
+`._*` files. See the [add-on guide](rainpointd_addon/DOCS.md) for settings and
+[firmware guide](firmware/rainpoint_bridge/README.md) for wiring and recovery.
 
-### Valve telemetry and supervised control
+## Operation
 
-- Locally enroll the isolated HTV405 through a bounded, association-specific
-  transcript without the stock RainPoint gateway.
-- Open every HTV405 zone for physically validated one- and two-minute runs and
-  early-close the confirmed active Zone 1 on the enrolled selector-2 carrier,
-  accepting state only from the valve's authenticated response or later
-  telemetry. The duration codec supports every whole-minute value from 1
-  through 60 rather than a device-preset list.
-- Configure the next 1--60 minute run independently for each zone using the
-  gateway-published continuous range.
-- Track the independent controller command counter from matching valve replies;
-  routine telemetry cannot overwrite it.
-- Decode the tested HTV145 frame family, open/closed state, configured duration,
-  last-session duration, and water usage.
-- Separate HTV145 command and telemetry counters, model a stock command as one
-  logical operation with a bounded burst of identical RF attempts, and persist
-  an at-most-once candidate reservation across gateway restarts.
-- Run the isolated HTV145 one-shot acceptance harness through a separate,
-  disabled-by-default research gate; it is token-protected and intentionally
-  absent from the Home Assistant entity/control model. Its first correct-
-  channel transmission was independently received but the already-low-battery
-  valve remained silent, so fresh-battery physical acceptance is still open.
-- Correlate local RF valve events with Home Assistant/cloud observations.
-- Exercise a hardware-independent duration-bounded controller: startup and
-  client loss are observation-only, missing acknowledgements block further
-  commands, explicit early-stop can retry, and only a positively observed
-  overdue run can trigger an anomaly close.
+Each device has one persistent transmitting ACK owner; other radios may receive
+and forward reports. Firmware restores assignments after reconnect. HA state
+comes from device responses or independent telemetry, not command intent.
 
-The gateway/HA valve-control boundary rejects all requests unless the explicit
-`supervised_htv405_control` option is enabled. Even then, it requires an
-authenticated candidate node, a complete durable association, an
-independently confirmed-idle valve, and no command already pending. Starting a
-zone performs fixed-anchor counter synchronization, observes the valve's
-15-second command interval, and waits for an authenticated watering response as
-one transaction. Home Assistant displays its progress and terminal result and
-removes actuation controls while it is active, preventing duplicate starts.
-The HTV145 transmitter implementation is compiled out of standard firmware and
-remains undeployed pending supervised acceptance with the isolated dry valve.
+Four-zone actuation requires the explicit `supervised_htv405_control` option and
+a capable owner. Default starts use a fixed-zero counter anchor before watering.
+Optional morning synchronization allows direct daytime starts with a retained
+counter. One-zone counter status and morning settings are available on its
+qualified owner, while actuation remains behind the isolated dry-test gate.
 
-## Architecture
-
-```text
-HCS02x sensors / HTV405 and HTV145 valves
-              |
-           433 MHz
-              |
-   +----------+-----------+
-   |                      |
-ESP32 + CC1101 nodes   optional RTL-SDR
-   | authenticated Wi-Fi  | receive-only
-   +----------+-----------+
-              |
-          rainpointd
-  protocol + registry + ACK ownership
-              |
-       versioned local API
-              |
- Home Assistant rainpoint_local
-```
-
-The transport boundary is intentionally generic: HA consumes the same devices
-whether a frame arrived through a radio node or the SDR. A sensor may be heard
-by many receivers, but only its explicitly assigned custom node may transmit an
-acknowledgement.
-
-## Components
-
-1. `custom_components/rainpoint_local` — HACS-compatible Home Assistant custom
-   integration.
-2. `rainpointd_addon` — Home Assistant app/add-on that owns protocol decoding,
-   persistence, radio-node sessions, pairing, ACK ownership, and OTA artifacts.
-3. `firmware/rainpoint_bridge` — the single supported ESP32/CC1101 radio-node
-   firmware.
-4. `hardware/rainpoint_carrier` — passive carrier PCB design for the tested
-   ESP32 and 8-pin CC1101 module.
-
-## Home Assistant installation
-
-HACS can install the custom integration but cannot run the gateway service.
-For development on Home Assistant OS:
-
-1. Copy `rainpointd_addon` to `/addons/rainpointd`.
-2. Reload the app store and install **RainPoint Local Gateway**.
-3. Copy `custom_components/rainpoint_local` into the HA configuration directory
-   or install it through HACS.
-4. Restart Home Assistant and add **RainPoint Local**.
-
-Supervisor discovery provisions the integration’s management credential. Users
-do not paste that credential during sensor pairing or radio-node adoption.
-
-Pair a sensor from **Settings → Devices & services → RainPoint Local →
-Configure**. Select the radio node closest to that sensor. Temporarily power off
-the stock RainPoint gateway during the exchange to prevent two transmitters
-from racing; reconnect it afterward if cloud-controlled valves still depend on
-it. Do not delete an existing HA sensor before reassociation.
-
-See [NODE_ONBOARDING.md](NODE_ONBOARDING.md) for radio-node setup and
-[firmware/rainpoint_bridge/README.md](firmware/rainpoint_bridge/README.md) for
-wiring, flashing, recovery, and OTA details.
+Both families enforce bounded durations, command spacing, and durable command
+reservations. Startup and missing telemetry never send a speculative close.
+Unknown counters block ordinary control until explicit recovery is confirmed.
 
 ## Development
 
-Run the local gateway with replay fixtures:
+Use the canonical checkout and Git branches; do not create additional worktrees.
 
 ```sh
 PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
-Run it with a receive-only RTL-SDR and `rtl_433`:
+This starts the replay-backed gateway. See [local development](LOCAL_DEVELOPMENT.md)
+for runtime options and [AGENTS.md](AGENTS.md) for the complete required Python
+and native regression commands. Build only the `rainpoint_bridge` PlatformIO
+environment; production must exclude experimental transmit paths.
 
-```sh
-PYTHONPATH=rainpointd_addon python3 -m rainpointd \
-  --transport rtl433 --host 0.0.0.0
-```
+## Documentation map
 
-Record bounded continuous IQ directly on a Mac for pairing and waveform
-research without stopping the Home Assistant gateway:
+| Need | Document |
+|---|---|
+| Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
+| Current work and physical gates | [Roadmap](PROJECT_ROADMAP.md) |
+| Responsibilities and boundaries | [Architecture](FULL_STACK_ARCHITECTURE.md) |
+| HA settings and operation | [Add-on guide](rainpointd_addon/DOCS.md) |
+| Radio commissioning | [Node onboarding](NODE_ONBOARDING.md) |
+| Research procedures and evidence | [Research index](research/README.md) |
+| Proposed cloud migration | [Migration design](CLOUD_TO_LOCAL_MIGRATION.md) |
+| Explicit household examples | [Examples](examples/federico-garden/) |
 
-```sh
-./tools/capture_rainpoint_continuous_iq.sh \
-  --duration-seconds 300 --gain 0.9
-```
-
-The script uses the local `rtl_sdr` binary, records the complete 2 MHz window
-centered at 433.7 MHz in asynchronous USB mode, verifies the expected byte
-count, and stores metadata and a SHA-256 alongside the ignored raw capture
-under `captures/continuous/`. Asynchronous mode avoids the short-read sample
-loss observed with synchronous `-S` captures on macOS.
-
-Run the complete Python regression suite:
-
-```sh
-python3 -m unittest -v \
-  test_rainpoint_protocol.py \
-  test_rainpoint_pairing.py \
-  test_rainpoint_pairing_protocol.py \
-  test_esp32_network.py \
-  test_rainpoint_network_transport.py \
-  test_integration_migration.py \
-  test_api_models.py \
-  test_addon_boundaries.py \
-  test_firmware_manifest.py \
-  test_firmware_catalog.py \
-  test_rainpointd.py \
-  test_rainpoint_rf.py \
-  test_rainpoint_analysis.py \
-  test_rainpoint_safety.py \
-  test_pairing_profile_analysis.py \
-  test_radio_node_acceptance.py \
-  test_rf_trial.py \
-  test_pairing_waveform_analysis.py
-```
-
-Build the one supported radio-node image:
-
-```sh
-pio run --project-dir firmware/rainpoint_bridge
-python tools/check_firmware_boundaries.py \
-  firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-```
-
-Automated tests remain intentionally comprehensive: they preserve the captured
-RF evidence and safety invariants while obsolete experimental firmware forks
-have been removed.
-
-## Evidence and portability
-
-Friendly names and dashboards for the original installation live only under
-`examples/federico-garden`. Runtime behavior is driven by persistent registry
-records and protocol/product evidence, not those names or endpoints.
-
-- [protocol_documentation/](protocol_documentation/) — current shared and
-  per-device RF protocol definitions.
-- [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) — the single source of truth for
-  current status, ordered qualification gates, and backlog.
-- [FULL_STACK_ARCHITECTURE.md](FULL_STACK_ARCHITECTURE.md) — component and
-  transport responsibilities.
-- [CLOUD_TO_LOCAL_MIGRATION.md](CLOUD_TO_LOCAL_MIGRATION.md) — proposed
-  cloud-to-local identity-preserving migration.
-- [research/DEVICE_PAIRING_VALIDATION_PLAN.md](research/DEVICE_PAIRING_VALIDATION_PLAN.md)
-  — retained physical evidence and reusable validation procedures.
-- [research/FOUR_ZONE_VALVE_TEST_PLAN.md](research/FOUR_ZONE_VALVE_TEST_PLAN.md)
-  — receive-only enrollment and crossed zone/duration capture sequence for the
-  isolated four-zone test valve.
-- [research/VALVE_PROTOCOL_STATUS.md](research/VALVE_PROTOCOL_STATUS.md) —
-  concise confirmed-versus-pending evidence ledger for both valve families.
-
-Cloud-specific investigation is isolated under `research/cloud` and is not a
-runtime dependency.
-
-## Project status
-
-All active work, completion evidence, phase ordering, and deferred items are
-tracked in [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md). Do not infer current status
-from older research narratives or architecture phases.
-
-The sensor reliability procedure uses persisted snapshots rather than
-screenshots:
-
-```bash
-python3 tools/sensor_soak.py prepare \
-  --gateway-url http://homeassistant.local:8787 \
-  --output captures/sensor-soak-start.json
-
-python3 tools/sensor_soak.py finish captures/sensor-soak-start.json \
-  --gateway-url http://homeassistant.local:8787 \
-  --minimum-hours 72 \
-  --output captures/sensor-soak-report.json
-```
-
-The report requires every starting soil sensor to remain registered and fresh,
-advance at least once per effective 30-minute interval, and retain enough
-connected authenticated ACK-owner capacity. Snapshot outputs remain local
-evidence under the ignored `captures/` directory.
-
-## Safety
-
-RainPoint Local remains receive-only by default. The supervised HTV405 beta
-enforces bounded duration, explicit target identity, authenticated node state,
-durable at-most-once command reservations, and valve-originated confirmation.
-Restart, client loss, and missing telemetry do not generate RF traffic, and a
-failed or ambiguous command does not trigger an immediate retry. A timed-out
-bounded HTV405 open can retain only the same and next counter as candidates for
-a later explicit request, after the entire possible run plus a guard interval;
-unexpected watering or an explicit transport/response failure cancels that
-path. Never
-test unknown RF commands against an installed irrigation zone without
-isolation and a ready manual stop.
+Installation-specific captures, databases, credentials, and build output stay
+untracked. Preserve raw captures until useful exchanges have redacted fixtures.

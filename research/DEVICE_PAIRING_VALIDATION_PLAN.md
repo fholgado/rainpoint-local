@@ -1,655 +1,79 @@
-# Sensor and valve pairing validation plan
-
-This is a retained evidence ledger and reusable physical-test procedure.
-`../PROJECT_ROADMAP.md` is the only live project-status checklist.
-
-This plan separates facts already established from the physical tests still
-needed before RainPoint Local can claim repeatable sensor or valve enrollment.
-Every test must retain raw RF evidence, normalized frames, radio-node logs,
-event markers, device state, firmware versions, antenna placement, and the
-result visible on the device or in the stock app.
-
-## Current qualification status (2026-08-14)
-
-The generalized first-enrollment path has now succeeded on both disposable test
-sensors and installed Left Bed, Right Bed, and front-yard identities. Known
-sensor recovery also succeeds through a bounded one-reply transaction while
-preserving the existing Home Assistant device identity. Persistent ACK owners
-survive gateway reconnects and radio-node OTA/restarts. The remaining release
-work is long-duration cadence, deliberate owner reassignment, stock-gateway
-coexistence, revision coverage, and interruption/reassociation edge cases.
-
-### Stock/custom gateway coexistence observation (2026-08-14)
-
-After the stock RainPoint gateway was powered again, Test Sensor A's last local
-report was 13:06:45 and Test Sensor B's was 13:07:34. At 13:08:06, Right Bed
-emitted a known factory/rejoin announcement and immediately resumed paired
-traffic, providing the closest RF marker for stock-gateway recovery. Both test
-sensors had reported repeatedly immediately beforehand; neither produced a
-later frame despite a healthy custom ACK owner retaining all four assignments.
-Sensors A and B are the distinguishing cohort: they have only ever been
-enrolled by the custom local gateway and were never associated with the stock
-RainPoint gateway. Left Bed, Right Bed, and both Front Yard sensors were
-previously associated with the stock gateway before migration and continue
-reporting when it returns. This makes a generic receiver-overload explanation
-less likely and points toward association-specific competing gateway traffic.
-
-The first half of the controlled test passed immediately afterward. With the
-stock gateway confirmed offline, a short press on each sensor emitted no RF,
-consistent with dormancy. A long press on each emitted its known factory
-identity, triggered automatic one-reply recovery, retained the existing HA
-device, returned to the paired identity, and produced current telemetry. The
-Vegetable Garden node's ACK counter increased by two for each recovery with
-zero failures. Sensor A returned at 45% and Sensor B at 53%.
-
-This materially strengthens—but does not alone prove—the leading hypothesis of
-competing replies from gateways presenting the same logical RainPoint identity.
-Until a later instrumented stock-on repetition captures both short replies,
-treat the stock gateway and custom ACK nodes as mutually exclusive RF
-authorities. A local-control test installation should leave the stock gateway
-off; a stock-controlled installation should keep local nodes receive-only.
-
-After local valve enrollment is complete, run one instrumented coexistence
-trial before changing the sensor protocol:
-
-1. With the stock gateway off, establish at least two current reports from each
-   local-only test sensor and one formerly stock-paired control sensor.
-2. Start continuous wideband IQ capture and retain radio-node receive, ACK,
-   failure, channel, and RSSI counters. Record the exact stock-gateway power-on
-   time as an event marker.
-3. While both gateway implementations are active, short-press A, B, and the
-   control sensor at spaced, recorded times. Do not re-enroll anything during
-   this phase.
-4. For every sensor report, identify zero, one, or competing gateway replies;
-   compare reply bodies, frequencies, timing, and the sensor's next endpoint
-   and message counter. Specifically test whether the stock gateway responds
-   to the unknown A/B identities despite never enrolling them.
-5. If A/B become dormant, power off only the stock gateway and repeat short
-   presses before attempting known-sensor long-press recovery. This separates
-   temporary RF collision from persistent sensor-side association state.
-6. Repeat with one custom ACK owner deliberately disarmed only if the first
-   capture cannot distinguish colliding acknowledgements from a stock
-   broadcast/configuration frame. Never leave an installed sensor without an
-   acknowledgement path outside the bounded test window.
-
-Pass criteria are causal, not merely temporal: capture the first frame or
-missing acknowledgement that makes a local-only sensor diverge while a
-formerly stock-paired control sensor remains healthy. The result should decide
-whether coexistence needs gateway identity separation, reply arbitration, or a
-documented single-authority limitation.
-
-### Local RF controller identity and migration order
-
-Do not confuse the gateway's API/discovery ID with its RF controller identity.
-The former identifies one `rainpointd` instance to Home Assistant. The latter is
-the four-byte endpoint placed in pairing replies and valve commands.
-
-The currently deployed installation uses the observed RainPoint companion
-endpoint `39840280`; the corresponding command-response route is `b9840280`.
-That was useful for retained-association takeover, but it deliberately
-impersonates the stock RainPoint gateway and cannot be the default for a
-coexistence-capable release. The staged implementation now generates a distinct
-gateway-wide identity and parameterizes sensor pairing, sensor ACK/recovery,
-and valve pairing with it. The permitted generated-value space still needs one
-physical enrollment validation before deployment.
-
-Implementation and validation order is therefore fixed:
-
-1. **Implemented, pending deployment:** generate one random RF controller
-   identity per custom local gateway, store
-   it durably, include it in backup/restore and diagnostics, and never change it
-   on restart, OTA, or radio-node replacement. All radio nodes belonging to the
-   gateway share this identity; node selection only chooses the best physical
-   transmitter/ACK owner.
-2. **Implemented, pending deployment:** parameterize HCS026 and HTV405
-   pairing profiles plus HCS026 recovery/ACK so firmware receives the identity
-   from the authenticated gateway instead of embedding `39840280`. Older node
-   firmware may continue servicing retained stock-identity assignments, but is
-   explicitly rejected for a generated-identity enrollment or ownership.
-3. **Next physical gate:** validate a disposable sensor enrollment under the
-   generated identity with
-   the stock RainPoint gateway powered, then validate ordinary reports and
-   acknowledgements from both independently owned device cohorts.
-4. Make generated identity the default for new local enrollment. Retained
-   stock-identity takeover remains an explicit migration mode that requires the
-   stock gateway to be off and must warn that the same RF identity cannot safely
-   coexist.
-5. Expose valve pairing in Home Assistant only after the identity boundary is
-   stable, so early adopters are not forced to re-pair devices after an upgrade.
-
-Coexistence does not make one device simultaneously controllable by both RF
-gateways. During migration, the stock RainPoint gateway owns devices not yet
-migrated and the custom local gateway owns devices paired to its generated
-identity. Cloud data may supplement devices that remain stock-owned, but must
-not overwrite locally owned device state.
-
-The Home Assistant valve enrollment flow must require no endpoint entry. It
-should select a radio node by friendly name, detect the factory announcement,
-show exchange and terminal-verification progress, retain the HA device identity
-on re-enrollment, and create the valve only after command-scoped completion plus
-ordinary paired telemetry. HTV405 is the first supported valve family; HTV145
-pairing remains blocked until its local enrollment exchange is reproduced.
-
-## HCS026 sensor: established evidence
-
-The following tests do not need to be repeated merely to demonstrate them
-again:
-
-- two factory identities established the deterministic high-bit paired
-  identities `1bce0024` → `9bce0024` and `15a98024` → `95a98024`;
-- both stock enrollments used the same sensor-side `01`, data `02`, short `02`,
-  and terminal `03` progression and nearly identical cadence;
-- the custom ESP32/CC1101 completed one isolated enrollment of `15a98024` and
-  received subsequent moisture telemetry with the stock RainPoint gateway off;
-- the custom ESP32/CC1101 completed an isolated enrollment of `1bce0024` using
-  four captured replies, received terminal message `03`, and received routine
-  telemetry under paired identity `9bce0024` with the stock gateway off;
-- the stock gateway can race a custom pairing attempt even after a sensor is
-  removed from the vendor app;
-- app deletion produced no RF unpair command, and a subsequent sensor power
-  cycle returned the deleted device to factory announcements;
-- full and low battery states were physically correlated on both test sensors;
-- receive-only discovery cannot complete physical pairing.
-
-## HCS026 sensor: retained experimental procedures
-
-### Pending telemetry-channel assignment experiment
-
-Use test Sensors A and B to determine whether any enrollment field controls
-their long-term telemetry channel. Existing evidence shows that changing the
-known pairing selector (Sensor B: 8 to 4; Sensor A: 5 to 4) did not move their
-routine reports away from telemetry channel 0, so the selector must not be
-treated as the telemetry-channel setting.
-
-1. Confirm both sensors are heard from the Vegetable Garden radio node and
-   record receiver RSSI after its August 13 relocation.
-2. Re-enroll one test sensor at a time while changing only one candidate reply
-   field.
-3. Require terminal pairing message `03`, then record the first three routine
-   reports and their CC1101 channels.
-4. Repeat after battery removal and after an ordinary manual report.
-5. Only declare telemetry-channel control when the same field moves a sensor
-   reproducibly between channel 0 and channel 11.
-
-If no controlling field is found, learn each device's telemetry channel from
-valid post-pairing reports and use it for per-node receive scheduling.
-
-### Sensor A local enrollment result
-
-The 2026-08-12 isolated trial established that Sensor A requires a mixed
-four-reply sequence for its observed request state: replies 1–3 from its first
-stock enrollment followed by reply 4 from its captured rejoin. The first reply
-used 433.4715 MHz, the remaining replies used approximately 434.0215 MHz, and
-the successful response delay was 10 ms. The sensor then emitted terminal
-message `03`, message `04`, and normal telemetry under identity `9bce0024`.
-The stock RainPoint gateway remained unplugged.
-
-The result validates this identity-specific profile but does not prove that
-the differing branch is universal across every HCS026 revision. The profile
-therefore remains evidence-labelled and endpoint-bounded.
-
-Offline comparison also identifies a provisional pairing-subchannel encoding.
-Reply 1 assigns a channel number in bytes 18–19; the sensor echoes the same
-number in bytes 16–17 of its following message `01`. Selectors 4, 8, and 9
-correspond to 433.4715, 433.9115, and 434.0215 MHz respectively, fitting a
-110 kHz channel plan beginning at 433.0315 MHz within 50 Hz across four
-captured exchanges. Sensor B has successfully used selectors 8 and 4, proving
-that this frequency is negotiated during enrollment rather than permanently
-tied to its identity. A controlled local-gateway test on August 12 then paired
-Sensor B on selector 4 and Sensor A on selector 5. Both sensors echoed their
-assigned selector, emitted terminal message `03`, resumed telemetry, and gave
-the long blue success indication while the stock RainPoint gateway remained
-unplugged. This proves that the selector is negotiated, but not that it must be
-unique per association.
-
-The follow-up same-selector test passed on August 12. Sensor A successfully
-enrolled on selector 4 while Sensor B remained paired and powered on selector
-4. Sensor B then reported 5% moisture and Sensor A reported 85%; the local
-gateway decoded both under their distinct identities and both frames echoed
-selector 4. Selector reuse is therefore supported and pairing logic must not
-reserve a unique selector per device. Leave both sensors powered for longer
-unattended observation of delivery cadence and collisions.
-
-[HWG023-family documentation](https://manuals.plus/asin/B0DS2FDP62.pdf)
-advertises up to 39 paired timers/devices, invalidating the earlier eight-device
-inference.
-
-Historical firmware `0.7.0-test.3` and gateway app `0.18.2` introduced the
-`hcs026_auto_v1` workflow. Home Assistant supplies neither a factory identity
-nor an identity-specific transcript. The current standard firmware retains
-this behavior. The selected node adopts the first strict
-HCS026 factory announcement, derives its paired identity, and generates the
-common four-reply first-enrollment branch on shared selector 4. The automatic
-path has since passed across both test sensors and installed sensors, including
-HA naming, identity preservation, and entity creation.
-
-```bash
-python3 tools/analyze_pairing_profiles.py
-```
-
-### S1 — second-identity local enrollment (passed 2026-08-12)
-
-The controlled Sensor A run passed every criterion below. Retain this procedure
-as the regression sequence for future identities and hardware revisions.
-
-1. Use the test sensor whose factory endpoint is not `15a98024`.
-2. Record its label, hardware markings, LCD state, battery state, and factory
-   endpoint before changing association state.
-3. Capture one stock enrollment or rejoin immediately beforehand as the
-   identity-specific reference.
-4. Disconnect the stock RainPoint gateway from power and verify its RF silence.
-5. Start simultaneous RTL-SDR and both-radio-node logging.
-6. Arm a candidate profile only after its generated frames have been compared
-   offline with that sensor's captured stock replies.
-7. Hold the sensor button once and record every trigger, reply, frequency,
-   latency, LED transition, and endpoint transition.
-8. Require terminal message `03`, then trigger a manual moisture report and
-   verify that the LCD value, local frame, gateway registry, and HA entity agree.
-
-Pass criteria:
-
-- no reply field was guessed solely from Sensor B;
-- the sensor reaches its expected paired identity and emits terminal `03`;
-- subsequent telemetry is decoded without the stock gateway or cloud;
-- any identity-specific bytes are represented as profile parameters, not
-  installation conditionals.
-
-### S2 — persistence and rejoin behavior (core path passed; edge cases remain)
-
-Open assumption to test: after losing its gateway acknowledgement and becoming
-dormant, an HCS026 may retry its factory announcement after an undocumented
-timeout. It may instead remain silent indefinitely until a battery cycle or
-long press. Do not infer either behavior from an hour without traffic. Leave at
-least one known dormant test sensor untouched for 24 hours while preserving
-factory-announcement events. Each event must retain receiver ID, RSSI/LQI,
-derived paired endpoint, selected ACK owner, automatic-rejoin decision, and the
-subsequent pairing/telemetry result.
-
-After a successful local enrollment:
-
-1. Power-cycle the sensor while the stock gateway remains off.
-2. Confirm whether it boots under the paired or factory identity.
-3. Power-cycle the custom local gateway and selected radio node independently.
-4. Confirm the HA device identity and entity history do not change.
-5. If the sensor asks to rejoin, capture the exact exchange and determine
-   whether a pairing window is required or a bounded rejoin path is sufficient.
-
-Repeat once after a gateway restart and once after a radio-node restart. A
-routine reboot must never silently create a second HA device.
-
-### S3 — unattended reporting without stock acknowledgements
-
-Leave the locally paired sensor operating for at least 72 hours with the stock
-gateway off. Preserve all frames and check:
-
-- expected periodic and manual reports continue;
-- unchanged moisture still produces approximately eight-minute updates, as
-  specified by the HCS026FRF manual (the device measures every three minutes
-  but refreshes the app every eight minutes, after manual detection, or after
-  an automatic change greater than 5%);
-- report cadence does not decay after a fixed number of unanswered messages;
-- moisture changes propagate correctly;
-- no unrecognized gateway acknowledgement is required;
-- battery and last-report entities remain coherent;
-- radio-node reconnects do not inflate logical report counts.
-
-This test establishes local data reliability; it does not require deliberately
-draining a battery.
-
-The first run failed on 2026-08-13: Sensor B stopped at 00:58 and Sensor A at
-04:59 after initially reporting successfully. Manual button presses later that
-day produced no RF frame, while the SDR and both custom nodes continued to
-receive established sensors. Reanalysis identified deterministic reversed
-frames 177--188 ms after established sensor reports; A and B never received
-them. Treat routine acknowledgement support as required unless the controlled
-trial below disproves that interpretation.
-
-The original `0.8.0-test.1` procedure below is retained as historical evidence;
-the standard firmware now persists and restores exactly one ACK owner per
-sensor across reconnect and OTA:
-
-1. Historically, flash only the selected test node with the routine-ACK build.
-2. Keep the stock RainPoint gateway off and re-enroll one test sensor through
-   that node. Confirm `authorized_until_reboot` for the paired endpoint.
-3. Confirm the first routine report produces a byte-for-byte expected reply,
-   `routine_ack_transmissions` increments, and the SDR sees the reply on the
-   negotiated enrollment selector frequency.
-4. Leave the node powered for 72 hours and verify periodic reports do not
-   decay. Do not reboot it; authorization is intentionally boot-scoped.
-5. Reboot the node and verify acknowledgements stop until an explicit rejoin
-   completes. This was the fail-safe behavior of the historical build.
-6. Repeat with the second sensor before designing persistent authorization,
-   reassignment, or forget synchronization.
-
-First `0.8.0-test.1` trial started 2026-08-13 with the stock RainPoint gateway
-unplugged. Sensor A (`9bce0024`) completed the four-step local enrollment on
-selector 4 and became authorized until reboot. Its immediate routine message
-`04` and a manual message `05` each caused the node to report a completed
-transmission at 433.5165 MHz, for two sends and zero driver failures. Serial
-output preserved the second generated reply:
-
-```text
-report: 79f4882f28b98402809bce00240581820205c400800000000000000000000000000000000276
-reply:  79f4882f289bce00243984028085c1810001000000000000000000000000000000000000657f
-```
-
-The broad RTL-SDR path decoded both triggering reports but did not decode the
-short replies, and the manual press did not produce a blue LED indication.
-Neither observation proves RF failure: blue is validated as pairing feedback,
-not routine-ack feedback, while the broad decoder can miss short replies.
-Treat sensor receipt as unconfirmed until focused IQ captures show the emitted
-carrier/timing or the isolated 72-hour cadence test demonstrates sustained
-reporting. Do not reboot the node during that test because authorization is
-intentionally RAM-only.
-
-### S4 — selected-node and overlapping-receiver behavior
-
-With two custom radio nodes and the RTL-SDR online:
-
-1. Select the node closest to the sensor for pairing.
-2. Verify exactly one node reports `tx_armed` and transmits replies.
-3. Confirm the other node and RTL-SDR remain receivers.
-4. Verify duplicate receptions update coverage for every receiver but create
-   one logical sensor report and one HA activity event.
-5. Repeat one manual report after moving the second node to a different area.
-
-### S5 — physical interruption and recovery
-
-An existing Right Bed association completed a controlled recovery trial on
-August 14, 2026 with the stock RainPoint gateway disconnected. Home Assistant
-selected `rp-f4e5be3b015c` (Vegetable Garden Radio) running unified firmware
-`0.10.0-test.6`. The network-wide receive path first decoded factory endpoint
-`1ce58024` through another node, while the selected node transmitted the
-pairing response. Subsequent paired messages for `9ce58024` were received by
-multiple nodes and the SDR; the Vegetable Garden node received them at about
-`-48.5 dBm`. Terminal telemetry reported 15% moisture and full battery.
-
-The gateway preserved the existing `soil-right-bed` HA identity, assigned
-`9ce58024` to the selected Vegetable Garden node, and observed one routine ACK
-transmission with zero failures. The node retained three ACK assignments and
-held both its declared routine-ACK receive channel and physical radio on
-channel 0 after cleanup. This validates using any authenticated receiver to
-discover an announcement while keeping exactly one explicitly selected node
-as transmitter; it does not yet validate automatic strongest-node selection.
-
-Perform only on a disposable/unpaired test state:
-
-- cancel before the first sensor announcement;
-- cancel after the first reply;
-- remove power from the selected node during an attempt;
-- allow a pairing window to expire without pressing the sensor button.
-
-In every case the gateway must report failure/incomplete state, persist no new
-association, and start the next attempt disarmed. The sensor must either remain
-factory-unpaired or have a documented, recoverable rejoin state.
-
-### S6 — forget and reassociation semantics
-
-1. Forget a locally paired test sensor in HA/RainPoint Local and confirm no RF
-   unpair command is transmitted.
-2. Confirm later telemetry remains recorded as evidence but cannot recreate an
-   exposed HA device automatically.
-3. Determine the sensor's physical reset/unpair gesture from controlled button
-   and power-cycle tests.
-4. Re-pair it and verify that the intended HA identity/history policy is
-   preserved.
-
-### S7 — soil profile (`P1`) encoding
-
-The HCS026 LCD's `P1` indicator is the user-selectable soil type/profile shown
-by the stock app; it is not a pairing-step or device-slot indicator. With a
-test sensor paired to the stock gateway, capture one manual report at each
-available profile while holding moisture and battery state constant. Determine
-whether the selected profile is transmitted by the sensor, changes only the
-display-side moisture calibration, or is stored solely in the stock app/cloud.
-If it is an RF field, expose the raw and decoded value locally before adding a
-writable HA setting. Record the available profile range and app labels as
-product metadata rather than assuming `P1` is universal.
-
-The physical HCS026FRF label (lot `202503`) documents these six profiles:
-
-| Display | Label |
-| --- | --- |
-| P1 | Mixed soil |
-| P2 | Peat soil |
-| P3 | Black earth soil |
-| P4 | Sandy loam |
-| P5 | Laterite soil |
-| P6 | Other soil |
-
-The same label prints common moisture ranges of 1–30% dry, 30–70% moist, and
-70–99% wet. These overlapping endpoints are transcribed as printed and should
-not yet be treated as protocol thresholds.
-
-### Sensor completion criteria
-
-Sensor pairing can be described as model-supported only after S1 and S2 pass
-on two distinct identities. S3 and S4 are required before recommending the
-local path for unattended use. S5 and S6 are required before publishing the
-pairing/removal UX as complete.
-
-## HTV145 valve: safety boundary
-
-Valve association is not valve control. Pairing work must not reuse the open
-or close command builder, and a successful association must not be inferred
-from TX success.
-
-Use only the dedicated test valve. Keep it disconnected from pressurized water
-for association experiments, with its outlet pointed safely and any motor
-movement observable. Keep the production irrigation valve and its schedules
-out of scope. Never intentionally factory-reset a production valve.
-
-The dedicated test hardware is a four-zone controller. Do not assume it uses
-the HTV145FRF single-zone RF body merely because both appear as valves in the
-cloud catalog. Record its exact model before assigning a protocol family. A
-successful four-zone implementation will exercise the more general HA entity
-and port model, but it does not automatically prove that the single-zone
-HTV145 wire format is a subset.
-
-If the label confirms `HTV405FRF`, compare captured product evidence with the
-cloud catalog's product code 38 and model code 38. The catalog represents it as
-one four-port chassis, with `CTL_WATER` DP IDs 46–49 for ports 1–4 and shared
-port-0 battery/RSSI. Treat this as a hypothesis for RF field classification,
-not as permission to synthesize commands.
-
-The stock RainPoint gateway must remain available until a complete stock
-pairing and recovery record exists. The RTL-SDR remains the independent
-reference receiver throughout custom-node work.
-
-## HTV145 valve test sequence
-
-### V0 — inventory and passive baseline
-
-Before opening the stock app's pairing screen:
-
-1. Photograph and record the exact model, label identifiers, firmware shown by
-   the app, power source, buttons, LED states, and printed reset instructions.
-2. Start a wide-band raw IQ capture covering the full known RainPoint window,
-   plus normalized RTL-SDR and radio-node logs.
-3. Install power without pressing any button and observe at least ten minutes.
-4. Press each non-destructive button briefly once, separated by at least one
-   minute, and mark the exact action time.
-5. Identify factory announcements, channels, wake lengths, frame lengths, and
-   any identity that is not part of the existing valve link.
-6. Inventory whether the controller exposes one RF identity for the chassis,
-   one identity per zone, or a chassis identity plus an explicit port field.
-
-Do not hold a button or invoke factory reset until its behavior can be recovered
-through the stock gateway.
-
-### V1 — first stock enrollment capture
-
-1. Start raw IQ, normalized RF, radio-node, stock-app screen recording, and
-   timestamped action markers before entering pairing mode.
-2. Put the stock RainPoint gateway/app into valve enrollment mode.
-3. Perform the valve's documented pairing gesture once.
-4. Continue capturing for at least ten minutes after the app declares success.
-5. Record every device-visible transition and the valve entry created in the
-   cloud integration/HA, including model and identity metadata.
-6. For an enrollment-only trial, trigger no watering unless the vendor workflow
-   makes it unavoidable; keep the valve dry and record actuator movement.
-   For the user-requested combined HTV145 pairing/control comparison, follow
-   [the stock pairing and dry control procedure](RF_CAPTURE_PLAN.md#htv145-stock-pairing-and-dry-control-comparison)
-   after terminal enrollment, preserving one continuous recording and association.
-7. If enrollment creates multiple app or HA entities, record their shared
-   parent, per-zone identifiers, and port numbering before renaming anything.
-
-Analysis must separate valve-to-gateway triggers from gateway-to-valve replies
-by timing, endpoint direction, carrier, wake length, and repeated-frame
-behavior. Do not assume the sensor's high-bit identity rule applies to valves.
-
-### V2 — stock reboot, rejoin, delete, and repeat matrix
-
-Capture each operation as a separate trial:
-
-1. valve power cycle while still registered;
-2. stock RainPoint gateway restart followed by valve power cycle;
-3. app deletion while the valve remains powered;
-4. valve power cycle after app deletion;
-5. second complete stock enrollment;
-6. third complete stock enrollment after another factory reset.
-
-Three enrollments are the minimum needed to classify fields as stable,
-identity-derived, session-generated, counters, timestamps, or random material.
-Record whether app deletion itself emits RF and whether reboot uses a shorter
-rejoin exchange.
-
-For the two remaining HTV145 stock branch captures, use continuous IQ from
-before the pairing gesture through at least 15 seconds after the white success
-flash. After each accepted enrollment, record the app's Device Address before
-deleting or renaming the device. Analyze a bounded window with:
-
-```sh
-python3 tools/analyze_htv145_pairing_iq.py CAPTURE.cu8 \
-  --factory-endpoint FACTORY \
-  --paired-endpoint PAIRED \
-  --companion-endpoint COMPANION \
-  --controller-endpoint CONTROLLER \
-  --start-seconds WINDOW_START \
-  --duration-seconds WINDOW_DURATION
-```
-
-Correlate the Device Address, assignment selector, assignment carrier, first
-paired request marker, and routine carrier as one branch. Do not change the
-local stage-0 reply from one isolated field: HTV405 required selector and
-carrier to change coherently before enrollment became reliable.
-
-After enrollment is stable, capture dry actions for zones 1 through 4
-separately using the same duration. Then repeat zone 1 with a different
-duration. This separates zone selection from duration, sequence, and trailer
-fields. Do not run simultaneous zones until the single-zone command and state
-model is understood; the product may represent simultaneous state as a bitmask.
-
-### V3 — offline protocol reconstruction
-
-Before custom transmission:
-
-- normalize and promote the smallest complete exchanges into redacted fixtures;
-- determine factory, paired valve, and controller identities without borrowing
-  the installed valve's constants;
-- classify every gateway reply byte by evidence and retain unknowns explicitly;
-- measure trigger-to-reply latency, channel changes, symbol rate, deviation,
-  polarity, wake length, repeat count, and completion indication;
-- determine whether trailer residue, sequence, time, product code `0x012e`, or
-  other counters participate in acceptance;
-- determine whether the test model has one transaction counter per chassis or
-  per zone, and whether stop is zone-specific or global;
-- implement a duration-bounded symbolic profile and offline waveform round-trip
-  tests with transmission disabled; restart and missing telemetry must remain
-  observation-only.
-
-Exit criterion: replaying captured valve triggers through the symbolic state
-machine selects exactly the captured reply sequence and rejects truncated,
-duplicate, out-of-order, and identity-mismatched exchanges.
-
-### V4 — SDR validation of custom reply probes
-
-With the test valve unpowered and the stock gateway disconnected, emit each
-candidate reply as an individually armed bench probe. Compare it with the
-corresponding stock waveform using the RTL-SDR. Confirm carrier, deviation,
-timing, polarity, wake, complete frame bytes, trailer, and power before allowing
-automatic replies.
-
-These probes must be compiled out of production firmware and must not contain
-open or close frames.
-
-### V5 — isolated custom valve enrollment
-
-1. Keep the test valve dry and the stock gateway powered off; verify RF silence.
-2. Start RTL-SDR and all radio-node logs.
-3. Select exactly one nearby custom node and arm the identity-specific valve
-   pairing profile for a short bounded window.
-4. Apply the valve's pairing gesture once.
-5. Require the complete captured terminal association signal plus ordinary
-   post-pair telemetry; do not treat sent replies or an LED alone as success.
-6. Confirm the gateway creates a provisional valve record, then name it in HA.
-7. Power-cycle the valve, selected node, and custom gateway separately and
-   verify stable association and HA identity.
-
-If the valve unexpectedly opens, immediately remove valve power. Do not begin
-bounded watering tests as part of this sequence.
-
-### V6 — multi-node placement and ownership
-
-1. Pair through the explicitly selected closest node.
-2. Confirm all other nodes remain receive-only during association.
-3. Verify receiver deduplication and coverage metrics from ordinary valve
-   telemetry.
-4. Persist the preferred transmitter assignment separately from valve RF
-   identity.
-5. Confirm changing node placement does not change the HA valve device.
-
-The preferred node is not authorized by enrollment alone. Valve-control testing
-uses the separate duration-bounded research gate: no startup transmission, no
-counter guessing after a missed response, and no automatic close without a
-fresh positively overdue watering report.
-
-## Evidence record for every trial
-
-Use `tools/rf_trial.py` to snapshot the gateway, establish an exact event
-cursor, timestamp actions, retain only the trial's new gateway events, and
-produce automatic route, message, known-stock-endpoint, and terminal-message
-checks. The endpoint check supplements the required physical power-off and RF
-baseline; it cannot independently prove that the stock RainPoint gateway is
-silent. Preparation is always receive-only and writes
-`rf_transmit_authorized: false` into the manifest.
-
-Sensor A example (prepare only after the independent raw-IQ capture is active):
-
-```bash
-python3 tools/rf_trial.py prepare \
-  --trial-id sensor-a-local-01 \
-  --kind sensor_pairing \
-  --gateway-url http://homeassistant.local:8787 \
-  --selected-node rp-001122aabbcc \
-  --stock-gateway-state off_verified \
-  --factory-endpoint 1bce0024 \
-  --paired-endpoint 9bce0024
-
-python3 tools/rf_trial.py mark captures/trials/sensor-a-local-01 \
-  sensor_button_held --detail "red flash followed by blue flash"
-
-python3 tools/rf_trial.py finish captures/trials/sensor-a-local-01
-```
-
-For a new valve, omit the unknown endpoint arguments during V0/V1. Fill them
-only after the captured exchange establishes the identities. Raw IQ, serial
-logs, photos, and the HA recorder output remain required alongside this trial
-bundle.
-
-Record at minimum:
-
-| Field | Required value |
-| --- | --- |
-| Trial ID | Stable name used by logs, markers, and fixture |
-| Hardware | Model, label/revision, batteries/power, radio-node ID |
-| Software | Stock app/gateway, add-on, integration, and firmware versions |
-| Topology | Stock gateway on/off, selected TX node, active receivers |
-| RF setup | Antenna positions, center/sample rate, node correction and power |
-| Action | Exact button/app action and wall-clock timestamp |
-| Result | Device LED/LCD/motor, app, HA, and RF terminal evidence |
-| Frames | Trigger/reply identities, frequencies, latency, repeats, trailers |
-| Recovery | Final association state and how the device returns to a safe state |
-
-Failed attempts are evidence and must be retained. Do not tune multiple
-variables within one trial.
+# Device lifecycle validation procedure
+
+Use this procedure for one authorized hardware trial. Current completion and
+ordering are in [the roadmap](../PROJECT_ROADMAP.md); packet rules are in
+[the device references](../protocol_documentation/). Dated trials and exact frames
+belong in [fixtures](fixtures/) and [capture notes](RF_CAPTURE_NOTES.md).
+
+## Prepare
+
+1. Identify the physical specimen, accepted association, assigned radio, firmware
+   hash, controller/companion routes, and whether it is a new or retained device.
+2. Record battery condition and isolate a test valve from pressurized watering.
+   Confirm the permitted duration and scope before testing an installed zone.
+3. Keep stock gateway power under explicit control. For stock captures, verify
+   every custom node is effectively receive-only before the gesture; for local
+   enrollment, keep stock replies absent.
+4. Start a bounded lossless capture before arming. Save metadata, hashes, exact
+   command IDs, timestamp timezone, and pre-trial HA device/entity inventory.
+5. Check fresh radio authentication, disarmed state, and no pending reboot,
+   control, revocation, or competing ownership operation.
+
+## New enrollment
+
+Use the HA profile for the actual model and select one nearby radio. Follow the
+manufacturer's exact gesture and retain its LED/app result. Never substitute a
+battery cycle for a documented reset or merge opposite arming orders into one trial.
+
+Require addressed device-owned continuation and terminal evidence. Distinguish
+an accepted prefix from full completion. Keep optional protocol tails visibly
+armed until they end; user naming must not prematurely cancel them. A tail timeout
+after authoritative acceptance must not erase that acceptance.
+
+Verify HA creates one physical device with only supported capabilities, saved
+name/area, and no duplicate per receiver. For valves, qualify bounded control
+separately from pairing using the [pairing playbook](PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md).
+
+## Retained lifecycle matrix
+
+Run each operation independently against a recorded baseline:
+
+| Operation | Required evidence |
+|---|---|
+| HA restart | Same device/entity IDs and history; no actuator replay |
+| Gateway restart | Same association, ACK owner, counters and reservations; no speculative close |
+| Owner reboot/OTA | New connection/boot evidence, restored assignments, continued reports and control |
+| Device battery cycle | Same identity and normal reporting without opening new enrollment |
+| Retained re-pair | Same physical identity; preserve an authenticated counter only for an unchanged qualified route |
+| ACK reassignment | Correlated revocation on old owner before new owner may transmit |
+| Remove and re-add | No stale controls/routing or duplicate entities; explicit re-enrollment clears suppression correctly |
+| Stock/custom coexistence | Distinct authority for each cohort with normal reporting and no conflicting ACKs |
+
+Do not forget a duplicate registry alias if that operation would delete the live
+physical association or revoke its working ACK owner. Resolve canonical identity
+first and remove only the obsolete HA representation.
+
+## Reliability and counter proof
+
+For sensors, record direct radio provenance, accepted moisture reports, report
+gaps, ACK send/failure counters, and recovery frames. An ACK-success log alone
+cannot prove the sensor accepted it. A snapshot with a high report count cannot
+prove continuous health; retain the event window.
+
+For valves, record command/reply correlation, independent watering/idle, duration,
+command-counter progression, owner continuity, and summary retransmissions.
+Never use a telemetry sequence as the command counter. A synchronized idle
+anchor and a later accepted open are separate pieces of evidence.
+
+Use [durable collection](../examples/reliability-soak/README.md) for extended
+observations. Restart, missing samples, overdue telemetry, and intervening commands
+must remain visible in the result. No test may turn silence into acceptance by
+replaying an unbounded open or resetting its retry budget.
+
+## Finish
+
+Disarm pairing and end temporary receive-only/capture modes. Confirm independent
+idle, normal node connectivity, single ACK ownership, and expected HA identity.
+Restore the original schedule unless a policy change was authorized. Remove
+one-off probe code only after retaining useful redacted fixtures and rollback
+artifacts. Update the roadmap only for the gates whose full evidence exists.

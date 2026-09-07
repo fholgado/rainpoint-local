@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.34.15 / Integration 0.14.4
+
+- Block one-zone control and profile restoration while its radio reboot is
+  pending, including the interval when the previous socket still appears connected.
+- Preserve the counter without reserving or sending a command during that interval.
+
 ## 0.34.14 / Integration 0.14.4
 
 - Reuse the established device ID when pairing registers an existing valve

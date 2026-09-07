@@ -1,0 +1,1476 @@
+{
+  "schema_version": 1,
+  "model": "HCS026FRF",
+  "purpose": "Verify an installed previously silent sensor resumed consecutive accepted direct-radio moisture reports without SDR assistance.",
+  "source_event_range": [
+    347704,
+    358422
+  ],
+  "report_count": 208,
+  "first_report_at": "2026-09-06T13:25:07.172840+00:00",
+  "last_report_at": "2026-09-07T00:27:03.089402+00:00",
+  "maximum_gap_seconds": 469.580772,
+  "reports": [
+    {
+      "event_id": 347704,
+      "observed_at": "2026-09-06T13:25:07.172840+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347707,
+      "observed_at": "2026-09-06T13:25:13.080657+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347710,
+      "observed_at": "2026-09-06T13:25:18.859131+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347713,
+      "observed_at": "2026-09-06T13:25:20.821622+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347717,
+      "observed_at": "2026-09-06T13:25:29.579689+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347779,
+      "observed_at": "2026-09-06T13:27:58.844030+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347782,
+      "observed_at": "2026-09-06T13:28:07.045728+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347784,
+      "observed_at": "2026-09-06T13:28:07.612271+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 59,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347918,
+      "observed_at": "2026-09-06T13:34:52.501428+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347945,
+      "observed_at": "2026-09-06T13:36:46.047838+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 347947,
+      "observed_at": "2026-09-06T13:36:54.227414+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348058,
+      "observed_at": "2026-09-06T13:43:39.721371+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348095,
+      "observed_at": "2026-09-06T13:45:33.182936+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348198,
+      "observed_at": "2026-09-06T13:52:18.012148+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348231,
+      "observed_at": "2026-09-06T13:54:20.247882+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 58,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348304,
+      "observed_at": "2026-09-06T13:57:15.902785+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348348,
+      "observed_at": "2026-09-06T14:00:11.605759+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 74,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348357,
+      "observed_at": "2026-09-06T14:00:19.994826+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 74,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348358,
+      "observed_at": "2026-09-06T14:00:28.523814+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 74,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348473,
+      "observed_at": "2026-09-06T14:07:13.945524+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 77,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348505,
+      "observed_at": "2026-09-06T14:08:58.761903+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 77,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348661,
+      "observed_at": "2026-09-06T14:15:43.478793+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 73,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348694,
+      "observed_at": "2026-09-06T14:17:45.634246+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 72,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348814,
+      "observed_at": "2026-09-06T14:24:30.304885+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 70,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348840,
+      "observed_at": "2026-09-06T14:26:32.702169+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 70,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348841,
+      "observed_at": "2026-09-06T14:26:33.476677+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 70,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348882,
+      "observed_at": "2026-09-06T14:29:28.076342+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 69,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 348978,
+      "observed_at": "2026-09-06T14:36:12.698975+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 69,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349011,
+      "observed_at": "2026-09-06T14:38:14.828136+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 68,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349135,
+      "observed_at": "2026-09-06T14:44:59.437901+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 69,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349158,
+      "observed_at": "2026-09-06T14:47:01.553985+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 68,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349265,
+      "observed_at": "2026-09-06T14:53:46.007440+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 68,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349306,
+      "observed_at": "2026-09-06T14:55:48.097268+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 68,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349397,
+      "observed_at": "2026-09-06T15:02:32.814695+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 68,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349443,
+      "observed_at": "2026-09-06T15:04:34.681553+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349445,
+      "observed_at": "2026-09-06T15:04:42.841817+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349559,
+      "observed_at": "2026-09-06T15:11:27.844691+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349596,
+      "observed_at": "2026-09-06T15:13:21.256853+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349711,
+      "observed_at": "2026-09-06T15:20:05.634532+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349757,
+      "observed_at": "2026-09-06T15:22:07.695051+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349759,
+      "observed_at": "2026-09-06T15:22:07.955224+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349865,
+      "observed_at": "2026-09-06T15:28:51.999298+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 349905,
+      "observed_at": "2026-09-06T15:30:54.035794+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350006,
+      "observed_at": "2026-09-06T15:37:38.400373+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350038,
+      "observed_at": "2026-09-06T15:39:40.546083+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350040,
+      "observed_at": "2026-09-06T15:39:48.707572+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350134,
+      "observed_at": "2026-09-06T15:46:33.664865+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350182,
+      "observed_at": "2026-09-06T15:48:26.886467+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350185,
+      "observed_at": "2026-09-06T15:48:27.142994+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350279,
+      "observed_at": "2026-09-06T15:55:10.993704+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350281,
+      "observed_at": "2026-09-06T15:55:11.259512+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350321,
+      "observed_at": "2026-09-06T15:57:12.977598+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350490,
+      "observed_at": "2026-09-06T16:03:57.062905+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350530,
+      "observed_at": "2026-09-06T16:05:59.033094+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350534,
+      "observed_at": "2026-09-06T16:06:07.198827+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350633,
+      "observed_at": "2026-09-06T16:12:51.955715+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350664,
+      "observed_at": "2026-09-06T16:14:45.338704+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350760,
+      "observed_at": "2026-09-06T16:21:29.738968+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350790,
+      "observed_at": "2026-09-06T16:23:31.918504+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350792,
+      "observed_at": "2026-09-06T16:23:32.965683+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350901,
+      "observed_at": "2026-09-06T16:30:16.274796+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 350928,
+      "observed_at": "2026-09-06T16:32:18.372903+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351033,
+      "observed_at": "2026-09-06T16:39:02.820427+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351063,
+      "observed_at": "2026-09-06T16:41:04.950860+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351066,
+      "observed_at": "2026-09-06T16:41:13.124732+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351172,
+      "observed_at": "2026-09-06T16:47:58.131026+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351199,
+      "observed_at": "2026-09-06T16:49:51.550444+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351204,
+      "observed_at": "2026-09-06T16:49:59.728306+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351206,
+      "observed_at": "2026-09-06T16:50:08.466070+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351311,
+      "observed_at": "2026-09-06T16:57:58.046842+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351323,
+      "observed_at": "2026-09-06T16:58:39.241805+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351324,
+      "observed_at": "2026-09-06T16:58:39.683620+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351326,
+      "observed_at": "2026-09-06T16:58:41.923812+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351425,
+      "observed_at": "2026-09-06T17:05:22.631498+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351462,
+      "observed_at": "2026-09-06T17:07:24.787285+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351468,
+      "observed_at": "2026-09-06T17:07:32.941846+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351470,
+      "observed_at": "2026-09-06T17:07:41.677318+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351569,
+      "observed_at": "2026-09-06T17:14:26.856701+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351598,
+      "observed_at": "2026-09-06T17:16:11.638345+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351711,
+      "observed_at": "2026-09-06T17:22:56.472828+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351728,
+      "observed_at": "2026-09-06T17:24:58.468742+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351734,
+      "observed_at": "2026-09-06T17:25:06.649831+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351871,
+      "observed_at": "2026-09-06T17:31:51.999418+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 351903,
+      "observed_at": "2026-09-06T17:33:45.547644+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352033,
+      "observed_at": "2026-09-06T17:40:30.548670+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352074,
+      "observed_at": "2026-09-06T17:42:32.833996+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352213,
+      "observed_at": "2026-09-06T17:49:17.832432+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352229,
+      "observed_at": "2026-09-06T17:51:20.076820+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352231,
+      "observed_at": "2026-09-06T17:51:28.263505+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352350,
+      "observed_at": "2026-09-06T17:58:13.807998+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352352,
+      "observed_at": "2026-09-06T17:58:14.628206+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352363,
+      "observed_at": "2026-09-06T18:00:07.398957+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352491,
+      "observed_at": "2026-09-06T18:06:52.362265+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352509,
+      "observed_at": "2026-09-06T18:08:54.619313+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352642,
+      "observed_at": "2026-09-06T18:15:39.714758+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352673,
+      "observed_at": "2026-09-06T18:17:41.997490+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352833,
+      "observed_at": "2026-09-06T18:24:27.124853+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352856,
+      "observed_at": "2026-09-06T18:26:29.468388+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352862,
+      "observed_at": "2026-09-06T18:26:37.884037+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 352977,
+      "observed_at": "2026-09-06T18:33:23.294608+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353000,
+      "observed_at": "2026-09-06T18:35:17.067573+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353119,
+      "observed_at": "2026-09-06T18:42:01.661413+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353152,
+      "observed_at": "2026-09-06T18:44:04.076017+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353153,
+      "observed_at": "2026-09-06T18:44:04.847697+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353262,
+      "observed_at": "2026-09-06T18:50:48.530543+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353295,
+      "observed_at": "2026-09-06T18:52:50.660094+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353298,
+      "observed_at": "2026-09-06T18:52:58.835711+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353377,
+      "observed_at": "2026-09-06T18:59:44.034447+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353415,
+      "observed_at": "2026-09-06T19:01:37.497647+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353514,
+      "observed_at": "2026-09-06T19:08:22.125561+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353570,
+      "observed_at": "2026-09-06T19:10:24.257907+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353714,
+      "observed_at": "2026-09-06T19:17:08.626635+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353762,
+      "observed_at": "2026-09-06T19:19:11.905521+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353768,
+      "observed_at": "2026-09-06T19:19:12.292888+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353886,
+      "observed_at": "2026-09-06T19:25:55.245746+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353887,
+      "observed_at": "2026-09-06T19:25:56.282954+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353913,
+      "observed_at": "2026-09-06T19:27:57.093497+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 353919,
+      "observed_at": "2026-09-06T19:28:05.257265+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354017,
+      "observed_at": "2026-09-06T19:34:50.065514+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354049,
+      "observed_at": "2026-09-06T19:36:43.422284+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354139,
+      "observed_at": "2026-09-06T19:43:27.713849+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354180,
+      "observed_at": "2026-09-06T19:45:29.753014+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 67,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354271,
+      "observed_at": "2026-09-06T19:52:14.113295+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354306,
+      "observed_at": "2026-09-06T19:54:16.200029+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354310,
+      "observed_at": "2026-09-06T19:54:24.368483+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354413,
+      "observed_at": "2026-09-06T20:01:09.265607+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354448,
+      "observed_at": "2026-09-06T20:03:02.651616+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354554,
+      "observed_at": "2026-09-06T20:09:46.853994+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354581,
+      "observed_at": "2026-09-06T20:11:48.895550+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354685,
+      "observed_at": "2026-09-06T20:18:33.233946+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354717,
+      "observed_at": "2026-09-06T20:20:35.311110+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354811,
+      "observed_at": "2026-09-06T20:27:19.638568+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354838,
+      "observed_at": "2026-09-06T20:29:21.717852+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354844,
+      "observed_at": "2026-09-06T20:29:29.887022+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354946,
+      "observed_at": "2026-09-06T20:36:14.761969+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354982,
+      "observed_at": "2026-09-06T20:38:08.169243+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354991,
+      "observed_at": "2026-09-06T20:38:16.348705+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354994,
+      "observed_at": "2026-09-06T20:38:17.539674+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 354996,
+      "observed_at": "2026-09-06T20:38:25.099472+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355109,
+      "observed_at": "2026-09-06T20:46:14.589312+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355117,
+      "observed_at": "2026-09-06T20:46:54.708414+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355229,
+      "observed_at": "2026-09-06T20:53:38.846665+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355253,
+      "observed_at": "2026-09-06T20:55:40.870211+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355256,
+      "observed_at": "2026-09-06T20:55:48.996068+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355261,
+      "observed_at": "2026-09-06T20:55:57.730190+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355364,
+      "observed_at": "2026-09-06T21:02:42.423449+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355390,
+      "observed_at": "2026-09-06T21:04:27.295562+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355487,
+      "observed_at": "2026-09-06T21:11:12.363589+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355516,
+      "observed_at": "2026-09-06T21:13:14.694440+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355520,
+      "observed_at": "2026-09-06T21:13:22.877935+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355633,
+      "observed_at": "2026-09-06T21:20:08.517102+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355661,
+      "observed_at": "2026-09-06T21:22:02.096999+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355755,
+      "observed_at": "2026-09-06T21:28:47.201675+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355780,
+      "observed_at": "2026-09-06T21:30:49.487363+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355782,
+      "observed_at": "2026-09-06T21:30:49.995108+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355879,
+      "observed_at": "2026-09-06T21:37:34.598377+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355913,
+      "observed_at": "2026-09-06T21:39:36.954306+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 355915,
+      "observed_at": "2026-09-06T21:39:45.143567+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356015,
+      "observed_at": "2026-09-06T21:46:30.998570+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356041,
+      "observed_at": "2026-09-06T21:48:24.699254+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356043,
+      "observed_at": "2026-09-06T21:48:25.708260+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356141,
+      "observed_at": "2026-09-06T21:55:09.982526+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356172,
+      "observed_at": "2026-09-06T21:57:12.326123+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356267,
+      "observed_at": "2026-09-06T22:03:57.629365+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356291,
+      "observed_at": "2026-09-06T22:05:59.996401+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356394,
+      "observed_at": "2026-09-06T22:12:45.224893+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356426,
+      "observed_at": "2026-09-06T22:14:47.558846+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356428,
+      "observed_at": "2026-09-06T22:14:55.779339+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 66,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356532,
+      "observed_at": "2026-09-06T22:21:41.447445+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356556,
+      "observed_at": "2026-09-06T22:23:35.296491+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356557,
+      "observed_at": "2026-09-06T22:23:36.476862+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356559,
+      "observed_at": "2026-09-06T22:23:37.018143+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356657,
+      "observed_at": "2026-09-06T22:30:20.279760+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356682,
+      "observed_at": "2026-09-06T22:32:22.624228+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356796,
+      "observed_at": "2026-09-06T22:39:07.961073+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356824,
+      "observed_at": "2026-09-06T22:41:10.309278+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356830,
+      "observed_at": "2026-09-06T22:41:18.500315+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356938,
+      "observed_at": "2026-09-06T22:48:04.381714+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 356962,
+      "observed_at": "2026-09-06T22:49:58.014111+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357061,
+      "observed_at": "2026-09-06T22:56:43.352597+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357086,
+      "observed_at": "2026-09-06T22:58:45.715733+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357185,
+      "observed_at": "2026-09-06T23:05:31.101766+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357211,
+      "observed_at": "2026-09-06T23:07:33.470970+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357213,
+      "observed_at": "2026-09-06T23:07:33.743709+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357313,
+      "observed_at": "2026-09-06T23:14:18.905802+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357343,
+      "observed_at": "2026-09-06T23:16:21.313602+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357345,
+      "observed_at": "2026-09-06T23:16:29.502174+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357449,
+      "observed_at": "2026-09-06T23:23:15.511193+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357471,
+      "observed_at": "2026-09-06T23:25:09.208871+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357575,
+      "observed_at": "2026-09-06T23:31:54.748536+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357602,
+      "observed_at": "2026-09-06T23:33:57.191775+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357604,
+      "observed_at": "2026-09-06T23:33:57.584749+00:00",
+      "receiver": "radio-3",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357710,
+      "observed_at": "2026-09-06T23:40:42.735528+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357736,
+      "observed_at": "2026-09-06T23:42:45.173705+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357738,
+      "observed_at": "2026-09-06T23:42:53.368433+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357840,
+      "observed_at": "2026-09-06T23:49:39.568081+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357868,
+      "observed_at": "2026-09-06T23:51:33.317210+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 357966,
+      "observed_at": "2026-09-06T23:58:19.040984+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358001,
+      "observed_at": "2026-09-07T00:00:21.500704+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358104,
+      "observed_at": "2026-09-07T00:07:07.225906+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358138,
+      "observed_at": "2026-09-07T00:09:09.715927+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358248,
+      "observed_at": "2026-09-07T00:15:55.438509+00:00",
+      "receiver": "radio-2",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358281,
+      "observed_at": "2026-09-07T00:17:57.956851+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358284,
+      "observed_at": "2026-09-07T00:18:06.154089+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358385,
+      "observed_at": "2026-09-07T00:24:52.376503+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358414,
+      "observed_at": "2026-09-07T00:26:46.120852+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358417,
+      "observed_at": "2026-09-07T00:26:54.318176+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    },
+    {
+      "event_id": 358422,
+      "observed_at": "2026-09-07T00:27:03.089402+00:00",
+      "receiver": "radio-1",
+      "moisture_percent": 65,
+      "trailer_valid": true
+    }
+  ],
+  "limitations": [
+    "Receiver provenance proves direct ESP32 reception, not that every transmitted ACK was accepted by the sensor.",
+    "This recovery window does not complete the minimum 72-hour soak or controlled stock/custom coexistence."
+  ],
+  "all_reports_from_esp32_nodes": true
+}

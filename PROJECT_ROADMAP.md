@@ -1,1630 +1,261 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-01
+Last reviewed: 2026-09-06
 
-This is the single source of truth for active project status, ordering, and
-completion. Architecture documents describe intended boundaries, protocol
-documents record wire evidence, research plans preserve procedures and trial
-history, and hardware checklists remain operational checklists. None of those
-documents independently schedules work.
+This is the only live project-status checklist. Device references describe
+current protocol facts; research records and fixtures preserve experimental
+evidence. A transmitted frame alone never closes a physical acceptance gate.
 
-## Working rules
+## Current work order
 
-- Work phases in order unless a later item blocks the active phase.
-- Mark an item complete only when its stated evidence exists. A successful RF
-  transmission is not evidence that a device accepted a command.
-- Update this file in the same commit that completes or changes a tracked gate.
-- A newly discovered issue enters the active phase only when it blocks its exit
-  criteria, invalidates evidence, or protects irrigation safety/reliability.
-  Everything else goes to [Backlog](#backlog).
-- Preserve redacted RF fixtures and concise trial results in `research/`; link
-  them from the relevant task rather than copying research journals here.
-- Use **stock RainPoint gateway** for the vendor hub and **custom local
-  gateway** for `rainpointd` plus its ESP32/CC1101 radio nodes.
+The user authorized this order while hardware assistance is unavailable:
 
-## Status-source disposition
+1. Verify Right Bed's direct-radio recovery.
+2. Reconcile this roadmap and streamline protocol, operational, and research docs.
+3. Qualify the dry one-zone valve's ACK/control persistence across restarts.
+4. Collect durable sensor/valve reliability and morning-sync evidence.
 
-| Former source | Role after consolidation |
-|---|---|
-| Root `README.md` remaining gates | Replaced by a link to this roadmap |
-| `INTEGRATION_EVOLUTION_BACKLOG.md` | Absorbed here and removed |
-| Monolithic `PROTOCOL.md` | Split into current per-device definitions under `protocol_documentation/`; chronology retained in RF capture notes; open work tracked here |
-| `FULL_STACK_ARCHITECTURE.md` phases | Architecture description only |
-| `HARDENING_INVENTORY.md` | Boundary inventory only |
-| `CLOUD_TO_LOCAL_MIGRATION.md` readiness gates | Deferred product-design constraints only |
-| `research/*PLAN.md` and protocol status | Evidence ledgers and reusable procedures only |
-| Carrier preorder checklist | One physical-operation checklist, not project status |
+Other phases retain the order below. Later work interrupts qualification only
+when it protects irrigation reliability or invalidates existing evidence.
+No additional four-zone watering is implied by passive monitoring.
 
-## Phase 0 — one clean baseline (complete)
+## Established baseline
 
-Before the baseline cleanup, the deployed radio nodes spanned three firmware
-versions, and historical invalid-trailer HTV405 observations left three phantom
-four-zone devices beside the one canonical valve. Further reliability
-measurements would have been ambiguous until that baseline was clean.
+- [x] Preserve one canonical HA identity per physical device and suppress
+  forgotten endpoints. Pairing registration now reuses an established valve
+  ID; the duplicate single-zone device was removed with working entity IDs,
+  history, ACK owner, counter, and schedules preserved.
+- [x] Support one canonical checkout and one PlatformIO environment. Production
+  firmware excludes the HTV145 qualification transmitter; its isolated dry-test
+  image is a deliberate exception, not fleet-wide release qualification.
+- [x] Pair and recover independent HCS026 identities, persist a single ACK owner,
+  and pre-fill known devices' saved names and HA areas on re-addition.
+- [x] Complete three HA-initiated HTV405 generated-identity enrollments and decode
+  all four zones with whole-minute durations from 1 through 60.
+- [x] Validate HTV405 fixed-zero idle counter assignment, bounded authenticated
+  control, rollover, automatic stop, and Zone 1 early stop.
+- [x] Validate HTV145 partial-association dry open, automatic stop, early close,
+  persistent selector-6 controls, and non-watering fixed-zero counter recovery.
+- [x] Expose both valves' morning-sync controls. One-zone retries are bounded to
+  three total attempts, each requiring new owner idle evidence after failure.
+- [x] Remove unsupported HTV405 usage entities and the one-zone phantom zones.
 
-- [x] Reject invalid or provisional valve identities before they can create a
-      Home Assistant device.
-- [x] Remove the three known phantom HTV405 records through the supported
-      lifecycle path; preserve the canonical association and its HA history.
-- [x] Verify dashboards, automations, notifications, and watchdogs reference
-      only the canonical local valve and local moisture entities.
-- [x] Publish one consolidated supervised radio-node image containing the
-      validated sensor, custom-identity, OTA, diagnostics, HTV405 pairing, and
-      HTV405 control paths without the HTV145 research transmitter.
-- [x] Upgrade the valve-owning node first and prove its association, command
-      counter, ACK assignments, and controls survived.
-- [x] Upgrade the remaining nodes one at a time and run the same reconnect,
-      receiver, ACK-owner, and diagnostic checks after each update.
-- [x] Reconcile the installed gateway package/version label with the running
-      source and retain one rollback artifact.
+Current evidence: [sensor fixtures](research/fixtures/),
+[HTV405 sync](research/HTV405_MORNING_SYNC_DESIGN.md),
+[HTV145 recovery](research/fixtures/htv145_idle_result3_counter_recovery_20260906.json).
+Historical trial sequences remain in [RF capture notes](research/RF_CAPTURE_NOTES.md)
+and version history, not this checklist.
 
-Exit criteria: every deployed node runs the same firmware; the existing
-sensors and valve remain usable; HA exposes one canonical HTV405 device; and a
-normal observation window creates no replacement phantoms.
+## Phase 1 — HA device lifecycle
 
-On 2026-08-26, all three adopted nodes were upgraded sequentially to the
-unified `0.15.0-supervised-beta.10` image. Each retained its node ID,
-authenticated, returned disarmed, and restored its gateway-owned sensor ACK
-assignments. The canonical HTV405 retained its Vegetable Garden control owner
-and authenticated command-counter state. Front Yard required roughly two
-minutes to reconnect and reported weak Wi-Fi near -90 dBm; placement/network
-quality remains an operational concern, not a firmware-identity failure.
+### Shared UI and sensors
 
-## Current focus: Phase 1 — Home Assistant device lifecycle
+- [ ] Return to the integration device list after removal. HA's supported
+  removal hook has no frontend-navigation callback; do not emulate this with
+  unrelated backend mutations.
+- [ ] Complete three consecutive pair → report → remove → re-pair cycles on
+  unchanged final firmware, including an installed sensor and both test sensors.
+- [ ] Verify physical removal clears entities, suppression/re-enrollment state,
+  and ACK assignment; re-pairing must not create a duplicate.
 
-- [x] Present the custom gateway's user-pairable profiles under Sensors and
-      Valves, list supported models beneath each category, and filter radio
-      nodes by the selected profile's advertised capability.
-- [x] Start HCS026 and HTV405 enrollment from HA without copied RF identities;
-      the selected node adopts the first strict model-specific factory
-      announcement within the bounded session. Physical repetition gates below
-      remain open.
-- [ ] After a successful device removal, navigate back to the RainPoint Local
-      device list instead of leaving the user on the deleted device's error
-      page.
+### Four-zone valve
 
-Home Assistant's supported integration removal hook controls whether removal
-is allowed but exposes no frontend-navigation callback. Backend removal is now
-family-neutral; the remaining redirect is an upstream HA frontend constraint,
-not a gateway lifecycle mutation.
+- [ ] Qualify the retained RX/FIFO recovery correction during a fresh pairing.
+- [ ] Remove through HA, verify all four controls, durations, association, and
+  routing are cleared, then re-pair without duplicate devices.
+- [ ] Physically qualify the implemented effective/raw pairing outcome split:
+  terminal acceptance remains completed when the optional tail later times out;
+  pre-terminal timeout remains failed. Preserve raw diagnostics and do not cancel RF.
+- [ ] Keep the HA wizard at **Finalizing pairing** while the optional tail is
+  armed; expose controls only once disarmed and `rf_control_available=true`.
 
-### HCS026-class soil sensors
+### Single-zone valve
 
-- [x] Pre-fill re-added known sensors with their saved name and HA area in
-      integration 0.14.1; preserve user customizations and edits on retry.
+- [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
+  identical stock reset/enrollment, retained long-press re-pair, and battery
+  rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
+- [ ] Complete the terminal stage after the frozen accepted assignment/configuration
+  prefix. Each new boundary requires two unchanged accepted repetitions.
+- [ ] Complete three fresh local terminal enrollments on unchanged firmware.
+- [ ] Verify stable identity after HA removal/re-pair; treat retained re-pair and
+  battery rejoin as separate lifecycle paths.
+- [ ] Define HA operational enrollment from valve-owned evidence while clearly
+  distinguishing it from full six-stage terminal completion.
 
-- [x] Pair independent sensor identities from the HA UI without copied RF IDs,
-      setup tokens, or CLI commands.
-- [x] Auto-advance the pairing flow after physical terminal evidence.
-- [x] Physically enroll a disposable sensor under a generated, persisted custom
-      RF controller identity.
-- [ ] Complete three consecutive pair -> report -> remove -> re-pair cycles on
-      unchanged final firmware, including one installed sensor and both test
-      sensor identities.
-- [ ] Confirm removal clears the device, entities, suppression state, and ACK
-      assignment, and that re-pairing does not leave a duplicate.
-
-### HTV405 four-zone valve
-
-- [x] Reproduce local association and accept paired valve-originated traffic as
-      terminal evidence.
-- [x] Merge partial HTV405 zone observations across concurrent SDR and radio
-      node receivers without replacing previously known booleans with unknown.
-      The regression replays the exact 2026-08-26 complete-idle then partial
-      Zone 3 idle sequence that had changed Zone 1 from Off to Unknown in HA.
-- [x] Let the selected node finish its bounded HTV405 association work after HA
-      receives terminal evidence; naming the device must not cancel remaining
-      protocol replies. The 2026-08-26 generated-identity validation reached
-      the `13/2C/99` tail and then transitioned directly into ordinary paired
-      reports. The stock transcript's later `9A` rows are not a universal
-      completion requirement.
-- [x] Count strict selector-`0x07` paired-link reports as device activity without
-      replacing the latest definitive zone/watering state, then prove the valve
-      continues reporting after association. The validated valve reported on
-      the generated route every approximately 40 seconds through the command
-      acceptance trial.
-- [x] Complete three consecutive HA-initiated new-enrollment trials on unchanged
-      final firmware.
-- [ ] Qualify the retained HTV405 RX recovery correction in firmware 0.15.13
-      during the next authorized pairing trial. Successful replies already
-      restore reception; the loop now preserves the FIFO through status
-      reporting instead of flushing a possible next request. Host validation
-      cannot prove the live timing; the HTV145 receive sequence is unchanged.
-- [x] Pair once under a generated custom controller identity and create exactly
-      one capability-correct HA device.
-- [ ] Confirm HA removal clears all four zone controls, duration entities,
-      association state, and node routing; then re-pair without a duplicate.
-
-Software coverage now proves that removal deletes the valve link and routing,
-ordinary reports cannot defeat suppression, and an explicit pairing session
-can restore the same stable device ID exactly once. Physical HA removal and
-re-pair evidence is still required before checking the gate.
-
-Three strict generated-identity HA enrollments are now retained. The third,
-performed on the consolidated beta.10 image on 2026-08-26, produced the physical
-white success flash, reached the accepted `13/2C/99` tail at 16/18, and was
-independently confirmed by another radio receiving ordinary traffic addressed
-to the generated controller. HA reused `htv405-94a98013`, created no duplicate,
-and reset the authenticated command counter to `1`. Earlier copied-identity
-white flashes and retained-association rejoins remain excluded from this count.
-
-- [ ] Once HA accepts command-scoped HTV405 terminal evidence, make the selected
-      node leave the bounded tail in a successful/disarmed diagnostic state.
-      The third accepted trial correctly remained armed so it could answer the
-      optional final stock-tail messages, but when those messages never arrived
-      its local five-minute timer later reported `session_timeout`/`failed` even
-      though HA had already finalized a valid association. Fix this misleading
-      post-success status without sending an RF cancellation or regressing the
-      proven 16/18 completion path.
-
-Success criteria for this diagnostic fix:
-
-1. Only an active-session valve frame addressed to the generated controller
-   may set the authoritative pairing outcome to `completed`.
-2. The selected node remains visibly armed while it can answer optional tail
-   requests; control and unrelated RF commands remain blocked during that time.
-3. If the optional tail expires after accepted terminal evidence, the effective
-   node pairing state is `completed`/disarmed with no pairing failure. The raw
-   node result remains available separately as `failed`/`session_timeout` with
-   tail state `optional_tail_timeout` for protocol research.
-4. A timeout before terminal evidence remains a real failure and the HA flow
-   continues to abort as `pairing_timeout` or `pairing_failed`.
-5. The fix sends no RF cancellation, changes no pairing payload/frequency/
-   timing, creates no duplicate device, and does not reset the authenticated
-   valve command counter after the first accepted terminal frame.
-
-Gateway 0.33.11 implements this effective/raw outcome split and is deployed.
-Automated coverage reproduces both the observed post-terminal 16/18 timeout and
-a real pre-terminal timeout; all 317 Python regressions and the native firmware
-protocol test pass. Leave this physical gate open until one later HTV405 pairing
-shows `pairing_outcome=completed`, raw node `failed`/`session_timeout`, tail
-`optional_tail_timeout`, and an available counter-synchronized valve after the
-five-minute node window expires.
-
-- [ ] Keep the HA pairing wizard in a visible `Finalizing pairing` state while
-      the selected HTV405 node finishes its optional tail. Do not expose a
-      usable Run now action until the node is disarmed and
-      `rf_control_available=true`. The 2026-09-01 pairing was authoritative and
-      ultimately completed with `optional_tail_timeout`, but an immediate Run
-      now attempt failed before RF dispatch with `radio_node_unavailable` while
-      the selected node was still armed. This is a lifecycle/feedback defect,
-      not a pairing or command-counter failure.
-
-### HTV145 single-zone valve
-
-- [x] Decode stock enrollment/control evidence sufficiently to build a bounded,
-      compile-gated candidate.
-- [x] Implement the generalized HA pairing lifecycle without exposing the
-      unaccepted research transmitter as a production control.
-- [x] Preserve the rejected local assignment corpus through probe `.17` and
-      establish one explicit red gate: the selected node transmitted two
-      decodable assignments, but the valve emitted zero addressed stage-1
-      requests. Small timing, carrier, prelude, and copied-identity changes are
-      closed as leading hypotheses until new stock evidence exposes another
-      discriminator. The frozen result is
-      `research/fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
-- [x] Confirm the manufacturer's distinct HTV145 lifecycle gestures. Ordinary
-      pairing is a long press followed by starting the app search. A documented
-      timer reset removes the batteries for at least ten seconds, then requires
-      holding the timer button while reinstalling four fresh alkaline cells
-      until the red LED flashes rapidly. A plain battery cycle, a long press
-      after boot, and that reset sequence must not be classified as equivalent.
-
-#### HTV145 controlled rebuild
-
-Complete these gates in order. Do not make another stage-0 RF change until the
-capture matrix has identified one coherent fresh-enrollment branch.
-
-Test the current hypotheses in this order: first, that documented factory
-reset, retained re-pair, and battery rejoin are different valve states; second,
-that the valve accepts at most the first assignment offered during one pairing
-session; third, that another assignment field is session-derived rather than
-static; and fourth, that a stock-only pre-assignment RF event or waveform
-feature is still missing. Each hypothesis must predict a distinguishing
-observation before it changes transmitted firmware.
-
-- [x] Implement authenticated radio-node maintenance controls in firmware, the
-      local gateway, and HA before the next stock-gateway recording:
-  - enter a bounded **receive-only** mode that keeps RF reception, normalized
-    logging, Wi-Fi, diagnostics, identify, and maintenance traffic available
-    while rejecting every pairing, routine-ACK, and valve-control transmission;
-  - restore normal RF mode explicitly, with automatic timeout recovery so a
-    forgotten experiment cannot leave irrigation radio support disabled;
-  - remotely reboot a node without requiring OTA or physical power removal;
-  - expose requested/effective RF mode, remaining timeout, last mode change,
-    reboot result, and rejected-TX count in HA diagnostics;
-  - require the custom local gateway to verify that every adopted node is
-    effectively receive-only before declaring a stock capture ready.
-- [x] Deploy the maintenance-capable image to every adopted radio node and
-      physically verify receive-only entry, capture-readiness blocking,
-      automatic normal-mode recovery, explicit restore, and remote reboot.
-      Do not begin the controlled stock-gateway capture matrix until this gate
-      is complete.
-      - 2026-09-01: all three adopted nodes entered bounded receive-only mode
-        together, aggregate capture readiness returned `ready: true` with no
-        blockers, and all three explicitly returned to normal operation with
-        their sensor/valve ACK assignments intact. Automatic timeout recovery
-        and remote reboot/reconnect were also physically verified on the OTA
-        test node.
-- [ ] Replace the HTV145 test valve's batteries with four fresh alkaline cells,
-      leave the stock RainPoint gateway under manual control, and record this
-      controlled lifecycle matrix as separate continuous-IQ trials:
-  1. [x] documented factory reset with the stock gateway off and every custom
-     node confirmed receive-only;
-     - 2026-09-01: a checksummed 180-second capture recovered a six-frame,
-       two-carrier factory sweep: counters `0`, `1`, lower/upper variants of
-       `2`, `3`, and `4`. No assignment, paired-route request, or configuration
-       response followed. The reset therefore cleared the retained association
-       even though its LED sequence was not visibly distinct from ordinary
-       pairing.
-  2. [x] documented factory reset followed by a complete stock enrollment using
-     the manual's exact button-then-app order;
-     - 2026-09-01: the stock gateway accepted factory counter `2`, completed all
-       six stages, and enrolled successfully. The capture proved that counter
-       `1` is a real upper-carrier factory announcement and that the accepted
-       counter-2 assignment selects response subchannel `12` at 434.3515 MHz.
-  3. [x] repeat the documented reset with stock app search armed before the
-     valve long press. Compare which factory counter is accepted against the
-     button-first counter-2 transcript without assuming counter `1` wins;
-     - 2026-09-01: the already-searching stock gateway accepted the first new
-       factory announcement, counter `0`, after 52.15 ms. It selected the same
-       selector `6` / response subchannel `12` and completed the same six-stage
-       exchange family. The controlled ordering comparison therefore supports
-       first-observed sweep acceptance, not a fixed target counter;
-     - 2026-09-01 local timing-only trial: after the same documented reset,
-       the OTA test node was positively confirmed armed before the valve long
-       press. The probe transmitted at least one assignment and remained at
-       step `1/6`; it observed the factory sweep through counter `3`, but no
-       addressed stage-1 valve request or terminal confirmation followed. The
-       current shared session can answer counter `0` with the older selector-5
-       branch and then answer counter `3` again with selector `6`, so this is a
-       rejected multi-assignment baseline rather than evidence against the new
-       stock counter-0/selector-6 transcript. Do not repeat this image.
-  4. [ ] a second documented factory reset and identical button-first complete
-     stock enrollment;
-  5. [ ] ordinary long-press re-pairing without a factory reset;
-  6. [ ] ordinary battery removal/reinstallation while the accepted stock
-     association remains registered.
-- [ ] For both new complete stock enrollments, retain the full factory sweep,
-      the first gateway transmission, every addressed continuation, the first
-      routine report, app Device Address, button/app ordering, and LED result.
-      Classify stable, clock-derived, identity-derived, branch-derived,
-      session-generated, and still-unknown fields. Treat the 2026-08-28
-      counter-3/selector-6 recording as retained-association evidence, not as a
-      universal fresh-enrollment branch.
-- [x] Extend the IQ analyzer with a stage-0 verdict that fails when an
-      assignment is transmitted without an addressed stage-1 request. The fast
-      fixture replay and raw-IQ replay must report the same red/green result,
-      and each physical attempt must retain the exact assignment plus the
-      following factory fallbacks or paired request.
-  - 2026-09-02: bounded raw-IQ replay now agrees with both independent
-    outcomes. It reports the accepted stock counter-0 assignment as
-    `accepted` after recovering one addressed stage-1 request, and probe `.25`
-    as `rejected_assignment_without_stage_1` after recovering the local
-    assignment, zero addressed stage-1 requests, and the continuing factory
-    sweep. The red/green evidence is retained in
-    `research/fixtures/htv145_stage0_raw_replay_differential_20260902.json`.
-- [x] Replace the shared HTV405 session reuse with a dedicated research-only
-      HTV145 state machine and one canonical transcript definition consumed by
-      the analyzer, gateway tests, and generated firmware table. The initial
-      harness must select one evidence-backed lifecycle/selector branch before
-      arming, transmit at most one assignment, never fall through to a second
-      branch in the same session, and remain receive-only afterward.
-  - 2026-09-01: probe `.19` now isolates HTV145 behind a dedicated one-shot
-    session and the controlled counter-0/selector-6/subchannel-12 transcript.
-    It exposes separate assignment-lock and stage-0 accept/reject diagnostics,
-    and the IQ analyzer now fails an assignment that is not followed by the
-    addressed stage-1 request. Unit, firmware-protocol, and PlatformIO builds
-    pass; this gate remains open until the physical stage-0 boundary and raw-IQ
-    verdict are reproduced twice without changing the frozen prefix.
-  - 2026-09-01 first physical `.19` result: the armed node locked one counter-0
-    assignment, reached `1/6`, then failed `stage_0_rejected` when counter `2`
-    arrived without an addressed stage-1 request. A later ordinary long press
-    happened after that terminal failure and therefore had no armed local
-    transmitter; it is not a second protocol result. Preserve the frozen `.19`
-    prefix and use `tools/run_htv145_stage0_hitl.sh` with bounded continuous IQ
-    before changing any RF field. The redacted diagnostic fixture is
-    `research/fixtures/htv145_probe19_stage0_rejection_20260901.json`.
-  - 2026-09-01 continuous-IQ `.19` result: the red-capable harness reproduced
-    `stage_0_rejected` and captured the assignment on air. Stock and local
-    valve factory carriers differed by only `31 Hz`, but the local assignment
-    was `+9.979 kHz` above the directly measured stock assignment
-    (`433.556628` versus `433.546649 MHz`). Both used `35.004 kHz` deviation;
-    the local reply was also approximately `0.85 ms` late. Probe `.20` changes
-    only the HTV145 selector-6 initial carrier by `-9.979 kHz`; payload, wake,
-    deviation, and timing remain frozen until the carrier hypothesis receives
-    a physical verdict. This also corrects an analyzer mistake where its
-    configured decision center had been recorded as a measured carrier.
-  - 2026-09-01 physical `.20` result: the node again reached `1/6` and failed
-    `stage_0_rejected`, but direct IQ measurement showed that the intended
-    carrier-only experiment never reached RF. The assignment remained at
-    `433.556232 MHz`, about `9.583 kHz` above stock and only normal capture
-    drift from `.19`; timing was `52.5 ms` and deviation remained `35.004 kHz`.
-    The live HTV145 path still shared HTV405 profile/calibration plumbing, so
-    this red result does not reject the corrected-carrier hypothesis. Fixture:
-    `research/fixtures/htv145_probe20_carrier_not_applied_rejection_20260901.json`.
-  - 2026-09-01 probe `.21` separates the live HTV145 pairing module from
-    HTV405: independent profile and step types, matcher, state machine, reply
-    builders, timing, and model-specific `45 kHz` calibration. The four-zone
-    path is unchanged. Node diagnostics now expose the profile initial center,
-    supplied offset, and effective initial TX center so a profile/calibration
-    mismatch is visible before the next RF trial. Native protocol, gateway,
-    and PlatformIO builds pass.
-  - 2026-09-01 physical `.21` result: an ordinary long press produced the clean
-    counter-0 factory announcement, the isolated node emitted exactly one
-    selector-6 assignment, and the valve rejected it before stage 1. A fresh
-    documented reset is therefore not required to exercise this boundary.
-    Direct IQ measurement placed the local assignment at `433.504260 MHz`,
-    `42.389 kHz` below the accepted stock assignment, while deviation remained
-    `35.004 kHz`; the reply began `52.85 ms` after the request ended versus
-    stock's `52.15 ms`. Probe `.22` changes only the node-specific HTV145
-    frequency correction from `45.000` to `87.389 kHz`; timing and every frame
-    field remain frozen for one discriminating carrier-only trial. Fixture:
-    `research/fixtures/htv145_probe21_isolated_carrier_rejection_20260901.json`.
-  - 2026-09-01 physical `.22` result: the carrier correction landed at
-    `433.546741 MHz`, within `92 Hz` of the accepted stock reference, with the
-    same `35.004 kHz` deviation, decoded selector-6 packet, and 320-symbol wake.
-    The valve nevertheless rejected stage zero. These center/deviation values
-    came from unconstrained FFT peaks and are superseded by the balanced-wake
-    analysis below; preserve this attempt as a rejection record, not as proof
-    that the PHY matched. The reply started `52.45 ms` after the request versus
-    stock's `52.15 ms`. An accepted local HTV405 enrollment was about `1.25 ms`
-    earlier than its stock reference, so this smaller delta still does not
-    justify a timing-only probe. Fixtures:
-    `research/fixtures/htv145_probe22_calibrated_carrier_rejection_20260901.json`.
-    `research/fixtures/htv405_stock_local_waveform_control_20260901.json`.
-  - 2026-09-01 physical-layer follow-up: `.22` was about `10.26 dB` stronger
-    than stock at the SDR and clipped `45.9%` of captured I/Q bytes while stock
-    clipped none. No additional exact-sync stock frame appeared on six known
-    carriers in the `5.8 s` before assignment. Before changing semantics,
-    repeat unchanged `.22` at reduced TX power with a non-clipping SDR capture;
-    treat valve-receiver overload as a hypothesis, not a conclusion.
-  - 2026-09-01 reduced-power verdict: unchanged `.22` at `0 dBm` reduced active
-    captured magnitude by `12.69 dB` and eliminated ADC-rail clipping, but the
-    valve again rejected the counter-0 selector-6 assignment before stage 1.
-    Transmit overload is closed, but the clean capture exposed an analyzer
-    error: payload-weighted FFT peaks did not represent the two FSK tones.
-    Decoder-independent balanced-wake analysis recovered all `319` wake
-    transitions. Accepted stock used deviation register `0x45`; local `.22`
-    used `0x43`. Normalizing each assignment against the valve request from the
-    same session placed local `.22` `35.370 kHz` below stock. Full-band energy
-    inventory found no stock-only burst in the `6.82 s` before assignment.
-    Probe `.23` changes only those two independently disproven PHY values:
-    frequency correction `87.389` to `122.759 kHz`, and initial deviation
-    `0x43` to `0x45`. Payload, endpoints, selector, clock builder, wake, timing,
-    power, polarity, and one-shot state remain frozen. If the on-air `.23`
-    waveform matches and stage zero still fails, replay one freshly accepted
-    stock assignment exactly before considering more semantic changes.
-    Fixtures:
-    `research/fixtures/htv145_probe22_reduced_power_rejection_20260901.json`.
-    `research/fixtures/htv145_balanced_wake_phy_discriminator_20260901.json`.
-  - 2026-09-01 unattended `.23` preparation: the isolated firmware and gateway
-    metadata now encode the balanced-wake correction, the candidate version is
-    `.23`, and regression tests assert both the `122.759 kHz` node calibration
-    and `0x45` initial deviation. The physical gate remains open until the
-    bounded stage-zero harness records the transmitted waveform and either an
-    addressed stage-1 request or the next factory fallback.
-  - 2026-09-01 preflight found `.23` could not arm because the shared validated
-    pairing guard rejected its evidence-backed `122.759 kHz` calibration before
-    any RF transmission. Probe `.24` changes no RF field or state-machine
-    behavior; it gives only the gated HTV145 research profile a `150 kHz`
-    calibration bound while retaining the generic `100 kHz` sensor/HTV405
-    boundary. The physical waveform verdict therefore remains a test of the
-    unchanged `.23` RF hypothesis.
-  - 2026-09-01 physical `.24` result: the bounded node again stopped at `1/6`,
-    but the clean IQ capture closed the intended PHY discriminator. Relative
-    to the same valve request, the assignment was only `+354 Hz` from accepted
-    stock, used the same `0x45` deviation family and 320-symbol wake, had no
-    clipping, and started `0.648 ms` later. The decoded frame matched stock in
-    every static byte, but its live clock encoded `17:56` as `01:56`: the
-    HTV145 builder incorrectly cleared the legitimate high-hour bit as though
-    it were a branch marker. Probe `.25` changes only that disproven clock
-    rule. RF profile, static payload, selector, endpoints, wake, scheduler,
-    power, polarity, and one-shot state remain frozen.
-  - 2026-09-01 physical `.25` result: the emitted clock correctly represented
-    `19:13:08`, but the valve still continued its sweep and the node stopped at
-    `1/6` with `stage_0_rejected`. The clock-wrap hypothesis is closed. Freeze
-    `.25`; at that point the next planned discriminator was exact replay of a
-    freshly accepted stock assignment. The later edge evidence below narrows
-    the first physical change further without reopening any `.25` field.
-  - 2026-09-02 edge follow-up: two accepted stock assignments each remain
-    above the energy threshold for about `31.36 ms`, versus `31.22--31.23 ms`
-    for rejected probes `.24` and `.25`. Sync-aligned backward-wake histograms
-    differ too, but an accepted stock continuation proves that count cannot be
-    translated directly into one fixed wake-symbol constant. Preserve this as
-    a packet-boundary/start-phase/PA-tail hypothesis, not as probe `.26` yet.
-    Median sync alignment now localizes most of the duration difference after
-    the normalized frame: both accepted stock assignments and an accepted
-    stage-1 reply retain about `160 us` of post-frame RF energy, while both
-    rejected local assignments retain only `45--47 us`. Frequency-resolved
-    bins identify the accepted tail as the low FSK tone even for two frames
-    whose final payload bit is high. The local driver already drives GDO0 low
-    before immediate `SIDLE`; a research-only, stage-0-only build gate now adds
-    the measured `115 us` difference and leaves every normal image unchanged.
-    It compiles and passes the firmware boundary check, but is not staged or
-    deployed. The next fresh stock capture must reproduce the approximately
-    `160 us` low tail before that single-variable candidate is authorized. If
-    a matching on-air tail remains rejected, exact accepted-byte replay is
-    next; do not reopen payload or wake-length guesses. Evidence:
-    `research/fixtures/htv145_stock_local_assignment_edge_discriminator_20260902.json`.
-  - 2026-09-02 counter-2 local acceptance: the research image ignored factory
-    counters `0` and `1`, answered counter `2` with the complete captured
-    selector-6 branch and measured low tail, and received the valve's addressed
-    paired-route stage-1 request. The node and IQ analyzer both report stage 0
-    accepted, and the valve gave its white success flash. This is the first
-    locally generated HTV145 assignment with authoritative valve-originated
-    acceptance evidence. The valve retried stage 1 after the immediate local
-    reply and never sent its configuration response, so the addressed request
-    proves only stage 0; it does not prove the stage-1 reply was accepted. The
-    first local delayed 2,400-symbol configuration boundary appeared `101.5 ms`
-    later than stock. Candidate `.2` changed only that scheduler offset while
-    leaving the assignment frozen. Evidence:
-    `research/fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
-  - 2026-09-02 repeated counter-2 acceptance and stage-1 discriminator:
-    candidate `.2` reproduced the addressed stage-1 valve request and white
-    flash with the frozen assignment. Its configuration began `2,952.70 ms`
-    after the stage-1 request boundary versus `2,952.55 ms` in stock, validating
-    the timing correction. Direct balanced-wake analysis then found the stock
-    immediate stage-1 reply centered at `434.351790 MHz` while the local reply
-    centered at `434.382116 MHz`, `30.326 kHz` high. Stock advanced without a
-    retry; local produced two stage-1 retries and no `81 50` response. Candidate
-    `.3` therefore changes only the counter-2 routine carrier by `-30.326 kHz`;
-    the proven stage-0 assignment and all decoded frames and timings remain
-    frozen.
-  - 2026-09-02 candidate `.3` accepted the ordinary stage-1 response: the
-    corrected local reply measured `434.351533 MHz`, only `257 Hz` below the
-    stock `434.351790 MHz`, and the valve did not retry stage 1. The long
-    configuration used the same corrected carrier but lasted `132.119 ms`
-    versus stock's `135.361 ms`; only `2,368` of `2,399` expected alternating
-    transitions were recovered, and the valve did not emit `81 50`. Candidate
-    `.4` adds `64` expendable leading symbols only to that research-only long
-    transmission to compensate for the measured `3.242 ms` on-air shortfall.
-    Stage 0, the accepted ordinary stage-1 reply, all frame bytes, carriers,
-    and scheduling remain unchanged. Evidence:
-    `research/fixtures/htv145_counter2_local_stage1_acceptance_20260902.json`.
-  - 2026-09-03 candidate `.4` was exercised physically on the OTA test node.
-    It again produced the valve's white flash, the addressed stage-1 request,
-    and two completed node steps, but no valve-originated `81 50` response.
-    Node diagnostics showed no blocked or rejected transmission. The trial had
-    no SDR capture, so it proves that wake-length compensation alone was not
-    sufficient but does not establish the emitted burst duration or whether
-    the valve retried stage 1. Before changing payload, carrier, or timing,
-    record one unchanged `.4` trial with the Mac SDR and measure those two
-    discriminators.
-  - 2026-09-03 candidates `.4`--`.7` closed the long-configuration waveform
-    hypotheses with continuous Mac SDR evidence. The original `.4` capture
-    showed that the ESP32/CC1101 really emitted all `2,464` requested wake
-    symbols and a `138.420 ms` burst; the earlier apparent shortfall was not a
-    transmitter truncation. Candidate `.5` added only the measured low-tone
-    tail and produced about `193.5 us` after the frame versus `201.5 us` stock,
-    but still received no `81 50`. Candidate `.6` restored the exact stock
-    `2,400`-symbol wake and measured `135.340 ms` versus `135.361 ms` stock,
-    with about `211.5 us` of low tail, but still received no `81 50`.
-    Candidate `.7` moved only the long reply `2.650 ms` earlier; its decoded
-    configuration frame began exactly `2,952.55 ms` after the addressed
-    stage-1 request end, matching stock, while total duration remained
-    `135.340 ms` and the decoded frame remained byte-identical. It also stopped
-    at `2/6`. All three post-`.4` captures used asynchronous rtl_sdr mode and
-    reported no sample loss. Wake count, burst duration, low-tail length, and
-    absolute configuration timing are therefore ruled out as sole causes.
-    An unchanged `.7` repeat then produced a lossless, unclipped capture at
-    `captures/continuous/20260903-152421/continuous.cu8` (`sha256
-    7d81d7a445f39455b59b6958d54328659bd8be6215dc13d6d5170503acab6ee0`).
-    Its long reply used `0x45` deviation, all 2,400 wake symbols, zero ADC-rail
-    clipping, and the same local carrier/deviation/symbol quality as the short
-    stage-1 reply. The remaining measured mismatch was one step earlier: stock
-    retains the stage-1 reply's final low tone for `160.5 us`, while local `.7`
-    retained it for only `31.0 us`. Retry suppression was not sufficient proof
-    that this intermediate boundary had been accepted. Candidate `.8` changes
-    only that stage-1 low-tone hold using the already stage-0-proven `115 us`
-    correction. Its pass condition is valve-originated `81 50` and progress
-    beyond `2/6`; otherwise the tail hypothesis is falsified. Keep assignment,
-    payloads, carriers, wake counts, response timing, and configuration frozen.
-  - 2026-09-03 candidate `.8` again produced the valve's white acceptance
-    flash and addressed stage-1 request, but the node remained at `2/6` and no
-    valve-originated `81 50` followed. The lossless, unclipped capture is
-    `captures/continuous/20260903-154714/continuous.cu8` (`sha256
-    7f77e748084c27fb36ca633c434e86179d9ce30d6a03ebb905cc3903821bbf13`).
-    Its ordinary reply retained the final low tone for `149.5 us` versus
-    `160.5 us` stock. Its delayed configuration was byte-identical to the
-    selector-6 stock frame, all 2,399 wake transitions were recovered, and
-    zero ADC-rail clipping was present. Searching both accepted-stock and local
-    intervals down to `20 us` found no hidden RF exchange between the ordinary
-    reply and delayed configuration. The stage-1 tail hypothesis is therefore
-    falsified; assignment, stage-1 reply, payload, wake, and absolute timing
-    remain frozen.
-    A 2026-09-03 balanced-wake reanalysis corrected the earlier unconstrained
-    FFT result, which had selected payload-dependent sidebands. Across all
-    `2,704` wake-plus-frame symbols, stock and local polarity have zero
-    mismatches. The stock long wake measures about `40.149 kHz` deviation at
-    `434.351818 MHz`; local measures about `41.223 kHz` at `434.351362 MHz`.
-    The local threshold crossings have higher residual jitter, but no error is
-    concentrated at the RMT driver's 128-symbol refill boundaries.
-  - 2026-09-03 the controlled factory-reset repeat of unchanged `.8` again
-    produced the white acceptance flash and addressed stage-1 request, then
-    stopped at `2/6` without `81 50`. The node was disarmed after the delayed
-    response margin. All three radio nodes observed the request, but the event
-    stream contains no competing pairing or HTV145 acknowledgement
-    transmission from either receive-only node. Their differently delayed
-    `observed_at` values are network-ingestion times, not RF retry evidence;
-    the prior continuous IQ capture remains the timing authority and contains
-    only the first stage-1 exchange. Retained valve state and cross-node reply
-    collision are therefore ruled out for this failure.
-    Offline spectral averaging also found no carrier rise during the local
-    2.8-second synthesizer-on wait, ruling out detectable local-oscillator
-    leakage as the blocker. Transmit level is not justified as the next trial:
-    the counter-2 stock session placed its long reply about `1.5 dB` below the
-    short reply, while a second accepted counter-0 session placed it about
-    `0.6 dB` above.
-    The authorized non-enrolling calibration then transmitted four unclipped
-    frames to impossible endpoints. Stock has a sharp approximately `2 us`
-    transition matching 2-FSK; both GFSK variants take about `14 us` and are
-    ruled out. `0x44` undershoots the stock deviation while `0x45` remains the
-    closest justified CC1101 family. Separate symbol-aligned analysis found no
-    stock or local carrier/deviation change at the wake-to-frame boundary and
-    decoded all 304 frame symbols with zero errors. The broad modulation and
-    frame-boundary PHY hypotheses are therefore closed. The calibration run's
-    absolute center is excluded because the rebooted serial session omitted
-    the node-specific frequency correction; the prior live `.8` capture is
-    still authoritative for the already matched carrier.
-  - [x] Exercise candidate `.9`, which changes one implementation-only detail:
-    `.8` enters FSTXON immediately after the ordinary stage-1 reply and holds
-    the synthesizer there for roughly `2.8 s`. `.9` keeps the radio in receive
-    configuration until `20 ms` before the frozen delayed configuration
-    boundary. It changes no bytes, carrier, deviation, symbols, power, tail, or
-    on-air timing. The 2026-09-04 trial again produced the white stage-0
-    acceptance flash and addressed stage-1 request, but stopped at `2/6`
-    without valve-originated `81 50`. The lossless asynchronous SDR capture is
-    `captures/continuous/20260904-095320/continuous.cu8` (`sha256
-    d64143d5fd3a2d3779b0a362d20664645c0060da32679f2428c6d5ffedf0e605`).
-    It recovered all `2,399` wake transitions, a `135.339 ms` configuration
-    versus `135.361 ms` stock, a carrier only about `320 Hz` below stock, and
-    a `210.5 us` low tail versus `201.5 us` stock. Removing the long FSTXON
-    dwell is therefore falsified as the missing condition.
-  - [x] Validate a CC1101-clocked synchronous or FIFO-backed long
-    configuration as the next transmitter-path discriminator. Exercise it
-    first against an impossible endpoint and compare the emitted waveform to
-    stock; do not alter the frozen assignment, short reply, frame bytes, or
-    configuration boundary, and request explicit approval before any live arm.
-    - [x] Isolate the synchronous-serial path behind the research-bench build
-      and an impossible endpoint. Its first calibration stopped after exactly
-      `38 * 8 / 20,000 = 15.2 ms`; a red/green regression proved and fixed the
-      inherited fixed-length setting by selecting infinite length. A
-      forced-low/forced-high GDO2 probe then identified a missing
-      GDO2-to-GPIO25 connection. After adding that jumper, the probe passed
-      and synchronous calibration counted exactly `2,712` rising edges:
-      `2,400` wake symbols plus `304` frame bits plus the CC1101's documented
-      eight-bit TX latency. The radio remained in TX through the stream and
-      restored receive mode afterward.
-    - [x] Add a research-only raw-FIFO alternative needing no GDO2 clock wire.
-      Calibration `.5` queued all `300` alternating wake bytes plus the `38`
-      frame bytes, completed nine bounded FIFO refills, observed the expected
-      `TXFIFO_UNDERFLOW` terminator, and restored receive mode. No deployed
-      receiver reported the impossible endpoint.
-    - [x] Capture both calibrations with the Mac SDR. The synchronous path's
-      GDO2 clock was exact, but its CPU-polled data stream was corrupt: the
-      nearest sync retained `10/40` errors and no exact frame was recovered.
-      Exclude it. FIFO recovered the exact frame, no clipping, about `2,410`
-      alternating pre-sync symbols, a `135.779 ms` burst, and a carrier only
-      `639 Hz` above stock. It remains measurably `0.418 ms` longer than stock.
-      Evidence is in
-      `fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json`.
-    - [x] Exercise candidate `.10` twice unchanged. It switches only the
-      delayed configuration from ESP32 RMT to CC1101 FIFO; stage 0 and the
-      ordinary stage-1 reply remain frozen. The OTA test node is connected and
-      authenticated on `.10`. Require explicit approval before each arm and
-      accept only valve-originated `81 50` plus progress beyond `2/6`.
-      - 2026-09-04 trial 1 passed. Lossless SDR recovered the accepted
-        assignment, addressed stage-1 request/reply, FIFO configuration, and
-        valve-originated `81 50`, followed by two more addressed exchanges.
-        Node progress advanced from `2/6` to `5/6`. This proves the FIFO
-        configuration discriminator once; repeat `.10` unchanged before
-        freezing it.
-      - 2026-09-04 trial 2 passed unchanged. Node diagnostics again reached
-        `5/6`; SDR again recovered the exact FIFO configuration, both
-        post-configuration replies, and the same non-terminal `03/83` retry
-        family. Capture
-        `captures/continuous/20260904-170527/continuous.cu8` has SHA-256
-        `a17c79851f9ee2a102b899e3d77d28d0d701d694a066bce48d279418bb9bf294`.
-        The assignment-through-configuration prefix is now frozen.
-      - An intervening unchanged attempt also put the accepted configuration
-        on air and elicited the next valve request, but the node reported
-        `transmit_failed` because its post-FIFO receive restoration failed.
-        Treat that as an implementation-recovery defect rather than a valve
-        protocol rejection; it does not replace either clean `5/6` trial.
-    - [x] Exercise isolated candidate `.11`.
-      Preserve the entire accepted prefix and add only the already proven
-      `115 us` final-low hold to zero-based reply step 4. Candidate `.10` sent
-      the exact stock step-4 frame on the matched carrier, wake, and schedule,
-      but its burst ended `129.5 us` before stock; the valve then emitted
-      `84/03`, `84/83`, `85/03`, `85/83` retries instead of terminal `84/2c`.
-      The approved 2026-09-04 trial did not pass: it again stopped at `5/6`
-      with the same retries. Capture
-      `captures/continuous/20260904-171403/continuous.cu8` has SHA-256
-      `1aaf802c3c52b013de79b93f81bca954fcda43cce73fb2ff75a0c29c50a652a1`.
-      The burst measured `31.3505 ms` versus `31.358 ms` stock, which shows that
-      matching the tail with RMT alone was insufficient. A matched tail together
-      with FIFO edge stability remains untested.
-    - [x] Calibrate isolated candidate `.12` without addressing the valve.
-      Freeze the complete accepted prefix and move only zero-based reply step
-      4 from ESP32 RMT to CC1101 FIFO hardware clocking. Candidate `.11` still
-      had transition-fit RMS `3.802` samples versus `0.5531` stock despite its
-      now-matched total duration. Two impossible-endpoint captures recovered
-      the exact frame and all 320 wake symbols without clipping. FIFO RMS was
-      `0.430--0.459` samples, proving that it removes the RMT jitter. Its 115 us
-      driver hold yielded only `68--69 us` of post-frame low tone versus
-      `160.5 us` stock, so `.12` is not a live candidate.
-    - [x] Calibrate isolated candidate `.13` without addressing the valve.
-      Preserve the proven prefix and candidate-.12 FIFO clocking, changing only
-      the FIFO hold from `115 us` to the derived `207 us`. Two unchanged
-      impossible-endpoint trials recovered the exact frame and 320-symbol wake,
-      with transition-fit RMS `0.320--0.325` samples. Both nevertheless retained
-      only `69 us` of post-frame low tone. Diagnostics captured MARCSTATE `0x16`
-      (`TXFIFO_UNDERFLOW`) before the delay, proving that RF had already ended;
-      a software wait in that state cannot extend the waveform.
-    - [x] Calibrate isolated candidate `.14` without addressing the valve.
-      Preserve the accepted prefix and the exact FIFO waveform while removing
-      candidate `.13`'s ineffective post-underflow wait so receive mode is
-      restored immediately. Capture
-      `captures/continuous/20260904-180543/continuous.cu8` recovered the exact
-      impossible-endpoint frame, all 320 wake symbols, and transition-fit RMS
-      `0.337` samples without clipping. The driver observed the expected
-      `TXFIFO_UNDERFLOW`, restored receive, and reported success.
-    - [x] Exercise controlled live candidate `.14` after explicit approval.
-      The 2026-09-05 trial again reached `5/6`: the SDR recovered the exact
-      configuration response and step-4 reply, followed by lower-carrier
-      `84/03` and `85/03` retries rather than terminal `84/2c`. The node was
-      verified armed before the gesture and disarmed after the trial.
-      This completed the experiment, not the enrollment gate. Its step-4
-      capture clipped heavily (`adc_rail_fraction=0.491132`), so it cannot
-      establish a precise analog match to stock.
-    - [x] Repeat `.14` with reduced SDR gain and no pairing-profile changes.
-      Establish an unclipped recording before further waveform conclusions.
-      The acceptance signal remains valve-originated terminal `84/2c` and
-      node progress `6/6`; require two unchanged successful progressions
-      before declaring enrollment supported. Ask before every arm.
-      The September 5 candidate `.18` repeat preserved `.14` pairing and used
-      `0.9 dB` SDR gain. The user reported a white LED; node and recovered RF
-      still proved only `5/6`, with the same `84/03` through `85/83` retries.
-      The final reply had no clipping, FIFO transition-fit RMS `0.316` samples,
-      and a `70 us` post-frame low tone versus `160.5 us` stock. Offline channel
-      filtering recovered the quiet valve requests that wideband demodulation
-      missed. See `research/fixtures/htv145_low_gain_terminal_retry_20260905.json`.
-    - [x] Calibrate the stage-4 reply with both FIFO edge stability and the
-      stock post-frame low-tone duration. Keep the accepted prefix unchanged;
-      measure against impossible endpoints first. Extending a wait after FIFO
-      underflow has already been disproven; any extension must occur while RF
-      is active. Arm another valve trial only after measuring the candidate.
-      On September 5, a research-only active FIFO stop with one zero padding
-      byte and a measured `910 us` delay recovered the exact packet in three
-      unchanged unused-address trials. Their low-tone endings were
-      `157--164 us` versus `160.5 us` stock, with `0.309--0.318` sample edge
-      RMS and no clipping. Candidate `.21` applies the setting only to reply 4.
-      See `research/fixtures/htv145_fifo_active_tail_calibration_20260905.json`.
-    - [x] Test the calibrated `.21` stage-4 ending in one user-assisted pairing
-      attempt. The September 5 trial again reached `5/6` with a white LED,
-      followed by `84/03` through `85/83` retries. The real final reply matched
-      stock bytes and measured `162.5 us` of low tone with `0.323` sample edge
-      RMS and no clipping. This proves the ending correction transferred to
-      the live exchange; matching both ending and edge stability was still
-      insufficient for terminal acceptance. The node was disarmed afterward.
-      See `research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json`.
-    - [ ] Characterize final-reply scheduling against the actual receive edge
-      before another candidate. Same-method filtered RF envelopes place `.21`
-      about `113--131 us` later than stock; the software FIFO-poll timestamp
-      is a possible contributor, not a proven cause. Preserve the accepted
-      prefix and measured ending; do not select a fixed timing correction from
-      this one observation alone. Terminal `84/2c`, `6/6`, and two unchanged
-      successful progressions remain required before claiming support.
-      - [x] Prepare and calibrate `.22` to observe packet end on existing
-        GDO1/MISO with SPI idle, using that edge only for zero-based reply 4.
-        Three CRC-valid receive frames had qualified edges `40--48 us` before
-        the FIFO poll. The installed image also repeated three exact,
-        unclipped final-reply probes with `163--164 us` low tone. Stale,
-        missing, short, or ambiguous observations suppress the experimental
-        reply. Production and supervised builds exclude the experiment.
-        See `research/fixtures/htv145_receive_edge_candidate_calibration_20260905.json`.
-      - [x] Capture one authorized `.22` pairing attempt with serial edge
-        diagnostics and low-gain SDR. Measure actual reply onset relative to
-        the request, verify the calibrated ending, and evaluate terminal
-        acceptance. The September 5 attempt captured a qualified request-end
-        marker and scheduled the reply from it plus exactly `52,550 us`.
-        At stable 20% and 50% RF-envelope thresholds, the remaining gap from
-        stock was `36.5--38.5 us`; the 10% threshold was contaminated and
-        excluded. The exact final reply retained `163.5 us` low tone and
-        `0.310` sample edge RMS without clipping. The valve again stopped at
-        `5/6` and repeated `84/03` through `85/83`; the node was disarmed.
-        See `research/fixtures/htv145_receive_edge_terminal_retry_20260905.json`.
-      - [x] Obtain a fresh stock-gateway pairing and dry watering-command capture.
-        September 5 stock pairing completed the terminal request/reply on
-        counter 0, selector 2, channel 4 (`433.4715 MHz`). Three cloud-integration
-        opens (60, 120, 60 seconds), one automatic stop, and two explicit early
-        closes succeeded. All five commands have independent positive valve
-        responses; subsequent reports and gateway ACKs are retained. HA access
-        setup required a capture rollover before controls, with the same
-        association preserved and no commands during the gap. The original
-        duration was restored, the valve confirmed idle, and custom nodes
-        remained disarmed. Fixture:
-        `research/fixtures/htv145_selector2_stock_pairing_control_20260905.json`.
-      - [ ] Align the stock/local association branch before another fine timing
-        comparison. This fresh success used selector 2/channel 4; `.22` used
-        selector 6/channel 12 and factory counter 2. Preserve the calibrated
-        candidate while identifying the smallest measured branch comparison.
-        Also account for the first stock open's `0x90` marker followed by
-        `0x10` opens in the same association; a fixed association-wide marker
-        assumption is not established. Existing evidence still favors sharp
-        2-FSK and the `0x45` deviation family over GFSK or `0x44`.
-        - [x] Prepare an isolated counter-0/selector-2 profile from the complete
-          September 5 stock transcript. Native replay covers every reply,
-          current-clock patching, wrong-branch/CRC rejection and the missing
-          terminal gate. Candidate `0.15.4-htv145-pairing-selector2-candidate.2`
-          retains the hardware FIFO configuration and receive-end observer,
-          applies a measured selector-2-only initial-carrier correction and
-          calibrated 905 us step-4 active stop, and reports assigned channel 4.
-          Production and supervised builds exclude its calibration command.
-          Calibration evidence:
-          `research/fixtures/htv145_selector2_candidate_calibration_20260905.json`.
-        - [x] Run one specifically authorized selector-2 attempt with the stock
-          gateway unplugged and continuous low-gain SDR plus serial diagnostics.
-          Candidate `.2` transmitted its assignment, then the valve continued
-          its factory sweep and the node reported `stage_0_rejected`, `1/6`.
-          The operator reported failure. No control command was sent. A prior
-          arm received no new request and ended early on stale command progress;
-          command-ID scoping was fixed before the explicitly authorized rearm.
-          The live assignment matched stock apart from clock bytes; its
-          oscillator-relative carrier differed by 601 Hz and the stable RF
-          envelope gaps were 357--360 us later. Timing is not a proven cause.
-          Evidence: `research/fixtures/htv145_selector2_assignment_rejection_20260905.json`.
-        - [ ] Preserve the accepted counter-2/selector-6 `.22` prefix. Local
-          open, automatic stop and early close now work after 5/6; prioritize
-          repeatable operational acceptance and report ACK/counter integration
-          before another terminal timing tweak. The missing terminal exchange
-          remains research work unless it blocks a lifecycle/reliability gate.
-          Identify a discriminating measurement before another RF change. The
-          selector-2 `.3` initial-delay adjustment was built and tested, but
-          parked without flashing or arming after the user questioned this
-          detour. Its patch and binary remain local; it is not the next trial.
-        - [x] Test operational control independently of terminal acceptance.
-          On September 5 the user-approved `.22` 5/6 association supported two
-          acknowledged one-minute opens, automatic stop and an acknowledged
-          active close. The working selector-6 close used the incremented
-          counter, not the fresh selector-2 same-counter hypothesis. See the
-          control acceptance gate and fixture below; a white LED alone was
-          not used as proof, and the full six-step exchange remains unproven.
-- [x] Require explicit user approval before every RF pairing arm. Analysis,
-      builds, OTA staging, and receive-only SDR capture may proceed unattended,
-      but the gateway must not enter a transmit-armed pairing state until the
-      user approves that specific attempt.
-- [x] Keep firmware-catalog staging within the runtime's 32-release bound.
-      Staging probe `.22` temporarily produced a 33-entry catalog that the
-      gateway rejected. The staging tool now refuses overflow before writing
-      an artifact and accepts only explicit, existing, same-variant release
-      IDs for supersession; regression tests cover both outcomes.
-- [x] Prove and freeze the initial assignment boundary. It passes only when
-      two consecutive unchanged trials produce the expected addressed stage-1
-      valve request. Freeze its request matcher, assignment payload, endpoints,
-      selector, carrier, prelude, deviation, wake, scheduler, clock derivation,
-      and trailer in a regression fixture and a separate commit.
-  - [x] First unchanged counter-2 trial produced an addressed stage-1 request
-        and matching node `stage_0_accepted` diagnostics.
-  - [x] Candidate `.2` repeated the frozen counter-2 assignment and produced
-        the expected addressed stage-1 request. Its later timing correction did
-        not alter stage 0.
-- [ ] Build the remaining exchange incrementally without modifying a frozen
-      prefix:
-  1. stage-1 ordinary reply plus its coupled delayed long-wake configuration,
-     proven by the valve's configuration response and next addressed request;
-  2. stage-3 reply, proven by the stage-4 request;
-  3. stage-4 reply, proven by the stage-5 request;
-  4. stage-5 reply, proven by ordinary paired telemetry on the new association.
-  Each boundary requires two consecutive unchanged progressions before it is
-  frozen. LED state and transmit completion are supporting observations only.
-- [ ] Complete three consecutive local pairings with fresh batteries and
-      valve-originated terminal evidence on the unchanged final candidate.
-- [ ] Confirm removal and re-pairing preserve the intended stable physical
-      identity without stale entities, then implement retained re-pair and
-      battery-rejoin behavior as separate lifecycle paths without reopening the
-      frozen fresh-enrollment transcript.
-
-Exit criteria: a user can pair and remove every supported family entirely from
-HA, each family completes three consecutive final-build trials, and each
-physical device has exactly one HA representation.
-
-The 2026-08-26 HTV145 stage-0 discriminator trials all stopped at 1/6: an
-on-air reply close to the stock 50.55 ms slot, a six-to-ten-foot separation
-trial, and a generated custom controller/companion identity. Continuous IQ
-shows matching decoded payload structure, wake length, and clock construction,
-but the later balanced-wake discriminator proved the carrier normalization and
-deviation did not match. These negatives make blind timing, near-field
-saturation, and retained-controller collision poor next hypotheses while
-leaving probe `.23` as the current evidence-backed PHY test. The later
-2026-08-28 stock exchange supplies a second
-coherent branch: counter `3`, selector `6`, assignment to the retained valve
-route, and a 434.461993 MHz routine carrier. Corrected bounded-IQ
-analysis recovered all four
-lower-channel paired requests and the controller-configuration response from
-each stock success, but zero paired requests after the rejected local
-assignments; the stall is valve-side rejection, not a node receive-channel
-miss. Probe `.8` observed the August 28 physical sweep through counters `0`,
-`2`, and `3`, automatically answered counter `3`, and reported one completed
-transmit step; the valve emitted no paired continuation. That result proves
-the failed trial was not an operator timing miss and rejects the hypothesis
-that the captured counter-3 frame alone is sufficient in every retained
-state. The event journal retains counter `0` from the SDR, counter `2` from the
-selected node, and counter `3` from a second node. Probe `.9` then answered the
-first evidenced selector-5 branch while a full IQ recording independently
-captured the result. The valve rejected it, fell through counters `2` and `3`,
-and the node also emitted the exact selector-6 reply; neither branch produced
-paired traffic. The progressively shorter visible phases therefore represent
-a bounded fallback sequence. A symbol-resolved re-analysis of probe `.12`
-corrected the former claim that factory counter `1` was missing: the valve sent
-counter `1` on an alternate 433.363 MHz solicitation carrier, which the
-single-center analyzer did not inspect. The counter-0 local waveform
-matches the accepted stock assignment within 122 Hz, with identical deviation,
-packet-sync timing, static payload, and valid current packed clock. Raw-envelope
-comparison then exposed what frame decoding hid: stock places a 256-symbol
-continuous high mark before the normal 320-symbol alternating wake, producing
-43.8 ms total RF versus 31.3 ms locally. Both sync words arrive about 66.6 ms
-after the request ends. Evidence is frozen in
-`research/fixtures/htv145_first_branch_local_rejection_20260828.json`. Probe
-`.10` adds only this lead-in and advances RF start 12.8 ms to preserve the
-proven sync instant. The 2026-08-28 physical `.10` trial remained at step 1/6:
-the selected node heard the factory sweep, transmitted its reply, then observed
-the valve fall through to counter `3` without any paired continuation. The
-recovered leading mark is therefore not sufficient by itself. Before changing
-payload, carrier, timing, or branch selection again, record the `.10` reply with
-continuous IQ and compare its actual on-air mark polarity, length, wake, sync,
-and envelope directly with the accepted stock counter-0 exchange. That capture
-showed the earlier decoder description was incomplete: stock uses a
-256-symbol alternating prefix at a shifted center and larger deviation, not a
-constant mark. Probe `.11` successfully changed RF settings within one
-continuous symbol stream while preserving the ordinary wake and assignment,
-but its coarse `+13`/`0x47` settings over-shifted and over-deviated the prefix;
-the valve again stopped at 1/6. Empirical comparison with the accepted stock
-prefix and the known-good ordinary `0x45` HTV405 waveform mapped probe `.12`
-to FSCTRL0 offset `12` and DEVIATN `0x46`, but that probe still failed. The
-estimator used for that inference excludes frequencies near the SDR's DC
-artifact, and one of the stock prelude tones falls inside the excluded band.
-Direct symbol measurement instead shows stock reversing prelude polarity at
-the ordinary-wake boundary and using about 30.2 kHz deviation, while probe
-`.12` retained the wake polarity and used about 44.4 kHz. Their ordinary wakes
-both measure about 34.8--34.9 kHz. This is a material waveform mismatch, not a
-minor timing or counter failure, and is frozen in
-`research/fixtures/htv145_probe12_prelude_rejection_20260828.json`.
-
-Before another valve trial, keep the proven assignment frame, selector branch,
-ordinary carrier, ordinary wake, sync instant, and response scheduling frozen.
-Add one non-pairing bench probe that emits a small prelude-only calibration
-matrix: reversed prelude polarity, FSCTRL0 offsets `12` and `13`, and DEVIATN
-values `0x41` and `0x42`. Capture all four variants through the SDR and select
-the least-error stock match by center shift, tone separation, polarity,
-boundary continuity, and symbol count. Only that measured winner may enter the
-next automatic pairing image. A live success requires addressed valve-originated
-paired traffic before the next factory fallback frame, followed by the captured
-six-stage HTV145 transcript; neither TX completion nor the white LED is enough.
-Keep fresh identity allocation gated until one more stock enrollment exists.
-
-The 2026-08-30 low-gain calibration completed that matrix without transmitting
-an addressed assignment. FSCTRL0 `13`, DEVIATN `0x42`, and prelude-only polarity
-reversal were the closest tested stock match: +20.65 kHz center shift and
-31.77 kHz deviation versus stock's +20.28 kHz and 30.21 kHz, with an unchanged
-34.99 kHz ordinary wake. Probe `.15` then changed only those measured prelude
-settings. A continuous SDR capture proved that the node answered factory
-counter `0` with selector `5`, then answered the later counter `3` fallback with
-selector `6`; the valve emitted no paired-stage traffic after either reply.
-The actual counter-0 prefix measured +20.64 kHz, 31.74 kHz deviation, reversed
-polarity, and 12.67 ms on-air versus stock's approximately 12.45 ms. This is a
-real valve-side rejection, not a missed node transmission or operator window.
-The next trial replayed unchanged probe `.15` with the valve's retained stock
-controller/companion identity. The LED remained in a different blinking
-pattern, but continuous IQ again showed the complete factory fallback sweep,
-counter-0 selector-5 and counter-3 selector-6 local assignments, and zero
-paired-stage traffic. Retained identity is therefore not sufficient. An
-initial whole-frame carrier estimator suggested a common 5.46 kHz-high error,
-but the controlled probe `.16` disproved it. The August 30 `.16` attempt was
-well inside the five-minute arm and SDR windows: the valve's counter-0 request
-started at 53.116 seconds, the node began its reply at 53.184 seconds, and the
-valve continued its fallback sweep with no paired-address traffic. Direct
-comparison of only the alternating wakes removes payload-symbol bias: probe
-`.15` was within about 7 Hz of the accepted stock request-to-assignment delta,
-whereas `.16` moved 5.57 kHz low. Probe `.17` therefore restores the zero
-HTV145-only correction while preserving `.15` modulation, prelude, timing,
-payload, branch selection, and identity handling. Carrier selection is frozen
-again. The next physical probe varies one remaining evidenced discriminator
-relative to `.15`: a counter-0-only +500 us scheduler adjustment, centered on
-the 49.85 and 50.20 ms local observations versus the accepted stock 50.55 ms
-slot. It does not move the independently timed counter-3 fallback branch.
-Evidence is frozen in
-`research/fixtures/htv145_probe15_calibrated_prelude_rejection_20260830.json`
-and
-`research/fixtures/htv145_probe15_retained_identity_rejection_20260830.json`,
-with the estimator correction in
-`research/fixtures/htv145_probe16_carrier_correction_rejection_20260830.json`.
-
-Probe `.17` then preserved the probe-`.15` carrier, calibrated prelude,
-payload, selector branches, and retained identity while moving only the
-counter-0 assignment scheduler by `+500 us`. A dedicated continuous IQ capture
-measured the actual selector-5 assignment at `50.800 ms` after the counter-0
-request ended, only about `0.25 ms` later than the accepted stock `50.55 ms`
-observation. The unchanged fallback branch answered counter `3` at `54.800 ms`.
-Both assignments echoed the correct counter and used the correct destination
-and selector, but the valve emitted zero addressed stage-1 requests. This
-rejects the small scheduler mismatch as the missing enrollment discriminator.
-Do not create probe `.18` from another small timing, carrier, or identity guess;
-resume only after a new stock/local discriminator is evidenced. The complete
-result is frozen in
-`research/fixtures/htv145_probe17_scheduler_rejection_20260901.json`.
+Exit: every supported family can pair/remove through HA, with repeated physical
+acceptance and one stable HA representation. Dry one-zone control does not close
+its full-enrollment gate.
 
 ## Phase 2 — persistence, recovery, and coexistence
 
-- [ ] Restore the installed Right Bed sensor's direct local reporting and prove
-      consecutive accepted moisture reports without SDR assistance. On
-      2026-09-05, HA's SDR reader had exited with code 2 and no SDR USB device
-      was enumerated. Right Bed's latest moisture report was SDR-only on
-      September 2; its last ESP32 reading was August 25. Five subsequent factory
-      sweeps triggered known rejoin attempts without later moisture. Its last
-      observed `04/83` report route/form also differs from the configured
-      `01/82` routine-ACK path. A native replay reproduced the rejected
-      counter-2 repeat marker; firmware 0.15.8 accepts that earlier opportunity
-      while preserving the sensor's canonical identity and single ACK owner.
-      OTA on its garden owner passed health confirmation with all assignments
-      restored; the live Right Bed reporting assertion remains false.
-      Verify the next natural sweep and subsequent moisture before declaring
-      recovery; use a physical wake capture if the corrected reply is rejected.
-      Evidence:
-      `research/fixtures/hcs026_missing_sdr_coverage_20260905.json`.
-- [x] Persist one sensor ACK owner and restore assignments after ordinary node
-      reconnect, gateway reconnect, and successful OTA.
-- [x] Freeze recurring stock-gateway HTV405 idle/watering reply evidence and
-      implement an association-scoped, non-actuating liveness ACK on the
-      valve's single durable control-node owner.
-- [ ] Complete the HTV405 liveness soak. The first authorization-scoped over-air
-      ACK transmitted successfully on 2026-08-26, and its single-owner
-      assignment survived an immediate custom-gateway restart; prove subsequent
-      routine valve reports continue across multiple cycles and longer node/
-      gateway restarts before closing this gate.
+- [x] Verify Right Bed resumed consecutive accepted moisture reports directly
+  from ESP32 radios without SDR assistance. The retained recovery window contains
+  208 accepted observations over about 11 hours; maximum gap 469.581 seconds.
+  Evidence: [direct reporting recovery](research/fixtures/hcs026_direct_reporting_recovery_20260906.json).
+  This does not prove every ACK was accepted or complete the 72-hour soak.
+- [ ] Complete four-zone liveness qualification across repeated report cycles
+  and longer gateway/node restarts, with persistent single-owner ACK evidence.
 - [ ] Battery-cycle each supported sensor family and restore the same HA device,
-      paired identity, and routine reporting without opening pairing.
-- [ ] Capture the stock RainPoint gateway's complete battery-rejoin exchange for
-      each valve family before changing either proven new-enrollment path.
-- [ ] Reproduce retained-association battery rejoin locally for HTV405 and
-      HTV145, including authenticated idle/control traffic as terminal proof.
-- [ ] Restart HA, the custom local gateway, and each assigned node while devices
-      are idle; restore associations, counters, ACK owners, and availability.
-- [ ] Deliberately reassign one sensor ACK owner and prove the old owner is
-      revoked before the new owner can transmit.
-- [ ] With the stock RainPoint gateway powered, prove a custom-identity sensor
-      keeps reporting and receiving only its custom-node acknowledgements while
-      legacy stock-owned devices continue normally.
-- [ ] Repeat coexistence with a custom-identity valve and confirm neither
-      gateway steals the association, controls the other's cohort, or creates
-      duplicate HA devices.
-- [ ] Document the recovery path for every destructive association transition.
+  association, and routine reporting without opening pairing.
+- [ ] Record stock battery-rejoin exchanges for both valves, then reproduce local
+  retained-association recovery with device-owned terminal/operational proof.
+- [ ] Restart HA, gateway, and each assigned node while idle; verify identities,
+  counters, ACK owners, availability, and no replay.
+- [ ] Reassign one sensor ACK owner and verify revocation precedes replacement TX.
+- [ ] Qualify sustained stock/custom coexistence for sensors and valves with
+  separate ownership, normal stock operation, and no duplicate HA devices.
+- [ ] Document recovery for every destructive association transition.
 
-Exit criteria: device battery changes and infrastructure restarts do not require
-full re-pairing, and stock-owned and custom-owned device cohorts operate at the
-same time without conflicting authority.
+Exit: ordinary battery changes and infrastructure restarts do not require full
+re-pairing; independent stock/custom cohorts operate without conflicting authority.
 
 ## Phase 3 — reliable valve control
 
-### HTV405
+### Four-zone valve
 
-- [x] Confirm one- and two-minute bounded opens on Zones 1--4 with authenticated
-      responses, independent active reports, and valve-owned automatic stops.
-- [x] Confirm local explicit early stop on Zone 1.
-- [x] Complete an installed 20-minute Zone 1 irrigation run with a valve-owned
-      return to idle. On 2026-09-01, unified firmware
-      `0.15.0-supervised-beta.11` accepted freshly initialized counter `1`,
-      reported a 1,200-second Zone 1 run, and returned itself to idle after the
-      requested duration.
-- [x] Disprove the old duration-preset and additive-bias hypotheses and define
-      the shared packed duration scalar. Duration is a two-second counter;
-      low-byte bit 7 is a mandatory marker and its displaced data bit is
-      carried in the adjacent extension byte. This explains every accepted
-      field, the rejected marker-less `16 01`/`42 02` candidates, and the old
-      `c2 01 00` request that the valve decoded as 644 rather than 900 seconds.
-      Exact Python and firmware round trips cover every whole minute 1--60.
-- [x] Physically confirm the resolved displaced-bit branch with synchronized
-      5- and 15-minute HTV405 opens. On 2026-09-02, the valve accepted
-      `96 00 80` and `c2 01 80`, independently reported exactly 300 and 900
-      seconds, completed the five-minute run on its own, and authenticated the
-      15-minute early stop. Gateway `0.33.42`, integration `0.13.9`, and
-      firmware `0.15.5` expose the continuous 1--60 whole-minute capability.
-      The redacted boundary exchange is retained in
-      `research/fixtures/htv405_packed_duration_boundary_20260902.json`.
-- [ ] Retain the end-to-end installed result across RF evidence, duration decode,
-      HA completion notification, automation outcome, and watchdog outcome.
-- [ ] Confirm local explicit early stop on Zones 2--4.
-- [x] Validate control under a generated custom controller identity. A fresh
-      generated-identity association initializes the independent command
-      counter at `1`: the 2026-08-26 Zone 1 command received an authenticated
-      counter-`1` response, independent active reports, and a valve-owned
-      automatic stop after 60 seconds. Pairing now initializes that counter
-      once without waiting for the unrelated routine telemetry sequence.
-- [ ] Preserve an authenticated watering-command counter when an existing
-      valve is re-paired to the unchanged custom controller, companion,
-      selector, and valve route. The guarded 2026-08-26 five-minute trial found
-      that the gateway reset its stored counter to `1` even though earlier
-      authenticated responses had established `3` as next; sequence `1`, its
-      same-counter retry, and the final sequence-`2` recovery all timed out.
-      A guarded discriminator subsequently proved the valve had retained
-      sequence `3`; preserve that authenticated value across a same-identity
-      repair while continuing to initialize a genuinely new association at
-      `1`. The subsequent retained sequence-`4` one-minute run also
-      authenticated, advanced to `5`, and stopped itself after 61.414 seconds,
-      proving sequence-`3` acceptance was not an isolated coincidence. A new
-      physical same-identity repair remains the final gate. Evidence is
-      retained in
-      `research/fixtures/htv405_same_identity_repair_counter_20260826.json`.
-- [ ] Physically verify gateway/node restart during idle and during a bounded
-      run remains observation-only and reconciles from subsequent valve
-      reports. The idle half passed on 2026-09-01: restarting gateway `0.33.21`
-      emitted no valve command and restored authenticated next counter `4`;
-      power-cycling the assigned beta.11 Vegetable Garden Radio restored its
-      identity, three sensor ACK assignments, HTV405 liveness/control profile,
-      and disarmed state. A subsequent 60-second open authenticated counter
-      `4` -> `5` and ended with valve-owned idle telemetry. Keep this gate open
-      only for restart during an active bounded run.
-- [ ] Exercise late response, RF timeout, duplicate request, 15-second hardware
-      interval, authenticated counter recovery, and positively observed overdue
-      anomaly handling without speculative opens or startup closes.
-- [x] Physically validate deterministic, non-actuating HTV405 command-counter
-      synchronization while the valve is independently confirmed idle.
-      Gateway 0.33.31 first fixed the action-alias defect that discarded a valid
-      closed response. Successor and skip-one tests then showed that close can
-      select a new counter. The exhaustive 2026-09-02 test visited all 32
-      five-bit values in bit-reversed order from authenticated next `10`; every
-      value returned a matching idle response and became the retained next
-      counter. Open `31` proved rollover to `0`. A production-shaped close `0`,
-      15-second interval, open `0` sequence authenticated next `1` and ended on
-      valve-owned automatic idle. Gateway 0.33.36 therefore replaces the old
-      scan with a fixed close-`0` anchor, repeats only that anchor once after
-      silence, stops on a second silence or strict rejection, and normalizes
-      persisted legacy scan state before transmitting.
-- [x] Implement fixed-anchor synchronization and a requested HTV405 open as one
-      explicit, observable transaction. Gateway 0.33.37 queues no open until
-      close `0` receives an authenticated idle response and the 15-second
-      command interval has elapsed. It cancels or fails queued work on gateway
-      restart, node or transport loss, rejection, timeout, unexpected watering,
-      or operator cancellation, and never replays an open after restart. HA
-      0.13.6 exposes a phase/result sensor, removes valve actuation features
-      while active to prevent duplicate clicks, and permits cancellation only
-      before open dispatch. Regression coverage includes authenticated air and
-      node-reported responses, late replies, duplicate requests, node loss,
-      restart, timeout, unexpected watering, operator cancellation, and the
-      exact 15-second boundary.
-- [x] Physically validate the one-click synchronized HTV405 start transaction.
-      On 2026-09-02, deployed gateway 0.33.37 moved a 60-second Zone 1 request
-      through synchronization, authenticated anchor confirmation, the exact
-      15-second interval, open-response confirmation, independent watering
-      telemetry, valve-owned automatic idle, and restored start availability.
-      The live state surface exposed every phase and disabled starts throughout
-      active work. Gateway 0.33.39 additionally labels the final idle result
-      **Watering completed** instead of retaining the earlier start-confirmed
-      wording.
-- [x] Make synchronization deterministic across HTV405 sleep windows. Two
-      failed 2026-09-03 dashboard requests transmitted their close-`0` anchors
-      12--13 minutes after the last valve report and received no response. A
-      manual close-`0` sent at the start of the valve's next report burst
-      authenticated immediately, followed by a fully confirmed 15-minute run.
-      Gateway 0.33.43 and firmware 0.15.7 therefore queue the non-actuating
-      anchor at the owner node until the next link report. The response timeout
-      and 15-second hardware interval now start from actual RF transmission,
-      and HA 0.13.10 exposes a cancellable **Waiting for the valve's next radio
-      check-in** phase instead of reporting a false timeout while the valve is
-      asleep. The installed scheduled and manual watering scripts submit one
-      transaction, detect request rejection within five seconds, and otherwise
-      allow a bounded 17-minute wake/check-in window before alerting; they no
-      longer stack command retries on top of the integration transaction.
-- [x] Make the installed Garden Run Now control follow that transaction rather
-      than layering its own retry loop on top. Integration `0.13.7` exposes a
-      start-availability binary sensor plus the transaction ID; the dashboard
-      presents the live status, disables Run Now while a request is active,
-      and the script submits exactly one open. A new transaction-specific
-      terminal failure updates the decision helper, mobile alert, and
-      persistent Home Assistant notification within a bounded 40-second
-      confirmation window. The installed script now validates the gateway-
-      published duration range up front and no longer adds a redundant
-      ten-second duration-entity polling delay before submitting the request.
-- [x] Prevent false Run Now failures caused by a throttled HA state refresh.
-      On September 6, the 09:55 request was valve-confirmed at 09:55:04.755,
-      but the script alerted at 09:55:09 while still reading the previous
-      **Synchronization completed** transaction. The valve service had awaited
-      HA's debounced refresh request (up to a ten-second cooldown), not a
-      completed fetch; the script's new-ID deadline was five seconds.
-      Integration `0.14.2` makes open/close await an immediate authoritative
-      refresh before returning. A callback regression reproduces the stale-ID
-      failure and covers pending, confirmed, and failed responses without
-      inventing successful watering. No RF payload, counter, retry, or watering
-      duration changes are involved. Deployment verification is non-actuating;
-      the next normal user run remains the live notification acceptance check.
-- [x] Design morning synchronization with direct daytime commands. The proposal
-      reuses one report-triggered close-0 anchor inside a bounded morning window,
-      persists counter/owner continuity, and sends a user's bounded command
-      directly when ready. It distinguishes counter validity from an asleep
-      receiver; see `research/HTV405_MORNING_SYNC_DESIGN.md`.
-- [x] Implement optional morning synchronization and direct daytime commands in
-      gateway `0.34.2`, integration `0.14.0`, and firmware `0.15.11`. Keep the
-      feature disabled by default. Cover daily claims, bounded radio waits,
-      restarts, missed windows, concurrent clicks, and uncertain opens in tests.
-- [x] Verify the initial known-idle synchronization, direct open, and automatic
-      stop on hardware. September 5 accepted close counter 0 at a fresh link
-      report, authenticated one direct Zone 1 one-minute open in 0.91 seconds,
-      and independently reported idle with next counter 1. The operator approved
-      this garden watering within a 15-minute total test budget; see
-      `research/fixtures/htv405_morning_sync_smoke_20260905.json`.
-- [x] Correct the September 6 morning-sync rejection of an idle counter-zero
-      reply naming the last watered zone. Gateway 0.34.5 and firmware 0.15.14
-      restrict the exception to known-idle morning anchors, retain strict
-      watering-zone validation, and preserve the actual failure reason.
-      See `research/HTV405_MORNING_SYNC_DESIGN.md` for the observed exchange.
-- [ ] Validate that a morning-synchronized HTV405 accepts retained-counter opens
-      away from report windows after 1, 4, 8, and 12 hours with a stable owner.
-      Measure actual wake/repetition against stock and command latency before
-      enabling the daily schedule for garden watering. Keep current
-      garden behavior until this evidence supports immediate daytime dispatch.
-      The September 5 controlled soak stopped before its first scheduled open:
-      an intervening Zone 4 one-minute direct command at 14:00:58 UTC changed
-      the retained counter. That command authenticated in `0.849 s`, advanced
-      counter `1` to `2`, and completed with independent idle evidence. It is
-      useful daytime evidence about 55 minutes after sync, but does not complete
-      the controlled interval gate. Further test opens were cancelled and
-      morning mode restored off; only the initial one-minute test was issued.
-      The operator resumed the experiment for September 6: a 05:30–06:00 Eastern
-      sync window, then one-minute Zone 1 checks 1, 4, 8, and 12 hours after
-      actual confirmation. The canonical-checkout ledger preserves prior trials
-      and charges both earlier one-minute runs to the original 15-minute budget.
-      Eight harness tests cover scheduled-sync adoption, off-report timing,
-      continuity, budget, uncertain submissions and automatic-idle evidence.
-      The resumed retention gates remain pending; no missed checkpoint is replayed.
-- [ ] Determine what causes an authenticated HTV405 counter to become stale.
-      Timestamped routine-ACK outcomes and radio-node connection/reboot
-      checkpoints are now durable. Hold the gateway and owner node stable and
-      test the exact next counter after controlled 1-, 4-, 8-, and 12-hour idle
-      intervals, then compare a stock-gateway open after a similar interval to
-      distinguish wall-clock reset, owner-node continuity loss, ACK gaps, and a
-      stock-only maintenance exchange. This causal research no longer blocks
-      deterministic fixed-anchor recovery.
+- [ ] Retain one installed run's RF response, duration, HA notification,
+  automation outcome, and watchdog outcome together.
+- [ ] Verify explicit early stop on Zones 2–4.
+- [ ] Physically re-pair an unchanged association and confirm the already
+  authenticated counter is preserved. Software regression coverage exists.
+- [ ] Restart gateway/node during an active bounded run without replay or
+  speculative close. Idle restart and subsequent control have passed.
+- [ ] Qualify late response, RF timeout, duplicate requests, command spacing,
+  authenticated recovery, and positively observed overdue anomalies.
+- [ ] Complete stable-owner retained-counter checks 1, 4, 8, and 12 hours after
+  morning sync, away from report windows. Preserve actual counter continuity,
+  latency, automatic idle, and remaining user-authorized watering budget.
+  Do not replay missed checkpoints or count an intervening command as a clean hold.
+- [ ] Isolate causes of counter staleness: time, owner reboot/reconnect, ACK gaps,
+  and stock maintenance traffic. Fixed-anchor recovery does not require this
+  causal result, but a single overnight failure cannot establish expiry.
+- [ ] Repeat association/control on a second specimen or compatible hardware profile.
 
-The frozen overnight timeline, competing hypotheses, and controlled
-discriminator are retained in
-`research/fixtures/htv405_overnight_counter_drift_20260902.json`. The interval
-alone is not yet causal: after the last authenticated `4` -> `5` command, the
-owner node recorded at least one reboot, 33 connection events, 421 routine ACK
-transmissions, and three aggregate ACK failures before inspection. Those
-events make loss of ACK-owner continuity at least as plausible as a pure
-wall-clock expiry until the new timestamped diagnostics complete a stable
-soak. The retained counter-`3` closed response validates the non-actuating
-probe mechanism independently of that still-unknown reset cause.
+Morning scheduling is enabled on the installed valves, and the last observed
+status for both is Ready. That deployment state does not complete the controlled
+retention matrix. The last-zone idle-reply correction is deployed; see the
+[current sync design](research/HTV405_MORNING_SYNC_DESIGN.md).
 
-The 2026-08-27 scheduled 15-minute run used authenticated next counter `5`, but
-the disproven additive `42 02 00` duration payload omitted the mandatory
-low-byte marker and received no positive response. A same-counter retry failed
-identically. That isolates malformed duration construction—not counter
-progression—as the failure cause. Gateway 0.33.13 still closes two recovery gaps exposed during
-the postmortem: any authenticated node may contribute the exact valve response
-during a pending window, and an already-chosen bounded retry candidate becomes
-available automatically after its safety guard. Keep this gate open until a
-scheduled run uses a validated duration and obtains valve-owned open and
-automatic-idle evidence without manual synchronization.
+### Single-zone valve
 
-The 2026-08-29 scheduled 20-minute run failed for a distinct transport reason.
-The gateway correctly reserved authenticated counter `7`, but the valve heard
-neither the original one-shot frame nor the same-counter bounded recovery. A
-controlled discriminator then sent the known-good 60-second command twice with
-the same counter and payload: the first transmission timed out, while the
-second was accepted immediately and the valve later returned itself to idle.
-This isolates intermittent one-shot RF delivery from counter progression and
-duration encoding. Firmware beta.11 therefore sends one logical HTV405 command
-as a bounded burst of up to three identical frames at 0, 650, and 1,450 ms,
-cancelling remaining attempts on the first authenticated response. Gateway
-0.33.17 also recognizes the strict `d0/86/83/00` negative reply; because that
-reply proves watering did not begin, it can retry the same counter after the
-15-second hardware interval instead of waiting through the requested run.
-Pairing, association, duration, and counter-advancement rules are unchanged.
-The 2026-09-01 installed run closes the beta.11 scheduled-run gate: the valve
-authenticated the 20-minute open and later supplied independent automatic-idle
-telemetry. Two subsequent early-stop trials then authenticated open `2` -> next
-`3`, close `3` -> next `3`, open `3` -> next `4`, and close `4` -> next `4`.
-This physically repeats the conditional rule that an accepted open advances
-the session counter while an accepted close leaves that counter available for
-the next open. Exact responses are retained in
-`research/fixtures/htv405_generated_identity_counter_continuity_20260901.json`.
+- [x] Qualify idle radio/gateway restart, valve-owned automatic stop across an
+  active gateway restart, and early close after an active owner reboot. Counter
+  state survives, no actuator is replayed, and the corrected reconnect trial has
+  matching positive RF replies and independent idle. Gateway 0.34.15 also blocks
+  commands while a reboot is pending, preserving the counter instead of sending
+  through the stale connection. Evidence:
+  [restart recovery](research/fixtures/htv145_restart_recovery_20260906.json).
+- [ ] Qualify report/summary ACK on-air timing, residue, and suppression of retries
+  on the cleaned image. Continued reports and gateway/radio ACK diagnostics do
+  not replace independent waveform evidence; SDR access is currently unavailable.
+- [ ] Complete the high-marker command-phase model for arbitrary action ordering,
+  including consecutive opens. Alternating open/close and rollover are supported;
+  fixed action polarity is not a universal model.
+- [ ] Repeat operational acceptance on fresh user-assisted associations with
+  fresh batteries and independent state evidence.
+- [ ] Promote ordinary HA actuation only after its physical gates pass.
 
-The superseded adjacent-candidate probes, beta.10/beta.11 radio A/B test, and
-raw-IQ proof that candidate `9` was transmitted correctly remain preserved in
-`research/fixtures/htv405_beta10_candidate9_on_air_20260831.json` and the RF
-capture notes. Their silence-based hypotheses must not be used by production
-control now that the exhaustive fixed-anchor result above defines the protocol.
+### HA and irrigation
 
-- [ ] Repeat association and control acceptance on a second HTV405 specimen or
-      independently evidenced compatible profile.
+- [ ] Verify HA watering state changes only from authenticated responses or
+  independent valve telemetry, never from outbound command intent.
+- [ ] Qualify one-active-zone enforcement, per-zone durations, local schedules,
+  completion/failure notifications, and watchdog behavior end to end.
+- [ ] Exercise scheduled irrigation with some sensors stale and with all sensors
+  stale; verify the configured 6–8-hour bounded fallback cannot suppress watering
+  indefinitely. The deployed script handles these branches; scheduled evidence
+  remains required.
+- [ ] Verify live timestamps/schedules in a non-Eastern timezone in addition to
+  existing UTC/offset/DST software tests.
 
-### HTV145
+Exit: accepted commands have valve-owned confirmation; failure and restart behavior
+are bounded, observable, and recoverable.
 
-- [x] Correct the valve-owner revoke HTTP route collision with node revocation
-      (gateway 0.34.8). A real HTTP regression reproduces the misrouting; require
-      correlated owner revocation before a new physical pairing trial. The
-      candidate 0.15.17 network filter also admits the implemented revoke command.
+## Phase 4 — field decoding
 
-- [x] Test the HTV405 idle-close counter-anchor method on the dry one-zone valve.
-      September 6 report-triggered phase 5 and later phases 6, 0 and 1 idle
-      closes all returned result 3. The same zero close succeeded while watering.
-      Two active anchors at phases 0 and 62 were followed by positively
-      acknowledged opens and early closes, including phase 63 -> 0 rollover;
-      independent IQ and telemetry verify both complete recovery sequences.
-      The follow-up idle phase-0 and phase-62 anchors returned result 3 but
-      their corresponding opens and early closes succeeded, including rollover.
-      This separately qualifies non-watering idle counter assignment. Later
-      evidence uses actual node/gateway RF replies and independent state reports;
-      the exact commands match the earlier IQ-decoded frames. Evidence:
-      `research/HTV145_COUNTER_ANCHOR_EXPERIMENT.md` and both active/idle recovery
-      fixtures. Result 3 remains an ordinary-command error outside a reserved
-      fixed-zero idle anchor.
-- [x] Implement and physically verify report-triggered one-zone idle counter
-      synchronization (gateway 0.34.12 / candidate 0.15.24). Starting with an
-      unknown gateway counter, the 19:08 UTC owner idle report triggered a fixed
-      zero close; its exact result-3 reply authenticated the anchor. Normal
-      60-second open and early close then received positive replies and separate
-      watering/idle telemetry. Final next numeric counter is `0x81`. Persist a
-      bounded queue and optional daily calendar policy; never water to sync,
-      reseed from telemetry counters, or replay a transmitted anchor on restart.
-      A final gateway rebuild preserved the recovered counter, radio
-      authentication and enabled morning policy without actuation. Removed the
-      obsolete packet-preparation helper and completed local trial runners after
-      qualification; retain raw evidence and supported decoder regressions. Redacted
-      runtime proof is in
-      `research/fixtures/htv145_idle_result3_counter_recovery_20260906.json`.
-- [x] Bound one-zone sync retries after missing replies or transport failures
-      to three total attempts inside the original manual/morning window
-      (gateway 0.34.13). Each retry requires a new owner idle report after the
-      preceding failure and at least 15 seconds between commands. Persist the
-      budget across restart and repeated button presses; terminate on protocol
-      conflicts, unexpected watering, cancellation, exhaustion or window expiry.
-      Regression coverage includes successful retry and failure without RF replay.
-- [ ] Qualify and persist the complete one-zone command phase, including the
-      high marker bit, for arbitrary action sequences. Stock consecutive opens
-      demonstrate why fixed action polarity is not a general phase model.
-      The September 6 active-anchor trials verify normal alternating controls
-      and rollover. The separately qualified fixed-zero idle anchor recovers
-      normal alternating controls without watering; it does not establish a
-      general phase model for consecutive opens or arbitrary action ordering.
+- [x] Decode HCS026 moisture/categorical battery, HTV145 state/duration/usage/
+  categorical battery, and HTV405 zones/duration/control counters.
+- [ ] Correlate model-supported fields with timestamped cloud or physical state:
+  battery, active zone, requested/actual/remaining duration, stop, and HTV145 usage.
+- [ ] Validate the HTV405 battery candidate with a controlled normal-to-low
+  transition. Byte 17 mask `0x08` remains provisional; routine ACK payloads do
+  not establish battery state. Keep HA battery unavailable until validated.
+- [ ] Ensure discovery is based on product codes and protocol capabilities,
+  not seller names, household endpoints, or friendly names.
 
-- [x] Reconstruct the stock one-zone command shape from retained IQ. Both actions
-      require 2,400 wake symbols; selector-6 close uses residue `4f03`; open
-      advances the command counter while close retains it. Replay accepted
-      open/close/open traffic across daemon restart and preserve branch polarity.
-      Invalidate legacy ambiguous counters on schema upgrade without replaying
-      pending commands. Evidence: `htv145_stock_control_shape_20260905.json`.
-- [x] Exercise corrected commands on user-confirmed dry hardware unattended.
-      Candidate `.16` sent one bounded 60-second open at assumed counter 1,
-      with three exact unclipped 2,400-symbol attempts and no confirmation.
-      Candidate `.17` close-only counters 1 and 0 each elicited valid result-3
-      replies. Their exact meaning is unknown; neither confirms physical state
-      or an accepted counter. Preserve these as negative fixtures and recognize
-      them in `.18` diagnostics. Pairing remains 5/6 and disarmed; no successful
-      local open/close pair is claimed. Evidence:
-      `research/fixtures/htv145_partial_pairing_control_replies_20260905.json`.
-- [x] Add a strict offline terminal-pairing verdict. Require the valve-originated
-      `2c 80 99` request and its matching bounded reply, separately from prefix
-      acceptance; keep the unchanged low-gain pairing repeat in the enrollment
-      gates above as the next physical discriminator.
-- [x] Test whether the accepted `5/6` association already permits a bounded
-      open, independently of terminal enrollment. On 2026-09-05 the user
-      confirmed the valve was dry and approved one 60-second open. Candidate
-      `.15` preserves `.14` pairing and adds only an isolated serial probe.
-      It carries the selector-6 command marker into the runtime builder and
-      labels counter `1` as assumed, not authenticated. Three exact stock-style
-      attempts were recovered without clipping at `434.351461 MHz`; neither
-      node nor SDR observed a matching response or later state report. This
-      is an inconclusive authorization test, not evidence of an explicit
-      valve rejection or proof that full enrollment is required. Fixture:
-      `research/fixtures/htv145_partial_pairing_dry_open_20260905.json`.
-- [x] Capture and decode stock 300- and 900-second opens on the retained
-      selector-6 association. Both received immediate valve responses; the
-      duration fields are `96 00` and `c2 01`. The capture also proves the
-      command-family high marker reverses by association while request action
-      byte `82/81` and response state marker `cf/4f` remain stable.
-- [ ] With fresh batteries, obtain new valve-originated idle and positively
-      confirmed stock-command evidence. Use the same-session stock pairing,
-      automatic-stop, and explicit-close capture procedure linked above;
-      record battery condition without assuming it has already been changed.
-      September 5 supplied positive responses for all five stock commands and
-      final idle evidence. The cloud reported 100% battery, but physical battery
-      replacement was not reconfirmed; that qualification remains open.
-- [x] Physically accept a bounded local open on its evidenced carrier,
-      with an immediate response or independent active-state fallback.
-  - [x] Prepare the user-requested 5/6 control experiment from the fresh stock
-        command evidence. Restore the exact `.22` artifact; preserve its pairing
-        prefix. The first stock 60-second open and earlier local attempt have
-        identical command bodies but different trailer residues (`4f03` versus
-        `c713`). Native builders reproduce all five fresh accepted commands.
-        A continuous pairing/control runner scopes progress and responses to
-        their own commands and rejects stale evidence; `.22` is connected and
-        disarmed with its sensor ACK assignment restored. Full Python suite:
-        432 passed, two optional skips; both relevant native suites passed.
-        Evidence: `htv145_partial_control_variant_preparation_20260905.json`.
-  - [x] Run the authorized `.22` experiment after independently verifying 5/6.
-        Open `81/90/4f03` succeeded on its first RF attempt, with a direct reply
-        and watering reports; its unacknowledged `81/90/c713` close did not
-        stop the run. Automatic stop produced idle after 61.900415 seconds.
-        A second bounded `82/90/4f03` open and active `83/10/4f03` close both
-        received positive first-attempt replies. Early close was sent after
-        20.476064 seconds; idle followed 6.142533 seconds later. No new pairing
-        arm occurred between these runs. Progress clearing on disarm required
-        a recorder rollover and test-radio restarts, so uninterrupted-session
-        control is not claimed. The runner now uses saved current-command
-        prefix evidence and tests cleared live progress. Firmware stayed `.22`;
-        the valve ended idle and all nodes connected/disarmed. Evidence:
-        `research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json`.
-- [ ] Confirm valve-owned automatic stop, explicit early stop after the hardware
-      interval, durable counter progression, and restart without command replay.
-  - [x] Observe automatic stop and active early stop on the dry `.22` association
-        using independent RF replies and idle reports, as recorded above.
-  - [x] Implement persistence/restoration of the evidenced selector-6 profile: 2,400 wake
-        symbols, open marker `90`, close marker `10`, residue `4f03` for both,
-        and incremented close counter. Keep it distinct from selector-2 evidence.
-        Gateway 0.34.3 implements direct commands, durable reservations, restart
-        without replay and observation-only morning readiness. Recorded exchange,
-        HTTP/TCP, ownership and overdue-anomaly regression tests cover this path.
-        Repeat live commands across restart remain a physical qualification gate.
-        Gateway 0.34.4 permits enrollment of pre-ACK dry trials after
-        positive exchange and fresh idle evidence, without actuation. Regression
-        tests reject unverified owner changes, pending work, stale evidence and
-        replacement of an existing ACK owner. An old trial radio may be retired
-        only after its live handshake confirms removal of HTV145 support.
-  - [x] Implement HTV145 report/summary ACK handling with one persistent owner.
-        Unacknowledged 60-second summaries repeated during the second run and
-        cannot be used as new elapsed-duration evidence. Preserve the captured
-        family-`86` reports and result-3 byte-17-`10` variant in decoder tests.
-        Both implementations reproduce ten stock ACKs. Summary retries do not
-        change current watering state; owner reassignment requires a correlated
-        revocation reply. Ordinary negative replies do not authenticate a
-        counter; the separately qualified fixed-zero idle-anchor reservation
-        accepts only its exact correlated result-3 variant.
-  - [ ] Physically qualify the cleaned image's report/summary ACK timing/residue,
-        repeated operational commands and counter restore across node/gateway
-        restart on dry hardware; preserve `.22` as the rollback baseline.
-  - [x] Retire obsolete firmware feature/timing forks, selector-2/counter-0
-        executable recipes, shifted/GFSK/synchronous probes and raw serial TX.
-        Keep one PlatformIO environment and one HTV145 qualification option;
-        retain historical RF fixtures and native tests for the frozen recipe.
-        Validation: 438 Python tests (two optional skips), 17 NumPy waveform
-        tests, both native protocol suites, production and isolated PlatformIO
-        builds, both binary boundaries and the verified production manifest.
-  - [ ] Repeat operational acceptance on fresh user-assisted associations and
-        define HA enrollment completion from valve-originated operational proof,
-        while retaining an honest distinction from the incomplete six-step
-        transcript. Full terminal success is no longer a prerequisite for the
-        already-demonstrated dry command capability.
-- [ ] Promote controls into HA only after the preceding physical gates pass.
-
-### HA and irrigation behavior
-
-- [x] Expose enrolled one-zone retained-counter status, value, and explicit
-      restoration in HA (gateway 0.34.7 / integration 0.14.3). This restores
-      known radio state only. The later qualified idle-anchor sync below
-      additionally recovers unknown counters without watering.
-
-- [x] Add real one-zone Sync counter and morning enabled/start/window/status
-      controls in HA (integration 0.14.4), preserving the existing button ID.
-      Scope four-zone registry projections to HTV405 so they cannot overwrite
-      one-zone sync state or add phantom actuator capabilities. Local API/UI
-      regressions and live source/entity verification cover the change.
-
-- [x] Remove the HTV145's four phantom zones while preserving its single overall
-      watering, battery, and usage entities and HTV405's real zones. Integration
-      0.13.11 was locally validated, deployed after a successful full HA backup,
-      checked with `ha core check`, and restarted. The live entity registry has
-      zero obsolete single-zone `zone_*` entries. Daemon projection cleanup is
-      prepared locally; the garden gateway was not upgraded for this UI fix.
-- [ ] Confirm HA state changes only from valve responses or independent state
-      telemetry, never from command intent alone.
-- [ ] Validate one-active-zone enforcement, per-zone durations, scheduled local
-      irrigation, completion/failure notifications, and watchdog behavior.
-- [ ] Confirm stale moisture data cannot suppress irrigation indefinitely: use
-      only sufficiently recent readings and follow the documented fallback after
-      the configured 6--8 hour limit.
-
-The deployed household script now waters from the remaining fresh readings
-when only part of a bed's sensor set is stale, and uses the bounded fallback
-only when no configured reading is fresh. Keep this gate open until a scheduled
-cycle validates both branches. As of 2026-08-31, its valve path accepts only a
-new matching authenticated valve response, never command intent or an unrelated
-physical-open report. It observes short bounded recovery windows rather than
-the requested watering duration, returns immediately after a confirmed bounded
-start, and lets valve-owned idle telemetry finish the run. An exhausted retry
-now fails immediately with the gateway's exact reason. Every iPhone push is
-also mirrored into HA's persistent notification area so the message remains
-reviewable after the mobile banner is opened or dismissed.
-- [ ] Verify timestamps and schedules in at least one non-Eastern timezone in
-      addition to the existing UTC/offset/DST software coverage.
-
-Exit criteria: both valve families pair and operate through HA, every accepted
-command has device-owned confirmation, and normal failure modes remain bounded,
-observable, and recoverable.
-
-The exact generated-identity tail, four incomplete-association negative trials,
-and the validated fresh-association counter-`1` result are frozen in
-`research/fixtures/htv405_generated_identity_control_gap_20260826.json`.
-
-## Phase 4 — complete field decoding
-
-- [x] Decode HCS026 moisture, categorical full/low battery, report time, RF
-      identity, receiver provenance, and reporting cadence.
-- [x] Decode HTV145 open/idle state, requested and last-session duration, water
-      usage, and categorical normal/low battery.
-- [x] Decode HTV405 zone selection, open/idle state, the complete two-byte
-      requested/remaining duration fields (including sessions over 254
-      seconds), and controller/telemetry counters for the tested association
-      profiles.
-- [ ] Correlate every model-supported valve field against the cloud integration
-      over the same timestamped sessions: battery, active zone, requested
-      duration, actual duration, remaining time when transmitted, automatic
-      stop, and HTV145 water usage. HTV405 declares no water-usage capability.
-- [ ] Produce a controlled HTV405 normal-to-low battery transition and keep its
-      battery entity unavailable until RF correlation is repeatable.
-      Offset 17 mask `0x08` is the leading bounded candidate: the equivalent
-      HTV145 status bit is independently confirmed, and it remained clear in
-      all 34 strictly decoded fresh-cell HTV405 stock-route status frames while
-      the cloud reported 100%. Historical HA data cannot label the weak-cell
-      side because that cloud entity was unavailable until after replacement.
-- [x] Remove HTV405 water-usage entities from the Home Assistant product/entity
-      definition and from every installed or example dashboard. Entity creation
-      must follow model capabilities: retain water usage for HTV145, whose RF
-      field is confirmed, and omit it entirely for HTV405, whose product model
-      declares no flow or water-volume capability.
-      - 2026-09-02: gateway `0.33.29` removes the generic product capability and
-        placeholder state, integration `0.13.4` rejects new HTV405 usage
-        entities and removes stale registry entries. Integration `0.13.7`
-        finishes the installation cleanup: both the checked-in example and
-        installed primary Garden dashboard contain no water-usage entity or
-        obsolete total-water helper.
-- [x] Mark each field as confirmed, provisional, categorical-only, or not
-      transmitted locally; never synthesize an unavailable protocol value.
-- [ ] Ensure product/model discovery is capability- and product-code based, not
-      tied to one seller name, household endpoint, or friendly name.
-
-Exit criteria: local valve entities agree with independently timestamped cloud
-or physical observations, and every unsupported value is explicitly unavailable.
+Exit: supported fields agree with independent observations; unsupported values
+remain explicitly unavailable. See [device references](protocol_documentation/).
 
 ## Phase 5 — stability qualification
 
-- [ ] Complete a persisted minimum 72-hour sensor cadence/ACK soak across the
-      installed multi-node layout.
-- [ ] Include a sustained stock/custom coexistence interval in that soak.
-- [ ] Complete at least three scheduled irrigation cycles using only local
-      sensor authority and local valve control.
-- [ ] Include one HA restart, custom gateway restart, node reboot, node OTA, and
-      device battery cycle without identity loss or command replay.
-- [ ] Confirm weak-link placement is adequate or relocate the affected radio
-      node before accepting the soak.
+- [x] Deploy a read-only HA-scheduled snapshot/event collector with a durable
+  cursor, fixed window, explicit gap/error records, and automatic completion.
+  See [operation](examples/reliability-soak/README.md).
+- [ ] Complete a persisted minimum 72-hour multi-node sensor cadence/ACK soak.
+  Current collection runs September 7 00:53 UTC through September 10 00:53 UTC;
+  completion still requires reviewing the evidence, not just reaching the deadline.
+- [ ] Include sustained stock/custom coexistence and three successful scheduled
+  irrigation cycles using only local authority.
+- [ ] Include HA/gateway restart, node reboot/OTA, and device battery cycle
+  without identity loss or command replay.
+- [ ] Confirm weak-link placement is adequate; relocate only if evidence requires it.
 - [ ] Observe no phantom devices, duplicate ACK owners, false watering states,
-      stale-data decisions, or notification reconnect flapping.
-- [ ] Reject a wrong-checksum OTA artifact, interrupt a download, power-cycle a
-      candidate boot, prove rollback after unhealthy boots, and retain USB
-      recovery.
+  stale-data decisions, or notification reconnect flapping.
+- [ ] Test wrong-checksum OTA, interrupted download, candidate-boot power loss,
+  unhealthy-boot rollback, and USB recovery.
 
-Exit criteria: the persisted soak report and irrigation evidence meet every
-criterion above without an unexplained recovery intervention.
+Exit: durable evidence meets the complete matrix without unexplained intervention.
+Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
 
 ## Phase 6 — open-source hardening
 
-- [ ] Remove installation-specific IDs, names, paths, allowlists, and behavior
-      from production code; keep deliberate household examples under `examples/`.
-- [ ] Separate protocol/identity models, gateway authority, HA adaptation,
-      firmware transport, and research tools behind reviewed interfaces.
-- [ ] Replace dictionary-heavy runtime boundaries with typed, versioned models
-      and structured errors; add formal HA config-entry/entity migrations.
+- [ ] Remove production installation IDs, names, paths, allowlists, and fixed
+  profiles; keep deliberate examples under `examples/`.
+- [ ] Review protocol, gateway, HA, firmware, and research interfaces; introduce
+  typed/versioned boundaries, structured errors, and formal HA migrations.
 - [ ] Finish event-driven HA updates with slow reconciliation fallback.
-- [ ] Remove superseded probes, hard-coded profiles, temporary acceptance
-      endpoints, obsolete feature gates, and retired firmware artifacts.
-- [ ] Remove dormant two-radio firmware support, secondary-radio diagnostics,
-      and its compile-time feature gate; support one CC1101 per distributed
-      radio node as the sole production hardware topology.
-- [ ] Keep genuine safety boundaries: scoped authentication, association-bound
-      transmission, bounded duration, device-owned confirmation, command
-      spacing, at-most-once opens, and rollback.
-- [ ] Add encrypted node sessions, integrity/replay protection, credential
-      rotation/revocation review, API resource limits, reproducible packaging,
-      and asymmetric OTA release signatures.
-- [ ] Run CI, security review, redaction checks, and release installation tests
-      from a clean environment.
+- [ ] Retire remaining superseded probes, temporary acceptance endpoints,
+  obsolete gates, firmware artifacts, and dormant two-radio support.
+- [ ] Preserve authentication, association-bound TX, bounded duration,
+  device-owned confirmation, command spacing, at-most-once opens, and rollback.
+- [ ] Add encrypted node sessions, replay protection, credential lifecycle
+  review, API limits, reproducible packaging, and asymmetric OTA signatures.
+- [ ] Run CI, security/redaction review, and clean-environment installation tests.
 
-Exit criteria: a new contributor can build and test one production stack without
-household knowledge, research-only transmit paths cannot enter release builds,
-and publication/security gates are documented and enforced.
+Exit: contributors can build one production stack without household knowledge;
+research transmit paths cannot enter a release artifact.
 
-## Phase 7 — research infrastructure and documentation
+## Phase 7 — documentation and research infrastructure
 
-- [x] Split the monolithic protocol journal into concise shared and per-device
-      current definitions under `protocol_documentation/`; retain dated
-      discovery history in `research/RF_CAPTURE_NOTES.md` and exact frames in
-      redacted fixtures.
-- [x] Document the reusable device-onboarding method in
-      `research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md`: isolate lifecycle
-      paths and product profiles, capture opposite arming orders, rank physical
-      evidence, normalize waveform measurements to the device oscillator, and
-      freeze each accepted stage before extending the transcript.
-- [ ] Make the receive-only SDR capture/decoder pipeline run as a managed Mac
-      service and optionally forward normalized observations to the custom
-      gateway; production HA operation must not depend on the SDR.
-  - 2026-09-02: `tools/capture_rainpoint_continuous_iq.sh` now provides a
-    bounded Mac-local continuous-IQ path with deterministic sample count,
-    capture metadata, and SHA-256 verification without stopping either HA or
-    the custom local gateway. Managed launch/restart and optional normalized
-    forwarding remain open.
-- [ ] Keep research tooling isolated in this repository while protocol APIs are
-      changing; decide before public release whether its dependencies, raw data,
-      and compile-gated transmit probes warrant a separate
-      `rainpoint-local-research` repository.
-- [ ] If split, keep redacted protocol fixtures and shared typed models with the
-      production protocol package and move raw captures, capture orchestration,
-      and unsafe probes to the research repository.
-- [ ] Rewrite documentation around quick start, supported-device/capability
-      matrix, architecture, pairing/removal, OTA, wiring, protocol confidence,
-      troubleshooting, and contributor research workflow.
-- [ ] Archive narrative journals and superseded plans; retain evidence ledgers
-      and procedural checklists with explicit links back to this roadmap.
-- [ ] Clean merged branches, temporary worktrees, deployment backups, and stale
-      firmware catalogs after preserving the minimum rollback artifacts and
-      redacted fixtures.
-  - 2026-09-05: reconciled the original checkout's 13 pending files with the
-    single-zone history, which includes the older roadmap clone. Preserved the
-    original local patch, promoted the redacted stock report fixture, retained
-    the HA RF-platform snapshot, and documented superseded experiments in
-    [the consolidation record](research/WORKSPACE_CONSOLIDATION_20260905.md).
-    Raw captures and physical rollback artifacts remain local.
-  - 2026-09-01: moved three duplicate-slug RainPoint source backups out of the
-    Supervisor-scanned `/addons` directory and removed macOS AppleDouble files
-    that prevented translation parsing. The contributor guide now fixes both
-    deployment rules; broader catalog/backup retention cleanup remains open.
+- [x] Streamline current device references, operational guides, architecture,
+  and research procedures. Keep chronology in evidence records and status here.
+- [ ] Make receive-only SDR capture a managed Mac service with optional normalized
+  forwarding. HA production must remain independent of SDR; current USB absence
+  prevents live capture qualification.
+- [ ] Decide the research repository boundary before publication. If separated,
+  keep protocol fixtures/models with production and move raw data/orchestration.
+- [ ] Clean merged branches, obsolete backups, and stale firmware catalogs after
+  retaining necessary rollback artifacts and redacted fixtures. Do not create
+  or use another development checkout.
 
-Exit criteria: production documentation is concise and user-oriented, research
-work has an explicit boundary, and the Mac can perform future SDR investigations
-without coupling the production stack to the Home Assistant host.
+Exit: concise user-oriented docs, explicit research boundaries, and independent
+capture infrastructure.
 
-## Deferred integration milestone
+## Deferred migration and backlog
 
-Cloud-to-local provider migration and a possible merge with the existing
-HomGar integration remain deferred until Phases 0--5 pass. Design review may
-continue, but no live authority handoff should ship before repeatable local
-pairing, control, recovery, coexistence, and stable identity are proven.
+Cloud-to-local authority handoff and a HomGar integration merge remain deferred
+until Phases 0–5 qualify. Design review may continue without live migration.
 
-## Backlog
+- Preserve explicit timezone on SDR observations before restoring it as an
+  authoritative receiver; do not reinterpret ambiguous historical timestamps.
+- Discover additional device families and determine whether HCS026 P1–P6 soil
+  selection is RF, device-local, or cloud metadata.
+- Determine whether any pairing field controls long-term telemetry channel.
+- Characterize compact product/status integrity before constructing that traffic.
+- Optimize channel scheduling and placement beyond the required stability floor.
+- Make Add device a reversible stepped wizard after protocol reliability stops
+  being the limiting factor; validate navigation in HA.
+- Finish carrier manufacturing/enclosure work under its physical preorder checklist.
 
-These items are intentionally outside the active stabilization sequence unless
-one becomes a blocker:
-
-- Preserve explicit timezone information on SDR observations before reusing
-  that transport for freshness-dependent irrigation decisions. Coincident
-  September 2 factory frames showed naive SDR local time four hours behind
-  node UTC, while the gateway treats naive values as UTC. This overstates age;
-  promote the fix before restoring SDR as an authoritative live receiver, and
-  validate a simultaneous SDR/node report without rewriting ambiguous history.
-- Discover and qualify additional RainPoint sensor and valve families.
-- Determine whether HCS026 P1--P6 soil selection is transmitted, device-local,
-  or cloud metadata.
-- Determine whether any pairing field controls long-term telemetry channel;
-  current evidence says the known selector does not.
-- Repeat fresh generated-identity HTV405 enrollment and command-counter
-  initialization on a second specimen or independently compatible product
-  before generalizing the profile beyond the tested hardware revision.
-- Characterize the compact product/status-frame integrity family before using
-  it to construct traffic for a newly supported device family; ordinary-frame
-  CRC residues do not prove that separate format.
-- Optimize multi-node channel scheduling and placement beyond the stability
-  threshold required by Phase 5.
-- Treat **Add device** as a reversible stepped wizard (category, model, radio
-  node, physical action, and details) whose language and navigation make Back
-  return exactly one step without abandoning the live session. This matters for
-  recoverable consumer setup; promote it when Phase 1 protocol reliability is
-  no longer the limiting factor and validate it with an end-to-end HA UI trial.
-- Finish carrier-PCB manufacturing and enclosure optimization using the
-  separate physical preorder checklist.
-- Implement cloud-to-local authority migration in coordination with the HomGar
-  maintainers after the deferred milestone opens.
-
-When adding a backlog item, record why it matters and the evidence that would
-promote it into an active phase. Do not implement it merely because it was
-noticed during unrelated work.
+Promote a backlog item only when evidence makes it a qualification blocker or
+irrigation reliability issue; do not implement it merely because it was noticed.

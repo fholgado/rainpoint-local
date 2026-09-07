@@ -123,108 +123,37 @@ Do not respond to failure with several small parameter changes. Rank
 hypotheses, state what each predicts, change one discriminator, and revert it
 if the predicted boundary does not move.
 
-## HTV145 diagnosis that established the working path
+## Separate pairing, operation, ACKs, and counter recovery
 
-The unsuccessful approach had several independent faults:
+A valve can accept commands on a partial association. Record terminal enrollment
+and operational acceptance as separate verdicts; do not use a white LED or local
+TX success to claim either. Keep the accepted prefix frozen while investigating
+its final stage. Match each result to the current trial's command ID and time.
 
-- Early firmware reused a shared valve session and could answer more than one
-  factory counter with fields from different association branches.
-- Lower-carrier-only analysis hid the real upper-carrier counter-1 sweep and
-  encouraged hard-coded counter assumptions.
-- Valid decoded bytes, local transmit completion, and LED behavior were treated
-  as stronger evidence than the valve's next packet.
-- Separate-session absolute FFT estimates selected sidebands and obscured a
-  response-carrier error. Some early captures were also clipped.
-- A packed-clock data bit was mistaken for a static marker, wrapping evening
-  hours into the morning.
-- The long-wake decoder normalized events as though every frame had a
-  320-symbol wake, which made the first configuration schedule appear 101.5 ms
-  late.
-- Nominal `2,400` wake symbols were assumed to mean a stock-length on-air
-  waveform without measuring its actual duration.
+After an authorized dry pairing trial, capture a bounded open with its matching
+reply and independent watering, then automatic idle. Use a second bounded run to
+check early close after command spacing. Retain negative results and interrupted
+trials; a later success does not erase them.
 
-The working path corrected the experimental method as much as the firmware:
+Capture routine reports and session summaries with their ACKs. Repeated summaries
+can belong to a previous run and cannot prove current idle or authenticate a
+counter. Distinguish node TX completion from on-air waveform validation and
+subsequent device behavior. Keep raw IQ bounded rather than recording it all night.
 
-1. Controlled stock captures proved first-observed factory-sweep acceptance
-   and preserved complete counter-0 and counter-2 profiles.
-2. A dedicated one-shot HTV145 state machine selected only the counter-2
-   transcript and sent at most one assignment.
-3. Balanced-wake, request-relative measurement fixed the assignment PHY and
-   branch-specific packed-clock fields.
-4. Two unchanged trials produced the valve's addressed stage-1 request and
-   white flash, freezing stage 0.
-5. Measuring stock and local stage-1 responses exposed a 30.326 kHz local
-   carrier error. Correcting only that carrier eliminated all stage-1 retries.
-6. The next remaining boundary became observable: local delayed configuration
-   lasted 132.119 ms versus stock at 135.361 ms and did not elicit `81 50`.
+For restart trials, wait for a changed connection epoch, cleared reboot-pending
+state, and restored configuration before submitting a new command. A still-open
+old socket is not proof that a rebooted radio has returned.
 
-This is substantial progress even though HTV145 enrollment is not finished:
-the valve now responds to the custom gateway, and subsequent failures identify
-a specific stage instead of collapsing into silent assignment rejection.
+For explicit counter recovery, use the family's qualified sync API. Wait for the
+required owner report and exact response; never infer a counter from telemetry.
+Follow recovery with dry bounded control only as a separate authorized test.
+Routine daily synchronization must never add watering. Persist attempt budgets,
+original deadlines, command IDs, and outcomes across interruptions.
 
-## HTV145 operational proof after 5/6 — September 5
+Current byte/timing rules belong in the [device references](../protocol_documentation/),
+not in this procedure. Dated findings belong in fixtures and the capture journal.
 
-The `.22` counter-2/selector-6 recipe reached five of six transcript rows and
-showed the white LED. Without another valve pairing gesture, local open
-`81/90/4f03` was accepted on the first RF attempt. Independent idle followed
-61.900415 seconds later. A second `82/90/4f03` open and active `83/10/4f03`
-close were also positively acknowledged; the close was issued 20.476064 seconds
-after open and independent idle followed 6.142533 seconds later. These observations
-prove usable command authority on that partial association. They do not prove
-the absent sixth row or repeatability across fresh associations.
-
-The retained evidence is
-[`htv145_partial_pairing_control_acceptance_20260905.json`](fixtures/htv145_partial_pairing_control_acceptance_20260905.json).
-It records test-radio restarts and recorder rollovers: the valve association
-remained unchanged, but uninterrupted recording is not claimed.
-
-Use the accepted recipe as a unit: 2,400-symbol command wake; open marker `90`;
-close marker `10`; both action residues `4f03`; accepted opens increment the
-command counter and accepted closes retain it. The fresh stock selector-2 trace
-has different marker/counter behavior and must not supply individual values for
-this selector-6 recipe. The `.22` firmware binary/hash is the rollback baseline;
-old timing switches and selector alternatives are no longer executable profiles.
-
-After an authorized pairing attempt, include bounded watering in the capture
-procedure: verify the prefix against that attempt's command ID, stop/disarm
-pairing, start one 60-second dry run, observe a positive immediate response and
-independent watering, then capture automatic idle. Test early close in a second
-bounded run after the minimum 15-second interval. Never count local TX logs or
-an idle-looking result-3 reply as control acceptance. A result-3 reply with
-byte 17 `10` is now also recognized as negative; its general meaning is unresolved.
-
-Capture both ordinary reports and session-summary retries. Family bytes `82`,
-`85` and `86` are evidenced. A summary can repeat during a later run, so it may
-update last-session usage/duration and receive an ACK, but never current watering
-state or the next command counter. Stock ACKs echo report byte 13, OR byte 14 with
-`40`, reverse the association routes and use `01 00 01` for state reports or
-`00 80 00` for summaries. Ten complete golden pairs exercise both builders.
-A locally emitted ACK still needs a subsequent valve reaction/on-air recording
-before claiming ACK-cycle acceptance.
-
-The persistent runtime imports a matching positive command/response exchange and
-fresh independent idle evidence, separately from pairing completion. It restores
-configuration and authenticated counters, sends daytime commands directly, and
-requires correlated owner revocation before reassignment. Morning readiness is
-observation-only unless an explicit or scheduled idle-anchor request is queued.
-The September 6 follow-up below qualifies HTV145 recovery independently of HTV405.
-Counter ambiguity blocks commands until new positive evidence is available.
-When OTA adds ACK support to an existing dry association, gateway 0.34.4 can
-upgrade its pre-ACK trial profile after those evidence gates pass. Changing radios
-also requires a live authenticated handshake confirming the old trial radio no
-longer supports HTV145 control or ACKs. Pending work and existing ACK owners
-cannot be replaced this way.
-For an overnight ACK observation, keep the stock gateway unplugged, retain the
-current association, and log received reports plus ACK transmit/failure events
-without watering. Use a bounded independent IQ capture to verify emitted frames;
-compare subsequent sequence/retry behavior before claiming valve acceptance.
-Do not store continuous raw IQ all night or reseed the command counter from
-telemetry sequence numbers.
-The management interface and qualification boundary are described in the
-[HTV145 protocol document](../protocol_documentation/htv145frf.md); live acceptance
-status remains only in the [roadmap](../PROJECT_ROADMAP.md).
-
-## Minimum onboarding checklist for the next device
+## Checklist for one device-onboarding operation
 
 - [ ] Record two complete stock pairings with opposite gateway/device arming
       order.
@@ -238,38 +167,3 @@ status remains only in the [roadmap](../PROJECT_ROADMAP.md).
       control response.
 - [ ] Test retained rejoin, battery change, ACK liveness, coexistence, removal,
       and HA identity after new enrollment is stable.
-
-
-## Counter recovery after pairing — September 6 follow-up
-
-Pairing progress, control success and counter synchronization remain separate
-claims. On the qualified selector-6 one-zone association, fixed idle closes can
-return result 3 and still establish the requested counter: phase-0 close followed
-by phase-1 open/phase-2 early close worked, as did phase-62 close followed by
-phase-63 open/phase-0 close across rollover. Do not classify every result 3 as
-counter rejection, or broadly reinterpret result 3 as command success.
-
-For an enrolled owner with candidate 0.15.24, use the authenticated device
-`valve/sync-now` route or HA Sync counter button. Keep the stock gateway unplugged.
-The queued request must receive a new independent idle report from that owner,
-then send only the fixed zero close. Require the exact correlated anchor response
-before claiming sync. On dry hardware, follow with a normal 60-second bounded open
-and early close at least 15 seconds later, retaining each reply and separate state
-report. Never add watering to an unattended daily synchronization procedure.
-
-The gateway persists bounded waits and daily calendar claims; restart does not
-replay transmitted anchors and a missed morning window does not run later.
-No arbitrary-phase or assumed-open route belongs in the cleaned deployment.
-Raw evidence and redacted fixtures are linked from
-[the experiment record](HTV145_COUNTER_ANCHOR_EXPERIMENT.md), which distinguishes
-independent IQ captures from the later node/gateway-only RF evidence. Project
-acceptance status remains in [the roadmap](../PROJECT_ROADMAP.md).
-
-
-The supported one-zone sync path now permits three total attempts within the
-original window after timeout or transport failure. Each retry waits for an owner
-idle report newer than the failure and respects the 15-second command interval.
-The budget survives restart and repeated button presses. Report attempts and their
-outcomes separately from the short radio burst within each attempt; stop on a
-protocol/state conflict, cancellation, budget exhaustion or window expiry. This
-policy requires no temporary probe route or packet generator.

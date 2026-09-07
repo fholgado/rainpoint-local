@@ -52,7 +52,8 @@ the command sequence are unrelated.
 
 ## Routine link report and acknowledgement
 
-The paired valve emits link/status reports at roughly 40-second intervals. Its
+The paired valve emits periodic link/status reports; cadence varies by state
+and profile. Its
 persistent ACK owner answers on the negotiated association channel.
 
 For a report sequence `SS`, the acknowledgement routes from the valve endpoint
@@ -167,15 +168,6 @@ Representative encodings are:
 | 1,200 seconds | `d8 02` | `00` |
 | 3,600 seconds | `88 07` | `00` |
 
-The earlier 300- and 900-second candidates `16 01` and `42 02` were rejected
-because they omitted the mandatory low-byte marker. The earlier `c2 01 00`
-900-second attempt retained the marker but lost the displaced bit and was
-therefore decoded by the valve as 644 seconds. Those failures are direct
-boundary evidence for the packed representation above, not special-duration
-exceptions. Corrected local `96 00 80` and `c2 01 80` commands subsequently
-received authenticated responses and exact independent 300/900-second state
-reports; the five-minute timer also reached valve-owned automatic idle.
-
 ## Command response and sequence
 
 A valid immediate response has this envelope:
@@ -196,97 +188,53 @@ The response sequence is `frame[13] & 0x1f`. A watering response advances the
 durable next command sequence by one; an idle/close response retains the same
 sequence. The sequence wraps in its five-bit field.
 
-Validated continuity includes:
+## Counter synchronization and scheduling
 
-```text
-fresh pairing -> next 1
-open at 1     -> response advances next to 2
-open at 2     -> response advances next to 3
-close at 3    -> response retains next 3
-open at 3     -> response advances next to 4
-close at 4    -> response retains next 4
-gateway and node restart -> next remains 4
-open at 4     -> response advances next to 5
-close at 5   -> response retains next 5
-open at 5    -> response advances next to 6
-close at 7 after authenticated next 6
-               -> response accepts and retains next 7
-close at 9 after authenticated next 7
-               -> response accepts and retains next 9
-open at 9     -> response advances next to 10
-close at all 32 five-bit values from authenticated next 10
-              -> every response accepts and retains the selected value
-open at 31    -> response advances next to 0
-close at 0    -> response accepts and retains next 0
-open at 0     -> response advances next to 1
-```
+All four zones share one command counter. A fresh generated association starts
+at 1. A same-route repair preserves an authenticated counter when controller,
+companion, selector, and valve identities are unchanged. Restart restores the
+stored value; routine report sequences never overwrite it.
 
-The gateway persists the next sequence only after a matching authenticated
-response. It never derives it from periodic telemetry. A timed open is
-valve-owned and stops automatically; startup must not issue a speculative
-close.
-
-A strict negative response has the body prefix:
-
-```text
-d0 86 83 00 4f
-```
-
-It echoes the attempted sequence and does not advance the counter. Absence of
-a response is a failed attempt, not proof of rejection or acceptance.
-
-The controlled 2026-09-02 exhaustive test began from authenticated next `10`
-and visited every five-bit close value once in bit-reversed order. All 32
-values returned a matching authenticated idle response and retained the value
-that had just been sent. An open at `31` then authenticated and advanced to
-`0`; after valve-owned automatic idle, close `0` authenticated and a 60-second
-open at `0` advanced to `1` and again stopped automatically.
-
-An authenticated idle close is therefore a non-actuating counter assignment,
-not a candidate check. The synchronization procedure is deterministic:
+An authenticated idle close assigns its submitted five-bit counter. Recovery
+therefore uses a fixed Zone 1 close at counter 0, not a counter search:
 
 1. Independently confirm the valve is idle.
-2. Send a Zone 1 close at fixed five-bit anchor `0`, with no duration.
-3. Publish next counter `0` only after the matching authenticated closed
-   response.
-4. Observe the 15-second hardware command interval before an open at `0`.
+2. Send close 0 with no duration and require a matching authenticated idle reply.
+3. Store next counter 0 only after that reply.
+4. Wait the 15-second hardware interval before sending an open.
 
-The standalone synchronization diagnostic may repeat one silent anchor once at
-the same value to tolerate a lost RF exchange. A second silence or a strict
-negative response stops fail-closed; neither dispatch nor silence establishes
-synchronization. Its retry state is durable across a gateway or assigned-node
-restart, while pre-0.33.36 multi-candidate recovery state is normalized to
-anchor `0` before any transmission.
+An idle sync response may identify the last watered zone. That exception is
+restricted to an already-idle synchronization reservation; ordinary watering
+responses must still match the requested zone.
 
-An end-user open is a distinct single-attempt transaction:
+The standalone diagnostic may repeat one silent anchor once at the same value.
+A second silence or strict negative response fails. Restart does not replay a
+transmitted command or establish synchronization.
 
-1. Reserve the requested zone and validated duration.
-2. Send the fixed close-`0` anchor and wait for its authenticated idle response.
-3. Wait until 15 seconds have elapsed from the anchor transmission.
-4. Send the requested open at counter `0`.
-5. Report success only after the matching authenticated watering response.
+Without morning mode, a requested open is an observable transaction: reserve the
+zone and duration, synchronize at fixed zero, wait the command interval, and
+send one bounded open. Completion requires the authenticated watering response.
+Duplicate starts are rejected; cancellation is allowed before open dispatch.
 
-Duplicate starts are rejected. Timeout, strict rejection, node or transport
-loss, unexpected watering, or gateway restart terminates the transaction and
-clears the queued open. An operator may cancel only before step 4. The gateway
-never restores or replays a queued open after restart.
+Optional morning mode persists an enabled flag, local start time, timezone, and
+window. It waits for an eligible owner report and confirms the idle anchor, then
+uses the retained counter for direct daytime requests. Unknown counters block
+direct starts. The complete 1/4/8/12-hour retention matrix is still a qualification
+limit; a successful immediate sync is not proof of indefinite counter validity.
+
+Startup, missing telemetry, and client loss never send a speculative close.
+Reports reconcile physical state; command intent alone cannot set HA watering.
 
 ## Battery and unsupported water usage
 
 Battery is a declared HTV405 capability but remains unavailable locally. The
-previously suspected offset-`17` bit `0x08` is only a research candidate and
+offset-`17` bit `0x08` is a research candidate and
 has not been correlated to a controlled normal-to-low transition.
 
-A September 6 read-only review found 63 distinct recorded routine gateway
-ACKs with the same payload: bytes 15–17 `01 00 01`, then zeros through byte 35.
-The different pairing-ACK body `01 00 00 80 ...` belongs to another protocol
-stage and is not battery evidence. All 158 distinct recorded valve status
-frames kept the candidate bit clear (`0x05` or `0x85` at byte 17). Control
-responses use a different layout, where byte 17 selects the zone. These counts
-exclude fixture-only frames; repeated identical frames are counted once.
-See `ack_review_20260906` in
-`research/fixtures/htv405_battery_transition_20260823.json` for the evidence scope.
-
+Routine gateway ACKs have fixed bytes 15–17 `01 00 01` and zeros through byte
+35. Pairing ACKs can instead contain `01 00 00 80 ...`; this is a different
+protocol stage, not battery evidence. Control-response byte 17 is the zone field
+and does not have status-report battery semantics.
 
 HTV405 does not expose water usage. Its cloud product definition includes
 per-zone work state, alarm, event time, and duration plus chassis battery and

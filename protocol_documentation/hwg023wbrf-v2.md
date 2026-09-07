@@ -22,12 +22,7 @@ all routes from one address at send time.
 ## Device Address and RF selector
 
 The app's Device Address is a gateway-assigned list/slot value, not a universal
-RF channel selector. Confirmed counterexamples include:
-
-- an HCS026 sensor shown as Device Address `2` while using RF selector `4`;
-- an HTV405 valve shown as Device Address `6` while using a selector-6 stock
-  association;
-- an HTV145 valve shown as Device Address `1` while using selector `6`.
+RF channel selector.
 
 Device Address may increment as devices are added to one stock gateway, but it
 must not be used to construct RF carriers or pairing replies.

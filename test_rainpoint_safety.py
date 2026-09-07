@@ -1909,6 +1909,25 @@ class Htv145RuntimeTest(unittest.TestCase):
             idle=self.idle, exchange_at="2026-09-05T12:00:00+00:00",
             idle_at="2026-09-05T12:01:03+00:00", now="2026-09-05T12:01:05+00:00")
 
+    def test_pending_reboot_blocks_control_before_old_connection_disappears(self):
+        self.enroll()
+        self.sent.clear()
+        self.node["node_reboot_pending"] = True
+        now = "2026-09-05T12:02:00+00:00"
+        before = self.store.htv145_control_states()
+        self.assertFalse(self.runtime.status(self.profile, now=now)["owner_available"])
+        for action in ("open", "close"):
+            with self.assertRaises(RuntimeError):
+                self.runtime.request(self.profile, action, duration_seconds=60, now=now)
+        self.runtime.tick(now=now)
+        self.assertEqual([], self.sent)
+        self.assertEqual(before, self.store.htv145_control_states())
+        self.node.update(node_reboot_pending=False, connected_at="connection-2")
+        self.runtime.tick(now=now)
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [c["type"] for _, c in self.sent])
+        self.assertTrue(self.runtime.status(self.profile, now=now)["ready"])
+
     def test_positive_exchange_enrollment_restores_only_configuration_and_counter(self):
         result = self.enroll()
         self.assertTrue(result["ready"])

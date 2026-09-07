@@ -10,12 +10,12 @@ Read [common.md](common.md) first, then the file for the device family:
 |---|---|---|
 | Stock RainPoint gateway (`HWG023WBRF-V2`) | [hwg023wbrf-v2.md](hwg023wbrf-v2.md) | Reference implementation and coexistence constraint |
 | Soil-moisture sensors (`HCS02x`, validated as `HCS026FRF`) | [hcs026frf.md](hcs026frf.md) | Pair, receive, acknowledge, and recover |
-| Single-zone valve (`HTV145FRF`) | [htv145frf.md](htv145frf.md) | Receive/decode; local pairing has accepted assignment and stage 1, later stages remain research-only |
+| Single-zone valve (`HTV145FRF`) | [htv145frf.md](htv145frf.md) | Decode, ACK, and dry-test control/sync on a partial association; full terminal pairing unqualified |
 | Four-zone valve (`HTV405FRF`) | [htv405frf.md](htv405frf.md) | Pair, receive, acknowledge, and control |
 
 Exact frames and experiment chronology live under [`research/`](../research/).
 The executable specification lives in `rainpointd_addon/rainpointd/`, with
-regression coverage in `rainpointd_addon/tests/`.
+regression coverage in root `test_*.py` files and the firmware native protocol test.
 
 ## Interpretation rules
 

@@ -15,10 +15,6 @@ information to distinguish every retail model in the family.
 | Exact model code | `0x013d` when present in product metadata |
 | Supported local profile | `hcs026_auto_v1` |
 
-Two validated transformations are `1b ce 00 24` to `9b ce 00 24` and
-`15 a9 80 24` to `95 a9 80 24`. These values are evidence examples, not fixed
-installation defaults.
-
 A strict factory announcement has message signature:
 
 ```text
@@ -141,7 +137,7 @@ fix is correct ACK ownership and delivery.
 ## Fields not present in routine RF telemetry
 
 - Exact retail model name, unless separate product metadata is available.
-- App Device Address; it is not the byte previously suspected at offset `15`.
+- App Device Address.
 - RSSI; this is measured by the receiver.
 - Soil type (`P1` mixed, `P2` peat, `P3` black earth, `P4` sandy loam,
   `P5` laterite, `P6` other).

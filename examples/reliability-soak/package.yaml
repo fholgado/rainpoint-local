@@ -1,0 +1,41 @@
+# Example HA package. Copy tools/reliability_soak.py into /config/rainpoint-local/.
+# Set the gateway URL for your installation. The output contains private RF data.
+shell_command:
+  rainpoint_collect_reliability: >-
+    python3 /config/rainpoint-local/reliability_soak.py collect
+    --database /config/rainpoint-local/reliability.sqlite3
+    --status-output /config/rainpoint-local/reliability-status.json
+    --gateway-url http://homeassistant.local:8787
+    --hours 72
+
+automation:
+  - id: rainpoint_reliability_collection
+    alias: RainPoint reliability evidence collection
+    description: Read-only snapshots and RF events for a fixed 72-hour window.
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: /5
+    actions:
+      - action: shell_command.rainpoint_collect_reliability
+        response_variable: collection
+      - choose:
+          - conditions: "{{ collection.returncode != 0 }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: rainpoint_reliability_collection
+                  title: RainPoint evidence collection needs attention
+                  message: Collection failed. The previous evidence cursor is retained; inspect HA logs and the collector database.
+          - conditions: "{{ collection.returncode == 0 and (collection.stdout | from_json).state == 'completed' }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: rainpoint_reliability_collection
+                  title: RainPoint evidence window complete
+                  message: The 72-hour evidence window is complete. Review the persisted data before declaring qualification passed.
+              - action: automation.turn_off
+                target:
+                  entity_id: "{{ this.entity_id }}"

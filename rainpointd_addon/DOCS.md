@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.34.14 supports authenticated network radio nodes, receive-only USB
+Version 0.34.15 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -31,9 +31,9 @@ overwriting the last definitive zone or watering state.
 
 ### Optional morning synchronization
 
-Integration 0.14.0 exposes a per-valve **Morning sync and direct watering** switch,
+HA exposes a per-valve **Morning sync and direct watering** switch,
 **Morning sync starts** local time, and a **Morning sync window** of 15–120 minutes.
-Enabling requires firmware 0.15.11 with `htv405_bounded_sync_wait`; the switch is
+Four-zone enabling requires `htv405_bounded_sync_wait`; the switch is
 initially off. The HA controls supply Home Assistant's configured timezone.
 Choose a window before the first scheduled watering, long enough to include a
 routine valve report. Physical daytime reception must be validated before
@@ -354,57 +354,16 @@ The selected HTV405 RF egress node is routing metadata, not part of the valve's
 controller identity. It may be moved to another connected, capable node while
 idle; doing so preserves the association parameters but deliberately clears the
 command counter until it is synchronized again.
-HTV145 exposes confirmed watering state, requested duration, and last-session
-water usage but remains receive-only.
-The temporary `htv145_dry_acceptance` option is a research-only physical-test
-gate, not a Home Assistant actuator path. When explicitly enabled it adds a
-token-protected one-shot endpoint for an isolated, unpressurized HTV145 valve.
-The runner requires fresh valve-originated idle evidence, a retained passive
-stock command for counter synchronization, and at least ten minutes without
-stock-controller RF before it can transmit one bounded open. It also requires
-a confirmed non-low valve battery report, derives channel 0 or 11 from the
-confirmed command rather than a frequency default, and will not reuse evidence
-that predates an earlier local attempt. Leave the option disabled outside a
-supervised acceptance session.
-Valid RainPoint frames that do not match the confirmed layouts are retained as
-`rf_frame` records in `/api/v1/events` for endpoint discovery; other RF fields
-remain research work.
+HTV145 exposes confirmed watering, duration, usage, categorical battery, and
+counter/morning-sync controls for its enrolled qualification owner. It does not
+expose four-zone actuators. Ordinary HA actuation remains unpromoted; use only
+the explicitly enabled dry-qualification API below.
 
-In live RTL-SDR mode, normalized events and decoded device state are persisted
-to `/data/rainpointd.sqlite3`, which survives app rebuilds and restarts. The
-read-only `/api/v1/endpoints` endpoint summarizes every observed RF endpoint,
-including first/last seen time, packet count, address-field roles, latest
-message byte, signal level, and frame.
-
-`/api/v1/devices` also includes persistent report count, average report
-interval, longest observed gap, and model-specific reporting freshness. The
-current measured timeout is 15 minutes for HCS026 sensors and 6 hours for the
-HTV145 valve.
-
-Device snapshots also expose valid and rejected RF-frame counts plus an RF
-reception-success percentage. Ordinary moisture reports with an invalid
-trailer remain available in `/api/v1/events` for research but cannot update
-Home Assistant state or create endpoint-discovery candidates. Confirmed
-product-code reports and structurally decoded valve transactions are retained
-as accepted protocol families while their distinct trailer behavior remains
-under study. Valid routine traffic on the established valve endpoint pair
-advances its report time without overwriting the last decoded watering state.
-
-Validated HCS026 factory and paired report layouts also expose the factory and
-paired RF identities. A newly paired sensor using this layout is discovered
-without an installation-specific endpoint allowlist. Its categorical battery
-field reports `100%` for normal and `10%` for low, matching the stock app's
-semantics. The former companion-heartbeat battery candidate has been withdrawn:
-same-file IQ identifies those reversed frames as stock-gateway acknowledgements.
-
-The unified candidate can acknowledge routine reports only for HCS026
-endpoints explicitly assigned to that node by the custom local gateway. The
-gateway persists exactly one radio-node owner for each sensor, restores those
-bounded assignments after reconnect or OTA reboot, and revokes them when a
-sensor is removed or reassigned. Home Assistant exposes authorized-sensor,
-successful-send, and failed-send counters as diagnostic entities. The normal
-production target keeps this transmitter disabled while the consolidated image
-completes physical migration validation.
+Sensor reports expose moisture, categorical battery, freshness, and receiver
+provenance. One persistent owner transmits ACKs; other nodes may forward the
+same report. Unsupported protocol values remain unavailable. Device identity
+comes from the accepted association, and re-registration reuses an established
+catalog identity instead of creating a duplicate HA device.
 
 ## Safety
 
@@ -419,13 +378,31 @@ optional external device catalog and cannot be used to write raw captures.
 
 ## HTV145 persistent dry qualification
 
-With `htv145_dry_acceptance` explicitly enabled and an isolated radio advertising
-`htv145_report_ack_tx`, the protected `/api/v1/research/htv145-control/` route can
-persist the accepted selector-6 recipe, import positive exchange/idle evidence,
-and issue bounded direct open/close commands. One persisted owner handles report
-and summary ACKs; changing it requires the exact revocation reply. Restart and
-morning readiness checks do not send actuator commands. Routine telemetry cannot
-reseed the command counter and repeated summaries cannot change current watering.
-The new ACK timing still requires on-air qualification before HA control promotion.
-See the [protocol interface](../protocol_documentation/htv145frf.md) for input
-fields and the [roadmap](../PROJECT_ROADMAP.md) for hardware qualification status.
+Requires `htv145_dry_acceptance`, a qualified isolated dry valve, and an owner
+advertising `htv145_report_ack_tx`. All routes below require the management token
+and live under `/api/v1/research/htv145-control/`.
+
+| POST action | Input and effect |
+|---|---|
+| `status`, `morning-check` | `valve_endpoint`; read readiness/counter/physical state without RF |
+| `open` | `valve_endpoint`, `duration_seconds`; one bounded whole-minute run, 60–3600 seconds |
+| `close` | `valve_endpoint`; explicit authenticated close after command spacing; fresh idle returns without RF |
+| `enroll` | `profile`, positive `command_frame`/`response_frame`, independent `idle_frame`, and `exchange_observed_at`/`idle_observed_at`; persist only recent verified evidence |
+| `revoke` | `valve_endpoint`; require the existing owner's correlated revocation reply |
+
+The profile supplies `node_id`, `controller_endpoint`, `valve_endpoint`,
+`center_hz`, `power_dbm`, `invert`, `trailer_residual`, `command_marker_inverted`,
+`close_trailer_residual`, and `report_ack_center_hz`. Use the accepted association,
+not installation defaults. No existing ACK owner can be silently replaced.
+
+HA Sync counter uses `/api/v1/devices/{device_id}/valve/sync-now` on an owner with
+`htv145_idle_anchor`. It waits for a new owner idle report and performs fixed-zero,
+close-only recovery. Three total attempts share one bounded window; each retry
+requires a later owner idle report. The legacy `/valve/restore-counter` restores
+an already authenticated counter to the radio without RF or new counter proof.
+Morning policy uses `/valve/morning-sync` with the same fields described above.
+
+Restart never replays an actuator command. Report sequences cannot reseed command
+counters, and repeated session summaries cannot change current watering state.
+See [the one-zone protocol](../protocol_documentation/htv145frf.md) for ACK and
+counter rules and [the roadmap](../PROJECT_ROADMAP.md) for physical qualification.

@@ -1,338 +1,105 @@
-# RainPoint fully local architecture
+# RainPoint Local architecture
 
-## Objective
-
-Replace the vendor software stack with a direct local RF bridge that can:
-
-- receive soil-moisture and valve telemetry,
-- safely control watering with hard local limits,
-- discover, enroll, name, and forget devices without the vendor app,
-- preserve device identity and configuration across restarts, and
-- operate without internet access.
-
-The stock hub may remain powered during migration as a rollback path, but it
-is not a backend or dependency of the target architecture.
-
-## Target system
+## Data and authority flow
 
 ```text
-HCS02x sensors       HTV405FRF / HTV145FRF valves
-          \                    /
-           \---- 433 MHz -----/
-                     |
-             local radio backend
-              - RTL-SDR receive reference
-              - one or more ESP32/CC1101 radio nodes
-                     |
-                 rainpointd
-       logical custom local RF gateway
-       protocol + registry + safety
-                     |
-              versioned local API
-                     |
-        Home Assistant rainpoint_local
+RainPoint sensors and valves
+          | 433/434 MHz
+ESP32/CC1101 radio nodes     optional receive-only SDR
+          | authenticated network frames |
+          +---------------+--------------+
+                      rainpointd
+              protocol, registry, persistence
+              ACK/control ownership and safety
+                          | local API
+              Home Assistant integration
 ```
 
-The Home Assistant integration does not own radio timing or valve safety. It
-is a client of `rainpointd`, allowing the receive-only SDR backend to be
-replaced by the ESP32/CC1101 bridge without recreating HA entities.
+The gateway owns associations and command authority. HA requests operations and
+renders confirmed state; firmware owns timing-critical RF. The SDR is research
+infrastructure and must not be required for production telemetry or control.
 
-## Components
+## Protocol core
 
-### Protocol core
+`rainpointd_addon/rainpointd/rf.py`, `pairing_protocol.py`, `valve_protocol.py`,
+and `valve_pairing_protocol.py` define frame validation, identity derivation,
+field codecs, enrollment, and reply shapes. Captured regression fixtures preserve
+byte evidence. Device references under [protocol_documentation/](protocol_documentation/)
+describe current rules without reproducing experiment chronology.
 
-The dependency-light protocol layer:
+Pairing, report, and command counters are separate state machines. Endpoint
+positions are protocol roles, not universal source/destination addresses.
+Installation identities must come from a catalog or accepted association.
 
-- preserves raw frames alongside decoded values,
-- distinguishes confirmed fields from hypotheses,
-- validates framing, endpoints, counters, and eventually the trailer,
-- emits typed device events rather than Home Assistant entities, and
-- uses captured fixtures as regression tests.
+## Gateway service
 
-`rainpointd_addon/rainpointd/rf.py` and its protocol tests are the current
-executable specification. Human-readable shared and per-device definitions are
-in [`protocol_documentation/`](protocol_documentation/).
+`rainpointd` owns durable device identity, suppression, metadata, radio credentials,
+ACK assignments, control profiles/counters, pending operations, morning schedules,
+and event history. Its API is versioned independently of the RF protocol.
 
-### Local gateway service (`rainpointd`)
+Multiple nodes can receive a frame. The gateway deduplicates observations while
+retaining receiver provenance. Exactly one assigned owner transmits routine ACKs
+or ordinary valve commands for each device. Reassignment revokes the old owner
+before a replacement may transmit. Unavailable owners block control; normal opens
+never fail over automatically to another radio.
 
-The gateway owns state that must survive an HA restart:
+Valve control reserves one logical operation durably before dispatch. The HTV405
+coordinator supports supervised HA operation. The HTV145 coordinator remains
+behind the explicit dry-qualification gate. They share safety principles but
+have distinct response, counter, and synchronization rules.
 
-- radio input/output adapters,
-- device and endpoint registry,
-- learn/enrollment sessions,
-- command correlation and acknowledgements,
-- transaction counters and retry state,
-- valve watchdogs and maximum run times,
-- append-only event and audit records, and
-- the versioned local API.
+## Radio firmware
 
-`rainpointd` is the logical **custom local RF gateway**. It may coordinate one
-or more distributed ESP32/CC1101 **local radio nodes** over the LAN. Device and
-pairing identity belongs to the logical gateway rather than to the location of
-a particular node.
+The sole PlatformIO environment is `rainpoint_bridge`, using one CC1101 per node.
+The radio scans association channels, receives normalized frames, records RF
+health, and executes only authorized bounded operations. Node sessions connect
+outbound to the gateway with node-specific credentials.
 
-### ESP32/CC1101 radio bridge
+Pairing and ACK timing run locally. Command bursts contain identical repetitions
+of one logical command and stop on a qualified response. The radio enforces
+command spacing and bounded waits independently of HA. Receive-only maintenance
+blocks all RF transmit paths while retaining diagnostics and reconnect support.
 
-Each radio node now:
+OTA verifies size and SHA-256, confirms a healthy candidate boot, and supports
+rollback. Asymmetric signatures and encrypted node sessions remain hardening
+gates; do not describe the existing shared-secret session as encrypted.
 
-- receive and forward normalized RainPoint RF frames,
-- transmit only commands generated by the safety-aware gateway,
-- default to receive-only after boot or connection loss,
-- expose health and radio diagnostics,
-- supports integrity-checked local firmware updates with health confirmation
-  and rollback (asymmetric signatures remain pending), and
-- retain no watering schedule that can outlive its watchdog.
+One extra compile option enables HTV145 qualification on an explicitly selected
+dry-test radio. Standard firmware excludes that transmitter. There are no
+separate development checkouts or identity-specific PlatformIO environments.
 
-The supported build uses a socketed ESP32 development board and one
-433 MHz CC1101 transceiver on a small carrier PCB. It will switch channels and
-operate half-duplex through one antenna, as the stock hub does. The existing
-RTL-SDR/Pi remains the independent reference receiver during development. An
-optional second CC1101 may be fitted for continuous dual-channel receive
-diagnostics, but it is not part of the production requirement. A custom
-bare-chip RF board is unnecessary until the protocol and deployment have been
-proven. Multiple single-radio nodes can be placed near different garden areas
-for coverage; obsolete multi-radio firmware forks are not part of the supported
-deployment architecture.
+## Home Assistant adapter
 
-The carrier is passive: USB-C power, the status LED, BOOT/pairing confirmation,
-and reset remain functions of the socketed ESP32 development board. The carrier
-only routes 3.3 V, ground, SPI, and the two CC1101 GDO lines and provides local
-radio-supply decoupling. This keeps the prototype serviceable and avoids a
-second power or user-interface implementation.
+The integration maps gateway capabilities to HA devices/entities, runs pairing
+and naming flows, submits authenticated actions, and displays their outcomes.
+It preserves entity identity across supported migrations and omits unsupported
+fields. A canonical valve is one physical HA device with one or four zones.
 
-### Distributed radio nodes
+The adapter does not implement RF timing, guess counters, infer watering from an
+outbound command, or substitute cloud values for undecoded local telemetry.
+Control availability depends on the owner, association, physical state, and any
+active maintenance/command reservation.
 
-Every node must have a stable identity and report it with each frame, together
-with channel, receive timestamp, RSSI/LQI, frequency offset, firmware version,
-and health counters. `rainpointd` deduplicates frames heard by several nodes
-and retains receiver provenance for coverage diagnostics.
+## Safety and persistence contract
 
-Reception may use every healthy node concurrently. Transmission is centrally
-coordinated:
+- Bound run duration and require independently known physical state.
+- Accept state/counters only from the relevant qualified response or telemetry.
+- Keep one logical operation per valve and preserve its reservation across failure.
+- Do not replay an open after gateway/node restart or client loss.
+- Never transmit a speculative startup close or close solely for missing telemetry.
+- Treat an overdue run as an observable anomaly; preserve uncertainty honestly.
+- Keep explicit counter sync distinct from status reads and normal startup.
+- Preserve ACK ownership and association identity across ordinary reconnects.
 
-- each device has one preferred transmitter node,
-- every valve in a multi-node installation requires an explicit user-selected
-  transmitter node before local control is enabled,
-- an open command is sent through exactly one node,
-- open commands are never broadcast for coverage,
-- alternate-node close attempts may occur only sequentially under the safety
-  controller, and
-- every transmitting node enforces its own hard deadline if LAN connectivity
-  or the controlling process is lost.
+Morning scheduling belongs to the gateway so HA downtime cannot erase its policy.
+HA may schedule irrigation, but gateway/radio safety continues independently.
+A missed maintenance window is not replayed arbitrarily later.
 
-The standard firmware uses an authenticated outbound Wi-Fi connection from
-each node to `rainpointd`, making it possible to place nodes near the garden
-areas they serve while keeping the SDR as a reference. Bounded sensor pairing,
-rejoin, and acknowledgement TX are implemented. HTV405 control remains a
-research-bench path. A distinct HTV145 long-wake candidate is compiled only
-when both research and HTV145-specific build gates are enabled; it remains
-absent from standard firmware and every public API until physical acceptance
-and transport-security review are complete.
+## Research and release boundaries
 
-For installations with multiple RainPoint valves, setup must ask the user
-which local radio node is physically closest to each valve. Observed receive
-quality may be shown as a recommendation, but it cannot silently override the
-assignment. Commissioning should require a successful close/idle exchange
-through the selected node before enabling bounded open commands. If that node
-is unavailable, ordinary open control remains unavailable rather than failing
-over automatically to a more distant node. The safety controller may attempt
-sequential close through other authorized nodes only as an emergency recovery
-operation.
+Raw captures, copied databases, build output, and installation secrets remain
+untracked. Redacted fixtures and reusable analyzers live in the repository.
+Cloud investigation stays under `research/cloud` and is not a runtime dependency.
 
-The sole radio-node firmware lives in `firmware/rainpoint_bridge`. Its
-receive loop scans both observed channels with one radio and implements
-frame reconstruction, integrity diagnostics, startup register verification,
-packet/overflow/recovery counters, frequency-offset estimates, and serial JSON
-output. It transmits only gateway-authorized HCS026 pairing/rejoin replies and
-routine acknowledgements in the standard build. The research-only HTV145 path
-constructs the observed long-wake open/close family, emits one bounded burst of
-up to three byte-identical attempts, stops on a valid response, and falls back
-to an independent state report without substituting its telemetry counter.
-
-### Home Assistant integration (`rainpoint_local`)
-
-The integration provides:
-
-- Config Flow and local gateway configuration,
-- soil moisture, signal, battery, usage, and last-seen sensors,
-- bounded-duration valve controls once enabled,
-- diagnostic raw-frame information,
-- repair warnings for stale or unreachable devices, and
-- explicit learn, accept, rename, and forget actions.
-
-## Transport progression
-
-| Backend | Telemetry | Control | Purpose |
-|---|---|---|---|
-| Replay fixtures | Synthetic | Rejected | Deterministic development and tests |
-| RTL-SDR / `rtl_433` | Live local | No | Current safe receive-only deployment |
-| ESP32 + one CC1101 | Live local | Bounded, after validation | Target production bridge |
-
-The protocol, registry, API, and HA entity model remain stable while the radio
-backend changes.
-
-## Local enrollment and pairing
-
-Two operations must remain distinct:
-
-1. **Registry enrollment:** observe a stable RF endpoint, accept it, and assign
-   a local name and area.
-2. **RF association:** perform any address, channel, key, or counter exchange
-   required by the physical device.
-
-Controlled HCS026 captures and a local physical enrollment now prove the
-bidirectional enrollment exchange. The
-sensor emits a factory identity; the stock RainPoint gateway answers with a
-short frame targeting the deterministic high-bit paired identity, then follows
-the sensor's sequence with acknowledgements. The ESP32/CC1101 transmitter
-reproduced this exchange across both test identities and the installed bed
-sensors, receiving terminal message `03` plus later telemetry without the stock
-gateway. The valve association
-procedure still requires a spare-device capture before resetting the working
-installation.
-
-Evidence from both test identities now supports a common four-reply
-first-enrollment branch. The model-level `hcs026_auto_v1` workflow locks a
-pairing window to the first strict factory announcement, derives the paired
-identity locally, assigns the validated shared selector, and never asks Home
-Assistant for an RF ID or captured transcript. It has passed end to end across
-independent test and installed-sensor identities. Authenticated node protocol
-v2 allows `rainpointd` to start or cancel
-only this bounded exchange on an explicitly selected node. The registry
-requires the terminal RF frame and matching node command ID before
-finalization. Valve commands remain absent.
-
-The local registry can retain:
-
-- protocol endpoint and model,
-- capabilities,
-- association material if discovered,
-- friendly name and area,
-- last-seen and health data, and
-- the evidence used to infer the record.
-
-Supported operations should be explicit:
-
-- `start_pairing(timeout)`
-- `pairing()`
-- `complete_pairing(endpoint, name, area)`
-- `rename_device(device_id, name)`
-- `forget_device(device_id, local_only=true)`
-- `factory_unpair(device_id)` only after its RF procedure is proven
-
-Deleting an HA entity must never silently transmit an unpair or reset command.
-
-## Delivery phases
-
-### Phase 1 — receive-only local telemetry: operational
-
-- Live 2-FSK receive through RTL-SDR and ESP32/CC1101 radio nodes
-- Multiple receivers with deduplication and coverage attribution
-- Local soil-moisture and confirmed battery reporting
-- Valve state, duration, and last-session usage decoding
-- Persistent local events, observations, registry, and endpoint inventory
-- Dynamic Home Assistant entities through the local API
-
-### Phase 2 — local sensor lifecycle: functional prototype
-
-- Persistent learning, naming, enrollment, suppression, and local forget
-- Authenticated selection of a transmitting radio node
-- Physically proven HCS026 pairing on both test identities
-- Automatic factory-identity adoption physically proven across independent
-  test and installed-sensor identities
-- Persistent single-owner routine acknowledgements restored after node restart,
-  OTA, and gateway reconnect
-- One-reply recovery for a known sensor without replacing its HA identity
-- Home Assistant node adoption, Identify, diagnostics, and sensor pairing UI
-
-Qualification status for cadence, ACK-owner reassignment, coexistence, hardware
-revisions, and reassociation is tracked only in `PROJECT_ROADMAP.md`. These are
-qualification tasks rather than missing protocol-core features.
-
-### Phase 3 — software publication hardening: in progress
-
-- HA-native lifecycle and migration tests
-- Standalone gateway claim and credential rotation/revocation
-- Typed/versioned API models and capability negotiation
-- Push-driven HA updates with reconciliation fallback
-- Separate production and research add-on surfaces
-- Transport-neutral protocol package
-- Signed OTA/rollback design and fleet compatibility policy
-
-The architecture permits these tasks without RF hardware, although OTA still
-requires physical update and recovery qualification. Their scheduling and
-completion status live in `PROJECT_ROADMAP.md`.
-
-### Phase 4 — bounded valve control: hardware-gated
-
-- Capture and reproduce test-valve association
-- Generate open and close frames with valid counters and trailers.
-- Require positive returned-state acknowledgement.
-- Enforce configured and absolute maximum durations.
-- Persist the requested duration and expected idle deadline before transmitting
-  open.
-- Never repeat a logical open; keep proven within-command RF attempts bounded.
-- Issue early-stop or anomaly-close only from explicit intent or positively
-  observed overdue watering.
-- Audit every request, response, timeout, retry, and failure.
-
-### Phase 5 — fully local operation and migration
-
-- Move schedules to Home Assistant or the local gateway.
-- Verify operation with internet access unavailable.
-- Test gateway, HA, network, and power-loss recovery.
-- Retain the existing installation as rollback until the local bridge has
-  completed an agreed validation period.
-- Preserve existing Home Assistant identity and history while transferring
-  authority from the cloud provider to the custom local provider.
-
-## Valve safety contract
-
-The gateway must guarantee:
-
-- fail-closed startup and recovery,
-- a user maximum and non-bypassable absolute run limit,
-- no open command without an active local watchdog,
-- no replay or speculative close after loss of the controlling client,
-- confirmation from returned valve state rather than transmit success,
-- one durably reserved logical operation at a time,
-- no restoration of an old open command after restart, and
-- persistent audit records for all control activity and faults.
-
-Scheduling may live in Home Assistant, but this contract must continue to work
-while Home Assistant is stopped.
-
-The hardware-independent safety state machine is implemented in
-`rainpointd_addon/rainpointd/safety.py`; the disabled HTV145 transport
-candidate adds a separate durable reservation and independent command-counter
-boundary. Neither is connected to a public HTTP or Home Assistant actuator:
-
-- startup is observation-only and will not accept open until idle is observed,
-- the hard run deadline is armed before an open action is emitted,
-- a missing acknowledgement invalidates the command counter without emitting a
-  second logical open,
-- the expected valve-owned completion deadline survives an ambiguous result,
-- client loss cannot restore or replay a command, and
-- only matching valve evidence advances the independently persisted counter.
-
-This simulation is a prerequisite, not authorization to transmit. Integrating
-its symbolic actions with a radio transport remains a separately reviewed
-milestone after physical receive and bounded acceptance testing.
-
-## Definition of independence
-
-The replacement is complete when a clean installation can, without internet
-services or a vendor app:
-
-- commission the local radio gateway,
-- learn every supported sensor and valve,
-- persist and restore its registry,
-- report all telemetry locally,
-- safely open and close a valve for bounded durations,
-- recover safely across service, network, and power failures, and
-- restore the setup from documented local backups.
-
-For existing cloud users, the transition to this architecture is an
-authority-preserving migration inside the existing RainPoint/HomGar
-integration, not a delete-and-recreate installation. See
-[`CLOUD_TO_LOCAL_MIGRATION.md`](CLOUD_TO_LOCAL_MIGRATION.md).
+[PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) owns all qualification and hardening
+status. [The research index](research/README.md) separates procedures from evidence.

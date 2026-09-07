@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "model": "HTV145FRF",
+  "profile": "selector_6_partial_association_dry",
+  "radio_firmware": "0.15.24-htv145-control.1",
+  "gateway_before": "0.34.14",
+  "gateway_correction": "0.34.15",
+  "association": {
+    "controller_endpoint": "b1c2d38f",
+    "valve_endpoint": "a1b2c380"
+  },
+  "evidence_kind": "gateway_and_radio_received_RF_plus_durable_control_state; no independent SDR",
+  "idle_restart": {
+    "radio_reboot_preserved_counter": 129,
+    "gateway_restart_preserved_counter": 129
+  },
+  "active_gateway_restart": {
+    "duration_seconds": 60,
+    "submitted_counter": 129,
+    "watering": {
+      "confirmed_at": "2026-09-07T00:43:12.138016+00:00",
+      "confirmed_watering": true,
+      "next_sequence": 130,
+      "counter_synchronized": true,
+      "last_result": "confirmed",
+      "frame": "79f4882f28a1b2c380b1c2d38f8d810786058090cf80000000409980569e0000000000005249"
+    },
+    "automatic_idle": {
+      "confirmed_at": "2026-09-07T00:44:06.115511+00:00",
+      "confirmed_watering": false,
+      "next_sequence": 130,
+      "counter_synchronized": true,
+      "last_result": "confirmed",
+      "frame": "79f4882f28a1b2c380b1c2d38f8f0107860580804f8000000040800056800000000000003f63"
+    }
+  },
+  "reboot_pending_close_failure": {
+    "duration_seconds": 120,
+    "submitted_open_counter": 130,
+    "watering": {
+      "confirmed_at": "2026-09-07T00:44:24.764883+00:00",
+      "confirmed_watering": true,
+      "next_sequence": 131,
+      "counter_synchronized": true,
+      "last_result": "confirmed",
+      "frame": "79f4882f28a1b2c380b1c2d38f93810786058090cf8000000040b80056bc0000000000005be0"
+    },
+    "close_submitted_at": "2026-09-07T00:45:03.962064+00:00",
+    "old_connection_disappeared_at": "2026-09-07T00:45:04.063457+00:00",
+    "new_connection_at": "2026-09-07T00:45:06.253952+00:00",
+    "submitted_close_counter": 131,
+    "node_reboot_pending_at_submission": true,
+    "result": "confirmation_timeout_counter_unsynchronized",
+    "automatic_idle": {
+      "confirmed_at": "2026-09-07T00:46:18.113502+00:00",
+      "confirmed_watering": false,
+      "next_sequence": 131,
+      "counter_synchronized": false,
+      "last_result": "confirmation_timeout_counter_unsynchronized",
+      "frame": "79f4882f28a1b2c380b1c2d38f998107860580804f800000004080005680000000000000738b"
+    },
+    "cause": "Readiness accepted the old connected socket while a requested radio reboot was pending. No positive early-close response was retained.",
+    "correction": "Block one-zone readiness and restoration while node_reboot_pending is true; preserve the counter and do not reserve/transmit."
+  },
+  "limitations": [
+    "No independent SDR capture; exact report/summary ACK on-air timing remains unqualified.",
+    "The interrupted close is retained as a failure, not counted as successful early stop or post-reconnect control.",
+    "No four-zone watering was issued by this trial."
+  ],
+  "received_replies": [
+    {
+      "observed_at": "2026-09-07T00:43:02.224138+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2",
+      "result_code": 0,
+      "event_id": 358688
+    },
+    {
+      "observed_at": "2026-09-07T00:44:14.335704+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf8000000040bc0056bc00000000000000004e3e",
+      "result_code": 0,
+      "event_id": 358733
+    },
+    {
+      "observed_at": "2026-09-07T00:54:37.215168+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f80508683104f800000004080005680000000000000000001f9",
+      "result_code": 3,
+      "event_id": 358948
+    },
+    {
+      "observed_at": "2026-09-07T00:55:34.009080+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f80d0868010cf8000000040bc0056bc00000000000000000c38",
+      "result_code": 0,
+      "event_id": 358960
+    },
+    {
+      "observed_at": "2026-09-07T00:56:26.157170+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f81508680104f8000000040800056bc00000000000000007b35",
+      "result_code": 0,
+      "event_id": 358973
+    }
+  ],
+  "corrected_active_radio_restart": {
+    "gateway_version": "0.34.15",
+    "duration_seconds": 120,
+    "open_counter": 128,
+    "blocked_close_error": "selected HTV145 control/ACK owner is unavailable",
+    "previous_connection_at": "2026-09-07T00:52:42.133950+00:00",
+    "new_connection_at": "2026-09-07T00:56:24.304249+00:00",
+    "reboot_pending_after_reconnect": false,
+    "restored_counter": 129,
+    "early_close_counter": 129,
+    "final_counter": 129,
+    "final_idle_at": "2026-09-07T00:56:36.111771+00:00",
+    "final_idle_frame": "79f4882f28a1b2c380b1c2d38f838107860580804f80000000408000568000000000000019c0",
+    "counter_synchronized": true,
+    "ready": true,
+    "result": "passed"
+  },
+  "idle_recovery_after_interrupted_close": {
+    "attempt_count": 1,
+    "counter_anchor": 0,
+    "response_result": 3,
+    "qualified_by_later_open_and_close": true
+  }
+}

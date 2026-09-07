@@ -7,8 +7,8 @@ The repository has three runtime layers and one standard firmware build:
 - `firmware/rainpoint_bridge` — ESP32/CC1101 radio node; and
 - `research/fixtures` — immutable captured protocol evidence used by tests.
 
-No development command contacts HomGar services. Valve-control requests remain
-rejected.
+The replay development configuration does not contact HomGar or authorize live
+RF actuation. Live valve paths require explicit gates and an accepted association.
 
 ## Gateway transports
 
@@ -61,7 +61,7 @@ access supports the optional SDR; Wi-Fi radio nodes do not require USB.
 
 ## Verification
 
-Run the full command listed in the root README or use unittest discovery:
+Run the complete required suite in [AGENTS.md](AGENTS.md), or use discovery:
 
 ```sh
 python3 -m unittest -v

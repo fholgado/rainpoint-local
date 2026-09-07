@@ -32,6 +32,7 @@ class Htv145Runtime:
         node = self.node(profile.node_id)
         if not (node.get("connected") is True and node.get("authenticated") is True
                 and node.get("tx_armed") is not True
+                and node.get("node_reboot_pending") is not True
                 and "htv145_report_ack_tx" in node.get("capabilities", [])
                 and "htv145_control_tx_candidate" in node.get("capabilities", [])):
             raise RuntimeError("selected HTV145 control/ACK owner is unavailable")
