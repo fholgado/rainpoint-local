@@ -19,6 +19,11 @@ belong in [fixtures](fixtures/) and [capture notes](RF_CAPTURE_NOTES.md).
 5. Check fresh radio authentication, disarmed state, and no pending reboot,
    control, revocation, or competing ownership operation.
 
+Before changing a profile, select the closest accepted baseline from the
+[playbook evidence index](PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md#reusable-positive-evidence-index).
+Include waveform integrity and receive turnaround in preflight; a decoded reply
+alone cannot establish that the next device request remained receivable.
+
 ## New enrollment
 
 Use the HA profile for the actual model and select one nearby radio. Follow the

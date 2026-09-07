@@ -107,6 +107,65 @@ fixture, and a one-sentence single-variable hypothesis. A later-stage change
 must not modify a frozen prefix. CI should compile the research branch and
 test its canonical frame table without enabling it in production.
 
+## Preserve the waveform and receive turnaround
+
+Correct decoded bytes are necessary but insufficient. Compare the complete
+waveform: alternating wake, symbol-edge stability, frame, on-air tail, and return
+to reception. There are two distinct FIFO lessons:
+
+- **TX FIFO hardware clocking:** the HTV145 delayed configuration was accepted
+  in two unchanged, unclipped trials after moving that burst to the CC1101 FIFO.
+  The valve emitted `81/50` and subsequent addressed requests, advancing from
+  2/6 to 5/6. Preserve this accepted prefix. This establishes configuration
+  acceptance for that profile, not full terminal enrollment or a universal need
+  to move every transmission to FIFO.
+- **RX FIFO preservation:** a successful HTV405 `transmitAsync()` already restores
+  reception. A second recovery/flush after reporting status can discard an
+  arriving continuation request. The caller skips that redundant recovery after
+  a successful pairing reply, retaining recovery for failed/no-reply paths and
+  the separate HTV145 receive sequence. This is a retained code correction;
+  fresh physical pairing qualification remains open in the roadmap.
+
+Measure on-air behavior independently of driver timing. HTV145 short-reply FIFO
+calibrations recovered the exact frame and 320 wake symbols with transition-fit
+RMS about 0.32–0.46 samples at 2 Msps, versus about 3.80 for the measured RMT
+candidate. This improved waveform did not establish terminal acceptance.
+A delay after `TXFIFO_UNDERFLOW` did not lengthen the RF tail: RF had already
+ended. Do not tune an off-air delay as though it were transmitted low tone, or
+interpret intentional end-of-stream underflow in this raw transmitter as proof
+of a truncated frame. Verify complete bytes, refill diagnostics, actual RF end,
+and receive restoration together.
+
+For the next family, first calibrate a bounded, non-addressing waveform with
+isolated test hardware. Verify no clipping and exact frame/wake recovery before
+using it in a live enrollment. Then require a device-owned continuation and an
+unchanged repeat. Do not copy a specimen's oscillator correction or fixture
+identities into the next association.
+
+## Reusable positive-evidence index
+
+Use these fixtures to select an accepted baseline before changing code. They
+contain measured exchanges and capture provenance; their installation-specific
+identities are evidence, never defaults. This index records what each result
+proves, not a second project-status checklist.
+
+| Boundary | Positive evidence | Limit / reusable lesson |
+|---|---|---|
+| Sensor enrollment replies | [HCS026 reference replies](fixtures/hcs026_gateway_pairing_replies.json) and [device rules](../protocol_documentation/hcs026frf.md) | Reuse the sensor-specific transcript; qualify the next specimen independently |
+| Four-zone generated association | [Generated-identity enrollment](fixtures/htv405_generated_identity_pairing_20260825.json) | Device-owned accepted traffic and subsequent reports; pairing does not seed the control counter |
+| One-zone assignment and ordinary reply | [Stage acceptance](fixtures/htv145_counter2_local_stage1_acceptance_20260902.json) | Repeated addressed continuation freezes assignment; corrected response carrier stopped stage-1 retries |
+| One-zone long configuration | [FIFO acceptance and unchanged repeat](fixtures/htv145_fifo_configuration_acceptance_20260904.json) | `81/50` plus next requests proves configuration acceptance; terminal `84/2c` remains absent |
+| Hardware-clocked waveform | [Calibration](fixtures/htv145_hardware_clocked_configuration_calibration_20260904.json) and [short-reply measurements](fixtures/htv145_fifo_configuration_acceptance_20260904.json) | Exact bytes and lower jitter are waveform proof, not device acceptance |
+| Control after partial pairing | [Partial-association control](fixtures/htv145_partial_pairing_control_acceptance_20260905.json) and [standard-firmware dry controls](fixtures/htv145_standard_firmware_control_20260906.json) | Matching replies, automatic stop and early close establish operational authority separately from terminal enrollment |
+| One-zone idle counter recovery | [Idle-anchor recovery](fixtures/htv145_idle_result3_counter_recovery_20260906.json) | Exact reserved response authenticates a counter; telemetry sequence alone cannot |
+| Retained operation after restart | [One-zone restart recovery](fixtures/htv145_restart_recovery_20260906.json) and [sensor direct reporting](fixtures/hcs026_direct_reporting_recovery_20260906.json) | Retained operation evidence does not substitute for battery-rejoin or fresh-enrollment qualification |
+
+The [capture journal](RF_CAPTURE_NOTES.md) preserves discriminating negative
+results alongside successes, including the off-air hold and terminal FIFO trials.
+The [RX recovery review](WORKSPACE_CONSOLIDATION_20260905.md) records the scope
+and qualification limit of the four-zone flush correction. Consult
+[the roadmap](../PROJECT_ROADMAP.md) for current physical gates.
+
 ## Failure interpretation
 
 Use the device's next action to classify a failure:

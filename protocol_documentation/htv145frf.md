@@ -66,6 +66,13 @@ request remains unproven. A white LED supports initial association acceptance,
 but only addressed valve traffic proves progress. The accepted partial
 association can produce routine telemetry and positively acknowledged controls.
 
+The delayed long configuration uses CC1101 FIFO hardware-clocked transmission.
+Its acceptance is supported by two unchanged trials with a valve-originated
+configuration response and subsequent requests. Exact short-reply FIFO waveforms
+have also been measured, but do not prove acceptance of the final stage. See the
+[waveform guidance and evidence index](../research/PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md#preserve-the-waveform-and-receive-turnaround)
+for TX clocking, on-air tail measurement, and RX FIFO preservation.
+
 ## Routine state and session summaries
 
 For a structurally valid status report:
