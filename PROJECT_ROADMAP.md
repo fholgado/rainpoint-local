@@ -13,6 +13,14 @@ The verified association now uses standard firmware and HA controls, preserving
 bounded commands, counter recovery and evidence-based state. Front-garden
 installation and watering qualification follow when the user connects the valve.
 
+September 7 follow-through order: finish the newly migrated single-zone
+association's ACK/control qualification first; then finish the prior pass's
+rendered HA wizard/UI checks and fixes with the Mac unlocked; then qualify
+firmware 0.16.1 on a test node before rolling it out to production owners.
+Firmware qualification must cover persisted association/counter restore without
+startup actuation, valve-confirmed bounded controls, ACK/report continuity and
+the overnight check. New-ID pairing alone does not qualify control ownership.
+
 The selected unattended implementation/review pass is complete (original list numbers):
 
 - [x] **1.** Audit production defaults: empty fresh installs, accepted identity
@@ -117,6 +125,14 @@ and version history, not this checklist.
   Follow-up on gateway 0.36.1 / firmware 0.16.0 confirmed the new-ID report through
   the selected node, preserved the existing HA device, and finalized/disarmed
   pairing. ACK/control enrollment and sustained reporting remain open.
+- [ ] Bridge fresh local pairing to first-control qualification without a stock
+  command or copied counter. Current dry acceptance requires a passive command
+  on the same link, and runtime enrollment requires a positive exchange; neither
+  can bootstrap a new custom-ID association through the current API. Design a
+  separately gated, bounded qualification state with explicit old-owner revocation,
+  fresh owner idle evidence, close-only counter establishment, and valve-confirmed
+  control before enabling public commands. Preserve the proven RF pairing prefix
+  and distinguish provisional test ownership from qualified runtime ownership.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
