@@ -1977,6 +1977,25 @@ class Htv145QualificationTest(unittest.TestCase):
         self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(2))
         self.assertEqual(1, len(self.sent))
 
+    def test_custom_identity_unqualified_anchor_stops_before_any_open(self):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+        self.prepare()
+        self.runtime.observe_counter_sync_report(bytes.fromhex(fixture["idle_frame"]),
+                                                 self.profile.node_id, now=self.at(1))
+        self.runtime.observe_frame(bytes.fromhex(fixture["response_frame"]), now=self.at(2))
+        status = self.runtime.status(self.profile, now=self.at(3))
+        self.assertEqual(fixture["qualification_state"], status["dry_qualification"]["state"])
+        self.assertEqual(fixture["qualification_reason"], status["dry_qualification"]["reason"])
+        self.assertEqual(fixture["result"], status["state"]["last_result"])
+        self.assertFalse(status["public_control_qualified"])
+        self.assertFalse(status["counter_synchronized"])
+        self.assertIsNone(status["next_sequence"])
+        with self.assertRaises(RuntimeError):
+            self.q.action(self.profile, "open", now=self.at(20))
+        self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(21))
+        self.assertEqual(["htv145_control_configure", "htv145_control_idle_anchor"],
+                         [c["type"] for _, c in self.sent])
+
     def test_corrupt_and_wrong_duration_replies_do_not_qualify(self):
         self.synchronized()
         self.q.action(self.profile, "open", now=self.at(17))

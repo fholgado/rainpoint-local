@@ -141,10 +141,17 @@ and version history, not this checklist.
   public-control blocking and interrupted-test handling. Validation: 510 Python
   tests (two skipped), native protocol tests and isolated release smoke test;
   all radios reconnected and eight device identities remained after deployment.
-  Physical validation remains required; firmware is unchanged. Management-token
-  access was blocked by the permission reviewer before old-owner revocation or
-  any qualification request. Obtain explicit authorization for that access;
-  no dry control run has been sent on the new association.
+  Physical qualification remains incomplete; firmware is unchanged. After explicit
+  management-token authorization, the old owner confirmed revocation and the new
+  owner heard idle telemetry. Its first fixed-zero anchor received result 3 with
+  byte 17 `00`, not the qualified `10` layout. Qualification stopped before any
+  open, with no authenticated counter. Preserve this rejection boundary; compare
+  fresh-association setup and command-phase evidence before proposing an isolated
+  bootstrap probe. Do not generalize the anchor decoder from a negative reply.
+  [Captured qualification rejection](research/fixtures/htv145_custom_identity_idle_anchor_20260907.json).
+  The captured-exchange regression and full 511-test suite pass (two skipped),
+  as do native protocol tests. Research controls are disabled again; the selected
+  provisional ACK owner remains configured, with public watering blocked.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
