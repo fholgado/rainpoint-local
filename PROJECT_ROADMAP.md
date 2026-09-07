@@ -256,8 +256,9 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
 - [ ] Test wrong-checksum OTA, interrupted download, candidate-boot power loss,
   unhealthy-boot rollback, and USB recovery.
   September 7: two interrupted 0.16.0 downloads left a node connected on its
-  original 0.15.7 image, with no candidate boot. Safe abort is observed; successful
-  retry/recovery remains unqualified and blocks the selected-node HTV145 handoff.
+  original 0.15.7 image, with no candidate boot. A third unchanged attempt completed
+  the download, rebooted into 0.16.0, and confirmed gateway/radio health. Interrupted
+  download retry is physically demonstrated; the other OTA fault cases remain open.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
