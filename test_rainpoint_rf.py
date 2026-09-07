@@ -17,12 +17,10 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
 from rainpointd.device_catalog import (  # noqa: E402
     DeviceCatalog,
-    LEGACY_HOME_CATALOG,
     SensorDefinition,
     ValveDefinition,
     load_catalog,
 )
-from rainpointd.gateway import Gateway  # noqa: E402
 from rainpointd.ingest import FrameIngestor  # noqa: E402
 from rainpointd.product_identity import (  # noqa: E402
     GENERIC_HCS02X_MODEL,
@@ -32,7 +30,6 @@ from rainpointd.product_identity import (  # noqa: E402
     product_from_codes,
 )
 from rainpointd.protocol import decode_receiver_event  # noqa: E402
-from rainpointd.rf import normalize_row  # noqa: E402
 from rainpointd.rtl433 import RTL433Transport, rtl_433_command  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
@@ -61,12 +58,34 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
     generate_command,
 )
 
+from test_support import CapturedInstallationGateway as Gateway
+from test_support import CAPTURED_INSTALLATION_CATALOG, captured_normalize_row as normalize_row
 
 class RainPointRFTest(unittest.TestCase):
     CAPTURED_VALVE_LINK = ValveLink(
         controller_endpoint=bytes.fromhex("b42d008f"),
         valve_endpoint=bytes.fromhex("b9840280"),
     )
+
+    def test_standard_firmware_open_auto_stop_and_early_close_evidence(self):
+        from rainpointd.valve_protocol import decode_htv145_command_response, decode_htv145_state_report
+        fixture = json.loads((ROOT / "research/fixtures/htv145_standard_firmware_control_20260906.json").read_text())
+        link = ValveLink(bytes.fromhex(fixture["controller_endpoint"]), bytes.fromhex(fixture["valve_endpoint"]))
+        counter = 129
+        for action in fixture["actions"]:
+            frame = bytes.fromhex(action["frame"])
+            if action["expected_sequence"] is not None:
+                decoded = decode_htv145_command_response(frame, link)
+                self.assertIsNotNone(decoded)
+                self.assertEqual(counter, decoded["sequence"])
+                self.assertEqual(action["action"] == "open", decoded["watering"])
+                counter = decoded["next_sequence"]
+            else:
+                decoded = decode_htv145_state_report(frame, link)
+                self.assertIsNotNone(decoded)
+                self.assertFalse(decoded["watering"])
+            self.assertEqual(action["next_sequence"], counter)
+        self.assertEqual(132, counter)
 
     @staticmethod
     def _frame_with_endpoint(frame_hex: str, endpoint: str) -> str:
@@ -89,7 +108,7 @@ class RainPointRFTest(unittest.TestCase):
                     "channel": 1,
                 },
             },
-            catalog=LEGACY_HOME_CATALOG,
+            catalog=CAPTURED_INSTALLATION_CATALOG,
         )
         self.assertEqual(1, len(observations))
         observation = observations[0]

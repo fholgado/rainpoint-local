@@ -7,6 +7,7 @@
 #include "rainpoint_clocked_transmit.h"
 #include "rainpoint_receive_edge.h"
 #include "rainpoint_pairing.h"
+#include "captured_pairing_profiles.h"
 #include "rainpoint_htv145_pairing.h"
 #include "rainpoint_valve_pairing.h"
 #include "rainpoint_valve_control.h"

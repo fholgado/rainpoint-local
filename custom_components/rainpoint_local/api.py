@@ -300,6 +300,16 @@ class RainPointLocalClient:
             token,
         )
 
+    async def open_single_valve(self, token: str, *, device_id: str,
+                                duration_seconds: int) -> dict[str, Any]:
+        """Open one enrolled outlet for a bounded duration."""
+        return await self._post(f"devices/{device_id}/valve/open",
+                                {"duration_seconds": duration_seconds}, token)
+
+    async def close_single_valve(self, token: str, *, device_id: str) -> dict[str, Any]:
+        """Stop the enrolled single outlet early."""
+        return await self._post(f"devices/{device_id}/valve/close", {}, token)
+
     async def open_htv405_zone(
         self,
         token: str,

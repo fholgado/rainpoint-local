@@ -271,7 +271,6 @@ void WifiTransport::handleGatewayLine(const String& line) {
         (type == "pairing_start" || type == "pairing_cancel" ||
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
-#if RAINPOINT_HTV145_ENABLED == 1
          || type == "htv145_control_configure" ||
              type == "htv145_control_sync" ||
              type == "htv145_control_open" ||
@@ -279,7 +278,6 @@ void WifiTransport::handleGatewayLine(const String& line) {
              type == "htv145_control_idle_anchor" ||
              type == "htv145_control_revoke" ||
              type == "htv145_control_status"
-#endif
          || isHtv405NetworkCommand(type.c_str())
          || type == "routine_ack_configure" ||
              type == "routine_ack_revoke" ||
@@ -321,14 +319,10 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"rf_maintenance\",\"node_reboot\""
         ",\"valve_control_tx_candidate\""
         ",\"htv405_bounded_sync_wait\""
-#if RAINPOINT_HTV145_ENABLED == 1
         ",\"htv145_control_tx_candidate\",\"htv145_report_ack_tx\",\"htv145_idle_anchor\""
-#endif
         ",\"valve_pairing_tx_candidate\""
         ",\"htv405_auto_identity_pairing\""
-#if RAINPOINT_HTV145_ENABLED == 1
         ",\"htv145_pairing_tx_candidate\""
-#endif
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
         ",\"firmware_update_trial\""

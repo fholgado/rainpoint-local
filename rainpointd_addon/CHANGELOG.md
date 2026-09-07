@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.35.0 / 2026-09-06
+
+Integration 0.15.0; unified firmware 0.16.0.
+
+- Promote verified HTV145 associations to authenticated, duration-bounded device controls with existing counter recovery and single-owner ACKs.
+- Preserve confirmed state during commands and block actuation while its radio is unavailable or rebooting.
+- Start new installations with an empty device catalog; recover existing identities from accepted persisted observations and registrations.
+- Remove household ACK defaults and fixed pairing profiles from the runtime. Replay captures remain explicit examples.
+
 ## 0.34.15 / Integration 0.14.4
 
 - Block one-zone control and profile restoration while its radio reboot is

@@ -39,6 +39,12 @@ async def async_setup_entry(
                 known.add((device_id, 0))
                 entities.append(RainPointMorningSyncWindow(coordinator, device_id,
                     str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))))
+            if (device.get("model") == "HTV145FRF"
+                    and "bounded_single_valve_control" in device.get("capabilities", [])):
+                if (device_id, 1) not in known:
+                    known.add((device_id, 1))
+                    entities.append(RainPointSingleValveDuration(coordinator, device_id))
+                continue
             if "bounded_valve_control" not in device.get("capabilities", []):
                 continue
             for zone in multi_zone_numbers(device):
@@ -176,3 +182,14 @@ class RainPointMorningSyncWindow(RainPointLocalEntity, NumberEntity):
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_request_refresh()
+
+
+class RainPointSingleValveDuration(RainPointHtv405ZoneDuration):
+    """Configure the next single-outlet watering duration."""
+
+    _attr_translation_key = "single_valve_duration"
+
+    def __init__(self, coordinator, device_id: str) -> None:
+        super().__init__(coordinator, device_id, 1)
+        self._attr_unique_id = f"{device_id}_run_duration"
+        self._attr_translation_placeholders = {}

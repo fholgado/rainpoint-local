@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import (
     HTV405_PENDING_GATEWAY_TIMEOUT_SECONDS,
-    Gateway,
     _observed_utc,
 )
 from rainpointd.http import create_server
@@ -34,8 +33,68 @@ from rainpointd.product_identity import (
 from rainpointd.replay import ReplayTransport, load_fixtures
 from rainpointd.valve_protocol import ValveLink, build_open_frame
 
+from test_support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
 
 class GatewayTest(unittest.TestCase):
+    def test_fresh_install_has_no_implicit_household_devices(self):
+        from rainpointd.gateway import Gateway as EmptyGateway
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "gateway.sqlite3")
+            for _ in range(2):
+                gateway = EmptyGateway(storage_path=path)
+                FrameIngestor(gateway).seed()
+                self.assertEqual([], gateway.devices())
+                self.assertEqual((), gateway.catalog.sensors)
+                self.assertEqual((), gateway.catalog.valves)
+                gateway.close()
+
+    def test_upgrade_recovers_observed_identity_without_catalog(self):
+        from rainpointd.gateway import Gateway as EmptyGateway
+        from rainpointd.device_catalog import DeviceCatalog, SensorDefinition
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "gateway.sqlite3")
+            catalog = DeviceCatalog(sensors=(SensorDefinition(
+                "92345624", "saved-sensor", "Saved sensor"),))
+            gateway = EmptyGateway(storage_path=path, catalog=catalog)
+            gateway.observe_decoded(
+                device_id="saved-sensor", name="Saved sensor", model="HCS026FRF",
+                frame="retained-observation", state={"rf_endpoint": "92345624",
+                    "rf_endpoint_a": "aabbcc80", "rf_frame_accepted": True,
+                    "rf_trailer_valid": True, "soil_moisture_percent": 42})
+            gateway.close()
+            restored = EmptyGateway(storage_path=path)
+            sensor = restored.catalog.sensor("92345624")
+            self.assertIsNotNone(sensor)
+            self.assertEqual("saved-sensor", sensor.device_id)
+            self.assertEqual("Saved sensor", sensor.name)
+            self.assertEqual(["saved-sensor"], [d["device_id"] for d in restored.devices()])
+            self.assertEqual([], restored._store.ack_assignments())
+            restored.close()
+
+    def test_upgrade_restores_single_valve_report_direction_without_catalog(self):
+        from rainpointd.gateway import Gateway as EmptyGateway
+        from rainpointd.rf import normalize_row
+        frame = "79f4882f28a1b2c380b1c2d38f880107860580804f8000000040800056800000000000001473"
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "gateway.sqlite3")
+            gateway = EmptyGateway(storage_path=path)
+            gateway.observe_decoded(device_id="saved-valve", name="Saved valve", model="HTV145FRF",
+                frame=frame, state={"rf_endpoint_a": "a1b2c380", "rf_endpoint_b": "b1c2d38f",
+                    "rf_frame_accepted": True, "rf_trailer_valid": True, "is_watering": False})
+            # Pairing role names are opposite to the evidenced HTV145 control
+            # link order; registry metadata must not reverse receive decoding.
+            gateway._store.upsert_valve_link(controller_endpoint="a1b2c380",
+                valve_endpoint="b1c2d38f", device_id="saved-valve", name="Saved valve",
+                model="HTV145FRF", area=None, accepted_at="2026-09-06T00:00:00+00:00")
+            gateway.close()
+            restored = EmptyGateway(storage_path=path)
+            decoded = normalize_row({"len": len(frame) * 4, "data": frame}, catalog=restored.catalog)
+            self.assertIs(decoded["is_watering"], False)
+            valve = restored.catalog.valve_link("a1b2c380", "b1c2d38f")
+            self.assertEqual("saved-valve", valve.device_id)
+            self.assertEqual("a1b2c380", valve.valve_endpoint)
+            restored.close()
+
     def test_single_zone_seed_and_restart_have_no_multi_zone_fields(self):
         from rainpointd.device_catalog import DeviceCatalog, ValveDefinition
         catalog = DeviceCatalog(valves=(ValveDefinition(
@@ -1225,10 +1284,11 @@ class GatewayTest(unittest.TestCase):
                 protocol_version=2,
                 capabilities=[
                     "rx",
-                    "sensor_pairing_tx",
+                    "sensor_pairing_tx", "configurable_rf_controller_identity",
                     "routine_sensor_ack_tx",
                 ],
             )
+            observe_captured_sensor_route(gateway)
             gateway.assign_radio_node_ack(
                 node_id="rp-001122334455",
                 paired_endpoint="9bce0024",
@@ -1384,8 +1444,13 @@ class GatewayTest(unittest.TestCase):
             gateway.update_node(
                 "rp-001122334455",
                 connected=True,
-                capabilities=["rx", "routine_sensor_ack_tx"],
+                capabilities=["rx", "routine_sensor_ack_tx", "configurable_rf_controller_identity"],
             )
+            with self.assertRaisesRegex(ValueError, "identity is unknown"):
+                gateway.assign_radio_node_ack(node_id="rp-001122334455",
+                    paired_endpoint="9bce0024", assigned_channel=4)
+            self.assertEqual([], commands)
+            observe_captured_sensor_route(gateway)
             assignment = gateway.assign_radio_node_ack(
                 node_id="rp-001122334455",
                 paired_endpoint="9bce0024",
@@ -1405,7 +1470,7 @@ class GatewayTest(unittest.TestCase):
             restored.update_node(
                 "rp-001122334455",
                 connected=True,
-                capabilities=["rx", "routine_sensor_ack_tx"],
+                capabilities=["rx", "routine_sensor_ack_tx", "configurable_rf_controller_identity"],
             )
             self.assertEqual(
                 1,
@@ -2534,6 +2599,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertFalse(forgotten["rf_unpaired"])
 
     def test_htv405_control_route_is_disabled_by_default(self) -> None:
+        self.server.gateway.register(device_id="htv405-test", name="Test valve", model="HTV405FRF", state={})
         with self.assertRaises(HTTPError) as raised:
             self.post_json(
                 "/api/v1/devices/htv405-test/valve/open",
@@ -2636,6 +2702,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
                 "last_seen_at": "2026-08-14T00:00:00+00:00",
             }
         )
+        observe_captured_sensor_route(self.server.gateway)
         assigned = self.post_json(
             f"/api/v1/nodes/{node_id}/ack-assignment",
             {
@@ -3000,10 +3067,30 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
                          [c["type"] for _, c in self.commands])
         self.commands.clear()
-        result = self.post_json(prefix + "open", {"valve_endpoint": "a1b2c380", "duration_seconds": 60})
+        gateway._htv145_acceptance_enabled = False
+        route = "/api/v1/devices/one-zone/valve/open"
+        with self.assertRaises(HTTPError) as context:
+            self.post_json(route, {"duration_seconds": 60}, token=None)
+        self.assertEqual(401, context.exception.code)
+        for body in ({}, {"duration_seconds": True}, {"duration_seconds": 30},
+                     {"duration_seconds": 3660}, {"duration_seconds": 60, "zone": 2}):
+            with self.assertRaises(HTTPError):
+                self.post_json(route, body)
+        self.assertEqual([], self.commands)
+        device = next(d for d in gateway.devices() if d["device_id"] == "one-zone")
+        self.assertIn("bounded_single_valve_control", device["capabilities"])
+        self.assertTrue(device["state"]["rf_control_start_available"])
+        self.assertFalse(device["state"]["is_watering"])
+        result = self.post_json(route, {"duration_seconds": 60})["control"]
         self.assertEqual("pending_valve_evidence", result["state"])
-        self.assertEqual(0x82, result["command"]["expected_sequence"])
-        self.assertEqual("b1c2d38f", result["command"]["controller_endpoint"])
+        self.assertEqual(0x82, self.commands[-1][1]["expected_sequence"])
+        self.assertEqual("b1c2d38f", self.commands[-1][1]["controller_endpoint"])
+        device = next(d for d in gateway.devices() if d["device_id"] == "one-zone")
+        self.assertFalse(device["state"]["is_watering"])
+        self.assertTrue(device["state"]["rf_control_command_pending"])
+        self.assertFalse(device["state"]["rf_control_start_available"])
+        with self.assertRaises(HTTPError):
+            self.post_json(route, {"duration_seconds": 60})
         self.assertEqual(["htv145_control_open"], [command["type"] for _, command in self.commands])
 
     def test_one_zone_sync_http_owner_duplicate_and_result3_confirmation(self):

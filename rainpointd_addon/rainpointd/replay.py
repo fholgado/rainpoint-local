@@ -10,16 +10,8 @@ from typing import Any
 from .gateway import Gateway
 
 
-DEFAULT_FIXTURES = Path(__file__).resolve().parent.parent / "fixtures.json"
+DEFAULT_FIXTURES = Path(__file__).resolve().parents[2] / "examples" / "captured-replay" / "fixtures.json"
 
-FIXTURE_DEVICES = {
-    "valve_running_600_seconds": ("valve-1", "Garden Valve"),
-    "valve_stopped": ("valve-1", "Garden Valve"),
-    "right_bed": ("soil-right-bed", "Right Bed"),
-    "left_bed": ("soil-left-bed", "Left Bed"),
-    "front_yard_sensor_1": ("soil-front-1", "Front Yard Sensor 1"),
-    "front_yard_sensor_2": ("soil-front-2", "Front Yard Sensor 2"),
-}
 
 
 def load_fixtures(path: Path = DEFAULT_FIXTURES) -> list[dict[str, Any]]:
@@ -28,11 +20,12 @@ def load_fixtures(path: Path = DEFAULT_FIXTURES) -> list[dict[str, Any]]:
     if not isinstance(fixtures, list) or not fixtures:
         raise ValueError("fixture file must contain a non-empty JSON list")
     for fixture in fixtures:
-        missing = {"name", "model", "frame"} - fixture.keys()
+        missing = {"name", "model", "frame", "device_id", "device_name"} - fixture.keys()
         if missing:
             raise ValueError(f"fixture is missing fields: {sorted(missing)}")
-        if fixture["name"] not in FIXTURE_DEVICES:
-            raise ValueError(f"fixture has no replay device mapping: {fixture['name']}")
+        if any(not isinstance(fixture[field], str) or not fixture[field].strip()
+               for field in ("name", "model", "frame", "device_id", "device_name")):
+            raise ValueError("fixture identity and frame fields must be non-empty strings")
     return fixtures
 
 
@@ -83,10 +76,9 @@ class ReplayTransport:
                     return
 
     def _publish(self, fixture: dict[str, Any]) -> None:
-        device_id, name = FIXTURE_DEVICES[fixture["name"]]
         self.gateway.observe(
-            device_id=device_id,
-            name=name,
+            device_id=fixture["device_id"],
+            name=fixture["device_name"],
             model=fixture["model"],
             frame=fixture["frame"],
         )

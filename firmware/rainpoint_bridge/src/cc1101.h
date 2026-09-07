@@ -8,9 +8,7 @@
 #include <cstdint>
 
 #include "rainpoint_protocol.h"
-#if RAINPOINT_HTV145_ENABLED == 1
 #include "rainpoint_receive_edge.h"
-#endif
 
 namespace rainpoint {
 
@@ -20,9 +18,7 @@ struct RadioPacket {
     std::int32_t frequencyOffsetHz = 0;
     std::uint8_t lqi = 0;
     std::uint32_t receivedAtMicros = 0;
-#if RAINPOINT_HTV145_ENABLED == 1
     ReceiveEndObservation receiveEnd{};
-#endif
 };
 
 struct ClockedTransmitDiagnostics {
@@ -81,9 +77,7 @@ public:
         std::uint16_t activeTailDelayUs = 0
     );
     bool poll(RadioPacket& packet, bool recoverAfterRead = true);
-#if RAINPOINT_HTV145_ENABLED == 1
     void setReceiveEndCapture(bool enabled);
-#endif
     void recoverReceive();
     std::uint8_t channel() const;
     std::uint8_t partNumber();
@@ -144,10 +138,8 @@ private:
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;
     std::uint32_t blockedTransmitCount_ = 0;
-#if RAINPOINT_HTV145_ENABLED == 1
     bool receiveEndCaptureEnabled_ = false;
     ReceiveEndCapture receiveEndCapture_;
-#endif
 };
 
 }  // namespace rainpoint

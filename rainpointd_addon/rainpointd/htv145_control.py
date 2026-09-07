@@ -1,10 +1,7 @@
-"""Persistent, disabled-by-default HTV145 single-zone control candidate.
+"""Persistent, duration-bounded HTV145 single-zone control.
 
-This module is deliberately not imported by the Home Assistant integration.
-The add-on exposes it only through a management-token-protected research route
-behind an explicit runtime gate. It coordinates an explicitly selected radio
-node and the compile-time-gated ESP32 candidate. One gateway command creates
-one bounded RF burst; a restart never replays an unresolved reservation.
+Commands use an evidenced association and one authenticated owner. A restart
+never replays an unresolved reservation; only valve responses confirm state.
 """
 
 from __future__ import annotations
@@ -81,9 +78,8 @@ class Htv145ControlProfile:
 class Htv145ControlCoordinator:
     """Persist and confirm at-most-once HTV145 logical commands.
 
-    Transmit is off unless ``enabled=True`` is supplied by the isolated dry
-    acceptance harness. The ordinary device-control and Home Assistant routes
-    never construct an enabled instance.
+    Transmit requires an explicitly enabled coordinator and a verified persisted
+    association; public controls do not accept RF identities from callers.
     """
 
     def __init__(

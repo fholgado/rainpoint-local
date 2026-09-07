@@ -611,19 +611,6 @@ bool Cc1101::transmitClocked(
     if (diagnostics != nullptr) {
         *diagnostics = ClockedTransmitDiagnostics{};
     }
-#if RAINPOINT_HTV145_ENABLED != 1
-    (void)frame;
-    (void)centerFrequencyHz;
-    (void)wakeSymbols;
-    (void)paTableValue;
-    (void)deviationRegister;
-    (void)startAtMicros;
-    (void)diagnostics;
-    (void)postFrameLowHoldMicros;
-    (void)activeTailDelayUs;
-    ++blockedTransmitCount_;
-    return false;
-#else
     if (!transmitEnabled_ || !hasSync(frame) ||
         !hasOrdinaryTrailer(frame) ||
         (wakeSymbols != kPairingWakeSymbols && wakeSymbols != 2'400) ||
@@ -804,7 +791,6 @@ bool Cc1101::transmitClocked(
         diagnostics->receiveConfigurationRestored = restored;
     }
     return restored && sent;
-#endif
 }
 
 bool Cc1101::waitForMainState(
@@ -822,10 +808,8 @@ bool Cc1101::waitForMainState(
 }
 
 bool Cc1101::enterIdle() {
-#if RAINPOINT_HTV145_ENABLED == 1
     receiveEndCapture_.clear();
     if (receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x2e);
-#endif
     if (strobe(kIdle) == 0xff) {
         return false;
     }
@@ -837,9 +821,7 @@ bool Cc1101::enterReceive() {
         return false;
     }
     const bool receiving = waitForMainState(kMainStateRx);
-#if RAINPOINT_HTV145_ENABLED == 1
     if (receiving && receiveEndCaptureEnabled_) writeRegister(kIocfg1, 0x06);
-#endif
     return receiving;
 }
 
@@ -882,7 +864,6 @@ void Cc1101::recoverRx() {
     enterReceive();
 }
 
-#if RAINPOINT_HTV145_ENABLED == 1
 void Cc1101::setReceiveEndCapture(bool enabled) {
     if (receiveEndCaptureEnabled_ == enabled) return;
     receiveEndCaptureEnabled_ = enabled;
@@ -892,10 +873,8 @@ void Cc1101::setReceiveEndCapture(bool enabled) {
     writeRegister(kIocfg1, enabled ? 0x06 : 0x2e);
     delayMicroseconds(2);
 }
-#endif
 
 bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
-#if RAINPOINT_HTV145_ENABLED == 1
     if (receiveEndCaptureEnabled_ && digitalRead(misoPin_) == HIGH) {
         // Leave SPI completely idle while a packet is in progress, so GDO1
         // cannot be confused with SPI data. Fixed RX payload lasts 14.4 ms;
@@ -910,7 +889,6 @@ bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
             receiveEndCapture_.clear();
         }
     }
-#endif
     const auto rxBytes = readStatus(kRxBytes);
     if (rxBytes & 0x80) {
         ++overflowCount_;
@@ -925,11 +903,9 @@ bool Cc1101::poll(RadioPacket& packet, bool recoverAfterRead) {
     // The fixed-length RX FIFO becomes complete at the end of the request.
     // Capture the earliest available deadline anchor before the SPI burst.
     packet.receivedAtMicros = micros();
-#if RAINPOINT_HTV145_ENABLED == 1
     packet.receiveEnd = receiveEndCapture_.take(
         packet.receivedAtMicros, rxBytes & 0x7fU
     );
-#endif
     std::array<std::uint8_t, kBytesWithStatus> received{};
     readBurst(kRxFifo, received.data(), received.size());
     for (std::size_t index = 0; index < packet.payload.size(); ++index) {

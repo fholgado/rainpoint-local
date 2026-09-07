@@ -247,6 +247,7 @@
       "radio_node_rf_transmissions": { "name": "RF transmissions" }
     },
     "number": {
+      "single_valve_duration": { "name": "Watering duration" },
       "morning_sync_window": { "name": "Morning sync window" },
       "htv405_zone_duration": { "name": "Zone {zone} duration" }
     },
@@ -257,6 +258,7 @@
       "morning_sync_start": { "name": "Morning sync starts" }
     },
     "valve": {
+      "single_valve": { "name": "Valve" },
       "htv405_zone": { "name": "Zone {zone}" }
     }
   }

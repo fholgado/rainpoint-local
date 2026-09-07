@@ -13,8 +13,8 @@ status. `PROJECT_ROADMAP.md` is the sole ordered checklist.
 - One PlatformIO environment, `rainpoint_bridge`, replaces the receive-only,
   dual-radio, bench, identity-specific pairing, ACK, and unified candidates.
 - The standard firmware contains receive, HCS026 pairing/recovery, persistent
-  ACK ownership, commissioning, diagnostics, Identify, and OTA. It contains no
-  serial RF probe commands or valve command path.
+  ACK ownership, commissioning, diagnostics, Identify, OTA, and bounded controls
+  for both valve families. It contains no retired serial RF probes.
 - Runtime device identity comes from the persistent registry and protocol
   evidence. Original-house names and dashboards are isolated under `examples`.
 - Pairing requires no copied RF ID or management token and preserves existing
@@ -32,7 +32,7 @@ status. `PROJECT_ROADMAP.md` is the sole ordered checklist.
 | Node transport | Mutual nonce/HMAC authentication over trusted-LAN TCP | Encryption, per-session integrity/replay handling, rotation, and revocation |
 | Gateway API | Versioned HTTP API with bearer-authenticated mutations | Typed schemas/errors, scoped credentials, rate/resource limits, reviewed server transport |
 | OTA | Gateway-hosted, size/SHA-256 checked, health-confirmed rollback | Asymmetric release signatures plus interrupted/power-loss rollback tests |
-| HA updates | Five-second coordinator polling | Event-driven updates with slow reconciliation |
+| HA updates | Event-triggered snapshot refresh plus periodic polling | Event-driven updates with slow reconciliation |
 | Device lifecycle | Persistent registry, suppression, reassociation, stable IDs | HA-native config-flow/entity/device-registry test harness and formal migrations |
 | Packaging | HA app supports network nodes and optional SDR | Reproducible pinned build and narrower network-only publication profile |
 | Protocol core | Transport-neutral ingestion but dictionary-heavy models | Installable typed protocol/identity package independent of HA and installation names |

@@ -12,7 +12,7 @@ or an SDR.
 |---|---|---|
 | HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
 | HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised beta; battery unavailable; no water-usage capability |
-| HTV145FRF | State, duration, usage, categorical battery, dry-test controls/ACKs/sync | Partial local association; ordinary HA actuation not promoted |
+| HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
 
 Read [device communication references](protocol_documentation/) for packet rules
 and [the roadmap](PROJECT_ROADMAP.md) for qualification gates. A supported codec
@@ -47,7 +47,7 @@ Four-zone actuation requires the explicit `supervised_htv405_control` option and
 a capable owner. Default starts use a fixed-zero counter anchor before watering.
 Optional morning synchronization allows direct daytime starts with a retained
 counter. One-zone counter status and morning settings are available on its
-qualified owner, while actuation remains behind the isolated dry-test gate.
+verified owner, with one valve control and one watering-duration setting.
 
 Both families enforce bounded durations, command spacing, and durable command
 reservations. Startup and missing telemetry never send a speculative close.
@@ -61,7 +61,8 @@ Use the canonical checkout and Git branches; do not create additional worktrees.
 PYTHONPATH=rainpointd_addon python3 -m rainpointd
 ```
 
-This starts the replay-backed gateway. See [local development](LOCAL_DEVELOPMENT.md)
+This starts an empty network gateway. Use the explicit
+[captured replay example](examples/captured-replay/) for offline sample data. See [local development](LOCAL_DEVELOPMENT.md)
 for runtime options and [AGENTS.md](AGENTS.md) for the complete required Python
 and native regression commands. Build only the `rainpoint_bridge` PlatformIO
 environment; production must exclude experimental transmit paths.

@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 from rainpoint_protocol import decode
 
-from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
+from .device_catalog import DeviceCatalog, EMPTY_CATALOG
 from .firmware_catalog import FirmwareCatalog
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
@@ -37,7 +37,6 @@ from .pairing import HCS026EnrollmentManager, factory_endpoint, paired_endpoint
 from .pairing_protocol import (
     AUTOMATIC_HCS026_PROFILE_ID,
     automatic_hcs026_profile_metadata,
-    pairing_profile,
 )
 from .valve_pairing_protocol import (
     AUTOMATIC_HTV145_PROFILE_ID,
@@ -71,8 +70,7 @@ from .product_identity import (
 )
 from .rf import normalize_row
 from .rf_identity import (
-    LEGACY_STOCK_COMPANION_ENDPOINT,
-    LEGACY_STOCK_CONTROLLER_ENDPOINT,
+    controller_endpoint_for,
     LocalRFControllerIdentity,
     generate_local_rf_identity,
     load_or_create_local_rf_identity,
@@ -224,7 +222,7 @@ class Gateway:
         registry_token: str | None = None,
         registry_token_path: str | None = None,
         claim_code: str | None = None,
-        catalog: DeviceCatalog = LEGACY_HOME_CATALOG,
+        catalog: DeviceCatalog = EMPTY_CATALOG,
         firmware_catalog: FirmwareCatalog | None = None,
         firmware_public_port: int = 8787,
         valve_control_enabled: bool = False,
@@ -263,7 +261,8 @@ class Gateway:
             else None
         )
         self.rf_identity: LocalRFControllerIdentity = (
-            load_or_create_local_rf_identity(self._store)
+            load_or_create_local_rf_identity(
+                self._store, reserved_endpoints=self._store.observed_rf_endpoints())
             if self._store is not None
             else generate_local_rf_identity()
         )
@@ -277,6 +276,9 @@ class Gateway:
             if storage_path
             else None
         )
+        if self._store is not None:
+            self._base_catalog = catalog.with_observed_identities(
+                self._store.latest_device_events(), self._store.suppressed_endpoints())
         self._migrate_legacy_registry_identities()
         self._refresh_registry_catalog()
         if self._store:
@@ -702,7 +704,7 @@ class Gateway:
             self._htv145_runtime = (
                 Htv145Runtime(Htv145ControlCoordinator(store=self._store, sender=sender, enabled=True),
                               lambda node_id: self._nodes.get(node_id, {}))
-                if sender is not None and self._store is not None and self._htv145_acceptance_enabled else None
+                if sender is not None and self._store is not None else None
             )
             if sender is None:
                 for timer in self._htv405_resync_timers.values():
@@ -719,12 +721,40 @@ class Gateway:
                 self._schedule_matured_htv405_resyncs_locked()
 
     def _htv145_profile_for_device(self, device: dict) -> Htv145ControlProfile | None:
-        if not self._htv145_acceptance_enabled or self._htv145_runtime is None or device.get("model") != "HTV145FRF":
+        if self._htv145_runtime is None or device.get("model") != "HTV145FRF":
             return None
         state = device.get("state", {})
         endpoints = {state.get("rf_endpoint_a"), state.get("rf_endpoint_b")}
         return next((p for p in self._htv145_runtime.profiles()
                      if endpoints == {p.controller_endpoint, p.valve_endpoint}), None)
+
+    def request_valve_control(self, *, device_id: str, action: str,
+                              zone: int = 1, duration_seconds: int | None = None) -> dict:
+        """Dispatch a bounded public command through the persisted association."""
+        if action not in {"open", "close"}:
+            raise ValueError("unsupported valve action")
+        with self._lock:
+            device = self._devices.get(device_id)
+            if device is None:
+                raise KeyError(device_id)
+            if device.get("model") == "HTV145FRF":
+                if zone != 1:
+                    raise ValueError("single-zone valve has only one outlet")
+                if action == "open" and (not isinstance(duration_seconds, int)
+                        or isinstance(duration_seconds, bool)):
+                    raise ValueError("valve open requires an integer bounded duration")
+                profile = self._htv145_profile_for_device(device)
+                if profile is None:
+                    raise RuntimeError("single-zone valve has no verified control association")
+                command = self._htv145_runtime.request(
+                    profile, action, now=datetime.now(timezone.utc).isoformat(),
+                    duration_seconds=duration_seconds)
+                return {"state": "already_idle" if command["type"] == "htv145_control_noop"
+                        else "pending_valve_evidence", "command_id": command.get("command_id")}
+        if action == "open":
+            return self.request_htv405_synchronized_open(
+                device_id=device_id, zone=zone, duration_seconds=duration_seconds)
+        return self.request_htv405_control(device_id=device_id, action=action, zone=zone)
 
     def restore_htv145_counter(self, device_id: str) -> dict:
         """Expose retained-state restoration by device identity, without actuator access."""
@@ -929,8 +959,13 @@ class Gateway:
     def _observe_htv145_acceptance_frame_locked(
         self, *, frame: str, model: str, observed_at: str
     ) -> None:
+        try:
+            raw = bytes.fromhex(frame)
+        except ValueError:
+            # Cloud/replay payloads and non-RF observations share this ingestion path.
+            return
         if self._htv145_runtime is not None:
-            self._htv145_runtime.observe_frame(bytes.fromhex(frame), now=observed_at)
+            self._htv145_runtime.observe_frame(raw, now=observed_at)
         harness = self._htv145_acceptance
         if harness is None or model != HTV145_MODEL:
             return
@@ -2309,13 +2344,12 @@ class Gateway:
         controller_endpoint: str,
         companion_endpoint: str,
     ) -> bool:
-        """Allow legacy associations on old firmware, but never new identities."""
-        if (
-            controller_endpoint == LEGACY_STOCK_CONTROLLER_ENDPOINT
-            and companion_endpoint == LEGACY_STOCK_COMPANION_ENDPOINT
-        ):
-            return True
-        return "configurable_rf_controller_identity" in node.get(
+        """Require explicit configurable identity support and a valid route."""
+        try:
+            valid = controller_endpoint_for(companion_endpoint) == controller_endpoint
+        except ValueError:
+            return False
+        return valid and "configurable_rf_controller_identity" in node.get(
             "capabilities", []
         )
 
@@ -2517,6 +2551,11 @@ class Gateway:
                 ),
                 None,
             )
+            identity = (previous if previous and previous.get("controller_endpoint")
+                        and previous.get("companion_endpoint")
+                        else self._store.observed_sensor_ack_identity(paired_endpoint))
+            if not identity or not identity.get("controller_endpoint") or not identity.get("companion_endpoint"):
+                raise ValueError("sensor ACK identity is unknown; wait for an accepted report or re-pair")
             assignment = {
                 "paired_endpoint": paired_endpoint,
                 "node_id": node_id,
@@ -2524,19 +2563,9 @@ class Gateway:
                 "frequency_offset_hz": frequency_offset_hz,
                 "power_dbm": power_dbm,
                 "invert": invert,
-                # Reassigning an ACK owner must never change the sensor's RF
-                # association. Rows created before identity persistence are
-                # explicitly backfilled to the retained stock identity.
-                "controller_endpoint": (
-                    previous.get("controller_endpoint")
-                    if previous is not None
-                    else LEGACY_STOCK_CONTROLLER_ENDPOINT
-                ),
-                "companion_endpoint": (
-                    previous.get("companion_endpoint")
-                    if previous is not None
-                    else LEGACY_STOCK_COMPANION_ENDPOINT
-                ),
+                # Ownership can change; the established RF association cannot.
+                "controller_endpoint": identity["controller_endpoint"],
+                "companion_endpoint": identity["companion_endpoint"],
                 "updated_at": (now or datetime.now(timezone.utc)).isoformat(),
             }
             node = self._nodes.get(node_id, {})
@@ -3852,7 +3881,30 @@ class Gateway:
                         "rf_retained_command_counter": status["next_sequence"] if status["counter_synchronized"] else None,
                         "rf_retained_counter_restore_available": status["ready"],
                     })
-                    device["capabilities"] = sorted({*device.get("capabilities", []), "retained_counter_restore"})
+                    confirmed = status["state"]
+                    pending = confirmed["pending_command_id"] is not None
+                    control_available = bool(status["owner_available"] and status["counter_synchronized"]
+                        and not pending and confirmed["revocation_command_id"] is None)
+                    device["state"].update({
+                        "rf_control_enabled": True,
+                        "rf_control_available": control_available,
+                        "rf_control_start_available": status["ready"],
+                        "rf_control_unavailable_reason": None if control_available else counter_status,
+                        "rf_control_start_unavailable_reason": None if status["ready"] else counter_status,
+                        "rf_control_command_pending": pending,
+                        "rf_control_transaction_active": pending,
+                        "rf_control_transaction_id": confirmed["pending_command_id"],
+                        "rf_control_confirmed_at": confirmed["confirmed_at"],
+                        "rf_control_expected_idle_at": confirmed["expected_idle_at"],
+                        "rf_control_overdue": status["anomaly"] is not None,
+                        "rf_control_duration_min_minutes": 1,
+                        "rf_control_duration_max_minutes": 60,
+                        "rf_control_duration_step_minutes": 1,
+                    })
+                    if isinstance(confirmed["confirmed_watering"], bool):
+                        device["state"]["is_watering"] = confirmed["confirmed_watering"]
+                    device["capabilities"] = sorted({*device.get("capabilities", []),
+                        "retained_counter_restore", "bounded_single_valve_control"})
                     sync = self._htv145_runtime.counter_sync.status(profile, now=observed.isoformat())
                     supported = "htv145_idle_anchor" in self._nodes.get(profile.node_id, {}).get("capabilities", [])
                     device["state"].update({
@@ -5589,14 +5641,8 @@ class Gateway:
                 elif automatic:
                     clock_lead_seconds = 240
                 else:
-                    try:
-                        profile = pairing_profile(profile_id)
-                    except KeyError:
-                        self._pairing.stop()
-                        raise ValueError("unsupported pairing profile") from None
-                    selected_controller_endpoint = LEGACY_STOCK_CONTROLLER_ENDPOINT
-                    selected_companion_endpoint = LEGACY_STOCK_COMPANION_ENDPOINT
-                    clock_lead_seconds = profile.clock_lead_seconds
+                    self._pairing.stop()
+                    raise ValueError("unsupported pairing profile")
                 required_capability = self._pairing_capability(
                     profile_id,
                     automatic_discovery=automatic_valve,
@@ -5984,6 +6030,7 @@ class Gateway:
                 and node is not None
                 and "routine_sensor_ack_tx" in node.get("capabilities", [])
                 and self._active_pairing_ack_parameters is not None
+                and self._active_pairing_rf_identity is not None
                 and node.get("pairing_assigned_channel") in {4, 5}
             ):
                 assignment = {
@@ -5991,13 +6038,7 @@ class Gateway:
                     "node_id": self._active_pairing_node_id,
                     "assigned_channel": int(node["pairing_assigned_channel"]),
                     **self._active_pairing_ack_parameters,
-                    **(
-                        self._active_pairing_rf_identity
-                        or {
-                            "controller_endpoint": LEGACY_STOCK_CONTROLLER_ENDPOINT,
-                            "companion_endpoint": LEGACY_STOCK_COMPANION_ENDPOINT,
-                        }
-                    ),
+                    **self._active_pairing_rf_identity,
                     "updated_at": timestamp,
                 }
                 self._store.upsert_ack_assignment(assignment)

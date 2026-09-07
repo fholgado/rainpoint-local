@@ -14,7 +14,7 @@ RUN apk add --no-cache python3 py3-pyserial rtl_433 tzdata
 
 WORKDIR /opt/rainpoint
 
-COPY rainpoint_protocol.py fixtures.json ./
+COPY rainpoint_protocol.py ./
 COPY rainpointd ./rainpointd
 COPY run.sh /
 

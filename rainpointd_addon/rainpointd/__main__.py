@@ -5,15 +5,16 @@ from __future__ import annotations
 import argparse
 import os
 import secrets
+from pathlib import Path
 
-from .device_catalog import LEGACY_HOME_CATALOG, load_catalog
+from .device_catalog import EMPTY_CATALOG, load_catalog
 from .esp32 import ESP32SerialTransport
 from .esp32_network import ESP32NetworkServer, load_node_tokens
 from .firmware_catalog import FirmwareCatalog
 from .gateway import Gateway
 from .http import create_server
 from .network import NetworkTransport
-from .replay import ReplayTransport
+from .replay import ReplayTransport, load_fixtures
 from .rtl433 import RTL433Transport
 from .storage import DEFAULT_EVENT_RETENTION_LIMIT
 
@@ -33,6 +34,7 @@ def main() -> int:
         default=5.0,
         help="seconds between replayed observations",
     )
+    parser.add_argument("--replay-fixtures", type=Path, help="explicit captured replay JSON")
     parser.add_argument("--frequency", type=int, default=433_700_000)
     parser.add_argument("--sample-rate", type=int, default=2_000_000)
     parser.add_argument("--signal-capture-seconds", type=int, default=0)
@@ -67,8 +69,8 @@ def main() -> int:
     parser.add_argument(
         "--device-catalog",
         help=(
-            "installation catalog JSON; omitted only for legacy prototype "
-            "identity compatibility"
+            "optional installation catalog JSON; otherwise use "
+            "persisted device registrations"
         ),
     )
     parser.add_argument(
@@ -92,11 +94,13 @@ def main() -> int:
         help="enable the isolated, one-shot HTV145 physical acceptance harness",
     )
     args = parser.parse_args()
+    if args.transport == "replay" and args.replay_fixtures is None:
+        parser.error("--transport replay requires --replay-fixtures")
 
     catalog = (
         load_catalog(args.device_catalog)
         if args.device_catalog
-        else LEGACY_HOME_CATALOG
+        else EMPTY_CATALOG
     )
 
     registry_token = os.environ.get("RAINPOINT_REGISTRY_TOKEN")
@@ -133,7 +137,7 @@ def main() -> int:
             baud=args.serial_baud,
         )
     elif args.transport == "replay":
-        transport = ReplayTransport(gateway, interval=args.interval)
+        transport = ReplayTransport(gateway, fixtures=load_fixtures(args.replay_fixtures), interval=args.interval)
     else:
         transport = NetworkTransport()
     transport.seed()

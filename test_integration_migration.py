@@ -30,14 +30,56 @@ from rainpoint_local.migration import migrate_entry_payload
 from rainpoint_local.api_models import multi_zone_numbers, unsupported_device_entity_ids
 
 
-def _integration_function(filename, name, namespace):
+def _integration_function(filename, name, namespace, classname=None):
     """Exercise the actual HA callback with registry/entity APIs stubbed."""
     tree = ast.parse((PACKAGE / filename).read_text())
+    if classname is not None:
+        tree = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classname)
     function = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
     module = ast.parse("from __future__ import annotations")
     module.body.append(function)
     exec(compile(module, str(PACKAGE / filename), "exec"), namespace)
     return namespace[name]
+
+
+class SingleValvePromotionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_public_commands_refresh_confirmed_state_and_bound_duration(self):
+        for method, action in (("async_open_valve", "open_single_valve"),
+                               ("async_close_valve", "close_single_valve")):
+            client = types.SimpleNamespace(open_single_valve=AsyncMock(), close_single_valve=AsyncMock())
+            coordinator = types.SimpleNamespace(client=client, async_refresh=AsyncMock(),
+                htv405_run_minutes={("one", 1): 5})
+            entity = types.SimpleNamespace(coordinator=coordinator, device_id="one", _token="token",
+                decoded_state={"rf_control_start_available": True, "is_watering": False})
+            callback = _integration_function("valve.py", method,
+                {"RainPointLocalError": ValueError, "HomeAssistantError": RuntimeError,
+                 "DEFAULT_BOUNDED_RUN_MINUTES": 1}, classname="RainPointSingleValve")
+            await callback(entity)
+            kwargs = {"device_id": "one"}
+            if action == "open_single_valve": kwargs["duration_seconds"] = 300
+            getattr(client, action).assert_awaited_once_with("token", **kwargs)
+            coordinator.async_refresh.assert_awaited_once()
+            self.assertFalse(entity.decoded_state["is_watering"])
+            if action == "open_single_valve":
+                entity.decoded_state["rf_control_start_available"] = False
+                with self.assertRaises(RuntimeError): await callback(entity)
+                self.assertEqual(1, client.open_single_valve.await_count)
+
+    async def test_exact_single_model_creates_one_control_and_no_zone_entities(self):
+        single, multi, add = Mock(), Mock(), Mock()
+        coordinator = types.SimpleNamespace(data={
+            "one": {"model": "HTV145FRF", "capabilities": ["bounded_single_valve_control"]},
+            "unverified": {"model": "HTV145FRF", "capabilities": []},
+        })
+        callback = _integration_function("valve.py", "async_add_missing_entities", {
+            "callback": lambda fn: fn, "coordinator": coordinator, "known": set(), "token": "token",
+            "RainPointSingleValve": single, "RainPointHtv405ZoneValve": multi,
+            "multi_zone_numbers": multi_zone_numbers, "async_add_entities": add,
+        })
+        callback(); callback()
+        single.assert_called_once_with(coordinator, "one", "token")
+        multi.assert_not_called()
+        add.assert_called_once_with([single.return_value])
 
 
 class ValveCommandRefreshTest(unittest.IsolatedAsyncioTestCase):

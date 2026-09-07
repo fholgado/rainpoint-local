@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpoint_protocol import decode, parse_tlv  # noqa: E402
 from rainpointd.device_catalog import DeviceCatalog, SensorDefinition  # noqa: E402
-from rainpointd.rf import normalize_row  # noqa: E402
+from test_support import captured_normalize_row as normalize_row  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
     build_close_frame,
@@ -164,7 +164,7 @@ class RainPointProtocolTest(unittest.TestCase):
 
     def test_captured_fixtures(self) -> None:
         fixtures = json.loads(
-            (ROOT / "rainpointd_addon" / "fixtures.json").read_text()
+            (ROOT / "examples" / "captured-replay" / "fixtures.json").read_text()
         )
         for fixture in fixtures:
             with self.subTest(fixture=fixture["name"]):

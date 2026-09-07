@@ -23,7 +23,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create four supervised valve entities for eligible HTV405 devices."""
+    """Create controls for each enrolled valve without inventing outlets."""
     coordinator: RainPointLocalCoordinator = hass.data[DOMAIN][entry.entry_id]
     token = str(entry.data.get(CONF_TOKEN, entry.options.get(CONF_TOKEN, "")))
     known: set[tuple[str, int]] = set()
@@ -32,6 +32,12 @@ async def async_setup_entry(
     def async_add_missing_entities() -> None:
         entities: list[ValveEntity] = []
         for device_id, device in coordinator.data.items():
+            if (device.get("model") == "HTV145FRF"
+                    and "bounded_single_valve_control" in device.get("capabilities", [])):
+                if (device_id, 1) not in known:
+                    known.add((device_id, 1))
+                    entities.append(RainPointSingleValve(coordinator, device_id, token))
+                continue
             if "bounded_valve_control" not in device.get("capabilities", []):
                 continue
             for zone in multi_zone_numbers(device):
@@ -217,6 +223,55 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
                 device_id=self.device_id,
                 zone=self._zone,
             )
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
+        await self.coordinator.async_refresh()
+
+
+class RainPointSingleValve(RainPointHtv405ZoneValve):
+    """One duration-bounded outlet on an HTV145 timer."""
+
+    _attr_translation_key = "single_valve"
+
+    def __init__(self, coordinator, device_id: str, token: str) -> None:
+        super().__init__(coordinator, device_id, 1, token)
+        self._attr_unique_id = f"{device_id}_control"
+        self._attr_translation_placeholders = {}
+
+    @property
+    def is_closed(self) -> bool | None:
+        watering = self.decoded_state.get("is_watering")
+        return not watering if isinstance(watering, bool) else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "bounded_run_seconds": self.coordinator.htv405_run_minutes.get(
+                (self.device_id, 1), DEFAULT_BOUNDED_RUN_MINUTES) * 60,
+            "control_available": self.decoded_state.get("rf_control_available"),
+            "start_unavailable_reason": self.decoded_state.get("rf_control_start_unavailable_reason"),
+            "command_pending": self.decoded_state.get("rf_control_command_pending"),
+            "confirmed_at": self.decoded_state.get("rf_control_confirmed_at"),
+            "expected_idle_at": self.decoded_state.get("rf_control_expected_idle_at"),
+            "overdue": self.decoded_state.get("rf_control_overdue"),
+        }
+
+    async def async_open_valve(self, **kwargs) -> None:
+        if self.decoded_state.get("rf_control_start_available") is not True:
+            raise HomeAssistantError("Valve is not ready; inspect its counter and radio status")
+        minutes = self.coordinator.htv405_run_minutes.get(
+            (self.device_id, 1), DEFAULT_BOUNDED_RUN_MINUTES)
+        try:
+            await self.coordinator.client.open_single_valve(
+                self._token, device_id=self.device_id, duration_seconds=minutes * 60)
+        except RainPointLocalError as error:
+            raise HomeAssistantError(str(error)) from error
+        await self.coordinator.async_refresh()
+
+    async def async_close_valve(self, **kwargs) -> None:
+        try:
+            await self.coordinator.client.close_single_valve(
+                self._token, device_id=self.device_id)
         except RainPointLocalError as error:
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()

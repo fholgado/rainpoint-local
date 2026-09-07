@@ -17,7 +17,7 @@ ROOT = Path(__file__).parent
 class AddonBoundaryTest(unittest.TestCase):
 
 
-    def test_firmware_has_one_environment_and_one_htv145_qualification_option(self):
+    def test_firmware_has_one_environment_with_both_valves(self):
         root = ROOT / "firmware/rainpoint_bridge"
         self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))
         class Environment:
@@ -28,9 +28,10 @@ class AddonBoundaryTest(unittest.TestCase):
             with patch.dict(os.environ, values, clear=True):
                 runpy.run_path(str(root / "tools/build_profile.py"), init_globals={"env": env, "Import": lambda _: None})
             return env.defines
-        self.assertEqual(0, build({})["RAINPOINT_HTV145_ENABLED"])
-        self.assertEqual(1, build({"RAINPOINT_HTV145_ENABLED": "1"})["RAINPOINT_HTV145_ENABLED"])
-        for values in [{"RAINPOINT_HTV145_ENABLED": "2"},
+        self.assertNotIn("RAINPOINT_HTV145_ENABLED", build({}))
+        self.assertIn("unified", build({})["RAINPOINT_FIRMWARE_VARIANT"])
+        for values in [{"RAINPOINT_HTV145_ENABLED": "0"},
+                       {"RAINPOINT_HTV145_ENABLED": "1"},
                        {"RAINPOINT_HTV145_ASSIGNMENT_SELECTOR_CANDIDATE": "2"},
                        {"RAINPOINT_RESEARCH_BENCH": "1"}]:
             with self.assertRaises(ValueError):
@@ -74,7 +75,7 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "rainpointd_addon" / "rainpointd" / "http.py"
         ).read_text()
 
-        self.assertIn("request_htv405_synchronized_open", http_source)
+        self.assertIn("request_valve_control", http_source)
         self.assertIn("rf_control_transaction_active", valve_source)
         self.assertIn("return ValveEntityFeature(0)", valve_source)
         self.assertIn("rf_control_start_available", valve_source)
@@ -214,17 +215,17 @@ class AddonBoundaryTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
-    def test_ci_builds_and_checks_the_isolated_htv145_pairing_candidate(self) -> None:
+    def test_ci_checks_both_valve_families_in_the_production_image(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
         boundary_check = (
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
-        self.assertIn('RAINPOINT_HTV145_ENABLED: "1"', workflow)
+        self.assertNotIn("RAINPOINT_HTV145_ENABLED", workflow)
         self.assertIn("--htv145-pairing", workflow)
         self.assertIn("HTV145_PAIRING_CAPABILITIES", boundary_check)
         self.assertIn('option == "--htv145-pairing"', boundary_check)
 
-    def test_htv145_acceptance_is_compile_and_research_gated(self) -> None:
+    def test_htv145_acceptance_remains_separate_from_promoted_controls(self) -> None:
         source = (
             ROOT / "firmware" / "rainpoint_bridge" / "src" / "main.cpp"
         ).read_text()
@@ -248,10 +249,11 @@ class AddonBoundaryTest(unittest.TestCase):
                 "*.py"
             )
         )
-        self.assertIn("RAINPOINT_HTV145_ENABLED == 1", source)
+        self.assertNotIn("RAINPOINT_HTV145_ENABLED", source)
+        self.assertNotIn("RAINPOINT_HTV145_ENABLED", (ROOT / "firmware/rainpoint_bridge/src/cc1101.cpp").read_text())
         self.assertIn("htv145_control_candidate", source)
         self.assertIn(
-            'os.environ.get("RAINPOINT_HTV145_ENABLED", "0")',
+            '"RAINPOINT_HTV145_ENABLED"',
             build_profile,
         )
         self.assertIn("htv145_dry_acceptance: false", config)

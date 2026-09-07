@@ -13,7 +13,9 @@
       "event_time_local": "2026-07-30T10:00:36",
       "report_time_local": "2026-07-30T09:50:42",
       "alarm": 0
-    }
+    },
+    "device_id": "valve-1",
+    "device_name": "Garden Valve"
   },
   {
     "name": "valve_stopped",
@@ -28,7 +30,9 @@
       "last_usage_liters": 10.0,
       "report_time_local": "2026-07-30T09:51:40",
       "alarm": 0
-    }
+    },
+    "device_id": "valve-1",
+    "device_name": "Garden Valve"
   },
   {
     "name": "right_bed",
@@ -39,7 +43,9 @@
       "rssi_dbm": -70,
       "soil_moisture_percent": 58,
       "report_time_local": "2026-07-30T09:49:44"
-    }
+    },
+    "device_id": "soil-right-bed",
+    "device_name": "Right Bed"
   },
   {
     "name": "left_bed",
@@ -50,7 +56,9 @@
       "rssi_dbm": -75,
       "soil_moisture_percent": 63,
       "report_time_local": "2026-07-30T09:00:32"
-    }
+    },
+    "device_id": "soil-left-bed",
+    "device_name": "Left Bed"
   },
   {
     "name": "front_yard_sensor_1",
@@ -61,7 +69,9 @@
       "rssi_dbm": -80,
       "soil_moisture_percent": 61,
       "report_time_local": "2026-07-29T20:20:07"
-    }
+    },
+    "device_id": "soil-front-1",
+    "device_name": "Front Yard Sensor 1"
   },
   {
     "name": "front_yard_sensor_2",
@@ -72,6 +82,8 @@
       "rssi_dbm": -77,
       "soil_moisture_percent": 82,
       "report_time_local": "2026-07-30T08:07:18"
-    }
+    },
+    "device_id": "soil-front-2",
+    "device_name": "Front Yard Sensor 2"
   }
 ]

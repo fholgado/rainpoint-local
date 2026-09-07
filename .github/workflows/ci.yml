@@ -61,19 +61,11 @@ jobs:
       - name: Build and check unified production firmware
         run: |
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
-          python tools/check_firmware_boundaries.py --supervised \
+          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
-            /tmp/rainpoint-firmware-manifest.json --version 0.15.13 --environment rainpoint_bridge
+            /tmp/rainpoint-firmware-manifest.json --version 0.16.0 --environment rainpoint_bridge
           python tools/firmware_manifest.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
             /tmp/rainpoint-firmware-manifest.json --verify
-      - name: Build and check isolated HTV145 control and pairing
-        env:
-          RAINPOINT_HTV145_ENABLED: "1"
-        run: |
-          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target clean
-          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
-          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
-            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin

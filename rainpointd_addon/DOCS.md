@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.34.15 supports authenticated network radio nodes, receive-only USB
+Version 0.35.0 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -15,12 +15,18 @@ The staged coexistence release persists one custom RF controller identity for
 the local gateway and supplies it to every radio node. Existing associations
 retain the identity under which they were paired. A node must advertise
 `configurable_rf_controller_identity` before it may pair or acknowledge a
-custom-identity device; older nodes remain usable for retained stock-identity
-associations. Physical custom-identity sensor enrollment is confirmed; sustained
+device. Older nodes must be upgraded before owning an ACK association. Physical custom-identity sensor enrollment is confirmed; sustained
 stock/custom cohort coexistence remains a release gate. Completion requires a
 terminal sensor frame addressed to the requested controller identity; a known
 sensor's retained-association recovery traffic cannot transfer ACK ownership
 during a custom-identity attempt.
+Verified HTV145 associations expose a single HA valve and a 1–60 minute watering
+duration. The public device-control API uses the saved owner, RF recipe and
+counter; it accepts no caller-supplied RF addresses. Counter sync and morning
+scheduling remain available. An open stays pending until valve-owned evidence
+confirms it; missing replies invalidate the counter and block further opens.
+The `htv145_dry_acceptance` option controls only the separate research harness.
+
 HTV405 valve-control POST requests remain rejected unless the explicit
 `supervised_htv405_control` beta option is enabled and the selected
 association-specific radio node advertises its candidate control capability.

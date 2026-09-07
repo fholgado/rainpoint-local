@@ -5,7 +5,7 @@ from __future__ import annotations
 import binascii
 from typing import Any
 
-from .device_catalog import DeviceCatalog, LEGACY_HOME_CATALOG
+from .device_catalog import DeviceCatalog, EMPTY_CATALOG
 from .valve_protocol import (
     ValveLink,
     decode_duration,
@@ -174,7 +174,7 @@ def _hcs026_pairing_fields(
 
     Two controlled sensors showed a four-byte factory identity whose first
     byte gains bit 7 after enrollment. Factory announcements use 80000000 as
-    the other endpoint. Paired reports use the established b9840280 RainPoint
+    the other endpoint. Paired reports use the established RainPoint
     gateway. Moisture and battery fields are decoded separately from their
     marker-relative report layout.
     """
@@ -397,7 +397,7 @@ def _valve_fields(
 
 
 def normalize_row(
-    row: dict[str, Any], *, catalog: DeviceCatalog = LEGACY_HOME_CATALOG
+    row: dict[str, Any], *, catalog: DeviceCatalog = EMPTY_CATALOG
 ) -> dict[str, Any]:
     """Locate sync and normalize any observed wake/prefix length."""
     bits = _row_bits(row)

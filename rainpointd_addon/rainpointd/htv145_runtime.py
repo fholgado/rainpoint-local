@@ -109,7 +109,7 @@ class Htv145Runtime:
         except RuntimeError:
             available = False
         result.update(owner_available=available, ready=result["ready"] and available,
-                      pairing_terminal_step_required=False, qualification="dry_selector6")
+                      pairing_terminal_step_required=False, qualification="selector6_control")
         result["counter_sync"] = self.counter_sync.status(profile, now=now)
         return result
 

@@ -8,16 +8,29 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ## Current work order
 
-The user authorized this order while hardware assistance is unavailable:
+The user prioritized single-zone promotion ahead of the selected hardening work.
+The verified association now uses standard firmware and HA controls, preserving
+bounded commands, counter recovery and evidence-based state. Front-garden
+installation and watering qualification follow when the user connects the valve.
 
-1. Verify Right Bed's direct-radio recovery.
-2. Reconcile this roadmap and streamline protocol, operational, and research docs.
-3. Qualify the dry one-zone valve's ACK/control persistence across restarts.
-4. Collect durable sensor/valve reliability and morning-sync evidence.
+The selected sequence resumes afterward (numbers refer to the presented list):
 
-Other phases retain the order below. Later work interrupts qualification only
-when it protects irrigation reliability or invalidates existing evidence.
-No additional four-zone watering is implied by passive monitoring.
+- **1.** Remove installation-specific runtime assumptions.
+- **2.** Retire unused firmware/experiment paths.
+- **4.** Finish event-driven HA updates.
+- **5.** Keep pairing visibly finalizing until the radio is ready.
+- **6.** Make Add device a reversible wizard.
+- **7.** Strengthen entity/config migrations.
+- **11.** Analyze four-zone counter staleness without exceeding watering authorization.
+- **12.** Harden authorization, credential handling, and API boundaries.
+- **15.** Improve CI and clean-install verification.
+- **16.** Clean redundant branches, backups, and firmware catalogs.
+- **18.** Investigate unresolved protocol fields from retained evidence.
+
+The existing 72-hour collector continues independently. Software completion does
+not close physical gates requiring pairing gestures, power changes, SDR, or a
+new watering budget. Later phases remain ordered below unless this selected
+sequence or irrigation reliability requires otherwise.
 
 ## Established baseline
 
@@ -25,9 +38,9 @@ No additional four-zone watering is implied by passive monitoring.
   forgotten endpoints. Pairing registration now reuses an established valve
   ID; the duplicate single-zone device was removed with working entity IDs,
   history, ACK owner, counter, and schedules preserved.
-- [x] Support one canonical checkout and one PlatformIO environment. Production
-  firmware excludes the HTV145 qualification transmitter; its isolated dry-test
-  image is a deliberate exception, not fleet-wide release qualification.
+- [x] Support one canonical checkout and one PlatformIO environment. Both valve
+  families use the standard firmware; production controls require an evidenced
+  association. Deployment does not replace the remaining physical qualifications.
 - [x] Pair and recover independent HCS026 identities, persist a single ACK owner,
   and pre-fill known devices' saved names and HA areas on re-addition.
 - [x] Complete three HA-initiated HTV405 generated-identity enrollments and decode
@@ -153,7 +166,16 @@ retention matrix. The last-zone idle-reply correction is deployed; see the
   fixed action polarity is not a universal model.
 - [ ] Repeat operational acceptance on fresh user-assisted associations with
   fresh batteries and independent state evidence.
-- [ ] Promote ordinary HA actuation only after its physical gates pass.
+- [x] Promote the verified single-zone association to standard firmware and HA
+  controls at the user's request. Gateway 0.35.0, integration 0.15.0, firmware
+  0.16.0 retain one device, its counter, ACK owner and morning schedule. Dry
+  public-API tests confirm one-minute automatic stop, a subsequent open and
+  early close after 20 seconds; counter progression is 129 → 130 → 131 → 131.
+  A final post-restart one-minute run confirms decoded watering and automatic
+  idle reports with counter 132.
+  [Promotion evidence](research/fixtures/htv145_standard_firmware_control_20260906.json).
+- [ ] Connect the promoted valve to the front garden and qualify watering there;
+  remaining ACK waveform, fresh-association and long-term hardening gates stay open.
 
 ### HA and irrigation
 
@@ -209,8 +231,10 @@ Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
 
 ## Phase 6 — open-source hardening
 
-- [ ] Remove production installation IDs, names, paths, allowlists, and fixed
-  profiles; keep deliberate examples under `examples/`.
+- [ ] Complete the production installation-assumption audit. Empty defaults,
+  accepted-observation identity recovery, evidence-based ACK routes and generic
+  pairing profiles are implemented; historical profiles live only in tests and
+  research, and replay samples are explicit `examples/` inputs.
 - [ ] Review protocol, gateway, HA, firmware, and research interfaces; introduce
   typed/versioned boundaries, structured errors, and formal HA migrations.
 - [ ] Finish event-driven HA updates with slow reconciliation fallback.

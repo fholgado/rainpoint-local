@@ -1,9 +1,9 @@
 """Installation identity boundary for decoded RainPoint RF devices.
 
 Protocol modules should describe frames and telemetry.  This catalog maps the
-RF identities found in those frames to stable gateway device identities.  The
-legacy profile below preserves the prototype installation while a persistent,
-user-managed registry is introduced.
+RF identities found in those frames to stable gateway device identities. Persisted
+observations preserve established IDs across upgrades; new installations start
+without a household catalog.
 """
 
 from __future__ import annotations
@@ -177,9 +177,12 @@ class DeviceCatalog:
             )
             existing = valves.get(valve.link)
             if existing is not None:
+                # HTV145 pairing roles and control-link order differ. Keep
+                # the receive direction established by accepted telemetry.
+                receive_link = existing if existing.model == HTV145_MODEL else valve
                 valve = ValveDefinition(
-                    controller_endpoint=valve.controller_endpoint,
-                    valve_endpoint=valve.valve_endpoint,
+                    controller_endpoint=receive_link.controller_endpoint,
+                    valve_endpoint=receive_link.valve_endpoint,
                     device_id=existing.device_id,
                     name=valve.name,
                     model=valve.model,
@@ -190,6 +193,65 @@ class DeviceCatalog:
             valves=tuple(valves.values()),
             hcs026_pairing_peers=catalog.hcs026_pairing_peers,
         )
+
+    def with_observed_identities(self, events: Iterable[Mapping[str, Any]],
+                                 suppressed: frozenset[str] = frozenset()) -> DeviceCatalog:
+        """Recover stable identities from accepted persisted device snapshots.
+
+        Explicit catalog entries win. Never infer a transmit profile or counter
+        from these receive-side identities; those remain in the association store.
+        """
+        sensors = {sensor.endpoint: sensor for sensor in self.sensors}
+        valves = {valve.link: valve for valve in self.valves}
+        peers = set(self.hcs026_pairing_peers)
+        device_ids = {device.device_id for device in (*self.sensors, *self.valves)}
+        for event in events:
+            state = event.get("state") or {}
+            if (event.get("event_type") != "device_observation"
+                    or state.get("rf_frame_accepted") is False
+                    or (state.get("rf_trailer_valid") is False
+                        and state.get("rf_frame_accepted") is not True)):
+                continue
+            device_id, name = event.get("device_id"), event.get("name")
+            if not isinstance(device_id, str) or not isinstance(name, str):
+                continue
+            if device_id in device_ids:
+                continue
+            try:
+                if is_hcs02x_sensor(model=event.get("model"), protocol=state.get("rf_protocol_family")):
+                    if (state.get("rf_frame_accepted") is not True
+                            and state.get("rf_trailer_valid") is not True
+                            and state.get("rf_pairing_state") != "paired"):
+                        continue
+                    endpoint = _normalize_endpoint(str(state.get("rf_endpoint", "")))
+                    if endpoint in suppressed:
+                        continue
+                    if endpoint in sensors:
+                        continue
+                    sensors.setdefault(endpoint, SensorDefinition(endpoint, device_id, name,
+                        str(event["model"]), str(state.get("rf_protocol_family") or HCS02X_PROTOCOL)))
+                    device_ids.add(device_id)
+                    controller = str(state.get("rf_endpoint_a", ""))
+                    if controller != endpoint and controller != "80000000":
+                        peers.add(_normalize_endpoint(controller))
+                elif event.get("model") in {"HTV145FRF", "HTV405FRF"}:
+                    if state.get("rf_trailer_valid") is not True:
+                        continue
+                    endpoint_a = str(state.get("rf_endpoint_a", ""))
+                    endpoint_b = str(state.get("rf_endpoint_b", ""))
+                    # HTV145 accepted telemetry uses the reverse of its command
+                    # link order. HTV405 reports retain the catalog link order.
+                    controller, endpoint = ((endpoint_b, endpoint_a)
+                        if event["model"] == HTV145_MODEL else (endpoint_a, endpoint_b))
+                    valve = ValveDefinition(controller, endpoint, device_id, name, str(event["model"]))
+                    if not valve.link.intersection(suppressed):
+                        if valve.link not in valves:
+                            valves[valve.link] = valve
+                            device_ids.add(device_id)
+            except (ValueError, KeyError):
+                continue
+        return DeviceCatalog(sensors=tuple(sensors.values()), valves=tuple(valves.values()),
+                             hcs026_pairing_peers=frozenset(peers))
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> DeviceCatalog:
@@ -232,22 +294,4 @@ def load_catalog(path: str | Path) -> DeviceCatalog:
     return DeviceCatalog.from_mapping(value)
 
 
-# This is a compatibility profile, not a protocol truth.  It intentionally
-# keeps the existing Home Assistant device IDs stable during generalization.
-LEGACY_HOME_CATALOG = DeviceCatalog(
-    sensors=(
-        SensorDefinition("c4e50024", "soil-left-bed", "Left Bed"),
-        SensorDefinition("ce628024", "soil-front-1", "Front Yard Sensor 1"),
-        SensorDefinition("d1e28024", "soil-front-2", "Front Yard Sensor 2"),
-        SensorDefinition("9ce58024", "soil-right-bed", "Right Bed"),
-    ),
-    valves=(
-        ValveDefinition(
-            "b42d008f",
-            "b9840280",
-            "valve-1",
-            "Garden Valve",
-        ),
-    ),
-    hcs026_pairing_peers=frozenset(("b9840280",)),
-)
+EMPTY_CATALOG = DeviceCatalog()

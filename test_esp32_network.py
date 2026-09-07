@@ -19,7 +19,6 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.esp32_network import ESP32NetworkServer, load_node_tokens
-from rainpointd.gateway import Gateway
 from rainpointd.valve_protocol import ValveLink, build_htv405_close_frame
 
 
@@ -47,6 +46,7 @@ def _replace_frame_endpoint(
     frame[-2:] = trailer.to_bytes(2, "big")
     return frame.hex()
 
+from test_support import CapturedInstallationGateway as Gateway
 
 class ESP32NetworkTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -985,6 +985,7 @@ class ESP32NetworkTest(unittest.TestCase):
             TOKEN_A,
             protocol_version=2,
             capabilities=[
+                "configurable_rf_controller_identity",
                 "rx",
                 "sensor_pairing_tx",
                 "valve_pairing_tx_candidate",
@@ -1117,6 +1118,7 @@ class ESP32NetworkTest(unittest.TestCase):
             TOKEN_A,
             protocol_version=2,
             capabilities=[
+                "configurable_rf_controller_identity",
                 "rx",
                 "sensor_pairing_tx",
                 "valve_pairing_tx_candidate",
@@ -1420,6 +1422,7 @@ class ESP32NetworkTest(unittest.TestCase):
             TOKEN_A,
             protocol_version=2,
             capabilities=[
+                "configurable_rf_controller_identity",
                 "rx",
                 "sensor_pairing_tx",
                 "htv145_pairing_tx_candidate",
@@ -1481,6 +1484,7 @@ class ESP32NetworkTest(unittest.TestCase):
             TOKEN_A,
             protocol_version=2,
             capabilities=[
+                "configurable_rf_controller_identity",
                 "rx",
                 "sensor_pairing_tx",
                 "valve_pairing_tx_candidate",
@@ -1532,6 +1536,7 @@ class ESP32NetworkTest(unittest.TestCase):
             TOKEN_A,
             protocol_version=2,
             capabilities=[
+                "configurable_rf_controller_identity",
                 "rx",
                 "sensor_pairing_tx",
                 "valve_pairing_tx_candidate",

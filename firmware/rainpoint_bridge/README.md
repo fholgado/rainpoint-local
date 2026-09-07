@@ -5,15 +5,12 @@ RainPoint Local. One node receives RainPoint RF telemetry, performs bounded
 HCS026 soil-sensor pairing and recovery, sends acknowledgements only for
 gateway-assigned sensors, and installs integrity-checked OTA updates.
 
-The unified build includes sensor pairing/ACKs, HTV405 enrollment and bounded
-control, and verified OTA. Actuation requires an authenticated gateway,
-association-specific endpoints and the add-on's explicit control gate. No build
-permits arbitrary RF transmission or the retired serial probes.
-
-HTV145 qualification uses one additional compile option. It retains the exact
-counter-2/selector-6 pairing recipe from `.22`, whose 5/6 prefix supported two
-local dry opens, automatic stop and active early close. The normal image excludes
-HTV145 transmission until its repeated operational/ACK hardware gates are met.
+The unified build includes sensor pairing/ACKs, HTV405 and HTV145 enrollment,
+bounded valve controls, and verified OTA. Actuation requires an authenticated
+gateway and association-specific endpoints. HTV145 uses the validated
+counter-2/selector-6 recipe; partial association supports its current controls.
+No build permits arbitrary RF transmission or retired serial probes. Remaining
+waveform and field qualification is tracked in the [roadmap](../../PROJECT_ROADMAP.md).
 
 ## Supported hardware and wiring
 
@@ -43,7 +40,7 @@ capacitor across CC1101 VCC/GND when practical.
   Unknown sensors still need an explicit user pairing gesture.
 - HTV405 controls support 1--60 whole-minute opens and use the existing bounded
   transaction, counter and morning-sync rules. The add-on `supervised_htv405_control` gate remains disabled by default.
-- The HTV145 qualification image adds a persistent control/ACK profile. Commands
+- HTV145 uses a persistent control/ACK profile. Commands
   carry both association endpoints and an expected counter. A rejected profile
   cannot accidentally direct a following command at the previous association.
 - HTV145 opens use a 2,400-symbol wake and whole-minute duration bounds; a positive
@@ -66,24 +63,15 @@ capacitor across CC1101 VCC/GND when practical.
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
-python tools/check_firmware_boundaries.py --supervised \
+python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-For the designated dry HTV145 test node:
-
-```sh
-RAINPOINT_HTV145_ENABLED=1 pio run --project-dir firmware/rainpoint_bridge \
-  --environment rainpoint_bridge
-python tools/check_firmware_boundaries.py --supervised --htv145-pairing \
-  --htv145-control firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
-```
-
-Production version is `0.15.14`; the isolated image is
-`0.15.24-htv145-control.1`. `RAINPOINT_FIRMWARE_VERSION` may label a reproducible
-artifact. Retired research, selector, factory-counter, timing, tail and PHY flags
-are rejected. Their captures remain under `research/fixtures`; Git retains the
-old implementation and the exact `.22` binary remains a separate rollback artifact.
+The production version is `0.16.0`. Both valve families are always included;
+there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
+may label a reproducible artifact. Retired experiment flags are rejected.
+Historical captures remain regression fixtures; preserve a verified rollback
+artifact until the new image has passed field checks.
 
 Back up the node's settings and preserve a verified rollback image before
 flashing. Never distribute an installation's settings or credentials. Use the

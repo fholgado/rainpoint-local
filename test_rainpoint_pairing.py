@@ -18,7 +18,7 @@ from rainpointd.pairing import (  # noqa: E402
     factory_endpoint,
     paired_endpoint,
 )
-from rainpointd.rf import normalize_row  # noqa: E402
+from test_support import captured_normalize_row as normalize_row  # noqa: E402
 
 
 UTC = timezone.utc

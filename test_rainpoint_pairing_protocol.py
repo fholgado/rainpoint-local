@@ -16,13 +16,13 @@ sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.pairing_protocol import (  # noqa: E402
     AUTOMATIC_HCS026_PROFILE_ID,
-    SENSOR_A_CANDIDATE_PROFILE,
-    VALIDATED_HCS026_PROFILE,
     PairingPlanController,
     PairingTrigger,
     automatic_hcs026_profile_metadata,
-    pairing_profile,
-    pairing_profile_for_factory,
+)
+from research.captured_pairing_profiles import (
+    SENSOR_A_CANDIDATE_PROFILE, VALIDATED_HCS026_PROFILE,
+    pairing_profile, pairing_profile_for_factory,
 )
 from rainpointd.valve_pairing_protocol import (  # noqa: E402
     AUTOMATIC_HTV145_PROFILE_ID,

@@ -2,7 +2,7 @@
 
 HTV145FRF is one valve with one watering zone. Local decoding covers state,
 duration, water usage, and categorical battery status. The selector-6 local
-association supports bounded dry-test controls, report ACKs, persistent counters,
+association supports bounded controls, report ACKs, persistent counters,
 and idle counter synchronization. Full six-stage enrollment and arbitrary
 command ordering remain unqualified. These are separate protocol boundaries:
 operational command acceptance does not imply a complete pairing transcript.
@@ -27,6 +27,12 @@ Command builders use the controller and valve endpoints stored in the accepted
 association. Do not derive those roles solely from endpoint suffixes. The
 companion commonly clears the first-byte high bit of the valve route.
 App Device Address is not an RF selector.
+
+Relative to the control link, requests place the controller endpoint first and
+the valve endpoint second; valve responses and reports reverse that order.
+Pairing registry role names can use the opposite convention. Receive decoding
+therefore preserves the link direction established by accepted telemetry when
+overlaying saved pairing metadata.
 
 ## Enrollment
 
@@ -54,7 +60,7 @@ configuration is scheduled 2,952.55 ms after the normalized stage-1 request end.
 The configuration response uses the assigned response carrier; other valve
 requests in that branch use the lower request carrier.
 
-The supported local candidate sends one counter-2 assignment and preserves the
+The supported local firmware sends one counter-2 assignment and preserves the
 accepted prefix through the stage-4 request. It reaches 5/6; the final terminal
 request remains unproven. A white LED supports initial association acceptance,
 but only addressed valve traffic proves progress. The accepted partial
@@ -197,10 +203,11 @@ counter state; it never replays an unresolved actuator command. Missing idle
 telemetry after the planned run plus 30 seconds raises an observation-only
 anomaly. Status queries and startup do not authorize an RF sync.
 
-HA exposes counter status, the existing Sync counter button, and morning
-settings for a capable enrolled owner. Morning sync defaults disabled. Ordinary
-one-zone HA actuation remains gated; the management-token-protected qualification
-API is documented in [the add-on guide](../rainpointd_addon/DOCS.md).
+HA exposes one duration-bounded valve control, watering duration, counter status,
+the existing Sync counter button, and morning
+settings for a capable enrolled owner. Morning sync defaults disabled. Public
+actuation uses the verified persisted association; research enrollment remains
+separately gated. See [the add-on guide](../rainpointd_addon/DOCS.md).
 
 ## Implementation and evidence
 

@@ -491,14 +491,18 @@ class SQLiteEventStore:
                         f"ALTER TABLE hcs026_ack_assignments "
                         f"ADD COLUMN {name} TEXT"
                     )
-            # Every pre-v14 assignment was created by the retained-association
-            # prototype and therefore belongs to the observed stock identity.
-            self._connection.execute(
-                "UPDATE hcs026_ack_assignments SET "
-                "controller_endpoint = COALESCE(controller_endpoint, ?), "
-                "companion_endpoint = COALESCE(companion_endpoint, ?)",
-                ("b9840280", "39840280"),
-            )
+            # Recover only an association evidenced by accepted sensor reports.
+            # Missing evidence leaves an unconfigured route, never a house default.
+            for row in self._connection.execute("SELECT paired_endpoint FROM hcs026_ack_assignments").fetchall():
+                identity = self.observed_sensor_ack_identity(str(row[0]))
+                if identity is not None:
+                    self._connection.execute(
+                        "UPDATE hcs026_ack_assignments SET "
+                        "controller_endpoint = COALESCE(controller_endpoint, ?), "
+                        "companion_endpoint = COALESCE(companion_endpoint, ?) "
+                        "WHERE paired_endpoint = ?",
+                        (identity["controller_endpoint"], identity["companion_endpoint"], row[0]),
+                    )
             self._connection.execute("PRAGMA user_version = 14")
 
     def _migrate_v14_to_v15(self) -> None:
@@ -951,6 +955,37 @@ class SQLiteEventStore:
             "SELECT payload FROM device_snapshots ORDER BY event_id"
         ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
+
+    def observed_rf_endpoints(self) -> frozenset[str]:
+        """Reserve receive-side identities when creating a new controller."""
+        return frozenset(
+            str(event.get("state", {}).get(key, "")).lower()
+            for event in self.latest_device_events() if frame_accepted(event) is True
+            for key in ("rf_endpoint_a", "rf_endpoint_b")
+        )
+
+    def observed_sensor_ack_identity(self, paired_endpoint: str) -> dict[str, str] | None:
+        """Recover the latest accepted ordinary sensor report's controller."""
+        from .rf_identity import controller_endpoint_for
+        from .product_identity import is_hcs02x_sensor
+        for event in reversed(self.latest_device_events()):
+            state = event.get("state", {})
+            if (frame_accepted(event) is not True
+                    or state.get("rf_trailer_valid") is not True
+                    or state.get("rf_endpoint") != paired_endpoint
+                    or state.get("rf_endpoint_b") != paired_endpoint
+                    or not is_hcs02x_sensor(model=event.get("model"), protocol=state.get("rf_protocol_family"))):
+                continue
+            try:
+                controller = bytes.fromhex(str(state.get("rf_endpoint_a", "")))
+                if len(controller) != 4 or controller[-1] != 0x80 or not controller[0] & 0x80:
+                    continue
+                companion = bytes((controller[0] & 0x7f, *controller[1:])).hex()
+                if controller_endpoint_for(companion) == controller.hex():
+                    return {"controller_endpoint": controller.hex(), "companion_endpoint": companion}
+            except ValueError:
+                continue
+        return None
 
     def device_observation_events(self, device_id: str) -> list[dict[str, Any]]:
         """Return retained observations for one device in event order."""

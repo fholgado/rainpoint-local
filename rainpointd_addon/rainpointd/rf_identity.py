@@ -12,8 +12,6 @@ from typing import Any, Protocol
 
 IDENTITY_METADATA_KEY = "local_rf_controller_identity_v1"
 IDENTITY_VERSION = 1
-LEGACY_STOCK_COMPANION_ENDPOINT = "39840280"
-LEGACY_STOCK_CONTROLLER_ENDPOINT = "b9840280"
 
 
 class IdentityStore(Protocol):
@@ -87,8 +85,6 @@ class LocalRFControllerIdentity:
             self.companion_endpoint
         ):
             raise ValueError("controller endpoint does not match companion endpoint")
-        if self.companion_endpoint == LEGACY_STOCK_COMPANION_ENDPOINT:
-            raise ValueError("custom RF identity cannot reuse the stock endpoint")
         try:
             parsed = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
         except ValueError as error:
@@ -107,6 +103,7 @@ def generate_local_rf_identity(
     *,
     random_bytes: Callable[[int], bytes] = secrets.token_bytes,
     now: datetime | None = None,
+    reserved_endpoints: frozenset[str] = frozenset(),
 ) -> LocalRFControllerIdentity:
     """Generate a compatible identity without using installation data."""
     for _ in range(32):
@@ -117,7 +114,7 @@ def generate_local_rf_identity(
         if random_part[0] == 0:
             continue
         companion = bytes((*random_part, 0x80)).hex()
-        if companion == LEGACY_STOCK_COMPANION_ENDPOINT:
+        if {companion, controller_endpoint_for(companion)} & reserved_endpoints:
             continue
         timestamp = (now or datetime.now(timezone.utc)).astimezone(
             timezone.utc
@@ -138,11 +135,13 @@ def load_or_create_local_rf_identity(
     *,
     random_bytes: Callable[[int], bytes] = secrets.token_bytes,
     now: datetime | None = None,
+    reserved_endpoints: frozenset[str] = frozenset(),
 ) -> LocalRFControllerIdentity:
     """Return the durable identity, creating it exactly once when absent."""
     stored = store.metadata_value(IDENTITY_METADATA_KEY)
     if stored is not None:
         return LocalRFControllerIdentity.from_json(stored)
-    identity = generate_local_rf_identity(random_bytes=random_bytes, now=now)
+    identity = generate_local_rf_identity(
+        random_bytes=random_bytes, now=now, reserved_endpoints=reserved_endpoints)
     store.set_metadata_value(IDENTITY_METADATA_KEY, identity.to_json())
     return identity

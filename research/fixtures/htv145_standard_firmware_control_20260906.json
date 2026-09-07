@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "model": "HTV145FRF",
+  "gateway_version": "0.35.0",
+  "integration_version": "0.15.0",
+  "firmware_version": "0.16.0",
+  "firmware_variant": "unified",
+  "hardware": "dry single-zone valve",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "redaction": "RF endpoints replaced and original CRC residuals preserved; raw recording remains local.",
+  "checks": [
+    "public bearer-authenticated device controls",
+    "one-minute automatic stop",
+    "consecutive open after automatic stop",
+    "two-minute requested run closed after 20 seconds",
+    "same HA device and counter/schedule preserved across upgrade",
+    "fresh watering and automatic idle telemetry decoded after gateway restart with saved pairing registry"
+  ],
+  "limitations": [
+    "ACK waveform timing remains unqualified",
+    "front-garden watering not yet tested"
+  ],
+  "actions": [
+    {
+      "action": "open",
+      "requested_duration_seconds": 60,
+      "expected_sequence": 129,
+      "next_sequence": 130,
+      "observed_at": "2026-09-07T01:46:55.657053+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f81d0868010cf80000000409e00569e000000000000000060e2"
+    },
+    {
+      "action": "automatic_stop",
+      "requested_duration_seconds": null,
+      "expected_sequence": null,
+      "next_sequence": 130,
+      "observed_at": "2026-09-07T01:47:57.160244+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f8e8107860580804f80000000408000568000000000000068ed"
+    },
+    {
+      "action": "open",
+      "requested_duration_seconds": 120,
+      "expected_sequence": 130,
+      "next_sequence": 131,
+      "observed_at": "2026-09-07T01:49:29.452056+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f82d0868010cf8000000040bc0056bc00000000000000004e3e"
+    },
+    {
+      "action": "close",
+      "requested_duration_seconds": null,
+      "expected_sequence": 131,
+      "next_sequence": 131,
+      "observed_at": "2026-09-07T01:49:49.525854+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f83508680104f8000000040800056bc00000000000000003933"
+    },
+    {
+      "action": "idle_report",
+      "requested_duration_seconds": null,
+      "expected_sequence": null,
+      "next_sequence": 131,
+      "observed_at": "2026-09-07T01:49:55.618637+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f940107860580804f8000000040800056800000000000003023"
+    },
+    {
+      "action": "open",
+      "requested_duration_seconds": 60,
+      "expected_sequence": 131,
+      "next_sequence": 132,
+      "observed_at": "2026-09-07T02:13:56.016964+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f83d0868010cf80000000409e00569e000000000000000022e4",
+      "after_gateway_restart": true
+    },
+    {
+      "action": "automatic_stop",
+      "requested_duration_seconds": null,
+      "expected_sequence": null,
+      "next_sequence": 132,
+      "observed_at": "2026-09-07T02:14:58.085402+00:00",
+      "frame": "79f4882f28a1b2c380b1c2d38f808107860580804f8000000040800056800000000000003ecd",
+      "after_gateway_restart": true
+    }
+  ]
+}

@@ -521,27 +521,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                         result = self.server.gateway.cancel_htv405_watering_transaction(
                             device_id=device_id
                         )
-                    elif action == "open":
+                    elif action in {"open", "close"}:
                         duration = body.get("duration_seconds")
-                        if duration is None:
-                            raise ValueError(
-                                "HTV405 open requires a bounded duration"
-                            )
-                        result = self.server.gateway.request_htv405_synchronized_open(
-                            device_id=device_id,
-                            zone=int(body.get("zone", 0)),
-                            duration_seconds=int(duration),
-                        )
-                    else:
-                        duration = body.get("duration_seconds")
-                        result = self.server.gateway.request_htv405_control(
-                            device_id=device_id,
-                            action=action,
-                            zone=int(body.get("zone", 0)),
-                            duration_seconds=(
-                                int(duration) if duration is not None else None
-                            ),
-                        )
+                        zone = body.get("zone", 1)
+                        if not isinstance(zone, int) or isinstance(zone, bool):
+                            raise ValueError("valve zone must be an integer")
+                        if action == "open" and (not isinstance(duration, int) or isinstance(duration, bool)):
+                            raise ValueError("valve open requires an integer bounded duration")
+                        result = self.server.gateway.request_valve_control(
+                            device_id=device_id, action=action, zone=zone,
+                            duration_seconds=duration)
                     self._json(202, {"control": result})
                     return
                 if parsed.path == f"{base}/registry/accept":
