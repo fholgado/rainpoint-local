@@ -50,6 +50,9 @@ The selected unattended implementation/review pass is complete (original list nu
 
 - [ ] Verify the new wizard's rendered navigation in HA after the Mac is unlocked.
   Callback tests cover review/Back behavior and no transmission before Start.
+  September 7: HA tab located, but Chrome's Apple Events JavaScript access is
+  disabled; rendered navigation has not been verified. Do not change browser
+  security settings implicitly or count callback tests as visual acceptance.
 - [ ] Deploy staged firmware 0.16.1 and qualify restore on hardware after the
   current soak; radios retain their installed firmware to avoid extra intervention.
 
@@ -126,17 +129,22 @@ and version history, not this checklist.
   the selected node, preserved the existing HA device, and finalized/disarmed
   pairing. ACK/control enrollment and sustained reporting remain open.
 - [ ] Bridge fresh local pairing to first-control qualification without a stock
-  command or copied counter. Current dry acceptance requires a passive command
+  command or copied counter. Previous dry acceptance required a passive command
   on the same link, and runtime enrollment requires a positive exchange; neither
-  can bootstrap a new custom-ID association through the current API. Design a
+  could bootstrap a new custom-ID association through that API. Use a
   separately gated, bounded qualification state with explicit old-owner revocation,
   fresh owner idle evidence, close-only counter establishment, and valve-confirmed
   control before enabling public commands. Preserve the proven RF pairing prefix
   and distinguish provisional test ownership from qualified runtime ownership.
-  Implementation staged in gateway 0.36.2: persistent provisional qualification,
+  Implementation deployed in gateway 0.36.2: persistent provisional qualification,
   fresh idle anchor, two fixed one-minute runs, response/stop verification,
-  public-control blocking and interrupted-test handling. Physical validation
-  remains required before marking this gate complete; firmware is unchanged.
+  public-control blocking and interrupted-test handling. Validation: 510 Python
+  tests (two skipped), native protocol tests and isolated release smoke test;
+  all radios reconnected and eight device identities remained after deployment.
+  Physical validation remains required; firmware is unchanged. Management-token
+  access was blocked by the permission reviewer before old-owner revocation or
+  any qualification request. Obtain explicit authorization for that access;
+  no dry control run has been sent on the new association.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
