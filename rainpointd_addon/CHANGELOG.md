@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.36.1 / 2026-09-07
+
+- Recognize a single-zone valve's first valid report against the active pairing
+  session, without requiring its new controller identity to be registered first.
+- Preserve the existing HA device and correct receive direction across identity
+  changes and restarts; retire the superseded receive route.
+- Reject corrupt, foreign, cancelled, expired and uncorrelated pairing evidence.
+  Pairing does not authorize watering or reuse the old link's command counter.
+- Radio firmware and the accepted pairing waveform/sequence are unchanged.
+
 ## 0.36.0 / 2026-09-07
 
 Integration 0.16.0; unified firmware 0.16.1.

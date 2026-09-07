@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 from rainpoint_protocol import decode
 
-from .device_catalog import DeviceCatalog, EMPTY_CATALOG
+from .device_catalog import DeviceCatalog, EMPTY_CATALOG, ValveDefinition
 from .firmware_catalog import FirmwareCatalog
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
@@ -50,6 +50,8 @@ from .valve_pairing_protocol import (
     build_htv405_profile,
 )
 from .valve_protocol import (
+    ValveLink,
+    decode_htv145_state_report,
     decode_htv145_gateway_command,
     decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
@@ -304,6 +306,7 @@ class Gateway:
         self._htv145_acceptance: Htv145DryValveAcceptance | None = None
         self._htv145_runtime: Htv145Runtime | None = None
         self._active_pairing_node_id: str | None = None
+        self._active_pairing_started_at: datetime | None = None
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
@@ -3442,6 +3445,60 @@ class Gateway:
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 
+    def htv145_pairing_definition(
+        self, frame: str, observed_at: str | None, metadata: dict[str, Any]
+    ) -> ValveDefinition | None:
+        """Resolve one proven report against an explicit, live enrollment.
+
+        This transient receive definition breaks the catalog/enrollment cycle;
+        it neither registers arbitrary traffic nor grants command authority.
+        """
+        with self._lock:
+            return self._htv145_pairing_definition_locked(frame, observed_at, metadata)
+
+    def _htv145_pairing_definition_locked(
+        self, frame: str, observed_at: str | None, metadata: dict[str, Any]
+    ) -> ValveDefinition | None:
+        node_id = self._active_pairing_node_id
+        endpoint = self._active_pairing_expected_valve_endpoint
+        controller = (self._active_pairing_rf_identity or {}).get("controller_endpoint")
+        if (self._active_pairing_profile_id != AUTOMATIC_HTV145_PROFILE_ID
+                or self._pairing is None or not endpoint or not controller
+                or self._active_pairing_started_at is None):
+            return None
+        window = self._pairing.status()
+        node = self._nodes.get(node_id, {})
+        if (not window["active"] or not self._active_pairing_command_id
+                or node.get("pairing_command_id") != self._active_pairing_command_id
+                or int(node.get("pairing_completed_steps") or 0) < 1
+                or node.get("connected") is not True
+                or metadata.get("rf_node_id") not in {None, node_id}):
+            return None
+        try:
+            timestamp = (datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+                         if observed_at is not None else datetime.now(timezone.utc))
+            expires = datetime.fromisoformat(window["expires_at"].replace("Z", "+00:00"))
+            if not self._active_pairing_started_at <= timestamp < expires:
+                return None
+            # Pairing registry roles are opposite the command-link order.
+            link = ValveLink(bytes.fromhex(endpoint), bytes.fromhex(controller))
+            if decode_htv145_state_report(bytes.fromhex(frame), link) is None:
+                return None
+        except (ValueError, TypeError):
+            return None
+        registration = next((r for r in self._store.valve_registry()
+                             if r["valve_endpoint"] == endpoint), None) if self._store else None
+        previous = next((v for v in self.catalog.valves
+                         if v.model == HTV145_MODEL and endpoint in v.link), None)
+        return ValveDefinition(
+            controller_endpoint=endpoint, valve_endpoint=controller,
+            device_id=(str(registration["device_id"]) if registration else
+                       previous.device_id if previous else f"htv145-{endpoint}"),
+            name=(str(registration["name"]) if registration else
+                  previous.name if previous else f"RainPoint valve {endpoint[-4:]}"),
+            model=HTV145_MODEL,
+        )
+
     def _confirm_valve_pairing_locked(
         self,
         frame: str,
@@ -3494,8 +3551,10 @@ class Gateway:
             if not is_htv405_link_frame(raw):
                 return
         else:
+            htv145_definition = self._htv145_pairing_definition_locked(frame, observed_at, state)
             if (
-                state.get("model") != HTV145_MODEL
+                htv145_definition is None
+                or state.get("model") != HTV145_MODEL
                 or state.get("rf_trailer_valid") is not True
                 or state.get("rf_frame_accepted") is not True
             ):
@@ -3513,10 +3572,12 @@ class Gateway:
                 if model == "HTV405FRF"
                 else f"htv145-{expected}"
             )
+            if model == HTV145_MODEL:
+                device_id = htv145_definition.device_id
             default_name = (
                 f"RainPoint 4-zone valve {expected[-4:]}"
                 if model == "HTV405FRF"
-                else f"RainPoint valve {expected[-4:]}"
+                else htv145_definition.name
             )
             existing = next(
                 (
@@ -5584,6 +5645,9 @@ class Gateway:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
             self._pairing.start(duration_seconds, now=now)
+            self._active_pairing_started_at = now or datetime.now(timezone.utc)
+            if self._active_pairing_started_at.tzinfo is None:
+                self._active_pairing_started_at = self._active_pairing_started_at.replace(tzinfo=timezone.utc)
             self._active_pairing_node_id = None
             self._active_pairing_command_id = None
             self._active_pairing_profile_id = None

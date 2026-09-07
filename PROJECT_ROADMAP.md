@@ -106,6 +106,14 @@ and version history, not this checklist.
 
 ### Single-zone valve
 
+- [x] Remove the new-controller-ID HA handoff dependency on an existing catalog
+  link. Command-scoped captured-report replay now preserves the HA device,
+  decodes the first report, retires the old route, and survives gateway restart.
+  Invalid/unrelated/session-expired reports and old control authority are rejected.
+  The frozen radio pairing sequence is unchanged (gateway 0.36.1).
+- [ ] Physically verify the new-ID handoff and subsequent ACK/control enrollment
+  through the chosen node; the September 7 partial 5/6 exchange proves initial
+  custom-ID acceptance, not completed HA migration or control qualification.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.

@@ -1451,6 +1451,115 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def _htv145_handoff_trial(self, variant="valid"):
+        """Replay a redacted device response over the real node receive path."""
+        controller, endpoint = "a1b2c380", "b1c2d38f"
+        self.gateway._store.upsert_valve_link(
+            controller_endpoint="d4e5f680", valve_endpoint=endpoint,
+            device_id="saved-valve", name="Office valve", model="HTV145FRF",
+            area="Office", accepted_at="2026-09-01T00:00:00+00:00")
+        self.gateway._refresh_registry_catalog()
+        self.gateway._store.configure_htv145_control(
+            controller_endpoint=endpoint, valve_endpoint="d4e5f680", node_id=NODE_A,
+            center_hz=434351500, power_dbm=10, invert=False, trailer_residual=0x4f03,
+            report_ack_center_hz=434351500, updated_at="2026-09-01T00:00:00+00:00")
+        connection, stream, _ = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "htv145_pairing_tx_candidate",
+                          "configurable_rf_controller_identity"])
+        deadline = time.monotonic() + 2
+        while not self.gateway.nodes()[0].get("capabilities"):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.01)
+        self.gateway.start_pairing(120, node_id=NODE_A,
+            profile_id="htv145_auto_candidate_v1", factory_endpoint="31c2d38f",
+            valve_route=controller, companion_endpoint="21b2c380")
+        command = json.loads(stream.readline())
+        stream.write(json.dumps({"type": "pairing_tx_status", "node_id": NODE_A,
+            "command_id": command["command_id"], "profile": "htv145_auto_candidate_v1",
+            "state": "armed", "completed_steps": 5, "step_count": 6,
+            "factory_endpoint": "31c2d38f", "paired_endpoint": endpoint,
+            "tx_armed": True}).encode() + b"\n")
+        while self.gateway.nodes()[0].get("pairing_completed_steps") != 5:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.01)
+        frame = "79f4882f28a1b2c380b1c2d38f828107862580804f8000000040800056800000000000009461"
+        frame = _replace_frame_endpoint(frame, offset=5, endpoint=controller)
+        frame = _replace_frame_endpoint(frame, offset=9, endpoint=endpoint)
+        self.assertIsNone(self.gateway.htv145_pairing_definition(
+            frame, "2020-01-01T00:00:00+00:00", {"rf_node_id": NODE_A}))
+        self.assertIsNone(self.gateway.htv145_pairing_definition(
+            frame, None, {"rf_node_id": NODE_B}))
+        if variant == "wrong_controller":
+            frame = _replace_frame_endpoint(frame, offset=5, endpoint="aabbcc80")
+        elif variant == "wrong_valve":
+            frame = _replace_frame_endpoint(frame, offset=9, endpoint="c1c2d38f")
+        elif variant == "reversed_route":
+            frame = _replace_frame_endpoint(frame, offset=5, endpoint=endpoint)
+            frame = _replace_frame_endpoint(frame, offset=9, endpoint=controller)
+        elif variant == "bad_crc":
+            frame = frame[:-2] + ("00" if frame[-2:] != "00" else "01")
+        elif variant == "command":
+            from rainpointd.valve_protocol import build_open_frame
+            frame = build_open_frame(ValveLink(bytes.fromhex(controller), bytes.fromhex(endpoint)),
+                sequence=0x82, duration_seconds=60, residue=0x4f03).hex()
+        elif variant == "cancelled":
+            self.gateway.stop_pairing(command_id=command["command_id"])
+        elif variant == "wrong_session":
+            self.gateway._nodes[NODE_A]["pairing_command_id"] = "superseded"
+        elif variant == "expired":
+            self.gateway._pairing.status(now=datetime.now().astimezone() + timedelta(seconds=121))
+        stream.write(json.dumps({"type": "rainpoint_rf", "node_id": NODE_A,
+            "radio": "primary", "channel": 12, "rssi_dbm": -45,
+            "frame": frame}).encode() + b"\n")
+        deadline = time.monotonic() + 2
+        while not any(e.get("raw") == frame for e in self.gateway.events()):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.01)
+        stream.close()
+        connection.close()
+        return frame
+
+    def test_htv145_pairing_new_identity_preserves_device_and_decodes_first_report(self):
+        frame = self._htv145_handoff_trial()
+        self.assertEqual("b1c2d38f", self.gateway.pairing()["completed_endpoint"])
+        event = next(e for e in self.gateway.events() if e.get("raw") == frame)
+        self.assertEqual("device_observation", event["event_type"])
+        self.assertEqual("saved-valve", event["device_id"])
+        self.assertIs(event["state"]["is_watering"], False)
+        self.assertIsNone(self.gateway.catalog.valve_link("d4e5f680", "b1c2d38f"))
+        valve = self.gateway.catalog.valve_link("a1b2c380", "b1c2d38f")
+        self.assertEqual("saved-valve", valve.device_id)
+        self.assertEqual("b1c2d38f", valve.controller_endpoint)
+        self.assertEqual("a1b2c380", valve.valve_endpoint)
+        self.assertEqual(1, len(self.gateway._store.valve_registry()))
+        device = next(d for d in self.gateway.devices() if d["device_id"] == "saved-valve")
+        self.assertIsNone(self.gateway._htv145_profile_for_device(device))
+        with self.assertRaisesRegex(RuntimeError, "no verified control association"):
+            self.gateway.request_valve_control(device_id="saved-valve", action="open", duration_seconds=60)
+        # Restart must retain the new receive direction and suppress the old route.
+        from rainpointd.gateway import Gateway as RestoredGateway
+        restored = RestoredGateway(storage_path=str(Path(self.temporary_directory.name) / "rainpoint.sqlite3"))
+        try:
+            self.assertIsNone(restored.catalog.valve_link("d4e5f680", "b1c2d38f"))
+            self.assertEqual("saved-valve", restored.catalog.valve_link("a1b2c380", "b1c2d38f").device_id)
+            self.assertEqual(1, len([d for d in restored.devices() if d["device_id"] == "saved-valve"]))
+        finally:
+            restored.close()
+
+    def test_htv145_pairing_handoff_rejects_unproven_frames(self):
+        # Each variant gets a separate persistent gateway and authenticated peer.
+        for variant in ("wrong_controller", "wrong_valve", "reversed_route", "bad_crc", "command",
+                        "cancelled", "wrong_session", "expired"):
+            with self.subTest(variant=variant):
+                trial = ESP32NetworkTest()
+                trial.setUp()
+                try:
+                    trial._htv145_handoff_trial(variant)
+                    self.assertIsNone(trial.gateway.pairing()["completed_endpoint"])
+                    self.assertEqual("d4e5f680", trial.gateway._store.valve_registry()[0]["controller_endpoint"])
+                finally:
+                    trial.tearDown()
+
     def test_pairing_power_override_is_research_only_and_bounded(self) -> None:
         with self.assertRaisesRegex(ValueError, "only valid for HTV145"):
             self.gateway.start_pairing(

@@ -66,6 +66,14 @@ request remains unproven. A white LED supports initial association acceptance,
 but only addressed valve traffic proves progress. The accepted partial
 association can produce routine telemetry and positively acknowledged controls.
 
+HA association recognition uses a valid valve-originated state report matching
+the active pairing session's controller, valve endpoint and correlated node
+progress. A previous catalog entry is not required. This preserves the existing
+device across controller-identity changes without treating arbitrary unknown RF
+as a device. The new receive route replaces the old one; old control authority
+does not transfer. Association recognition remains separate from six-stage
+transcript completion and positive control/ACK qualification.
+
 The delayed long configuration uses CC1101 FIFO hardware-clocked transmission.
 Its acceptance is supported by two unchanged trials with a valve-originated
 configuration response and subsequent requests. Exact short-reply FIFO waveforms
