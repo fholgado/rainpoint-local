@@ -1,0 +1,22 @@
+# Installation-specific UI projection; never infers watering from a request.
+template:
+  - binary_sensor:
+      - name: Front Yard Local Run Available
+        unique_id: front_yard_local_run_available
+        state: >-
+          {{ is_state('valve.rainpoint_valve_008f_valve', 'closed')
+             and state_attr('valve.rainpoint_valve_008f_valve', 'start_available') is true
+             and not is_state('script.garden_run_confirmed_single_valve', 'on')
+             and not is_state('script.front_yard_run_manual_watering_program', 'on') }}
+    sensor:
+      - name: Front Yard Local Run Status
+        unique_id: front_yard_local_run_status
+        icon: mdi:sprinkler-variant
+        state: >-
+          {% if is_state('valve.rainpoint_valve_008f_valve', 'open') %}Watering
+          {% elif state_attr('valve.rainpoint_valve_008f_valve', 'command_pending') is true %}Waiting for valve
+          {% elif is_state('script.garden_run_confirmed_single_valve', 'on') %}Starting / verifying
+          {% elif is_state('binary_sensor.front_yard_local_run_available', 'on') %}Ready
+          {% else %}Not ready{% endif %}
+        attributes:
+          reason: "{{ state_attr('valve.rainpoint_valve_008f_valve', 'start_unavailable_reason') }}"

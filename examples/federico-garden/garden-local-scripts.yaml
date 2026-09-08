@@ -71,6 +71,21 @@ garden_force_run_zone:
     - choose:
         - conditions:
             - condition: template
+              value_template: "{{ confirmation_mode | default('transaction') == 'single_valve' }}"
+          sequence:
+            - action: script.garden_run_confirmed_single_valve
+              data:
+                zone_name: "{{ zone_name }}"
+                valve_entity: "{{ valve_entity }}"
+                duration_number_entity: "{{ duration_number_entity }}"
+                duration_minutes: "{{ duration_minutes }}"
+                last_ran_datetime_entity: "{{ last_ran_datetime_entity }}"
+                last_decision_text_entity: "{{ last_decision_text_entity }}"
+                notify_service: "{{ notify_service }}"
+                urgent_notify_service: "{{ urgent_notify_service }}"
+            - stop: Confirmed single-valve run finished.
+        - conditions:
+            - condition: template
               value_template: "{{ control_domain == 'valve' }}"
           sequence:
             - if:
@@ -376,3 +391,21 @@ garden_run_manual_watering_program:
         last_decision_text_entity: input_text.garden_watering_last_decision
         notify_service: notify.mobile_app_fedes_iphone
         urgent_notify_service: notify.mobile_app_fedes_iphone
+
+front_yard_run_manual_watering_program:
+  alias: Front Yard - Run Manual Watering
+  description: Manually run the front yard irrigation for the dashboard duration, bypassing moisture, rain, and season checks.
+  icon: mdi:play-circle
+  mode: single
+  sequence:
+  - action: script.garden_force_run_zone
+    data:
+      zone_name: Front Yard
+      valve_entity: valve.rainpoint_valve_008f_valve
+      duration_number_entity: number.rainpoint_valve_008f_watering_duration
+      confirmation_mode: single_valve
+      duration_minutes: "{{ states('input_number.front_yard_watering_duration') | float(10) }}"
+      last_ran_datetime_entity: input_datetime.front_yard_watering_last_ran
+      last_decision_text_entity: input_text.front_yard_watering_last_decision
+      notify_service: notify.mobile_app_fedes_iphone
+      urgent_notify_service: notify.mobile_app_fedes_iphone

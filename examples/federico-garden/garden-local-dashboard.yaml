@@ -292,33 +292,77 @@ views:
         cards:
           - type: markdown
             content: >-
-              **Local RF telemetry.** Soil readings and sensor health below come
-              from `rainpoint_local`; the existing front-yard valve remains on
-              its current local integration.
+              **Local RF telemetry and control.** The front irrigation uses the
+              RainPoint single-zone valve through the Front Yard radio. Soil
+              readings and valve confirmations come from `rainpoint_local`.
           - type: heading
             heading: Front Yard Moisture
             heading_style: title
             icon: mdi:water-percent
-          - type: gauge
-            name: Plant Bed 1
-            entity: sensor.front_yard_sensor_1_soil_moisture
-            min: 0
-            max: 100
-            needle: true
-            severity:
-              red: 0
-              yellow: 35
-              green: 45
-          - type: gauge
-            name: Plant Bed 2
-            entity: sensor.front_yard_sensor_2_soil_moisture
-            min: 0
-            max: 100
-            needle: true
-            severity:
-              red: 0
-              yellow: 35
-              green: 45
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_sensor_1_reporting
+                state: "on"
+            card:
+              type: gauge
+              name: Plant Bed 1
+              entity: sensor.front_yard_sensor_1_soil_moisture
+              min: 0
+              max: 100
+              needle: true
+              severity:
+                red: 0
+                yellow: 35
+                green: 45
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_sensor_1_reporting
+                state_not: "on"
+            card:
+              type: gauge
+              name: ⚠ Plant Bed 1 — stale
+              entity: sensor.front_yard_sensor_1_soil_moisture
+              min: 0
+              max: 100
+              needle: true
+              severity:
+                red: 0
+                yellow: 35
+                green: 45
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_sensor_2_reporting
+                state: "on"
+            card:
+              type: gauge
+              name: Plant Bed 2
+              entity: sensor.front_yard_sensor_2_soil_moisture
+              min: 0
+              max: 100
+              needle: true
+              severity:
+                red: 0
+                yellow: 35
+                green: 45
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_sensor_2_reporting
+                state_not: "on"
+            card:
+              type: gauge
+              name: ⚠ Plant Bed 2 — stale
+              entity: sensor.front_yard_sensor_2_soil_moisture
+              min: 0
+              max: 100
+              needle: true
+              severity:
+                red: 0
+                yellow: 35
+                green: 45
           - type: statistics-graph
             title: Moisture Trend
             chart_type: line
@@ -353,12 +397,48 @@ views:
             icon: mdi:water-percent
             color: teal
             vertical: false
-          - type: button
-            name: Run Now
-            icon: mdi:sprinkler-variant
-            tap_action:
-              action: call-service
-              service: script.front_yard_run_manual_watering_program
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_local_run_available
+                state: "on"
+            card:
+              type: button
+              name: Run Now
+              icon: mdi:sprinkler-variant
+              tap_action:
+                action: perform-action
+                perform_action: script.front_yard_run_manual_watering_program
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.front_yard_local_run_available
+                state_not: "on"
+            card:
+              type: button
+              entity: sensor.front_yard_local_run_status
+              name: Run Status
+              show_state: true
+              tap_action:
+                action: none
+              hold_action:
+                action: none
+              double_tap_action:
+                action: none
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: valve.rainpoint_valve_008f_valve
+                state: "open"
+            card:
+              type: button
+              name: Stop Watering
+              icon: mdi:stop-circle
+              tap_action:
+                action: perform-action
+                perform_action: valve.close_valve
+                target:
+                  entity_id: valve.rainpoint_valve_008f_valve
           - type: entities
             title: Decision Settings
             show_header_toggle: false
@@ -392,43 +472,11 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Front Yard Watering Today
-            heading_style: title
-            icon: mdi:sprinkler-variant
-          - type: tile
-            entity: input_number.front_yard_water_used_today
-            name: Water Used Today
-            icon: mdi:water
-            color: blue
-            vertical: false
-          - type: tile
-            entity: input_number.front_yard_last_session_gallons
-            name: Last Session
-            icon: mdi:cup-water
-            color: blue
-            vertical: false
-          - type: tile
-            entity: sensor.front_garden_bed_water_valve_volume_flow_rate
-            name: Flow Rate
-            icon: mdi:water-pump
-            color: teal
-            vertical: false
-          - type: history-graph
-            title: Watering Activity
-            hours_to_show: 24
-            entities:
-              - entity: input_number.front_yard_last_session_gallons
-                name: Gallons
-              - entity: switch.front_garden_bed_water_valve
-                name: Valve
-      - type: grid
-        cards:
-          - type: heading
-            heading: Front Yard Valve
+            heading: Front Yard Valve & Activity
             heading_style: title
             icon: mdi:valve
           - type: tile
-            entity: switch.front_garden_bed_water_valve
+            entity: valve.rainpoint_valve_008f_valve
             name: Water Valve
             icon: mdi:valve
             color: green
@@ -439,50 +487,56 @@ views:
             icon: mdi:timer-cog-outline
             color: amber
             vertical: false
+          - type: tile
+            entity: sensor.garden_valve_last_water_usage
+            name: Reported Water Volume
+            icon: mdi:water
+          - type: history-graph
+            title: Watering Activity
+            hours_to_show: 24
+            entities:
+              - entity: valve.rainpoint_valve_008f_valve
+                name: Front Yard Valve
           - type: entities
-            title: Meter
+            title: Local Valve Health
             show_header_toggle: false
             entities:
-              - entity: sensor.front_garden_bed_water_valve_total_gallons
-                name: Total Gallons
-              - entity: sensor.front_garden_bed_water_valve_total_volume
-                name: Total Volume
-              - entity: input_number.front_yard_water_meter_session_start
-                name: Session Start Meter
-          - type: entities
-            title: Device Health
-            show_header_toggle: false
-            entities:
-              - entity: sensor.front_garden_bed_water_valve_battery
+              - entity: sensor.front_yard_local_run_status
+                name: Run Status
+              - entity: sensor.garden_valve_battery
                 name: Valve Battery
-              - entity: sensor.front_yard_sensor_1_battery
-                name: Sensor 1 Battery
-              - entity: sensor.front_yard_sensor_2_battery
-                name: Sensor 2 Battery
-              - entity: sensor.front_yard_sensor_1_signal_strength
-                name: Sensor 1 Signal
-              - entity: sensor.front_yard_sensor_2_signal_strength
-                name: Sensor 2 Signal
-              - entity: sensor.front_yard_sensor_1_device_report_time
-                name: Sensor 1 Last Report
-              - entity: sensor.front_yard_sensor_2_device_report_time
-                name: Sensor 2 Last Report
+              - entity: sensor.garden_valve_device_report_time
+                name: Last Valve Report
+              - entity: sensor.garden_valve_counter_status
+                name: Counter Status
+              - entity: sensor.rainpoint_valve_008f_watering_readiness_2
+                name: Morning Readiness
+              - entity: sensor.garden_valve_signal_strength
+                name: RF Signal
           - type: entities
-            title: Receive Reliability
+            title: Soil Sensor Health
             show_header_toggle: false
             entities:
+              - type: section
+                label: Plant Bed 1
               - entity: binary_sensor.front_yard_sensor_1_reporting
-                name: Sensor 1 Reporting
+                name: Reporting
+              - entity: sensor.front_yard_sensor_1_device_report_time
+                name: Last Report
+              - entity: sensor.front_yard_sensor_1_battery
+                name: Battery
+              - entity: sensor.front_yard_sensor_1_signal_strength
+                name: Signal
+              - type: section
+                label: Plant Bed 2
               - entity: binary_sensor.front_yard_sensor_2_reporting
-                name: Sensor 2 Reporting
-              - entity: sensor.front_yard_sensor_1_average_report_interval
-                name: Sensor 1 Average Interval
-              - entity: sensor.front_yard_sensor_2_average_report_interval
-                name: Sensor 2 Average Interval
-              - entity: sensor.front_yard_sensor_1_reports_received
-                name: Sensor 1 Reports Received
-              - entity: sensor.front_yard_sensor_2_reports_received
-                name: Sensor 2 Reports Received
+                name: Reporting
+              - entity: sensor.front_yard_sensor_2_device_report_time
+                name: Last Report
+              - entity: sensor.front_yard_sensor_2_battery
+                name: Battery
+              - entity: sensor.front_yard_sensor_2_signal_strength
+                name: Signal
           - type: history-graph
             title: Report Cadence
             hours_to_show: 24

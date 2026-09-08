@@ -364,7 +364,13 @@ class AddonBoundaryTest(unittest.TestCase):
             / "federico-garden"
             / "garden-local-dashboard.yaml"
         ).read_text()
-        self.assertNotIn("garden_valve_", dashboard)
+        # Retained single-zone entity names belong only to the Front Yard view.
+        garden, front = dashboard.split("  - title: Front Yard", maxsplit=1)
+        self.assertNotIn("garden_valve_", garden)
+        self.assertIn("valve.rainpoint_valve_008f_valve", front)
+        self.assertIn("sensor.garden_valve_last_water_usage", front)
+        self.assertNotIn("front_garden_bed_water_valve", dashboard)
+        self.assertIn("binary_sensor.front_yard_local_run_available", front)
         for entity in (
             "binary_sensor.rainpoint_4_zone_valve_8013_zone_1_watering",
             "sensor.rainpoint_4_zone_valve_8013_device_report_time",
@@ -405,6 +411,22 @@ class AddonBoundaryTest(unittest.TestCase):
         self.assertNotIn("validated_duration_minutes", force_run)
         self.assertNotIn('timeout: "00:00:10"', force_run)
         self.assertNotIn("accepted_command_results", force_run)
+
+    def test_single_valve_example_requires_fresh_confirmation_and_preserves_alerts(self) -> None:
+        example = ROOT / "examples" / "federico-garden"
+        script = (example / "single-valve-scripts.yaml").read_text()
+        self.assertEqual(1, script.count("action: valve.open_valve"))
+        self.assertNotIn("action: valve.close_valve", script)
+        self.assertIn('timeout: "00:00:40"', script)
+        self.assertIn("state_attr(valve_entity, 'confirmed_at')", script)
+        self.assertIn("requested_at | float", script)
+        self.assertIn("persistent_notification.create", script)
+        self.assertIn("urgent_notify_service", script)
+        self.assertIn("mode: single", script)
+        self.assertIn("start_available", script)
+        self.assertIn("No duplicate open was sent", script)
+        self.assertIn("confirmation_mode: single_valve",
+            (example / "garden-local-scripts.yaml").read_text())
 
     def test_htv405_omits_unsupported_water_usage_entity(self) -> None:
         sensor_source = (

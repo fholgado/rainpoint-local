@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-08
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -10,13 +10,13 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 The user prioritized single-zone promotion ahead of the selected hardening work.
 The verified association now uses standard firmware and HA controls, preserving
-bounded commands, counter recovery and evidence-based state. Front-garden
-installation and watering qualification follow when the user connects the valve.
+bounded commands, counter recovery and evidence-based state. The user connected
+the single-zone valve to the front irrigation on September 8. Its dashboard,
+manual run, scheduled decision and watchdog now target the local valve.
 
-September 7 follow-through order: finish the newly migrated single-zone
-association's ACK/control qualification first; then finish the prior pass's
-rendered HA wizard/UI checks and fixes with the Mac unlocked; then qualify
-firmware 0.16.1 on a test node before rolling it out to production owners.
+September 8 follow-through order: verify the first front-garden scheduled run
+and completion; then finish the prior pass's rendered HA wizard/UI checks and
+fixes; then qualify the consolidated firmware on remaining production owners.
 Firmware qualification must cover persisted association/counter restore without
 startup actuation, valve-confirmed bounded controls, ACK/report continuity and
 the overnight check. New-ID pairing alone does not qualify control ownership.
@@ -53,11 +53,12 @@ The selected unattended implementation/review pass is complete (original list nu
   September 7: HA tab located, but Chrome's Apple Events JavaScript access is
   disabled; rendered navigation has not been verified. Do not change browser
   security settings implicitly or count callback tests as visual acceptance.
-- [ ] Deploy staged firmware 0.16.1 and qualify restore on hardware after the
-  current soak; radios retain their installed firmware to avoid extra intervention.
+- [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
+  soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
+  open/automatic stop/early close; the other nodes retain their installed images.
 
-Gateway 0.36.0 and integration 0.16.0 contain this pass. Firmware 0.16.1 builds
-and passes native protocol/binary-boundary checks; its offer is staged only.
+Gateway 0.36.4 and integration 0.16.1 are deployed. Firmware 0.16.2 contains the
+post-command RX restoration fix, without changing the frozen pairing sequence.
 Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
@@ -283,8 +284,17 @@ retention matrix. The last-zone idle-reply correction is deployed; see the
   A final post-restart one-minute run confirms decoded watering and automatic
   idle reports with counter 132.
   [Promotion evidence](research/fixtures/htv145_standard_firmware_control_20260906.json).
-- [ ] Connect the promoted valve to the front garden and qualify watering there;
-  remaining ACK waveform, fresh-association and long-term hardening gates stay open.
+- [x] Connect the promoted single-zone valve to the front garden (user confirmed)
+  and migrate the live dashboard, Run Now, scheduled decision and watchdog.
+  Preserve 07:00 / 30-minute settings, season toggle and local-moisture/weather
+  checks. Enable 06:15 America/New_York morning sync (30-minute window). Remove
+  obsolete Sonoff meter automations/cards, keeping historical helpers untouched.
+  HA configuration validation and restart succeeded; no watering was triggered
+  during cutover. The four-zone decision/control path is unchanged.
+- [ ] Qualify the first front-garden scheduled start, actual irrigation and
+  confirmed completion, including the new HA feedback. UI rendering and real
+  push delivery still require observation; configuration checks are not watering
+  acceptance. Remaining ACK waveform, fresh-association and soak gates stay open.
 
 ### HA and irrigation
 

@@ -2,6 +2,9 @@
 
 ## 0.36.4 / 2026-09-08
 
+- Integration 0.16.1 exposes single-zone start availability from the authoritative
+  gateway state. The front-garden example now uses confirmed single-zone control,
+  bounded start feedback, disabled busy controls and persistent failure messages.
 - Preserve the packed usage field in single-zone result-3 decoding; nonzero
   usage must not hide a matching idle-anchor response. The anchor still requires
   the reserved zero-counter close and byte-17 `10` layout; ordinary commands

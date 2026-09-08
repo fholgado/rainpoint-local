@@ -1,0 +1,161 @@
+# Installation example: merge these scripts into scripts.yaml. No RF identities.
+# Both scheduled and manual decision scripts call this AFTER their own checks.
+garden_run_confirmed_single_valve:
+  alias: Garden - Run Confirmed Single Valve
+  description: Bounded local watering with fresh valve confirmation and visible failures.
+  mode: single
+  max_exceeded: warning
+  sequence:
+    - variables:
+        run_minutes: "{{ duration_minutes | float(0) }}"
+        notification_id: "{{ zone_name | lower | replace(' ', '-') }}-local-watering"
+        failure: ""
+    - action: input_text.set_value
+      target:
+        entity_id: "{{ last_decision_text_entity }}"
+      data:
+        value: "Preparing {{ zone_name }} local watering for {{ run_minutes }} min."
+    - if:
+        - condition: template
+          value_template: >-
+            {{ run_minutes != run_minutes | int or run_minutes < 1 or run_minutes > 60
+               or not is_state(valve_entity, 'closed')
+               or state_attr(valve_entity, 'start_available') is not true }}
+      then:
+        - variables:
+            failure: >-
+              Cannot start {{ zone_name }}: valve {{ states(valve_entity) }},
+              {{ state_attr(valve_entity, 'start_unavailable_reason')
+                 | default('check duration (1–60 whole minutes) and readiness', true) }}.
+      else:
+        - action: number.set_value
+          continue_on_error: true
+          target:
+            entity_id: "{{ duration_number_entity }}"
+          data:
+            value: "{{ run_minutes }}"
+        - wait_template: "{{ states(duration_number_entity) | float(-1) == run_minutes }}"
+          timeout: "00:00:05"
+          continue_on_timeout: true
+        - if:
+            - condition: template
+              value_template: "{{ states(duration_number_entity) | float(-1) != run_minutes }}"
+          then:
+            - variables:
+                failure: "Duration was not accepted; no open command was sent."
+          else:
+            - variables:
+                requested_at: "{{ as_timestamp(now()) }}"
+            - action: input_text.set_value
+              target:
+                entity_id: "{{ last_decision_text_entity }}"
+              data:
+                value: "Requesting {{ zone_name }} watering; waiting for valve confirmation."
+            - action: valve.open_valve
+              continue_on_error: true
+              target:
+                entity_id: "{{ valve_entity }}"
+            - wait_template: >-
+                {{ is_state(valve_entity, 'open')
+                   and as_timestamp(state_attr(valve_entity, 'confirmed_at'), 0)
+                     >= requested_at | float }}
+              timeout: "00:00:40"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ not (is_state(valve_entity, 'open')
+                       and as_timestamp(state_attr(valve_entity, 'confirmed_at'), 0)
+                         >= requested_at | float) }}
+              then:
+                - variables:
+                    failure: >-
+                      No fresh open confirmation from {{ zone_name }} within 40 seconds.
+                      Watering is unconfirmed, not assumed off. No duplicate open was sent.
+                      Check valve readiness and physical irrigation before retrying.
+              else:
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: "{{ last_ran_datetime_entity }}"
+                  data:
+                    datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                - action: input_text.set_value
+                  target:
+                    entity_id: "{{ last_decision_text_entity }}"
+                  data:
+                    value: "{{ zone_name }} watering confirmed for {{ run_minutes }} min."
+                - action: persistent_notification.create
+                  data:
+                    notification_id: "{{ notification_id }}"
+                    title: "{{ zone_name }} watering"
+                    message: "Valve confirmed watering; requested duration {{ run_minutes }} minutes."
+                - action: "{{ notify_service }}"
+                  continue_on_error: true
+                  data:
+                    title: "{{ zone_name }} watering"
+                    message: "Valve confirmed watering for {{ run_minutes }} minutes."
+                # The valve owns its timer. Do not issue another open or a timer-based
+                # close. Require a fresh idle confirmation (including manual stop).
+                - wait_template: >-
+                    {{ is_state(valve_entity, 'closed')
+                       and as_timestamp(state_attr(valve_entity, 'confirmed_at'), 0)
+                         >= requested_at | float }}
+                  timeout:
+                    seconds: "{{ run_minutes * 60 + 120 }}"
+                  continue_on_timeout: true
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {{ not (is_state(valve_entity, 'closed')
+                           and as_timestamp(state_attr(valve_entity, 'confirmed_at'), 0)
+                             >= requested_at | float) }}
+                  then:
+                    - variables:
+                        failure: >-
+                          {{ zone_name }} has not confirmed closed after the requested
+                          duration plus two minutes. Inspect irrigation; missing reports
+                          do not prove either completion or continued watering.
+    - if:
+        - condition: template
+          value_template: "{{ failure | length > 0 }}"
+      then:
+        - action: input_text.set_value
+          target:
+            entity_id: "{{ last_decision_text_entity }}"
+          data:
+            value: "{{ failure[:255] }}"
+        - action: persistent_notification.create
+          data:
+            notification_id: "{{ notification_id }}"
+            title: "{{ zone_name }} watering needs attention"
+            message: "{{ failure }}"
+        - action: "{{ urgent_notify_service }}"
+          continue_on_error: true
+          data:
+            title: "{{ zone_name }} watering needs attention"
+            message: "{{ failure }}"
+            data:
+              tag: "{{ notification_id }}"
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1.0
+                interruption-level: critical
+        - stop: Local watering was not confirmed.
+          error: true
+    - action: input_text.set_value
+      target:
+        entity_id: "{{ last_decision_text_entity }}"
+      data:
+        value: "{{ zone_name }} valve confirmed closed (requested {{ run_minutes }} min)."
+    - action: persistent_notification.create
+      data:
+        notification_id: "{{ notification_id }}"
+        title: "{{ zone_name }} watering ended"
+        message: "Valve confirmed closed. Requested duration was {{ run_minutes }} minutes; an early stop is possible."
+    - action: "{{ notify_service }}"
+      continue_on_error: true
+      data:
+        title: "{{ zone_name }} watering ended"
+        message: "Valve confirmed closed (requested {{ run_minutes }} minutes)."
