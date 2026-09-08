@@ -240,6 +240,10 @@ inline bool decodeHtv145CommandError(
         if (index == 3 && (frame[17] == 0 || frame[17] == 0x10)) {
             continue;
         }
+        // Packed usage bytes vary independently of the result and counter.
+        if (index == 5 && (frame[19] & 0x80U)) continue;
+        if (index == 6) continue;
+        if (index == 7 && !(frame[21] & 0x7fU)) continue;
         if (frame[14 + index] != body[index]) {
             return false;
         }

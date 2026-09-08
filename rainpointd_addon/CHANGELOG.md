@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.36.4 / 2026-09-08
+
+- Preserve the packed usage field in single-zone result-3 decoding; nonzero
+  usage must not hide a matching idle-anchor response. The anchor still requires
+  the reserved zero-counter close and byte-17 `10` layout; ordinary commands
+  continue to treat result 3 as failure.
+- Unified radio firmware 0.16.2 restores the full telemetry receive configuration
+  after single-zone commands, not just the channel number. Pairing is unchanged.
+
 ## 0.36.3 / 2026-09-08
 
 - Add an explicit dry first-open trial after rejected single-zone idle-anchor

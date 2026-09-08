@@ -122,18 +122,15 @@ and version history, not this checklist.
   decodes the first report, retires the old route, and survives gateway restart.
   Invalid/unrelated/session-expired reports and old control authority are rejected.
   The frozen radio pairing sequence is unchanged (gateway 0.36.1).
-- [ ] Physically verify the new-ID handoff and subsequent ACK/control enrollment
-  through the chosen node; the September 7 partial 5/6 exchange proves initial
-  custom-ID acceptance, not completed HA migration or control qualification.
-  Follow-up on gateway 0.36.1 / firmware 0.16.0 confirmed the new-ID report through
-  the selected node, preserved the existing HA device, and finalized/disarmed
-  pairing. ACK/control enrollment and sustained reporting remain open.
-  September 8: an unchanged five-minute, user-initiated re-pair through the same
-  selected node again reached 5/6, produced a fresh custom-ID idle report, retained
-  the HA device and finalized/disarmed normally. No battery cycle, firmware
-  change or control probe was performed. Prior failed control qualification is
-  retained; repeat association acceptance does not authenticate a counter.
-- [ ] Bridge fresh local pairing to first-control qualification without a stock
+- [x] Physically verify new-ID handoff and subsequent ACK/control enrollment
+  through the chosen node. The September 7/8 partial 5/6 exchanges preserved the
+  existing HA device and disarmed normally. September 8 bounded qualification
+  and the corrected standard-firmware recovery/control trial below established
+  command authority and owner telemetry/ACK operation without further re-pairing.
+- [ ] Verify sustained reporting and control on this custom-ID association.
+  The successful bounded tests do not qualify overnight persistence, battery
+  rejoin, repeated new enrollments or full six-stage terminal completion.
+- [x] Bridge fresh local pairing to first-control qualification without a stock
   command or copied counter. Previous dry acceptance required a passive command
   on the same link, and runtime enrollment requires a positive exchange; neither
   could bootstrap a new custom-ID association through that API. Use a
@@ -168,7 +165,34 @@ and version history, not this checklist.
   counter-`81` / 60-second command. The earlier positive association opened before
   idle-anchor testing; initialization and recovery are not proven equivalent.
   Candidate reservation must not authenticate a counter, replay after restart,
-  retry automatically, or enable public controls. Physical result pending.
+  retry automatically, or enable public controls.
+  September 8, gateway 0.36.3: the isolated first-open trial on unchanged pairing
+  accepted `81/90` and completed automatic idle after a requested 60-second run.
+  A second confirmed open (`82/90`) and early close (`83/10`, 20 seconds later),
+  followed by independent idle, completed public control qualification.
+  No stock command, copied counter or additional re-pair was needed. Public
+  authority survived an add-on restart; research access is disabled again.
+  [Redacted captured exchange](research/fixtures/htv145_custom_identity_first_open_20260908.json)
+  now replays through the qualification state machine. This closes this one
+  association's bootstrap/control gate, not repeated enrollment, long-term
+  stability, full terminal pairing, or battery rejoin. Front Yard returned to
+  standard 0.16.0 with OTA health confirmed; retained authority survived radio
+  and gateway restarts, and a normal public 60-second open was acknowledged.
+  Post-bootstrap idle-anchor recovery exposed two additional boundaries:
+  channel selection did not restore the command-retuned base frequency, and
+  the result-3 matcher hardcoded zero usage. A receive-only configuration reset
+  restored owner reception immediately. Firmware 0.16.2 restores full RX state;
+  gateway 0.36.4 and firmware preserve usage bytes in the narrow error matcher.
+  Both issues have red/green regressions; unchanged pairing is retained.
+  Physical verification passed on September 8: corrected firmware completed OTA
+  health, Front Yard received the nonzero-usage anchor and established counter80,
+  the public 60-second open was positively acknowledged, and Front Yard itself
+  received automatic idle about63seconds after dispatch and resumed report ACKs.
+  Final counter81, idle, public controls ready, research disabled. Captured replay
+  covers recovery through the subsequent accepted command and independent stop.
+  Validation:519 Python tests pass(two optional skips), native C++ protocol and
+  actual receive-restoration call-site regression pass; unified firmware build
+  and isolated packaged-gateway smoke pass. Production four-zone owner unchanged.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
@@ -314,6 +338,10 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   original 0.15.7 image, with no candidate boot. A third unchanged attempt completed
   the download, rebooted into 0.16.0, and confirmed gateway/radio health. Interrupted
   download retry is physically demonstrated; the other OTA fault cases remain open.
+  September 8 repeated this behavior on Front Yard: two interrupted downloads
+  retained the running image, and a third unchanged transfer passed SHA and OTA
+  health confirmation. Root cause of intermittent transfer interruption remains
+  unproven; do not weaken artifact checks or infer a timeout fix from the retry.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.

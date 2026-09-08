@@ -23,6 +23,7 @@ an active run or authenticate a command counter.
 | HTV145 fixed-zero recovery, result 3, and rollover | [Idle recovery](fixtures/htv145_idle_result3_counter_recovery_20260906.json) |
 | HTV145 restart without replay and bounded stop | [Restart recovery](fixtures/htv145_restart_recovery_20260906.json) |
 | HTV145 standard firmware/HA promotion | [Bounded controls and restored telemetry](fixtures/htv145_standard_firmware_control_20260906.json) |
+| HTV145 custom-ID initialization after rejected idle anchor | [Negative anchor](fixtures/htv145_custom_identity_idle_anchor_20260907.json), [first open and full dry control qualification](fixtures/htv145_custom_identity_first_open_20260908.json) |
 
 For physical procedures use the [pairing playbook](PAIRING_REVERSE_ENGINEERING_PLAYBOOK.md)
 and [lifecycle procedure](DEVICE_PAIRING_VALIDATION_PLAN.md). Qualification status

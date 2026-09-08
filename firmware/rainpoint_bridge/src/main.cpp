@@ -1713,7 +1713,11 @@ void reportHtv145CandidateStatus(
 void restoreHtv145CandidateReceive() {
     htv145ControlCandidate.listeningOnCommandCarrier = false;
     scanChannels = true;
-    selectChannel(kHcs026TelemetryChannel);
+    // Command replies retune the base FREQ registers. Selecting CHANNR=0
+    // alone leaves RX on that command carrier and loses ordinary reports/ACKs.
+    if (!primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel)) {
+        reportHtv145CandidateStatus("telemetry_receiver_restore_failed");
+    }
 }
 
 const char* htv145CandidateFailureClass(const char* state) {

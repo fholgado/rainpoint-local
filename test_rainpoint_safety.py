@@ -2010,6 +2010,18 @@ class Htv145QualificationTest(unittest.TestCase):
         self.assertEqual("failed", self.q.status(self.profile, now=self.at(20))["state"])
         self.assertFalse(self.q.qualified(self.profile))
 
+    def test_custom_identity_anchor_preserves_nonzero_usage_as_data(self):
+        from rainpointd.valve_protocol import decode_htv145_idle_anchor_response, decode_htv145_command_response
+        captured = bytes.fromhex("79f4882f28a1b2c380b1c2d38f80508683104fe700000040800056800000000000000000bf41")
+        self.assertEqual({"sequence": 128, "result_code": 3},
+                         decode_htv145_idle_anchor_response(captured, self.profile.link))
+        self.assertIsNone(decode_htv145_command_response(captured, self.profile.link))
+        for offset, value in ((17, 0), (21, 1), (18, 0xcf), (13, 0x81)):
+            frame = bytearray(captured)
+            frame[offset] = value
+            frame[-2:] = (binascii.crc_hqx(frame[:-2], 0) ^ 0x4f03).to_bytes(2, "big")
+            self.assertIsNone(decode_htv145_idle_anchor_response(bytes(frame), self.profile.link))
+
     def test_explicit_bootstrap_does_not_authenticate_candidate_before_positive_reply(self):
         self.prepare()
         self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(1))
@@ -2035,6 +2047,33 @@ class Htv145QualificationTest(unittest.TestCase):
         self.runtime.observe_frame(self.idle, now=self.at(82))
         self.assertEqual("ready_for_early_stop_test", self.q.status(self.profile, now=self.at(83))["state"])
         self.assertFalse(self.q.qualified(self.profile))
+
+    def test_captured_custom_identity_first_open_completes_qualification(self):
+        fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_first_open_20260908.json").read_text())
+        negative = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+        self.prepare()
+        self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(1))
+        self.runtime.observe_frame(bytes.fromhex(negative["response_frame"]), now=self.at(2))
+        self.runtime.status(self.profile, now=self.at(3))
+        self.node["capabilities"].append("htv145_bootstrap_trial")
+        self.q.bootstrap(self.profile, now=self.at(20))
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["response_frame"]), now=self.at(21))
+        self.assertEqual(130, self.runtime.status(self.profile, now=self.at(22))["next_sequence"])
+        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["idle_frame"]), now=self.at(83))
+        self.assertFalse(self.q.qualified(self.profile))
+        self.q.action(self.profile, "open", now=self.at(179))
+        self.runtime.observe_frame(bytes.fromhex(fixture["second_open"]["response_frame"]), now=self.at(180))
+        self.q.action(self.profile, "close", now=self.at(199))
+        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["response_frame"]), now=self.at(200))
+        self.assertFalse(self.q.qualified(self.profile))
+        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["idle_frame"]), now=self.at(206))
+        status = self.runtime.status(self.profile, now=self.at(207))
+        self.assertTrue(status["ready"])
+        self.assertEqual(131, status["next_sequence"])
+        self.assertEqual(fixture["qualification_state"], status["dry_qualification"]["state"])
+        self.assertEqual([129, 130, 131], [command["expected_sequence"] for _, command in self.sent
+            if command["type"] in {"htv145_control_bootstrap_open", "htv145_control_open", "htv145_control_close"}])
 
     def test_bootstrap_negative_and_restart_never_replay_or_enable_public_control(self):
         from rainpointd.htv145_runtime import Htv145Runtime
@@ -2390,6 +2429,22 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.runtime.observe_frame(bytes.fromhex(self.fixture["transactions"][1]["response_frame"]), now=self.at(18))
         self.assertTrue(self.store.htv145_control_states()[0]["counter_synchronized"])
         self.assertEqual(129, self.store.htv145_control_states()[0]["next_sequence"])
+
+    def test_captured_nonzero_usage_anchor_leads_to_positive_control_and_owner_idle(self):
+        trial = json.loads((ROOT / "research/fixtures/htv145_custom_identity_first_open_20260908.json").read_text())["corrected_standard_firmware_trial"]
+        self.queue()
+        self.report()
+        self.runtime.observe_frame(bytes.fromhex(trial["anchor_frame"]), now=self.at(2))
+        self.assertEqual(128, self.store.htv145_control_states()[0]["next_sequence"])
+        self.runtime.restored[self.profile.valve_endpoint] = ("connection-1", "test")
+        command = self.runtime.request(self.profile, "open", duration_seconds=60, now=self.at(17))
+        self.assertEqual(128, command["expected_sequence"])
+        self.runtime.observe_frame(bytes.fromhex(trial["open_response_frame"]), now=self.at(18))
+        self.assertEqual(129, self.store.htv145_control_states()[0]["next_sequence"])
+        self.runtime.observe_counter_sync_report(bytes.fromhex(trial["idle_frame"]), self.profile.node_id, now=self.at(80))
+        self.runtime.observe_frame(bytes.fromhex(trial["idle_frame"]), now=self.at(80))
+        self.assertFalse(self.store.htv145_control_states()[0]["confirmed_watering"])
+        self.assertTrue(self.runtime.status(self.profile, now=self.at(81))["ready"])
 
     def test_fixture_qualifies_two_idle_anchors_with_successful_controls_and_rollover(self):
         from rainpointd.valve_protocol import decode_htv145_command_response, decode_htv145_command_error, decode_htv145_idle_anchor_response, decode_htv145_state_report
