@@ -8,6 +8,7 @@ from .device_catalog import DeviceCatalog
 from .gateway import Gateway
 from .product_identity import hcs02x_identity
 from .protocol import RFObservation, decode_receiver_event, decode_receiver_line
+from .rf import normalize_row
 from .valve_protocol import (
     decode_htv405_control_frame,
     decode_htv405_gateway_command_rejection,
@@ -111,6 +112,15 @@ class FrameIngestor:
                 raw_frame = bytes.fromhex(decoded["frame_hex"])
             except ValueError:
                 raw_frame = b""
+            if valve is None and decoded.get("trailer_valid") is True:
+                valve = self.gateway.htv145_pairing_definition(
+                    decoded["frame_hex"], observed_at, receiver_metadata)
+                if valve is not None:
+                    # Decode the first new-link report in its command-scoped
+                    # context. observe_decoded below persists the association.
+                    decoded = normalize_row(
+                        {"len": len(raw_frame) * 8, "data": raw_frame.hex()},
+                        catalog=DeviceCatalog(valves=(valve,)))
             control_response = (
                 decode_htv405_gateway_command_response(raw_frame) or {}
             )

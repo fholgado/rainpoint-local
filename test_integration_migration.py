@@ -102,6 +102,16 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
 
 
 class SingleValvePromotionTest(unittest.IsolatedAsyncioTestCase):
+    def test_single_valve_start_availability_is_authoritative(self):
+        callback = _integration_function("valve.py", "extra_state_attributes",
+            {"DEFAULT_BOUNDED_RUN_MINUTES": 1}, classname="RainPointSingleValve")
+        entity = types.SimpleNamespace(device_id="one",
+            coordinator=types.SimpleNamespace(htv405_run_minutes={}), decoded_state={})
+        for ready in (None, False, True):
+            entity.decoded_state = {"rf_control_available": True,
+                "rf_control_start_available": ready, "rf_control_command_pending": False}
+            self.assertIs(callback.fget(entity)["start_available"], ready)
+
     async def test_public_commands_refresh_confirmed_state_and_bound_duration(self):
         for method, action in (("async_open_valve", "open_single_valve"),
                                ("async_close_valve", "close_single_valve")):

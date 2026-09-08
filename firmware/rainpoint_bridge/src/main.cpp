@@ -865,7 +865,8 @@ bool rfCommandMayTransmit(const String& type) {
     }
     if (
         type == "htv145_control_open" ||
-        type == "htv145_control_close" || type == "htv145_control_idle_anchor"
+        type == "htv145_control_close" || type == "htv145_control_idle_anchor" ||
+        type == "htv145_control_bootstrap_open"
     ) {
         return true;
     }
@@ -1712,7 +1713,11 @@ void reportHtv145CandidateStatus(
 void restoreHtv145CandidateReceive() {
     htv145ControlCandidate.listeningOnCommandCarrier = false;
     scanChannels = true;
-    selectChannel(kHcs026TelemetryChannel);
+    // Command replies retune the base FREQ registers. Selecting CHANNR=0
+    // alone leaves RX on that command carrier and loses ordinary reports/ACKs.
+    if (!primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel)) {
+        reportHtv145CandidateStatus("telemetry_receiver_restore_failed");
+    }
 }
 
 const char* htv145CandidateFailureClass(const char* state) {
@@ -1832,13 +1837,17 @@ bool startHtv145Candidate(
     const String& commandId,
     bool watering,
     std::uint32_t durationSeconds,
-    bool idleAnchor = false
+    bool idleAnchor = false,
+    bool bootstrapTrial = false
 ) {
+#ifndef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
+    if (bootstrapTrial) return false;
+#endif
     if (!htv145ControlCandidate.configured ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
         (htv145CommandIssued && !rainpoint::htv145CommandIntervalElapsed(
             lastHtv145CommandStartedAtMs, millis())) ||
-        (!idleAnchor && !htv145ControlCandidate.counterAuthenticated) ||
+        (!idleAnchor && !bootstrapTrial && !htv145ControlCandidate.counterAuthenticated) ||
         htv145ControlCandidate.pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         return false;
@@ -1850,7 +1859,13 @@ bool startHtv145Candidate(
         htv145ControlCandidate.closeTrailerResidual != 0x4f03)) {
         return false;
     }
-    const std::uint8_t sequence = idleAnchor ? 0x80 : htv145ControlCandidate.nextSequence;
+    if (bootstrapTrial && (!watering || durationSeconds != 60 || idleAnchor ||
+        htv145ControlCandidate.counterAuthenticated ||
+        !htv145ControlCandidate.stateObserved || htv145ControlCandidate.observedWatering ||
+        millis() - htv145ControlCandidate.stateObservedAtMs > 3'600'000 ||
+        !htv145ControlCandidate.commandMarkerInverted ||
+        htv145ControlCandidate.trailerResidual != 0x4f03)) return false;
+    const std::uint8_t sequence = bootstrapTrial ? 0x81 : idleAnchor ? 0x80 : htv145ControlCandidate.nextSequence;
     std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
     const rainpoint::Htv145ControlProfile profile{
         htv145ControlCandidate.link,
@@ -1870,7 +1885,7 @@ bool startHtv145Candidate(
     htv145ControlCandidate.durationSeconds = durationSeconds;
     htv145ControlCandidate.transmittedSequence = sequence;
     htv145ControlCandidate.idleAnchor = idleAnchor;
-    if (idleAnchor) htv145ControlCandidate.counterAuthenticated = false;
+    if (idleAnchor || bootstrapTrial) htv145ControlCandidate.counterAuthenticated = false;
     htv145ControlCandidate.commandWatering = watering;
     htv145ControlCandidate.attemptsSent = 0;
     htv145ControlCandidate.successfulAttempts = 0;
@@ -2222,13 +2237,25 @@ void handleNetworkCommand() {
         htv145ControlCandidate = Htv145ControlCandidate{};
         return;
     }
-    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor") {
+    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor" || type == "htv145_control_bootstrap_open") {
         if (jsonStringField(command, "controller_endpoint") != hexString(htv145ControlCandidate.link.controllerEndpoint.data(), 4) ||
             jsonStringField(command, "valve_endpoint") != hexString(htv145ControlCandidate.link.valveEndpoint.data(), 4)) {
             reportNetworkCommandError(commandId, "htv145_control_association_mismatch");
             return;
         }
     }
+#ifdef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
+    if (type == "htv145_control_bootstrap_open") {
+        long expectedSequence = 0;
+        long durationSeconds = 0;
+        if (!jsonLongField(command, "expected_sequence", expectedSequence) || expectedSequence != 0x81 ||
+            !jsonLongField(command, "duration_seconds", durationSeconds) || durationSeconds != 60 ||
+            !startHtv145Candidate(commandId, true, 60, false, true)) {
+            reportNetworkCommandError(commandId, "invalid_htv145_bootstrap_trial");
+        }
+        return;
+    }
+#endif
     if (type == "htv145_control_sync") {
         long nextSequence = 0;
         if (!htv145ControlCandidate.configured ||

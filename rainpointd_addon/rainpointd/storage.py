@@ -17,7 +17,7 @@ from .product_identity import (
 from .valve_protocol import next_htv145_command_sequence
 from .htv145_counter_sync import MAX_SYNC_ATTEMPTS, failed_attempt
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -259,6 +259,11 @@ class SQLiteEventStore:
             version = 21
         if version == 21:
             self._migrate_v21_to_v22()
+            version = 22
+        if version == 22:
+            with self._connection:
+                self._connection.execute("CREATE TABLE IF NOT EXISTS htv145_qualification (valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+                self._connection.execute("PRAGMA user_version = 23")
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -646,6 +651,18 @@ class SQLiteEventStore:
     def htv145_counter_sync(self, valve_endpoint: str) -> dict[str, Any]:
         row = self._connection.execute("SELECT payload FROM htv145_counter_sync WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
         return json.loads(row[0]) if row is not None else {}
+
+    def htv145_qualifications(self) -> list[dict[str, Any]]:
+        return [json.loads(row[0]) for row in self._connection.execute(
+            "SELECT payload FROM htv145_qualification ORDER BY valve_endpoint")]
+
+    def htv145_qualification(self, valve_endpoint: str) -> dict[str, Any]:
+        row = self._connection.execute("SELECT payload FROM htv145_qualification WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+        return json.loads(row[0]) if row is not None else {}
+
+    def save_htv145_qualification(self, valve_endpoint: str, payload: dict) -> None:
+        with self._connection:
+            self._connection.execute("INSERT INTO htv145_qualification VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
 
     def _write_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
         self._connection.execute("INSERT INTO htv145_counter_sync VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
@@ -3379,6 +3396,28 @@ class SQLiteEventStore:
         if not cursor.rowcount:
             raise KeyError(valve_endpoint)
         self._connection.commit()
+        return self.htv145_control_states(valve_endpoint)[0]
+
+    def reserve_htv145_bootstrap(self, valve_endpoint, command_id, started_at):
+        """Reserve only the fixed dry-test open, keeping candidate != known state."""
+        with self._connection:
+            row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            trial = self.htv145_qualification(valve_endpoint)
+            now = datetime.fromisoformat(started_at)
+            if (row is None or row["pending_command_id"] or row["revocation_command_id"]
+                    or row["counter_synchronized"] or row["confirmed_watering"] != 0
+                    or not row["confirmed_at"] or not 0 <= (now - datetime.fromisoformat(row["confirmed_at"])).total_seconds() <= 3600
+                    or trial.get("state") != "opening" or trial.get("reason") != "unverified_first_open_trial"
+                    or trial.get("command_started_at") != started_at or trial.get("open_count") != 1
+                    or not trial.get("bootstrap_attempted")):
+                raise RuntimeError("bootstrap requires a reserved explicit dry qualification")
+            if row["last_command_started_at"] and (now - datetime.fromisoformat(row["last_command_started_at"])).total_seconds() < 15:
+                raise RuntimeError("HTV145 commands require a 15-second hardware interval")
+            self._connection.execute("""UPDATE htv145_control_state SET next_sequence=NULL,
+                counter_synchronized=0, counter_source=NULL, pending_command_id=?, pending_action='open',
+                pending_sequence=129, pending_duration_seconds=60, pending_started_at=?, expected_idle_at=?,
+                last_command_started_at=?, last_result='unverified_bootstrap_pending', updated_at=? WHERE valve_endpoint=?""",
+                (command_id, started_at, (now + timedelta(seconds=60)).isoformat(), started_at, started_at, valve_endpoint))
         return self.htv145_control_states(valve_endpoint)[0]
 
     def reserve_htv145_command(

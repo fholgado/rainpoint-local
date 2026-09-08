@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 from rainpoint_protocol import decode
 
-from .device_catalog import DeviceCatalog, EMPTY_CATALOG
+from .device_catalog import DeviceCatalog, EMPTY_CATALOG, ValveDefinition
 from .firmware_catalog import FirmwareCatalog
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
@@ -50,6 +50,8 @@ from .valve_pairing_protocol import (
     build_htv405_profile,
 )
 from .valve_protocol import (
+    ValveLink,
+    decode_htv145_state_report,
     decode_htv145_gateway_command,
     decode_htv405_gateway_command_rejection,
     decode_htv405_gateway_command_response,
@@ -304,6 +306,7 @@ class Gateway:
         self._htv145_acceptance: Htv145DryValveAcceptance | None = None
         self._htv145_runtime: Htv145Runtime | None = None
         self._active_pairing_node_id: str | None = None
+        self._active_pairing_started_at: datetime | None = None
         self._active_pairing_command_id: str | None = None
         self._active_pairing_profile_id: str | None = None
         self._active_pairing_ack_parameters: dict[str, Any] | None = None
@@ -774,6 +777,41 @@ class Gateway:
             runtime = self._htv145_runtime
             if not self._htv145_acceptance_enabled or runtime is None:
                 raise PermissionError("HTV145 dry control is disabled")
+            if action.startswith("qualification-"):
+                device = self._devices.get(str(body.get("device_id", "")), {})
+                if device.get("model") != HTV145_MODEL:
+                    raise ValueError("qualification requires a registered single-zone valve")
+                if action == "qualification-prepare":
+                    if body.get("dry_valve_confirmed") is not True:
+                        raise ValueError("confirm the valve is disconnected from water")
+                    registration = next((item for item in self._store.valve_registry()
+                                         if item["device_id"] == device["device_id"]), None)
+                    if registration is None or registration["model"] != HTV145_MODEL:
+                        raise ValueError("qualification requires accepted pairing evidence")
+                    profile = Htv145ControlProfile(
+                        node_id=str(body.get("node_id", "")),
+                        controller_endpoint=registration["valve_endpoint"],
+                        valve_endpoint=registration["controller_endpoint"],
+                        center_hz=int(body.get("center_hz", 0)), power_dbm=10,
+                        invert=False, trailer_residual=0x4f03,
+                        command_marker_inverted=True,
+                        report_ack_center_hz=int(body.get("report_ack_center_hz", 0)),
+                    )
+                    report = decode_htv145_state_report(bytes.fromhex(device["state"].get("raw", "")), profile.link)
+                    age = (_observed_utc(timestamp) - _observed_utc(device["observed_at"])).total_seconds()
+                    if report is None or report["watering"] or not 0 <= age <= 3600:
+                        raise ValueError("qualification requires fresh idle evidence on the accepted link")
+                    return runtime.qualification.prepare(profile, now=timestamp)
+                profile = self._htv145_profile_for_device(device)
+                if profile is None:
+                    raise ValueError("device has no provisional qualification owner")
+                if action == "qualification-status":
+                    return runtime.qualification.status(profile, now=timestamp)
+                if action == "qualification-bootstrap":
+                    if body.get("dry_valve_confirmed") is not True:
+                        raise ValueError("confirm the valve is disconnected from water")
+                    return runtime.qualification.bootstrap(profile, now=timestamp)
+                return runtime.qualification.action(profile, action.removeprefix("qualification-"), now=timestamp)
             if action == "enroll":
                 profile = Htv145ControlProfile(**body["profile"])
                 return runtime.enroll(profile, command=bytes.fromhex(body["command_frame"]),
@@ -1078,6 +1116,8 @@ class Gateway:
         """Persist a disabled-by-default per-valve morning policy."""
         with self._lock:
             if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                if not self._htv145_runtime.qualification.qualified(profile):
+                    raise RuntimeError("finish dry qualification before changing morning sync")
                 result = self._htv145_runtime.counter_sync.configure(profile, settings, now=(now or datetime.now(timezone.utc)).isoformat())
                 self._event_condition.notify_all()
                 return result
@@ -1165,6 +1205,8 @@ class Gateway:
         """Explicit recover-now action; never enqueue a watering command."""
         with self._lock:
             if profile := self._htv145_profile_for_device(self._devices.get(device_id, {})):
+                if not self._htv145_runtime.qualification.qualified(profile):
+                    raise RuntimeError("dry qualification owns the pending counter sync")
                 result = self._htv145_runtime.counter_sync.request(profile, now=(now or datetime.now(timezone.utc)).isoformat())
                 self._event_condition.notify_all()
                 return result
@@ -3442,6 +3484,60 @@ class Gateway:
             self._observe_pairing(decoded, timestamp)
             return copy.deepcopy(event)
 
+    def htv145_pairing_definition(
+        self, frame: str, observed_at: str | None, metadata: dict[str, Any]
+    ) -> ValveDefinition | None:
+        """Resolve one proven report against an explicit, live enrollment.
+
+        This transient receive definition breaks the catalog/enrollment cycle;
+        it neither registers arbitrary traffic nor grants command authority.
+        """
+        with self._lock:
+            return self._htv145_pairing_definition_locked(frame, observed_at, metadata)
+
+    def _htv145_pairing_definition_locked(
+        self, frame: str, observed_at: str | None, metadata: dict[str, Any]
+    ) -> ValveDefinition | None:
+        node_id = self._active_pairing_node_id
+        endpoint = self._active_pairing_expected_valve_endpoint
+        controller = (self._active_pairing_rf_identity or {}).get("controller_endpoint")
+        if (self._active_pairing_profile_id != AUTOMATIC_HTV145_PROFILE_ID
+                or self._pairing is None or not endpoint or not controller
+                or self._active_pairing_started_at is None):
+            return None
+        window = self._pairing.status()
+        node = self._nodes.get(node_id, {})
+        if (not window["active"] or not self._active_pairing_command_id
+                or node.get("pairing_command_id") != self._active_pairing_command_id
+                or int(node.get("pairing_completed_steps") or 0) < 1
+                or node.get("connected") is not True
+                or metadata.get("rf_node_id") not in {None, node_id}):
+            return None
+        try:
+            timestamp = (datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+                         if observed_at is not None else datetime.now(timezone.utc))
+            expires = datetime.fromisoformat(window["expires_at"].replace("Z", "+00:00"))
+            if not self._active_pairing_started_at <= timestamp < expires:
+                return None
+            # Pairing registry roles are opposite the command-link order.
+            link = ValveLink(bytes.fromhex(endpoint), bytes.fromhex(controller))
+            if decode_htv145_state_report(bytes.fromhex(frame), link) is None:
+                return None
+        except (ValueError, TypeError):
+            return None
+        registration = next((r for r in self._store.valve_registry()
+                             if r["valve_endpoint"] == endpoint), None) if self._store else None
+        previous = next((v for v in self.catalog.valves
+                         if v.model == HTV145_MODEL and endpoint in v.link), None)
+        return ValveDefinition(
+            controller_endpoint=endpoint, valve_endpoint=controller,
+            device_id=(str(registration["device_id"]) if registration else
+                       previous.device_id if previous else f"htv145-{endpoint}"),
+            name=(str(registration["name"]) if registration else
+                  previous.name if previous else f"RainPoint valve {endpoint[-4:]}"),
+            model=HTV145_MODEL,
+        )
+
     def _confirm_valve_pairing_locked(
         self,
         frame: str,
@@ -3494,8 +3590,10 @@ class Gateway:
             if not is_htv405_link_frame(raw):
                 return
         else:
+            htv145_definition = self._htv145_pairing_definition_locked(frame, observed_at, state)
             if (
-                state.get("model") != HTV145_MODEL
+                htv145_definition is None
+                or state.get("model") != HTV145_MODEL
                 or state.get("rf_trailer_valid") is not True
                 or state.get("rf_frame_accepted") is not True
             ):
@@ -3513,10 +3611,12 @@ class Gateway:
                 if model == "HTV405FRF"
                 else f"htv145-{expected}"
             )
+            if model == HTV145_MODEL:
+                device_id = htv145_definition.device_id
             default_name = (
                 f"RainPoint 4-zone valve {expected[-4:]}"
                 if model == "HTV405FRF"
-                else f"RainPoint valve {expected[-4:]}"
+                else htv145_definition.name
             )
             existing = next(
                 (
@@ -3885,10 +3985,13 @@ class Gateway:
                     })
                     confirmed = status["state"]
                     pending = confirmed["pending_command_id"] is not None
-                    control_available = bool(status["owner_available"] and status["counter_synchronized"]
+                    control_available = bool(status["public_control_qualified"] and status["owner_available"] and status["counter_synchronized"]
                         and not pending and confirmed["revocation_command_id"] is None)
+                    if not status["public_control_qualified"]:
+                        counter_status = "Dry qualification: " + str(status["dry_qualification"].get("state", "required"))
                     device["state"].update({
-                        "rf_control_enabled": True,
+                        "rf_control_enabled": status["public_control_qualified"],
+                        "rf_control_qualification_state": status["dry_qualification"].get("state", "qualified"),
                         "rf_control_available": control_available,
                         "rf_control_start_available": status["ready"],
                         "rf_control_unavailable_reason": None if control_available else counter_status,
@@ -3911,7 +4014,7 @@ class Gateway:
                     supported = "htv145_idle_anchor" in self._nodes.get(profile.node_id, {}).get("capabilities", [])
                     device["state"].update({
                         "rf_htv145_counter_sync_supported": supported,
-                        "rf_htv145_counter_sync_available": sync["available"],
+                        "rf_htv145_counter_sync_available": sync["available"] and status["public_control_qualified"],
                         "rf_morning_sync_status": sync["status"],
                         "rf_morning_sync_reason": sync.get("reason"),
                         "rf_morning_sync_last_success_at": sync.get("last_success_at"),
@@ -5584,6 +5687,9 @@ class Gateway:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
             self._pairing.start(duration_seconds, now=now)
+            self._active_pairing_started_at = now or datetime.now(timezone.utc)
+            if self._active_pairing_started_at.tzinfo is None:
+                self._active_pairing_started_at = self._active_pairing_started_at.replace(tzinfo=timezone.utc)
             self._active_pairing_node_id = None
             self._active_pairing_command_id = None
             self._active_pairing_profile_id = None

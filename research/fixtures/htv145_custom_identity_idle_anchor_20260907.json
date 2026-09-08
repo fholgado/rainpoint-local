@@ -1,0 +1,23 @@
+{
+  "description": "A freshly migrated custom-ID association reached 5/6 pairing and reported idle. Its first close-only counter anchor returned result 3 with byte 17 equal to 00, not the qualified 10 layout. No open was sent and no counter was authenticated.",
+  "redaction": "Synthetic endpoints; original payloads and CRC residues preserved, checksums recomputed. Radio and command IDs omitted. Private gateway records retain originals; no SDR IQ capture was made.",
+  "controller_endpoint": "b1c2d38f",
+  "valve_endpoint": "a1b2c380",
+  "gateway_version": "0.36.2",
+  "firmware_version": "0.16.0",
+  "old_owner_revocation_confirmed": true,
+  "dry_valve_confirmed": true,
+  "idle_frame": "79f4882f28a1b2c380b1c2d38f8a8107860700804f800000004080005680000000000000a7e0",
+  "owner_idle_observed_at": "2026-09-07T19:41:24.043671+00:00",
+  "anchor_requested_at": "2026-09-07T19:41:24.043671+00:00",
+  "response_frame": "79f4882f28a1b2c380b1c2d38f80508683004f8000000040800056800000000000000000b9b4",
+  "response_observed_at": "2026-09-07T19:41:24.555802+00:00",
+  "following_frame": "79f4882f28a1b2c380b1c2d38f8d02810600800000000000000000000000000000000000ccf3",
+  "following_frame_observed_at": "2026-09-07T19:41:29.975838+00:00",
+  "result": "negative_command_result_3",
+  "qualification_state": "failed",
+  "qualification_reason": "idle_anchor_failed",
+  "open_count": 0,
+  "counter_synchronized": false,
+  "interpretation": "Reception and a command-correlated valve reply are evidenced. Byte 17 semantics remain unproven. Do not broaden the anchor recognizer from this negative reply alone; earlier 00 replies also lack positive follow-up control evidence."
+}

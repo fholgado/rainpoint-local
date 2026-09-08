@@ -249,6 +249,7 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             "bounded_run_seconds": self.coordinator.htv405_run_minutes.get(
                 (self.device_id, 1), DEFAULT_BOUNDED_RUN_MINUTES) * 60,
             "control_available": self.decoded_state.get("rf_control_available"),
+            "start_available": self.decoded_state.get("rf_control_start_available"),
             "start_unavailable_reason": self.decoded_state.get("rf_control_start_unavailable_reason"),
             "command_pending": self.decoded_state.get("rf_control_command_pending"),
             "confirmed_at": self.decoded_state.get("rf_control_confirmed_at"),

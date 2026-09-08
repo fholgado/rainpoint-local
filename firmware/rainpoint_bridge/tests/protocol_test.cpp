@@ -2385,5 +2385,14 @@ int main() {
     result3[17] = 0x10; result3[14] = 0xd0;
     rainpoint::writeTrailer(result3, 0x4f03);
     assert(!rainpoint::isHtv145IdleAnchorResponse(result3, ackLink));
+    auto usageAnchor = fromHex("79f4882f28a1b2c380b1c2d38f80508683104fe700000040800056800000000000000000bf41");
+    assert(rainpoint::isHtv145IdleAnchorResponse(usageAnchor, ackLink));
+    assert(!rainpoint::decodeHtv145CommandResponse(usageAnchor, ackLink, htv145Response));
+    usageAnchor[17] = 0;
+    rainpoint::writeTrailer(usageAnchor, 0x4f03);
+    assert(!rainpoint::isHtv145IdleAnchorResponse(usageAnchor, ackLink));
+    usageAnchor[17] = 0x10; usageAnchor[21] = 1;
+    rainpoint::writeTrailer(usageAnchor, 0x4f03);
+    assert(!rainpoint::isHtv145IdleAnchorResponse(usageAnchor, ackLink));
     return 0;
 }

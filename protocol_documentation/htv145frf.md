@@ -66,6 +66,14 @@ request remains unproven. A white LED supports initial association acceptance,
 but only addressed valve traffic proves progress. The accepted partial
 association can produce routine telemetry and positively acknowledged controls.
 
+HA association recognition uses a valid valve-originated state report matching
+the active pairing session's controller, valve endpoint and correlated node
+progress. A previous catalog entry is not required. This preserves the existing
+device across controller-identity changes without treating arbitrary unknown RF
+as a device. The new receive route replaces the old one; old control authority
+does not transfer. Association recognition remains separate from six-stage
+transcript completion and positive control/ACK qualification.
+
 The delayed long configuration uses CC1101 FIFO hardware-clocked transmission.
 Its acceptance is supported by two unchanged trials with a valve-originated
 configuration response and subsequent requests. Exact short-reply FIFO waveforms
@@ -144,6 +152,9 @@ frame[15] = 0x82 open, 0x81 close
 Both actions require 2,400 alternating wake symbols. One logical command uses a
 bounded burst of identical RF attempts and stops on a matching reply; it is not
 multiple logical opens. Commands are spaced at least 15 seconds apart.
+After response listening, restore the complete telemetry receive configuration,
+including base frequency. Writing channel number zero alone does not undo an
+absolute command-carrier retune and can silently prevent subsequent report ACKs.
 
 The qualified selector-6 alternating-control recipe uses open marker `90`,
 close marker `10`, and residue `4f03` for both. An accepted open advances the
@@ -160,6 +171,9 @@ association, counter, action/marker, and duration. Result `83` is a non-success
 reply for ordinary commands, including both `50` and `d0` byte-14 variants.
 An idle-looking negative reply does not prove the valve physically closed.
 Only the explicit idle-anchor reservation below has a narrower exception.
+Bytes 19–21 in the result-3 body contain packed usage and need not represent
+zero. They are data, not part of the fixed error signature; preserve the usage
+marker/reserved bits and the remaining family, identity, counter and result checks.
 
 ## Report and summary ACKs
 
@@ -200,6 +214,26 @@ unexpected watering, conflicting replies, or unqualified negatives terminate
 it. Each attempt's bounded RF burst does not consume additional queued attempts.
 
 ## Persistence and HA boundary
+
+First-control qualification after custom-identity pairing is distinct from
+retained-counter restoration. A negative fixed-zero anchor does not prove the
+association cannot accept an open: initialization and idle recovery are separate
+boundaries. A separately compiled dry-test path permits one fixed `81/90`,
+60-second first-open candidate after an unqualified anchor rejection and fresh
+idle evidence. This candidate worked on the captured custom-ID association;
+it is not a universal pairing-reset counter or an automatic retry strategy.
+Reservation leaves the counter unknown. Only its matched positive reply
+authenticates subsequent commands. The ordinary pairing prefix and command
+waveform are unchanged.
+
+The explicit dry-test flow revokes the old owner and leases one provisional
+report-ACK owner. It requires two fixed 60-second runs: valve-confirmed
+open with independent automatic idle, followed by a second confirmed open,
+spaced early close, and independent idle. Public control is blocked until all
+these checks pass. No stock command or assumed pairing-reset counter seeds it.
+An interrupted/restarted qualification cannot replay a command or resume an
+unsent anchor. The first-open trial is single-use, research-gated, and absent
+from standard firmware; ordinary controls use the persisted qualified association.
 
 A requested owner reboot makes control unavailable immediately, even while its
 old socket still appears connected. Reconnect must clear the pending-reboot flag.

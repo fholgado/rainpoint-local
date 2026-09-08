@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.36.0 supports authenticated network radio nodes, receive-only USB
+Version 0.36.4 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -383,6 +383,30 @@ only by `rtl_433` or the serial bridge. The read-only share mapping supports an
 optional external device catalog and cannot be used to write raw captures.
 
 ## HTV145 persistent dry qualification
+
+For a freshly paired custom-identity valve without a prior command exchange,
+the gated `research/htv145-control/qualification-prepare` action accepts
+`device_id`, `node_id`, `dry_valve_confirmed: true`, `center_hz`, and
+`report_ack_center_hz`. It derives RF identities from the accepted registry and
+requires fresh idle telemetry. Revoke the previous control/ACK owner first.
+Preparation grants provisional ACK ownership and requests a fresh owner idle
+report for the fixed-zero close anchor; it never copies a counter or opens.
+
+Using the same research prefix, `qualification-status`, `qualification-open`,
+and `qualification-close` take `device_id`. Two opens are permitted, each exactly
+60 seconds: first verify automatic stop, then explicitly close the second after
+at least 15 seconds and before its automatic timeout. Only matching positive
+responses plus independent idle reports complete qualification. Public controls
+and morning-sync changes remain blocked throughout. Restart interrupts the
+test and cancels any unsent anchor; unresolved watering is never replayed.
+After a rejected initial anchor, `qualification-bootstrap` takes `device_id`
+and `dry_valve_confirmed: true`. It permits one fixed counter-`81`, 60-second
+candidate open, without claiming a synchronized counter. It requires opt-in
+firmware advertising `htv145_bootstrap_trial`; normal builds omit this operation.
+A positive reply and independent stop must still pass the same qualification
+sequence. Negative replies, missing responses and restart do not authorize a retry.
+The existing pairing sequence is unchanged. The persisted qualification record uses schema 23;
+restore the pre-update database backup when rolling back to an older gateway.
 
 Requires `htv145_dry_acceptance`, a qualified isolated dry valve, and an owner
 advertising `htv145_report_ack_tx`. All routes below require the management token

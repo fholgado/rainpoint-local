@@ -176,6 +176,18 @@ class DeviceCatalog:
                 model=str(registration.get("model") or "HTV405FRF"),
             )
             existing = valves.get(valve.link)
+            if valve.model == HTV145_MODEL:
+                # Registry fields use pairing roles. A new link has no prior
+                # receive observation to preserve, so establish the reverse
+                # command-link order explicitly. Retire superseded routes for
+                # the same device instead of letting old traffic overwrite it.
+                valves = {link: item for link, item in valves.items()
+                          if item.device_id != valve.device_id or link == valve.link}
+                if existing is None:
+                    valve = ValveDefinition(
+                        controller_endpoint=valve.valve_endpoint,
+                        valve_endpoint=valve.controller_endpoint,
+                        device_id=valve.device_id, name=valve.name, model=valve.model)
             if existing is not None:
                 # HTV145 pairing roles and control-link order differ. Keep
                 # the receive direction established by accepted telemetry.

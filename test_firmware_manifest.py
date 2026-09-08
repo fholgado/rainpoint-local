@@ -4,12 +4,47 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import subprocess
 from pathlib import Path
 
 from tools.firmware_manifest import build_manifest, verify_manifest
 
 
 class FirmwareManifestTest(unittest.TestCase):
+    def test_htv145_command_completion_restores_telemetry_base_frequency(self):
+        # Compile the actual Arduino call-site body against a small radio fake.
+        # Channel selection changes CHANNR, not the base FREQ registers. Hardware
+        # acceptance still requires post-command reports from the assigned owner.
+        source = (Path(__file__).parent / "firmware/rainpoint_bridge/src/main.cpp").read_text()
+        start = source.index("void restoreHtv145CandidateReceive() {")
+        end = source.index("\nconst char* htv145CandidateFailureClass", start)
+        function = source[start:end]
+        harness = r'''
+constexpr int kHcs026TelemetryChannel = 0;
+struct Radio {
+    int frequency = 434398811;
+    bool setChannel(int) { return true; }
+    bool restoreReceiveChannel(int) { frequency = 433031500; return true; }
+} primaryRadio;
+struct Candidate { bool listeningOnCommandCarrier = true; } htv145ControlCandidate;
+bool scanChannels = false;
+void selectChannel(int channel) { primaryRadio.setChannel(channel); }
+void reportHtv145CandidateStatus(const char*) {}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "receive_restore.cpp"
+            binary = Path(directory) / "receive_restore"
+            cpp.write_text(harness + function + r'''
+int main() {
+    restoreHtv145CandidateReceive();
+    return primaryRadio.frequency != 433031500 ||
+        htv145ControlCandidate.listeningOnCommandCarrier || !scanChannels;
+}
+''')
+            subprocess.run(["c++", "-std=c++17", str(cpp), "-o", str(binary)], check=True, capture_output=True)
+            result = subprocess.run([str(binary)], capture_output=True)
+            self.assertEqual(0, result.returncode, result.stderr.decode())
+
     def test_production_artifact_round_trip_and_tamper_detection(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             artifact = Path(temporary_directory) / "firmware.bin"

@@ -568,7 +568,11 @@ def decode_htv145_command_error(
         )
         or frame[13] not in range(0x80, 0xA0)
         or frame[14] not in {0x50, 0xD0}
-        or frame[15:36] not in {
+        # Response bytes 19--21 are the packed usage scalar, not fixed zeros.
+        # Preserve its marker/reserved-bit constraints and every other byte.
+        or not frame[19] & 0x80
+        or frame[21] & 0x7F
+        or (frame[15:19] + bytes.fromhex("800000") + frame[22:36]) not in {
             bytes.fromhex("8683004f8000000040800056800000000000000000"),
             bytes.fromhex("8683104f8000000040800056800000000000000000"),
         }

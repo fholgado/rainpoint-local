@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv145_counter_sync import Htv145CounterSync
+from .htv145_qualification import Htv145Qualification
 from .valve_protocol import decode_htv145_state_report
 
 
@@ -22,6 +23,7 @@ class Htv145Runtime:
         self.node = node
         self.restored: dict[str, Any] = {}
         self.counter_sync = Htv145CounterSync(coordinator, self._ready_node)
+        self.qualification = Htv145Qualification(self)
 
     def profiles(self) -> list[Htv145ControlProfile]:
         return [self.coordinator.restored_profile(state)
@@ -111,6 +113,9 @@ class Htv145Runtime:
         result.update(owner_available=available, ready=result["ready"] and available,
                       pairing_terminal_step_required=False, qualification="selector6_control")
         result["counter_sync"] = self.counter_sync.status(profile, now=now)
+        result["dry_qualification"] = self.qualification.status(profile, now=now)
+        result["public_control_qualified"] = self.qualification.qualified(profile)
+        result["ready"] = result["ready"] and result["public_control_qualified"]
         return result
 
     def restore_retained_counter(self, profile: Htv145ControlProfile, *, now: str) -> dict[str, Any]:
@@ -125,6 +130,8 @@ class Htv145Runtime:
 
     def request(self, profile: Htv145ControlProfile, action: str, *, now: str,
                 duration_seconds: int | None = None) -> dict[str, Any]:
+        if not self.qualification.qualified(profile):
+            raise RuntimeError("single-zone control qualification is incomplete")
         self.restore(profile, now=now)
         status = self.status(profile, now=now)
         if status["state"]["revocation_command_id"]:
@@ -165,6 +172,8 @@ class Htv145Runtime:
                 return
             try:
                 self.coordinator.observe_candidate_status(profile, message, observed_at=now)
+                if isinstance(message.get("frame"), str):
+                    self.qualification.observe(profile, bytes.fromhex(message["frame"]), now=now)
             except (KeyError, ValueError):
                 pass
 
@@ -173,6 +182,7 @@ class Htv145Runtime:
         # authorize the anchor, even if a neighboring receiver reported first.
         for profile in self.profiles():
             try:
+                self.qualification.status(profile, now=now)
                 self.counter_sync.observe(profile, frame, node_id, now=now)
             except (KeyError, ValueError, RuntimeError, PermissionError, ConnectionError):
                 pass
@@ -181,12 +191,14 @@ class Htv145Runtime:
         for profile in self.profiles():
             try:
                 self.coordinator.observe_frame(profile, frame, observed_at=now)
+                self.qualification.observe(profile, frame, now=now)
             except (KeyError, ValueError):
                 pass
 
     def tick(self, *, now: str) -> None:
         for profile in self.profiles():
             self.coordinator.readiness(profile, observed_at=now)
+            self.qualification.status(profile, now=now)
             try:
                 self.restore(profile, now=now)
                 self.counter_sync.tick(profile, now=now)

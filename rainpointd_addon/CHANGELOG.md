@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.36.4 / 2026-09-08
+
+- Integration 0.16.1 exposes single-zone start availability from the authoritative
+  gateway state. The front-garden example now uses confirmed single-zone control,
+  bounded start feedback, disabled busy controls and persistent failure messages.
+- Preserve the packed usage field in single-zone result-3 decoding; nonzero
+  usage must not hide a matching idle-anchor response. The anchor still requires
+  the reserved zero-counter close and byte-17 `10` layout; ordinary commands
+  continue to treat result 3 as failure.
+- Unified radio firmware 0.16.2 restores the full telemetry receive configuration
+  after single-zone commands, not just the channel number. Pairing is unchanged.
+
+## 0.36.3 / 2026-09-08
+
+- Add an explicit dry first-open trial after rejected single-zone idle-anchor
+  qualification. The fixed counter is a candidate, never restored authority;
+  only positive valve evidence can synchronize it. Public controls stay blocked
+  until both bounded runs and their independent stop evidence pass.
+- Require separately opted-in trial firmware; normal firmware builds omit the
+  operation. Preserve the existing pairing sequence and command waveform.
+
+## 0.36.2 / 2026-09-07
+
+- Add separately gated first-control qualification for a locally paired HTV145
+  association without stock command evidence or an inherited counter.
+- Require old-owner revocation, fresh owner idle synchronization, two fixed
+  one-minute tests, positive valve replies and independent stop evidence before
+  enabling public controls. Persist progress and interrupt unfinished tests on
+  restart; never replay a watering command.
+- Keep radio firmware and pairing waveforms unchanged. Storage schema 23 adds
+  qualification records; older-gateway rollback requires the database backup.
+
+## 0.36.1 / 2026-09-07
+
+- Recognize a single-zone valve's first valid report against the active pairing
+  session, without requiring its new controller identity to be registered first.
+- Preserve the existing HA device and correct receive direction across identity
+  changes and restarts; retire the superseded receive route.
+- Reject corrupt, foreign, cancelled, expired and uncorrelated pairing evidence.
+  Pairing does not authorize watering or reuse the old link's command counter.
+- Radio firmware and the accepted pairing waveform/sequence are unchanged.
+
 ## 0.36.0 / 2026-09-07
 
 Integration 0.16.0; unified firmware 0.16.1.

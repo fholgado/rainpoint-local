@@ -890,7 +890,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(22, restored._store.schema_version())
+            self.assertEqual(23, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1755,7 +1755,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(22, gateway.info()["storage_schema_version"])
+            self.assertEqual(23, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1766,7 +1766,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(22, migrated.info()["storage_schema_version"])
+            self.assertEqual(23, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -3057,6 +3057,50 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         )
         with urlopen(request, timeout=2) as response:
             return json.load(response)
+
+    def test_new_pairing_qualification_is_gated_and_public_controls_remain_disabled(self):
+        gateway = self.server.gateway
+        now = datetime.now(timezone.utc).isoformat()
+        controller, physical = "a1b2c380", "b1c2d38f"
+        idle = "79f4882f28a1b2c380b1c2d38f880107860580804f8000000040800056800000000000001473"
+        gateway._store.accept_paired_valve_link(controller_endpoint=controller,
+            valve_endpoint=physical, device_id="one-zone", name="Test valve",
+            model="HTV145FRF", area=None, accepted_at=now)
+        gateway._devices["one-zone"] = {"device_id": "one-zone", "name": "Test valve",
+            "model": "HTV145FRF", "observed_at": now, "state": {"raw": idle,
+            "rf_endpoint_a": controller, "rf_endpoint_b": physical}}
+        gateway.update_node(self.NODE_ID, connected=True, authenticated=True, tx_armed=False,
+            capabilities=["htv145_control_tx_candidate", "htv145_report_ack_tx", "htv145_idle_anchor"])
+        route = "/api/v1/research/htv145-control/qualification-prepare"
+        body = {"device_id": "one-zone", "node_id": self.NODE_ID,
+            "dry_valve_confirmed": True, "center_hz": 434398811,
+            "report_ack_center_hz": 433518905}
+        for token, dry in ((None, True), ("test-token", False)):
+            with self.assertRaises(HTTPError):
+                self.post_json(route, {**body, "dry_valve_confirmed": dry}, token=token)
+        gateway._htv145_acceptance_enabled = False
+        with self.assertRaises(HTTPError):
+            self.post_json(route, body)
+        gateway._htv145_acceptance_enabled = True
+        self.assertEqual([], self.commands)
+        self.assertEqual("waiting_for_idle", self.post_json(route, body)["state"])
+        self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.commands])
+        self.commands.clear()
+        for action, payload in (("open", {"duration_seconds": 60}), ("close", {}),
+                                ("sync-now", {}), ("morning-sync", {"enabled": True})):
+            with self.assertRaises(HTTPError):
+                self.post_json(f"/api/v1/devices/one-zone/valve/{action}", payload)
+        self.assertEqual([], self.commands)
+        state = next(d for d in gateway.devices() if d["device_id"] == "one-zone")["state"]
+        self.assertFalse(state["rf_control_available"])
+        self.assertFalse(state["rf_control_enabled"])
+        self.assertEqual("waiting_for_idle", state["rf_control_qualification_state"])
+        bootstrap_route = "/api/v1/research/htv145-control/qualification-bootstrap"
+        with self.assertRaises(HTTPError):
+            self.post_json(bootstrap_route, {"device_id": "one-zone"})
+        with self.assertRaises(HTTPError):
+            self.post_json(bootstrap_route, {"device_id": "one-zone", "dry_valve_confirmed": True})
+        self.assertEqual([], self.commands)
 
     def test_valve_owner_revoke_does_not_collide_with_node_revoke(self):
         from unittest.mock import patch

@@ -1163,3 +1163,31 @@ and native firmware tests. Runtime ACKs use explicit association routes and a
 calibrated frequency, echo the report counter/marker and never consume a command
 counter. The new ACK timing remains an on-air qualification question, separate
 from the already successful `.22` control transmissions.
+
+## HTV145 first control after custom-ID migration — 2026-09-07
+
+Gateway 0.36.2 / unchanged firmware 0.16.0 provisioned the selected new owner
+only after the previous radio confirmed control/ACK revocation. The dry valve
+reported idle through the new owner at 19:41:24.043671 UTC. Its reserved fixed-zero
+close anchor received a matching valve reply at 19:41:24.555802 UTC, about
+512 ms later. Reception and a command-correlated response are therefore proven;
+the earlier wait was not proof of a dead valve or failed pairing.
+
+The reply was `50 86 83 00 ...`, while the qualified result-3 anchors use
+`50 86 83 10 ...`. The strict decoder rejected it, left the counter unknown and
+stopped first-control qualification before either planned one-minute open.
+The valve subsequently sent `02/82 81 06` frames. Their purpose is not established
+by this capture, and they are not independent idle-state evidence.
+
+Earlier `00` replies in the September 5 partial-pairing fixture have no verified
+positive follow-up control. Successful anchor/control fixtures use `10`; they
+do not prove that a fresh custom-ID association has equivalent counter semantics.
+Association/setup state, command phase and an overly narrow recognizer remain
+competing explanations. Do not accept `00` as a counter merely to get past this
+gate. No pairing waveform, decoder or firmware was changed for this trial.
+
+[Redacted exchange](fixtures/htv145_custom_identity_idle_anchor_20260907.json)
+is replayed through the real runtime in a regression test: one anchor, no open,
+no retry and no public-control authority. Raw radio/gateway events remain private;
+there was no independent SDR recording. Follow-up acceptance is tracked only in
+the [roadmap](../PROJECT_ROADMAP.md).

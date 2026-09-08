@@ -52,6 +52,14 @@ private `/data` volume.
 
 ## Home Assistant development install
 
+Before a live update, check free space and back up only the affected app (for
+example `ha backups new --app local_rainpointd --name <purpose>`). An unqualified
+`ha backups new` creates a full backup, including shared research captures; this
+can exhaust storage. Do not delete source captures to make a deployment fit.
+Use `ha apps update local_rainpointd` when the source version changes; `rebuild`
+is only for the currently installed version. Verify the backup and update
+results, not just their command exit codes.
+
 1. Copy `rainpointd_addon` to `/addons/rainpointd`.
 2. Reload the app store and rebuild/install `local_rainpointd`.
 3. Copy `custom_components/rainpoint_local` to the HA configuration directory.

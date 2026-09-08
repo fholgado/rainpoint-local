@@ -265,6 +265,22 @@ class Htv145ControlCoordinator:
             expected_idle_at=expected_idle_at,
         )
 
+    def request_bootstrap_open(self, profile, *, started_at):
+        """Reserve an unproven candidate without authenticating a counter."""
+        self._require_enabled()
+        self._require_profile(self._state(profile.valve_endpoint), profile)
+        command = self._command("htv145_control_bootstrap_open",
+            controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint,
+            expected_sequence=0x81, duration_seconds=60)
+        self.store.reserve_htv145_bootstrap(profile.valve_endpoint, command["command_id"], started_at)
+        try:
+            self.sender(profile.node_id, command)
+        except Exception:
+            self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint,
+                command_id=command["command_id"], reason="bootstrap_transport_failed", observed_at=started_at)
+            raise
+        return command
+
     def request_close(
         self, profile: Htv145ControlProfile, *, started_at: str
     ) -> dict[str, Any]:
