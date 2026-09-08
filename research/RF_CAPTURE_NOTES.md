@@ -8,6 +8,46 @@ keeps chronology and correlation details out of those normative references.
 Raw IQ captures are retained locally and are not committed because they can be
 large and may include unrelated nearby traffic.
 
+## Interim reliability review — 2026-09-08
+
+A read-only Mac copy of the HA collector database passed SQLite integrity checking;
+its SHA-256 matched the live source before and after transfer. The original remains
+on HA and continues collecting through September 10 at 00:53:50 UTC (September 9,
+20:53:50 America/New_York). No watering, pairing, reboot or OTA was initiated by
+this review.
+
+The interval September 7 00:53:50–September 8 20:00:00 UTC covers 43.103 hours,
+523 snapshots and 39,071 events. No collection errors or missing event IDs were
+recorded; the largest snapshot interval was 300.073 seconds. All six sensors were
+fresh at every snapshot. The inventory remained eight devices, and each sensor's
+reported ACK-owner identity stayed unchanged and nonempty. These are configured
+ownership observations, not independent proof of every ACK's on-air waveform.
+
+| Sensor | New reports | Longest captured observation interval |
+| --- | ---: | ---: |
+| Test A | 793 | 531.1 s |
+| Test B | 799 | 516.6 s |
+| Front right | 2,039 | 337.8 s |
+| Front left | 2,261 | 563.5 s |
+| Left bed | 2,150 | 336.8 s |
+| Right bed | 814 | 520.3 s |
+
+All three nodes were connected at every five-minute sample, but the event stream
+contains 61 connection events and seven detected reboots. Snapshot availability
+therefore must not be described as uninterrupted connectivity. Front and test
+nodes also changed firmware during collection. The evidence supports continued
+sensor reporting through interventions; it does not finish a 72-hour unchanged-
+release production qualification.
+
+The four-zone event stream includes authenticated morning-anchor responses on
+September 7 and 8, plus two confirmed open commands. This alone does not identify
+which HA decision initiated each run or establish every completion. The newly
+migrated front-garden schedule has not run yet; its first eligible window is
+September 9 at 07:00 local, after the 06:15 morning-sync window. Evaluate HA's
+decision separately from RF acceptance, and never count a justified skip as a
+passed watering test. Live UI inspection still requires user-assisted verification
+or explicitly approved browser access.
+
 ## Initial local decode — 2026-08-06
 
 A Nooelec NESDR receiver captured HCS026FRF and HTV145FRF traffic. The first

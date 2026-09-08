@@ -53,6 +53,9 @@ The selected unattended implementation/review pass is complete (original list nu
   September 7: HA tab located, but Chrome's Apple Events JavaScript access is
   disabled; rendered navigation has not been verified. Do not change browser
   security settings implicitly or count callback tests as visual acceptance.
+  September 8 recheck found the HA tab, but Chrome still rejects JavaScript
+  inspection through Apple Events. Continue with user-assisted UI verification
+  or explicitly approved browser access; no browser security setting was changed.
 - [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
   soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
   open/automatic stop/early close; the other nodes retain their installed images.
@@ -295,6 +298,10 @@ retention matrix. The last-zone idle-reply correction is deployed; see the
   confirmed completion, including the new HA feedback. UI rendering and real
   push delivery still require observation; configuration checks are not watering
   acceptance. Remaining ACK waveform, fresh-association and soak gates stay open.
+  The existing six-hour reliability-review heartbeat now explicitly checks the
+  September 9 07:00 local run after its window, correlating HA decisions with
+  valve-owned confirmation. A justified moisture/weather skip is not an irrigation
+  failure or a passed watering test. This follow-up must not trigger extra watering.
 
 ### HA and irrigation
 
@@ -335,6 +342,16 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
 - [ ] Complete a persisted minimum 72-hour multi-node sensor cadence/ACK soak.
   Current collection runs September 7 00:53 UTC through September 10 00:53 UTC;
   completion still requires reviewing the evidence, not just reaching the deadline.
+- [x] Review the first 43.103 hours of the current collection: 523 snapshots,
+  39,071 events, no recorded cursor gaps/errors, and six fresh sensors at every
+  snapshot. All eight device identities remained present; each sensor retained
+  one configured ACK owner. Longest interval between captured sensor observations
+  was 563.5 seconds. See [interim evidence](research/RF_CAPTURE_NOTES.md#interim-reliability-review--2026-09-08).
+- [ ] After fleet firmware qualification, collect an unchanged-release production
+  baseline. The current window contains 61 radio connection events, seven detected
+  reboots and multiple firmware versions; it demonstrates continued sensor
+  reporting through interventions, not uninterrupted final-version stability.
+  Preserve and finish the existing window rather than resetting its deadline.
 - [ ] Include sustained stock/custom coexistence and three successful scheduled
   irrigation cycles using only local authority.
 - [ ] Include HA/gateway restart, node reboot/OTA, and device battery cycle
