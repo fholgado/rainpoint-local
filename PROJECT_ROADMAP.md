@@ -358,6 +358,15 @@ Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
 
 ## Phase 6 — open-source hardening
 
+- [ ] Isolate the intermittent network-test registry race before calling CI
+  deterministic. September 8 PR run 34270093265 failed
+  `test_htv145_pairing_handoff_rejects_unproven_frames` (`wrong_session`):
+  a direct private-store registry read returned an empty list. The same commit
+  passed the branch CI run and 521 local tests (two skips); 20 repetitions of
+  the entire rejection-variant test also passed. Unsynchronized test setup/read
+  access is a hypothesis, not a proven cause. Preserve rejection assertions and
+  pairing behavior until a deterministic interleaving reproduces the failure.
+
 - [x] Complete the production installation-assumption audit. Empty defaults,
   accepted-observation identity recovery, evidence-based ACK routes and generic
   pairing profiles are implemented; historical profiles live only in tests and
