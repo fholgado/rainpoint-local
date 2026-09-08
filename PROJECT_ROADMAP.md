@@ -128,6 +128,11 @@ and version history, not this checklist.
   Follow-up on gateway 0.36.1 / firmware 0.16.0 confirmed the new-ID report through
   the selected node, preserved the existing HA device, and finalized/disarmed
   pairing. ACK/control enrollment and sustained reporting remain open.
+  September 8: an unchanged five-minute, user-initiated re-pair through the same
+  selected node again reached 5/6, produced a fresh custom-ID idle report, retained
+  the HA device and finalized/disarmed normally. No battery cycle, firmware
+  change or control probe was performed. Prior failed control qualification is
+  retained; repeat association acceptance does not authenticate a counter.
 - [ ] Bridge fresh local pairing to first-control qualification without a stock
   command or copied counter. Previous dry acceptance required a passive command
   on the same link, and runtime enrollment requires a positive exchange; neither
