@@ -3095,6 +3095,12 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         self.assertFalse(state["rf_control_available"])
         self.assertFalse(state["rf_control_enabled"])
         self.assertEqual("waiting_for_idle", state["rf_control_qualification_state"])
+        bootstrap_route = "/api/v1/research/htv145-control/qualification-bootstrap"
+        with self.assertRaises(HTTPError):
+            self.post_json(bootstrap_route, {"device_id": "one-zone"})
+        with self.assertRaises(HTTPError):
+            self.post_json(bootstrap_route, {"device_id": "one-zone", "dry_valve_confirmed": True})
+        self.assertEqual([], self.commands)
 
     def test_valve_owner_revoke_does_not_collide_with_node_revoke(self):
         from unittest.mock import patch

@@ -164,6 +164,11 @@ and version history, not this checklist.
   disabled again; all three nodes reconnected and production four-zone controls
   remained available. Compare command acceptance/setup against a proven positive
   exchange next; do not change the frozen pairing prefix or treat this as RF silence.
+  Add a separately compiled, explicit dry first-open trial using the captured
+  counter-`81` / 60-second command. The earlier positive association opened before
+  idle-anchor testing; initialization and recovery are not proven equivalent.
+  Candidate reservation must not authenticate a counter, replay after restart,
+  retry automatically, or enable public controls. Physical result pending.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.

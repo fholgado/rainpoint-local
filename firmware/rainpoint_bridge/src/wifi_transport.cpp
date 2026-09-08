@@ -276,6 +276,9 @@ void WifiTransport::handleGatewayLine(const String& line) {
              type == "htv145_control_open" ||
              type == "htv145_control_close" ||
              type == "htv145_control_idle_anchor" ||
+#ifdef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
+             type == "htv145_control_bootstrap_open" ||
+#endif
              type == "htv145_control_revoke" ||
              type == "htv145_control_status"
          || isHtv405NetworkCommand(type.c_str())
@@ -320,6 +323,9 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"valve_control_tx_candidate\""
         ",\"htv405_bounded_sync_wait\""
         ",\"htv145_control_tx_candidate\",\"htv145_report_ack_tx\",\"htv145_idle_anchor\""
+#ifdef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
+        ",\"htv145_bootstrap_trial\""
+#endif
         ",\"valve_pairing_tx_candidate\""
         ",\"htv405_auto_identity_pairing\""
         ",\"htv145_pairing_tx_candidate\""

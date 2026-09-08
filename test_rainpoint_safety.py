@@ -2010,6 +2010,62 @@ class Htv145QualificationTest(unittest.TestCase):
         self.assertEqual("failed", self.q.status(self.profile, now=self.at(20))["state"])
         self.assertFalse(self.q.qualified(self.profile))
 
+    def test_explicit_bootstrap_does_not_authenticate_candidate_before_positive_reply(self):
+        self.prepare()
+        self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(1))
+        fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+        self.runtime.observe_frame(bytes.fromhex(fixture["response_frame"]), now=self.at(2))
+        self.runtime.status(self.profile, now=self.at(3))
+        with self.assertRaisesRegex(RuntimeError, "firmware"):
+            self.q.bootstrap(self.profile, now=self.at(20))
+        self.node["capabilities"].append("htv145_bootstrap_trial")
+        self.q.bootstrap(self.profile, now=self.at(20))
+        state = self.store.htv145_control_states()[0]
+        self.assertFalse(state["counter_synchronized"])
+        self.assertIsNone(state["next_sequence"])
+        self.assertEqual(0x81, state["pending_sequence"])
+        self.assertEqual("htv145_control_bootstrap_open", self.sent[-1][1]["type"])
+        self.assertFalse(self.q.qualified(self.profile))
+        with self.assertRaises(RuntimeError):
+            self.q.bootstrap(self.profile, now=self.at(21))
+        self.runtime.observe_frame(self.response, now=self.at(21))
+        self.assertTrue(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.assertEqual("watering", self.q.status(self.profile, now=self.at(22))["state"])
+        self.assertEqual("positive_first_open_response", self.store.htv145_counter_sync(self.profile.valve_endpoint)["reason"])
+        self.runtime.observe_frame(self.idle, now=self.at(82))
+        self.assertEqual("ready_for_early_stop_test", self.q.status(self.profile, now=self.at(83))["state"])
+        self.assertFalse(self.q.qualified(self.profile))
+
+    def test_bootstrap_negative_and_restart_never_replay_or_enable_public_control(self):
+        from rainpointd.htv145_runtime import Htv145Runtime
+        self.prepare()
+        self.q._fail(self.store.htv145_qualification(self.profile.valve_endpoint), "idle_anchor_failed")
+        self.runtime.observe_frame(self.idle, now=self.at(1))
+        self.node["capabilities"].append("htv145_bootstrap_trial")
+        self.q.bootstrap(self.profile, now=self.at(20))
+        self.sent.clear()
+        restarted = Htv145Runtime(self.coordinator, lambda _: self.node)
+        self.assertFalse(restarted.qualification.qualified(self.profile))
+        self.assertEqual("interrupted", self.store.htv145_qualification(self.profile.valve_endpoint)["state"])
+        self.assertEqual([], self.sent)
+
+    def test_negative_bootstrap_reply_leaves_counter_unknown_and_consumes_trial(self):
+        self.prepare()
+        self.q._fail(self.store.htv145_qualification(self.profile.valve_endpoint), "idle_anchor_failed")
+        self.runtime.observe_frame(self.idle, now=self.at(1))
+        self.node["capabilities"].append("htv145_bootstrap_trial")
+        self.q.bootstrap(self.profile, now=self.at(20))
+        fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+        negative = bytearray.fromhex(fixture["response_frame"])
+        negative[13] = 0x81
+        negative[14] = 0xd0
+        negative[-2:] = (binascii.crc_hqx(negative[:-2], 0) ^ 0x4f03).to_bytes(2, "big")
+        self.runtime.observe_frame(bytes(negative), now=self.at(21))
+        self.assertFalse(self.store.htv145_control_states()[0]["counter_synchronized"])
+        self.assertEqual("failed", self.q.status(self.profile, now=self.at(22))["state"])
+        with self.assertRaises(RuntimeError):
+            self.q.bootstrap(self.profile, now=self.at(40))
+
     def test_completed_qualification_survives_database_reopen_without_actuation(self):
         from rainpointd.htv145_runtime import Htv145Runtime
         self.automatic_stop()

@@ -2140,6 +2140,27 @@ class ESP32NetworkTest(unittest.TestCase):
                     self.server.send_command(NODE_A,command)
             stream.close(); connection.close()
 
+    def test_bootstrap_trial_requires_explicit_capability_and_fixed_command(self):
+        command = {"type": "htv145_control_bootstrap_open", "command_id": "76" * 16,
+                   "controller_endpoint": "b1c2d38f", "valve_endpoint": "a1b2c380",
+                   "expected_sequence": 0x81, "duration_seconds": 60}
+        for supported in (False, True):
+            capabilities = ["rx", "sensor_pairing_tx", "htv145_control_tx_candidate"]
+            if supported:
+                capabilities.append("htv145_bootstrap_trial")
+            connection, stream, _ = self._connect(NODE_A, TOKEN_A, protocol_version=2, capabilities=capabilities)
+            if supported:
+                for change in ({"duration_seconds": 120}, {"expected_sequence": 0x80}):
+                    with self.assertRaises(ValueError):
+                        self.server.send_command(NODE_A, {**command, **change})
+                self.server.send_command(NODE_A, command)
+                self.assertEqual(command, json.loads(stream.readline()))
+            else:
+                with self.assertRaisesRegex(ValueError, "htv145_bootstrap_trial"):
+                    self.server.send_command(NODE_A, command)
+            stream.close()
+            connection.close()
+
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,

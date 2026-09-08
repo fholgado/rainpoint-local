@@ -807,6 +807,10 @@ class Gateway:
                     raise ValueError("device has no provisional qualification owner")
                 if action == "qualification-status":
                     return runtime.qualification.status(profile, now=timestamp)
+                if action == "qualification-bootstrap":
+                    if body.get("dry_valve_confirmed") is not True:
+                        raise ValueError("confirm the valve is disconnected from water")
+                    return runtime.qualification.bootstrap(profile, now=timestamp)
                 return runtime.qualification.action(profile, action.removeprefix("qualification-"), now=timestamp)
             if action == "enroll":
                 profile = Htv145ControlProfile(**body["profile"])

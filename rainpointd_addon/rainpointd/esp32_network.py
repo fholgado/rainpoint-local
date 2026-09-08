@@ -156,6 +156,7 @@ class ESP32NetworkServer:
             "htv145_control_open",
             "htv145_control_close",
             "htv145_control_idle_anchor",
+            "htv145_control_bootstrap_open",
             "htv145_control_status",
             "htv145_control_revoke",
         }:
@@ -184,6 +185,10 @@ class ESP32NetworkServer:
             required_capability = "htv405_routine_ack_tx"
         elif command_type == "htv145_control_idle_anchor":
             required_capability = "htv145_idle_anchor"
+        elif command_type == "htv145_control_bootstrap_open":
+            if message.get("expected_sequence") != 0x81 or message.get("duration_seconds") != 60:
+                raise ValueError("bootstrap trial permits only counter 0x81 and 60 seconds")
+            required_capability = "htv145_bootstrap_trial"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -709,6 +714,7 @@ class ESP32NetworkServer:
                         "htv145_control_tx_candidate",
                         "htv145_report_ack_tx",
                         "htv145_idle_anchor",
+                        "htv145_bootstrap_trial",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                     }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.36.3 / 2026-09-08
+
+- Add an explicit dry first-open trial after rejected single-zone idle-anchor
+  qualification. The fixed counter is a candidate, never restored authority;
+  only positive valve evidence can synchronize it. Public controls stay blocked
+  until both bounded runs and their independent stop evidence pass.
+- Require separately opted-in trial firmware; normal firmware builds omit the
+  operation. Preserve the existing pairing sequence and command waveform.
+
 ## 0.36.2 / 2026-09-07
 
 - Add separately gated first-control qualification for a locally paired HTV145

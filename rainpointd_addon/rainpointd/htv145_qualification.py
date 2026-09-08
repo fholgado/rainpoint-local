@@ -130,6 +130,39 @@ class Htv145Qualification:
         self._save(data)
         return data
 
+    def bootstrap(self, profile, *, now):
+        """One explicit dry trial of the captured first-open candidate, not a seed.
+
+        Kept separate from normal opens and the close-only synchronization API.
+        Experimental firmware must advertise support; no arbitrary counter,
+        duration, automatic retry, or successful qualification is implied.
+        """
+        node = self.runtime._ready_node(profile)
+        if "htv145_bootstrap_trial" not in node.get("capabilities", []):
+            raise RuntimeError("bootstrap requires explicitly enabled trial firmware")
+        data = self.store.htv145_qualification(profile.valve_endpoint)
+        if (not data or data["profile"] != asdict(profile) or data["state"] != "failed"
+                or data["reason"] != "idle_anchor_failed" or data["open_count"] != 0
+                or data.get("bootstrap_attempted")):
+            raise RuntimeError("bootstrap requires an unused failed idle-anchor qualification")
+        status = self.runtime.coordinator.readiness(profile, observed_at=now)
+        if (not status["fresh_state"] or status["state"]["confirmed_watering"] is not False
+                or status["state"]["pending_command_id"] or status["anomaly"]):
+            raise RuntimeError("bootstrap requires fresh idle and no unresolved operation")
+        data.update(state="opening", reason="unverified_first_open_trial", bootstrap_attempted=True,
+                    open_count=1, open_started_at=now, command_started_at=now,
+                    node_epoch=node.get("connected_at"),
+                    deadline=(datetime.fromisoformat(now) + timedelta(minutes=15)).isoformat())
+        self._save(data)
+        try:
+            command = self.runtime.coordinator.request_bootstrap_open(profile, started_at=now)
+        except Exception:
+            self._fail(data, "bootstrap_dispatch_failed")
+            raise
+        data.update(command_id=command["command_id"], expected_sequence=0x81)
+        self._save(data)
+        return data
+
     def observe(self, profile, frame, *, now):
         data = self.store.htv145_qualification(profile.valve_endpoint)
         if not data or data["state"] in TERMINAL or data["profile"] != asdict(profile):
@@ -158,6 +191,11 @@ class Htv145Qualification:
                     or (expected_watering and frame[27:30] != bytes.fromhex("9e0000"))):
                 return
             data["evidence"].append({"action": "open" if expected_watering else "close", "frame": frame.hex(), "observed_at": now})
+            if expected_watering and data.get("bootstrap_attempted") and data["open_count"] == 1:
+                sync = self.store.htv145_counter_sync(profile.valve_endpoint)
+                sync.update(state="ready", reason="positive_first_open_response", command_id=None,
+                            deadline=None, last_success_at=now, response_frame=frame.hex())
+                self.store.save_htv145_counter_sync(profile.valve_endpoint, sync)
             data.update(state="watering" if expected_watering else "waiting_final_idle", positive_response_at=now)
             self._save(data)
             return

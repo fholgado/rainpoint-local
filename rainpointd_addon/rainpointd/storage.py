@@ -3398,6 +3398,28 @@ class SQLiteEventStore:
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]
 
+    def reserve_htv145_bootstrap(self, valve_endpoint, command_id, started_at):
+        """Reserve only the fixed dry-test open, keeping candidate != known state."""
+        with self._connection:
+            row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            trial = self.htv145_qualification(valve_endpoint)
+            now = datetime.fromisoformat(started_at)
+            if (row is None or row["pending_command_id"] or row["revocation_command_id"]
+                    or row["counter_synchronized"] or row["confirmed_watering"] != 0
+                    or not row["confirmed_at"] or not 0 <= (now - datetime.fromisoformat(row["confirmed_at"])).total_seconds() <= 3600
+                    or trial.get("state") != "opening" or trial.get("reason") != "unverified_first_open_trial"
+                    or trial.get("command_started_at") != started_at or trial.get("open_count") != 1
+                    or not trial.get("bootstrap_attempted")):
+                raise RuntimeError("bootstrap requires a reserved explicit dry qualification")
+            if row["last_command_started_at"] and (now - datetime.fromisoformat(row["last_command_started_at"])).total_seconds() < 15:
+                raise RuntimeError("HTV145 commands require a 15-second hardware interval")
+            self._connection.execute("""UPDATE htv145_control_state SET next_sequence=NULL,
+                counter_synchronized=0, counter_source=NULL, pending_command_id=?, pending_action='open',
+                pending_sequence=129, pending_duration_seconds=60, pending_started_at=?, expected_idle_at=?,
+                last_command_started_at=?, last_result='unverified_bootstrap_pending', updated_at=? WHERE valve_endpoint=?""",
+                (command_id, started_at, (now + timedelta(seconds=60)).isoformat(), started_at, started_at, valve_endpoint))
+        return self.htv145_control_states(valve_endpoint)[0]
+
     def reserve_htv145_command(
         self,
         *,
