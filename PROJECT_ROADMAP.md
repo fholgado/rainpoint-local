@@ -157,6 +157,13 @@ and version history, not this checklist.
   The captured-exchange regression and full 511-test suite pass (two skipped),
   as do native protocol tests. Research controls are disabled again; the selected
   provisional ACK owner remains configured, with public watering blocked.
+  September 8 unchanged re-pair follow-up: the same selected node and firmware
+  again received a byte-for-byte identical negative anchor reply after fresh idle
+  telemetry (one close-only attempt; no opens). Re-pairing alone did not establish
+  command authority. Subsequent idle reporting continued. Research access was
+  disabled again; all three nodes reconnected and production four-zone controls
+  remained available. Compare command acceptance/setup against a proven positive
+  exchange next; do not change the frozen pairing prefix or treat this as RF silence.
 - [ ] Complete the controlled lifecycle matrix with fresh batteries: repeated
   identical stock reset/enrollment, retained long-press re-pair, and battery
   rejoin. Retain full exchanges, ordering, app metadata, and independent outcomes.
