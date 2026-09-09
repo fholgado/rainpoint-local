@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.37.0 supports authenticated network radio nodes, receive-only USB
+Version 0.37.1 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -235,6 +235,11 @@ to eight commands so every persisted ACK assignment can be restored after a
 reconnect or OTA reboot.
 After the first OTA-capable image is installed by USB, compatible releases can
 be installed from the radio node's Home Assistant firmware Update entity.
+Firmware delivery permits slow flash-write readers with 16 KiB socket writes,
+a ten-second per-write timeout, and a 120-second total transfer deadline. At
+most two firmware downloads run concurrently; additional requests receive 503
+without consuming the ordinary API's full worker capacity. These transport
+limits do not replace the node's byte-count, SHA-256 or healthy-boot checks.
 An authenticated reconnect atomically replaces a stale session for the same
 managed node, so a software reboot or power loss does not require restarting
 the custom local gateway.

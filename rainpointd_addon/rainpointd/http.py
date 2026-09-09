@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .gateway import API_VERSION, Gateway
+
+
+_LOGGER = logging.getLogger(__name__)
+FIRMWARE_CHUNK_BYTES = 16 * 1024
+FIRMWARE_PROGRESS_TIMEOUT_SECONDS = 10
+FIRMWARE_TRANSFER_TIMEOUT_SECONDS = 120
 
 
 class RainPointHTTPServer(ThreadingHTTPServer):
@@ -20,6 +28,7 @@ class RainPointHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, *args, **kwargs):
         self._request_slots = threading.BoundedSemaphore(32)
+        self._firmware_slots = threading.BoundedSemaphore(2)
         super().__init__(*args, **kwargs)
 
     def get_request(self):
@@ -97,18 +106,24 @@ class RequestHandler(BaseHTTPRequestHandler):
             release_id = parsed.path[
                 len(firmware_prefix) : -len(".bin")
             ]
-            try:
-                body, digest = self.server.gateway.firmware_artifact(release_id)
-            except (OSError, ValueError):
-                self._json(404, {"error": "firmware artifact not found"})
+            if not self.server._firmware_slots.acquire(blocking=False):
+                self._json(503, {"error": "firmware download capacity reached"})
                 return
-            self.send_response(200)
-            self.send_header("Content-Type", "application/octet-stream")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
-            self.send_header("ETag", f'"sha256:{digest}"')
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                try:
+                    body, digest = self.server.gateway.firmware_artifact(release_id)
+                except (OSError, ValueError):
+                    self._json(404, {"error": "firmware artifact not found"})
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                self.send_header("ETag", f'"sha256:{digest}"')
+                self.end_headers()
+                self._write_firmware(body, release_id)
+            finally:
+                self.server._firmware_slots.release()
             return
         if parsed.path == f"/api/{API_VERSION}/receivers":
             self._json(200, {"receivers": self.server.gateway.receivers()})
@@ -151,6 +166,44 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
             return
         self._json(404, {"error": "not found"})
+
+    def _write_firmware(self, body: bytes, release_id: str) -> None:
+        """Allow flash-write backpressure without extending ordinary API limits.
+
+        A single sendall gives the entire image the socket's ten-second budget.
+        Chunked writes instead bound each blocked write, plus the whole transfer.
+        Queued bytes are not proof that the node received or verified an image.
+        """
+        previous_timeout = self.connection.gettimeout()
+        started = time.monotonic()
+        deadline = started + FIRMWARE_TRANSFER_TIMEOUT_SECONDS
+        queued_bytes = 0
+        timeout_reason = "progress_timeout"
+        content = memoryview(body)
+        try:
+            while queued_bytes < len(body):
+                remaining = deadline - time.monotonic()
+                timeout_reason = (
+                    "transfer_deadline" if remaining <= FIRMWARE_PROGRESS_TIMEOUT_SECONDS
+                    else "progress_timeout"
+                )
+                if remaining <= 0:
+                    raise TimeoutError("firmware transfer deadline")
+                self.connection.settimeout(min(FIRMWARE_PROGRESS_TIMEOUT_SECONDS, remaining))
+                chunk = content[queued_bytes:queued_bytes + FIRMWARE_CHUNK_BYTES]
+                if self.wfile.write(chunk) != len(chunk):
+                    raise OSError("incomplete firmware chunk write")
+                queued_bytes += len(chunk)
+        except OSError as error:
+            self.close_connection = True
+            reason = timeout_reason if isinstance(error, TimeoutError) else type(error).__name__
+            _LOGGER.warning(
+                "Firmware transfer incomplete: release=%s queued_bytes=%d total_bytes=%d "
+                "elapsed_seconds=%.3f reason=%s",
+                release_id, queued_bytes, len(body), time.monotonic() - started, reason,
+            )
+        finally:
+            self.connection.settimeout(previous_timeout)
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         parsed = urlparse(self.path)

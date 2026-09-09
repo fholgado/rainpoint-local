@@ -95,7 +95,23 @@ The selected unattended implementation/review pass is complete (original list nu
   Better RSSI did not resolve the interruption; weak signal alone is insufficient
   to explain it. The relocation also power-cycled the node, so this is not an
   isolated signal-strength experiment.
+  Resolved later September 9 by gateway 0.37.1: instrumented whole-image HTTP
+  writes timed out after 10.001 seconds. Bounded streaming (16 KiB writes,
+  ten-second per-write limit, 120-second overall deadline, two download slots)
+  fixed the real-socket regression and the next identical Front Yard update.
+  Front Yard booted 0.17.0 after approximately 18 seconds and confirmed gateway
+  and radio health by 76 seconds, with no pending rollback, two restored sensor
+  ACK assignments, zero ACK failures, fresh RF frames and retained authenticated
+  single-zone counter. All three radios now run 0.17.0; no post-update watering
+  was requested, so this completes fleet installation, not functional soak or
+  fresh onboarding qualification. Gateway restart and OTA are soak interventions.
   No pairing or extra watering was triggered during this deployment.
+- [x] Diagnose and fix late Front Yard OTA truncation without weakening image
+  verification or rollback. Gateway 0.37.1 is deployed; the original affected
+  node passed the same-image update after the server fix. Validation: 536 Python
+  tests passed (two optional skips), native protocol tests and package smoke
+  passed, deployed source hash matched. Evidence and limits:
+  `research/OTA_HARDWARE_VALIDATION.md`.
 - [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
   radio, retain the custom gateway identity, persist the accepted pairing owner,
   and expose separate paired/control-verification states in HA. Verification
@@ -147,9 +163,10 @@ The selected unattended implementation/review pass is complete (original list nu
   gateway identity, device associations and all three authenticated radios.
   No RF sequence, credential, schedule or control behavior changed.
 
-Gateway 0.37.0 and integration 0.17.0 are deployed. Standard firmware retains the
+Gateway 0.37.1 and integration 0.17.0 are deployed. Standard firmware retains the
 post-command RX restoration fix without changing the frozen pairing sequence.
-Current fleet: OTA Test and Vegetable Garden 0.17.0; Front Yard 0.16.2.
+Current fleet: OTA Test, Vegetable Garden and Front Yard all run 0.17.0 with
+healthy-boot confirmation. Fleet soak and physical onboarding gates remain open.
 Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
@@ -479,6 +496,11 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   The subsequent near-AP retry failed at approximately 89% with -54 dBm signal.
   Preserve that negative result; investigate connection-close versus stalled-read
   behavior rather than assuming that further placement changes will fix OTA.
+  The later instrumented trial proved a ten-second whole-image server-write
+  timeout. Gateway 0.37.1's bounded streaming fixed the slow-reader regression
+  and the next real Front Yard update, including healthy-boot confirmation and
+  restored ownership. This establishes the observed transfer cause, not all
+  possible OTA failure modes or the remaining rollback fault-injection gates.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
