@@ -396,25 +396,21 @@ def automatic_htv405_profile_metadata() -> dict[str, Any]:
 
 
 def automatic_htv145_profile_metadata() -> dict[str, Any]:
-    """Describe the bounded, research-only HTV145 enrollment profile."""
+    """Describe identity-discovered enrollment, separate from control verification."""
     return {
         "profile_id": AUTOMATIC_HTV145_PROFILE_ID,
         "model": "HTV145FRF",
         "device_category": "valve",
         "display_name": "HTV145 single-zone water timer",
-        "user_pairing_supported": False,
-        "required_node_capability": "htv145_pairing_tx_candidate",
-        "automatic_discovery": False,
+        "user_pairing_supported": True,
+        "required_node_capability": "htv145_auto_identity_pairing",
+        "automatic_discovery": True,
         "experimental": True,
         "transmit_enabled": True,
         "valve_control_enabled": False,
-        "association_inputs_required": [
-            "factory_endpoint",
-            "valve_route",
-            "companion_endpoint",
-        ],
-        "controller_identity_default": "retained_association",
-        "retained_association_identity_optional": False,
+        "association_inputs_required": [],
+        "controller_identity_default": "persistent_local_gateway",
+        "retained_association_identity_optional": True,
         "step_count": len(HTV145_STEPS),
         "reply_delay_ms": REPLY_DELAY_MS,
         "calibrated_frequency_offset_hz": HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ,
@@ -423,7 +419,7 @@ def automatic_htv145_profile_metadata() -> dict[str, Any]:
         "configuration_start_delay_ms": HTV145_CONFIGURATION_START_DELAY_MS,
         "configuration_wake_symbols": HTV145_CONFIGURATION_WAKE_SYMBOLS,
         "evidence": (
-            "complete successful stock-gateway enrollment captured "
-            "continuously on 2026-08-25; local physical validation pending"
+            "local counter-2 association and bounded controls verified; automatic "
+            "onboarding requires firmware support and separate consented control verification"
         ),
     }

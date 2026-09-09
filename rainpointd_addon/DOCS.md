@@ -5,7 +5,7 @@ This experimental app runs the local `rainpointd` API used by the
 
 ## Current behavior
 
-Version 0.36.4 supports authenticated network radio nodes, receive-only USB
+Version 0.37.0 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -303,9 +303,21 @@ installation-specific device IDs and filters radio-node choices by the
 selected model's required capability. Automatic HTV405 identity discovery has
 its own `htv405_auto_identity_pairing` capability, so older firmware that
 supports only explicit valve pairing is not offered by this flow.
-`hcs026_auto_v1` and
-`htv405_auto_candidate_v1` are currently user-pairable; the unaccepted HTV145
-transmitter remains hidden behind its research build.
+`hcs026_auto_v1`, `htv405_auto_candidate_v1` and `htv145_auto_candidate_v1`
+are user-pairable. HTV145 discovery requires `htv145_auto_identity_pairing`;
+control verification additionally requires `htv145_commissioning`. Pairing
+does not authorize watering. The [onboarding guide](../NODE_ONBOARDING.md)
+describes the separately consented bounded tests and current capacity limits.
+
+Normal single-zone verification uses authenticated POST requests to
+`/api/v1/commissioning/{status,begin,advance,cancel}` with `device_id` and, for
+mutating actions, the current `pairing_command_id` returned by status. Begin
+also requires `test_watering_confirmed: true`. RF identities, frequencies and
+counters are derived on the gateway and are not client inputs. This flow does
+not require the research setting. Its fixed first-open uses the separate
+`htv145_control_commission_open` command; the old research bootstrap route and
+`htv145_bootstrap_trial` remain gated. These source changes are staged; see the
+roadmap for deployment and end-to-end acceptance status.
 
 Users are not asked to identify RF endpoints or choose a transcript. For
 HCS026, the selected node adopts the first strict sensor factory announcement,

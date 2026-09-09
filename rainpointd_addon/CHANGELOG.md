@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.37.0 / 2026-09-08
+
+- Integration 0.17.0 lists HTV145 single-zone valves under Valves, discovers
+  identity automatically, and offers a separate consented control-verification
+  flow. Verify valve controls returns to pending setup without entering RF IDs.
+- Unified firmware 0.17.0 preserves the frozen counter-2 pairing waveform and
+  adds explicit automatic-discovery and commissioning capabilities. Older radios
+  cannot be selected for automatic HTV145 onboarding until updated.
+- Persist the accepted pairing owner and scope verification to that pairing.
+  Confirm old-owner revocation before provisioning the new owner. Use a fresh
+  idle anchor, with one bounded first-open initialization if needed, followed
+  by positive open/close and independent automatic/early-stop evidence.
+- Require explicit consent for two fixed 60-second test runs. Do not retry an
+  unconfirmed open, replay after restart, or enable public controls from pairing
+  alone. Cancellation, reconnect, expiry and failure remain visible in HA.
+- Existing qualified associations are unchanged by upgrade. This candidate is
+  not deployed; the complete automatic onboarding path needs a physical test.
+
 ## Integration 0.16.2 / 2026-09-08
 
 - Label intermediate pairing forms Next and provide review Back navigation to

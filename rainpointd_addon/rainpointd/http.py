@@ -208,6 +208,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             htv145_acceptance_prefix
         )
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
+        commissioning_prefix = f"{base}/commissioning/"
+        commissioning_path = parsed.path.startswith(commissioning_prefix)
         node_path = parsed.path.startswith(f"{base}/nodes/")
         if (
             parsed.path == f"{base}/learning"
@@ -217,12 +219,24 @@ class RequestHandler(BaseHTTPRequestHandler):
             or htv145_control_path
             or htv145_acceptance_path
             or pairing_path
+            or commissioning_path
             or node_path
         ):
             if not self._authorize_registry_write():
                 return
             try:
                 body = self._request_json()
+                if commissioning_path:
+                    action = parsed.path[len(commissioning_prefix):]
+                    if action not in {"status", "begin", "advance", "cancel"}:
+                        self._json(404, {"error": "not found"})
+                        return
+                    result = self.server.gateway.commission_single_valve(
+                        str(body.get("device_id", "")), action,
+                        pairing_command_id=body.get("pairing_command_id"),
+                        consent=body.get("test_watering_confirmed") is True)
+                    self._json(200, result)
+                    return
                 if parsed.path == f"{base}/learning":
                     result = self.server.gateway.start_learning(
                         int(body.get("duration_seconds", 300))

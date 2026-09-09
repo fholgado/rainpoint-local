@@ -13,7 +13,7 @@ retired = [name for name in os.environ if name.startswith("RAINPOINT_") and
 if retired:
     raise ValueError("Retired firmware flags: " + ", ".join(sorted(retired)))
 version = os.environ.get("RAINPOINT_FIRMWARE_VERSION",
-                         "0.16.2")
+                         "0.17.0")
 if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", version):
     raise ValueError("RAINPOINT_FIRMWARE_VERSION is invalid")
 variant = "unified"
