@@ -22,6 +22,8 @@ radio node**.
 
 The flow auto-advances when confirmation/authentication is observed. Adding a
 second node does not create another integration entry.
+The management menu does not offer manual setup-code registration. Use the
+discovered node's adoption flow rather than entering hardware IDs or tokens.
 
 ## Authentication and lifecycle
 
@@ -70,11 +72,21 @@ Useful placement targets:
 
 ## Pairing devices through a node
 
-Use **RainPoint Local → Configure → Pair sensor**, select the closest node, and
-follow the progress modal. The stock RainPoint gateway must be powered off only
-during the brief exchange so it cannot race the selected transmitter. Do not
-delete an existing HA device before reassociation; stable endpoint matching
-preserves its entities and history.
+Use **RainPoint Local → Configure → Add a RainPoint device**, choose **Sensors**
+or **Valves**, select a supported model, then choose the closest capable node.
+**Next** advances to review without transmitting. Review offers **Back** to
+change the radio/window, **Change device model**, and **Start pairing**. Close
+the dialog with **X** to exit; only **Start pairing** arms a radio. The native
+HA forms do not have footer Back buttons on every step.
 
-Valve onboarding will use the same node selection model only after the isolated
-test-valve pairing and close-first safety sequence are physically validated.
+Keep the stock RainPoint gateway powered off during the exchange so it cannot
+race the selected transmitter. Long-term stock/local coexistence remains a
+separate qualification gate in the [roadmap](PROJECT_ROADMAP.md). Do not delete
+an existing HA device before reassociation; stable endpoint matching preserves
+its entities and history.
+
+HCS02x sensors and HTV405 four-zone valves appear in the normal model picker.
+HTV145 single-zone generic enrollment is not yet offered: its current workflow
+requires association inputs and separate first-control qualification. An
+already-qualified single-zone valve can use normal HA controls; that does not
+make generic single-zone onboarding complete.

@@ -525,7 +525,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 },
             )
         menu_options = (
-            ["add_device", "add_radio_node", "remove_radio_node"]
+            ["add_device", "remove_radio_node"]
             if self._token
             else ["authenticate_gateway"]
         )
@@ -728,6 +728,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_pair_device()
         return self.async_show_form(
             step_id=step_id,
+            last_step=False,
             data_schema=vol.Schema(
                 {vol.Required("profile_id"): vol.In(choices)}
             ),
@@ -834,6 +835,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="pair_device",
+            last_step=False,
             data_schema=vol.Schema(
                 {
                     vol.Required("node_id", default=default_node): vol.In(
@@ -853,7 +855,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
     async def async_step_pairing_review(self, user_input=None) -> FlowResult:
         """Review and navigate backward before arming any radio."""
         return self.async_show_menu(step_id="pairing_review", menu_options=[
-            "start_pairing", "change_pairing_radio", "change_pairing_model", "cancel_add_device"
+            "start_pairing", "change_pairing_model", "change_pairing_radio"
         ], description_placeholders={
             "device_name": self._pairing_profile.display_name,
             "node_name": self._pairing_nodes.get(self._pairing_request.get("node_id"), "Unavailable radio"),

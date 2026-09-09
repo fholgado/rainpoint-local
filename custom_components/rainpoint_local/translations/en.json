@@ -61,7 +61,6 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "add_device": "Add a RainPoint device",
-          "add_radio_node": "Add with setup code (advanced)",
           "remove_radio_node": "Remove a radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
@@ -76,7 +75,7 @@
       },
       "add_radio_node": {
         "title": "Add custom local radio node",
-        "description": "Register the stable node ID and 64-character setup token shown by the provisioned ESP32 firmware. The credential is stored privately by the custom local gateway.",
+        "description": "Manual fallback for a custom ESP32 radio node, not for pairing a sensor or valve. Normally, configure the radio's Wi-Fi, then adopt it from Discovered in Devices & services and confirm with its BOOT button. Use this form only when you already have a provisioned radio's ID and 64-character setup token. The credential is stored privately by the custom local gateway.",
         "data": {
           "node_id": "Radio node ID",
           "node_token": "Node setup token",
@@ -148,12 +147,11 @@
       },
       "pairing_review": {
         "title": "Review pairing",
-        "description": "Pair {device_name} using {node_name}. The radio will listen for {duration_seconds} seconds after you select Start pairing.",
+        "description": "Pair {device_name} using {node_name}. The radio will listen for {duration_seconds} seconds after you select Start pairing. Back returns to the radio and timeout settings without starting pairing. Close this dialog with X to exit.",
         "menu_options": {
           "start_pairing": "Start pairing",
-          "change_pairing_radio": "Change radio or timeout",
           "change_pairing_model": "Change device model",
-          "cancel_add_device": "Cancel"
+          "change_pairing_radio": "Back"
         }
       }
     },

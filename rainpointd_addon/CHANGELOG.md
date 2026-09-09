@@ -1,5 +1,13 @@
 # Changelog
 
+## Integration 0.16.2 / 2026-09-08
+
+- Label intermediate pairing forms Next and provide review Back navigation to
+  retained radio/timeout choices. Closing the dialog remains the way to exit.
+- Remove manual setup-code registration from the management menu; normal
+  discovery/BOOT radio adoption does not require entering IDs or setup tokens.
+- No gateway, firmware, pairing-waveform or watering-control changes.
+
 ## 0.36.4 / 2026-09-08
 
 - Integration 0.16.1 exposes single-zone start availability from the authoritative
