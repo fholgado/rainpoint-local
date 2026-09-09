@@ -129,6 +129,33 @@ inline bool requestMatches(
     return true;
 }
 
+// Discovery supplies identity only. PairingSession retains the frozen counter-2
+// transcript, timing and expiry; see the byte-identical response regression.
+inline bool initializeAutomaticProfile(
+    const std::array<std::uint8_t, 4>& controllerEndpoint,
+    const std::array<std::uint8_t, 4>& companionEndpoint,
+    PairingProfile& profile
+) {
+    return buildProfile({{0, 0, 0, 0x8f}}, controllerEndpoint, companionEndpoint, profile);
+}
+
+inline bool adoptFactoryAnnouncement(
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    PairingProfile& profile
+) {
+    std::array<std::uint8_t, 4> factory{};
+    for (std::size_t index = 0; index < factory.size(); ++index) {
+        factory[index] = frame[9 + index];
+    }
+    PairingProfile candidate{};
+    if (!buildProfile(factory, profile.controllerEndpoint, profile.companionEndpoint, candidate) ||
+        !requestMatches(candidate, 0, frame)) {
+        return false;
+    }
+    profile = candidate;
+    return true;
+}
+
 inline bool buildReply(
     const PairingProfile& profile,
     std::size_t stepIndex,

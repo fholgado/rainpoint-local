@@ -75,6 +75,25 @@ The selected unattended implementation/review pass is complete (original list nu
 - [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
   soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
   open/automatic stop/early close; the other nodes retain their installed images.
+- [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
+  radio, retain the custom gateway identity, persist the accepted pairing owner,
+  and expose separate paired/control-verification states in HA. Verification
+  must require explicit consent for bounded watering; pairing alone must neither
+  actuate nor authenticate a counter. Keep the frozen counter-2 RF sequence and
+  existing qualified associations unchanged; a sixth transcript row is not a
+  prerequisite for independently proven controls.
+  September 8 implementation: an isolated discovery helper and native regression
+  now reject malformed/non-announcement frames and prove every generated reply
+  matches the explicit-ID profile byte for byte. Counter-0/1 announcements still
+  receive no assignment and counter 2 retains the existing response.
+  Validation: both native C++ protocol tests passed; all 524 Python tests passed
+  with two optional skips.
+  The helper is **not connected to runtime firmware or advertised to HA**.
+  Runtime wiring was blocked by the execution safety review pending explicit
+  approval of the automatic path before its physical qualification. No firmware,
+  gateway or HA deployment was performed for this change. Next: approved staged
+  wiring, authenticated device-based commissioning with restart/duplicate-action
+  protection and visible failures, then an explicitly scheduled physical test.
 
 Gateway 0.36.4 and integration 0.16.2 are deployed. Firmware 0.16.2 contains the
 post-command RX restoration fix, without changing the frozen pairing sequence.
