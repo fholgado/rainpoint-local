@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-08
+Last reviewed: 2026-09-09
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -14,9 +14,10 @@ bounded commands, counter recovery and evidence-based state. The user connected
 the single-zone valve to the front irrigation on September 8. Its dashboard,
 manual run, scheduled decision and watchdog now target the local valve.
 
-September 8 follow-through order: verify the first front-garden scheduled run
-and completion; then finish the prior pass's rendered HA wizard/UI checks and
-fixes; then qualify the consolidated firmware on remaining production owners.
+September 9: the user confirmed scheduled front-garden watering, and retained
+valve observations confirm 07:00:01 open through 07:35:03 idle (35 minutes).
+Next: finish rendered HA wizard/UI checks and physical automatic onboarding,
+then qualify the consolidated firmware on all production owners.
 Firmware qualification must cover persisted association/counter restore without
 startup actuation, valve-confirmed bounded controls, ACK/report continuity and
 the overnight check. New-ID pairing alone does not qualify control ownership.
@@ -77,9 +78,18 @@ The selected unattended implementation/review pass is complete (original list nu
   module runs remain supported. September 8 validation: all 533 Python tests
   passed (two optional skips), with test logic unchanged. Native firmware tests
   remain under `firmware/rainpoint_bridge/tests/`.
-- [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
-  soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
-  open/automatic stop/early close; the other nodes retain their installed images.
+- [ ] Finish fleet qualification of standard firmware 0.17.0 after staged OTA.
+  Front Yard's prior 0.16.2 custom-ID open/automatic stop/early-close evidence is
+  retained, but does not qualify fresh onboarding or the new fleet version.
+  September 9: OTA Test and Vegetable Garden installed the identical verified
+  0.17.0 artifact, reconnected, passed gateway/radio health confirmation, and
+  received new RF frames. Vegetable Garden restored four sensor ACK assignments
+  and one valve ACK assignment. Front Yard's three identical transfers stopped
+  at 921639, 915895 and 938871 of 963120 bytes (`download_interrupted`); none
+  booted a candidate. It remains connected on 0.16.2 with its two sensor ACK
+  assignments and authenticated single-zone counter intact. Do not call the
+  fleet consolidated yet; investigate interrupted transfer or use USB recovery.
+  No pairing or extra watering was triggered during this deployment.
 - [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
   radio, retain the custom gateway identity, persist the accepted pairing owner,
   and expose separate paired/control-verification states in HA. Verification
@@ -111,12 +121,29 @@ The selected unattended implementation/review pass is complete (original list nu
   checks. HA callbacks were tested with stubs; the new screens have not yet been
   verified in the live HA frontend. No physical controls were sent by these tests.
   The user separately confirmed successful front-yard watering on the installed
-  version; that does not close automatic onboarding acceptance. **Not deployed**:
-  stage the candidate, then physically verify discovery → pairing → consent →
-  bounded controls from HA, cancellation/restart, and retained owner health.
+  version; that does not close automatic onboarding acceptance. September 9:
+  gateway 0.37.0 and integration 0.17.0 are deployed with a verified partial app
+  backup and private source/config-entry rollback copies. Package smoke and HA
+  configuration checks passed; deployed implementation hashes match the tested
+  archive. Both valves retained idle/readiness and the single-zone counter.
+  The pairing API now advertises HCS02x, HTV145 and HTV405 model choices; no
+  pairing was armed. The integration's real catalog parser accepted that live
+  response with automatic HTV145 discovery enabled. Browser-control tools were
+  unavailable in this session,
+  so visual wizard acceptance remains open. Physically verify discovery →
+  pairing → consent → bounded controls from HA, cancellation/restart, and
+  retained owner health before closing this item.
 
-Gateway 0.36.4 and integration 0.16.2 are deployed. Firmware 0.16.2 contains the
-post-command RX restoration fix, without changing the frozen pairing sequence.
+- [x] Correct the installation's obsolete SDR receiver configuration after its
+  move to the Mac. With working Wi-Fi nodes, `/health` repeatedly returned 503
+  because the absent `rtl_433` receiver exited. Changing only transport to
+  `network` and restarting changed that same check to 200/healthy, retaining
+  gateway identity, device associations and all three authenticated radios.
+  No RF sequence, credential, schedule or control behavior changed.
+
+Gateway 0.37.0 and integration 0.17.0 are deployed. Standard firmware retains the
+post-command RX restoration fix without changing the frozen pairing sequence.
+Current fleet: OTA Test and Vegetable Garden 0.17.0; Front Yard 0.16.2.
 Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
@@ -262,12 +289,11 @@ and version history, not this checklist.
   battery rejoin as separate lifecycle paths.
 - [ ] Define HA operational enrollment from valve-owned evidence while clearly
   distinguishing it from full six-stage terminal completion.
-  September 8 UI audit: HTV145 remains intentionally excluded from the ordinary
-  model picker (`user_pairing_supported=False`), because its research enrollment
-  still requires factory/route/companion association inputs and separate control
-  qualification. The qualified installed valve's controls do not prove generic
-  discovery or unattended first-control setup. Implement and qualify that path
-  before advertising user pairing; do not merely flip the metadata flag.
+  The September 8 UI exclusion was replaced by implemented automatic identity
+  discovery and separate consented control verification. The September 9 gateway
+  catalog advertises HTV145 only with compatible radio capabilities. Existing
+  qualified controls still do not prove the new generic onboarding path; its
+  physical and rendered-UI acceptance remains in the current work order above.
 
 Exit: every supported family can pair/remove through HA, with repeated physical
 acceptance and one stable HA representation. Dry one-zone control does not close
@@ -355,10 +381,15 @@ retention matrix. The last-zone idle-reply correction is deployed; see the
   obsolete Sonoff meter automations/cards, keeping historical helpers untouched.
   HA configuration validation and restart succeeded; no watering was triggered
   during cutover. The four-zone decision/control path is unchanged.
-- [ ] Qualify the first front-garden scheduled start, actual irrigation and
-  confirmed completion, including the new HA feedback. UI rendering and real
-  push delivery still require observation; configuration checks are not watering
-  acceptance. Remaining ACK waveform, fresh-association and soak gates stay open.
+- [x] Confirm the first front-garden scheduled irrigation and valve-owned stop.
+  September 9: the user confirmed completion; accepted decoded RF observations
+  show 07:00:01 open, 35-minute duration, and 07:35:03 idle on gateway 0.36.4 /
+  owner firmware 0.16.2. No additional watering was triggered for this check.
+  [Redacted evidence](research/fixtures/htv145_scheduled_watering_20260909.json).
+- [ ] Verify the scheduled run's HA feedback, rendered completion/failure state
+  and actual push delivery. The automation trace/UI were not independently
+  inspected during the read-only evidence review. Remaining ACK waveform,
+  fresh-association and soak gates stay open.
   The existing six-hour reliability-review heartbeat now explicitly checks the
   September 9 07:00 local run after its window, correlating HA decisions with
   valve-owned confirmation. A justified moisture/weather skip is not an irrigation
@@ -401,6 +432,10 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   cursor, fixed window, explicit gap/error records, and automatic completion.
   See [operation](examples/reliability-soak/README.md).
 - [ ] Complete a persisted minimum 72-hour multi-node sensor cadence/ACK soak.
+  September 9 interim review: 714 snapshots through 11:50 UTC, with all six
+  sensors reporting and no collector event-gap/error records. Per-sensor maximum
+  observed gaps range from 337 to 563 seconds. Database quick_check passed.
+  Deployment/restarts/OTA are interventions, not uninterrupted release uptime.
   Current collection runs September 7 00:53 UTC through September 10 00:53 UTC;
   completion still requires reviewing the evidence, not just reaching the deadline.
 - [x] Review the first 43.103 hours of the current collection: 523 snapshots,
@@ -430,6 +465,11 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   retained the running image, and a third unchanged transfer passed SHA and OTA
   health confirmation. Root cause of intermittent transfer interruption remains
   unproven; do not weaken artifact checks or infer a timeout fix from the retry.
+  September 9: Front Yard retained its verified 0.16.2 image after three failed
+  0.17.0 downloads; the same artifact passed first-attempt OTA on the other two
+  nodes. Its error combines connection loss and a ten-second no-progress timeout,
+  so current diagnostics do not distinguish those causes. Prioritize a bounded
+  transfer diagnosis before further repeated production-owner retries.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.

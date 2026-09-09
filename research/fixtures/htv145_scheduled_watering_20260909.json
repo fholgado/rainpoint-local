@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "normalized_observation_evidence",
+  "model": "HTV145FRF",
+  "source": "Read-only reliability collector; copied database passed SQLite quick_check",
+  "redaction": "Device identity, RF endpoints, receiver IDs, and raw frames omitted",
+  "installed_versions": {
+    "gateway": "0.36.4",
+    "integration": "0.16.2",
+    "control_owner_firmware": "0.16.2"
+  },
+  "timezone": "America/New_York",
+  "user_confirmation": "Scheduled watering completed this morning",
+  "observations": [
+    {
+      "source_event_id": 412291,
+      "observed_at": "2026-09-09T11:00:01.059055+00:00",
+      "is_watering": true,
+      "duration_seconds": 2100,
+      "rf_frame_accepted": true,
+      "rf_trailer_valid": true
+    },
+    {
+      "source_event_id": 412795,
+      "observed_at": "2026-09-09T11:35:03.380551+00:00",
+      "is_watering": false,
+      "duration_seconds": 2100,
+      "rf_frame_accepted": true,
+      "rf_trailer_valid": true
+    }
+  ],
+  "limits": [
+    "Normalized decoded observations, not an independent SDR waveform capture",
+    "User confirms scheduled physical watering; HA automation trace and push rendering were not independently inspected",
+    "Does not qualify firmware 0.17.0 or the new automatic onboarding path"
+  ]
+}
