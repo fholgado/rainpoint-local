@@ -89,6 +89,12 @@ The selected unattended implementation/review pass is complete (original list nu
   booted a candidate. It remains connected on 0.16.2 with its two sensor ACK
   assignments and authenticated single-zone counter intact. Do not call the
   fleet consolidated yet; investigate interrupted transfer or use USB recovery.
+  A later user-approved retry after moving Front Yard beside an AP also failed:
+  Wi-Fi improved from -76 to -59/-54 dBm, but the same artifact stopped at
+  852711 of 963120 bytes. No candidate boot occurred; 0.16.2 remained connected.
+  Better RSSI did not resolve the interruption; weak signal alone is insufficient
+  to explain it. The relocation also power-cycled the node, so this is not an
+  isolated signal-strength experiment.
   No pairing or extra watering was triggered during this deployment.
 - [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
   radio, retain the custom gateway identity, persist the accepted pairing owner,
@@ -470,6 +476,9 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   nodes. Its error combines connection loss and a ten-second no-progress timeout,
   so current diagnostics do not distinguish those causes. Prioritize a bounded
   transfer diagnosis before further repeated production-owner retries.
+  The subsequent near-AP retry failed at approximately 89% with -54 dBm signal.
+  Preserve that negative result; investigate connection-close versus stalled-read
+  behavior rather than assuming that further placement changes will fix OTA.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
