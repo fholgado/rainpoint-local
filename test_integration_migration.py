@@ -80,7 +80,7 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
         callback = _integration_function("config_flow.py", "async_step_init",
                                          {"CONF_TOKEN": "registry_write_token"})
         await callback(flow)
-        self.assertEqual(["add_device", "remove_radio_node"],
+        self.assertEqual(["add_device", "verify_valve", "remove_radio_node"],
                          flow.async_show_menu.call_args.kwargs["menu_options"])
 
     def test_pairing_labels_omit_manual_credentials_and_use_review_back(self):
@@ -91,6 +91,33 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("add_radio_node", steps["init"]["menu_options"])
         self.assertEqual("Back", steps["pairing_review"]["menu_options"]["change_pairing_radio"])
         self.assertNotIn("cancel_add_device", steps["pairing_review"]["menu_options"])
+
+    async def test_commissioning_review_and_skip_never_start_watering(self):
+        client = types.SimpleNamespace(commission_valve=AsyncMock(return_value={
+            "state": "awaiting_consent", "pairing_command_id": "pair-1"}))
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+            _commission_device_id="valve", async_show_menu=Mock(), async_create_entry=Mock())
+        fn = _integration_function("config_flow.py", "async_step_commission_review", {})
+        await fn(flow)
+        client.commission_valve.assert_awaited_once_with("token", "valve", "status")
+        self.assertEqual("pair-1", flow._commission_pairing_command_id)
+        self.assertIn("commission_later", flow.async_show_menu.call_args.kwargs["menu_options"])
+        await _integration_function("config_flow.py", "async_step_commission_later", {})(flow)
+        self.assertEqual(1, client.commission_valve.await_count)
+
+    async def test_commissioning_progress_cancels_only_its_pairing_session(self):
+        import asyncio
+        client = types.SimpleNamespace(commission_valve=AsyncMock(side_effect=[asyncio.CancelledError(), {}]))
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+            _commission_device_id="valve", _commission_pairing_command_id="pair-1")
+        ns = {"asyncio": asyncio, **{name: ValueError for name in (
+            "RainPointLocalCannotConnect", "RainPointLocalInvalidResponse",
+            "RainPointLocalUnauthorized", "RainPointLocalCommandRejected")}}
+        fn = _integration_function("config_flow.py", "_async_commission_wait", ns)
+        with self.assertRaises(asyncio.CancelledError): await fn(flow)
+        self.assertEqual([call("token", "valve", "advance", pairing_command_id="pair-1"),
+                         call("token", "valve", "cancel", pairing_command_id="pair-1")],
+                         client.commission_valve.await_args_list)
 
     async def test_event_listener_refreshes_state_and_recovers_reset_cursor(self):
         import asyncio

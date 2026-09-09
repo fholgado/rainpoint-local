@@ -85,8 +85,29 @@ separate qualification gate in the [roadmap](PROJECT_ROADMAP.md). Do not delete
 an existing HA device before reassociation; stable endpoint matching preserves
 its entities and history.
 
-HCS02x sensors and HTV405 four-zone valves appear in the normal model picker.
-HTV145 single-zone generic enrollment is not yet offered: its current workflow
-requires association inputs and separate first-control qualification. An
-already-qualified single-zone valve can use normal HA controls; that does not
-make generic single-zone onboarding complete.
+HCS02x sensors, HTV405 four-zone valves and HTV145 single-zone valves appear in
+the normal model picker. HTV145 automatic discovery requires firmware advertising
+`htv145_auto_identity_pairing`; older nodes require an update, not manual IDs.
+After naming an HTV145, choose to verify controls now or finish without testing.
+**Verify valve controls** returns to a paired valve's pending setup later.
+Finishing without testing does not finish ACK/control-owner provisioning; if the
+valve stops reporting before verification resumes, it may need to be woken or
+paired again. The flow will not guess its state or send an open without evidence.
+
+Verification requires explicit approval for two requested 60-second runs (or a
+dry valve): automatic stop, then an early stop after at least 20 seconds. Keep
+the flow open. The gateway derives the selected owner and RF parameters from
+accepted pairing, confirms any old owner's revocation, and requires fresh owner
+telemetry before the idle anchor. If that anchor fails, one fixed first-open
+candidate may initialize this association; only its positive response supplies
+counter authority. No failed open is retried automatically. Independent stop
+reports must complete both tests before public controls become available.
+
+Closing the flow stops subsequent test steps; a started bounded run may still
+finish automatically. Failure, owner reconnect, expiry or gateway restart ends
+the verification attempt without replay. Inspect the device before re-pairing
+and granting fresh consent. An old flow cannot act on a newer pairing session.
+The current HTV145 runtime supports one single-zone valve per custom gateway
+identity and per node; onboarding refuses to displace a different valve's owner.
+Existing qualified valves do not acquire a new test requirement on upgrade.
+See the [roadmap](PROJECT_ROADMAP.md) for staged deployment and physical acceptance.

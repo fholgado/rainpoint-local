@@ -88,12 +88,27 @@ The selected unattended implementation/review pass is complete (original list nu
   receive no assignment and counter 2 retains the existing response.
   Validation: both native C++ protocol tests passed; all 524 Python tests passed
   with two optional skips.
-  The helper is **not connected to runtime firmware or advertised to HA**.
-  Runtime wiring was blocked by the execution safety review pending explicit
-  approval of the automatic path before its physical qualification. No firmware,
-  gateway or HA deployment was performed for this change. Next: approved staged
-  wiring, authenticated device-based commissioning with restart/duplicate-action
-  protection and visible failures, then an explicitly scheduled physical test.
+  After explicit approval, candidate gateway 0.37.0, integration/firmware 0.17.0
+  connect discovery to the unchanged pairing exchange and advertise the model
+  only to compatible radios. Accepted pairing records the selected owner; an
+  authenticated, session-scoped verification flow confirms old-owner revocation
+  before configuring a new owner. Consent permits two fixed one-minute runs,
+  including at most one captured first-open initialization, with positive valve
+  replies and independent automatic/early-stop evidence required for completion.
+  The HA flow exposes progress/failure, supports finishing without testing and
+  returning later, and prevents duplicate starts or old-dialog cancellation of
+  a newer pairing. Interrupted tests are not replayed. Existing qualified
+  installations are not reset on upgrade. The current one-single-valve slot per
+  gateway identity/node is enforced without displacing a different valve.
+  Candidate validation: all 533 Python tests passed (two optional skips), both
+  native C++ protocol tests passed, unified firmware 0.17.0 built successfully,
+  and the final deterministic package passed isolated fresh-install/restart smoke
+  checks. HA callbacks were tested with stubs; the new screens have not yet been
+  verified in the live HA frontend. No physical controls were sent by these tests.
+  The user separately confirmed successful front-yard watering on the installed
+  version; that does not close automatic onboarding acceptance. **Not deployed**:
+  stage the candidate, then physically verify discovery → pairing → consent →
+  bounded controls from HA, cancellation/restart, and retained owner health.
 
 Gateway 0.36.4 and integration 0.16.2 are deployed. Firmware 0.16.2 contains the
 post-command RX restoration fix, without changing the frozen pairing sequence.

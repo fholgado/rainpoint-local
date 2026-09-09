@@ -500,6 +500,11 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         self._pairing_request: dict[str, Any] = {}
         self._pairing_reviewed = False
         self._pairing_command_id: str | None = None
+        self._commission_device_id: str | None = None
+        self._commission_pairing_command_id: str | None = None
+        self._commission_task: asyncio.Task[None] | None = None
+        self._commission_result: dict[str, Any] = {}
+        self._commission_action = "commission_wait"
 
     def _client(self) -> RainPointLocalClient:
         return RainPointLocalClient(
@@ -525,7 +530,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 },
             )
         menu_options = (
-            ["add_device", "remove_radio_node"]
+            ["add_device", "verify_valve", "remove_radio_node"]
             if self._token
             else ["authenticate_gateway"]
         )
@@ -948,6 +953,108 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 pass
             raise
 
+    async def async_step_verify_valve(self, user_input=None) -> FlowResult:
+        """Return to verification after leaving an already-paired valve setup."""
+        try:
+            devices = await self._client().devices()
+        except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse):
+            return self.async_abort(reason="cannot_connect")
+        choices = {d["device_id"]: d.get("name", d["device_id"]) for d in devices
+                   if d.get("model") == "HTV145FRF" and d.get("state", {}).get(
+                       "rf_commissioning_state", "not_required") not in {"complete", "not_required"}}
+        if not choices:
+            return self.async_abort(reason="no_pending_valves")
+        if user_input is not None and user_input.get("device_id") in choices:
+            self._commission_device_id = user_input["device_id"]
+            return await self.async_step_commission_review()
+        return self.async_show_form(step_id="verify_valve", last_step=False,
+            data_schema=vol.Schema({vol.Required("device_id"): vol.In(choices)}))
+
+    async def async_step_commission_review(self, user_input=None) -> FlowResult:
+        try:
+            result = await self._client().commission_valve(self._token, self._commission_device_id, "status")
+        except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
+                RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
+            self._commission_result = {"state": "failed", "reason": str(err)}
+            return await self.async_step_commission_result()
+        if result.get("state") != "awaiting_consent":
+            self._commission_result = result
+            return await self.async_step_commission_result()
+        self._commission_pairing_command_id = result.get("pairing_command_id")
+        return self.async_show_menu(step_id="commission_review",
+            menu_options=["commission_start", "commission_later", "verify_valve"])
+
+    async def async_step_commission_later(self, user_input=None) -> FlowResult:
+        return self.async_create_entry(title="Paired — verification pending", data={})
+
+    async def async_step_commission_start(self, user_input=None) -> FlowResult:
+        errors = {}
+        if user_input is not None:
+            if user_input.get("test_watering_confirmed") is not True:
+                errors["base"] = "test_consent_required"
+            else:
+                try:
+                    await self._client().commission_valve(self._token,
+                        self._commission_device_id, "begin", consent=True,
+                        pairing_command_id=self._commission_pairing_command_id)
+                except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
+                        RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
+                    self._commission_result = {"state": "failed", "reason": str(err)}
+                    return await self.async_step_commission_result()
+                self._commission_result = {}
+                self._commission_task = self.hass.async_create_task(self._async_commission_wait())
+                return await self.async_step_commission_progress()
+        return self.async_show_form(step_id="commission_start", errors=errors,
+            data_schema=vol.Schema({vol.Required("test_watering_confirmed", default=False): bool}))
+
+    async def _async_commission_wait(self) -> None:
+        try:
+            while True:
+                result = await self._client().commission_valve(
+                    self._token, self._commission_device_id, "advance",
+                    pairing_command_id=self._commission_pairing_command_id)
+                if result.get("state") in {"complete", "failed", "interrupted", "awaiting_consent", "not_required"}:
+                    self._commission_result = result
+                    return
+                action = {
+                    "opening": "commission_open", "watering": "commission_watering",
+                    "closing": "commission_close", "waiting_final_idle": "commission_close",
+                }.get(result.get("reason"), "commission_wait")
+                if action != self._commission_action:
+                    self._commission_action = action
+                    return
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            try:
+                await self._client().commission_valve(self._token, self._commission_device_id, "cancel",
+                    pairing_command_id=self._commission_pairing_command_id)
+            except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
+                    RainPointLocalUnauthorized, RainPointLocalCommandRejected):
+                pass
+            raise
+        except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
+                RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
+            self._commission_result = {"state": "failed", "reason": str(err)}
+
+    async def async_step_commission_progress(self, user_input=None) -> FlowResult:
+        if self._commission_task is None or self._commission_task.done():
+            if self._commission_result:
+                return self.async_show_progress_done(next_step_id="commission_result")
+            self._commission_task = self.hass.async_create_task(self._async_commission_wait())
+        return self.async_show_progress(step_id="commission_progress",
+            progress_action=self._commission_action, progress_task=self._commission_task)
+
+    async def async_step_commission_result(self, user_input=None) -> FlowResult:
+        if user_input is not None:
+            coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+            if coordinator is not None:
+                await coordinator.async_request_refresh()
+            return self.async_create_entry(title="Valve verification finished", data={})
+        success = self._commission_result.get("state") == "complete"
+        return self.async_show_form(step_id="commission_result", data_schema=vol.Schema({}),
+            description_placeholders={"result": "Controls verified" if success else "Controls not verified",
+                "reason": str(self._commission_result.get("reason", "verification_pending"))})
+
     async def async_step_pairing_result(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -1000,6 +1107,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                             name_by_user=name if device_entry.name_by_user is not None else None,
                             area_id=area_id,
                         )
+                if (isinstance(device_id, str) and self._pairing_profile is not None
+                        and self._pairing_profile.model == "HTV145FRF"):
+                    self._commission_device_id = device_id
+                    return await self.async_step_commission_review()
                 return self.async_create_entry(title="Device paired", data={})
 
         display_name = (

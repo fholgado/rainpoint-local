@@ -51,6 +51,10 @@
   },
   "options": {
     "progress": {
+      "commission_wait": "Waiting for the selected radio and fresh valve telemetry. Pairing is complete, but controls are not verified yet.",
+      "commission_open": "Sending a bounded test run and waiting for the valve to confirm it opened.",
+      "commission_watering": "The valve confirmed watering. Checking its automatic stop, then performing a second bounded run with an early stop.",
+      "commission_close": "Waiting for the valve's close confirmation and an independent idle report.",
       "wait_for_device": "Listening on {node_name} for {device_name} for up to {duration_seconds} seconds. Start pairing on the device and keep it near the radio node.",
       "exchange_with_device": "A {device_name} request was detected. {node_name} is completing the model-specific pairing exchange; keep the device nearby until its LED sequence finishes.",
       "confirm_device": "Pairing messages were sent. Waiting for {device_name} to confirm its assigned local identity.",
@@ -61,9 +65,32 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "add_device": "Add a RainPoint device",
+          "verify_valve": "Verify valve controls",
           "remove_radio_node": "Remove a radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
+      },
+      "verify_valve": {
+        "title": "Select a valve to verify",
+        "data": {"device_id": "Valve"}
+      },
+      "commission_review": {
+        "title": "Valve paired — verify controls",
+        "description": "Pairing alone does not confirm watering controls. Verification uses the selected radio and requires your approval before water can flow.",
+        "menu_options": {
+          "commission_start": "Review watering test",
+          "commission_later": "Finish without testing",
+          "verify_valve": "Back"
+        }
+      },
+      "commission_start": {
+        "title": "Approve valve verification",
+        "description": "This test can release water. It requests two 60-second runs: the first stops automatically; the second is stopped early after at least 20 seconds. Allow up to two minutes of watering, or disconnect the valve from water first. Keep this screen open. Closing it stops further test steps, but an already-started run may continue to its automatic stop. No failed open is retried automatically.",
+        "data": {"test_watering_confirmed": "I approve these bounded watering tests"}
+      },
+      "commission_result": {
+        "title": "{result}",
+        "description": "{reason}. Only positive valve responses and independent stop reports enable normal controls. If verification failed or was interrupted, inspect the valve before pairing and testing again; an unconfirmed run may still have occurred."
       },
       "authenticate_gateway": {
         "title": "Authenticate standalone gateway",
@@ -162,9 +189,11 @@
       "no_pairing_node": "No authenticated pairing-capable local radio node is connected",
       "pairing_failed": "The selected radio node could not start this model's pairing exchange",
       "sensor_not_found": "The selected sensor is no longer available",
-      "confirmation_required": "Confirm that the physical sensor is not reset by this action"
+      "confirmation_required": "Confirm that the physical sensor is not reset by this action",
+      "test_consent_required": "Approve the bounded watering tests to continue"
     },
     "abort": {
+      "no_pending_valves": "No single-zone valves need control verification.",
       "pairing_timeout": "The pairing window expired before the device completed enrollment",
       "pairing_failed": "The local radio node could not complete the device enrollment exchange",
       "no_supported_devices": "This gateway does not currently advertise any user-pairable device models",
