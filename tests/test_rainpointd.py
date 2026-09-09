@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import (
@@ -33,7 +33,7 @@ from rainpointd.product_identity import (
 from rainpointd.replay import ReplayTransport, load_fixtures
 from rainpointd.valve_protocol import ValveLink, build_open_frame
 
-from test_support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
+from tests.support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
 
 class GatewayTest(unittest.TestCase):
     def test_cancelled_pairing_flow_cannot_stop_a_replacement_session(self):
@@ -3249,7 +3249,7 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
             controller_endpoint="b1c2d38f", valve_endpoint="a1b2c380", center_hz=434398811,
             power_dbm=10, invert=False, trailer_residual=0x4f03, close_trailer_residual=0x4f03,
             command_marker_inverted=True, report_ack_center_hz=433518905)
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
         gateway._htv145_runtime.coordinator.configure(profile, observed_at=now.isoformat())
         gateway._devices["one-zone"] = {"device_id":"one-zone", "model":"HTV145FRF", "name":"Test valve",
             "state":{"rf_endpoint_a":"a1b2c380", "rf_endpoint_b":"b1c2d38f"}}

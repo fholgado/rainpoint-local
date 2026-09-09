@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 MODULE = (
-    Path(__file__).parent
+    Path(__file__).resolve().parents[1]
     / "custom_components"
     / "rainpoint_local"
     / "api_models.py"

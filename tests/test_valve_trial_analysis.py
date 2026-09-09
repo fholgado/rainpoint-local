@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "rainpointd_addon"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
 
 from tools.valve_trial_analysis import (
     analyze_valve_transactions,
@@ -36,7 +36,7 @@ class CounterRecoveryEvidenceTests(unittest.TestCase):
         from pathlib import Path
         from tools.analyze_htv145_command_phase import command_phase
         from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response, decode_htv145_command_error, decode_htv145_state_report
-        fixture = json.loads((Path(__file__).parent / 'research/fixtures/htv145_active_counter_recovery_20260906.json').read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / 'research/fixtures/htv145_active_counter_recovery_20260906.json').read_text())
         link = ValveLink(bytes.fromhex(fixture['controller_endpoint']), bytes.fromhex(fixture['valve_endpoint']))
         rows = fixture['command_transactions']
         self.assertEqual([5, 0, 1, 2, 3, 62, 63, 0], [command_phase(bytes.fromhex(r['command_frame']), link) for r in rows])
@@ -58,7 +58,7 @@ class CounterRecoveryEvidenceTests(unittest.TestCase):
         from pathlib import Path
         from tools.analyze_htv145_control_iq import summarize_matches
         from rainpointd.valve_protocol import ValveLink, decode_htv145_command_error, decode_htv145_command_response
-        fixture = json.loads((Path(__file__).parent / 'research/fixtures/htv145_next_phase_idle_close_rejection_20260906.json').read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / 'research/fixtures/htv145_next_phase_idle_close_rejection_20260906.json').read_text())
         link = ValveLink(bytes.fromhex(fixture['controller_endpoint']), bytes.fromhex(fixture['valve_endpoint']))
         response = bytes.fromhex(fixture['response_frame'])
         self.assertEqual({'sequence': 0x82, 'result_code': 3}, decode_htv145_command_error(response, link))
@@ -90,7 +90,7 @@ class CounterRecoveryEvidenceTests(unittest.TestCase):
         from rainpointd.htv145_control import Htv145ControlProfile
         from rainpointd.valve_protocol import decode_htv145_idle_anchor_response
         from rainpointd.valve_protocol import decode_htv145_command_error, decode_htv145_gateway_command
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_counter_anchor_baseline_negative_20260906.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_counter_anchor_baseline_negative_20260906.json").read_text())
         profile = Htv145ControlProfile(node_id="rp-001122334455",
             controller_endpoint=fixture["controller_endpoint"], valve_endpoint=fixture["valve_endpoint"],
             center_hz=434398811, power_dbm=10, invert=False,
@@ -105,7 +105,7 @@ class CounterRecoveryEvidenceTests(unittest.TestCase):
         import json
         from pathlib import Path
         from rainpointd.valve_protocol import ValveLink, decode_htv145_gateway_command, decode_htv145_command_response, decode_htv145_state_report
-        data = json.loads((Path(__file__).parent / "research/fixtures/htv145_fresh_pairing_control_baseline_20260906.json").read_text())
+        data = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_fresh_pairing_control_baseline_20260906.json").read_text())
         link = ValveLink(bytes.fromhex(data["controller_endpoint"]), bytes.fromhex(data["valve_endpoint"]))
         commands = [decode_htv145_gateway_command(bytes.fromhex(row["frame"]), link) for row in data["commands"]]
         replies = [decode_htv145_command_response(bytes.fromhex(row["frame"]), link) for row in data["responses"]]
@@ -121,7 +121,7 @@ class CounterRecoveryEvidenceTests(unittest.TestCase):
         from pathlib import Path
         from tools.analyze_htv145_command_phase import analyze_transactions, command_phase
         from rainpointd.valve_protocol import ValveLink
-        root = Path(__file__).parent / "research/fixtures"
+        root = Path(__file__).resolve().parents[1] / "research/fixtures"
         stock = json.loads((root / "htv145_selector2_stock_pairing_control_20260905.json").read_text())
         rows = stock["command_transactions"]
         first = bytes.fromhex(rows[0]["command_frame"])

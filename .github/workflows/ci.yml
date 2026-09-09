@@ -17,27 +17,7 @@ jobs:
           python-version: "3.12"
       - name: Run protocol, gateway, analysis, and safety tests
         run: |
-          python -m unittest -v \
-            test_rainpoint_protocol.py \
-            test_rainpoint_pairing.py \
-            test_rainpoint_pairing_protocol.py \
-            test_esp32_network.py \
-            test_rainpoint_network_transport.py \
-            test_integration_migration.py \
-            test_api_models.py \
-            test_addon_boundaries.py \
-            test_firmware_manifest.py \
-            test_firmware_catalog.py \
-            test_rainpointd.py \
-            test_rainpoint_rf.py \
-            test_rainpoint_analysis.py \
-            test_rainpoint_safety.py \
-            test_pairing_profile_analysis.py \
-            test_radio_node_acceptance.py \
-            test_rf_trial.py \
-            test_pairing_waveform_analysis.py \
-            test_sensor_soak.py \
-            test_valve_trial_analysis.py
+          python -m unittest discover -s tests -t . -v
       - name: Build reproducible source package and verify clean installation
         run: |
           python tools/package_release.py /tmp/rainpoint-release-a.tar.gz --smoke-test

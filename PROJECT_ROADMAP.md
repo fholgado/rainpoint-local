@@ -72,6 +72,11 @@ The selected unattended implementation/review pass is complete (original list nu
   idle, all six sensors available and three radios connected/normal/unarmed.
   Record this HA restart as an intervention in the ongoing mixed-version soak,
   not uninterrupted final-release uptime.
+- [x] Consolidate root-level Python regression tests and shared fixtures under
+  `tests/`. CI and contributor instructions now use automatic discovery; focused
+  module runs remain supported. September 8 validation: all 533 Python tests
+  passed (two optional skips), with test logic unchanged. Native firmware tests
+  remain under `firmware/rainpoint_bridge/tests/`.
 - [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
   soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
   open/automatic stop/early close; the other nodes retain their installed images.

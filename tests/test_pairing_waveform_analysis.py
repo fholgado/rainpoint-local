@@ -19,9 +19,9 @@ from rainpointd.valve_protocol import (
 )
 
 
-MODULE_PATH = Path(__file__).parent / "tools" / "analyze_pairing_waveform.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "analyze_pairing_waveform.py"
 FIXTURE_PATH = (
-    Path(__file__).parent
+    Path(__file__).resolve().parents[1]
     / "research"
     / "fixtures"
     / "htv145_balanced_wake_phy_discriminator_20260901.json"
@@ -34,7 +34,7 @@ SPEC.loader.exec_module(MODULE)
 
 class PairingWaveformAnalysisTests(unittest.TestCase):
     def test_partial_pairing_can_have_independently_accepted_control(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json").read_text())
         identity = fixture["association"]
         paired = bytes.fromhex(identity["paired_endpoint"])
@@ -73,7 +73,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
                 self.assertEqual(row["action"] == "open", response["watering"])
 
     def test_idle_result3_variant_is_not_an_accepted_close(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_partial_pairing_control_acceptance_20260905.json").read_text())
         identity = fixture["association"]
         link = ValveLink(bytes.fromhex(identity["paired_endpoint"]),
@@ -87,7 +87,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
             self.assertIsNone(decode_htv145_command_response(frame, link))
 
     def test_received_edge_anchor_does_not_imply_terminal_acceptance(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_receive_edge_terminal_retry_20260905.json").read_text())
         identity = fixture["association"]
         observation = fixture["receive_edge_observation"]
@@ -105,7 +105,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
         self.assertTrue(fixture["node_result"]["disarmed_after_trial"])
 
     def test_stock_length_stable_final_reply_does_not_imply_terminal_pairing(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_calibrated_tail_terminal_retry_20260905.json").read_text())
         identity = fixture["association"]
         verdict = terminal_exchange_evidence(
@@ -122,7 +122,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
         self.assertEqual(0, wave["adc_rail_fraction"])
 
     def test_active_fifo_tail_calibration_preserves_frame_and_matches_stock(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_fifo_active_tail_calibration_20260905.json").read_text())
         target = fixture["stock_reference"]["post_frame_low_tone_us"]
         trials = [trial for capture in fixture["captures"]
@@ -146,7 +146,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
         self.assertFalse(fixture["verdict"]["terminal_pairing_proven"])
 
     def test_low_gain_live_retry_capture_is_not_terminal_enrollment(self):
-        fixture = json.loads((Path(__file__).parent /
+        fixture = json.loads((Path(__file__).resolve().parents[1] /
             "research/fixtures/htv145_low_gain_terminal_retry_20260905.json").read_text())
         identity = fixture["association"]
         verdict = terminal_exchange_evidence(
@@ -158,7 +158,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
                           "terminal_exchange_observed": False}, verdict)
 
     def test_partial_association_close_replies_are_errors_not_acceptance(self):
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_partial_pairing_control_replies_20260905.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_partial_pairing_control_replies_20260905.json").read_text())
         link = ValveLink(bytes.fromhex(fixture["identity"]["controller_endpoint"]),
                          bytes.fromhex(fixture["identity"]["valve_endpoint"]))
         for trial in fixture["trials"][1:]:
@@ -175,7 +175,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
             self.assertEqual([], summarize_matches([match], wrong_route)["errors"])
 
     def test_stock_terminal_exchange_is_required_not_assignment_or_retry(self):
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_counter2_stock_enrollment_20260901.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_counter2_stock_enrollment_20260901.json").read_text())
         exchange = fixture["exchanges"][-1]
         kwargs = {key: bytes.fromhex(fixture["association"][key])
                   for key in ("controller_endpoint", "paired_endpoint")}
@@ -191,7 +191,7 @@ class PairingWaveformAnalysisTests(unittest.TestCase):
         self.assertFalse(terminal_exchange_evidence([corrupted], [reply], **kwargs)["terminal_request_observed"])
 
     def test_control_analysis_distinguishes_stock_wake_and_unconfirmed_intent(self):
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_stock_control_shape_20260905.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_stock_control_shape_20260905.json").read_text())
         link = ValveLink(bytes.fromhex(fixture["identity"]["controller_endpoint"]),
                          bytes.fromhex(fixture["identity"]["valve_endpoint"]))
         for window in fixture["windows"]:

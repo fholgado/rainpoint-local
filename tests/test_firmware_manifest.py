@@ -15,7 +15,7 @@ class FirmwareManifestTest(unittest.TestCase):
         # Compile the actual Arduino call-site body against a small radio fake.
         # Channel selection changes CHANNR, not the base FREQ registers. Hardware
         # acceptance still requires post-command reports from the assigned owner.
-        source = (Path(__file__).parent / "firmware/rainpoint_bridge/src/main.cpp").read_text()
+        source = (Path(__file__).resolve().parents[1] / "firmware/rainpoint_bridge/src/main.cpp").read_text()
         start = source.index("void restoreHtv145CandidateReceive() {")
         end = source.index("\nconst char* htv145CandidateFailureClass", start)
         function = source[start:end]

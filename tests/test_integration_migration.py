@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, call
 from pathlib import Path
 from datetime import timedelta
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "custom_components" / "rainpoint_local"
 
 # Load the pure migration module without importing Home Assistant.

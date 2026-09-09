@@ -8,12 +8,12 @@ import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpoint_protocol import decode, parse_tlv  # noqa: E402
 from rainpointd.device_catalog import DeviceCatalog, SensorDefinition  # noqa: E402
-from test_support import captured_normalize_row as normalize_row  # noqa: E402
+from tests.support import captured_normalize_row as normalize_row  # noqa: E402
 from rainpointd.valve_protocol import (  # noqa: E402
     ValveLink,
     build_close_frame,

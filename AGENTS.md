@@ -33,31 +33,14 @@ permission before diagnosing code. PlatformIO builds also need access to the
 configured `~/.platformio` package cache; the native C++ protocol test does not
 need elevated permission.
 
-Run the complete Python suite used by CI:
+From the repository root, run the complete Python suite used by CI. Add new
+Python tests under `tests/` so discovery includes them automatically:
 
 ```bash
-python3 -m unittest -v \
-  test_rainpoint_protocol.py \
-  test_rainpoint_pairing.py \
-  test_rainpoint_pairing_protocol.py \
-  test_esp32_network.py \
-  test_rainpoint_network_transport.py \
-  test_integration_migration.py \
-  test_api_models.py \
-  test_addon_boundaries.py \
-  test_firmware_manifest.py \
-  test_firmware_catalog.py \
-  test_rainpointd.py \
-  test_rainpoint_rf.py \
-  test_rainpoint_analysis.py \
-  test_rainpoint_safety.py \
-  test_pairing_profile_analysis.py \
-  test_radio_node_acceptance.py \
-  test_rf_trial.py \
-  test_pairing_waveform_analysis.py \
-  test_sensor_soak.py \
-  test_valve_trial_analysis.py
+python3 -m unittest discover -s tests -t . -v
 ```
+
+Run an individual module with `python3 -m unittest tests.test_rainpointd -v`.
 
 Also compile and run the hardware-independent firmware protocol test:
 
