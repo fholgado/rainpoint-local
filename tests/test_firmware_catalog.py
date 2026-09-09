@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from urllib.request import urlopen
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 sys.path.insert(0, str(ROOT / "tools"))
 

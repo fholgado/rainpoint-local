@@ -24,6 +24,7 @@ from .firmware_catalog import FirmwareCatalog
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_runtime import Htv145Runtime
+from .htv145_commissioning import Htv145Commissioning
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
 from .htv405_control import (
     HTV405_CONTROL_BASE_CENTER_HZ,
@@ -305,6 +306,7 @@ class Gateway:
         ) = None
         self._htv145_acceptance: Htv145DryValveAcceptance | None = None
         self._htv145_runtime: Htv145Runtime | None = None
+        self._htv145_commissioning: Htv145Commissioning | None = None
         self._active_pairing_node_id: str | None = None
         self._active_pairing_started_at: datetime | None = None
         self._active_pairing_command_id: str | None = None
@@ -571,9 +573,9 @@ class Gateway:
     def _adopt_active_valve_identity_from_node_locked(
         self, node_id: str, node: dict[str, Any]
     ) -> None:
-        """Accept an automatically discovered HTV405 factory identity."""
+        """Accept a family-validated identity from the current pairing owner."""
         if (
-            self._active_pairing_profile_id != AUTOMATIC_HTV405_PROFILE_ID
+            self._active_pairing_profile_id not in {AUTOMATIC_HTV405_PROFILE_ID, AUTOMATIC_HTV145_PROFILE_ID}
             or self._active_pairing_node_id != node_id
             or self._active_pairing_command_id is None
             or self._active_pairing_expected_valve_endpoint is not None
@@ -587,7 +589,9 @@ class Gateway:
         if not isinstance(factory, str) or not isinstance(paired, str):
             return
         try:
-            profile = build_htv405_profile(
+            builder = (build_htv145_profile if self._active_pairing_profile_id == AUTOMATIC_HTV145_PROFILE_ID
+                       else build_htv405_profile)
+            profile = builder(
                 factory_endpoint=factory.strip().lower(),
                 valve_route=str(identity.get("controller_endpoint", "")),
                 companion_endpoint=str(identity.get("companion_endpoint", "")),
@@ -599,8 +603,10 @@ class Gateway:
         self._active_pairing_expected_valve_endpoint = profile.paired_endpoint
         self._active_pairing_control_profile = {
             "companion_endpoint": profile.companion_endpoint,
-            "selector": 0x05,
-            "frequency_offset_hz": HTV405_FREQUENCY_OFFSET_HZ,
+            "selector": 0x06 if self._active_pairing_profile_id == AUTOMATIC_HTV145_PROFILE_ID else 0x05,
+            "frequency_offset_hz": (HTV145_CALIBRATED_FREQUENCY_OFFSET_HZ
+                                    if self._active_pairing_profile_id == AUTOMATIC_HTV145_PROFILE_ID
+                                    else HTV405_FREQUENCY_OFFSET_HZ),
         }
 
     def observe_sensor_link_status(
@@ -711,6 +717,8 @@ class Gateway:
                               lambda node_id: self._nodes.get(node_id, {}))
                 if sender is not None and self._store is not None else None
             )
+            self._htv145_commissioning = (
+                Htv145Commissioning(self._htv145_runtime) if self._htv145_runtime else None)
             if sender is None:
                 for timer in self._htv405_resync_timers.values():
                     timer.cancel()
@@ -769,6 +777,25 @@ class Gateway:
                 raise ValueError("device has no enrolled one-zone counter owner")
             return self._htv145_runtime.restore_retained_counter(
                 profile, now=datetime.now(timezone.utc).isoformat())
+
+    def commission_single_valve(self, device_id: str, action: str, *, consent: bool = False,
+                                pairing_command_id: str | None = None,
+                                now: datetime | None = None) -> dict[str, Any]:
+        """Normal authenticated onboarding; no client-supplied RF parameters."""
+        with self._lock:
+            if self._htv145_commissioning is None or self._store is None:
+                raise RuntimeError("single-zone commissioning is unavailable")
+            registration = next((r for r in self._store.valve_registry()
+                                 if r["device_id"] == device_id and r["model"] == HTV145_MODEL), None)
+            if registration is None:
+                raise ValueError("device is not an accepted single-zone valve")
+            timestamp = (now or datetime.now(timezone.utc)).isoformat()
+            if action != "status":
+                current = self._htv145_commissioning.status(registration, now=timestamp)
+                if not pairing_command_id or current.get("pairing_command_id") != pairing_command_id:
+                    raise ValueError("commissioning flow belongs to an older pairing session")
+            return self._htv145_commissioning.act(registration, action,
+                now=timestamp, consent=consent)
 
     def htv145_control(self, action: str, body: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         """Manage one evidenced dry association under the existing runtime gate."""
@@ -3714,6 +3741,9 @@ class Gateway:
         elif self._store is not None and profile is not None:
             self._refresh_registry_catalog()
             self._ensure_registered_valve_devices()
+            if self._htv145_commissioning is not None:
+                registration = next(r for r in self._store.valve_registry() if r["valve_endpoint"] == expected)
+                self._htv145_commissioning.record_pairing(registration, node_id, command_id)
         self._active_pairing_confirmed_valve_endpoint = expected
         self._active_pairing_confirmation_observed_at = observed_at
         receiver = state.get("rf_receiver_id")
@@ -3969,6 +3999,14 @@ class Gateway:
                 )
             }
             for device_id, device in devices.items():
+                if (self._htv145_commissioning is not None and
+                        device_id in valve_registry and device.get("model") == HTV145_MODEL):
+                    commissioning = self._htv145_commissioning.status(
+                        valve_registry[device_id], now=observed.isoformat())
+                    device.setdefault("state", {}).update({
+                        "rf_commissioning_state": commissioning["state"],
+                        "rf_commissioning_reason": commissioning.get("reason"),
+                    })
                 if profile := self._htv145_profile_for_device(device):
                     status = self._htv145_runtime.status(profile, now=observed.isoformat())
                     counter_status = (
@@ -5714,7 +5752,7 @@ class Gateway:
                     raise RuntimeError("radio-node command transport is unavailable")
                 automatic = profile_id == AUTOMATIC_HCS026_PROFILE_ID
                 automatic_valve = (
-                    profile_id == AUTOMATIC_HTV405_PROFILE_ID
+                    profile_id in {AUTOMATIC_HTV405_PROFILE_ID, AUTOMATIC_HTV145_PROFILE_ID}
                     and not str(factory_endpoint or "").strip()
                 )
                 valve_candidate = profile_id in {
@@ -6446,6 +6484,8 @@ class Gateway:
                 return "htv405_auto_identity_pairing"
             return "valve_pairing_tx_candidate"
         if profile_id == AUTOMATIC_HTV145_PROFILE_ID:
+            if automatic_discovery:
+                return "htv145_auto_identity_pairing"
             return "htv145_pairing_tx_candidate"
         return "sensor_pairing_tx"
 

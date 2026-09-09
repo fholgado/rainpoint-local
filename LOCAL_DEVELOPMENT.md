@@ -73,11 +73,16 @@ access supports the optional SDR; Wi-Fi radio nodes do not require USB.
 
 ## Verification
 
-Run the complete required suite in [AGENTS.md](AGENTS.md), or use discovery:
+From the repository root, run the Python tests in `tests/` using discovery
+(with the permission preflight in [AGENTS.md](AGENTS.md)):
 
 ```sh
-python3 -m unittest -v
+python3 -m unittest discover -s tests -t . -v
 ```
+
+For a focused run: `python3 -m unittest tests.test_rainpointd -v`.
+Shared captured-installation fixtures live in `tests/support.py`; native C++
+tests remain with their firmware under `firmware/rainpoint_bridge/tests/`.
 
 Build and inspect the sole firmware image:
 

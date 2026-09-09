@@ -86,6 +86,35 @@ int main() {
     const rainpoint::PairingLocalDateTime capturedClock{
         2026, 9, 1, 12, 12, 48,
     };
+    // Automatic discovery must produce byte-identical replies to explicitly
+    // supplying the identity; it must not alter the proven RF transcript.
+    rainpoint::htv145::PairingProfile discovered{};
+    assert(rainpoint::htv145::initializeAutomaticProfile(
+        profile.controllerEndpoint, profile.companionEndpoint, discovered));
+    auto malformed = factory2;
+    malformed[17] ^= 1;
+    assert(!rainpoint::htv145::adoptFactoryAnnouncement(malformed, discovered));
+    rainpoint::writeTrailer(malformed, rainpoint::trailerResidual(factory2));
+    assert(!rainpoint::htv145::adoptFactoryAnnouncement(malformed, discovered));
+    auto pairedAnnouncement = factory2;
+    pairedAnnouncement[9] |= 0x80;
+    rainpoint::writeTrailer(pairedAnnouncement, rainpoint::trailerResidual(factory2));
+    assert(!rainpoint::htv145::adoptFactoryAnnouncement(pairedAnnouncement, discovered));
+    assert(discovered.factoryEndpoint[0] == 0);
+    assert(!rainpoint::htv145::adoptFactoryAnnouncement(request1, discovered));
+    assert(rainpoint::htv145::adoptFactoryAnnouncement(factory0, discovered));
+    assert(discovered.factoryEndpoint == profile.factoryEndpoint);
+    rainpoint::htv145::PairingSession discoveredSession(discovered);
+    discoveredSession.arm(0);
+    assert(discoveredSession.claimReply(factory0, 1) == nullptr);
+    assert(discoveredSession.claimReply(factory1, 1'500) == nullptr);
+    assert(discoveredSession.claimReply(factory2, 5'500) == &discovered.steps[0]);
+    for (std::size_t index = 0; index < profile.steps.size(); ++index) {
+        std::array<std::uint8_t, rainpoint::kFrameBytes> expected{}, actual{};
+        const bool built = rainpoint::htv145::buildReply(profile, index, capturedClock, expected);
+        assert(built == rainpoint::htv145::buildReply(discovered, index, capturedClock, actual));
+        assert(actual == expected);
+    }
     std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
     assert(rainpoint::htv145::buildReply(
         profile, 0, capturedClock, reply

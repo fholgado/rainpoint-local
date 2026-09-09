@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).parent / "tools" / "rf_trial.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "rf_trial.py"
 SPEC = importlib.util.spec_from_file_location("rf_trial", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).parent / "tools" / "check_radio_node.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "check_radio_node.py"
 SPEC = importlib.util.spec_from_file_location("check_radio_node", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

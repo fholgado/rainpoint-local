@@ -157,6 +157,7 @@ class ESP32NetworkServer:
             "htv145_control_close",
             "htv145_control_idle_anchor",
             "htv145_control_bootstrap_open",
+            "htv145_control_commission_open",
             "htv145_control_status",
             "htv145_control_revoke",
         }:
@@ -189,6 +190,10 @@ class ESP32NetworkServer:
             if message.get("expected_sequence") != 0x81 or message.get("duration_seconds") != 60:
                 raise ValueError("bootstrap trial permits only counter 0x81 and 60 seconds")
             required_capability = "htv145_bootstrap_trial"
+        elif command_type == "htv145_control_commission_open":
+            if message.get("expected_sequence") != 0x81 or message.get("duration_seconds") != 60:
+                raise ValueError("commissioning permits only counter 0x81 and 60 seconds")
+            required_capability = "htv145_commissioning"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -206,7 +211,9 @@ class ESP32NetworkServer:
             command_type == "pairing_start"
             and message.get("profile") == "htv145_auto_candidate_v1"
         ):
-            required_capability = "htv145_pairing_tx_candidate"
+            required_capability = ("htv145_auto_identity_pairing"
+                                   if not message.get("factory_endpoint")
+                                   else "htv145_pairing_tx_candidate")
         else:
             required_capability = "sensor_pairing_tx"
         if required_capability not in session["capabilities"]:
@@ -708,6 +715,8 @@ class ESP32NetworkServer:
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
+                        "htv145_auto_identity_pairing",
+                        "htv145_commissioning",
                         "htv145_post_frame_tail_candidate",
                         "valve_control_tx_candidate",
                         "htv405_bounded_sync_wait",

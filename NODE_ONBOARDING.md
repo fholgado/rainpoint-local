@@ -22,6 +22,8 @@ radio node**.
 
 The flow auto-advances when confirmation/authentication is observed. Adding a
 second node does not create another integration entry.
+The management menu does not offer manual setup-code registration. Use the
+discovered node's adoption flow rather than entering hardware IDs or tokens.
 
 ## Authentication and lifecycle
 
@@ -70,11 +72,42 @@ Useful placement targets:
 
 ## Pairing devices through a node
 
-Use **RainPoint Local → Configure → Pair sensor**, select the closest node, and
-follow the progress modal. The stock RainPoint gateway must be powered off only
-during the brief exchange so it cannot race the selected transmitter. Do not
-delete an existing HA device before reassociation; stable endpoint matching
-preserves its entities and history.
+Use **RainPoint Local → Configure → Add a RainPoint device**, choose **Sensors**
+or **Valves**, select a supported model, then choose the closest capable node.
+**Next** advances to review without transmitting. Review offers **Back** to
+change the radio/window, **Change device model**, and **Start pairing**. Close
+the dialog with **X** to exit; only **Start pairing** arms a radio. The native
+HA forms do not have footer Back buttons on every step.
 
-Valve onboarding will use the same node selection model only after the isolated
-test-valve pairing and close-first safety sequence are physically validated.
+Keep the stock RainPoint gateway powered off during the exchange so it cannot
+race the selected transmitter. Long-term stock/local coexistence remains a
+separate qualification gate in the [roadmap](PROJECT_ROADMAP.md). Do not delete
+an existing HA device before reassociation; stable endpoint matching preserves
+its entities and history.
+
+HCS02x sensors, HTV405 four-zone valves and HTV145 single-zone valves appear in
+the normal model picker. HTV145 automatic discovery requires firmware advertising
+`htv145_auto_identity_pairing`; older nodes require an update, not manual IDs.
+After naming an HTV145, choose to verify controls now or finish without testing.
+**Verify valve controls** returns to a paired valve's pending setup later.
+Finishing without testing does not finish ACK/control-owner provisioning; if the
+valve stops reporting before verification resumes, it may need to be woken or
+paired again. The flow will not guess its state or send an open without evidence.
+
+Verification requires explicit approval for two requested 60-second runs (or a
+dry valve): automatic stop, then an early stop after at least 20 seconds. Keep
+the flow open. The gateway derives the selected owner and RF parameters from
+accepted pairing, confirms any old owner's revocation, and requires fresh owner
+telemetry before the idle anchor. If that anchor fails, one fixed first-open
+candidate may initialize this association; only its positive response supplies
+counter authority. No failed open is retried automatically. Independent stop
+reports must complete both tests before public controls become available.
+
+Closing the flow stops subsequent test steps; a started bounded run may still
+finish automatically. Failure, owner reconnect, expiry or gateway restart ends
+the verification attempt without replay. Inspect the device before re-pairing
+and granting fresh consent. An old flow cannot act on a newer pairing session.
+The current HTV145 runtime supports one single-zone valve per custom gateway
+identity and per node; onboarding refuses to displace a different valve's owner.
+Existing qualified valves do not acquire a new test requirement on upgrade.
+See the [roadmap](PROJECT_ROADMAP.md) for staged deployment and physical acceptance.

@@ -300,6 +300,13 @@ class RainPointLocalClient:
             token,
         )
 
+    async def commission_valve(self, token: str, device_id: str, action: str,
+                               *, consent: bool = False, pairing_command_id: str | None = None) -> dict[str, Any]:
+        """Manage consented onboarding using only a registered device identity."""
+        return await self._post(f"commissioning/{action}",
+            {"device_id": device_id, "test_watering_confirmed": consent,
+             "pairing_command_id": pairing_command_id}, token)
+
     async def open_single_valve(self, token: str, *, device_id: str,
                                 duration_seconds: int) -> dict[str, Any]:
         """Open one enrolled outlet for a bounded duration."""

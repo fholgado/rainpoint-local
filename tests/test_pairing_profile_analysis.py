@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "tools" / "analyze_pairing_profiles.py"
 SPEC = importlib.util.spec_from_file_location("analyze_pairing_profiles", MODULE_PATH)
 assert SPEC and SPEC.loader

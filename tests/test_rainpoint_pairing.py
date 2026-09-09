@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.pairing import (  # noqa: E402
@@ -18,7 +18,7 @@ from rainpointd.pairing import (  # noqa: E402
     factory_endpoint,
     paired_endpoint,
 )
-from test_support import captured_normalize_row as normalize_row  # noqa: E402
+from tests.support import captured_normalize_row as normalize_row  # noqa: E402
 
 
 UTC = timezone.utc

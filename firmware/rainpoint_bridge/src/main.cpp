@@ -101,6 +101,7 @@ std::uint32_t pairingLocalDateTimeSetAtMs = 0;
 bool pairingRequiresNetwork = false;
 bool pairingAutomaticDiscovery = false;
 bool pairingFactoryAdopted = false;
+bool htv145CommissionOpenAttempted = false;
 String pairingCommandId;
 rainpoint::RoutineAckAuthorizations routineAckAuthorizations;
 rainpoint::Htv405RoutineAckAuthorizations htv405RoutineAckAuthorizations;
@@ -866,7 +867,7 @@ bool rfCommandMayTransmit(const String& type) {
     if (
         type == "htv145_control_open" ||
         type == "htv145_control_close" || type == "htv145_control_idle_anchor" ||
-        type == "htv145_control_bootstrap_open"
+        type == "htv145_control_bootstrap_open" || type == "htv145_control_commission_open"
     ) {
         return true;
     }
@@ -1838,10 +1839,11 @@ bool startHtv145Candidate(
     bool watering,
     std::uint32_t durationSeconds,
     bool idleAnchor = false,
-    bool bootstrapTrial = false
+    bool bootstrapTrial = false,
+    bool commissioning = false
 ) {
 #ifndef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
-    if (bootstrapTrial) return false;
+    if (bootstrapTrial && !commissioning) return false;
 #endif
     if (!htv145ControlCandidate.configured ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
@@ -2235,14 +2237,30 @@ void handleNetworkCommand() {
         htv145ControlCandidate.reportAckCenterHz = 0;
         reportHtv145CandidateStatus("revoked");
         htv145ControlCandidate = Htv145ControlCandidate{};
+        htv145CommissionOpenAttempted = false;
         return;
     }
-    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor" || type == "htv145_control_bootstrap_open") {
+    if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor" || type == "htv145_control_bootstrap_open" || type == "htv145_control_commission_open") {
         if (jsonStringField(command, "controller_endpoint") != hexString(htv145ControlCandidate.link.controllerEndpoint.data(), 4) ||
             jsonStringField(command, "valve_endpoint") != hexString(htv145ControlCandidate.link.valveEndpoint.data(), 4)) {
             reportNetworkCommandError(commandId, "htv145_control_association_mismatch");
             return;
         }
+    }
+    // Explicit commissioning uses the dry-qualified fixed first-open recipe.
+    // Host consent/reservation persists across restarts; normal open and sync
+    // never reach this path. No arbitrary counter, duration or automatic retry.
+    if (type == "htv145_control_commission_open") {
+        long sequence = 0, duration = 0;
+        if (htv145CommissionOpenAttempted ||
+            !jsonLongField(command, "expected_sequence", sequence) || sequence != 0x81 ||
+            !jsonLongField(command, "duration_seconds", duration) || duration != 60 ||
+            !startHtv145Candidate(commandId, true, 60, false, true, true)) {
+            reportNetworkCommandError(commandId, "invalid_htv145_commission_open");
+        } else {
+            htv145CommissionOpenAttempted = true;
+        }
+        return;
     }
 #ifdef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
     if (type == "htv145_control_bootstrap_open") {
@@ -2668,7 +2686,7 @@ void handleNetworkCommand() {
     const bool requestedValveFactoryParsed =
         parseRawHexEndpoint(factory, requestedFactoryEndpoint);
     requestedValveAutomaticDiscovery =
-        requestedHtv405Profile && factory.isEmpty();
+        (requestedHtv405Profile || requestedHtv145Profile) && factory.isEmpty();
     if (
         (requestedValveAutomaticDiscovery ||
             ((requestedHtv405Profile || requestedHtv145Profile) &&
@@ -2731,12 +2749,16 @@ void handleNetworkCommand() {
     if (requestedValvePairing) {
         const bool profileBuilt =
             valvePairingHtv145
-                ? rainpoint::htv145::buildProfile(
+                ? (requestedValveAutomaticDiscovery
+                    ? rainpoint::htv145::initializeAutomaticProfile(
+                        requestedValveRoute, requestedCompanionEndpoint,
+                        activeHtv145PairingProfile)
+                    : rainpoint::htv145::buildProfile(
                     requestedFactoryEndpoint,
                     requestedValveRoute,
                     requestedCompanionEndpoint,
                     activeHtv145PairingProfile
-                )
+                ))
                 :
             (requestedValveAutomaticDiscovery
                 ? rainpoint::initializeAutomaticHtv405Profile(
@@ -3241,6 +3263,14 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
         if (valvePairingHtv145) {
+            if (pairingAutomaticDiscovery && !pairingFactoryAdopted) {
+                if (!rainpoint::htv145::adoptFactoryAnnouncement(frame, activeHtv145PairingProfile)) {
+                    printPacket(name, frame, packet, radio);
+                    return;
+                }
+                pairingFactoryAdopted = true;
+                reportPairingStatus("factory_identity_adopted");
+            }
             processHtv145PairingFrame(frame, packet, radio);
         } else
         {

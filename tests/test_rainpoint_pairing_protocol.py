@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.pairing_protocol import (  # noqa: E402
@@ -1036,7 +1036,10 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
 
         htv145_metadata = automatic_htv145_profile_metadata()
         self.assertEqual("valve", htv145_metadata["device_category"])
-        self.assertFalse(htv145_metadata["user_pairing_supported"])
+        self.assertTrue(htv145_metadata["user_pairing_supported"])
+        self.assertTrue(htv145_metadata["automatic_discovery"])
+        self.assertEqual("htv145_auto_identity_pairing", htv145_metadata["required_node_capability"])
+        self.assertEqual([], htv145_metadata["association_inputs_required"])
         self.assertEqual(
             122_759, htv145_metadata["calibrated_frequency_offset_hz"]
         )
@@ -1124,7 +1127,7 @@ class HTV405PairingEvidenceTest(unittest.TestCase):
         self.assertFalse(metadata["valve_control_enabled"])
         self.assertEqual(6, metadata["step_count"])
         self.assertEqual(2_400, metadata["configuration_wake_symbols"])
-        self.assertEqual("retained_association", metadata["controller_identity_default"])
+        self.assertEqual("persistent_local_gateway", metadata["controller_identity_default"])
 
     def test_valve_clock_keeps_the_captured_marker_bits(self) -> None:
         profile = build_htv405_profile(

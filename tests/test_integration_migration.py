@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import importlib.util
 import sys
 import types
@@ -11,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, call
 from pathlib import Path
 from datetime import timedelta
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "custom_components" / "rainpoint_local"
 
 # Load the pure migration module without importing Home Assistant.
@@ -51,13 +52,72 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
             async_step_pair_device=AsyncMock(), async_step_add_device=AsyncMock())
         review = _integration_function("config_flow.py", "async_step_pairing_review", {})
         await review(flow)
-        self.assertEqual(["start_pairing", "change_pairing_radio", "change_pairing_model", "cancel_add_device"],
+        self.assertEqual(["start_pairing", "change_pairing_model", "change_pairing_radio"],
                          flow.async_show_menu.call_args.kwargs["menu_options"])
         flow.async_step_pair_device.assert_not_awaited()
         back = _integration_function("config_flow.py", "async_step_change_pairing_radio", {})
         await back(flow)
         flow.async_step_pair_device.assert_awaited_once_with()
         self.assertEqual("n", flow._pairing_request["node_id"])
+
+    def test_pairing_intermediate_forms_render_next(self):
+        tree = ast.parse((PACKAGE / "config_flow.py").read_text())
+        for name in ("_async_select_pairing_profile", "async_step_pair_device"):
+            method = next(node for node in ast.walk(tree)
+                          if isinstance(node, ast.AsyncFunctionDef) and node.name == name)
+            form = next(node for node in ast.walk(method)
+                        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "async_show_form")
+            keywords = {arg.arg: arg.value for arg in form.keywords}
+            self.assertIn("last_step", keywords, name)
+            self.assertIs(ast.literal_eval(keywords["last_step"]), False, name)
+
+    async def test_management_menu_omits_manual_radio_credentials(self):
+        flow = types.SimpleNamespace(
+            _token="test-token", _entry=types.SimpleNamespace(
+                data={"registry_write_token": "test-token"}, options={}),
+            async_show_menu=Mock())
+        callback = _integration_function("config_flow.py", "async_step_init",
+                                         {"CONF_TOKEN": "registry_write_token"})
+        await callback(flow)
+        self.assertEqual(["add_device", "verify_valve", "remove_radio_node"],
+                         flow.async_show_menu.call_args.kwargs["menu_options"])
+
+    def test_pairing_labels_omit_manual_credentials_and_use_review_back(self):
+        strings = json.loads((PACKAGE / "strings.json").read_text())
+        translated = json.loads((PACKAGE / "translations/en.json").read_text())
+        self.assertEqual(strings, translated)
+        steps = strings["options"]["step"]
+        self.assertNotIn("add_radio_node", steps["init"]["menu_options"])
+        self.assertEqual("Back", steps["pairing_review"]["menu_options"]["change_pairing_radio"])
+        self.assertNotIn("cancel_add_device", steps["pairing_review"]["menu_options"])
+
+    async def test_commissioning_review_and_skip_never_start_watering(self):
+        client = types.SimpleNamespace(commission_valve=AsyncMock(return_value={
+            "state": "awaiting_consent", "pairing_command_id": "pair-1"}))
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+            _commission_device_id="valve", async_show_menu=Mock(), async_create_entry=Mock())
+        fn = _integration_function("config_flow.py", "async_step_commission_review", {})
+        await fn(flow)
+        client.commission_valve.assert_awaited_once_with("token", "valve", "status")
+        self.assertEqual("pair-1", flow._commission_pairing_command_id)
+        self.assertIn("commission_later", flow.async_show_menu.call_args.kwargs["menu_options"])
+        await _integration_function("config_flow.py", "async_step_commission_later", {})(flow)
+        self.assertEqual(1, client.commission_valve.await_count)
+
+    async def test_commissioning_progress_cancels_only_its_pairing_session(self):
+        import asyncio
+        client = types.SimpleNamespace(commission_valve=AsyncMock(side_effect=[asyncio.CancelledError(), {}]))
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+            _commission_device_id="valve", _commission_pairing_command_id="pair-1")
+        ns = {"asyncio": asyncio, **{name: ValueError for name in (
+            "RainPointLocalCannotConnect", "RainPointLocalInvalidResponse",
+            "RainPointLocalUnauthorized", "RainPointLocalCommandRejected")}}
+        fn = _integration_function("config_flow.py", "_async_commission_wait", ns)
+        with self.assertRaises(asyncio.CancelledError): await fn(flow)
+        self.assertEqual([call("token", "valve", "advance", pairing_command_id="pair-1"),
+                         call("token", "valve", "cancel", pairing_command_id="pair-1")],
+                         client.commission_valve.await_args_list)
 
     async def test_event_listener_refreshes_state_and_recovers_reset_cursor(self):
         import asyncio

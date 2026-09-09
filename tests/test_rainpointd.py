@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.gateway import (
@@ -33,7 +33,7 @@ from rainpointd.product_identity import (
 from rainpointd.replay import ReplayTransport, load_fixtures
 from rainpointd.valve_protocol import ValveLink, build_open_frame
 
-from test_support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
+from tests.support import CapturedInstallationGateway as Gateway, observe_captured_sensor_route
 
 class GatewayTest(unittest.TestCase):
     def test_cancelled_pairing_flow_cannot_stop_a_replacement_session(self):
@@ -1382,6 +1382,33 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual("Vegetable Garden", pairing_node["area"])
             self.assertTrue(pairing_node["managed"])
             gateway.close()
+
+    def test_single_valve_auto_discovery_is_capability_and_command_scoped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = Gateway(storage_path=str(Path(directory) / "events.sqlite3"))
+            self.addCleanup(gateway.close)
+            commands = []
+            node_id = "rp-001122334455"
+            gateway.set_node_command_sender(lambda _, command: commands.append(command))
+            caps = ["rx", "sensor_pairing_tx", "htv145_pairing_tx_candidate", "configurable_rf_controller_identity"]
+            gateway.update_node(node_id, connected=True, authenticated=True, protocol_version=2, capabilities=caps)
+            with self.assertRaises(ValueError):
+                gateway.start_pairing(120, node_id=node_id, profile_id="htv145_auto_candidate_v1")
+            gateway.update_node(node_id, capabilities=caps + ["htv145_auto_identity_pairing"])
+            gateway.start_pairing(120, node_id=node_id, profile_id="htv145_auto_candidate_v1")
+            command = commands[-1]
+            self.assertNotIn("factory_endpoint", command)
+            self.assertEqual(gateway.rf_identity.controller_endpoint, command["valve_route"])
+            for observed_command, factory, paired in (("old", "31c2d38f", "b1c2d38f"),
+                                                       (command["command_id"], "31c2d313", "b1c2d313")):
+                gateway.update_node(node_id, pairing_command_id=observed_command,
+                    pairing_factory_endpoint=factory, pairing_paired_endpoint=paired)
+                self.assertIsNone(gateway._active_pairing_expected_valve_endpoint)
+            gateway.update_node(node_id, pairing_command_id=command["command_id"],
+                pairing_factory_endpoint="31c2d38f", pairing_paired_endpoint="b1c2d38f")
+            self.assertEqual("b1c2d38f", gateway._active_pairing_expected_valve_endpoint)
+            self.assertEqual(6, gateway._active_pairing_control_profile["selector"])
+            self.assertIsNone(gateway._active_pairing_confirmed_valve_endpoint)
 
     def test_sensor_ack_capacity_does_not_hide_a_valve_capable_node(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -3058,6 +3085,36 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         with urlopen(request, timeout=2) as response:
             return json.load(response)
 
+    def test_normal_commissioning_requires_auth_pairing_and_consent_not_research_mode(self):
+        gateway = self.server.gateway
+        gateway._htv145_acceptance_enabled = False
+        route = "/api/v1/commissioning/begin"
+        with self.assertRaises(HTTPError):
+            self.post_json(route, {"device_id": "missing", "test_watering_confirmed": True})
+        registration = gateway._store.accept_paired_valve_link(
+            controller_endpoint="a1b2c380", valve_endpoint="b1c2d38f", device_id="one-zone",
+            name="Valve", model="HTV145FRF", area=None, accepted_at=datetime.now(timezone.utc).isoformat())
+        gateway._htv145_commissioning.record_pairing(registration, self.NODE_ID, "pairing")
+        gateway.update_node(self.NODE_ID, capabilities=["htv145_control_tx_candidate",
+            "htv145_report_ack_tx", "htv145_idle_anchor", "htv145_commissioning"])
+        for token, consent in ((None, True), ("wrong", True), ("test-token", False)):
+            with self.assertRaises(HTTPError):
+                self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": consent,
+                    "pairing_command_id": "pairing"}, token=token)
+        self.assertEqual([], self.commands)
+        result = self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": True,
+            "node_id": "rp-deadbeef0000", "center_hz": 0, "expected_sequence": 5,
+            "pairing_command_id": "pairing"})
+        self.assertEqual("verifying", result["state"])
+        self.assertEqual(self.NODE_ID, self.commands[-1][0])
+        self.assertEqual("htv145_control_configure", self.commands[-1][1]["type"])
+        with self.assertRaises(HTTPError):
+            self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": True,
+                "pairing_command_id": "pairing"})
+        with self.assertRaises(HTTPError):
+            self.post_json("/api/v1/commissioning/cancel", {"device_id": "one-zone", "pairing_command_id": "old"})
+        self.assertEqual("verifying", self.post_json("/api/v1/commissioning/status", {"device_id": "one-zone"})["state"])
+
     def test_new_pairing_qualification_is_gated_and_public_controls_remain_disabled(self):
         gateway = self.server.gateway
         now = datetime.now(timezone.utc).isoformat()
@@ -3192,7 +3249,7 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
             controller_endpoint="b1c2d38f", valve_endpoint="a1b2c380", center_hz=434398811,
             power_dbm=10, invert=False, trailer_residual=0x4f03, close_trailer_residual=0x4f03,
             command_marker_inverted=True, report_ack_center_hz=433518905)
-        fixture = json.loads((Path(__file__).parent / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
+        fixture = json.loads((Path(__file__).resolve().parents[1] / "research/fixtures/htv145_idle_result3_counter_recovery_20260906.json").read_text())
         gateway._htv145_runtime.coordinator.configure(profile, observed_at=now.isoformat())
         gateway._devices["one-zone"] = {"device_id":"one-zone", "model":"HTV145FRF", "name":"Test valve",
             "state":{"rf_endpoint_a":"a1b2c380", "rf_endpoint_b":"b1c2d38f"}}

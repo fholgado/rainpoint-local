@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.safety import (  # noqa: E402
@@ -2122,6 +2122,93 @@ class Htv145QualificationTest(unittest.TestCase):
         restored.tick(now=self.at(125))
         self.assertTrue(restored.qualification.qualified(self.profile))
         self.assertEqual(["htv145_control_configure", "htv145_control_sync"], [c["type"] for _, c in self.sent])
+
+
+class Htv145CommissioningTest(unittest.TestCase):
+    at = Htv145QualificationTest.at
+
+    def setUp(self):
+        from rainpointd.htv145_commissioning import Htv145Commissioning
+        Htv145RuntimeTest.setUp(self)
+        self.node["capabilities"] += ["htv145_idle_anchor", "htv145_commissioning"]
+        self.commissioning = Htv145Commissioning(self.runtime)
+        self.registration = {"device_id": "test-valve", "model": "HTV145FRF",
+            "valve_endpoint": self.profile.controller_endpoint,
+            "controller_endpoint": self.profile.valve_endpoint}
+        self.commissioning.record_pairing(self.registration, self.profile.node_id, "pairing-1")
+
+    def act(self, action, seconds=0, consent=False):
+        return self.commissioning.act(self.registration, action, now=self.at(seconds), consent=consent)
+
+    def test_pairing_and_status_do_not_actuate_or_grant_authority(self):
+        self.assertEqual("awaiting_consent", self.act("status")["state"])
+        self.assertFalse(self.runtime.qualification.qualified(self.profile))
+        self.act("advance")
+        with self.assertRaises(ValueError): self.act("begin")
+        self.assertEqual([], self.sent)
+
+    def test_captured_first_open_and_stops_complete_device_based_onboarding(self):
+        self.act("begin", consent=True)
+        self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.sent])
+        with self.assertRaises(RuntimeError): self.act("begin", consent=True)
+        negative = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+        fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_first_open_20260908.json").read_text())
+        self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(1))
+        self.runtime.observe_frame(bytes.fromhex(negative["response_frame"]), now=self.at(2))
+        self.act("advance", 3)
+        self.assertFalse(any(c["type"].endswith("open") for _, c in self.sent))
+        self.act("advance", 22)
+        self.assertEqual("htv145_control_commission_open", self.sent[-1][1]["type"])
+        sent = len(self.sent)
+        self.act("advance", 22)
+        self.assertEqual(sent, len(self.sent))
+        self.assertFalse(self.runtime.qualification.qualified(self.profile))
+        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["response_frame"]), now=self.at(23))
+        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["idle_frame"]), now=self.at(85))
+        self.act("advance", 86)
+        self.runtime.observe_frame(bytes.fromhex(fixture["second_open"]["response_frame"]), now=self.at(87))
+        self.act("advance", 105)
+        self.assertEqual("htv145_control_open", self.sent[-1][1]["type"])
+        self.act("advance", 106)
+        self.assertEqual("htv145_control_close", self.sent[-1][1]["type"])
+        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["response_frame"]), now=self.at(107))
+        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["idle_frame"]), now=self.at(113))
+        self.assertEqual("complete", self.act("advance", 114)["state"])
+        self.assertTrue(self.runtime.qualification.qualified(self.profile))
+        self.assertEqual(2, len([c for _, c in self.sent if c["type"].endswith("open")]))
+
+    def test_cancel_restart_and_reconnection_never_replay(self):
+        from rainpointd.htv145_commissioning import Htv145Commissioning
+        for mode in ("cancel", "restart", "reconnect"):
+            with self.subTest(mode=mode):
+                self.commissioning.record_pairing(self.registration, self.profile.node_id, mode)
+                self.act("begin", consent=True)
+                count = len(self.sent)
+                if mode == "cancel": self.act("cancel")
+                elif mode == "restart": self.commissioning = Htv145Commissioning(self.runtime)
+                else: self.node["connected_at"] = "new-connection"
+                self.assertEqual("interrupted", self.act("advance", 1)["state"])
+                self.assertEqual(count, len(self.sent))
+
+    def test_owner_revoke_is_confirmed_before_replacement(self):
+        self.coordinator.configure(self.profile, observed_at=self.at())
+        self.act("begin", consent=True)
+        self.assertEqual("htv145_control_revoke", self.sent[-1][1]["type"])
+        count = len(self.sent)
+        self.act("advance", 1)
+        self.assertEqual(count, len(self.sent))
+        command = self.sent[-1][1]
+        self.runtime.observe_node(self.profile.node_id, {**command, "state": "revoked"}, now=self.at(2))
+        self.act("advance", 3)
+        self.assertEqual("htv145_control_configure", self.sent[-1][1]["type"])
+
+    def test_association_change_and_expiry_fail_closed(self):
+        self.act("begin", consent=True)
+        count = len(self.sent)
+        self.assertEqual("failed", self.act("advance", 901)["state"])
+        self.assertEqual(count, len(self.sent))
+        self.registration["controller_endpoint"] = "d1b2c380"
+        self.assertEqual("association_changed", self.act("status", 902)["reason"])
 
 
 class Htv145RuntimeTest(unittest.TestCase):

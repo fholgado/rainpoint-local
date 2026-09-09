@@ -48,19 +48,74 @@ The selected unattended implementation/review pass is complete (original list nu
 - [x] **18.** Recheck command-phase, shared-counter and battery-field evidence.
   Unsupported battery and arbitrary action-order semantics remain unavailable.
 
-- [ ] Verify the new wizard's rendered navigation in HA after the Mac is unlocked.
-  Callback tests cover review/Back behavior and no transmission before Start.
-  September 7: HA tab located, but Chrome's Apple Events JavaScript access is
-  disabled; rendered navigation has not been verified. Do not change browser
-  security settings implicitly or count callback tests as visual acceptance.
-  September 8 recheck found the HA tab, but Chrome still rejects JavaScript
-  inspection through Apple Events. Continue with user-assisted UI verification
-  or explicitly approved browser access; no browser security setting was changed.
+- [x] Inspect the deployed wizard in HA with explicitly user-enabled browser
+  access. September 8: both categories, HCS02x and HTV405 models, friendly radio
+  labels, radio/timeout preservation, category return and pre-arm cancellation
+  were exercised in the rendered UI. No pairing or watering was started; all
+  three radios remained connected, normal and unarmed. HA's stale browser
+  connection recovered with a page refresh, without a server or radio restart.
+- [x] Deploy and verify the selected native pairing navigation improvements.
+  Integration 0.16.2 renders Next for model and radio forms and Back on review.
+  Live September 8 verification covered sensor and valve flows, review Back
+  retaining a non-default radio/300-second window, and Change device model
+  returning to categories. No Start pairing was clicked. These are native menu
+  actions, not footer Back buttons on every screen. The user deferred a dedicated
+  wizard; its remaining requirement is recorded in the backlog below.
+- [x] Verify removal of "Add with setup code" from the management menu in HA.
+  The user requested removal on September 8. New radios use discovery and BOOT
+  confirmation; existing registrations/credentials are unchanged. The hidden
+  legacy callback remains for an already-open manual registration flow, not as
+  a normal sensor/valve pairing option.
+  Validation: 524 Python tests passed (two optional skips), native C++ protocol
+  test and deterministic package smoke passed, HA configuration check passed,
+  and deployed file hashes matched. Only HA was restarted; both valves remained
+  idle, all six sensors available and three radios connected/normal/unarmed.
+  Record this HA restart as an intervention in the ongoing mixed-version soak,
+  not uninterrupted final-release uptime.
+- [x] Consolidate root-level Python regression tests and shared fixtures under
+  `tests/`. CI and contributor instructions now use automatic discovery; focused
+  module runs remain supported. September 8 validation: all 533 Python tests
+  passed (two optional skips), with test logic unchanged. Native firmware tests
+  remain under `firmware/rainpoint_bridge/tests/`.
 - [ ] Finish fleet qualification of standard firmware 0.16.2 after the current
   soak. The Front Yard owner is already on 0.16.2 with confirmed custom-ID
   open/automatic stop/early close; the other nodes retain their installed images.
+- [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
+  radio, retain the custom gateway identity, persist the accepted pairing owner,
+  and expose separate paired/control-verification states in HA. Verification
+  must require explicit consent for bounded watering; pairing alone must neither
+  actuate nor authenticate a counter. Keep the frozen counter-2 RF sequence and
+  existing qualified associations unchanged; a sixth transcript row is not a
+  prerequisite for independently proven controls.
+  September 8 implementation: an isolated discovery helper and native regression
+  now reject malformed/non-announcement frames and prove every generated reply
+  matches the explicit-ID profile byte for byte. Counter-0/1 announcements still
+  receive no assignment and counter 2 retains the existing response.
+  Validation: both native C++ protocol tests passed; all 524 Python tests passed
+  with two optional skips.
+  After explicit approval, candidate gateway 0.37.0, integration/firmware 0.17.0
+  connect discovery to the unchanged pairing exchange and advertise the model
+  only to compatible radios. Accepted pairing records the selected owner; an
+  authenticated, session-scoped verification flow confirms old-owner revocation
+  before configuring a new owner. Consent permits two fixed one-minute runs,
+  including at most one captured first-open initialization, with positive valve
+  replies and independent automatic/early-stop evidence required for completion.
+  The HA flow exposes progress/failure, supports finishing without testing and
+  returning later, and prevents duplicate starts or old-dialog cancellation of
+  a newer pairing. Interrupted tests are not replayed. Existing qualified
+  installations are not reset on upgrade. The current one-single-valve slot per
+  gateway identity/node is enforced without displacing a different valve.
+  Candidate validation: all 533 Python tests passed (two optional skips), both
+  native C++ protocol tests passed, unified firmware 0.17.0 built successfully,
+  and the final deterministic package passed isolated fresh-install/restart smoke
+  checks. HA callbacks were tested with stubs; the new screens have not yet been
+  verified in the live HA frontend. No physical controls were sent by these tests.
+  The user separately confirmed successful front-yard watering on the installed
+  version; that does not close automatic onboarding acceptance. **Not deployed**:
+  stage the candidate, then physically verify discovery → pairing → consent →
+  bounded controls from HA, cancellation/restart, and retained owner health.
 
-Gateway 0.36.4 and integration 0.16.1 are deployed. Firmware 0.16.2 contains the
+Gateway 0.36.4 and integration 0.16.2 are deployed. Firmware 0.16.2 contains the
 post-command RX restoration fix, without changing the frozen pairing sequence.
 Software/research completion does not resolve the physical or publication gates.
 
@@ -207,6 +262,12 @@ and version history, not this checklist.
   battery rejoin as separate lifecycle paths.
 - [ ] Define HA operational enrollment from valve-owned evidence while clearly
   distinguishing it from full six-stage terminal completion.
+  September 8 UI audit: HTV145 remains intentionally excluded from the ordinary
+  model picker (`user_pairing_supported=False`), because its research enrollment
+  still requires factory/route/companion association inputs and separate control
+  qualification. The qualified installed valve's controls do not prove generic
+  discovery or unattended first-control setup. Implement and qualify that path
+  before advertising user pairing; do not merely flip the metadata flag.
 
 Exit: every supported family can pair/remove through HA, with repeated physical
 acceptance and one stable HA representation. Dry one-zone control does not close
@@ -431,8 +492,11 @@ until Phases 0–5 qualify. Design review may continue without live migration.
 - Determine whether any pairing field controls long-term telemetry channel.
 - Characterize compact product/status integrity before constructing that traffic.
 - Optimize channel scheduling and placement beyond the required stability floor.
-- Make Add device a reversible stepped wizard after protocol reliability stops
-  being the limiting factor; validate navigation in HA.
+- Build a dedicated Add device wizard with actual footer Back/Next buttons on
+  every selection/review screen. Deferred by the user on September 8 after
+  selecting native-flow improvements first. HA 2026.8's standard data-entry
+  forms provide Next labels but no previous-step button contract; preserve
+  backend validation and explicit Start pairing authorization in any custom UI.
 - Finish carrier manufacturing/enclosure work under its physical preorder checklist.
 
 Promote a backlog item only when evidence makes it a qualification blocker or

@@ -51,6 +51,10 @@
   },
   "options": {
     "progress": {
+      "commission_wait": "Waiting for the selected radio and fresh valve telemetry. Pairing is complete, but controls are not verified yet.",
+      "commission_open": "Sending a bounded test run and waiting for the valve to confirm it opened.",
+      "commission_watering": "The valve confirmed watering. Checking its automatic stop, then performing a second bounded run with an early stop.",
+      "commission_close": "Waiting for the valve's close confirmation and an independent idle report.",
       "wait_for_device": "Listening on {node_name} for {device_name} for up to {duration_seconds} seconds. Start pairing on the device and keep it near the radio node.",
       "exchange_with_device": "A {device_name} request was detected. {node_name} is completing the model-specific pairing exchange; keep the device nearby until its LED sequence finishes.",
       "confirm_device": "Pairing messages were sent. Waiting for {device_name} to confirm its assigned local identity.",
@@ -61,10 +65,32 @@
         "title": "Manage RainPoint Local",
         "menu_options": {
           "add_device": "Add a RainPoint device",
-          "add_radio_node": "Add with setup code (advanced)",
+          "verify_valve": "Verify valve controls",
           "remove_radio_node": "Remove a radio node",
           "authenticate_gateway": "Authenticate a standalone gateway"
         }
+      },
+      "verify_valve": {
+        "title": "Select a valve to verify",
+        "data": {"device_id": "Valve"}
+      },
+      "commission_review": {
+        "title": "Valve paired — verify controls",
+        "description": "Pairing alone does not confirm watering controls. Verification uses the selected radio and requires your approval before water can flow.",
+        "menu_options": {
+          "commission_start": "Review watering test",
+          "commission_later": "Finish without testing",
+          "verify_valve": "Back"
+        }
+      },
+      "commission_start": {
+        "title": "Approve valve verification",
+        "description": "This test can release water. It requests two 60-second runs: the first stops automatically; the second is stopped early after at least 20 seconds. Allow up to two minutes of watering, or disconnect the valve from water first. Keep this screen open. Closing it stops further test steps, but an already-started run may continue to its automatic stop. No failed open is retried automatically.",
+        "data": {"test_watering_confirmed": "I approve these bounded watering tests"}
+      },
+      "commission_result": {
+        "title": "{result}",
+        "description": "{reason}. Only positive valve responses and independent stop reports enable normal controls. If verification failed or was interrupted, inspect the valve before pairing and testing again; an unconfirmed run may still have occurred."
       },
       "authenticate_gateway": {
         "title": "Authenticate standalone gateway",
@@ -76,7 +102,7 @@
       },
       "add_radio_node": {
         "title": "Add custom local radio node",
-        "description": "Register the stable node ID and 64-character setup token shown by the provisioned ESP32 firmware. The credential is stored privately by the custom local gateway.",
+        "description": "Manual fallback for a custom ESP32 radio node, not for pairing a sensor or valve. Normally, configure the radio's Wi-Fi, then adopt it from Discovered in Devices & services and confirm with its BOOT button. Use this form only when you already have a provisioned radio's ID and 64-character setup token. The credential is stored privately by the custom local gateway.",
         "data": {
           "node_id": "Radio node ID",
           "node_token": "Node setup token",
@@ -148,12 +174,11 @@
       },
       "pairing_review": {
         "title": "Review pairing",
-        "description": "Pair {device_name} using {node_name}. The radio will listen for {duration_seconds} seconds after you select Start pairing.",
+        "description": "Pair {device_name} using {node_name}. The radio will listen for {duration_seconds} seconds after you select Start pairing. Back returns to the radio and timeout settings without starting pairing. Close this dialog with X to exit.",
         "menu_options": {
           "start_pairing": "Start pairing",
-          "change_pairing_radio": "Change radio or timeout",
           "change_pairing_model": "Change device model",
-          "cancel_add_device": "Cancel"
+          "change_pairing_radio": "Back"
         }
       }
     },
@@ -164,9 +189,11 @@
       "no_pairing_node": "No authenticated pairing-capable local radio node is connected",
       "pairing_failed": "The selected radio node could not start this model's pairing exchange",
       "sensor_not_found": "The selected sensor is no longer available",
-      "confirmation_required": "Confirm that the physical sensor is not reset by this action"
+      "confirmation_required": "Confirm that the physical sensor is not reset by this action",
+      "test_consent_required": "Approve the bounded watering tests to continue"
     },
     "abort": {
+      "no_pending_valves": "No single-zone valves need control verification.",
       "pairing_timeout": "The pairing window expired before the device completed enrollment",
       "pairing_failed": "The local radio node could not complete the device enrollment exchange",
       "no_supported_devices": "This gateway does not currently advertise any user-pairable device models",

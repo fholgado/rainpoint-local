@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.esp32_network import ESP32NetworkServer, load_node_tokens
@@ -46,7 +46,7 @@ def _replace_frame_endpoint(
     frame[-2:] = trailer.to_bytes(2, "big")
     return frame.hex()
 
-from test_support import CapturedInstallationGateway as Gateway
+from tests.support import CapturedInstallationGateway as Gateway
 
 class ESP32NetworkTest(unittest.TestCase):
     def setUp(self) -> None:

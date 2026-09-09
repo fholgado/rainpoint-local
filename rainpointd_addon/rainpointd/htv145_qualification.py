@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from .valve_protocol import decode_htv145_command_response, decode_htv145_state_report
 
 
-TERMINAL = {"complete", "failed", "interrupted"}
+TERMINAL = {"complete", "failed", "interrupted", "awaiting_consent"}
 
 
 class Htv145Qualification:
@@ -130,7 +130,7 @@ class Htv145Qualification:
         self._save(data)
         return data
 
-    def bootstrap(self, profile, *, now):
+    def bootstrap(self, profile, *, now, commissioning=False):
         """One explicit dry trial of the captured first-open candidate, not a seed.
 
         Kept separate from normal opens and the close-only synchronization API.
@@ -138,7 +138,8 @@ class Htv145Qualification:
         duration, automatic retry, or successful qualification is implied.
         """
         node = self.runtime._ready_node(profile)
-        if "htv145_bootstrap_trial" not in node.get("capabilities", []):
+        capability = "htv145_commissioning" if commissioning else "htv145_bootstrap_trial"
+        if capability not in node.get("capabilities", []):
             raise RuntimeError("bootstrap requires explicitly enabled trial firmware")
         data = self.store.htv145_qualification(profile.valve_endpoint)
         if (not data or data["profile"] != asdict(profile) or data["state"] != "failed"
@@ -155,7 +156,7 @@ class Htv145Qualification:
                     deadline=(datetime.fromisoformat(now) + timedelta(minutes=15)).isoformat())
         self._save(data)
         try:
-            command = self.runtime.coordinator.request_bootstrap_open(profile, started_at=now)
+            command = self.runtime.coordinator.request_bootstrap_open(profile, started_at=now, commissioning=commissioning)
         except Exception:
             self._fail(data, "bootstrap_dispatch_failed")
             raise

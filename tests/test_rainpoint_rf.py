@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "rainpointd_addon"))
 
 from rainpointd.esp32 import ESP32SerialTransport  # noqa: E402
@@ -58,8 +58,8 @@ from tools.generate_rainpoint_iq import (  # noqa: E402
     generate_command,
 )
 
-from test_support import CapturedInstallationGateway as Gateway
-from test_support import CAPTURED_INSTALLATION_CATALOG, captured_normalize_row as normalize_row
+from tests.support import CapturedInstallationGateway as Gateway
+from tests.support import CAPTURED_INSTALLATION_CATALOG, captured_normalize_row as normalize_row
 
 class RainPointRFTest(unittest.TestCase):
     CAPTURED_VALVE_LINK = ValveLink(
