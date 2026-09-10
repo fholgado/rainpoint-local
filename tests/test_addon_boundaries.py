@@ -33,7 +33,11 @@ class AddonBoundaryTest(unittest.TestCase):
     def test_firmware_has_one_environment_with_both_valves(self):
         root = ROOT / "firmware/rainpoint_bridge"
         self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))
-        class Environment:
+        class Environment(dict):
+            def subst(self, value):
+                if value == "$PROJECT_DIR":
+                    return str(root)
+                raise AssertionError(value)
             def Append(self, **kwargs):
                 self.defines = dict(kwargs["CPPDEFINES"])
         def build(values):

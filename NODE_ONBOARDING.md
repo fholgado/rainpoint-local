@@ -1,5 +1,8 @@
 # Local radio-node onboarding
 
+For the complete first-install hardware, app and integration procedure, start
+with [Getting started](GETTING_STARTED.md).
+
 Adding a custom local radio node should feel like commissioning a Zigbee
 coordinator: users supply Wi-Fi, identify the physical device, confirm it, and
 give it a friendly name. They never copy ESP32 IDs, RF endpoints, ports, or

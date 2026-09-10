@@ -26,11 +26,15 @@ CC1101 module. Use 3.3 V logic and power; never connect CC1101 VCC to 5 V.
 | 5 | SCK | GPIO18 | SPI clock |
 | 6 | MOSI | GPIO23 | SPI controller-to-radio data |
 | 7 | MISO/GDO1 | GPIO19 | SPI radio-to-controller data |
-| 8 | GDO2 | GPIO25 | Reserved |
+| 8 | GDO2 | Not connected | Optional legacy GPIO25 wire; unused by current firmware |
 
 Use the module’s pin-1 marking and printed labels to orient its 2×4 connector.
 Keep wiring short, connect a 433 MHz antenna, and place a 100 nF ceramic bypass
 capacitor across CC1101 VCC/GND when practical.
+FIFO transmission uses the radio's internal clock; packet-end observations use
+the existing MISO/GDO1 connection. GDO2 is not required. An existing GDO2-to-GPIO25
+wire may remain connected, but GDO0-to-GPIO26 is still required. Disconnect USB
+power before changing wires.
 
 ## Behavior
 
@@ -120,7 +124,7 @@ unconfigured board it also exposes the generated setup token for recovery.
 ## Sensor pairing and recovery
 
 Pair sensors from **Settings → Devices & services → RainPoint Local →
-Configure → Pair sensor**. Select the radio node closest to the sensor. The
+Configure → Add a RainPoint device → Sensors**. Select the radio node closest to the sensor. The
 stock RainPoint gateway must be powered off during the short pairing exchange
 so it cannot race the selected local transmitter.
 
@@ -143,7 +147,7 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.15.11 --environment rainpoint_bridge
+  --version 0.17.0 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify

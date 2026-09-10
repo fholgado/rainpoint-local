@@ -1,0 +1,79 @@
+blueprint:
+  name: RainPoint Local - stale device report
+  description: >-
+    Optional observation-only alert for a Device report time entity. Creates
+    a persistent HA notification and optionally runs your notification action.
+    Never waters, re-pairs or resets anything. Review the alpha notification guide.
+  domain: automation
+  homeassistant:
+    min_version: 2026.7.0
+  input:
+    report_entity:
+      name: Device report time
+      selector:
+        entity:
+          filter:
+            integration: rainpoint_local
+            domain: sensor
+            device_class: timestamp
+    max_age_hours:
+      name: Stale after
+      default: 8
+      selector:
+        number:
+          min: 1
+          max: 48
+          step: 1
+          unit_of_measurement: hours
+    grace_minutes:
+      name: Condition must remain true for
+      description: Suppresses brief unavailable states during reconnects. Resets after HA restart.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: minutes
+    notify_actions:
+      name: Additional notification actions
+      description: Optional mobile notification; use notify_title and notify_message as templates. Do not add watering actions.
+      default: []
+      selector:
+        action: {}
+trigger_variables:
+  report_entity: !input report_entity
+  max_age_hours: !input max_age_hours
+triggers:
+  - trigger: template
+    value_template: >-
+      {% set stamp = as_timestamp(states(report_entity), 0) %}
+      {% set current = as_timestamp(now()) %}
+      {{ stamp <= 0 or stamp > current + 300 or current - stamp > (max_age_hours | float * 3600) }}
+    for:
+      minutes: !input grace_minutes
+variables:
+  report_entity: !input report_entity
+  max_age_hours: !input max_age_hours
+conditions:
+  - condition: template
+    value_template: >-
+      {% set stamp = as_timestamp(states(report_entity), 0) %}
+      {% set current = as_timestamp(now()) %}
+      {{ stamp <= 0 or stamp > current + 300 or current - stamp > (max_age_hours | float * 3600) }}
+actions:
+  - variables:
+      notify_title: RainPoint device needs attention
+      notify_message: >-
+        {{ state_attr(report_entity, 'friendly_name') or report_entity }} has no
+        trustworthy report within {{ max_age_hours }} hours. Last value:
+        {{ states(report_entity) }}. Check the device, radio and timestamps.
+        Missing telemetry does not prove a valve is closed. Observed at {{ now().isoformat() }}.
+  - action: persistent_notification.create
+    data:
+      notification_id: "rainpoint_stale_{{ report_entity | replace('.', '_') }}"
+      title: "{{ notify_title }}"
+      message: "{{ notify_message }}"
+  - sequence: !input notify_actions
+mode: single
+max_exceeded: silent

@@ -77,6 +77,7 @@ From the repository root, run the Python tests in `tests/` using discovery
 (with the permission preflight in [AGENTS.md](AGENTS.md)):
 
 ```sh
+python3 -m pip install -r tests/requirements.txt
 python3 -m unittest discover -s tests -t . -v
 ```
 

@@ -6,12 +6,18 @@ associations, ACK ownership, counters, and safety; the HA integration exposes
 telemetry and qualified controls. Normal operation does not need the vendor cloud
 or an SDR.
 
+**Experimental alpha preparation — not a finished irrigation controller.**
+Start with the [getting-started guide](GETTING_STARTED.md) for a separate
+installation, supported hardware, setup, recovery and known limitations.
+Use a maintainer-selected revision; no downloadable alpha release is published
+yet. Existing single-house field results do not prove a fresh installation.
+
 ## Device support
 
 | Family | Current capability | Limit |
 |---|---|---|
 | HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
-| HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised beta; battery unavailable; no water-usage capability |
+| HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised experimental use; battery unavailable; no water-usage capability |
 | HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
 
 Read [device communication references](protocol_documentation/) for packet rules
@@ -22,15 +28,11 @@ or successful RF transmission is not proof of physical acceptance.
 
 HACS installs the integration; the gateway service is a separate app/add-on.
 
-1. Copy `rainpointd_addon` to `/addons/rainpointd`, reload the app store, and install
-   **RainPoint Local Gateway**.
-2. Install `custom_components/rainpoint_local` through HACS or copy it into HA's
-   custom components directory, then restart HA.
-3. Add **RainPoint Local**. Supervisor discovery provisions its management credential.
-4. Follow [radio onboarding](NODE_ONBOARDING.md) to commission and adopt a radio.
-5. Use the integration's **Configure** flow to add a supported device. Choose the
-   nearest suitable radio and power off the stock gateway during local enrollment.
-   Known devices retain their saved name, area, and canonical identity.
+The [getting-started guide](GETTING_STARTED.md) covers the two separate installs:
+the gateway app and the `rainpoint_local` integration, then USB flashing,
+Wi-Fi adoption and device pairing. The existing HomGar/RainPoint cloud integration
+is neither required nor replaced. Installing both integrations does **not** prove
+that stock and custom RF gateways can safely share devices.
 
 Back up HA before changing configuration. Keep source backups under
 `/share/rainpoint-local/source-backups`, outside `/addons`, and exclude macOS
@@ -64,13 +66,16 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd
 This starts an empty network gateway. Use the explicit
 [captured replay example](examples/captured-replay/) for offline sample data. See [local development](LOCAL_DEVELOPMENT.md)
 for runtime options and [AGENTS.md](AGENTS.md) for the complete required Python
-and native regression commands. Build only the `rainpoint_bridge` PlatformIO
+and native regression commands. Install the development test dependencies with
+`python3 -m pip install -r tests/requirements.txt` in a virtual environment first.
+Build only the `rainpoint_bridge` PlatformIO
 environment; production must exclude experimental transmit paths.
 
 ## Documentation map
 
 | Need | Document |
 |---|---|
+| First installation and alpha limitations | [Getting started](GETTING_STARTED.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
 | Current work and physical gates | [Roadmap](PROJECT_ROADMAP.md) |
 | Responsibilities and boundaries | [Architecture](FULL_STACK_ARCHITECTURE.md) |

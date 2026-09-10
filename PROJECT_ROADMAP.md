@@ -8,6 +8,83 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ## Current work order
 
+### Alpha cohort preparation
+
+The user now prioritizes an independent alpha for builders of their own radios,
+covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.
+This is a separate `rainpoint_local` installation, not a cloud-integration merge.
+Do not drop valve coverage to a sensor-only alpha. Dry valve verification comes
+before supervised live irrigation; the alpha is not yet a broad stable release.
+These launch tasks complement, rather than mark complete, the physical gates below.
+
+- [x] Merge the CI-green OTA fix and completed collection review into main
+  (PR #11). Gateway 0.37.1 was already deployed; merging changes no live RF state.
+- [x] Add `GETTING_STARTED.md` for independent builders: exact hardware/wiring,
+  separate app/HACS installs, Wi-Fi adoption, all supported pairing paths,
+  valve verification, updates, recovery and redacted feedback. Refresh README
+  entry points and clarify the unused GDO2 wire. The guide describes current
+  source installation and explicitly flags unverified distribution/UI paths.
+- [ ] Validate the guide on a clean HA OS installation without household
+  databases, catalogs or tokens: custom app repository and HACS installation,
+  discovery, new radio adoption and generated gateway identity. Confirm declared
+  HA minimum and both advertised app architectures, or narrow the alpha matrix.
+- [ ] Finish rendered native HA onboarding and physical acceptance for **both
+  valve families and sensors** on the unified image. Keep paired versus
+  control-qualified outcomes explicit. Check removal/re-enrollment, cancellation,
+  no-radio/offline-radio feedback and unsupported-model rejection. Record any
+  remaining battery-rejoin limits in alpha notes instead of promising recovery.
+- [ ] Prepare an immutable alpha tag and version compatibility table, source
+  bundle, first-USB-flash artifacts with offsets/tool instructions, OTA artifact
+  and installable local catalog, checksums and rollback notes. CI currently
+  labels its firmware manifest 0.16.1 despite building 0.17.0; derive a consistent
+  version and verify it before publishing. No release/tag was published by the
+  documentation pass; do not distribute stale CI manifests as alpha firmware.
+  Unattended preparation now implements a single source firmware version,
+  PlatformIO-generated receipt of actual flash parts/offsets, and a local alpha
+  bundle with source, USB/OTA images, catalog, compatibility metadata, checksums
+  and recovery instructions. Dirty/stale/mixed builds are rejected; previews are
+  explicitly marked dirty. Production boundary and extracted-source smoke checks
+  run before packaging; CI checks repeat-package byte identity without uploading
+  the bundle. This is packaging infrastructure, not publication or physical
+  first-flash qualification. External binary uploads require explicit approval.
+  Validation: unified PlatformIO build and real receipt succeeded; local preview
+  archive/source smoke passed and repeated archive bytes matched; 542 Python
+  tests passed (two optional skips). No radio was flashed and no release created.
+- [ ] Validate HACS metadata/distribution and app repository discovery; select
+  codeowners/contact, add a redacted issue template and test the support workflow.
+  Decide the supported update channel so testers do not unknowingly install main.
+  Offline checks now enforce one separately named integration, required manifest
+  fields, owner/contact and consistent HA minimum; an alpha issue form covers
+  all three device families and redaction. Full HACS acceptance is not proven.
+  Current HACS documentation requires local brand assets; no integration icon is
+  present yet. Add/validate it before claiming the custom-repository path ready.
+- [ ] Audit what a fresh tester actually gets for failed irrigation, stale
+  moisture, counter synchronization and offline alerts. Provide generic optional
+  setup/examples where needed; the household dashboards/watchdogs are not
+  automatically installed safeguards. Require visible valve-owned start/stop
+  evidence before asking testers to depend on scheduled watering.
+  Audit complete: `docs/ALPHA_NOTIFICATIONS.md` distinguishes what exists from
+  household-only safeguards. Optional observation-only blueprints provide stale
+  report and exposed valve-problem alerts, with persistent HA records before
+  optional mobile actions. Template regressions cover age/timezone/unknown values,
+  duplicate changes and new failures. Clean HA import and actual phone delivery
+  remain open. HTV145 lacks a persistent failed-command transaction entity for
+  every service/transport failure; implement/exercise that before promising full
+  failure-alert coverage. No alert blueprint was deployed to the live house.
+  Validation: the complete Python suite passed 547 tests (two optional skips),
+  including the shipped alert-template and distribution-metadata regressions.
+- [ ] Make an explicit alpha security decision: current sessions are not
+  encrypted, telemetry is LAN-readable, commissioning AP is open and firmware
+  lacks publisher signatures. Finish the corresponding hardening or document
+  accepted limitations for an invited trusted-LAN cohort; do not silently waive
+  the existing publication gates. No Internet port forwarding.
+- [ ] Record independent-house results for sensors and both valve families,
+  including RF reporting/ACK continuity, actual watering duration/stops and
+  overnight counter recovery. Preserve first-house evidence but do not use it
+  to close fresh-install or independent-site acceptance.
+
+### Existing qualification sequence
+
 The user prioritized single-zone promotion ahead of the selected hardening work.
 The verified association now uses standard firmware and HA controls, preserving
 bounded commands, counter recovery and evidence-based state. The user connected
