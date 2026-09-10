@@ -4022,6 +4022,8 @@ class Gateway:
                         "rf_retained_counter_restore_available": status["ready"],
                     })
                     confirmed = status["state"]
+                    transaction = self._store.htv145_transaction(profile.valve_endpoint)
+                    transaction_state = transaction.get("state", "idle")
                     pending = confirmed["pending_command_id"] is not None
                     control_available = bool(status["public_control_qualified"] and status["owner_available"] and status["counter_synchronized"]
                         and not pending and confirmed["revocation_command_id"] is None)
@@ -4035,8 +4037,19 @@ class Gateway:
                         "rf_control_unavailable_reason": None if control_available else counter_status,
                         "rf_control_start_unavailable_reason": None if status["ready"] else counter_status,
                         "rf_control_command_pending": pending,
-                        "rf_control_transaction_active": pending,
-                        "rf_control_transaction_id": confirmed["pending_command_id"],
+                        "rf_control_transaction_active": transaction_state == "waiting_for_confirmation",
+                        "rf_control_transaction_id": transaction.get("id"),
+                        "rf_control_transaction_state": transaction_state,
+                        "rf_control_transaction_status": {
+                            "idle": "No command requested", "waiting_for_confirmation": "Waiting for valve response",
+                            "confirmed": "Valve response confirmed", "failed": "Command failed",
+                        }.get(transaction_state, transaction_state),
+                        "rf_control_transaction_error": transaction.get("error"),
+                        "rf_control_transaction_action": transaction.get("action"),
+                        "rf_control_transaction_zone": 1 if transaction else None,
+                        "rf_control_transaction_duration_seconds": transaction.get("duration_seconds"),
+                        "rf_control_transaction_started_at": transaction.get("started_at"),
+                        "rf_control_transaction_updated_at": transaction.get("updated_at"),
                         "rf_control_confirmed_at": confirmed["confirmed_at"],
                         "rf_control_expected_idle_at": confirmed["expected_idle_at"],
                         "rf_control_overdue": status["anomaly"] is not None,

@@ -632,6 +632,7 @@ class RainPointLocalSensor(RainPointLocalEntity, SensorEntity):
             }
         if self.entity_description.key == "control_transaction_status":
             return {
+                "action": self.decoded_state.get("rf_control_transaction_action"),
                 "transaction_id": self.decoded_state.get(
                     "rf_control_transaction_id"
                 ),

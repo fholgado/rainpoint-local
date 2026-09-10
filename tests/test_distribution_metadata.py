@@ -1,13 +1,38 @@
 """Offline distribution structure checks, not HACS/HA OS acceptance."""
 import json
+import ast
 from pathlib import Path
 import re
+import struct
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DistributionMetadataTest(unittest.TestCase):
+    def test_adoption_network_component_dependency_is_declared(self):
+        directory = ROOT / "custom_components/rainpoint_local"
+        tree = ast.parse((directory / "config_flow.py").read_text())
+        imports = {alias.name for node in ast.walk(tree)
+                   if isinstance(node, ast.ImportFrom) and node.module == "homeassistant.components"
+                   for alias in node.names}
+        self.assertIn("network", imports)
+        manifest = json.loads((directory / "manifest.json").read_text())
+        self.assertEqual(["domain", "name", *sorted(set(manifest) - {"domain", "name"})], list(manifest))
+        self.assertIn("network", manifest.get("dependencies", []),
+                      "adoption uses the network component; it must be initialized first")
+
+    def test_local_brand_assets_are_real_rgba_pngs_at_both_sizes(self):
+        directory = ROOT / "custom_components/rainpoint_local/brand"
+        for filename, size in (("icon.png", 256), ("icon@2x.png", 512)):
+            data = (directory / filename).read_bytes()
+            self.assertEqual(b"\x89PNG\r\n\x1a\n", data[:8])
+            self.assertEqual(b"IHDR", data[12:16])
+            self.assertEqual((size, size, 8, 6), struct.unpack(">IIBB", data[16:26]))
+            self.assertIn(b"IDAT", data)
+            self.assertTrue(data.endswith(b"IEND\xaeB`\x82"))
+        self.assertTrue((ROOT / "tools/generate_brand_icon.swift").exists())
+
     def test_hacs_installs_one_separate_integration(self):
         integrations = sorted(p.name for p in (ROOT / "custom_components").iterdir()
                               if p.is_dir() and not p.name.startswith("."))

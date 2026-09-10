@@ -1,0 +1,2 @@
+{% set requested = states('input_number.garden_watering_duration') | float(0) %}
+{{ requested if 1 <= requested <= 60 and requested == (requested | int) else 0 }}

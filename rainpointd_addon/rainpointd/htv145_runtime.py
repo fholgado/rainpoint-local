@@ -8,6 +8,7 @@ waits for new owner telemetry before dispatching a close-only anchor.
 from __future__ import annotations
 
 from datetime import datetime
+import uuid
 from typing import Any, Callable
 
 from .htv145_control import Htv145ControlCoordinator, Htv145ControlProfile
@@ -130,6 +131,22 @@ class Htv145Runtime:
 
     def request(self, profile: Htv145ControlProfile, action: str, *, now: str,
                 duration_seconds: int | None = None) -> dict[str, Any]:
+        if action not in {"open", "close"}:
+            raise ValueError("unsupported HTV145 control action")
+        store = self.coordinator.store
+        previous_id = store.htv145_transaction(profile.valve_endpoint).get("id")
+        try:
+            return self._request(profile, action, now=now, duration_seconds=duration_seconds)
+        except (RuntimeError, ConnectionError, PermissionError, ValueError):
+            # A failed dispatch already has its own durable result. Duplicate
+            # calls must not replace the command whose RF evidence is pending.
+            if store.htv145_transaction(profile.valve_endpoint).get("id") == previous_id:
+                store.reject_htv145_request(profile.valve_endpoint,
+                    command_id=uuid.uuid4().hex, action=action, observed_at=now)
+            raise
+
+    def _request(self, profile: Htv145ControlProfile, action: str, *, now: str,
+                 duration_seconds: int | None = None) -> dict[str, Any]:
         if not self.qualification.qualified(profile):
             raise RuntimeError("single-zone control qualification is incomplete")
         self.restore(profile, now=now)

@@ -1,8 +1,9 @@
 blueprint:
   name: RainPoint Local - reported valve problem
   description: >-
-    Observation-only alert for an HTV405 failed/interrupted transaction or an
-    HTV145 overdue-run diagnostic. Not a full irrigation watchdog or a guarantee
+    Observation-only alert for an HTV405 or HTV145 failed/interrupted transaction
+    or an HTV145 overdue-run diagnostic. HTV145 requires gateway 0.37.2 and
+    integration 0.17.1. Not a full irrigation watchdog or a guarantee
     that every failed command is represented. Does not retry or close the valve.
   domain: automation
   homeassistant:

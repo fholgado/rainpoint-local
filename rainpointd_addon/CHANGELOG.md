@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.37.2 / Integration 0.17.1 / 2026-09-10
+
+- Include original local integration icons and declare the network component
+  used by radio adoption. Validate distribution with HACS and hassfest in CI.
+- Retain single-zone watering command IDs, states, errors and timestamps after
+  confirmation or failure, independently of subsequent telemetry/counter sync.
+  Expose Control request status and valve attributes for optional HA alerts.
+- Record pre-dispatch runtime rejections without changing valve/counter state;
+  duplicate requests cannot replace an in-flight transaction. HA refreshes
+  diagnostics after command errors. Missing responses never imply a closed valve.
+- Schema 24 adds observation-only transaction records, preserving associations,
+  counters and pending commands. Back up the database before upgrading; reverting
+  to an older gateway requires restoring that backup. No radio firmware change.
+
 ## 0.37.1 / 2026-09-09
 
 - Stream verified firmware in bounded chunks instead of giving a whole-image

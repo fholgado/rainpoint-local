@@ -2212,6 +2212,82 @@ class Htv145CommissioningTest(unittest.TestCase):
 
 
 class Htv145RuntimeTest(unittest.TestCase):
+    def test_last_transaction_survives_timeout_restart_and_later_telemetry(self):
+        self.enroll(); self.sent.clear()
+        command = self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        endpoint = self.profile.valve_endpoint
+        pending = self.store.htv145_transaction(endpoint)
+        self.assertEqual(command["command_id"], pending["id"])
+        self.assertEqual("waiting_for_confirmation", pending["state"])
+        with self.assertRaises(RuntimeError):
+            self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:01+00:00")
+        self.assertEqual(pending, self.store.htv145_transaction(endpoint))
+        self.assertEqual(1, len(self.sent))
+        self.runtime.status(self.profile, now="2026-09-05T12:02:16+00:00")
+        failed = self.store.htv145_transaction(endpoint)
+        self.assertEqual("failed", failed["state"])
+        self.assertEqual(command["command_id"], failed["id"])
+        self.assertEqual("confirmation_timeout_counter_unsynchronized", failed["error"])
+        self.runtime.observe_frame(self.idle, now="2026-09-05T12:03:00+00:00")
+        self.assertEqual(failed, self.store.htv145_transaction(endpoint))
+        self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.assertEqual(failed, self.store.htv145_transaction(endpoint))
+        self.assertEqual(1, len(self.sent))
+        self.store.delete_htv145_control(endpoint)
+        self.assertEqual({}, self.store.htv145_transaction(endpoint))
+
+    def test_offline_rejection_is_durable_without_changing_counter_or_valve(self):
+        self.enroll(); self.sent.clear()
+        self.node["connected"] = False
+        before = self.store.htv145_control_states()
+        ids = []
+        for action in ("open", "close"):
+            with self.assertRaises(RuntimeError):
+                self.runtime.request(self.profile, action, duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+            diagnostic = self.store.htv145_transaction(self.profile.valve_endpoint)
+            self.assertEqual("failed", diagnostic["state"])
+            self.assertEqual("request_rejected_before_dispatch", diagnostic["error"])
+            ids.append(diagnostic["id"])
+        self.assertNotEqual(*ids)
+        self.assertEqual(before, self.store.htv145_control_states())
+        self.assertEqual([], self.sent)
+
+    def test_dispatch_failure_keeps_specific_result_without_exception_secrets(self):
+        self.enroll()
+        def fail(*args): raise ConnectionError("token=private")
+        self.coordinator.sender = fail
+        with self.assertRaises(ConnectionError):
+            self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        diagnostic = self.store.htv145_transaction(self.profile.valve_endpoint)
+        self.assertEqual("node_dispatch_failed_counter_unsynchronized", diagnostic["error"])
+        self.assertNotIn("private", json.dumps(diagnostic))
+        self.assertEqual(60, diagnostic["duration_seconds"])
+
+    def test_schema23_migration_preserves_counter_and_pending_command(self):
+        self.enroll()
+        self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        before = self.store.htv145_control_states()
+        self.store._connection.execute("DROP TABLE htv145_transaction")
+        self.store._connection.execute("PRAGMA user_version=23")
+        self.store._connection.commit(); self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.assertEqual(before, self.store.htv145_control_states())
+        diagnostic = self.store.htv145_transaction(self.profile.valve_endpoint)
+        self.assertEqual(before[0]["pending_command_id"], diagnostic["id"])
+        self.assertEqual("waiting_for_confirmation", diagnostic["state"])
+
+    def test_node_error_text_is_not_published_in_ha_transaction(self):
+        self.enroll()
+        command = self.runtime.request(self.profile, "open", duration_seconds=60, now="2026-09-05T12:02:00+00:00")
+        self.runtime.observe_node(self.profile.node_id, {
+            "type": "command_error", "node_id": self.profile.node_id,
+            "command_id": command["command_id"], "error": "htv145 token=secret",
+        }, now="2026-09-05T12:02:01+00:00")
+        diagnostic = self.store.htv145_transaction(self.profile.valve_endpoint)
+        self.assertEqual("node_rejected_command", diagnostic["error"])
+        self.assertNotIn("secret", json.dumps(diagnostic))
+
     def setUp(self):
         from rainpointd.htv145_runtime import Htv145Runtime
         self.temp = tempfile.TemporaryDirectory()
@@ -2353,6 +2429,11 @@ class Htv145RuntimeTest(unittest.TestCase):
         self.assertEqual(0x83, state["next_sequence"])
         self.runtime.observe_frame(self.idle, now="2026-09-05T12:03:03+00:00")
         self.assertEqual(0x83, self.store.htv145_control_states()[0]["next_sequence"])
+        diagnostic = self.store.htv145_transaction(self.profile.valve_endpoint)
+        self.assertEqual(command["command_id"], diagnostic["id"])
+        self.assertEqual("confirmed", diagnostic["state"])
+        self.assertIsNone(diagnostic["error"])
+        self.assertEqual("2026-09-05T12:02:02+00:00", diagnostic["updated_at"])
 
     def test_restart_timeout_and_overdue_watchdog_are_observation_only(self):
         from rainpointd.htv145_runtime import Htv145Runtime
@@ -2486,6 +2567,9 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
             node or self.profile.node_id, now=self.at(seconds))
 
     def test_unknown_counter_waits_for_new_owner_idle_and_result3_anchors_only_counter(self):
+        self.store.reject_htv145_request(self.profile.valve_endpoint,
+            command_id="prior-watering", action="open", observed_at=self.at(-10))
+        last_watering = self.store.htv145_transaction(self.profile.valve_endpoint)
         self.assertEqual("waiting_for_report", self.queue()["state"])
         self.assertEqual([], self.sent)
         self.report(0)
@@ -2508,6 +2592,7 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.assertEqual(physical["last_response_frame"], state["last_response_frame"])
         self.assertEqual(3, self.sync.status(self.profile, now=self.at(2))["result_code"])
         self.assertEqual("Ready", self.sync.status(self.profile, now=self.at(2))["status"])
+        self.assertEqual(last_watering, self.store.htv145_transaction(self.profile.valve_endpoint))
         self.runtime.observe_frame(self.anchor, now=self.at(3))
         self.assertEqual(1, len(self.sent))
         self.runtime.restored[self.profile.valve_endpoint] = ("connection-1", "test")
@@ -2633,7 +2718,7 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.store._connection.execute("PRAGMA user_version=21")
         self.store._connection.commit(); self.store.close()
         self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
-        self.assertEqual(23,self.store.schema_version())
+        self.assertEqual(24,self.store.schema_version())
         self.assertEqual(before,self.store.htv145_control_states()[0])
         self.assertEqual({},self.store.htv145_counter_sync(self.profile.valve_endpoint))
 

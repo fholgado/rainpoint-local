@@ -17,7 +17,7 @@ from .product_identity import (
 from .valve_protocol import next_htv145_command_sequence
 from .htv145_counter_sync import MAX_SYNC_ATTEMPTS, failed_attempt
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -264,6 +264,19 @@ class SQLiteEventStore:
             with self._connection:
                 self._connection.execute("CREATE TABLE IF NOT EXISTS htv145_qualification (valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)")
                 self._connection.execute("PRAGMA user_version = 23")
+            version = 23
+        if version == 23:
+            with self._connection:
+                self._connection.execute("CREATE TABLE IF NOT EXISTS htv145_transaction (valve_endpoint TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+                # Retain real unresolved reservations, not inferred historical successes.
+                for row in self._connection.execute("SELECT * FROM htv145_control_state WHERE pending_action IN ('open', 'close') AND pending_command_id IS NOT NULL").fetchall():
+                    self._write_htv145_transaction(row["valve_endpoint"], {
+                        "id": row["pending_command_id"], "state": "waiting_for_confirmation",
+                        "action": row["pending_action"], "duration_seconds": row["pending_duration_seconds"],
+                        "started_at": row["pending_started_at"], "updated_at": row["pending_started_at"],
+                        "error": None,
+                    })
+                self._connection.execute("PRAGMA user_version = 24")
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -1263,6 +1276,7 @@ class SQLiteEventStore:
                 (device["valve_endpoint"],),
             )
             self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint = ?", (device["valve_endpoint"],))
+            self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint = ?", (device["valve_endpoint"],))
             self._connection.execute(
                 "DELETE FROM htv405_morning_sync WHERE valve_endpoint = ?",
                 (device["valve_endpoint"],),
@@ -3241,6 +3255,7 @@ class SQLiteEventStore:
                 (valve_endpoint,),
             )
             self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint=? AND NOT EXISTS (SELECT 1 FROM htv145_control_state WHERE valve_endpoint=?)", (valve_endpoint, valve_endpoint))
+            self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint=? AND NOT EXISTS (SELECT 1 FROM htv145_control_state WHERE valve_endpoint=?)", (valve_endpoint, valve_endpoint))
 
     def htv145_control_states(
         self, valve_endpoint: str | None = None
@@ -3267,6 +3282,50 @@ class SQLiteEventStore:
                     item["confirmed_watering"]
                 )
         return result
+
+    def htv145_transaction(self, valve_endpoint: str) -> dict[str, Any]:
+        """Last logical watering command; independent of telemetry and sync maintenance."""
+        row = self._connection.execute("SELECT payload FROM htv145_transaction WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+        return json.loads(row[0]) if row is not None else {}
+
+    def _write_htv145_transaction(self, valve_endpoint: str, payload: dict) -> None:
+        self._connection.execute("INSERT INTO htv145_transaction VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
+
+    def reject_htv145_request(self, valve_endpoint: str, *, command_id: str,
+                             action: str, observed_at: str) -> None:
+        """Record a pre-dispatch refusal without replacing an in-flight command.
+
+        Never store exception text: transport exceptions can include credentials.
+        This diagnostic changes no counter, reservation or physical state.
+        """
+        with self._connection:
+            row = self._connection.execute("SELECT pending_command_id FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            if row is None or row[0] is not None:
+                return
+            self._write_htv145_transaction(valve_endpoint, {
+                "id": command_id, "state": "failed", "action": action,
+                "duration_seconds": None, "started_at": observed_at,
+                "updated_at": observed_at, "error": "request_rejected_before_dispatch",
+            })
+
+    def _finish_htv145_transaction(self, valve_endpoint: str, command_id: str,
+                                   *, state: str, error: str | None, observed_at: str) -> None:
+        transaction = self.htv145_transaction(valve_endpoint)
+        if transaction.get("id") == command_id:
+            # Node errors/failure_class are external strings. Publish only known
+            # diagnostic codes; private raw evidence is not a public HA message.
+            if error is not None:
+                code = error.split(":", 1)[0]
+                known = {
+                    "node_dispatch_failed_counter_unsynchronized", "transmit_failed",
+                    "response_receiver_tune_failed", "confirmation_timeout_counter_unsynchronized",
+                    "gateway_connection_lost_counter_unsynchronized", "conflicting_command_response",
+                    *{f"negative_command_result_{value}" for value in range(4)},
+                }
+                error = (code if code in known else "node_rejected_command"
+                         if code.startswith("node_rejected_") else "command_failed")
+            transaction.update(state=state, error=error, updated_at=observed_at)
+            self._write_htv145_transaction(valve_endpoint, transaction)
 
     def configure_htv145_control(
         self,
@@ -3333,6 +3392,7 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise RuntimeError("cannot reconfigure HTV145 while command pending")
+        self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint=?", (valve_endpoint,))
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]
 
@@ -3501,6 +3561,11 @@ class SQLiteEventStore:
                 raise RuntimeError(
                     "HTV145 reservation state changed before dispatch"
                 )
+            self._write_htv145_transaction(valve_endpoint, {
+                "id": command_id, "state": "waiting_for_confirmation", "action": action,
+                "duration_seconds": duration_seconds, "started_at": started_at,
+                "updated_at": started_at, "error": None,
+            })
         return self.htv145_control_states(valve_endpoint)[0]
 
     def confirm_htv145_command(
@@ -3569,6 +3634,8 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise ValueError("HTV145 reservation changed before confirmation")
+        self._finish_htv145_transaction(valve_endpoint, command_id, state="confirmed",
+            error=None, observed_at=observed_at)
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]
 
@@ -3601,6 +3668,8 @@ class SQLiteEventStore:
         )
         if not cursor.rowcount:
             raise ValueError("HTV145 failure does not match reservation")
+        self._finish_htv145_transaction(valve_endpoint, command_id, state="failed",
+            error=reason, observed_at=observed_at)
         data = self.htv145_counter_sync(valve_endpoint)
         if data.get("command_id") == command_id:
             data = failed_attempt(data, reason=reason, observed_at=observed_at)

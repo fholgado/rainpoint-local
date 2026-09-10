@@ -890,7 +890,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(23, restored._store.schema_version())
+            self.assertEqual(24, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1782,7 +1782,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(23, gateway.info()["storage_schema_version"])
+            self.assertEqual(24, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1793,7 +1793,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(23, migrated.info()["storage_schema_version"])
+            self.assertEqual(24, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -3237,9 +3237,17 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         self.assertFalse(device["state"]["is_watering"])
         self.assertTrue(device["state"]["rf_control_command_pending"])
         self.assertFalse(device["state"]["rf_control_start_available"])
+        self.assertEqual(result["command_id"], device["state"]["rf_control_transaction_id"])
+        self.assertEqual("waiting_for_confirmation", device["state"]["rf_control_transaction_state"])
         with self.assertRaises(HTTPError):
             self.post_json(route, {"duration_seconds": 60})
         self.assertEqual(["htv145_control_open"], [command["type"] for _, command in self.commands])
+        device = next(d for d in gateway.devices(now=now + timedelta(seconds=20)) if d["device_id"] == "one-zone")
+        self.assertEqual(result["command_id"], device["state"]["rf_control_transaction_id"])
+        self.assertEqual("failed", device["state"]["rf_control_transaction_state"])
+        self.assertEqual("confirmation_timeout_counter_unsynchronized", device["state"]["rf_control_transaction_error"])
+        self.assertFalse(device["state"]["rf_control_transaction_active"])
+        self.assertFalse(device["state"]["is_watering"])
 
     def test_one_zone_sync_http_owner_duplicate_and_result3_confirmation(self):
         from rainpointd.htv145_control import Htv145ControlProfile
