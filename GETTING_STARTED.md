@@ -87,8 +87,9 @@ cd rainpoint-local
 
 Check out that agreed revision before copying files or building. Use the same
 revision for the app, integration and firmware unless its release notes specify
-a compatible combination. The current documented baseline is gateway 0.37.1,
-integration 0.17.0 and unified firmware 0.17.0; these are separate version numbers.
+a compatible combination. The alpha-preparation source now uses gateway 0.37.2,
+integration 0.17.1 and unified firmware 0.17.0; these are separate version numbers.
+This is not a published alpha release or a claim of fresh-install acceptance.
 
 ## 2. Install the gateway app
 
@@ -128,9 +129,9 @@ network isolation or blocked multicast can prevent adoption even with good RSSI.
 
 ## 3. Install the HA integration
 
-The intended HACS path below still needs clean-install acceptance and the
-required integration brand asset; use the revision-pinned manual path for
-maintainer-led testing until those launch gates are closed.
+The intended HACS path below still needs clean-install acceptance. Local brand
+assets and metadata validation are included; use the revision-pinned manual
+path for maintainer-led testing until the launch gates are closed.
 
 For HACS, add `https://github.com/fholgado/rainpoint-local` as a custom repository
 of type **Integration**, then download **RainPoint Local** and restart HA.

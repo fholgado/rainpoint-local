@@ -8,6 +8,21 @@ permissions:
   contents: read
 
 jobs:
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hacs/action@main
+        with:
+          category: integration
+          comment: "false"
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: home-assistant/actions/hassfest@master
+
   python:
     runs-on: ubuntu-latest
     steps:

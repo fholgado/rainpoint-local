@@ -57,8 +57,10 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   Offline checks now enforce one separately named integration, required manifest
   fields, owner/contact and consistent HA minimum; an alpha issue form covers
   all three device families and redaction. Full HACS acceptance is not proven.
-  Current HACS documentation requires local brand assets; add/validate an
-  integration icon and the official validators before claiming this path ready.
+  September 10: original integration-local 256/512 PNG icons and editable source
+  are added, with HACS and hassfest CI jobs (no ignored validation checks).
+  Official validation and clean-install acceptance must be recorded separately;
+  see `docs/HACS_DISTRIBUTION_REQUIREMENTS.md` for the distribution contract.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
   setup/examples where needed; the household dashboards/watchdogs are not
@@ -79,6 +81,10 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   Requests rejected inside HA or never reaching the gateway remain service
   errors, not invented gateway transactions. No RF/pairing/counter behavior was
   changed. Clean HA alert delivery and deployment remain unverified.
+  Validation: 554 Python tests passed (two optional skips), both native protocol
+  binaries passed, and the isolated source-package fresh/restart smoke passed.
+  Additional maintenance regression confirms sync leaves watering diagnostics
+  unchanged. Gateway rollback from schema 24 requires a pre-upgrade DB backup.
   Validation: the complete Python suite passed 547 tests (two optional skips),
   including the shipped alert-template and distribution-metadata regressions.
 - [ ] Make an explicit alpha security decision: current sessions are not
