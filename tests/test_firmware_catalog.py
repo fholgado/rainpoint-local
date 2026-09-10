@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
-import tempfile
-import unittest
+import socket
 import sys
+import tempfile
+import threading
+import time
+import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +22,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from rainpointd.firmware_catalog import FirmwareCatalog
 from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
+from rainpointd import http as gateway_http
 from stage_firmware_release import stage_release
 
 
@@ -232,6 +238,127 @@ class FirmwareCatalogTest(unittest.TestCase):
                     response.headers["ETag"],
                 )
         finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            gateway.close()
+
+    def test_firmware_stream_allows_slow_progress_beyond_api_timeout(self):
+        """An OTA reader writing flash must not share JSON's total-write budget."""
+        self.content = b"firmware" * 131072
+        self.artifact.write_bytes(self.content)
+        payload = json.loads(self.catalog_path.read_text())
+        payload["releases"][0].update(
+            size_bytes=len(self.content),
+            sha256=hashlib.sha256(self.content).hexdigest(),
+        )
+        self.catalog_path.write_text(json.dumps(payload))
+        gateway = Gateway(firmware_catalog=FirmwareCatalog.load(self.catalog_path))
+        server = create_server(gateway, port=0)
+        accept = server.get_request
+
+        def constrained_connection():
+            client, address = accept()
+            client.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32768)
+            client.settimeout(0.25)
+            return client, address
+
+        server.get_request = constrained_connection
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        try:
+            with patch.object(gateway_http, "FIRMWARE_PROGRESS_TIMEOUT_SECONDS", 1), \
+                 patch.object(gateway_http, "FIRMWARE_TRANSFER_TIMEOUT_SECONDS", 10):
+                thread.start()
+                connection.connect()
+                connection.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32768)
+                connection.request("GET", "/firmware/esp32dev-ota-0.9.0-test.3.bin")
+                response = connection.getresponse()
+                received = bytearray()
+                started = time.monotonic()
+                while chunk := response.read(8192):
+                    received.extend(chunk)
+                    time.sleep(0.015)
+                self.assertGreater(time.monotonic() - started, 0.25)
+                self.assertEqual(len(self.content), len(received))
+                self.assertEqual(
+                    hashlib.sha256(self.content).digest(),
+                    hashlib.sha256(received).digest(),
+                )
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            gateway.close()
+
+    def test_firmware_stream_bounds_and_restores_socket_timeout(self):
+        for mode in ("success", "stall", "deadline", "disconnect", "short_write"):
+            with self.subTest(mode=mode):
+                handler = object.__new__(gateway_http.RequestHandler)
+                handler.connection = Mock()
+                handler.connection.gettimeout.return_value = 10
+                handler.wfile = Mock()
+                handler.close_connection = False
+                handler.wfile.write.side_effect = lambda chunk: len(chunk)
+                times = [0, 0, 1, 2]
+                if mode == "stall":
+                    handler.wfile.write.side_effect = TimeoutError()
+                elif mode == "disconnect":
+                    handler.wfile.write.side_effect = BrokenPipeError()
+                elif mode == "short_write":
+                    handler.wfile.write.side_effect = lambda chunk: len(chunk) - 1
+                elif mode == "deadline":
+                    times = [0, 0, 121, 121]
+                with patch.object(gateway_http.time, "monotonic", side_effect=times), \
+                     patch.object(gateway_http._LOGGER, "warning") as warning:
+                    handler._write_firmware(b"x" * 32768, "test-release")
+                handler.connection.settimeout.assert_called_with(10)
+                self.assertEqual(mode != "success", handler.close_connection)
+                if mode == "success":
+                    warning.assert_not_called()
+                    self.assertEqual(2, handler.wfile.write.call_count)
+                else:
+                    warning.assert_called_once()
+                    self.assertEqual(1, handler.wfile.write.call_count)
+                if mode == "deadline":
+                    self.assertEqual("transfer_deadline", warning.call_args.args[-1])
+                elif mode == "stall":
+                    self.assertEqual("progress_timeout", warning.call_args.args[-1])
+
+    def test_firmware_capacity_preserves_api_access_and_releases_slots(self):
+        gateway = Gateway(firmware_catalog=FirmwareCatalog.load(self.catalog_path))
+        server = create_server(gateway, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        try:
+            thread.start()
+            # Simulate two active downloads without extending the test duration.
+            self.assertTrue(server._firmware_slots.acquire(blocking=False))
+            self.assertTrue(server._firmware_slots.acquire(blocking=False))
+            connection.request("GET", "/firmware/esp32dev-ota-0.9.0-test.3.bin")
+            response = connection.getresponse()
+            self.assertEqual(503, response.status)
+            response.read()
+            connection.request("GET", "/api/v1/firmware/releases")
+            response = connection.getresponse()
+            self.assertEqual(200, response.status)
+            response.read()
+            server._firmware_slots.release()
+            server._firmware_slots.release()
+            # Errors and successful transfers both return the capacity permit.
+            for path, status in (("missing", 404), ("esp32dev-ota-0.9.0-test.3", 200)):
+                connection.request("GET", f"/firmware/{path}.bin")
+                response = connection.getresponse()
+                self.assertEqual(status, response.status)
+                response.read()
+            for _ in range(2):
+                self.assertTrue(server._firmware_slots.acquire(timeout=1))
+            self.assertFalse(server._firmware_slots.acquire(blocking=False))
+            for _ in range(2):
+                server._firmware_slots.release()
+        finally:
+            connection.close()
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)

@@ -95,7 +95,23 @@ The selected unattended implementation/review pass is complete (original list nu
   Better RSSI did not resolve the interruption; weak signal alone is insufficient
   to explain it. The relocation also power-cycled the node, so this is not an
   isolated signal-strength experiment.
+  Resolved later September 9 by gateway 0.37.1: instrumented whole-image HTTP
+  writes timed out after 10.001 seconds. Bounded streaming (16 KiB writes,
+  ten-second per-write limit, 120-second overall deadline, two download slots)
+  fixed the real-socket regression and the next identical Front Yard update.
+  Front Yard booted 0.17.0 after approximately 18 seconds and confirmed gateway
+  and radio health by 76 seconds, with no pending rollback, two restored sensor
+  ACK assignments, zero ACK failures, fresh RF frames and retained authenticated
+  single-zone counter. All three radios now run 0.17.0; no post-update watering
+  was requested, so this completes fleet installation, not functional soak or
+  fresh onboarding qualification. Gateway restart and OTA are soak interventions.
   No pairing or extra watering was triggered during this deployment.
+- [x] Diagnose and fix late Front Yard OTA truncation without weakening image
+  verification or rollback. Gateway 0.37.1 is deployed; the original affected
+  node passed the same-image update after the server fix. Validation: 536 Python
+  tests passed (two optional skips), native protocol tests and package smoke
+  passed, deployed source hash matched. Evidence and limits:
+  `research/OTA_HARDWARE_VALIDATION.md`.
 - [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
   radio, retain the custom gateway identity, persist the accepted pairing owner,
   and expose separate paired/control-verification states in HA. Verification
@@ -147,9 +163,10 @@ The selected unattended implementation/review pass is complete (original list nu
   gateway identity, device associations and all three authenticated radios.
   No RF sequence, credential, schedule or control behavior changed.
 
-Gateway 0.37.0 and integration 0.17.0 are deployed. Standard firmware retains the
+Gateway 0.37.1 and integration 0.17.0 are deployed. Standard firmware retains the
 post-command RX restoration fix without changing the frozen pairing sequence.
-Current fleet: OTA Test and Vegetable Garden 0.17.0; Front Yard 0.16.2.
+Current fleet: OTA Test, Vegetable Garden and Front Yard all run 0.17.0 with
+healthy-boot confirmation. Fleet soak and physical onboarding gates remain open.
 Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
@@ -437,23 +454,18 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
 - [x] Deploy a read-only HA-scheduled snapshot/event collector with a durable
   cursor, fixed window, explicit gap/error records, and automatic completion.
   See [operation](examples/reliability-soak/README.md).
-- [ ] Complete a persisted minimum 72-hour multi-node sensor cadence/ACK soak.
-  September 9 interim review: 714 snapshots through 11:50 UTC, with all six
-  sensors reporting and no collector event-gap/error records. Per-sensor maximum
-  observed gaps range from 337 to 563 seconds. Database quick_check passed.
-  Deployment/restarts/OTA are interventions, not uninterrupted release uptime.
-  Current collection runs September 7 00:53 UTC through September 10 00:53 UTC;
-  completion still requires reviewing the evidence, not just reaching the deadline.
-- [x] Review the first 43.103 hours of the current collection: 523 snapshots,
-  39,071 events, no recorded cursor gaps/errors, and six fresh sensors at every
-  snapshot. All eight device identities remained present; each sensor retained
-  one configured ACK owner. Longest interval between captured sensor observations
-  was 563.5 seconds. See [interim evidence](research/RF_CAPTURE_NOTES.md#interim-reliability-review--2026-09-08).
+- [x] Complete and review the fixed 72-hour observation collection. The closing
+  sample on September 10 contains 874 snapshots and 66,569 events, no recorded
+  collector gaps/errors, six fresh sensors at every snapshot, stable configured
+  sensor ACK ownership and eight unchanged device identities. Source/copy hashes
+  match and SQLite quick_check passes. Right Bed's maximum observed gap was
+  520.254 seconds. See [completed review](research/RELIABILITY_COLLECTION_REVIEW_20260910.md).
 - [ ] After fleet firmware qualification, collect an unchanged-release production
-  baseline. The current window contains 61 radio connection events, seven detected
-  reboots and multiple firmware versions; it demonstrates continued sensor
-  reporting through interventions, not uninterrupted final-version stability.
-  Preserve and finish the existing window rather than resetting its deadline.
+  baseline. The completed window includes 83 connected events, two disconnected
+  events, 11 reboot-observed events and multiple firmware versions. Single-zone
+  reporting had a 67-minute gap overlapping pairing/handoff work. This qualifies
+  observation/recovery evidence, not uninterrupted final-version stability or
+  independent on-air ACK acceptance. Preserve the completed database and captures.
 - [ ] Include sustained stock/custom coexistence and three successful scheduled
   irrigation cycles using only local authority.
 - [ ] Include HA/gateway restart, node reboot/OTA, and device battery cycle
@@ -479,6 +491,11 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
   The subsequent near-AP retry failed at approximately 89% with -54 dBm signal.
   Preserve that negative result; investigate connection-close versus stalled-read
   behavior rather than assuming that further placement changes will fix OTA.
+  The later instrumented trial proved a ten-second whole-image server-write
+  timeout. Gateway 0.37.1's bounded streaming fixed the slow-reader regression
+  and the next real Front Yard update, including healthy-boot confirmation and
+  restored ownership. This establishes the observed transfer cause, not all
+  possible OTA failure modes or the remaining rollback fault-injection gates.
 
 Exit: durable evidence meets the complete matrix without unexplained intervention.
 Passive monitoring alone cannot qualify battery-cycle or coexistence operations.

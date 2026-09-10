@@ -6,6 +6,55 @@ status is tracked only in `../PROJECT_ROADMAP.md`.
 Status: successful physical install plus managed local release path; production
 gates remain.
 
+## 2026-09-09 late-download interruption diagnosis
+
+The affected production node repeatedly retained its healthy 0.16.2 image after
+truncated downloads of the same 963,120-byte unified 0.17.0 artifact that two
+other nodes installed. Moving it beside an AP improved RSSI but did not fix OTA.
+Two further bounded reproductions failed at 904,407 and 908,715 bytes after
+about 12.2 seconds, without a Wi-Fi reconnect. Instrumenting only the firmware
+HTTP response showed the server's whole-image `sendall` raising `TimeoutError`
+after **10.001 seconds**, with its socket timeout set to ten seconds.
+
+That timeout is a total budget for one write, not a reset-on-progress deadline.
+The old server assigned the same deadline to small JSON replies and an entire
+firmware image. ESP32 receive/flash backpressure could exhaust that budget even
+while data continued moving. This establishes the cause of the instrumented
+failure; earlier interruptions without matching server evidence need not all
+have the same cause.
+
+The regression uses real HTTP sockets with constrained buffers and a reader
+that deliberately consumes data slowly. Before the fix, the scaled 250 ms
+whole-write budget truncated a 1,048,576-byte response to 589,221 bytes; after
+the fix it received the exact image and digest. Run:
+
+```bash
+python3 -m unittest tests.test_firmware_catalog -v
+```
+
+Gateway 0.37.1 writes 16 KiB chunks with a ten-second per-write limit and a
+120-second overall limit, restoring the ordinary socket timeout afterward.
+Two firmware download slots preserve API worker capacity. Tests cover slow
+progress, stalled and disconnected writers, the overall deadline, exact byte
+content, and capacity release. Temporary diagnostic logging is removed;
+interrupted-transfer warnings retain release, queued-byte count, elapsed time
+and reason. Queued bytes do not prove delivery. Firmware hash verification,
+rollback, RF behavior and association persistence are unchanged.
+
+After deploying only gateway 0.37.1, the next managed update of the same image
+booted the previously failing node into 0.17.0 by approximately 18 seconds.
+At approximately 75 seconds it reported `confirmed` /
+`gateway_and_radio_healthy`, cleared its pending-candidate flag, and retained
+two sensor ACK assignments and authenticated single-zone counter state. Fresh
+RF frames continued, ACK failures were zero and Wi-Fi was approximately
+-51 to -53 dBm with zero reconnects after boot. The other two nodes remained
+connected on 0.17.0; all eight registered devices were available and both
+valves idle. No pairing or extra watering was performed. This is one successful
+post-fix physical update plus a red/green regression, not a long-term soak claim.
+The temporary observation script matched the request ID before reboot, but
+that ID clears on candidate boot; final confirmation was checked directly from
+version, authenticated reconnect, candidate state and restored ownership.
+
 ## 2026-08-13 isolated-candidate trial
 
 - Source version: `0.9.0-test.1`

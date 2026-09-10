@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.37.1 / 2026-09-09
+
+- Stream verified firmware in bounded chunks instead of giving a whole-image
+  write the ordinary API's ten-second socket deadline. Slow ESP32 flash writes
+  can make progress without a late truncated download.
+- Retain ten-second per-write and 120-second overall limits, cap simultaneous
+  firmware downloads at two, and report interrupted transfers without secrets.
+  Firmware checksum, rollback, pairing and valve-control behavior are unchanged.
+
 ## 0.37.0 / 2026-09-08
 
 - Integration 0.17.0 lists HTV145 single-zone valves under Valves, discovers
