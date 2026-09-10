@@ -18,6 +18,16 @@ The valve path submits one request, waits for a new transaction ID, and returns
 as soon as that transaction confirms watering or fails. The generic switch
 path remains available for other installations.
 
+For `garden_daily_smart_watering`, use the contents of
+`scheduled-duration.jinja` as the `duration_minutes` template passed to
+`script.garden_water_zone_if_needed`. It preserves the selected whole-minute
+duration from 1–60; do not restore the historical `[1, 2, 20]` filter that
+silently substituted 20 minutes. Invalid/unavailable settings produce zero so
+the existing valve-duration validation rejects them before opening, rather than
+choosing an arbitrary watering duration. Notification text continues to use the
+same requested duration as the watering script. This file is a template fragment,
+not an automatically installed automation or a change to the schedule.
+
 The front garden now uses the HTV145 single-zone control. Merge
 `single-valve-scripts.yaml` into scripts and include
 `front-irrigation-package.yaml` as a Home Assistant package. Both manual and

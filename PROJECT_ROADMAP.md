@@ -8,6 +8,20 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ## Current work order
 
+### Scheduled garden duration correction
+
+- [x] Reproduce and remove the installation's obsolete `[1, 2, 20]` scheduled
+  duration filter: selecting 21 previously submitted 20 to both watering and
+  notification paths. The tested adapter preserves all whole minutes 1–60 and
+  fails invalid settings through the existing valve-duration guard. Manual-run
+  scripts, RF encoding, schedules and moisture/rain decisions are unchanged.
+- [ ] Activate the corrected automation with HA's automation reload and verify
+  its loaded template. The on-device file was backed up and changed with an
+  exact-match guard; HA configuration validation passed. The current internal
+  service API credential returns HTTP 401, so no reload or restart was issued.
+  Do not call this live until reloaded. No extra watering is needed to validate
+  the template; check the next authorized run's notification and duration.
+
 ### Alpha cohort preparation
 
 The user now prioritizes an independent alpha for builders of their own radios,
