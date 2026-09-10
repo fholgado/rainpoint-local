@@ -454,23 +454,18 @@ remain explicitly unavailable. See [device references](protocol_documentation/).
 - [x] Deploy a read-only HA-scheduled snapshot/event collector with a durable
   cursor, fixed window, explicit gap/error records, and automatic completion.
   See [operation](examples/reliability-soak/README.md).
-- [ ] Complete a persisted minimum 72-hour multi-node sensor cadence/ACK soak.
-  September 9 interim review: 714 snapshots through 11:50 UTC, with all six
-  sensors reporting and no collector event-gap/error records. Per-sensor maximum
-  observed gaps range from 337 to 563 seconds. Database quick_check passed.
-  Deployment/restarts/OTA are interventions, not uninterrupted release uptime.
-  Current collection runs September 7 00:53 UTC through September 10 00:53 UTC;
-  completion still requires reviewing the evidence, not just reaching the deadline.
-- [x] Review the first 43.103 hours of the current collection: 523 snapshots,
-  39,071 events, no recorded cursor gaps/errors, and six fresh sensors at every
-  snapshot. All eight device identities remained present; each sensor retained
-  one configured ACK owner. Longest interval between captured sensor observations
-  was 563.5 seconds. See [interim evidence](research/RF_CAPTURE_NOTES.md#interim-reliability-review--2026-09-08).
+- [x] Complete and review the fixed 72-hour observation collection. The closing
+  sample on September 10 contains 874 snapshots and 66,569 events, no recorded
+  collector gaps/errors, six fresh sensors at every snapshot, stable configured
+  sensor ACK ownership and eight unchanged device identities. Source/copy hashes
+  match and SQLite quick_check passes. Right Bed's maximum observed gap was
+  520.254 seconds. See [completed review](research/RELIABILITY_COLLECTION_REVIEW_20260910.md).
 - [ ] After fleet firmware qualification, collect an unchanged-release production
-  baseline. The current window contains 61 radio connection events, seven detected
-  reboots and multiple firmware versions; it demonstrates continued sensor
-  reporting through interventions, not uninterrupted final-version stability.
-  Preserve and finish the existing window rather than resetting its deadline.
+  baseline. The completed window includes 83 connected events, two disconnected
+  events, 11 reboot-observed events and multiple firmware versions. Single-zone
+  reporting had a 67-minute gap overlapping pairing/handoff work. This qualifies
+  observation/recovery evidence, not uninterrupted final-version stability or
+  independent on-air ACK acceptance. Preserve the completed database and captures.
 - [ ] Include sustained stock/custom coexistence and three successful scheduled
   irrigation cycles using only local authority.
 - [ ] Include HA/gateway restart, node reboot/OTA, and device battery cycle
