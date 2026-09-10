@@ -61,6 +61,10 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   are added, with HACS and hassfest CI jobs (no ignored validation checks).
   Official validation and clean-install acceptance must be recorded separately;
   see `docs/HACS_DISTRIBUTION_REQUIREMENTS.md` for the distribution contract.
+  Initial official HACS checks passed. Hassfest caught an existing undeclared
+  `network` dependency in radio adoption; the manifest now declares it and a
+  source/manifest regression reproduces the omission. Final CI must pass before
+  merge; no clean HA OS installation is inferred from static validation.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
   setup/examples where needed; the household dashboards/watchdogs are not

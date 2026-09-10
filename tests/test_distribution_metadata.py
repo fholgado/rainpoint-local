@@ -1,5 +1,6 @@
 """Offline distribution structure checks, not HACS/HA OS acceptance."""
 import json
+import ast
 from pathlib import Path
 import re
 import struct
@@ -9,6 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DistributionMetadataTest(unittest.TestCase):
+    def test_adoption_network_component_dependency_is_declared(self):
+        directory = ROOT / "custom_components/rainpoint_local"
+        tree = ast.parse((directory / "config_flow.py").read_text())
+        imports = {alias.name for node in ast.walk(tree)
+                   if isinstance(node, ast.ImportFrom) and node.module == "homeassistant.components"
+                   for alias in node.names}
+        self.assertIn("network", imports)
+        manifest = json.loads((directory / "manifest.json").read_text())
+        self.assertIn("network", manifest.get("dependencies", []),
+                      "adoption uses the network component; it must be initialized first")
+
     def test_local_brand_assets_are_real_rgba_pngs_at_both_sizes(self):
         directory = ROOT / "custom_components/rainpoint_local/brand"
         for filename, size in (("icon.png", 256), ("icon@2x.png", 512)):

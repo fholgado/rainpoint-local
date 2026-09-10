@@ -2,6 +2,8 @@
 
 ## 0.37.2 / Integration 0.17.1 / 2026-09-10
 
+- Include original local integration icons and declare the network component
+  used by radio adoption. Validate distribution with HACS and hassfest in CI.
 - Retain single-zone watering command IDs, states, errors and timestamps after
   confirmation or failure, independently of subsequent telemetry/counter sync.
   Expose Control request status and valve attributes for optional HA alerts.
