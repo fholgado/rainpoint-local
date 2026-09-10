@@ -1,0 +1,55 @@
+blueprint:
+  name: RainPoint Local - reported valve problem
+  description: >-
+    Observation-only alert for an HTV405 failed/interrupted transaction or an
+    HTV145 overdue-run diagnostic. Not a full irrigation watchdog or a guarantee
+    that every failed command is represented. Does not retry or close the valve.
+  domain: automation
+  homeassistant:
+    min_version: 2026.7.0
+  input:
+    valve_entity:
+      name: RainPoint valve
+      selector:
+        entity:
+          filter:
+            integration: rainpoint_local
+            domain: valve
+    notify_actions:
+      name: Additional notification actions
+      description: Optional mobile notification using notify_title and notify_message. Do not add watering actions.
+      default: []
+      selector:
+        action: {}
+triggers:
+  - trigger: state
+    entity_id: !input valve_entity
+variables:
+  valve_entity: !input valve_entity
+conditions:
+  - condition: template
+    value_template: >-
+      {% set after = trigger.to_state.attributes if trigger.to_state is not none else {} %}
+      {% set before = trigger.from_state.attributes if trigger.from_state is not none else {} %}
+      {% set failure = after.get('transaction_state') in ['failed', 'interrupted'] %}
+      {% set new_failure = failure and (before.get('transaction_state') != after.get('transaction_state')
+        or before.get('transaction_id') != after.get('transaction_id')) %}
+      {{ new_failure or (after.get('overdue') == true and before.get('overdue') != true) }}
+actions:
+  - variables:
+      notify_title: RainPoint valve needs attention
+      notify_message: >-
+        {{ state_attr(valve_entity, 'friendly_name') or valve_entity }} reported a problem.
+        Transaction: {{ state_attr(valve_entity, 'transaction_state') }}.
+        Error: {{ state_attr(valve_entity, 'transaction_error') }}.
+        Overdue: {{ state_attr(valve_entity, 'overdue') }}.
+        Inspect the physical valve; this alert neither confirms no water flowed nor
+        sends a stop. Observed at {{ now().isoformat() }}.
+  - action: persistent_notification.create
+    data:
+      notification_id: "rainpoint_valve_{{ valve_entity | replace('.', '_') }}"
+      title: "{{ notify_title }}"
+      message: "{{ notify_message }}"
+  - sequence: !input notify_actions
+mode: queued
+max: 10

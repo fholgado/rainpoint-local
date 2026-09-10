@@ -66,7 +66,9 @@ PYTHONPATH=rainpointd_addon python3 -m rainpointd
 This starts an empty network gateway. Use the explicit
 [captured replay example](examples/captured-replay/) for offline sample data. See [local development](LOCAL_DEVELOPMENT.md)
 for runtime options and [AGENTS.md](AGENTS.md) for the complete required Python
-and native regression commands. Build only the `rainpoint_bridge` PlatformIO
+and native regression commands. Install the development test dependencies with
+`python3 -m pip install -r tests/requirements.txt` in a virtual environment first.
+Build only the `rainpoint_bridge` PlatformIO
 environment; production must exclude experimental transmit paths.
 
 ## Documentation map

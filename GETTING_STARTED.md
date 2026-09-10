@@ -128,6 +128,10 @@ network isolation or blocked multicast can prevent adoption even with good RSSI.
 
 ## 3. Install the HA integration
 
+The intended HACS path below still needs clean-install acceptance and the
+required integration brand asset; use the revision-pinned manual path for
+maintainer-led testing until those launch gates are closed.
+
 For HACS, add `https://github.com/fholgado/rainpoint-local` as a custom repository
 of type **Integration**, then download **RainPoint Local** and restart HA.
 See [HACS custom repositories](https://www.hacs.xyz/docs/faq/custom_repositories/).
@@ -231,7 +235,10 @@ remain available to inspect the valve and water manually if necessary. Do not
 copy the household dashboard or
 automations under `examples/federico-garden`: their entities, schedules and
 fallback policies are installation-specific, not an automatically installed
-notification/watchdog package for your garden.
+notification/watchdog package for your garden. Optional persistent/mobile alert
+blueprints and their exact coverage limits are described in
+[alpha notifications](docs/ALPHA_NOTIFICATIONS.md). They must be installed and
+configured separately; HTV145 persistent command-failure coverage remains incomplete.
 
 ## Updates, recovery and feedback
 

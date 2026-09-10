@@ -1,7 +1,7 @@
 {
   "domain": "rainpoint_local",
   "name": "RainPoint Local",
-  "codeowners": [],
+  "codeowners": ["@fholgado"],
   "config_flow": true,
   "documentation": "https://github.com/fholgado/rainpoint-local",
   "integration_type": "hub",

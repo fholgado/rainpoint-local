@@ -53,11 +53,26 @@ These launch tasks complement, rather than mark complete, the physical gates bel
 - [ ] Validate HACS metadata/distribution and app repository discovery; select
   codeowners/contact, add a redacted issue template and test the support workflow.
   Decide the supported update channel so testers do not unknowingly install main.
+  Offline checks now enforce one separately named integration, required manifest
+  fields, owner/contact and consistent HA minimum; an alpha issue form covers
+  all three device families and redaction. Full HACS acceptance is not proven.
+  Current HACS documentation requires local brand assets; no integration icon is
+  present yet. Add/validate it before claiming the custom-repository path ready.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
   setup/examples where needed; the household dashboards/watchdogs are not
   automatically installed safeguards. Require visible valve-owned start/stop
   evidence before asking testers to depend on scheduled watering.
+  Audit complete: `docs/ALPHA_NOTIFICATIONS.md` distinguishes what exists from
+  household-only safeguards. Optional observation-only blueprints provide stale
+  report and exposed valve-problem alerts, with persistent HA records before
+  optional mobile actions. Template regressions cover age/timezone/unknown values,
+  duplicate changes and new failures. Clean HA import and actual phone delivery
+  remain open. HTV145 lacks a persistent failed-command transaction entity for
+  every service/transport failure; implement/exercise that before promising full
+  failure-alert coverage. No alert blueprint was deployed to the live house.
+  Validation: the complete Python suite passed 547 tests (two optional skips),
+  including the shipped alert-template and distribution-metadata regressions.
 - [ ] Make an explicit alpha security decision: current sessions are not
   encrypted, telemetry is LAN-readable, commissioning AP is open and firmware
   lacks publisher signatures. Finish the corresponding hardening or document

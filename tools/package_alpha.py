@@ -143,7 +143,10 @@ def bundle(destination: Path, *, allow_dirty: bool = False) -> dict:
     files["compatibility.json"] = json_bytes(metadata)
     for name in ("GETTING_STARTED.md", "SECURITY.md", "LICENSE", "NODE_ONBOARDING.md",
                  "PROJECT_ROADMAP.md", "firmware/rainpoint_bridge/README.md",
-                 "rainpointd_addon/DOCS.md", "docs/ALPHA_BUNDLE.md"):
+                 "rainpointd_addon/DOCS.md", "docs/ALPHA_BUNDLE.md",
+                 "docs/ALPHA_NOTIFICATIONS.md",
+                 "blueprints/automation/rainpoint_local/stale_report.yaml",
+                 "blueprints/automation/rainpoint_local/valve_attention.yaml"):
         files[name] = (ROOT / name).read_bytes()
     files["FLASH_AND_UPDATE.md"] = (ROOT / "docs/ALPHA_BUNDLE.md").read_bytes()
     with tempfile.TemporaryDirectory(prefix="rainpoint-alpha-") as temporary:
