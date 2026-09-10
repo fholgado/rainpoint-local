@@ -3,8 +3,9 @@
 This guide is for early testers building their own ESP32/CC1101 radio nodes.
 It describes the current source installation, not a released turnkey product.
 Ask the maintainer for an agreed commit before testing; do not assume the latest
-development branch is a qualified release. There is no published alpha bundle
-or browser flasher yet. The live launch checklist is in the
+development branch is a qualified release. A local candidate bundle can now be
+built with [the packaging guide](docs/ALPHA_BUNDLE.md); none is published yet,
+and there is no hosted browser flasher. The live launch checklist is in the
 [project roadmap](PROJECT_ROADMAP.md#alpha-cohort-preparation).
 
 ## What you are installing

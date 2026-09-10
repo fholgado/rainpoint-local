@@ -39,6 +39,17 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   labels its firmware manifest 0.16.1 despite building 0.17.0; derive a consistent
   version and verify it before publishing. No release/tag was published by the
   documentation pass; do not distribute stale CI manifests as alpha firmware.
+  Unattended preparation now implements a single source firmware version,
+  PlatformIO-generated receipt of actual flash parts/offsets, and a local alpha
+  bundle with source, USB/OTA images, catalog, compatibility metadata, checksums
+  and recovery instructions. Dirty/stale/mixed builds are rejected; previews are
+  explicitly marked dirty. Production boundary and extracted-source smoke checks
+  run before packaging; CI checks repeat-package byte identity without uploading
+  the bundle. This is packaging infrastructure, not publication or physical
+  first-flash qualification. External binary uploads require explicit approval.
+  Validation: unified PlatformIO build and real receipt succeeded; local preview
+  archive/source smoke passed and repeated archive bytes matched; 542 Python
+  tests passed (two optional skips). No radio was flashed and no release created.
 - [ ] Validate HACS metadata/distribution and app repository discovery; select
   codeowners/contact, add a redacted issue template and test the support workflow.
   Decide the supported update channel so testers do not unknowingly install main.
