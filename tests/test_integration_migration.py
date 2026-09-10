@@ -162,6 +162,27 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
 
 
 class SingleValvePromotionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_single_valve_failure_refreshes_persistent_diagnostics_without_optimism(self):
+        attrs = _integration_function("valve.py", "extra_state_attributes",
+            {"DEFAULT_BOUNDED_RUN_MINUTES": 1}, classname="RainPointSingleValve")
+        for method, action in (("async_open_valve", "open_single_valve"),
+                               ("async_close_valve", "close_single_valve")):
+            coordinator = types.SimpleNamespace(htv405_run_minutes={}, async_refresh=AsyncMock(),
+                client=types.SimpleNamespace(**{action: AsyncMock(side_effect=ValueError("dispatch failed"))}))
+            entity = types.SimpleNamespace(coordinator=coordinator, device_id="one", _token="token",
+                decoded_state={"rf_control_start_available": True, "is_watering": False,
+                    "rf_control_transaction_id": "request", "rf_control_transaction_state": "failed",
+                    "rf_control_transaction_error": "node_dispatch_failed_counter_unsynchronized"})
+            callback = _integration_function("valve.py", method,
+                {"RainPointLocalError": ValueError, "HomeAssistantError": RuntimeError,
+                 "DEFAULT_BOUNDED_RUN_MINUTES": 1}, classname="RainPointSingleValve")
+            with self.assertRaisesRegex(RuntimeError, "dispatch failed"):
+                await callback(entity)
+            coordinator.async_refresh.assert_awaited_once()
+            self.assertEqual("request", attrs.fget(entity)["transaction_id"])
+            self.assertEqual("failed", attrs.fget(entity)["transaction_state"])
+            self.assertFalse(entity.decoded_state["is_watering"])
+
     def test_single_valve_start_availability_is_authoritative(self):
         callback = _integration_function("valve.py", "extra_state_attributes",
             {"DEFAULT_BOUNDED_RUN_MINUTES": 1}, classname="RainPointSingleValve")

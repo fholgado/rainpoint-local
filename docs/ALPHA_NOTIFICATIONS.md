@@ -12,12 +12,17 @@ installation are not a portable safety package.
 | Sensor/valve freshness | Device report time; accepted telemetry | HA availability alone can hide a long report gap |
 | HTV405 control failure | Valve `transaction_state`, `transaction_id`, `transaction_error`; Control request status | A failure does not prove no water flowed |
 | HTV145 overdue run | Valve `overdue`, `expected_idle_at`, `confirmed_at` | Missing idle evidence is an anomaly, not proof it is still open |
-| HTV145 command failure | Service-call error, retained-counter/radio status | Not every failure has a persistent transaction error entity yet |
+| HTV145 command failure | Valve `transaction_state`, `transaction_id`, `transaction_error`; Control request status (gateway 0.37.2/integration 0.17.1) | Covers runtime requests reaching the gateway, not HA-local validation or a gateway that cannot be contacted |
 | Both families' morning sync | Status, reason and last-success time | A successful sync is not a watering confirmation |
 
-The HTV145 persistent-failure gap remains in the roadmap. Do not advertise
-universal failed-irrigation alerts until that state and actual delivery have
-been verified. Automation traces are also not a permanent notification log.
+Single-zone command records survive gateway restarts and subsequent telemetry.
+Pre-dispatch rejection is distinct from a transmitted command lacking a matching
+response. Sync maintenance does not erase the last watering outcome. Unknown
+old outcomes are not reconstructed on upgrade. A later successful command replaces
+the last record, but does not dismiss an existing persistent HA notification.
+HA-local validation errors and an unreachable gateway still surface as service
+errors; a gateway cannot durably record a request it never received. Actual alert
+delivery still needs verification. Automation traces are not a permanent log.
 
 ## Optional observation-only blueprints
 
@@ -33,7 +38,7 @@ They are not installed by HACS and are not enabled automatically.
   one automation per device. This threshold does not change watering decisions.
 - **Reported valve problem:** select the physical valve's entity. For HTV405,
   choose one zone entity per physical valve because transaction attributes are
-  shared. It alerts on failed/interrupted transactions or an HTV145 overdue
+  shared. It alerts on either valve family's failed/interrupted transactions or an HTV145 overdue
   transition, not on every unavailable state or every rejected HA service call.
 
 Each creates or updates a stable persistent notification in HA **before** any

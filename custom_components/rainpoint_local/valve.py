@@ -255,6 +255,11 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             "confirmed_at": self.decoded_state.get("rf_control_confirmed_at"),
             "expected_idle_at": self.decoded_state.get("rf_control_expected_idle_at"),
             "overdue": self.decoded_state.get("rf_control_overdue"),
+            "transaction_id": self.decoded_state.get("rf_control_transaction_id"),
+            "transaction_state": self.decoded_state.get("rf_control_transaction_state"),
+            "transaction_error": self.decoded_state.get("rf_control_transaction_error"),
+            "transaction_action": self.decoded_state.get("rf_control_transaction_action"),
+            "transaction_updated_at": self.decoded_state.get("rf_control_transaction_updated_at"),
         }
 
     async def async_open_valve(self, **kwargs) -> None:
@@ -266,6 +271,7 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             await self.coordinator.client.open_single_valve(
                 self._token, device_id=self.device_id, duration_seconds=minutes * 60)
         except RainPointLocalError as error:
+            await self.coordinator.async_refresh()
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()
 
@@ -274,5 +280,6 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             await self.coordinator.client.close_single_valve(
                 self._token, device_id=self.device_id)
         except RainPointLocalError as error:
+            await self.coordinator.async_refresh()
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()

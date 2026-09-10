@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-09-10
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -24,6 +24,8 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   valve verification, updates, recovery and redacted feedback. Refresh README
   entry points and clarify the unused GDO2 wire. The guide describes current
   source installation and explicitly flags unverified distribution/UI paths.
+- [x] Merge alpha setup, packaging and optional-alert preparation (PR #12).
+  All Python, firmware and container CI checks passed; no release or live deploy.
 - [ ] Validate the guide on a clean HA OS installation without household
   databases, catalogs or tokens: custom app repository and HACS installation,
   discovery, new radio adoption and generated gateway identity. Confirm declared
@@ -35,10 +37,9 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   remaining battery-rejoin limits in alpha notes instead of promising recovery.
 - [ ] Prepare an immutable alpha tag and version compatibility table, source
   bundle, first-USB-flash artifacts with offsets/tool instructions, OTA artifact
-  and installable local catalog, checksums and rollback notes. CI currently
-  labels its firmware manifest 0.16.1 despite building 0.17.0; derive a consistent
-  version and verify it before publishing. No release/tag was published by the
-  documentation pass; do not distribute stale CI manifests as alpha firmware.
+  and installable local catalog, checksums and rollback notes. The stale CI
+  manifest label is fixed: version and actual flash inputs now come from the
+  unified build. No release/tag has been published.
   Unattended preparation now implements a single source firmware version,
   PlatformIO-generated receipt of actual flash parts/offsets, and a local alpha
   bundle with source, USB/OTA images, catalog, compatibility metadata, checksums
@@ -56,8 +57,8 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   Offline checks now enforce one separately named integration, required manifest
   fields, owner/contact and consistent HA minimum; an alpha issue form covers
   all three device families and redaction. Full HACS acceptance is not proven.
-  Current HACS documentation requires local brand assets; no integration icon is
-  present yet. Add/validate it before claiming the custom-repository path ready.
+  Current HACS documentation requires local brand assets; add/validate an
+  integration icon and the official validators before claiming this path ready.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
   setup/examples where needed; the household dashboards/watchdogs are not
@@ -68,9 +69,16 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   report and exposed valve-problem alerts, with persistent HA records before
   optional mobile actions. Template regressions cover age/timezone/unknown values,
   duplicate changes and new failures. Clean HA import and actual phone delivery
-  remain open. HTV145 lacks a persistent failed-command transaction entity for
-  every service/transport failure; implement/exercise that before promising full
-  failure-alert coverage. No alert blueprint was deployed to the live house.
+  remain open. The audit identified an HTV145 persistent-failure gap, addressed
+  by the implementation below. No alert blueprint was deployed to the live house.
+  September 10 implementation (gateway 0.37.2/integration 0.17.1): durable
+  HTV145 last-command diagnostics now cover runtime preflight refusals, dispatch
+  errors, negative responses and confirmation timeouts. IDs/errors survive later
+  telemetry and restart; duplicates cannot overwrite pending work. HA exposes
+  Control request status and valve attributes and refreshes after API failures.
+  Requests rejected inside HA or never reaching the gateway remain service
+  errors, not invented gateway transactions. No RF/pairing/counter behavior was
+  changed. Clean HA alert delivery and deployment remain unverified.
   Validation: the complete Python suite passed 547 tests (two optional skips),
   including the shipped alert-template and distribution-metadata regressions.
 - [ ] Make an explicit alpha security decision: current sessions are not
