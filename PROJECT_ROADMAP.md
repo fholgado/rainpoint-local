@@ -65,8 +65,9 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   `network` dependency in radio adoption; the manifest now declares it and a
   source/manifest regression reproduces the omission. A subsequent validator
   pass caught legacy manifest key ordering; that is corrected and tested too.
-  Final CI must pass before
-  merge; no clean HA OS installation is inferred from static validation.
+  Both official HACS and hassfest checks passed on `6541df2` after those fixes.
+  Full PR checks must pass before merge; a clean HA OS installation, support
+  workflow and intentionally selected release/update channel remain open.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
   setup/examples where needed; the household dashboards/watchdogs are not

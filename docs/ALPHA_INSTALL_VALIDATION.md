@@ -22,6 +22,11 @@ installation. It does not mark HACS, HA OS or radio adoption accepted.
 - Distribution tests enforce a single `rainpoint_local` integration directory,
   required metadata, a nonempty maintainer, a separate cloud-independent domain,
   consistent HA version declarations and the alpha report template.
+- Official HACS and hassfest checks passed on `6541df2` in
+  [CI run 34467939697](https://github.com/fholgado/rainpoint-local/actions/runs/34467939697).
+  Hassfest exposed an existing missing `network` dependency used by adoption,
+  then incorrect manifest key ordering; both now have source/metadata regressions.
+  This is integration-data validation, not a real HA setup/commissioning test.
 
 ## What these checks do not cover
 
