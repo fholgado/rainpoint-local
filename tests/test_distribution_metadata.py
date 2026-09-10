@@ -18,6 +18,7 @@ class DistributionMetadataTest(unittest.TestCase):
                    for alias in node.names}
         self.assertIn("network", imports)
         manifest = json.loads((directory / "manifest.json").read_text())
+        self.assertEqual(["domain", "name", *sorted(set(manifest) - {"domain", "name"})], list(manifest))
         self.assertIn("network", manifest.get("dependencies", []),
                       "adoption uses the network component; it must be initialized first")
 

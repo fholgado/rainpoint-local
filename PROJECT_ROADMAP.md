@@ -63,7 +63,9 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   see `docs/HACS_DISTRIBUTION_REQUIREMENTS.md` for the distribution contract.
   Initial official HACS checks passed. Hassfest caught an existing undeclared
   `network` dependency in radio adoption; the manifest now declares it and a
-  source/manifest regression reproduces the omission. Final CI must pass before
+  source/manifest regression reproduces the omission. A subsequent validator
+  pass caught legacy manifest key ordering; that is corrected and tested too.
+  Final CI must pass before
   merge; no clean HA OS installation is inferred from static validation.
 - [ ] Audit what a fresh tester actually gets for failed irrigation, stale
   moisture, counter synchronization and offline alerts. Provide generic optional
