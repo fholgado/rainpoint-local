@@ -8,6 +8,57 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ## Current work order
 
+### Alpha cohort preparation
+
+The user now prioritizes an independent alpha for builders of their own radios,
+covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.
+This is a separate `rainpoint_local` installation, not a cloud-integration merge.
+Do not drop valve coverage to a sensor-only alpha. Dry valve verification comes
+before supervised live irrigation; the alpha is not yet a broad stable release.
+These launch tasks complement, rather than mark complete, the physical gates below.
+
+- [x] Merge the CI-green OTA fix and completed collection review into main
+  (PR #11). Gateway 0.37.1 was already deployed; merging changes no live RF state.
+- [x] Add `GETTING_STARTED.md` for independent builders: exact hardware/wiring,
+  separate app/HACS installs, Wi-Fi adoption, all supported pairing paths,
+  valve verification, updates, recovery and redacted feedback. Refresh README
+  entry points and clarify the unused GDO2 wire. The guide describes current
+  source installation and explicitly flags unverified distribution/UI paths.
+- [ ] Validate the guide on a clean HA OS installation without household
+  databases, catalogs or tokens: custom app repository and HACS installation,
+  discovery, new radio adoption and generated gateway identity. Confirm declared
+  HA minimum and both advertised app architectures, or narrow the alpha matrix.
+- [ ] Finish rendered native HA onboarding and physical acceptance for **both
+  valve families and sensors** on the unified image. Keep paired versus
+  control-qualified outcomes explicit. Check removal/re-enrollment, cancellation,
+  no-radio/offline-radio feedback and unsupported-model rejection. Record any
+  remaining battery-rejoin limits in alpha notes instead of promising recovery.
+- [ ] Prepare an immutable alpha tag and version compatibility table, source
+  bundle, first-USB-flash artifacts with offsets/tool instructions, OTA artifact
+  and installable local catalog, checksums and rollback notes. CI currently
+  labels its firmware manifest 0.16.1 despite building 0.17.0; derive a consistent
+  version and verify it before publishing. No release/tag was published by the
+  documentation pass; do not distribute stale CI manifests as alpha firmware.
+- [ ] Validate HACS metadata/distribution and app repository discovery; select
+  codeowners/contact, add a redacted issue template and test the support workflow.
+  Decide the supported update channel so testers do not unknowingly install main.
+- [ ] Audit what a fresh tester actually gets for failed irrigation, stale
+  moisture, counter synchronization and offline alerts. Provide generic optional
+  setup/examples where needed; the household dashboards/watchdogs are not
+  automatically installed safeguards. Require visible valve-owned start/stop
+  evidence before asking testers to depend on scheduled watering.
+- [ ] Make an explicit alpha security decision: current sessions are not
+  encrypted, telemetry is LAN-readable, commissioning AP is open and firmware
+  lacks publisher signatures. Finish the corresponding hardening or document
+  accepted limitations for an invited trusted-LAN cohort; do not silently waive
+  the existing publication gates. No Internet port forwarding.
+- [ ] Record independent-house results for sensors and both valve families,
+  including RF reporting/ACK continuity, actual watering duration/stops and
+  overnight counter recovery. Preserve first-house evidence but do not use it
+  to close fresh-install or independent-site acceptance.
+
+### Existing qualification sequence
+
 The user prioritized single-zone promotion ahead of the selected hardening work.
 The verified association now uses standard firmware and HA controls, preserving
 bounded commands, counter recovery and evidence-based state. The user connected

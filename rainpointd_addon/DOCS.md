@@ -3,6 +3,10 @@
 This experimental app runs the local `rainpointd` API used by the
 **RainPoint Local** Home Assistant integration.
 
+New independent installations should begin with the
+[alpha getting-started guide](../GETTING_STARTED.md). HACS installs the
+integration separately from this app; no cloud integration is required.
+
 ## Current behavior
 
 Version 0.37.1 supports authenticated network radio nodes, receive-only USB
@@ -342,8 +346,8 @@ The app exposes its local device and pairing API on TCP port 8787. Configure the
 - Host: the IP address of the Home Assistant host
 - Port: `8787`
 
-The supported transports currently create confirmed HCS026FRF soil-moisture
-entities, a receive-only HTV145 valve device, and an association-backed HTV405
+The supported transports create HCS026FRF soil-moisture entities, an HTV145
+single-zone device with controls after qualification, and an association-backed HTV405
 four-zone device. HTV405 exposes one bounded-duration control and one duration
 setting per zone only when supervised control is explicitly enabled; state is
 accepted only from authenticated responses or subsequent valve telemetry.
@@ -379,8 +383,10 @@ idle; doing so preserves the association parameters but deliberately clears the
 command counter until it is synchronized again.
 HTV145 exposes confirmed watering, duration, usage, categorical battery, and
 counter/morning-sync controls for its enrolled qualification owner. It does not
-expose four-zone actuators. Ordinary HA actuation remains unpromoted; use only
-the explicitly enabled dry-qualification API below.
+expose four-zone actuators. Qualified associations support ordinary HA actuation;
+fresh pairing must complete the separate consented verification flow first.
+The dry-qualification API below is retained developer tooling, not an alternate
+normal installation path or permission to bypass qualification.
 
 Sensor reports expose moisture, categorical battery, freshness, and receiver
 provenance. One persistent owner transmits ACKs; other nodes may forward the
@@ -390,7 +396,9 @@ catalog identity instead of creating a duplicate HA device.
 
 ## Safety
 
-This release has no cloud transport and remains receive-only by default. When
+This release has no cloud transport. A fresh installation cannot control an
+unassociated valve; pairing and ACK transmission require explicit ownership.
+Qualified HTV145 controls are available through the normal HA flow. When
 `supervised_htv405_control` is explicitly enabled, the API accepts only
 token-authenticated, association-specific, duration-bounded HTV405 operations.
 Each command is reserved durably before RF dispatch and HA state changes only
