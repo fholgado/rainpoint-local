@@ -15,12 +15,12 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   notification paths. The tested adapter preserves all whole minutes 1–60 and
   fails invalid settings through the existing valve-duration guard. Manual-run
   scripts, RF encoding, schedules and moisture/rain decisions are unchanged.
-- [ ] Activate the corrected automation with HA's automation reload and verify
-  its loaded template. The on-device file was backed up and changed with an
-  exact-match guard; HA configuration validation passed. The current internal
-  service API credential returns HTTP 401, so no reload or restart was issued.
-  Do not call this live until reloaded. No extra watering is needed to validate
-  the template; check the next authorized run's notification and duration.
+- [x] Activate the corrected automation. HA configuration validation passed,
+  then the September 10 coordinated rollout restarted Core successfully and
+  reloaded the on-device 1–60 whole-minute adapter. The SSH app is not permitted
+  to proxy Core API calls (the earlier HTTP 401), so no permission expansion was
+  made. Check the next authorized run's notification against its duration;
+  no extra irrigation was triggered for this template change.
 
 ### Alpha cohort preparation
 
@@ -28,16 +28,17 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   Schema 25 migrates the old shared-route key without discarding counters,
   reservations, diagnostics or qualification. Each association retains its own
   command/ACK state; overlapping transmissions are rejected. Temporary-database
-  isolation/migration and native slot-selection tests pass. Source only; no live
-  database changed. Existing firmware remains capacity-one per radio.
+  isolation/migration and native slot-selection tests pass. Deployed September
+  10 with the coordinated release below; multiple physical single-zone valves
+  on one node still require qualification.
 - [x] Implement TLS-PSK for radio sessions, HA management and OTA downloads.
   Existing credentials are retained, invalid credentials/plaintext are rejected,
   and current HA client tests exercise encrypted reads, writes and token rotation.
   Python 3.13+ is required; CI and the container runtime assertion are updated.
-  Firmware builds; coordinated production rollout remains open.
+  Deployed in the coordinated production rollout below.
   Local validation: 582 Python tests passed (two skipped), native C++ protocol
   tests passed, and the unified ESP32 firmware built successfully. The container
-  image has not yet been qualified; physical TLS/OTA results follow below.
+  image passed CI and the HA aarch64 build; physical TLS/OTA results follow below.
 - [x] Qualify operational TLS and HTTPS OTA on the spare radio. September 10:
   the unified candidate authenticated with its existing node credential using
   `PSK-AES128-GCM-SHA256`, received real RF telemetry and retained roughly
@@ -53,13 +54,11 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   and no armed pairing window. The temporary Mac gateway was stopped. Recovery
   backups and qualification evidence are preserved in the private, Git-ignored
   `captures/tls-bench-20260910-private/` directory.
-- [ ] Complete the multi-valve/TLS candidate's physical ACK/report continuity,
-  per-valve isolation and longer-soak qualification, plus container-image build.
-  Then approve a coordinated live cutover with a schema-24 backup/rollback plan.
-  See `docs/ALPHA_BUNDLE.md`; do not deploy a mismatched plaintext/TLS combination.
-  Coordinated release preparation is now authorized: gateway `0.38.0`, integration
-  and unified firmware `0.18.0`. The production gateway, integration and garden
-  firmware remain unchanged until backup, CI/container and cutover preflights pass.
+- [ ] Complete longer-soak and physical multi-valve-per-node isolation checks,
+  plus authorized post-update valve actuation. Initial ACK/report continuity
+  passed after the coordinated cutover; it does not prove longer-term stability
+  or concurrent ownership of multiple physical single-zone valves on one radio.
+  See `docs/ALPHA_BUNDLE.md`; never mix plaintext/TLS operational versions.
 - [x] Qualify the copied production database before coordinated cutover. The
   September 10 backup actually uses schema 23; migration to 25 preserves all
   existing values across 18 tables, including counters, ownership, credentials
@@ -73,7 +72,21 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   582-test suite passed with two optional skips, plus the added watchdog
   regression and native protocol tests. Correct version metadata and use a
   Supervisor TCP watchdog because its HTTP probe cannot authenticate TLS-PSK.
-  CI and coordinated live rollout still need completion.
+  All five CI jobs passed for release revision `7a3529e`.
+- [x] Deploy gateway `0.38.0`, integration `0.18.0`, and unified firmware
+  `0.18.0` to all three radios (September 10, 21:52 EDT). All three verified
+  the 1,090,768-byte image, reconnected with existing credentials over
+  `PSK-AES128-GCM-SHA256`, and confirmed healthy boots. HA's persisted firmware
+  entities show installed/latest `0.18.0`. All eight device IDs and six sensor
+  ACK assignments are unchanged. Fresh post-cutover reports arrived from all
+  six sensors and both valves; sensor/four-zone ACK failures remain zero, and
+  the retained single-zone counter 129 and four-zone next counter 1 survived.
+  Plaintext and invalid-PSK management connections are rejected. Both valves
+  remain idle; no pairing or watering commands were sent. Source/config/image
+  recovery material remains private on HA and in the verified Mac backup.
+  A second OTA on the ownerless test node used HTTPS through the live gateway,
+  rebooted successfully, and reached `confirmed / gateway_and_radio_healthy`;
+  garden ACK ownership remained unchanged throughout that test.
 
 The user now prioritizes an independent alpha for builders of their own radios,
 covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.
@@ -103,7 +116,8 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   its pairing evidence. Provenance stays pairing-derived until a matching positive
   response. Regression coverage checks first open/advance, replay, restart, old
   onboarding records, expiry, owner transfer and failed-first-command behavior.
-  End-to-end HA/physical acceptance and deployment remain outstanding.
+  Deployed September 10; fresh end-to-end HA pairing/physical acceptance remains
+  outstanding and was not exercised against the installed irrigation valves.
 - [x] Implement one-shot HTV145 fresh-pairing counter initialization and expose
   pairing-derived versus response-confirmed provenance to HA. Preserve the RF
   waveform and normal duration path; never water automatically during setup.
@@ -116,7 +130,9 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   duplicate reports and unknown state. Physical/UI verification and rollout are
   pending; no live commands are part of this change.
   Included in the 574-test validation above. No version bump, commit, push,
-  firmware flash or deployment; the revised flow still needs live acceptance.
+  firmware flash or deployment occurred in that earlier validation; the
+  September 10 coordinated rollout deploys it, with clean-install acceptance
+  still outstanding.
 - [ ] Validate the guide on a clean HA OS installation without household
   databases, catalogs or tokens: custom app repository and HACS installation,
   discovery, new radio adoption and generated gateway identity. Confirm declared
@@ -746,6 +762,10 @@ until Phases 0–5 qualify. Design review may continue without live migration.
 
 - Preserve explicit timezone on SDR observations before restoring it as an
   authoritative receiver; do not reinterpret ambiguous historical timestamps.
+- Replace deprecated device-registry `async_get_device` calls in the HA
+  integration with entry-scoped APIs before HA 2027.8. HA 2026.9 startup warns
+  at coordinator.py and __init__.py; current setup succeeds. Preserve support
+  for the declared minimum HA version when implementing the replacement.
 - Discover additional device families and determine whether HCS026 P1–P6 soil
   selection is RF, device-local, or cloud metadata.
 - Determine whether any pairing field controls long-term telemetry channel.
