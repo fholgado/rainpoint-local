@@ -133,7 +133,7 @@ def bundle(destination: Path, *, allow_dirty: bool = False) -> dict:
                 "source_commit": revision, "source_dirty": dirty or receipt["source_dirty"],
                 "gateway_version": gateway_version, "integration_version": integration_version,
                 "firmware_version": version, "firmware_release_id": release_id,
-                "security": "trusted LAN; unencrypted; SHA-256 is not a publisher signature"}
+                "security": "TLS-PSK operational transport; initial setup requires a trusted LAN; SHA-256 is not a publisher signature"}
     files = {f"usb/{name}": body for name, body in images.items()}
     files["usb/build-receipt.json"] = json_bytes(receipt)
     files["usb/manifest.json"] = json_bytes({"name": "RainPoint Local", "version": version,
