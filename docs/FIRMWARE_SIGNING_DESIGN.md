@@ -220,3 +220,19 @@ Finally test trial health confirmation/rollback remains unchanged, and perform
 an explicitly authorized isolated hardware trial only after host tests and
 the production target compile pass. No new live valve transmission is part
 of firmware signing validation.
+
+## Legacy rollout ordering
+
+Fresh radios can receive the verified baseline over USB. A deployed 0.18 radio
+needs that same trusted baseline before it can accept signed-only OTA commands;
+gateway 0.39 deliberately refuses to send those commands to legacy nodes.
+Coordinate a legacy TLS bootstrap with the gateway/catalog cutover, or use USB.
+Do not enable an unsigned bypass in the signed gateway.
+
+The gateway handshake must recognize `firmware_signed_ota`, not merely verify
+signatures later at the catalog boundary. An older gateway rejects a 0.19 hello
+containing the new capability even when its token and TLS connection are valid.
+Once the baseline image is staged, bring up the matching gateway and signed
+catalog before judging candidate health. Repeated USB serial opens can reset
+some ESP boards and consume their unconfirmed-boot allowance; keep one capture
+connection open across a trial or observe it over the network.
