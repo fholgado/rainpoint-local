@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.38.0 / Integration and firmware 0.18.0 / 2026-09-10
+## 0.38.0 / Integration 0.18.0 / Firmware 0.18.0 / 2026-09-10
 
 - Per-association HTV145 storage (schema 25) preserves retained counters,
   transactions and ownership; firmware supports eight single-zone owners per
