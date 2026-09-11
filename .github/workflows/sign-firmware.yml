@@ -30,7 +30,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python tools/check_signing_environment.py
-          test -f release/firmware-signing-public.pem
+          test -f rainpointd_addon/rainpointd/firmware_keys/rainpoint-release-2026.pem
       - name: Validate and build without signing credentials
         run: |
           pip install -r tests/requirements.txt 'platformio==6.1.19'
@@ -83,7 +83,7 @@ jobs:
           python tools/sign_firmware.py sign
           --image signed/firmware.bin --receipt signed/release-input.json
           --expected-commit "$SOURCE_COMMIT" --key-id "$KEY_ID"
-          --public-key release/firmware-signing-public.pem
+          --public-key rainpointd_addon/rainpointd/firmware_keys/rainpoint-release-2026.pem
           --envelope signed/firmware-signature.json
       - name: Verify again without the private key
         env:
@@ -91,8 +91,22 @@ jobs:
         run: >-
           python tools/sign_firmware.py verify
           --image signed/firmware.bin --key-id "$KEY_ID"
-          --public-key release/firmware-signing-public.pem
+          --public-key rainpointd_addon/rainpointd/firmware_keys/rainpoint-release-2026.pem
           --envelope signed/firmware-signature.json
+      - name: Stage an installable signed OTA catalog without the private key
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.stage_firmware_release import stage_release
+          envelope = json.loads(Path('signed/firmware-signature.json').read_text())
+          descriptor = envelope['descriptor']
+          stage_release(Path('signed/firmware.bin'), Path('signed/ota'),
+              release_id=descriptor['release_id'], version=descriptor['version'],
+              summary='Publisher-signed RainPoint radio firmware',
+              notes='Unified sensors and valves; use the matching gateway release.',
+              firmware_variant='unified', signature=envelope)
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: signed-firmware-unpublished
@@ -102,3 +116,5 @@ jobs:
             signed/firmware.bin
             signed/release-input.json
             signed/firmware-signature.json
+            signed/ota/catalog.json
+            signed/ota/*.bin

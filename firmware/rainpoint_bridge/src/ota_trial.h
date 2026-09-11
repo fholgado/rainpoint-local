@@ -6,20 +6,16 @@
 
 #include <cstddef>
 #include <cstdint>
+#include "firmware_signature.h"
 
 namespace rainpoint {
 
-// Hardware trial only. This class is excluded from normal firmware until the
-// signed-manifest path and rollback behavior have passed on a disposable node.
+// Publisher-authenticated OTA into the inactive slot, followed by a health trial.
 class OtaTrial {
 public:
     void begin();
     bool install(
-        const String& commandId,
-        const String& url,
-        const String& version,
-        const String& expectedSha256,
-        std::size_t expectedSize,
+        const SignedOtaRequest& signedRequest,
         const String& gatewayHost,
         WiFiClientSecure& downloadClient
     );

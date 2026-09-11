@@ -24,8 +24,8 @@ The temporary setup access point and initial HTTP adoption exchange are unchange
 Home Wi-Fi details and the initial node credential are **not protected by the new
 operational TLS channel during this handoff**. Only commission on a network you
 trust, with physical access to the node. Password-protected setup is deferred by
-the user; firmware signing is planned for alpha. TLS and artifact checksums do
-not replace publisher signatures or secure initial provisioning.
+the user. Publisher signing protects OTA after a trusted baseline is installed;
+it does not secure this initial credential handoff.
 
 ## Authority and credentials
 
@@ -53,11 +53,25 @@ timeouts are bounded. Socket reads have a
 non-object JSON and non-finite JSON numbers are rejected. Event waits are finite
 and limited to 30 seconds; event pages contain at most 1,000 records.
 
-Firmware offers are bounded and checked against local file size and SHA-256 before
-use. The ESP32 verifies the download and requires healthy gateway confirmation,
-with rollback for an unconfirmed image. SHA-256 detects corruption; it is not an
-asymmetric publisher signature. Keep a verified installed image and rollback
-artifact when pruning offers.
+Gateway 0.39 and radio firmware 0.19 require P-256/SHA-256 publisher signatures
+with package-pinned public keys. The gateway verifies the signature, target and
+complete artifact before dispatch and again before delivery. Ad-hoc update URLs
+are not accepted. The ESP32 verifies a bounded descriptor before starting HTTP
+or writing the inactive partition; version, size and hash must match that signed
+descriptor. Unknown keys, unsigned offers and ambiguous request fields fail closed.
+The download is then SHA-256 checked before activation, with healthy gateway
+confirmation and the existing unconfirmed-image rollback. A modified download
+can write inactive-slot bytes before its final digest is known, but cannot be
+activated. Keep a verified installed image and rollback artifact when pruning offers.
+
+The private signing key lives only in the protected GitHub `firmware-signing`
+environment. Builds run without it; a separately reviewed signing job receives it
+only for signing. Public keys are shared by the packaged gateway and radio build.
+This is application-level OTA authentication, not Secure Boot, eFuse protection
+or anti-rollback. Older signed images remain cryptographically valid; automatic
+trial rollback is intentional. Initial USB flashing or a controlled, explicitly
+authorized legacy TLS bootstrap establishes trust; an old unsigned updater
+cannot authenticate that bootstrap itself. Deployment evidence is in the roadmap.
 
 The explicit `--insecure-development` CLI option is for isolated local test
 harnesses only. It is not exposed in the gateway app's normal configuration.

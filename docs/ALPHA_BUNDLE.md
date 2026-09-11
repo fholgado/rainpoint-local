@@ -115,6 +115,13 @@ Commit source first. The tool refuses dirty source, a receipt from a different
 commit, changed/missing images, mismatched versions and unsupported layouts.
 It checks production firmware boundaries and runs the isolated source-install
 smoke test. It creates no tag/release, flashes nothing and contacts no radio.
+Without `--signature firmware-signature.json`, the bundle is an unsigned preview:
+its OTA catalog is deliberately rejected by the production gateway. The protected
+GitHub workflow produces the signature and an installable signed OTA catalog.
+To build a signed full bundle, use `--signature` with the exact matching source
+commit and build; do not relabel an older image. When staging an individual offer,
+pass `--signature` to `stage_firmware_release.py`. `--unsigned-preview` is only
+for non-installable research/package inspection.
 The output is deterministic for identical source and build inputs; this does not
 claim compiler output is reproducible across arbitrary toolchains/hosts.
 

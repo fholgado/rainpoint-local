@@ -7,6 +7,10 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
+from rainpointd.firmware_signatures import verify, trusted_keys, load_json
 
 
 MAXIMUM_CATALOG_RELEASES = 32
@@ -25,11 +29,19 @@ def stage_release(
     compatible_variants: list[str] | None = None,
     release_url: str | None = None,
     supersede_release_ids: list[str] | None = None,
+    signature: dict | None = None,
 ) -> dict:
     """Copy an artifact and atomically replace its bounded catalog entry."""
     content = artifact.read_bytes()
     if not 64 * 1024 <= len(content) <= 2 * 1024 * 1024:
         raise ValueError("firmware artifact size is outside OTA limits")
+    if signature is not None:
+        verify(signature, trusted_keys(), content)
+        descriptor = signature["descriptor"]
+        if (descriptor["release_id"] != release_id or descriptor["version"] != version
+                or descriptor["firmware_variant"] != firmware_variant
+                or compatible_variants not in (None, ["unified"])):
+            raise ValueError("staging metadata differs from signed descriptor")
     catalog_path = destination / "catalog.json"
     if catalog_path.exists():
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -42,6 +54,11 @@ def stage_release(
     ):
         raise ValueError("unsupported firmware catalog schema")
     raw_releases = catalog["releases"]
+    for existing in raw_releases:
+        if existing.get("release_id") == release_id and (
+                existing.get("sha256") != hashlib.sha256(content).hexdigest()
+                or existing.get("version") != version or existing.get("signature") != signature):
+            raise ValueError("cannot replace an existing firmware release identity")
     superseded = set(supersede_release_ids or [])
     if release_id in superseded:
         raise ValueError("new release cannot supersede itself")
@@ -91,7 +108,7 @@ def stage_release(
         "hardware_profile": HARDWARE_PROFILE,
         "firmware_variant": firmware_variant,
         "compatible_variants": compatible_variants or [firmware_variant],
-        "required_capability": "firmware_update_trial",
+        "required_capability": "firmware_signed_ota" if signature is not None else "firmware_update_trial",
         "artifact": filename,
         "size_bytes": len(content),
         "sha256": hashlib.sha256(content).hexdigest(),
@@ -100,6 +117,8 @@ def stage_release(
         "release_url": release_url,
         "supersedes": sorted(superseded),
     }
+    if signature is not None:
+        release["signature"] = signature
     releases.append(release)
     catalog = {
         "schema_version": 1,
@@ -130,6 +149,8 @@ def main() -> int:
         help="source firmware variant that may install this release",
     )
     parser.add_argument("--release-url")
+    parser.add_argument("--signature", type=Path, help="publisher signature envelope from the protected signing workflow")
+    parser.add_argument("--unsigned-preview", action="store_true", help="prepare a draft catalog that the production gateway will reject")
     parser.add_argument(
         "--supersede-release-id",
         action="append",
@@ -140,6 +161,8 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if bool(args.signature) == args.unsigned_preview:
+        parser.error("choose --signature or explicit --unsigned-preview")
     release = stage_release(
         args.artifact,
         args.destination,
@@ -151,6 +174,7 @@ def main() -> int:
         compatible_variants=args.compatible_variants,
         release_url=args.release_url,
         supersede_release_ids=args.supersede_release_ids,
+        signature=load_json(args.signature) if args.signature else None,
     )
     print(json.dumps(release, indent=2, sort_keys=True))
     return 0

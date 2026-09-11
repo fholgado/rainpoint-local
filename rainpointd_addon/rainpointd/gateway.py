@@ -21,6 +21,7 @@ from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, EMPTY_CATALOG, ValveDefinition
 from .firmware_catalog import FirmwareCatalog
+from .firmware_signatures import wire_signature
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_runtime import Htv145Runtime
@@ -3095,7 +3096,7 @@ class Gateway:
             "blockers": blockers,
         }
 
-    def start_radio_node_firmware_update(
+    def _start_radio_node_firmware_update(
         self,
         node_id: str,
         *,
@@ -3103,8 +3104,9 @@ class Gateway:
         version: str,
         size_bytes: int,
         sha256: str,
+        signature: dict[str, Any],
     ) -> dict[str, Any]:
-        """Start an integrity-checked update on an explicit OTA trial node."""
+        """Dispatch only a previously verified catalog release."""
         node_id = node_id.strip().lower()
         if (
             not url.startswith("https://")
@@ -3123,8 +3125,8 @@ class Gateway:
                 or node.get("authenticated") is not True
             ):
                 raise ValueError("radio node is not connected")
-            if "firmware_update_trial" not in node.get("capabilities", []):
-                raise ValueError("radio node does not support OTA trials")
+            if "firmware_signed_ota" not in node.get("capabilities", []):
+                raise ValueError("radio node requires a trusted signed-OTA baseline")
             if node.get("tx_armed") is True:
                 raise ValueError("radio node is armed for RF transmission")
             if self._node_command_sender is None:
@@ -3137,6 +3139,7 @@ class Gateway:
                 "version": version,
                 "size_bytes": size_bytes,
                 "sha256": sha256.lower(),
+                **wire_signature(signature),
             }
             self._node_command_sender(node_id, command)
             node.update(
@@ -3180,12 +3183,13 @@ class Gateway:
             f"https://{host}:{self._firmware_public_port}/firmware/"
             f"{release.release_id}.bin"
         )
-        result = self.start_radio_node_firmware_update(
+        result = self._start_radio_node_firmware_update(
             node_id,
             url=url,
             version=release.version,
             size_bytes=release.size_bytes,
             sha256=release.sha256,
+            signature=release.signature,
         )
         result["release_id"] = release.release_id
         return result

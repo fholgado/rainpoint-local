@@ -179,6 +179,7 @@ pairing, acknowledgement, channel, or trailer behavior.
 The sole live checklist for firmware, OTA, sensor, and valve hardware gates is
 `../../PROJECT_ROADMAP.md`. This document describes how to build and operate the
 firmware and must not maintain a second completion list.
+
 ## Capacity budgets
 
 The current radio reserves space for eight sensor ACK owners, four HTV405 valve

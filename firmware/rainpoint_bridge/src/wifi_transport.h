@@ -43,7 +43,7 @@ public:
 private:
     static constexpr std::uint16_t kProtocolVersion = 2;
     static constexpr std::uint32_t kReconnectIntervalMs = 5'000;
-    static constexpr std::size_t kMaximumLineBytes = 1'024;
+    static constexpr std::size_t kMaximumLineBytes = 3'072;
     static constexpr std::size_t kCommandQueueDepth = 8;
 
     void loadConfiguration();

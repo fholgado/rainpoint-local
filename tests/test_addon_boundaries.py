@@ -7,6 +7,7 @@ import os
 import re
 import runpy
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -37,14 +38,19 @@ class AddonBoundaryTest(unittest.TestCase):
 
     def test_firmware_has_one_environment_with_both_valves(self):
         root = ROOT / "firmware/rainpoint_bridge"
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))
         class Environment(dict):
             def subst(self, value):
                 if value == "$PROJECT_DIR":
                     return str(root)
+                if value == "$BUILD_DIR":
+                    return temporary.name
                 raise AssertionError(value)
             def Append(self, **kwargs):
-                self.defines = dict(kwargs["CPPDEFINES"])
+                if "CPPDEFINES" in kwargs:
+                    self.defines = dict(kwargs["CPPDEFINES"])
         def build(values):
             env = Environment()
             with patch.dict(os.environ, values, clear=True):

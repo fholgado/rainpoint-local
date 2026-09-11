@@ -30,7 +30,9 @@ REQUIRED_CAPABILITIES = (
     b"htv405_auto_identity_pairing",
     b"firmware_update_start",
     b"firmware_update_trial",
-    b"verified_sha256",
+    b"firmware_signed_ota",
+    b"publisher_signature_invalid",
+    b"verified_publisher_and_sha256",
 )
 
 FORBIDDEN_VALVE_CONTROL_COMMANDS = (

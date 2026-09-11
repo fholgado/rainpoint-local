@@ -13,6 +13,9 @@ import sys
 import tempfile
 import zipfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
+from rainpointd.firmware_signatures import load_json, verify, trusted_keys
+
 try:
     from .firmware_manifest import build_manifest, verify_manifest, VERSION
     from .package_release import package, smoke_test
@@ -106,7 +109,7 @@ def json_bytes(value) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
 
 
-def bundle(destination: Path, *, allow_dirty: bool = False) -> dict:
+def bundle(destination: Path, *, allow_dirty: bool = False, signature_path: Path | None = None) -> dict:
     if destination.exists():
         raise ValueError("output already exists; use a new artifact path")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -129,17 +132,27 @@ def bundle(destination: Path, *, allow_dirty: bool = False) -> dict:
     # same semver in the immutable local firmware catalog.
     image_digest = hashlib.sha256(images["firmware.bin"]).hexdigest()
     release_id = f"unified-{version.lower()}-{revision[:8]}-{image_digest[:8]}"
+    signature = load_json(signature_path) if signature_path else None
+    if signature is not None:
+        if dirty or receipt["source_dirty"]:
+            raise ValueError("cannot sign a dirty preview bundle")
+        verify(signature, trusted_keys(), images["firmware.bin"])
+        if signature["descriptor"]["source_commit"] != revision:
+            raise ValueError("signature source revision mismatch")
     metadata = {"schema_version": 1, "status": "unpublished-alpha-candidate",
                 "source_commit": revision, "source_dirty": dirty or receipt["source_dirty"],
                 "gateway_version": gateway_version, "integration_version": integration_version,
                 "firmware_version": version, "firmware_release_id": release_id,
-                "security": "TLS-PSK operational transport; initial setup requires a trusted LAN; SHA-256 is not a publisher signature"}
+                "publisher_signature_verified": signature is not None,
+                "security": "Signed-only OTA with pinned P-256 publisher key; initial setup requires a trusted LAN; unsigned bundles are non-installable OTA previews"}
     files = {f"usb/{name}": body for name, body in images.items()}
     files["usb/build-receipt.json"] = json_bytes(receipt)
     files["usb/manifest.json"] = json_bytes({"name": "RainPoint Local", "version": version,
         "builds": [{"chipFamily": "ESP32", "parts": [
             {"path": p["path"], "offset": p["offset"]} for p in receipt["parts"]]}]})
     files["firmware-manifest.json"] = json_bytes(manifest)
+    if signature is not None:
+        files["firmware-signature.json"] = json_bytes(signature)
     files["compatibility.json"] = json_bytes(metadata)
     for name in ("GETTING_STARTED.md", "SECURITY.md", "LICENSE", "NODE_ONBOARDING.md",
                  "PROJECT_ROADMAP.md", "firmware/rainpoint_bridge/README.md",
@@ -158,7 +171,7 @@ def bundle(destination: Path, *, allow_dirty: bool = False) -> dict:
         stage_release(build / "firmware.bin", staging / "ota", release_id=release_id,
             version=version, summary=f"Unified {version} alpha candidate",
             notes="Sensors and both valve families. See bundled limitations and compatibility.json.",
-            firmware_variant="unified")
+            firmware_variant="unified", signature=signature)
         for item in (staging / "ota").iterdir():
             files[f"ota/{item.name}"] = item.read_bytes()
     files["SHA256SUMS"] = "".join(
@@ -174,8 +187,9 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--allow-dirty", action="store_true",
                         help="local verification only; marks the bundle as dirty")
+    parser.add_argument("--signature", type=Path, help="verified publisher envelope; without it OTA catalog is a non-installable preview")
     args = parser.parse_args()
-    print(json.dumps(bundle(args.output, allow_dirty=args.allow_dirty), indent=2))
+    print(json.dumps(bundle(args.output, allow_dirty=args.allow_dirty, signature_path=args.signature), indent=2))
 
 
 if __name__ == "__main__":

@@ -409,15 +409,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             )
                         )
                     else:
-                        result = (
-                            self.server.gateway.start_radio_node_firmware_update(
-                                node_id,
-                                url=str(body.get("url", "")),
-                                version=str(body.get("version", "")),
-                                size_bytes=int(body.get("size_bytes", 0)),
-                                sha256=str(body.get("sha256", "")),
-                            )
-                        )
+                        raise ValueError("firmware updates require a signed catalog release_id")
                     self._json(202, result)
                     return
                 if separator and node_action == "revoke":

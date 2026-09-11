@@ -1,4 +1,5 @@
 #include "ota_trial.h"
+#include "firmware_trust.h"
 
 
 #include <HTTPClient.h>
@@ -101,20 +102,24 @@ bool OtaTrial::validateRequest(
 }
 
 bool OtaTrial::install(
-    const String& commandId,
-    const String& url,
-    const String& version,
-    const String& expectedSha256,
-    std::size_t expectedSize,
+    const SignedOtaRequest& signedRequest,
     const String& gatewayHost,
     WiFiClientSecure& downloadClient
 ) {
-    commandId_ = commandId;
+    const String url(signedRequest.url.c_str());
+    const String version(signedRequest.version.c_str());
+    const String expectedSha256(signedRequest.sha256.c_str());
+    const auto expectedSize = signedRequest.size;
+    commandId_ = signedRequest.commandId.c_str();
     receivedBytes_ = 0;
     totalBytes_ = expectedSize;
     restartPending_ = false;
     if (candidatePending_ || state_ == "downloading") {
         fail("update_already_pending");
+        return false;
+    }
+    if (!authenticateOtaRequest(signedRequest, kFirmwareSigningKeys.data(), kFirmwareSigningKeys.size())) {
+        fail("publisher_signature_invalid");
         return false;
     }
     if (!validateRequest(
@@ -207,7 +212,7 @@ bool OtaTrial::install(
     }
     savePending(version);
     state_ = "ready_to_reboot";
-    detail_ = "verified_sha256";
+    detail_ = "verified_publisher_and_sha256";
     restartPending_ = true;
     return true;
 }

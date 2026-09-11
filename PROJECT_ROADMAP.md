@@ -224,6 +224,22 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   tests including a real CLI sign/verify round trip and refusal to overwrite a
   descriptor. Only temporary keys were used. The protected workflow itself has
   not been dispatched and no firmware artifact has been published.
+  September 11 enforcement implementation: gateway 0.39.0 verifies signed
+  catalogs and removes raw-URL OTA. Firmware 0.19.0 pins the same public key and
+  verifies a bounded strict request before HTTP or `Update.begin`; 26 invalid
+  vectors made zero download/flash calls in the actual OTA class linked to Mbed
+  TLS 2.28.7. A valid vector activated, and a changed download aborted without
+  activation, pending-trial state or restart. Production target compiled.
+  The `rainpoint-release-2026` private key was generated in memory and uploaded
+  directly to the protected GitHub environment; only the public key is tracked.
+  Main now requires PR/CI checks, and signing is restricted to main with required
+  review and no admin bypass. The user will approve signing runs; self-approval
+  is allowed so they can approve runs started under their account. Actual GitHub
+  signing and spare-node signed OTA remain open; neither
+  irrigation node nor the live gateway has been changed by this work.
+  Local qualification: all 595 Python tests passed (two optional skips), the
+  real OTA/Mbed TLS negative-vector harness passed, and the unified target built
+  with the pinned public key embedded. No RF control or pairing bytes changed.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.

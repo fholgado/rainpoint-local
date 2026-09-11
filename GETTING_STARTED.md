@@ -149,7 +149,10 @@ network. Do not mix this candidate with the earlier plaintext transport.
 
 Updates are separate: app store for the gateway, HACS for the integration and
 HA's radio Update entity once an agent/maintainer has staged a compatible
-[firmware catalog](docs/ALPHA_BUNDLE.md#ota-for-an-already-adopted-node).
+[publisher-signed firmware catalog](docs/ALPHA_BUNDLE.md#ota-for-an-already-adopted-node).
+Unsigned build previews are not OTA releases. Fresh USB installs include the
+public verification key; upgrading a pre-signing node needs the maintainer's
+controlled bootstrap procedure first.
 
 ## Report issues
 

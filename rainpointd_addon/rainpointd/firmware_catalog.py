@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import copy
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from .firmware_signatures import verify, trusted_keys as package_keys
 
 
 CATALOG_SCHEMA_VERSION = 1
@@ -36,6 +39,7 @@ class FirmwareRelease:
     release_summary: str
     release_notes: str
     release_url: str | None
+    signature: dict[str, Any]
 
     def public(self, *, artifact_ready: bool) -> dict[str, Any]:
         """Return metadata that is safe to expose through the local API."""
@@ -53,24 +57,37 @@ class FirmwareRelease:
             "release_notes": self.release_notes,
             "release_url": self.release_url,
             "artifact_ready": artifact_ready,
+            "publisher_key_id": self.signature["descriptor"]["key_id"],
         }
 
 
 class FirmwareCatalog:
     """Load a bounded catalog and verify every artifact before use."""
 
-    def __init__(self, releases: list[FirmwareRelease] | None = None) -> None:
+    def __init__(self, releases: list[FirmwareRelease] | None = None, *,
+                 trusted_keys: dict[str, bytes] | None = None) -> None:
+        self._trusted_keys = dict(package_keys() if trusted_keys is None else trusted_keys)
         self._releases = {
             release.release_id: release for release in (releases or [])
         }
 
     @classmethod
-    def load(cls, catalog_path: str | Path | None) -> FirmwareCatalog:
+    def load(cls, catalog_path: str | Path | None, *,
+             trusted_keys: dict[str, bytes] | None = None) -> FirmwareCatalog:
         """Load a local catalog; an omitted path intentionally disables OTA UI."""
         if not catalog_path:
             return cls()
         path = Path(catalog_path)
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate firmware catalog key")
+                result[key] = value
+            return result
+        if path.stat().st_size > 1024 * 1024:
+            raise ValueError("firmware catalog exceeds limit")
+        payload = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
         if not isinstance(payload, dict) or payload.get("schema_version") != 1:
             raise ValueError("unsupported firmware catalog schema")
         raw_releases = payload.get("releases")
@@ -79,7 +96,10 @@ class FirmwareCatalog:
         releases = [cls._parse_release(item, path.parent) for item in raw_releases]
         if len({item.release_id for item in releases}) != len(releases):
             raise ValueError("firmware catalog release IDs must be unique")
-        return cls(releases)
+        catalog = cls(releases, trusted_keys=trusted_keys)
+        for release in releases:
+            catalog._verify_signature(release)
+        return catalog
 
     @staticmethod
     def _parse_release(raw: Any, root: Path) -> FirmwareRelease:
@@ -144,7 +164,18 @@ class FirmwareCatalog:
             release_summary=summary,
             release_notes=notes,
             release_url=release_url,
+            signature=copy.deepcopy(raw.get("signature", {})),
         )
+
+    def _verify_signature(self, release: FirmwareRelease, content: bytes | None = None) -> None:
+        verify(release.signature, self._trusted_keys, content)
+        descriptor = release.signature["descriptor"]
+        for key in ("release_id", "version", "channel", "hardware_profile",
+                    "firmware_variant", "size_bytes", "sha256"):
+            if descriptor[key] != getattr(release, key):
+                raise ValueError(f"catalog differs from signed {key}")
+        if release.compatible_variants != ("unified",) or release.required_capability != "firmware_signed_ota":
+            raise ValueError("signed OTA requires the unified signature-verifying node")
 
     @property
     def enabled(self) -> bool:
@@ -181,13 +212,15 @@ class FirmwareCatalog:
         """Read and return the exact bytes whose catalog digest was verified."""
         release = self.get(release_id)
         try:
-            content = release.artifact_path.read_bytes()
+            with release.artifact_path.open("rb") as artifact:
+                content = artifact.read(MAXIMUM_ARTIFACT_BYTES + 1)
         except OSError as error:
             raise ValueError("firmware artifact is not staged") from error
         if len(content) != release.size_bytes:
             raise ValueError("firmware artifact size mismatch")
         if hashlib.sha256(content).hexdigest() != release.sha256:
             raise ValueError("firmware artifact digest mismatch")
+        self._verify_signature(release, content)
         return content
 
     def latest_for_node(self, node: dict[str, Any]) -> dict[str, Any] | None:

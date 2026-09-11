@@ -2851,7 +2851,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("reboot_requested", rebooted["state"])
         self.assertEqual("node_reboot", commands[-1][1]["type"])
 
-    def test_ota_trial_api_requires_candidate_node_capability(self) -> None:
+    def test_ota_api_rejects_ad_hoc_unsigned_url(self) -> None:
         commands: list[tuple[str, dict]] = []
         node_id = "rp-001122334455"
         self.server.gateway.update_node(
@@ -2868,19 +2868,13 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.server.gateway.set_node_command_sender(
             lambda target, message: commands.append((target, message))
         )
-        result = self.post_json(
-            f"/api/v1/nodes/{node_id}/firmware-update",
-            {
-                "url": "https://192.0.2.1:8787/firmware/test.bin",
-                "version": "0.9.0-test.2",
-                "size_bytes": 900_000,
-                "sha256": "AB" * 32,
-            },
-        )
-        self.assertEqual("requested", result["state"])
-        self.assertEqual(node_id, commands[0][0])
-        self.assertEqual("firmware_update_start", commands[0][1]["type"])
-        self.assertEqual("ab" * 32, commands[0][1]["sha256"])
+        with self.assertRaises(HTTPError) as refused:
+            self.post_json(
+                f"/api/v1/nodes/{node_id}/firmware-update",
+                {"url": "https://192.0.2.1:8787/firmware/test.bin", "version": "0.9.0-test.2",
+                 "size_bytes": 900_000, "sha256": "AB" * 32})
+        self.assertEqual(400, refused.exception.code)
+        self.assertEqual([], commands)
 
         self.server.gateway.update_node(
             node_id,

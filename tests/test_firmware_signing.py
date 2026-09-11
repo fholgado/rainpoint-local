@@ -131,8 +131,11 @@ class SigningTest(unittest.TestCase):
     def test_cli_sign_verify_and_refuse_replacement(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            (root / "firmware.bin").write_bytes(self.image)
-            (root / "receipt.json").write_text(json.dumps(self.receipt))
+            image = self.image[:1] + self.public + b"\0" + self.image[2 + len(self.public):]
+            receipt = copy.deepcopy(self.receipt)
+            receipt["parts"][0]["sha256"] = hashlib.sha256(image).hexdigest()
+            (root / "firmware.bin").write_bytes(image)
+            (root / "receipt.json").write_text(json.dumps(receipt))
             (root / "public.pem").write_bytes(self.public)
             script = Path(__file__).resolve().parents[1] / "tools/sign_firmware.py"
             arguments = ["--image", str(root / "firmware.bin"), "--public-key", str(root / "public.pem"),

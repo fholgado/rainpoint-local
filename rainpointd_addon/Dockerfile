@@ -10,7 +10,7 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache python3 py3-pyserial rtl_433 tzdata
+RUN apk add --no-cache python3 py3-pyserial py3-cryptography rtl_433 tzdata
 RUN python3 -c "import ssl; assert hasattr(ssl.SSLContext, 'set_psk_server_callback'), 'Python TLS-PSK support required'"
 
 WORKDIR /opt/rainpoint

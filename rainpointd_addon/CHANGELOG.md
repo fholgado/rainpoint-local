@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.39.0 / Integration 0.18.0 / Firmware 0.19.0 / 2026-09-11
+
+- Require publisher-signed firmware catalogs; remove ad-hoc URL updates.
+- Verify P-256/SHA-256 signatures independently in the gateway and radio before
+  downloading/writing. Bind version, target, release, source commit, image size
+  and digest. Keep streamed digest validation and the existing health rollback.
+- Pin the same public key in both runtimes; private signing material lives only
+  in the protected GitHub environment. No eFuse/Secure Boot changes.
+- Remove obsolete app research switches; ordinary valve controls retain their
+  association/owner/counter checks. Pairing and RF builders are unchanged.
+- Upgrade from 0.18 radio firmware requires a controlled trusted bootstrap to
+  0.19; unsigned legacy catalogs are rejected. Do not upgrade a live gateway
+  without first staging a signed catalog or disabling its catalog path.
+
+
 ## 0.38.0 / Integration 0.18.0 / Firmware 0.18.0 / 2026-09-10
 
 - Per-association HTV145 storage (schema 25) preserves retained counters,

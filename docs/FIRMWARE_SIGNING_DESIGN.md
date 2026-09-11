@@ -1,8 +1,7 @@
 # Firmware publisher-signing design
 
-Research date: 2026-09-11. This is a proposed contract, not evidence that
-production keys, GitHub protections, signed releases, or device validation
-have been provisioned. Project status belongs in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
+Publisher authentication contract. Project provisioning, rollout and qualification
+status belongs in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 
 ## Recommendation and current boundary
 
@@ -11,10 +10,10 @@ encoded artifact descriptor. Verify independently in the gateway and ESP32.
 Keep the current TLS-PSK transport, streaming SHA-256 check, and trial/rollback
 behavior; publisher authentication supplements them.
 
-Current [ota_trial.cpp](../firmware/rainpoint_bridge/src/ota_trial.cpp) trusts
-gateway-provided version, size, and hash. It calls `Update.begin` and writes
-the inactive slot before completing the hash check, then calls `Update.end`
-only on success. [package_alpha.py](../tools/package_alpha.py) prepares an
+[ota_trial.cpp](../firmware/rainpoint_bridge/src/ota_trial.cpp) verifies the
+publisher signature and bound request fields before HTTP and `Update.begin`.
+It writes the inactive slot while hashing the download, then calls `Update.end`
+only on a matching digest. [package_alpha.py](../tools/package_alpha.py) prepares an
 unpublished, clean-revision-bound bundle and checks USB parts/partition layout;
 its checksums do not authenticate a publisher.
 
@@ -27,7 +26,7 @@ a real target build and negative-vector execution remain necessary evidence.
 [Arduino release](https://github.com/espressif/arduino-esp32/releases/tag/2.0.17),
 [Mbed TLS 2.28.7 ECDSA API](https://mbed-tls.readthedocs.io/projects/api/en/v2.28.7/api/file/ecdsa_8h/).
 
-## Proposed exact descriptor and signature contract
+## Exact descriptor and signature contract
 
 Use a new versioned signature schema, separate from the existing manifest
 schema. Do not sign pretty-printed JSON or implement general JSON
@@ -130,7 +129,7 @@ not an automatically installed update. Dispatch is not part of ordinary CI.
 
 Before enabling it, a maintainer must provision all of the following together:
 
-- A reviewed P-256 public key at `release/firmware-signing-public.pem`.
+- A reviewed P-256 public key at `rainpointd_addon/rainpointd/firmware_keys/rainpoint-release-2026.pem`.
 - Environment secret `FIRMWARE_SIGNING_KEY_PEM` containing the matching private
   PKCS#8 PEM, and environment variable `FIRMWARE_SIGNING_KEY_ID`.
 - The `firmware-signing` environment with a required reviewer, administrator
@@ -141,15 +140,17 @@ The preflight queries GitHub and refuses missing/relaxed protection. The signer
 checks the build receipt against the workflow's immutable commit and actual
 image hash/size, refuses a private/public key mismatch, and verifies its output.
 The private key is supplied only to that signing step; verification and artifact
-upload run without it. No real key or environment has been provisioned by the
-source implementation. A sole maintainer must explicitly decide whether to allow
+upload run without it. Provisioning evidence is recorded in the roadmap. A sole maintainer must explicitly decide whether to allow
 self-approval or appoint another reviewer; YAML cannot make that decision.
 
 The temporary-key tests cover strict descriptor bytes, each bound field, wrong
 keys, damaged images, malformed signatures, duplicate JSON and environment
-protections. **Gateway and ESP32 OTA enforcement are not implemented by this
-tooling**, and the reviewed public key must also be pinned there before enabling
-a signed-only release. Runtime qualification remains in the roadmap.
+protections. Gateway and ESP32 enforcement use the same package-pinned public key. On the
+wire, the exact descriptor bytes are lowercase hex in `signed_descriptor_hex`,
+with `signature_der_hex`; the OTA-only flat JSON parser rejects duplicates,
+unknown fields and escape/nesting ambiguity. The radio command limit is 3072
+bytes. Cryptographic checks use Mbed TLS, not custom ECDSA code. Runtime and
+hardware qualification evidence remains in the roadmap.
 
 Recommended job boundary: `prepare -> approved-sign -> approved-publish`.
 Preparation runs tests/builds and produces an unpublished artifact at an exact

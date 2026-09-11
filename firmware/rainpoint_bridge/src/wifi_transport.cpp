@@ -336,6 +336,7 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
         ",\"firmware_update_trial\""
+        ",\"firmware_signed_ota\""
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,

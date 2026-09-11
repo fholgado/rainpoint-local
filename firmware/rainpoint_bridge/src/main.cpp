@@ -2649,12 +2649,9 @@ void handleNetworkCommand() {
         return;
     }
     if (type == "firmware_update_start") {
-        const String url = jsonStringField(command, "url");
-        const String version = jsonStringField(command, "version");
-        const String sha256 = jsonStringField(command, "sha256");
-        long sizeBytes = 0;
-        if (!jsonLongField(command, "size_bytes", sizeBytes) ||
-            sizeBytes <= 0 || currentPairingState() ==
+        rainpoint::SignedOtaRequest request;
+        if (!rainpoint::parseSignedOtaRequest(std::string_view(command.c_str(), command.length()), request) ||
+            currentPairingState() ==
                 rainpoint::PairingSessionState::Armed) {
             reportNetworkCommandError(commandId, "invalid_update_request");
             return;
@@ -2662,11 +2659,7 @@ void handleNetworkCommand() {
         WiFiClientSecure downloadClient;
         wifiTransport.secureClient(downloadClient);
         otaTrial.install(
-            commandId,
-            url,
-            version,
-            sha256,
-            static_cast<std::size_t>(sizeBytes),
+            request,
             wifiTransport.gatewayHost(), downloadClient
         );
         emitLine(otaTrial.status(wifiTransport.nodeId()));
