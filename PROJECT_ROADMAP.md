@@ -202,55 +202,39 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   unchanged. Gateway rollback from schema 24 requires a pre-upgrade DB backup.
   Validation: the complete Python suite passed 547 tests (two optional skips),
   including the shipped alert-template and distribution-metadata regressions.
-- [ ] Complete alpha security acceptance: operational TLS passed the September 10
-  coordinated deployment and spare-node encrypted OTA. Initial commissioning AP and HTTP adoption remain
-  trusted-network-only and are unchanged by user direction. Implement publisher
-  firmware signing at the alpha milestone as requested. Preserve explicit limits
-  for initial provisioning; no Internet port forwarding.
-  September 11 decision: automate signing in a protected GitHub release workflow;
-  keep the private key in an environment secret, never source or build artifacts.
-  `docs/FIRMWARE_SIGNING_DESIGN.md` defines the proposed descriptor/trust boundary.
-  Temporary-key tooling, gateway/node enforcement and release-environment
-  provisioning must be qualified before claiming signed OTA support.
-  Host tooling and the manual protected-environment workflow are now implemented;
-  Temporary-key tests cover signing and workflow isolation. Signing rejects unreviewed commit receipts,
-  changed image/descriptor fields, unknown/mismatched keys and malformed DER/JSON.
-  The workflow verifies reviewer/branch protections, builds without secrets,
-  signs after approval and does not publish a release. It intentionally cannot
-  run until the real public key and protected environment are provisioned.
-  Node/gateway signature enforcement and an isolated OTA trial remain open;
-  the existing radios have not been changed.
-  Validation: 592 Python tests passed (two skips), followed by all 10 signing
-  tests including a real CLI sign/verify round trip and refusal to overwrite a
-  descriptor. Only temporary keys were used. The protected workflow itself has
-  not been dispatched and no firmware artifact has been published.
-  September 11 enforcement implementation: gateway 0.39.0 verifies signed
-  catalogs and removes raw-URL OTA. Firmware 0.19.0 pins the same public key and
-  verifies a bounded strict request before HTTP or `Update.begin`; 26 invalid
-  vectors made zero download/flash calls in the actual OTA class linked to Mbed
-  TLS 2.28.7. A valid vector activated, and a changed download aborted without
-  activation, pending-trial state or restart. Production target compiled.
-  The `rainpoint-release-2026` private key was generated in memory and uploaded
-  directly to the protected GitHub environment; only the public key is tracked.
-  Main now requires PR/CI checks, and signing is restricted to main with required
-  review and no admin bypass. The user will approve signing runs; self-approval
-  is allowed so they can approve runs started under their account. Actual GitHub
-  signing and spare-node signed OTA remain open; neither
-  irrigation node nor the live gateway has been changed by this work.
-  Local qualification: all 595 Python tests passed (two optional skips), the
-  real OTA/Mbed TLS negative-vector harness passed, and the unified target built
-  with the pinned public key embedded. No RF control or pairing bytes changed.
-  The first CI firmware build passed but packaging exposed a missing
-  `cryptography` dependency in that isolated job; the firmware job now installs
-  the pinned signing requirements before running its packaging regression check.
-  Approved GitHub run 34585252074 signed the merged 5dc0c5fc artifact; its
-  publisher signature and downloaded image digest verified locally. The spare
-  trial exposed a missing `firmware_signed_ota` entry in the network handshake
-  allowlist: the candidate rebooted and reached TLS, but received
-  `node_rejected`. A real socket regression reproduced that failure before the
-  fix; command dispatch now also requires the signed capability. Serial-port
-  opens reset this USB-connected ESP, so subsequent trials keep one continuous
-  serial connection open to avoid interfering with candidate boot accounting.
+- [x] Implement and qualify the alpha security boundary (September 11).
+  Operational TLS passed the September 10 coordinated deployment. Initial
+  commissioning AP and HTTP adoption remain trusted-network-only by user
+  direction; no Internet port forwarding. Publisher signing is enforced by
+  gateway 0.39.0 and radio 0.19.0; see `docs/FIRMWARE_SIGNING_DESIGN.md`.
+  The private key exists only in the protected GitHub environment. Main requires
+  PR/CI checks; signing requires maintainer approval, main-only deployment and
+  no admin bypass. User-approved run 34585252074 signed firmware from 5dc0c5fc;
+  no GitHub release was published.
+  Hardware evidence: the spare received all 1,097,648 bytes of the approved image,
+  reported `verified_publisher_and_sha256`, rebooted without USB intervention,
+  reauthenticated and reported `confirmed` / `gateway_and_radio_healthy` by
+  12:00 UTC. This was a genuine 0.19-to-0.19 signed OTA after a separately verified
+  legacy TLS bootstrap. Image SHA-256 starts `22d57e428c4b0285`.
+  Gateway 0.39 is deployed; all eight device IDs, six sensor ACK assignments and
+  valve endpoint/control-counter fields survived. Both valves were idle and all
+  devices available afterward. Deployed raw-URL OTA returned HTTP 400 without
+  dispatch. Irrigation-node firmware remains 0.18.0 intentionally.
+  Host evidence: 596 Python tests passed (two optional skips), all six CI jobs
+  passed, and actual OTA code linked to Mbed TLS rejected 26 invalid inputs
+  before download/flash and aborted a tampered download before activation.
+  Negative signature flash tests are host-instrumented, not hardware injections.
+  Trial fixes: install the verifier dependency in isolated firmware-packaging
+  CI, and accept `firmware_signed_ota` in the authenticated hello allowlist while
+  requiring it for update dispatch (PRs #14/#15). A real socket test reproduced
+  `node_rejected` before the fix. USB serial opens reset this ESP; uninterrupted
+  capture isolated the successful software reboot from diagnostic resets.
+- [ ] Coordinate remaining irrigation-node promotion to signed firmware 0.19.
+  The spare-only qualification above is complete; do not interpret it as a
+  completed fleet rollout. Preserve the existing pairs/ACK owners/counters and
+  use a controlled trusted bootstrap or USB, since 0.18 cannot verify signatures
+  and the signed-only gateway deliberately will not send it new OTA requests.
+  Release publication remains a separate explicitly approved action.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
