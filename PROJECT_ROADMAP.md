@@ -241,8 +241,18 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   and both valves were idle with unchanged control counters and start controls
   available. Current gateway data was backed up and its Mac copy hash verified.
   Front Yard Wi-Fi was weak (-83 to -85 dBm) despite a successful update/reconnect.
-  No watering was triggered during promotion; post-update irrigation testing and
-  release publication remain separate actions.
+  No watering was triggered during promotion. Separately authorized post-update
+  tests then passed through the normal gateway control API: Vegetable Garden
+  zone 1 received one 600-second request at 12:38:48 UTC and was observed closed
+  at 12:49:00; only afterward Front Garden received one 60-second request at
+  12:49:15 and was observed closed at 12:50:20. Both durations were decoded back
+  from fresh valve reports; these are observation times, not exact physical
+  actuation timestamps. Counters advanced 0→1 and 129→130 respectively, without
+  resynchronization, repeat watering requests, or manual close commands. Both
+  valves were idle with no pending commands afterward; all eight devices and
+  three radios remained available. This validates the gateway/firmware control
+  path, not a separate dashboard-click test. Release publication remains a
+  separate explicitly approved action.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
