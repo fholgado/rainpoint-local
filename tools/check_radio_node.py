@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from functools import partial
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -175,9 +176,10 @@ def _print_text(report: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--gateway-url", help="Gateway root, e.g. http://host:8787")
+    source.add_argument("--gateway-url", help="Gateway root, e.g. https://host:8787")
     source.add_argument("--snapshot", type=Path, help="Previously saved JSON snapshot")
     parser.add_argument("--node-id", required=True)
+    parser.add_argument("--token-file", type=Path, help="Private management credential file for TLS")
     parser.add_argument("--maximum-age", type=int, default=120)
     parser.add_argument("--save", type=Path, help="Save the fetched snapshot as JSON")
     parser.add_argument("--json", action="store_true", help="Print machine-readable output")
@@ -186,7 +188,14 @@ def main() -> int:
     if args.snapshot:
         snapshot = json.loads(args.snapshot.read_text())
     else:
-        snapshot = fetch_snapshot(args.gateway_url)
+        opener = urlopen
+        if args.gateway_url.startswith("https://"):
+            if args.token_file is None:
+                parser.error("HTTPS requires --token-file (never put the credential in command arguments)")
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
+            from rainpointd.secure_transport import client_context
+            opener = partial(urlopen, context=client_context(args.token_file.read_text().strip()))
+        snapshot = fetch_snapshot(args.gateway_url, opener=opener)
     if args.save:
         args.save.parent.mkdir(parents=True, exist_ok=True)
         args.save.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")

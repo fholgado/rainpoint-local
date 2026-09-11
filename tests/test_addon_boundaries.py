@@ -66,7 +66,7 @@ class AddonBoundaryTest(unittest.TestCase):
         handled = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', source))
         admitted = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', transport))
         self.assertLessEqual(handled, admitted)
-        self.assertIn("!htv145ControlCandidate.counterAuthenticated", source)
+        self.assertIn("!htv145Owner().counterAuthenticated", source)
         self.assertIn("!rfMaintenance.transmitAllowed()", source)
         self.assertIn("!wifiTransport.authenticated()", source)
 

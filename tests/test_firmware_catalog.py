@@ -217,7 +217,7 @@ class FirmwareCatalogTest(unittest.TestCase):
         )
         self.assertEqual("requested", result["state"])
         self.assertEqual(
-            "http://192.0.2.10:8787/firmware/esp32dev-ota-0.9.0-test.3.bin",
+            "https://192.0.2.10:8787/firmware/esp32dev-ota-0.9.0-test.3.bin",
             commands[0][1]["url"],
         )
 

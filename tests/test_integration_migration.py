@@ -19,7 +19,7 @@ PACKAGE = ROOT / "custom_components" / "rainpoint_local"
 package = types.ModuleType("rainpoint_local")
 package.__path__ = [str(PACKAGE)]
 sys.modules.setdefault("rainpoint_local", package)
-for module_name in ("const", "migration", "api_models"):
+for module_name in ("const", "migration", "api_models", "notifications"):
     spec = importlib.util.spec_from_file_location(
         f"rainpoint_local.{module_name}", PACKAGE / f"{module_name}.py"
     )
@@ -34,6 +34,8 @@ from rainpoint_local.api_models import multi_zone_numbers, unsupported_device_en
 
 def _integration_function(filename, name, namespace, classname=None):
     """Exercise the actual HA callback with registry/entity APIs stubbed."""
+    from rainpoint_local.notifications import notify_command_failure
+    namespace.setdefault("notify_command_failure", notify_command_failure)
     tree = ast.parse((PACKAGE / filename).read_text())
     if classname is not None:
         tree = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classname)
@@ -118,6 +120,25 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call("token", "valve", "advance", pairing_command_id="pair-1"),
                          call("token", "valve", "cancel", pairing_command_id="pair-1")],
                          client.commission_valve.await_args_list)
+
+    async def test_setup_enables_owner_without_watering_consent_or_experiments(self):
+        client = types.SimpleNamespace(commission_valve=AsyncMock(return_value={"state": "ready"}))
+        async def wait(): pass
+        # Close the scheduled coroutine in this callback-only harness.
+        def create_task(coro):
+            coro.close()
+            return "task"
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+            _commission_device_id="valve", _commission_pairing_command_id="pair-1",
+            hass=types.SimpleNamespace(async_create_task=create_task),
+            _async_commission_wait=wait, async_step_commission_progress=AsyncMock())
+        namespace = {name: ValueError for name in (
+            "RainPointLocalCannotConnect", "RainPointLocalInvalidResponse",
+            "RainPointLocalUnauthorized", "RainPointLocalCommandRejected")}
+        await _integration_function("config_flow.py", "async_step_commission_start", namespace)(flow, {})
+        client.commission_valve.assert_awaited_once_with("token", "valve", "enable",
+            pairing_command_id="pair-1")
+        flow.async_step_commission_progress.assert_awaited_once()
 
     async def test_event_listener_refreshes_state_and_recovers_reset_cursor(self):
         import asyncio

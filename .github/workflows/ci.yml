@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - name: Run protocol, gateway, analysis, and safety tests
         run: |
           pip install -r tests/requirements.txt
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - name: Install PlatformIO
         run: pip install "platformio==6.1.19"
       - name: Build and check unified production firmware

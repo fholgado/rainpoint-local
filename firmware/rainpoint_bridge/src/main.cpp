@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "cc1101.h"
+#include "rainpoint_association_slots.h"
 #include "rainpoint_clocked_transmit.h"
 #include "rainpoint_ack.h"
 #include "rainpoint_htv145_control.h"
@@ -221,7 +222,23 @@ struct Htv145ControlCandidate {
     bool immediateResponseWindowClosed = false;
 };
 
-Htv145ControlCandidate htv145ControlCandidate;
+std::array<Htv145ControlCandidate, 8> htv145Owners{};
+std::size_t selectedHtv145Owner = 0;
+Htv145ControlCandidate& htv145Owner() { return htv145Owners[selectedHtv145Owner]; }
+struct Htv145OwnerSelection {
+    std::size_t previous = selectedHtv145Owner;
+    explicit Htv145OwnerSelection(std::size_t index) { selectedHtv145Owner = index; }
+    ~Htv145OwnerSelection() { selectedHtv145Owner = previous; }
+};
+bool htv145Pending() {
+    for (const auto& owner : htv145Owners) if (owner.pending) return true;
+    return false;
+}
+bool htv145OwnsReports() {
+    for (const auto& owner : htv145Owners)
+        if (owner.configured && owner.reportAckCenterHz) return true;
+    return false;
+}
 bool htv145CommandIssued = false;
 std::uint32_t lastHtv145CommandStartedAtMs = 0;
 
@@ -889,10 +906,12 @@ void enterRfReceiveOnly(
     valveControlProbe.closeQueued = false;
     valveControlProbe.commandPendingConfirmation = false;
     valveControlProbe.responseListenActive = false;
-    if (htv145ControlCandidate.pending) {
-        htv145ControlCandidate.pending = false;
-        htv145ControlCandidate.counterAuthenticated = false;
-        htv145ControlCandidate.commandId.clear();
+    for (auto& owner : htv145Owners) {
+        if (owner.pending) {
+            owner.pending = false;
+            owner.counterAuthenticated = false;
+            owner.commandId.clear();
+        }
     }
     primaryRadio.restoreReceiveChannel(kHcs026TelemetryChannel);
     reportRfMaintenanceStatus("receive_only_started");
@@ -1614,80 +1633,80 @@ void reportHtv145CandidateStatus(
     line += "\",\"state\":\"";
     line += state;
     line += "\",\"configured\":";
-    line += htv145ControlCandidate.configured ? "true" : "false";
+    line += htv145Owner().configured ? "true" : "false";
     line += ",\"counter_authenticated\":";
-    line += htv145ControlCandidate.counterAuthenticated ? "true" : "false";
+    line += htv145Owner().counterAuthenticated ? "true" : "false";
     line += ",\"pending\":";
-    line += htv145ControlCandidate.pending ? "true" : "false";
-    if (htv145ControlCandidate.configured || strcmp(state, "revoked") == 0) {
+    line += htv145Owner().pending ? "true" : "false";
+    if (htv145Owner().configured || strcmp(state, "revoked") == 0) {
         line += ",\"controller_endpoint\":\"";
         line += hexString(
-            htv145ControlCandidate.link.controllerEndpoint.data(), 4
+            htv145Owner().link.controllerEndpoint.data(), 4
         );
         line += "\",\"valve_endpoint\":\"";
         line += hexString(
-            htv145ControlCandidate.link.valveEndpoint.data(), 4
+            htv145Owner().link.valveEndpoint.data(), 4
         );
         line += "\",\"center_hz\":";
-        line += htv145ControlCandidate.centerHz;
+        line += htv145Owner().centerHz;
         line += ",\"next_sequence\":";
-        line += htv145ControlCandidate.nextSequence;
+        line += htv145Owner().nextSequence;
     }
-    if (!htv145ControlCandidate.commandId.isEmpty()) {
+    if (!htv145Owner().commandId.isEmpty()) {
         line += ",\"command_id\":\"";
-        line += htv145ControlCandidate.commandId;
+        line += htv145Owner().commandId;
         line += '"';
     }
-    if (!htv145ControlCandidate.commandId.isEmpty()) {
+    if (!htv145Owner().commandId.isEmpty()) {
         line += ",\"transmitted_sequence\":";
-        line += htv145ControlCandidate.transmittedSequence;
+        line += htv145Owner().transmittedSequence;
         line += ",\"attempts_started\":";
-        line += htv145ControlCandidate.attemptsSent;
+        line += htv145Owner().attemptsSent;
         line += ",\"attempts_sent\":";
-        line += htv145ControlCandidate.successfulAttempts;
+        line += htv145Owner().successfulAttempts;
         line += ",\"observed_frames\":";
-        line += htv145ControlCandidate.observedFrames;
+        line += htv145Owner().observedFrames;
         line += ",\"matching_route_frames\":";
-        line += htv145ControlCandidate.matchingRouteFrames;
+        line += htv145Owner().matchingRouteFrames;
         line += ",\"invalid_trailer_frames\":";
-        line += htv145ControlCandidate.invalidTrailerFrames;
+        line += htv145Owner().invalidTrailerFrames;
         line += ",\"classified_response_frames\":";
-        line += htv145ControlCandidate.classifiedResponseFrames;
+        line += htv145Owner().classifiedResponseFrames;
         line += ",\"classified_state_frames\":";
-        line += htv145ControlCandidate.classifiedStateFrames;
+        line += htv145Owner().classifiedStateFrames;
         line += ",\"conflicting_state_frames\":";
-        line += htv145ControlCandidate.conflictingStateFrames;
+        line += htv145Owner().conflictingStateFrames;
         line += ",\"immediate_response_window_closed\":";
-        line += htv145ControlCandidate.immediateResponseWindowClosed
+        line += htv145Owner().immediateResponseWindowClosed
             ? "true" : "false";
         line += ",\"immediate_response_outcome\":\"";
-        if (htv145ControlCandidate.classifiedResponseFrames > 0) {
+        if (htv145Owner().classifiedResponseFrames > 0) {
             line += "classified";
-        } else if (htv145ControlCandidate.invalidTrailerFrames > 0 ||
-            htv145ControlCandidate.matchingRouteFrames >
-                htv145ControlCandidate.classifiedStateFrames) {
+        } else if (htv145Owner().invalidTrailerFrames > 0 ||
+            htv145Owner().matchingRouteFrames >
+                htv145Owner().classifiedStateFrames) {
             line += "corrupt_or_foreign";
         } else {
             line += "none_observed";
         }
         line += "\",\"state_confirmation_outcome\":\"";
-        if (htv145ControlCandidate.classifiedStateFrames >
-                htv145ControlCandidate.conflictingStateFrames) {
+        if (htv145Owner().classifiedStateFrames >
+                htv145Owner().conflictingStateFrames) {
             line += "matching";
-        } else if (htv145ControlCandidate.conflictingStateFrames > 0) {
+        } else if (htv145Owner().conflictingStateFrames > 0) {
             line += "conflicting";
-        } else if (!htv145ControlCandidate.pending &&
-            htv145ControlCandidate.immediateResponseWindowClosed) {
+        } else if (!htv145Owner().pending &&
+            htv145Owner().immediateResponseWindowClosed) {
             line += "missed";
         } else {
             line += "pending";
         }
         line += '"';
         line += ",\"requested_watering\":";
-        line += htv145ControlCandidate.commandWatering ? "true" : "false";
-        if (htv145ControlCandidate.commandWatering) {
+        line += htv145Owner().commandWatering ? "true" : "false";
+        if (htv145Owner().commandWatering) {
             line += ",\"duration_seconds\":";
-            line += htv145ControlCandidate.durationSeconds;
+            line += htv145Owner().durationSeconds;
         }
     }
     if (confirmation != nullptr) {
@@ -1699,7 +1718,7 @@ void reportHtv145CandidateStatus(
         line += ",\"failure_class\":\"";
         line += failureClass;
         line += "\",\"counter_ambiguous\":";
-        line += htv145ControlCandidate.successfulAttempts > 0
+        line += htv145Owner().successfulAttempts > 0
             ? "true" : "false";
     }
     if (frame != nullptr) {
@@ -1712,7 +1731,7 @@ void reportHtv145CandidateStatus(
 }
 
 void restoreHtv145CandidateReceive() {
-    htv145ControlCandidate.listeningOnCommandCarrier = false;
+    htv145Owner().listeningOnCommandCarrier = false;
     scanChannels = true;
     // Command replies retune the base FREQ registers. Selecting CHANNR=0
     // alone leaves RX on that command carrier and loses ordinary reports/ACKs.
@@ -1723,7 +1742,7 @@ void restoreHtv145CandidateReceive() {
 
 const char* htv145CandidateFailureClass(const char* state) {
     if (strcmp(state, "transmit_failed") == 0 &&
-        htv145ControlCandidate.successfulAttempts == 0) {
+        htv145Owner().successfulAttempts == 0) {
         return "nothing_transmitted";
     }
     if (strcmp(state, "response_receiver_tune_failed") == 0) {
@@ -1736,17 +1755,17 @@ const char* htv145CandidateFailureClass(const char* state) {
         return "valve_result_code_3_meaning_unresolved";
     }
     if (strcmp(state, "gateway_connection_lost_counter_unsynchronized") == 0) {
-        return htv145ControlCandidate.successfulAttempts > 0
+        return htv145Owner().successfulAttempts > 0
             ? "gateway_lost_after_transmission"
             : "gateway_lost_before_transmission";
     }
-    if (htv145ControlCandidate.invalidTrailerFrames > 0 ||
-        htv145ControlCandidate.matchingRouteFrames >
-            htv145ControlCandidate.classifiedResponseFrames +
-            htv145ControlCandidate.classifiedStateFrames) {
+    if (htv145Owner().invalidTrailerFrames > 0 ||
+        htv145Owner().matchingRouteFrames >
+            htv145Owner().classifiedResponseFrames +
+            htv145Owner().classifiedStateFrames) {
         return "corrupt_or_foreign_matching_route_response";
     }
-    if (htv145ControlCandidate.immediateResponseWindowClosed) {
+    if (htv145Owner().immediateResponseWindowClosed) {
         return "state_confirmation_missed_after_no_immediate_response";
     }
     return "transmitted_no_matching_response_or_state";
@@ -1759,13 +1778,13 @@ void failHtv145Candidate(
     // Once any attempt may have reached the air, failure to observe the valve
     // makes the outbound counter ambiguous. Fail closed and require a new
     // passive stock/local synchronization before accepting another command.
-    htv145ControlCandidate.counterAuthenticated = false;
-    htv145ControlCandidate.pending = false;
+    htv145Owner().counterAuthenticated = false;
+    htv145Owner().pending = false;
     reportHtv145CandidateStatus(
         state, nullptr, frame, htv145CandidateFailureClass(state)
     );
     restoreHtv145CandidateReceive();
-    htv145ControlCandidate.commandId.clear();
+    htv145Owner().commandId.clear();
 }
 
 void confirmHtv145Candidate(
@@ -1776,60 +1795,60 @@ void confirmHtv145Candidate(
         strcmp(confirmation, "matching_immediate_response") == 0 ||
         strcmp(confirmation, "matching_idle_anchor_response") == 0;
     if (sequenceConfirmed) {
-        htv145ControlCandidate.nextSequence =
+        htv145Owner().nextSequence =
             rainpoint::nextHtv145CommandSequence(
-                htv145ControlCandidate.transmittedSequence,
-                htv145ControlCandidate.commandWatering
+                htv145Owner().transmittedSequence,
+                htv145Owner().commandWatering
             );
     }
     // Independent watering telemetry proves state, not acceptance of an
     // assumed sequence. Only the matching command response authenticates it.
-    htv145ControlCandidate.counterAuthenticated = sequenceConfirmed;
-    htv145ControlCandidate.pending = false;
+    htv145Owner().counterAuthenticated = sequenceConfirmed;
+    htv145Owner().pending = false;
     reportHtv145CandidateStatus("confirmed", confirmation, &frame);
     restoreHtv145CandidateReceive();
-    htv145ControlCandidate.commandId.clear();
+    htv145Owner().commandId.clear();
 }
 
 bool transmitNextHtv145CandidateAttempt() {
-    if (!htv145ControlCandidate.pending ||
-        htv145ControlCandidate.attemptsSent >=
+    if (!htv145Owner().pending ||
+        htv145Owner().attemptsSent >=
             rainpoint::kHtv145CommandAttemptOffsetsMs.size()) {
         return false;
     }
     const bool sent = primaryRadio.transmitAsync(
-        htv145ControlCandidate.commandFrame,
-        htv145ControlCandidate.centerHz,
+        htv145Owner().commandFrame,
+        htv145Owner().centerHz,
         rainpoint::kHtv145CommandWakeSymbols,
-        htv145ControlCandidate.invert,
+        htv145Owner().invert,
         rainpoint::pairingPaTableValue(
-            htv145ControlCandidate.powerDbm
+            htv145Owner().powerDbm
         )
     );
-    ++htv145ControlCandidate.attemptsSent;
+    ++htv145Owner().attemptsSent;
     if (sent) {
-        ++htv145ControlCandidate.successfulAttempts;
+        ++htv145Owner().successfulAttempts;
     }
     if (!sent || !primaryRadio.setReceiveFrequency(
-            htv145ControlCandidate.centerHz
+            htv145Owner().centerHz
         )) {
         failHtv145Candidate(
             sent ? "response_receiver_tune_failed" : "transmit_failed"
         );
         return false;
     }
-    htv145ControlCandidate.listeningOnCommandCarrier = true;
-    if (htv145ControlCandidate.attemptsSent <
+    htv145Owner().listeningOnCommandCarrier = true;
+    if (htv145Owner().attemptsSent <
             rainpoint::kHtv145CommandAttemptOffsetsMs.size()) {
-        htv145ControlCandidate.nextAttemptAtMs =
-            htv145ControlCandidate.burstStartedAtMs +
+        htv145Owner().nextAttemptAtMs =
+            htv145Owner().burstStartedAtMs +
             rainpoint::kHtv145CommandAttemptOffsetsMs[
-                htv145ControlCandidate.attemptsSent
+                htv145Owner().attemptsSent
             ];
     }
     reportHtv145CandidateStatus(
         "bounded_burst_attempt_sent", nullptr,
-        &htv145ControlCandidate.commandFrame
+        &htv145Owner().commandFrame
     );
     return true;
 }
@@ -1845,35 +1864,35 @@ bool startHtv145Candidate(
 #ifndef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
     if (bootstrapTrial && !commissioning) return false;
 #endif
-    if (!htv145ControlCandidate.configured ||
+    if (!htv145Owner().configured ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
         (htv145CommandIssued && !rainpoint::htv145CommandIntervalElapsed(
             lastHtv145CommandStartedAtMs, millis())) ||
-        (!idleAnchor && !bootstrapTrial && !htv145ControlCandidate.counterAuthenticated) ||
-        htv145ControlCandidate.pending ||
+        (!idleAnchor && !bootstrapTrial && !htv145Owner().counterAuthenticated) ||
+        htv145Owner().pending ||
         currentPairingState() == rainpoint::PairingSessionState::Armed) {
         return false;
     }
     if (idleAnchor && (watering || durationSeconds != 0 ||
-        !htv145ControlCandidate.stateObserved || htv145ControlCandidate.observedWatering ||
-        millis() - htv145ControlCandidate.stateObservedAtMs > 5'000 ||
-        !htv145ControlCandidate.commandMarkerInverted ||
-        htv145ControlCandidate.closeTrailerResidual != 0x4f03)) {
+        !htv145Owner().stateObserved || htv145Owner().observedWatering ||
+        millis() - htv145Owner().stateObservedAtMs > 5'000 ||
+        !htv145Owner().commandMarkerInverted ||
+        htv145Owner().closeTrailerResidual != 0x4f03)) {
         return false;
     }
     if (bootstrapTrial && (!watering || durationSeconds != 60 || idleAnchor ||
-        htv145ControlCandidate.counterAuthenticated ||
-        !htv145ControlCandidate.stateObserved || htv145ControlCandidate.observedWatering ||
-        millis() - htv145ControlCandidate.stateObservedAtMs > 3'600'000 ||
-        !htv145ControlCandidate.commandMarkerInverted ||
-        htv145ControlCandidate.trailerResidual != 0x4f03)) return false;
-    const std::uint8_t sequence = bootstrapTrial ? 0x81 : idleAnchor ? 0x80 : htv145ControlCandidate.nextSequence;
+        htv145Owner().counterAuthenticated ||
+        !htv145Owner().stateObserved || htv145Owner().observedWatering ||
+        millis() - htv145Owner().stateObservedAtMs > 3'600'000 ||
+        !htv145Owner().commandMarkerInverted ||
+        htv145Owner().trailerResidual != 0x4f03)) return false;
+    const std::uint8_t sequence = bootstrapTrial ? 0x81 : idleAnchor ? 0x80 : htv145Owner().nextSequence;
     std::array<std::uint8_t, rainpoint::kFrameBytes> frame{};
     const rainpoint::Htv145ControlProfile profile{
-        htv145ControlCandidate.link,
-        htv145ControlCandidate.trailerResidual,
-        htv145ControlCandidate.commandMarkerInverted,
-        htv145ControlCandidate.closeTrailerResidual
+        htv145Owner().link,
+        htv145Owner().trailerResidual,
+        htv145Owner().commandMarkerInverted,
+        htv145Owner().closeTrailerResidual
     };
     const bool built = rainpoint::buildHtv145ControlFrame(
         profile, sequence, watering,
@@ -1882,31 +1901,31 @@ bool startHtv145Candidate(
     if (!built) {
         return false;
     }
-    htv145ControlCandidate.commandFrame = frame;
-    htv145ControlCandidate.commandId = commandId;
-    htv145ControlCandidate.durationSeconds = durationSeconds;
-    htv145ControlCandidate.transmittedSequence = sequence;
-    htv145ControlCandidate.idleAnchor = idleAnchor;
-    if (idleAnchor || bootstrapTrial) htv145ControlCandidate.counterAuthenticated = false;
-    htv145ControlCandidate.commandWatering = watering;
-    htv145ControlCandidate.attemptsSent = 0;
-    htv145ControlCandidate.successfulAttempts = 0;
-    htv145ControlCandidate.observedFrames = 0;
-    htv145ControlCandidate.matchingRouteFrames = 0;
-    htv145ControlCandidate.invalidTrailerFrames = 0;
-    htv145ControlCandidate.classifiedResponseFrames = 0;
-    htv145ControlCandidate.classifiedStateFrames = 0;
-    htv145ControlCandidate.conflictingStateFrames = 0;
-    htv145ControlCandidate.immediateResponseWindowClosed = false;
-    htv145ControlCandidate.pending = true;
-    htv145ControlCandidate.burstStartedAtMs = millis();
+    htv145Owner().commandFrame = frame;
+    htv145Owner().commandId = commandId;
+    htv145Owner().durationSeconds = durationSeconds;
+    htv145Owner().transmittedSequence = sequence;
+    htv145Owner().idleAnchor = idleAnchor;
+    if (idleAnchor || bootstrapTrial) htv145Owner().counterAuthenticated = false;
+    htv145Owner().commandWatering = watering;
+    htv145Owner().attemptsSent = 0;
+    htv145Owner().successfulAttempts = 0;
+    htv145Owner().observedFrames = 0;
+    htv145Owner().matchingRouteFrames = 0;
+    htv145Owner().invalidTrailerFrames = 0;
+    htv145Owner().classifiedResponseFrames = 0;
+    htv145Owner().classifiedStateFrames = 0;
+    htv145Owner().conflictingStateFrames = 0;
+    htv145Owner().immediateResponseWindowClosed = false;
+    htv145Owner().pending = true;
+    htv145Owner().burstStartedAtMs = millis();
     htv145CommandIssued = true;
-    lastHtv145CommandStartedAtMs = htv145ControlCandidate.burstStartedAtMs;
-    htv145ControlCandidate.immediateResponseDeadlineMs =
-        htv145ControlCandidate.burstStartedAtMs +
+    lastHtv145CommandStartedAtMs = htv145Owner().burstStartedAtMs;
+    htv145Owner().immediateResponseDeadlineMs =
+        htv145Owner().burstStartedAtMs +
         rainpoint::kHtv145ImmediateResponseWindowMs;
-    htv145ControlCandidate.stateConfirmationDeadlineMs =
-        htv145ControlCandidate.burstStartedAtMs +
+    htv145Owner().stateConfirmationDeadlineMs =
+        htv145Owner().burstStartedAtMs +
         rainpoint::kHtv145StateConfirmationWindowMs;
     scanChannels = false;
     return transmitNextHtv145CandidateAttempt();
@@ -1916,19 +1935,19 @@ void acknowledgeHtv145Report(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame,
     rainpoint::Cc1101& radio, std::uint32_t receivedAtMicros
 ) {
-    if (!htv145ControlCandidate.configured || !htv145ControlCandidate.reportAckCenterHz ||
+    if (!htv145Owner().configured || !htv145Owner().reportAckCenterHz ||
         !rfMaintenance.transmitAllowed() || !wifiTransport.authenticated() ||
         currentPairingState() == rainpoint::PairingSessionState::Armed ||
-        htv145ControlCandidate.listeningOnCommandCarrier) {
+        htv145Owner().listeningOnCommandCarrier) {
         return;
     }
     std::array<std::uint8_t, rainpoint::kFrameBytes> reply{};
-    if (!rainpoint::buildHtv145ReportAck(frame, htv145ControlCandidate.link, 0x4f03, reply)) {
+    if (!rainpoint::buildHtv145ReportAck(frame, htv145Owner().link, 0x4f03, reply)) {
         return;
     }
-    const bool sent = radio.transmitAsync(reply, htv145ControlCandidate.reportAckCenterHz,
-        rainpoint::kHtv145ReportAckWakeSymbols, htv145ControlCandidate.invert,
-        rainpoint::pairingPaTableValue(htv145ControlCandidate.powerDbm), 0x45,
+    const bool sent = radio.transmitAsync(reply, htv145Owner().reportAckCenterHz,
+        rainpoint::kHtv145ReportAckWakeSymbols, htv145Owner().invert,
+        rainpoint::pairingPaTableValue(htv145Owner().powerDbm), 0x45,
         receivedAtMicros + rainpoint::kHtv145ReportAckDelayUs);
     reportHtv145CandidateStatus(sent ? "report_ack_transmitted" : "report_ack_failed", nullptr, &reply);
 }
@@ -1937,58 +1956,58 @@ void observeHtv145CandidateFrame(
     const std::array<std::uint8_t, rainpoint::kFrameBytes>& frame
 ) {
     bool observedWatering = false;
-    if (htv145ControlCandidate.configured && rainpoint::decodeHtv145StateReport(
-            frame, htv145ControlCandidate.link, observedWatering)) {
-        htv145ControlCandidate.stateObserved = true;
-        htv145ControlCandidate.stateObservedAtMs = millis();
-        htv145ControlCandidate.observedWatering = observedWatering;
-        if (htv145ControlCandidate.pending && htv145ControlCandidate.idleAnchor) {
+    if (htv145Owner().configured && rainpoint::decodeHtv145StateReport(
+            frame, htv145Owner().link, observedWatering)) {
+        htv145Owner().stateObserved = true;
+        htv145Owner().stateObservedAtMs = millis();
+        htv145Owner().observedWatering = observedWatering;
+        if (htv145Owner().pending && htv145Owner().idleAnchor) {
             if (observedWatering) failHtv145Candidate("idle_anchor_state_changed", &frame);
             return; // Independent telemetry never confirms an anchor's counter.
         }
     }
-    if (!htv145ControlCandidate.pending) {
+    if (!htv145Owner().pending) {
         return;
     }
-    ++htv145ControlCandidate.observedFrames;
+    ++htv145Owner().observedFrames;
     const bool matchingRoute = rainpoint::htv145RouteMatches(
         frame,
-        htv145ControlCandidate.link.valveEndpoint,
-        htv145ControlCandidate.link.controllerEndpoint
+        htv145Owner().link.valveEndpoint,
+        htv145Owner().link.controllerEndpoint
     );
     if (matchingRoute) {
-        ++htv145ControlCandidate.matchingRouteFrames;
+        ++htv145Owner().matchingRouteFrames;
         if (!rainpoint::hasOrdinaryTrailer(frame)) {
-            ++htv145ControlCandidate.invalidTrailerFrames;
+            ++htv145Owner().invalidTrailerFrames;
             return;
         }
     }
-    if (htv145ControlCandidate.idleAnchor &&
-        rainpoint::isHtv145IdleAnchorResponse(frame, htv145ControlCandidate.link)) {
-        if (millis() - htv145ControlCandidate.burstStartedAtMs <= rainpoint::kHtv145ImmediateResponseWindowMs) {
+    if (htv145Owner().idleAnchor &&
+        rainpoint::isHtv145IdleAnchorResponse(frame, htv145Owner().link)) {
+        if (millis() - htv145Owner().burstStartedAtMs <= rainpoint::kHtv145ImmediateResponseWindowMs) {
             confirmHtv145Candidate("matching_idle_anchor_response", frame);
         }
         return;
     }
     rainpoint::Htv145CommandError error{};
     if (rainpoint::decodeHtv145CommandError(
-            frame, htv145ControlCandidate.link, error
+            frame, htv145Owner().link, error
         )) {
-        ++htv145ControlCandidate.classifiedResponseFrames;
-        if (error.sequence == htv145ControlCandidate.transmittedSequence) {
+        ++htv145Owner().classifiedResponseFrames;
+        if (error.sequence == htv145Owner().transmittedSequence) {
             failHtv145Candidate("negative_command_response", &frame);
         }
         return;
     }
     rainpoint::Htv145CommandResponse response{};
     if (rainpoint::decodeHtv145CommandResponse(
-            frame, htv145ControlCandidate.link, response
+            frame, htv145Owner().link, response
         )) {
-        ++htv145ControlCandidate.classifiedResponseFrames;
-        if (response.sequence != htv145ControlCandidate.transmittedSequence ||
+        ++htv145Owner().classifiedResponseFrames;
+        if (response.sequence != htv145Owner().transmittedSequence ||
             response.commandMarkerInverted !=
-                htv145ControlCandidate.commandMarkerInverted ||
-            response.watering != htv145ControlCandidate.commandWatering) {
+                htv145Owner().commandMarkerInverted ||
+            response.watering != htv145Owner().commandWatering) {
             failHtv145Candidate("conflicting_command_response");
             return;
         }
@@ -1997,11 +2016,11 @@ void observeHtv145CandidateFrame(
     }
     bool watering = false;
     if (rainpoint::decodeHtv145StateReport(
-            frame, htv145ControlCandidate.link, watering
+            frame, htv145Owner().link, watering
         )) {
-        ++htv145ControlCandidate.classifiedStateFrames;
-        if (watering != htv145ControlCandidate.commandWatering) {
-            ++htv145ControlCandidate.conflictingStateFrames;
+        ++htv145Owner().classifiedStateFrames;
+        if (watering != htv145Owner().commandWatering) {
+            ++htv145Owner().conflictingStateFrames;
             return;
         }
         // This report has its own telemetry counter. It proves resulting state
@@ -2011,34 +2030,34 @@ void observeHtv145CandidateFrame(
 }
 
 void pollHtv145Candidate() {
-    if (!htv145ControlCandidate.pending) {
+    if (!htv145Owner().pending) {
         return;
     }
     const std::uint32_t now = millis();
-    if (htv145ControlCandidate.attemptsSent <
+    if (htv145Owner().attemptsSent <
             rainpoint::kHtv145CommandAttemptOffsetsMs.size() &&
         static_cast<std::int32_t>(
-            now - htv145ControlCandidate.nextAttemptAtMs
+            now - htv145Owner().nextAttemptAtMs
         ) >= 0) {
         transmitNextHtv145CandidateAttempt();
         return;
     }
-    if (htv145ControlCandidate.listeningOnCommandCarrier &&
+    if (htv145Owner().listeningOnCommandCarrier &&
         static_cast<std::int32_t>(
-            now - htv145ControlCandidate.immediateResponseDeadlineMs
+            now - htv145Owner().immediateResponseDeadlineMs
         ) >= 0) {
-        if (htv145ControlCandidate.idleAnchor) {
+        if (htv145Owner().idleAnchor) {
             failHtv145Candidate("idle_anchor_response_timeout");
             return;
         }
         // The fallback watering/idle report is on the ordinary telemetry
         // carrier. Restore it once the immediate response window closes.
         restoreHtv145CandidateReceive();
-        htv145ControlCandidate.immediateResponseWindowClosed = true;
+        htv145Owner().immediateResponseWindowClosed = true;
         scanChannels = false;
     }
     if (static_cast<std::int32_t>(
-            now - htv145ControlCandidate.stateConfirmationDeadlineMs
+            now - htv145Owner().stateConfirmationDeadlineMs
         ) >= 0) {
         failHtv145Candidate("confirmation_timeout_counter_unsynchronized");
     }
@@ -2096,6 +2115,32 @@ void handleNetworkCommand() {
     }
     const String type = jsonStringField(command, "type");
     const String commandId = jsonStringField(command, "command_id");
+    if ((htv145Pending() && (type.startsWith("valve_control_") || type == "pairing_start")) ||
+        (type.startsWith("htv145_control_") && type != "htv145_control_status" &&
+         (valveControlProbe.commandPendingConfirmation || valveControlProbe.openQueued || valveControlProbe.closeQueued))) {
+        reportNetworkCommandError(commandId, "radio_busy_with_other_valve");
+        return;
+    }
+    std::size_t ownerSlot = selectedHtv145Owner;
+    if (type.startsWith("htv145_control_")) {
+        rainpoint::Htv145Link link{};
+        if (!parseRawHexEndpoint(jsonStringField(command, "controller_endpoint"), link.controllerEndpoint) ||
+            !parseRawHexEndpoint(jsonStringField(command, "valve_endpoint"), link.valveEndpoint)) {
+            reportNetworkCommandError(commandId, "invalid_htv145_control_profile");
+            return;
+        }
+        ownerSlot = rainpoint::associationSlot(htv145Owners, link,
+            type == "htv145_control_configure" || type == "htv145_control_revoke");
+        if (ownerSlot == htv145Owners.size()) {
+            reportNetworkCommandError(commandId, "htv145_owner_missing_or_capacity");
+            return;
+        }
+        if (htv145Pending() && !htv145Owners[ownerSlot].pending && type != "htv145_control_status") {
+            reportNetworkCommandError(commandId, "radio_busy_with_other_valve");
+            return;
+        }
+    }
+    Htv145OwnerSelection ownerSelection(ownerSlot);
     if (!validCommandId(commandId)) {
         reportNetworkCommandError("invalid", "invalid_command_id");
         return;
@@ -2181,12 +2226,12 @@ void handleNetworkCommand() {
             (trailerResidual != 0xc713 && trailerResidual != 0x4f03) ||
             (closeTrailerResidual != 0xc713 && closeTrailerResidual != 0x4f03) ||
             (reportAckCenterHz != 0 && (reportAckCenterHz < 433'000'000 || reportAckCenterHz > 435'000'000)) ||
-            (htv145ControlCandidate.configured && htv145ControlCandidate.reportAckCenterHz != 0 &&
-             (link.controllerEndpoint != htv145ControlCandidate.link.controllerEndpoint ||
-              link.valveEndpoint != htv145ControlCandidate.link.valveEndpoint)) ||
+            (htv145Owner().configured && htv145Owner().reportAckCenterHz != 0 &&
+             (link.controllerEndpoint != htv145Owner().link.controllerEndpoint ||
+              link.valveEndpoint != htv145Owner().link.valveEndpoint)) ||
             !jsonBoolField(command, "invert", invert) ||
             !jsonBoolField(command, "command_marker_inverted", commandMarkerInverted) ||
-            htv145ControlCandidate.pending ||
+            htv145Owner().pending ||
             currentPairingState() == rainpoint::PairingSessionState::Armed ||
             !primaryRadio.prepareTransmit()) {
             reportNetworkCommandError(
@@ -2197,52 +2242,52 @@ void handleNetworkCommand() {
         primaryRadio.cacheTransmitFrequency(
             static_cast<std::uint32_t>(centerHz)
         );
-        htv145ControlCandidate = Htv145ControlCandidate{};
-        htv145ControlCandidate.link = link;
-        htv145ControlCandidate.centerHz =
+        htv145Owner() = Htv145ControlCandidate{};
+        htv145Owner().link = link;
+        htv145Owner().centerHz =
             static_cast<std::uint32_t>(centerHz);
-        htv145ControlCandidate.powerDbm =
+        htv145Owner().powerDbm =
             static_cast<std::int8_t>(powerDbm);
-        htv145ControlCandidate.trailerResidual =
+        htv145Owner().trailerResidual =
             static_cast<std::uint16_t>(trailerResidual);
-        htv145ControlCandidate.closeTrailerResidual = static_cast<std::uint16_t>(closeTrailerResidual);
-        htv145ControlCandidate.reportAckCenterHz = static_cast<std::uint32_t>(reportAckCenterHz);
+        htv145Owner().closeTrailerResidual = static_cast<std::uint16_t>(closeTrailerResidual);
+        htv145Owner().reportAckCenterHz = static_cast<std::uint32_t>(reportAckCenterHz);
         if (reportAckCenterHz) {
             primaryRadio.cacheTransmitFrequency(static_cast<std::uint32_t>(reportAckCenterHz));
         }
-        htv145ControlCandidate.invert = invert;
-        htv145ControlCandidate.commandMarkerInverted = commandMarkerInverted;
-        htv145ControlCandidate.configured = true;
-        htv145ControlCandidate.commandId = commandId;
+        htv145Owner().invert = invert;
+        htv145Owner().commandMarkerInverted = commandMarkerInverted;
+        htv145Owner().configured = true;
+        htv145Owner().commandId = commandId;
         reportHtv145CandidateStatus("configured_counter_required");
-        htv145ControlCandidate.commandId.clear();
+        htv145Owner().commandId.clear();
         return;
     }
     if (type == "htv145_control_revoke") {
         rainpoint::Htv145Link requested{};
         if (!parseRawHexEndpoint(jsonStringField(command, "controller_endpoint"), requested.controllerEndpoint) ||
             !parseRawHexEndpoint(jsonStringField(command, "valve_endpoint"), requested.valveEndpoint) ||
-            !rainpoint::canRevokeHtv145Owner(htv145ControlCandidate.configured,
-                htv145ControlCandidate.pending, htv145ControlCandidate.link, requested)) {
+            !rainpoint::canRevokeHtv145Owner(htv145Owner().configured,
+                htv145Owner().pending, htv145Owner().link, requested)) {
             reportNetworkCommandError(commandId, "invalid_htv145_control_revoke");
             return;
         }
         // After a reboot the empty node can still confirm that the old lease
         // is gone. Echo the requested route and exact command ID without RF.
-        htv145ControlCandidate.link = requested;
-        htv145ControlCandidate.configured = false;
+        htv145Owner().link = requested;
+        htv145Owner().configured = false;
         restoreHtv145CandidateReceive();
-        htv145ControlCandidate.commandId = commandId;
-        htv145ControlCandidate.counterAuthenticated = false;
-        htv145ControlCandidate.reportAckCenterHz = 0;
+        htv145Owner().commandId = commandId;
+        htv145Owner().counterAuthenticated = false;
+        htv145Owner().reportAckCenterHz = 0;
         reportHtv145CandidateStatus("revoked");
-        htv145ControlCandidate = Htv145ControlCandidate{};
+        htv145Owner() = Htv145ControlCandidate{};
         htv145CommissionOpenAttempted = false;
         return;
     }
     if (type == "htv145_control_open" || type == "htv145_control_close" || type == "htv145_control_sync" || type == "htv145_control_idle_anchor" || type == "htv145_control_bootstrap_open" || type == "htv145_control_commission_open") {
-        if (jsonStringField(command, "controller_endpoint") != hexString(htv145ControlCandidate.link.controllerEndpoint.data(), 4) ||
-            jsonStringField(command, "valve_endpoint") != hexString(htv145ControlCandidate.link.valveEndpoint.data(), 4)) {
+        if (jsonStringField(command, "controller_endpoint") != hexString(htv145Owner().link.controllerEndpoint.data(), 4) ||
+            jsonStringField(command, "valve_endpoint") != hexString(htv145Owner().link.valveEndpoint.data(), 4)) {
             reportNetworkCommandError(commandId, "htv145_control_association_mismatch");
             return;
         }
@@ -2276,8 +2321,8 @@ void handleNetworkCommand() {
 #endif
     if (type == "htv145_control_sync") {
         long nextSequence = 0;
-        if (!htv145ControlCandidate.configured ||
-            htv145ControlCandidate.pending ||
+        if (!htv145Owner().configured ||
+            htv145Owner().pending ||
             !jsonLongField(command, "next_sequence", nextSequence) ||
             nextSequence < 0x80 || nextSequence > 0x9f) {
             reportNetworkCommandError(
@@ -2285,12 +2330,12 @@ void handleNetworkCommand() {
             );
             return;
         }
-        htv145ControlCandidate.nextSequence =
+        htv145Owner().nextSequence =
             static_cast<std::uint8_t>(nextSequence);
-        htv145ControlCandidate.counterAuthenticated = true;
-        htv145ControlCandidate.commandId = commandId;
+        htv145Owner().counterAuthenticated = true;
+        htv145Owner().commandId = commandId;
         reportHtv145CandidateStatus("counter_synchronized");
-        htv145ControlCandidate.commandId.clear();
+        htv145Owner().commandId.clear();
         return;
     }
     if (type == "htv145_control_idle_anchor") {
@@ -2305,7 +2350,7 @@ void handleNetworkCommand() {
         if (!jsonLongField(
                 command, "expected_sequence", expectedSequence
             ) ||
-            expectedSequence != htv145ControlCandidate.nextSequence ||
+            expectedSequence != htv145Owner().nextSequence ||
             !jsonLongField(command, "duration_seconds", durationSeconds) ||
             durationSeconds < 60 || durationSeconds > 3'600 ||
             durationSeconds % 60 != 0 ||
@@ -2324,7 +2369,7 @@ void handleNetworkCommand() {
         if (!jsonLongField(
                 command, "expected_sequence", expectedSequence
             ) ||
-            expectedSequence != htv145ControlCandidate.nextSequence ||
+            expectedSequence != htv145Owner().nextSequence ||
             !startHtv145Candidate(commandId, false, 0)) {
             reportNetworkCommandError(
                 commandId, "invalid_htv145_control_close"
@@ -2333,9 +2378,9 @@ void handleNetworkCommand() {
         return;
     }
     if (type == "htv145_control_status") {
-        htv145ControlCandidate.commandId = commandId;
+        htv145Owner().commandId = commandId;
         reportHtv145CandidateStatus("status_requested");
-        htv145ControlCandidate.commandId.clear();
+        htv145Owner().commandId.clear();
         return;
     }
     if (type == "valve_control_configure") {
@@ -2614,13 +2659,15 @@ void handleNetworkCommand() {
             reportNetworkCommandError(commandId, "invalid_update_request");
             return;
         }
+        WiFiClientSecure downloadClient;
+        wifiTransport.secureClient(downloadClient);
         otaTrial.install(
             commandId,
             url,
             version,
             sha256,
             static_cast<std::size_t>(sizeBytes),
-            wifiTransport.gatewayHost()
+            wifiTransport.gatewayHost(), downloadClient
         );
         emitLine(otaTrial.status(wifiTransport.nodeId()));
         return;
@@ -3257,8 +3304,12 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         );
     }
     if (&radio == &primaryRadio) {
-        observeHtv145CandidateFrame(frame);
-        acknowledgeHtv145Report(frame, radio, packet.receivedAtMicros);
+        for (std::size_t i = 0; i < htv145Owners.size(); ++i) {
+            Htv145OwnerSelection selection(i);
+            observeHtv145CandidateFrame(frame);
+            if (!htv145Pending() || htv145Owner().pending)
+                acknowledgeHtv145Report(frame, radio, packet.receivedAtMicros);
+        }
     }
     if (&radio == &primaryRadio && valvePairingActive &&
         activeValvePairingArmed()) {
@@ -3666,8 +3717,10 @@ void loop() {
     if (pairingRequiresNetwork && !wifiTransport.authenticated()) {
         cancelPairing("gateway_connection_lost");
     }
-    if (htv145ControlCandidate.pending && !wifiTransport.authenticated()) {
-        failHtv145Candidate("gateway_connection_lost_counter_unsynchronized");
+    for (std::size_t i = 0; i < htv145Owners.size(); ++i) {
+        Htv145OwnerSelection selection(i);
+        if (htv145Owner().pending && !wifiTransport.authenticated())
+            failHtv145Candidate("gateway_connection_lost_counter_unsynchronized");
     }
     pollRfMaintenance();
     handleNetworkCommand();
@@ -3708,7 +3761,7 @@ void loop() {
         // its bounded reply; nodes without assignments continue broad scans.
         const bool ownsTelemetryAcks = routineAckAuthorizations.activeCount() > 0 ||
             htv405RoutineAckAuthorizations.activeCount() > 0
-            || (htv145ControlCandidate.configured && htv145ControlCandidate.reportAckCenterHz != 0)
+            || htv145OwnsReports()
             ;
         if (ownsTelemetryAcks &&
             primaryRadio.channel() != kHcs026TelemetryChannel) {
@@ -3720,7 +3773,10 @@ void loop() {
     }
     // Drain a matching response before deciding whether the bounded command
     // burst needs its next byte-identical RF attempt.
-    pollHtv145Candidate();
+    for (std::size_t i = 0; i < htv145Owners.size(); ++i) {
+        Htv145OwnerSelection selection(i);
+        pollHtv145Candidate();
+    }
     if (valvePairingActive) {
         tickActiveValvePairing(millis());
     } else

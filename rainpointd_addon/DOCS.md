@@ -382,11 +382,17 @@ controller identity. It may be moved to another connected, capable node while
 idle; doing so preserves the association parameters but deliberately clears the
 command counter until it is synchronized again.
 HTV145 exposes confirmed watering, duration, usage, categorical battery, and
+per-association control state. Multi-valve firmware supports eight single-zone
+associations per radio; older firmware remains limited to one per radio.
+It also exposes
 counter/morning-sync controls for its enrolled qualification owner. It does not
 expose four-zone actuators. Qualified associations support ordinary HA actuation;
-fresh pairing must complete the separate consented verification flow first.
-The dry-qualification API below is retained developer tooling, not an alternate
-normal installation path or permission to bypass qualification.
+the revised draft replaces mandatory test runs with radio-owner setup and a
+recommendation to test dry or visually confirm operation. Confirmed fresh pairing
+initializes counter 1 (`0x81`) once; matching responses confirm/advance it.
+Pairing-derived versus response-confirmed authority is exposed in device state.
+End-to-end acceptance remains pending for this undeployed draft; see the roadmap.
+The dry-qualification API below remains separate developer tooling.
 
 Sensor reports expose moisture, categorical battery, freshness, and receiver
 provenance. One persistent owner transmits ACKs; other nodes may forward the

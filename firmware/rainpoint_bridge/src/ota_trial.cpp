@@ -95,7 +95,7 @@ bool OtaTrial::validateRequest(
     if (expectedSize < 64 * 1024 || expectedSize > 2 * 1024 * 1024) {
         return false;
     }
-    const String requiredPrefix = String("http://") + gatewayHost + ":";
+    const String requiredPrefix = String("https://") + gatewayHost + ":";
     return !gatewayHost.isEmpty() && url.startsWith(requiredPrefix) &&
            url.length() <= 320 && url.indexOf(' ') < 0;
 }
@@ -106,7 +106,8 @@ bool OtaTrial::install(
     const String& version,
     const String& expectedSha256,
     std::size_t expectedSize,
-    const String& gatewayHost
+    const String& gatewayHost,
+    WiFiClientSecure& downloadClient
 ) {
     commandId_ = commandId;
     receivedBytes_ = 0;
@@ -123,7 +124,6 @@ bool OtaTrial::install(
         return false;
     }
 
-    WiFiClient downloadClient;
     HTTPClient request;
     request.setConnectTimeout(5'000);
     request.setTimeout(10'000);

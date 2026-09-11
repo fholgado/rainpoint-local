@@ -17,7 +17,7 @@ from .product_identity import (
 from .valve_protocol import next_htv145_command_sequence
 from .htv145_counter_sync import MAX_SYNC_ATTEMPTS, failed_attempt
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 DEFAULT_EVENT_RETENTION_LIMIT = 100_000
 HTV405_COUNTER_MODULUS = 0x20
 HTV405_IDLE_CLOSE_SYNC_ANCHOR = 0
@@ -277,6 +277,7 @@ class SQLiteEventStore:
                         "error": None,
                     })
                 self._connection.execute("PRAGMA user_version = 24")
+        self._migrate_htv145_association_keys()
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -662,6 +663,7 @@ class SQLiteEventStore:
             self._connection.execute("PRAGMA user_version = 22")
 
     def htv145_counter_sync(self, valve_endpoint: str) -> dict[str, Any]:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         row = self._connection.execute("SELECT payload FROM htv145_counter_sync WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
         return json.loads(row[0]) if row is not None else {}
 
@@ -670,24 +672,33 @@ class SQLiteEventStore:
             "SELECT payload FROM htv145_qualification ORDER BY valve_endpoint")]
 
     def htv145_qualification(self, valve_endpoint: str) -> dict[str, Any]:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         row = self._connection.execute("SELECT payload FROM htv145_qualification WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
         return json.loads(row[0]) if row is not None else {}
 
     def save_htv145_qualification(self, valve_endpoint: str, payload: dict) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             self._connection.execute("INSERT INTO htv145_qualification VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
 
     def _write_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         self._connection.execute("INSERT INTO htv145_counter_sync VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
 
     def save_htv145_counter_sync(self, valve_endpoint: str, payload: dict) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             self._write_htv145_counter_sync(valve_endpoint, payload)
 
     def reserve_htv145_idle_anchor(self, valve_endpoint: str, command_id: str, started_at: str) -> dict:
         """Consume an explicit queued request using fresh independent idle evidence."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
+            if row is not None and self._connection.execute(
+                    "SELECT 1 FROM htv145_control_state WHERE node_id=? AND valve_endpoint<>? AND pending_command_id IS NOT NULL",
+                    (row["node_id"], valve_endpoint)).fetchone():
+                raise RuntimeError("radio is handling another valve command")
             data = self.htv145_counter_sync(valve_endpoint)
             current = datetime.fromisoformat(started_at)
             if (row is None or data.get("state") != "waiting_for_report" or row["pending_command_id"] is not None
@@ -713,6 +724,7 @@ class SQLiteEventStore:
 
     def confirm_htv145_idle_anchor(self, valve_endpoint: str, command_id: str, *, frame: str, result_code: int, observed_at: str) -> dict:
         """Confirm only the reserved counter; preserve the independent physical state."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
             data = self.htv145_counter_sync(valve_endpoint)
@@ -1272,11 +1284,14 @@ class SQLiteEventStore:
                 "DELETE FROM valve_registry WHERE device_id = ?", (device_id,)
             )
             self._connection.execute(
-                "DELETE FROM htv145_control_state WHERE valve_endpoint = ?",
-                (device["valve_endpoint"],),
+                "DELETE FROM htv145_control_state WHERE valve_endpoint IN (?,?)",
+                (f"{device['valve_endpoint']}:{device['controller_endpoint']}",
+                 f"{device['controller_endpoint']}:{device['valve_endpoint']}"),
             )
-            self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint = ?", (device["valve_endpoint"],))
-            self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint = ?", (device["valve_endpoint"],))
+            for table in ("htv145_counter_sync", "htv145_transaction", "htv145_qualification"):
+                self._connection.execute(f"DELETE FROM {table} WHERE valve_endpoint IN (?,?)", (
+                    f"{device['valve_endpoint']}:{device['controller_endpoint']}",
+                    f"{device['controller_endpoint']}:{device['valve_endpoint']}"))
             self._connection.execute(
                 "DELETE FROM htv405_morning_sync WHERE valve_endpoint = ?",
                 (device["valve_endpoint"],),
@@ -3239,6 +3254,7 @@ class SQLiteEventStore:
         return result
 
     def reserve_htv145_revocation(self, valve_endpoint: str, command_id: str) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             cursor = self._connection.execute(
                 "UPDATE htv145_control_state SET revocation_command_id = ? WHERE valve_endpoint = ? AND pending_command_id IS NULL",
@@ -3249,6 +3265,7 @@ class SQLiteEventStore:
 
     def delete_htv145_control(self, valve_endpoint: str) -> None:
         """Remove an association only after its radio acknowledged revocation."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             self._connection.execute(
                 "DELETE FROM htv145_control_state WHERE valve_endpoint = ? AND pending_command_id IS NULL",
@@ -3257,10 +3274,43 @@ class SQLiteEventStore:
             self._connection.execute("DELETE FROM htv145_counter_sync WHERE valve_endpoint=? AND NOT EXISTS (SELECT 1 FROM htv145_control_state WHERE valve_endpoint=?)", (valve_endpoint, valve_endpoint))
             self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint=? AND NOT EXISTS (SELECT 1 FROM htv145_control_state WHERE valve_endpoint=?)", (valve_endpoint, valve_endpoint))
 
+    def _migrate_htv145_association_keys(self) -> None:
+        """Preserve all retained state while giving each RF association a key.
+
+        The historical SQL valve_endpoint key is private. rf_valve_endpoint
+        preserves the on-air value returned through the store interface.
+        """
+        columns = {r[1] for r in self._connection.execute("PRAGMA table_info(htv145_control_state)")}
+        if "rf_valve_endpoint" in columns:
+            self._connection.execute("PRAGMA user_version = 25")
+            return
+        with self._connection:
+            self._connection.execute("ALTER TABLE htv145_control_state ADD COLUMN rf_valve_endpoint TEXT")
+            for row in self._connection.execute("SELECT valve_endpoint,controller_endpoint FROM htv145_control_state").fetchall():
+                old, controller = row
+                key = f"{controller}:{old}"
+                self._connection.execute("UPDATE htv145_control_state SET valve_endpoint=?,rf_valve_endpoint=? WHERE valve_endpoint=?", (key, old, old))
+                for table in ("htv145_counter_sync", "htv145_qualification", "htv145_transaction"):
+                    self._connection.execute(f"UPDATE {table} SET valve_endpoint=? WHERE valve_endpoint=?", (key, old))
+            self._connection.execute("PRAGMA user_version = 25")
+
+    def _htv145_key(self, endpoint: str | None) -> str | None:
+        """Legacy lookups are accepted only if they name one association."""
+        if endpoint is None or ":" in endpoint:
+            return endpoint
+        try:
+            rows = self._connection.execute("SELECT valve_endpoint FROM htv145_control_state WHERE rf_valve_endpoint=?", (endpoint,)).fetchall()
+        except sqlite3.OperationalError:
+            return endpoint  # Older schema migrations may write transactions.
+        if len(rows) > 1:
+            raise ValueError("HTV145 lookup requires a complete association key")
+        return rows[0][0] if rows else endpoint
+
     def htv145_control_states(
         self, valve_endpoint: str | None = None
     ) -> list[dict[str, Any]]:
         """Return private HTV145 coordinator state; never an actuator API."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         if valve_endpoint is None:
             rows = self._connection.execute(
                 "SELECT * FROM htv145_control_state ORDER BY valve_endpoint"
@@ -3272,6 +3322,8 @@ class SQLiteEventStore:
             ).fetchall()
         result = [dict(row) for row in rows]
         for item in result:
+            item["association_key"] = item["valve_endpoint"]
+            item["valve_endpoint"] = item.pop("rf_valve_endpoint")
             item["invert"] = bool(item["invert"])
             item["command_marker_inverted"] = bool(item["command_marker_inverted"])
             item["counter_synchronized"] = bool(
@@ -3285,10 +3337,12 @@ class SQLiteEventStore:
 
     def htv145_transaction(self, valve_endpoint: str) -> dict[str, Any]:
         """Last logical watering command; independent of telemetry and sync maintenance."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         row = self._connection.execute("SELECT payload FROM htv145_transaction WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
         return json.loads(row[0]) if row is not None else {}
 
     def _write_htv145_transaction(self, valve_endpoint: str, payload: dict) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         self._connection.execute("INSERT INTO htv145_transaction VALUES (?,?) ON CONFLICT(valve_endpoint) DO UPDATE SET payload=excluded.payload", (valve_endpoint, json.dumps(payload, sort_keys=True)))
 
     def reject_htv145_request(self, valve_endpoint: str, *, command_id: str,
@@ -3298,6 +3352,7 @@ class SQLiteEventStore:
         Never store exception text: transport exceptions can include credentials.
         This diagnostic changes no counter, reservation or physical state.
         """
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT pending_command_id FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
             if row is None or row[0] is not None:
@@ -3310,6 +3365,7 @@ class SQLiteEventStore:
 
     def _finish_htv145_transaction(self, valve_endpoint: str, command_id: str,
                                    *, state: str, error: str | None, observed_at: str) -> None:
+        valve_endpoint = self._htv145_key(valve_endpoint)
         transaction = self.htv145_transaction(valve_endpoint)
         if transaction.get("id") == command_id:
             # Node errors/failure_class are external strings. Publish only known
@@ -3343,13 +3399,15 @@ class SQLiteEventStore:
         report_ack_center_hz: int | None = None,
     ) -> dict[str, Any]:
         """Persist an association-specific profile with control unsynchronized."""
+        rf_valve_endpoint = valve_endpoint
+        valve_endpoint = f"{controller_endpoint}:{valve_endpoint}"
         cursor = self._connection.execute(
             """
             INSERT INTO htv145_control_state(
                 valve_endpoint, controller_endpoint, node_id, center_hz,
                 power_dbm, invert, trailer_residual, updated_at, command_marker_inverted,
-                close_trailer_residual, report_ack_center_hz
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                close_trailer_residual, report_ack_center_hz, rf_valve_endpoint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(valve_endpoint) DO UPDATE SET
                 controller_endpoint=excluded.controller_endpoint,
                 node_id=excluded.node_id,
@@ -3388,6 +3446,7 @@ class SQLiteEventStore:
                 int(command_marker_inverted),
                 close_trailer_residual,
                 report_ack_center_hz,
+                rf_valve_endpoint,
             ),
         )
         if not cursor.rowcount:
@@ -3395,6 +3454,49 @@ class SQLiteEventStore:
         self._connection.execute("DELETE FROM htv145_transaction WHERE valve_endpoint=?", (valve_endpoint,))
         self._connection.commit()
         return self.htv145_control_states(valve_endpoint)[0]
+
+    def initialize_htv145_pairing_counter(self, *, device_id: str,
+                                         pairing_command_id: str, observed_at: str) -> bool:
+        """Consume one fresh accepted pairing's first-counter evidence atomically.
+
+        This is intentionally not a generic reseed API. Ordinary sync/response
+        paths keep their own authority, and replay cannot reset an advanced or
+        failed counter. A historical onboarding record cannot grant a seed.
+        """
+        key = f"htv145_commissioning:{device_id}"
+        with self._connection:
+            data = json.loads(self.metadata_value(key) or "{}")
+            if data.get("pairing_command_id") != pairing_command_id:
+                raise ValueError("counter initialization belongs to another pairing session")
+            if data.get("counter_seed_state") != "pending":
+                return False
+            age = (datetime.fromisoformat(observed_at) -
+                   datetime.fromisoformat(data["pairing_confirmed_at"])).total_seconds()
+            profile = data["profile"]
+            association_key = f"{profile['controller_endpoint']}:{profile['valve_endpoint']}"
+            row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?",
+                                           (association_key,)).fetchone()
+            if row is None or any(row[k] != profile[k] for k in (
+                    "controller_endpoint", "node_id")):
+                raise RuntimeError("counter initialization requires the accepted pairing owner")
+            if row["pending_command_id"] or row["revocation_command_id"]:
+                raise RuntimeError("counter initialization cannot overwrite pending work")
+            # An explicit five-minute window bounds the fresh-pairing inference.
+            # The ticket is retired even if a later path already established state.
+            unused = (row["next_sequence"] is None and not row["counter_synchronized"]
+                      and row["last_command_started_at"] is None and row["counter_source"] is None)
+            applied = 0 <= age <= 300 and unused
+            if applied:
+                self._connection.execute("""UPDATE htv145_control_state SET
+                    next_sequence=129, counter_synchronized=1,
+                    counter_source='fresh_pairing_initialization',
+                    last_result='pairing_counter_initialized', updated_at=?
+                    WHERE valve_endpoint=?""", (observed_at, association_key))
+            data.update(counter_seed_state="applied" if applied else "expired_or_already_used",
+                        counter_seed_processed_at=observed_at)
+            self._connection.execute("UPDATE storage_metadata SET value=? WHERE key=?",
+                                     (json.dumps(data), key))
+        return applied
 
     def synchronize_htv145_control_counter(
         self,
@@ -3405,6 +3507,7 @@ class SQLiteEventStore:
         observed_at: str,
     ) -> dict[str, Any]:
         """Set an outbound counter only from explicit, evidenced state."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         if next_sequence not in range(0x80, 0xA0):
             raise ValueError("HTV145 sequence must be in 0x80..0x9f")
         if source not in {
@@ -3436,6 +3539,7 @@ class SQLiteEventStore:
         frame: str,
     ) -> dict[str, Any]:
         """Persist state without changing the independent command counter."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         cursor = self._connection.execute(
             """
             UPDATE htv145_control_state SET
@@ -3460,6 +3564,7 @@ class SQLiteEventStore:
 
     def reserve_htv145_bootstrap(self, valve_endpoint, command_id, started_at):
         """Reserve only the fixed dry-test open, keeping candidate != known state."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
             trial = self.htv145_qualification(valve_endpoint)
@@ -3491,6 +3596,7 @@ class SQLiteEventStore:
         expected_idle_at: str | None,
     ) -> dict[str, Any]:
         """Atomically reserve one logical command before any node write."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         if action not in {"open", "close"}:
             raise ValueError("HTV145 action must be open or close")
         if action == "open" and (
@@ -3580,6 +3686,7 @@ class SQLiteEventStore:
         frame: str,
     ) -> dict[str, Any]:
         """Advance a reserved counter only from matching valve evidence."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         if confirmation not in {
             "matching_immediate_response",
             "matching_independent_state_report",
@@ -3649,6 +3756,7 @@ class SQLiteEventStore:
         frame: str | None = None,
     ) -> dict[str, Any]:
         """Clear a failed reservation and make the counter unusable."""
+        valve_endpoint = self._htv145_key(valve_endpoint)
         cursor = self._connection.execute(
             """
             UPDATE htv145_control_state SET

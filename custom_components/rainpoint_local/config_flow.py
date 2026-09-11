@@ -162,6 +162,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 entry.data[CONF_HOST],
                 entry.data[CONF_PORT],
                 async_get_clientsession(self.hass),
+                token=entry.data.get(CONF_TOKEN),
             ).nodes()
         except RainPointLocalCannotConnect:
             return self.async_abort(reason="cannot_connect")
@@ -271,6 +272,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             entry.data[CONF_HOST],
             entry.data[CONF_PORT],
             async_get_clientsession(self.hass),
+            token=entry.data.get(CONF_TOKEN),
         )
         try:
             adoption = await gateway.start_radio_node_adoption(
@@ -464,6 +466,7 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[CONF_HOST],
             user_input[CONF_PORT],
             async_get_clientsession(self.hass),
+            token=user_input.get(CONF_TOKEN),
         )
         return await client.info()
 
@@ -511,6 +514,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             self._entry.data[CONF_HOST],
             self._entry.data[CONF_PORT],
             async_get_clientsession(self.hass),
+            token=self._entry.data.get(CONF_TOKEN),
         )
 
     async def async_step_init(
@@ -954,14 +958,14 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             raise
 
     async def async_step_verify_valve(self, user_input=None) -> FlowResult:
-        """Return to verification after leaving an already-paired valve setup."""
+        """Finish radio-owner setup for an already paired valve, without watering."""
         try:
             devices = await self._client().devices()
         except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse):
             return self.async_abort(reason="cannot_connect")
         choices = {d["device_id"]: d.get("name", d["device_id"]) for d in devices
                    if d.get("model") == "HTV145FRF" and d.get("state", {}).get(
-                       "rf_commissioning_state", "not_required") not in {"complete", "not_required"}}
+                       "rf_commissioning_state", "not_required") not in {"ready", "complete", "not_required"}}
         if not choices:
             return self.async_abort(reason="no_pending_valves")
         if user_input is not None and user_input.get("device_id") in choices:
@@ -977,7 +981,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
             self._commission_result = {"state": "failed", "reason": str(err)}
             return await self.async_step_commission_result()
-        if result.get("state") != "awaiting_consent":
+        if result.get("state") in {"ready", "complete", "not_required"}:
             self._commission_result = result
             return await self.async_step_commission_result()
         self._commission_pairing_command_id = result.get("pairing_command_id")
@@ -985,27 +989,24 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             menu_options=["commission_start", "commission_later", "verify_valve"])
 
     async def async_step_commission_later(self, user_input=None) -> FlowResult:
-        return self.async_create_entry(title="Paired — verification pending", data={})
+        return self.async_create_entry(title="Paired — radio setup pending", data={})
 
     async def async_step_commission_start(self, user_input=None) -> FlowResult:
         errors = {}
         if user_input is not None:
-            if user_input.get("test_watering_confirmed") is not True:
-                errors["base"] = "test_consent_required"
-            else:
-                try:
-                    await self._client().commission_valve(self._token,
-                        self._commission_device_id, "begin", consent=True,
-                        pairing_command_id=self._commission_pairing_command_id)
-                except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
-                        RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
-                    self._commission_result = {"state": "failed", "reason": str(err)}
-                    return await self.async_step_commission_result()
-                self._commission_result = {}
-                self._commission_task = self.hass.async_create_task(self._async_commission_wait())
-                return await self.async_step_commission_progress()
+            try:
+                await self._client().commission_valve(self._token,
+                    self._commission_device_id, "enable",
+                    pairing_command_id=self._commission_pairing_command_id)
+            except (RainPointLocalCannotConnect, RainPointLocalInvalidResponse,
+                    RainPointLocalUnauthorized, RainPointLocalCommandRejected) as err:
+                self._commission_result = {"state": "failed", "reason": str(err)}
+                return await self.async_step_commission_result()
+            self._commission_result = {}
+            self._commission_task = self.hass.async_create_task(self._async_commission_wait())
+            return await self.async_step_commission_progress()
         return self.async_show_form(step_id="commission_start", errors=errors,
-            data_schema=vol.Schema({vol.Required("test_watering_confirmed", default=False): bool}))
+            data_schema=vol.Schema({}))
 
     async def _async_commission_wait(self) -> None:
         try:
@@ -1013,13 +1014,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 result = await self._client().commission_valve(
                     self._token, self._commission_device_id, "advance",
                     pairing_command_id=self._commission_pairing_command_id)
-                if result.get("state") in {"complete", "failed", "interrupted", "awaiting_consent", "not_required"}:
+                if result.get("state") in {"ready", "complete", "failed", "interrupted", "awaiting_setup", "awaiting_consent", "not_required"}:
                     self._commission_result = result
                     return
-                action = {
-                    "opening": "commission_open", "watering": "commission_watering",
-                    "closing": "commission_close", "waiting_final_idle": "commission_close",
-                }.get(result.get("reason"), "commission_wait")
+                action = "commission_wait"
                 if action != self._commission_action:
                     self._commission_action = action
                     return
@@ -1049,11 +1047,11 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
             if coordinator is not None:
                 await coordinator.async_request_refresh()
-            return self.async_create_entry(title="Valve verification finished", data={})
-        success = self._commission_result.get("state") == "complete"
+            return self.async_create_entry(title="Valve setup finished", data={})
+        success = self._commission_result.get("state") in {"ready", "complete", "not_required"}
         return self.async_show_form(step_id="commission_result", data_schema=vol.Schema({}),
-            description_placeholders={"result": "Controls verified" if success else "Controls not verified",
-                "reason": str(self._commission_result.get("reason", "verification_pending"))})
+            description_placeholders={"result": "Valve setup complete" if success else "Valve setup incomplete",
+                "reason": str(self._commission_result.get("reason", "setup_pending"))})
 
     async def async_step_pairing_result(
         self, user_input: dict[str, Any] | None = None

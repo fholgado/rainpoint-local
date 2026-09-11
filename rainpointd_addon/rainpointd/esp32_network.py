@@ -62,8 +62,10 @@ class ESP32NetworkServer:
         htv145_candidate_observer: (
             Callable[[str, dict[str, Any]], None] | None
         ) = None,
+        tls_context=None,
     ) -> None:
         self.gateway = gateway
+        self.tls_context = tls_context
         self.host = host
         self.port = port
         self.node_tokens = dict(node_tokens or {})
@@ -79,6 +81,7 @@ class ESP32NetworkServer:
         self._sessions_lock = threading.Lock()
         self._active_nodes: set[str] = set()
         self._sessions: dict[str, dict[str, Any]] = {}
+        self._connection_slots = threading.BoundedSemaphore(32)
 
     @property
     def server_port(self) -> int:
@@ -234,12 +237,21 @@ class ESP32NetworkServer:
                 continue
             except OSError:
                 return
+            if not self._connection_slots.acquire(blocking=False):
+                connection.close()
+                continue
             threading.Thread(
-                target=self._handle_connection,
+                target=self._bounded_connection,
                 args=(connection, address),
                 name="rainpoint-node-session",
                 daemon=True,
             ).start()
+
+    def _bounded_connection(self, connection, address):
+        try:
+            self._handle_connection(connection, address)
+        finally:
+            self._connection_slots.release()
 
     def _handle_connection(
         self, connection: socket.socket, address: tuple[str, int]
@@ -247,6 +259,13 @@ class ESP32NetworkServer:
         node_id: str | None = None
         session: dict[str, Any] | None = None
         session_reserved = False
+        if self.tls_context is not None:
+            try:
+                connection.settimeout(10)
+                connection = self.tls_context.wrap_socket(connection, server_side=True)
+            except (OSError, ValueError):
+                connection.close()
+                return
         connection.settimeout(75)
         stream = connection.makefile("rwb", buffering=0)
         try:
@@ -315,6 +334,9 @@ class ESP32NetworkServer:
                 previous_node.get("node_reboot_pending") is True
             )
             connection_diagnostics: dict[str, Any] = {}
+            connection_diagnostics["transport_encrypted"] = self.tls_context is not None
+            if self.tls_context is not None:
+                connection_diagnostics["tls_cipher"] = connection.cipher()[0]
             if reboot_completed:
                 connection_diagnostics.update(
                     {
@@ -722,6 +744,7 @@ class ESP32NetworkServer:
                         "htv405_bounded_sync_wait",
                         "htv145_control_tx_candidate",
                         "htv145_report_ack_tx",
+                        "htv145_multi_valve",
                         "htv145_idle_anchor",
                         "htv145_bootstrap_trial",
                         "paired_sensor_recovery_tx",

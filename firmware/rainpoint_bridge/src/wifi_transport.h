@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 #include <array>
 #include <cstdint>
@@ -24,6 +25,10 @@ public:
     bool authenticated() const { return authenticated_; }
     String localIp() const { return WiFi.localIP().toString(); }
     const String& gatewayHost() const { return gatewayHost_; }
+    void secureClient(WiFiClientSecure& client) const {
+        client.setPreSharedKey(nodeId_.c_str(), token_.c_str());
+        client.setHandshakeTimeout(10);
+    }
     int wifiRssiDbm() const { return WiFi.RSSI(); }
     std::uint64_t networkBytesSent() const { return networkBytesSent_; }
     std::uint64_t networkBytesReceived() const { return networkBytesReceived_; }
@@ -52,7 +57,7 @@ private:
 
     Preferences preferences_;
     CommissioningPortal commissioningPortal_;
-    WiFiClient client_;
+    WiFiClientSecure client_;
     String nodeId_;
     String ssid_;
     String password_;

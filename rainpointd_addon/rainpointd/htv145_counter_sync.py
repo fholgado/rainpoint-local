@@ -59,7 +59,7 @@ class Htv145CounterSync:
 
     def status(self, profile, *, now):
         state = self.coordinator.readiness(profile, observed_at=now)["state"]
-        data = self.store.htv145_counter_sync(profile.valve_endpoint)
+        data = self.store.htv145_counter_sync(profile.storage_key)
         try:
             self._require_owner(profile)
             available = True
@@ -81,7 +81,7 @@ class Htv145CounterSync:
                 "available": available and not state["pending_command_id"] and not state["revocation_command_id"]}
 
     def configure(self, profile, settings, *, now):
-        data = self.store.htv145_counter_sync(profile.valve_endpoint)
+        data = self.store.htv145_counter_sync(profile.storage_key)
         config = morning_sync.configuration(data.get("config", {}), settings)
         if data.get("state") == "syncing":
             raise RuntimeError("wait for the pending counter anchor before changing settings")
@@ -90,12 +90,12 @@ class Htv145CounterSync:
         if not config["enabled"] and data.get("state") == "waiting_for_report":
             data.update(state="cancelled", deadline=None, reason="disabled")
         data["config"] = config
-        self.store.save_htv145_counter_sync(profile.valve_endpoint, data)
+        self.store.save_htv145_counter_sync(profile.storage_key, data)
         return self.status(profile, now=now)
 
     def request(self, profile, *, now, wait_seconds=None):
         self._require_owner(profile)
-        data = self.store.htv145_counter_sync(profile.valve_endpoint)
+        data = self.store.htv145_counter_sync(profile.storage_key)
         current = datetime.fromisoformat(now)
         state = self.coordinator.readiness(profile, observed_at=now)["state"]
         if data.get("state") == "syncing" or (data.get("state") == "waiting_for_report"
@@ -111,11 +111,11 @@ class Htv145CounterSync:
                     last_attempt_result=None, last_attempt_finished_at=None,
                     deadline=(current + timedelta(seconds=seconds)).isoformat(), command_id=None,
                     reason="waiting_for_new_owner_idle_report")
-        self.store.save_htv145_counter_sync(profile.valve_endpoint, data)
+        self.store.save_htv145_counter_sync(profile.storage_key, data)
         return self.status(profile, now=now)
 
     def observe(self, profile, frame, node_id, *, now):
-        data = self.store.htv145_counter_sync(profile.valve_endpoint)
+        data = self.store.htv145_counter_sync(profile.storage_key)
         if data.get("state") != "waiting_for_report" or node_id != profile.node_id:
             return
         current = datetime.fromisoformat(now)
@@ -134,11 +134,11 @@ class Htv145CounterSync:
         self.coordinator.request_idle_anchor(profile, started_at=now)
 
     def tick(self, profile, *, now):
-        data = self.store.htv145_counter_sync(profile.valve_endpoint)
+        data = self.store.htv145_counter_sync(profile.storage_key)
         current = datetime.fromisoformat(now)
         if data.get("state") == "waiting_for_report" and current >= datetime.fromisoformat(data["deadline"]):
             data.update(state="failed", deadline=None, reason="idle_report_wait_expired")
-            self.store.save_htv145_counter_sync(profile.valve_endpoint, data)
+            self.store.save_htv145_counter_sync(profile.storage_key, data)
         config = data.get("config", morning_sync.DEFAULT_CONFIG)
         if not config["enabled"]:
             return
@@ -152,5 +152,5 @@ class Htv145CounterSync:
         # Persist the calendar claim before authorizing a queue. A crash here
         # skips maintenance rather than replaying an anchor on startup.
         data["last_service_date"] = day
-        self.store.save_htv145_counter_sync(profile.valve_endpoint, data)
+        self.store.save_htv145_counter_sync(profile.storage_key, data)
         self.request(profile, now=now, wait_seconds=remaining)

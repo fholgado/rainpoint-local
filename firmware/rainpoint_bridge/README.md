@@ -71,7 +71,7 @@ python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The source version is `0.17.0`. Both valve families are always included;
+The source version is `0.18.0`. Both valve families are always included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
 Historical captures remain regression fixtures; preserve a verified rollback
@@ -147,16 +147,17 @@ as compatible with `unified` nodes.
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json \
-  --version 0.17.0 --environment rainpoint_bridge
+  --version 0.18.0 --environment rainpoint_bridge
 python tools/firmware_manifest.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin \
   /tmp/rainpoint-radio-node-manifest.json --verify
 ```
 
-The current OTA transport is intended for a trusted LAN. Node/gateway HMAC
-authentication and artifact hashing are implemented; encrypted sessions,
-credential rotation, and asymmetric release signatures remain publication
-hardening requirements.
+The candidate uses TLS-PSK for operational sessions and OTA downloads, using the
+existing per-node credential. HMAC session proofs and artifact hashes remain.
+Initial adoption is still a trusted-network operation; publisher signing is
+planned for alpha. Gateway, HA integration and radio firmware must be updated
+together; there is no plaintext fallback. See [security details](../../SECURITY.md).
 
 ## Developer verification
 

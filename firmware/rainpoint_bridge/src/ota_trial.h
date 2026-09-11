@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <WiFiClientSecure.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -19,7 +20,8 @@ public:
         const String& version,
         const String& expectedSha256,
         std::size_t expectedSize,
-        const String& gatewayHost
+        const String& gatewayHost,
+        WiFiClientSecure& downloadClient
     );
     void confirmHealthy(bool gatewayAuthenticated, bool radioHealthy);
     String status(const String& nodeId) const;

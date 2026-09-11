@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import ssl
 
 import aiohttp
 
@@ -34,9 +35,23 @@ class RainPointLocalClient:
     """Small asynchronous client for rainpointd."""
 
     def __init__(
-        self, host: str, port: int, session: aiohttp.ClientSession
+        self, host: str, port: int, session: aiohttp.ClientSession, *, token: str | None = None
     ) -> None:
-        self._base_url = f"http://{host}:{port}/api/{API_VERSION}"
+        self._tls = None
+        if token:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE  # Peer identity is verified by TLS-PSK, not a certificate.
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_2
+            context.set_ciphers("ECDHE-PSK-CHACHA20-POLY1305:PSK-AES128-GCM-SHA256")
+            key = token.encode()
+            if not 32 <= len(key) <= 256:
+                raise RainPointLocalUnauthorized("invalid management credential")
+            self._tls_key = key
+            context.set_psk_client_callback(lambda hint: ("management", self._tls_key))
+            self._tls = context
+        self._base_url = f"{'https' if self._tls else 'http'}://{host}:{port}/api/{API_VERSION}"
         self._session = session
 
     async def info(self) -> GatewayMetadata:
@@ -112,6 +127,8 @@ class RainPointLocalClient:
         replacement = result.get("registry_write_token")
         if not isinstance(replacement, str) or not replacement:
             raise RainPointLocalInvalidResponse("rotation response has no token")
+        if self._tls is not None:
+            self._tls_key = replacement.encode()
         return replacement
 
     async def register_radio_node(
@@ -381,6 +398,8 @@ class RainPointLocalClient:
             async with self._session.get(
                 f"{self._base_url}/{path}",
                 timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+                ssl=self._tls,
+                allow_redirects=False,
             ) as response:
                 response.raise_for_status()
                 payload = await response.json()
@@ -403,6 +422,8 @@ class RainPointLocalClient:
                     {"Authorization": f"Bearer {token}"} if token else {}
                 ),
                 timeout=aiohttp.ClientTimeout(total=10),
+                ssl=self._tls,
+                allow_redirects=False,
             ) as response:
                 if response.status == 401:
                     raise RainPointLocalUnauthorized(
