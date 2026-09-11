@@ -243,6 +243,14 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   The first CI firmware build passed but packaging exposed a missing
   `cryptography` dependency in that isolated job; the firmware job now installs
   the pinned signing requirements before running its packaging regression check.
+  Approved GitHub run 34585252074 signed the merged 5dc0c5fc artifact; its
+  publisher signature and downloaded image digest verified locally. The spare
+  trial exposed a missing `firmware_signed_ota` entry in the network handshake
+  allowlist: the candidate rebooted and reached TLS, but received
+  `node_rejected`. A real socket regression reproduced that failure before the
+  fix; command dispatch now also requires the signed capability. Serial-port
+  opens reset this USB-connected ESP, so subsequent trials keep one continuous
+  serial connection open to avoid interfering with candidate boot accounting.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
