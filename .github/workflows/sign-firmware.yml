@@ -1,0 +1,104 @@
+name: Prepare signed firmware (no publication)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: firmware-signing
+  cancel-in-progress: false
+
+# Deliberately inert until the protected environment, reviewed public key and
+# matching private environment secret are provisioned. No key generation here.
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Require configured release protections and reviewed public key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/check_signing_environment.py
+          test -f release/firmware-signing-public.pem
+      - name: Validate and build without signing credentials
+        run: |
+          pip install -r tests/requirements.txt 'platformio==6.1.19'
+          python -m unittest discover -s tests -t . -v
+          c++ -std=c++17 -Ifirmware/rainpoint_bridge/include firmware/rainpoint_bridge/tests/protocol_test.cpp -o /tmp/protocol-test
+          /tmp/protocol-test
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target release_receipt
+          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+          mkdir "$RUNNER_TEMP/firmware-signing-input"
+          cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin "$RUNNER_TEMP/firmware-signing-input/firmware.bin"
+          cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/release-input.json "$RUNNER_TEMP/firmware-signing-input/release-input.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: firmware-signing-input
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/firmware-signing-input/firmware.bin
+            ${{ runner.temp }}/firmware-signing-input/release-input.json
+
+  sign:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: firmware-signing
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Recheck environment after approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/check_signing_environment.py
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: firmware-signing-input
+          path: signed
+      - name: Install verifier before exposing the signing secret
+        run: pip install -r tools/signing-requirements.txt
+      - name: Sign reviewed artifact and verify with pinned public key
+        env:
+          RAINPOINT_RELEASE_SIGNING_KEY_PEM: ${{ secrets.FIRMWARE_SIGNING_KEY_PEM }}
+          KEY_ID: ${{ vars.FIRMWARE_SIGNING_KEY_ID }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: >-
+          python tools/sign_firmware.py sign
+          --image signed/firmware.bin --receipt signed/release-input.json
+          --expected-commit "$SOURCE_COMMIT" --key-id "$KEY_ID"
+          --public-key release/firmware-signing-public.pem
+          --envelope signed/firmware-signature.json
+      - name: Verify again without the private key
+        env:
+          KEY_ID: ${{ vars.FIRMWARE_SIGNING_KEY_ID }}
+        run: >-
+          python tools/sign_firmware.py verify
+          --image signed/firmware.bin --key-id "$KEY_ID"
+          --public-key release/firmware-signing-public.pem
+          --envelope signed/firmware-signature.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signed-firmware-unpublished
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            signed/firmware.bin
+            signed/release-input.json
+            signed/firmware-signature.json

@@ -122,6 +122,35 @@ decision, not trust in a newly downloaded replacement key.
 
 ## Protected GitHub release workflow
 
+The repository now includes `.github/workflows/sign-firmware.yml` and
+`tools/sign_firmware.py`. Manual dispatch on protected `main` builds without the
+signing key, then waits for the `firmware-signing` environment before signing.
+It produces a short-lived **unpublished CI artifact**, not a GitHub release and
+not an automatically installed update. Dispatch is not part of ordinary CI.
+
+Before enabling it, a maintainer must provision all of the following together:
+
+- A reviewed P-256 public key at `release/firmware-signing-public.pem`.
+- Environment secret `FIRMWARE_SIGNING_KEY_PEM` containing the matching private
+  PKCS#8 PEM, and environment variable `FIRMWARE_SIGNING_KEY_ID`.
+- The `firmware-signing` environment with a required reviewer, administrator
+  bypass disabled, and exactly one custom deployment rule: branch `main`.
+- Protection for `main` and reviewed changes to the workflow/key/tooling.
+
+The preflight queries GitHub and refuses missing/relaxed protection. The signer
+checks the build receipt against the workflow's immutable commit and actual
+image hash/size, refuses a private/public key mismatch, and verifies its output.
+The private key is supplied only to that signing step; verification and artifact
+upload run without it. No real key or environment has been provisioned by the
+source implementation. A sole maintainer must explicitly decide whether to allow
+self-approval or appoint another reviewer; YAML cannot make that decision.
+
+The temporary-key tests cover strict descriptor bytes, each bound field, wrong
+keys, damaged images, malformed signatures, duplicate JSON and environment
+protections. **Gateway and ESP32 OTA enforcement are not implemented by this
+tooling**, and the reviewed public key must also be pinned there before enabling
+a signed-only release. Runtime qualification remains in the roadmap.
+
 Recommended job boundary: `prepare -> approved-sign -> approved-publish`.
 Preparation runs tests/builds and produces an unpublished artifact at an exact
 protected-branch commit; it has read-only repository access and no signing

@@ -179,3 +179,17 @@ pairing, acknowledgement, channel, or trailer behavior.
 The sole live checklist for firmware, OTA, sensor, and valve hardware gates is
 `../../PROJECT_ROADMAP.md`. This document describes how to build and operate the
 firmware and must not maintain a second completion list.
+## Capacity budgets
+
+The current radio reserves space for eight sensor ACK owners, four HTV405 valve
+ACK owners and eight HTV145 valve associations. These are per-radio memory/state
+budgets, not a discovered RainPoint protocol limit or a stock-gateway capacity
+claim. Radio command exchanges are serialized; ownership capacity does not mean
+all devices can transmit simultaneously.
+
+To increase these budgets, update `kMaximumRoutineAckAuthorizations` and
+`kMaximumHtv405RoutineAckAuthorizations` in `include/rainpoint_ack.h`, or the
+`htv145Owners` array in `src/main.cpp`. The gateway's
+`MAXIMUM_ROUTINE_ACK_ASSIGNMENTS` must match the sensor budget. Rebuild and
+qualify memory use, ACK timing and capacity-exceeded feedback before publishing
+an increase. This is a build-time change, not a setting alpha users need to tune.

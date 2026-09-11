@@ -123,7 +123,8 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   waveform and normal duration path; never water automatically during setup.
   Local validation: full Python suite ran 574 tests successfully (two optional
   skips); native C++ protocol regressions passed. The authenticated onboarding
-  HTTP tests also passed after adding the first-counter assertions. Not deployed.
+  HTTP tests also passed after adding the first-counter assertions. Deployed in
+  the September 10 coordinated rollout; fresh physical acceptance remains above.
 - [ ] Validate default HA watering notifications on a clean HA instance. Draft
   emits confirmed start/stop, failed request and overdue notices automatically;
   mobile forwarding remains optional. Snapshot tests cover dynamic durations,
@@ -211,17 +212,37 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   `docs/FIRMWARE_SIGNING_DESIGN.md` defines the proposed descriptor/trust boundary.
   Temporary-key tooling, gateway/node enforcement and release-environment
   provisioning must be qualified before claiming signed OTA support.
+  Host tooling and the manual protected-environment workflow are now implemented;
+  Temporary-key tests cover signing and workflow isolation. Signing rejects unreviewed commit receipts,
+  changed image/descriptor fields, unknown/mismatched keys and malformed DER/JSON.
+  The workflow verifies reviewer/branch protections, builds without secrets,
+  signs after approval and does not publish a release. It intentionally cannot
+  run until the real public key and protected environment are provisioned.
+  Node/gateway signature enforcement and an isolated OTA trial remain open;
+  the existing radios have not been changed.
+  Validation: 592 Python tests passed (two skips), followed by all 10 signing
+  tests including a real CLI sign/verify round trip and refusal to overwrite a
+  descriptor. Only temporary keys were used. The protected workflow itself has
+  not been dispatched and no firmware artifact has been published.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
   September 11: 583 Python tests passed (two skips). The extracted package starts
   its actual TLS CLI with an empty database, rejects plaintext/wrong keys, and
   preserves its generated RF identity across restart. Source only; not redeployed.
-- [ ] Qualify actual fresh HA Core setup in isolated CI. The new container harness
+- [x] Qualify actual fresh HA Core setup in isolated CI. The new container harness
   covers discovery, duplicate suppression, model menus, missing-radio feedback,
-  reload and removal without household credentials or RF transmissions. Record
-  the CI result before closing this subgate; it does not replace HA OS/HACS,
+  reload and removal without household credentials or RF transmissions. The real
+  HA Core 2026.9.1 job passed on `a1feb43` (run 34580019946), after correcting the
+  harness to initialize HA's full bootstrap. It does not replace HA OS/HACS,
   rendered frontend, physical pairing or default-notification delivery checks.
+- [x] Classify current capacity and compatibility boundaries for alpha. Fixed
+  per-radio pools are resource budgets, not a discovered RF/global gateway limit:
+  eight sensor ACK owners, four HTV405 ACK owners, eight HTV145 associations.
+  Keep capacities unchanged until higher-load tests justify raising them; document
+  the source constants. There are no external installs to support with speculative
+  old-version fallbacks. Retain migrations needed by this installation's database
+  and backups; new alpha installs should use the matching release stack.
 - [ ] Record independent-house results for sensors and both valve families,
   including RF reporting/ACK continuity, actual watering duration/stops and
   overnight counter recovery. Preserve first-house evidence but do not use it
