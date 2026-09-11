@@ -145,6 +145,18 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_signed_ota_node_authenticates(self) -> None:
+        connection, stream, response = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "firmware_update_trial",
+                          "firmware_signed_ota"],
+        )
+        try:
+            self.assertEqual("node_authenticated", response["type"])
+        finally:
+            stream.close()
+            connection.close()
+
     def test_v2_morning_sync_owner_authenticates_and_cancels_exact_wait(self) -> None:
         connection, stream, response = self._connect(
             NODE_A, TOKEN_A, protocol_version=2,
@@ -2209,7 +2221,7 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
-    def test_ota_trial_command_requires_explicit_candidate_capability(self) -> None:
+    def test_ota_command_requires_signed_capability(self) -> None:
         connection, stream, _ = self._connect(
             NODE_A,
             TOKEN_A,
@@ -2218,12 +2230,13 @@ class ESP32NetworkTest(unittest.TestCase):
                 "rx",
                 "sensor_pairing_tx",
                 "firmware_update_trial",
+                "firmware_signed_ota",
             ],
         )
         command = {
             "type": "firmware_update_start",
             "command_id": "12" * 16,
-            "url": "http://192.0.2.1:8787/firmware/test.bin",
+            "url": "https://192.0.2.1:8787/firmware/test.bin",
             "version": "0.9.0-test.2",
             "size_bytes": 900_000,
             "sha256": "ab" * 32,
@@ -2237,9 +2250,9 @@ class ESP32NetworkTest(unittest.TestCase):
             NODE_B,
             TOKEN_B,
             protocol_version=2,
-            capabilities=["rx", "sensor_pairing_tx"],
+            capabilities=["rx", "sensor_pairing_tx", "firmware_update_trial"],
         )
-        with self.assertRaisesRegex(ValueError, "firmware_update_trial"):
+        with self.assertRaisesRegex(ValueError, "firmware_signed_ota"):
             self.server.send_command(NODE_B, command)
         stream.close()
         connection.close()

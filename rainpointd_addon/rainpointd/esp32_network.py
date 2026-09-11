@@ -179,7 +179,7 @@ class ESP32NetworkServer:
         elif command_type == "node_reboot":
             required_capability = "node_reboot"
         elif command_type == "firmware_update_start":
-            required_capability = "firmware_update_trial"
+            required_capability = "firmware_signed_ota"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
         elif command_type in {
@@ -749,6 +749,7 @@ class ESP32NetworkServer:
                         "htv145_bootstrap_trial",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
+                        "firmware_signed_ota",
                     }
                 )
             ):

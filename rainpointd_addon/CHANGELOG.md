@@ -2,6 +2,10 @@
 
 ## 0.39.0 / Integration 0.18.0 / Firmware 0.19.0 / 2026-09-11
 
+- Accept the signed-OTA capability during authenticated node enrollment and
+  require it at command dispatch; preserve connections from older nodes without
+  allowing them to receive the new signed update wire format.
+
 - Require publisher-signed firmware catalogs; remove ad-hoc URL updates.
 - Verify P-256/SHA-256 signatures independently in the gateway and radio before
   downloading/writing. Bind version, target, release, source commit, image size
