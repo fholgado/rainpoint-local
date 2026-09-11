@@ -80,8 +80,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Install PlatformIO
-        run: pip install "platformio==6.1.19"
+      - name: Install PlatformIO and firmware packaging dependencies
+        run: pip install "platformio==6.1.19" -r tools/signing-requirements.txt
       - name: Build and check unified production firmware
         run: |
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge

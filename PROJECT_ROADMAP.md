@@ -240,6 +240,9 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   Local qualification: all 595 Python tests passed (two optional skips), the
   real OTA/Mbed TLS negative-vector harness passed, and the unified target built
   with the pinned public key embedded. No RF control or pairing bytes changed.
+  The first CI firmware build passed but packaging exposed a missing
+  `cryptography` dependency in that isolated job; the firmware job now installs
+  the pinned signing requirements before running its packaging regression check.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
