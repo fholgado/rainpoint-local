@@ -21,15 +21,16 @@ from rainpointd.secure_transport import client_context
 
 async def qualify(config_dir: Path, port: int, token: str) -> None:
     from homeassistant.core import HomeAssistant
+    from homeassistant import bootstrap, loader
     from homeassistant.helpers.service_info.hassio import HassioServiceInfo
-    from homeassistant.setup import async_setup_component
 
     hass = HomeAssistant(str(config_dir))
     try:
-        assert await async_setup_component(hass, "persistent_notification", {})
+        loader.async_setup(hass)
+        assert await bootstrap.async_from_config_dict({"persistent_notification": {}}, hass) is hass
         await hass.async_start()
         discovery = HassioServiceInfo(
-            name="RainPoint clean-install test", slug="local_rainpointd",
+            name="RainPoint clean-install test", slug="local_rainpointd", uuid="clean-install",
             config={"host": "127.0.0.1", "port": port,
                     "registry_write_token": token, "gateway_id": "clean-install"})
         flow = await hass.config_entries.flow.async_init(
