@@ -7,6 +7,7 @@ import os
 import re
 import runpy
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_supervisor_watchdog_uses_tls_compatible_tcp_probe(self):
+        config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
+        self.assertIn("watchdog: tcp://[HOST]:[PORT:8787]", config)
+        self.assertNotIn("watchdog: http://", config)
+
 
 
     def test_runtime_has_no_household_identity_or_research_imports(self):
@@ -32,14 +38,19 @@ class AddonBoundaryTest(unittest.TestCase):
 
     def test_firmware_has_one_environment_with_both_valves(self):
         root = ROOT / "firmware/rainpoint_bridge"
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         self.assertEqual(1, (root / "platformio.ini").read_text().count("[env:"))
         class Environment(dict):
             def subst(self, value):
                 if value == "$PROJECT_DIR":
                     return str(root)
+                if value == "$BUILD_DIR":
+                    return temporary.name
                 raise AssertionError(value)
             def Append(self, **kwargs):
-                self.defines = dict(kwargs["CPPDEFINES"])
+                if "CPPDEFINES" in kwargs:
+                    self.defines = dict(kwargs["CPPDEFINES"])
         def build(values):
             env = Environment()
             with patch.dict(os.environ, values, clear=True):
@@ -66,7 +77,7 @@ class AddonBoundaryTest(unittest.TestCase):
         handled = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', source))
         admitted = set(re.findall(r'type == "(htv145_control_[a-z_]+)"', transport))
         self.assertLessEqual(handled, admitted)
-        self.assertIn("!htv145ControlCandidate.counterAuthenticated", source)
+        self.assertIn("!htv145Owner().counterAuthenticated", source)
         self.assertIn("!rfMaintenance.transmitAllowed()", source)
         self.assertIn("!wifiTransport.authenticated()", source)
 
@@ -151,8 +162,12 @@ class AddonBoundaryTest(unittest.TestCase):
             "supervised_htv405_control",
             "htv145_dry_acceptance",
         ):
-            self.assertIn(f"\n  {option}:\n", translations)
-            self.assertNotIn(f"\n      {option}:\n", translations)
+            self.assertNotIn(option, translations)
+            self.assertNotIn(option, config)
+            self.assertNotIn(option, run_script)
+        main = (ROOT / "rainpointd_addon/rainpointd/__main__.py").read_text()
+        self.assertIn("valve_control_enabled=True", main)
+        self.assertNotIn("--enable-supervised-htv405-control", main)
 
     def test_unified_firmware_accepts_gateway_owned_ack_commands(self) -> None:
         source = (
@@ -219,7 +234,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn('type == "valve_control_open"', source)
         self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
-        self.assertIn("supervised_htv405_control: false", addon_config)
+        self.assertNotIn("supervised_htv405_control", addon_config)
         boundary_check = (
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
@@ -273,7 +288,7 @@ class AddonBoundaryTest(unittest.TestCase):
             '"RAINPOINT_HTV145_ENABLED"',
             build_profile,
         )
-        self.assertIn("htv145_dry_acceptance: false", config)
+        self.assertNotIn("htv145_dry_acceptance", config)
         self.assertIn("/research/htv145-acceptance/", http_source)
         self.assertIn("--enable-htv145-dry-acceptance", main_source)
         self.assertNotIn("htv145-acceptance", integration_source)

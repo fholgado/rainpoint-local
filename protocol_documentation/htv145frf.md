@@ -215,25 +215,25 @@ it. Each attempt's bounded RF burst does not consume additional queued attempts.
 
 ## Persistence and HA boundary
 
-First-control qualification after custom-identity pairing is distinct from
-retained-counter restoration. A negative fixed-zero anchor does not prove the
-association cannot accept an open: initialization and idle recovery are separate
-boundaries. A separately compiled dry-test path permits one fixed `81/90`,
-60-second first-open candidate after an unqualified anchor rejection and fresh
-idle evidence. This candidate worked on the captured custom-ID association;
-it is not a universal pairing-reset counter or an automatic retry strategy.
-Reservation leaves the counter unknown. Only its matched positive reply
-authenticates subsequent commands. The ordinary pairing prefix and command
-waveform are unchanged.
+Fresh accepted pairing initializes the first normal command at logical counter
+1, encoded `81`. This is supported by the retained fresh-pairing first-open
+captures, not proof of a universal battery-rejoin reset. A negative fixed-zero
+anchor does not disprove the association: initialization and idle recovery are
+separate boundaries.
 
-The explicit dry-test flow revokes the old owner and leases one provisional
-report-ACK owner. It requires two fixed 60-second runs: valve-confirmed
-open with independent automatic idle, followed by a second confirmed open,
-spaced early close, and independent idle. Public control is blocked until all
-these checks pass. No stock command or assumed pairing-reset counter seeds it.
-An interrupted/restarted qualification cannot replay a command or resume an
-unsent anchor. The first-open trial is single-use, research-gated, and absent
-from standard firmware; ordinary controls use the persisted qualified association.
+The gateway consumes timestamped, command-scoped pairing evidence once during
+owner setup (within five minutes of acceptance), atomically persisting `81` with
+source `fresh_pairing_initialization`. It is usable but not response-confirmed.
+The first user-requested open uses the normal duration/control path; a matching
+positive reply advances to `82` and records `matching_immediate_response`.
+Physical watering state always comes from valve evidence, never the seed.
+
+Setup sends no open or close. Duplicate pairing reports, setup retries, restarts,
+passive telemetry and battery rejoin cannot reapply the seed. Old onboarding
+records gain no inferred counter; a failed command invalidates readiness without
+making the seed reusable. Existing owner revocation must be confirmed before
+replacement. The optional two-run research qualification harness remains separate
+from normal HA setup. Live acceptance of this revised onboarding is pending.
 
 A requested owner reboot makes control unavailable immediately, even while its
 old socket still appears connected. Reconnect must clear the pending-reboot flag.

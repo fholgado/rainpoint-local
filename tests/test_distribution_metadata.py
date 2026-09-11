@@ -59,7 +59,8 @@ class DistributionMetadataTest(unittest.TestCase):
             self.assertIn(text, template)
         self.assertTrue((ROOT / "repository.yaml").exists())
         guide = (ROOT / "GETTING_STARTED.md").read_text()
-        self.assertIn("not RF coexistence validation", guide)
+        self.assertIn("HACS installs the integration, not the gateway app or radio firmware", guide)
+        self.assertIn("stock/local coexistence still need qualification", guide)
 
 
 if __name__ == "__main__":

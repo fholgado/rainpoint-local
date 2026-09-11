@@ -42,9 +42,11 @@ entity attributes, diagnostics, and logs never expose it.
 - USB serial remains a recovery path through `show_node`, `configure_wifi`, and
   `clear_wifi`; it is not normal UX.
 
-The trusted-LAN TCP prototype authenticates both parties but is not encrypted.
-Publication requires encrypted sessions, replay-protected messages, credential
-rotation/revocation, and gateway identity pinning.
+The candidate encrypts operational sessions with TLS-PSK using existing radio
+credentials; the HA management interface and OTA downloads also use TLS.
+There is no plaintext fallback. Initial HTTP adoption/Wi-Fi provisioning remains
+a trusted-network operation; see [security details](SECURITY.md). Publisher
+signing remains an alpha milestone, not something supplied by TLS.
 
 ## Placement and acceptance
 
@@ -57,7 +59,8 @@ Run the read-only acceptance checker after adoption or relocation:
 
 ```sh
 python3 tools/check_radio_node.py \
-  --gateway-url http://homeassistant.local:8787 \
+  --gateway-url https://homeassistant.local:8787 \
+  --token-file /path/to/private-management-token \
   --node-id rp-001122aabbcc \
   --save captures/node-acceptance/rp-001122aabbcc.json
 ```
@@ -91,26 +94,34 @@ its entities and history.
 HCS02x sensors, HTV405 four-zone valves and HTV145 single-zone valves appear in
 the normal model picker. HTV145 automatic discovery requires firmware advertising
 `htv145_auto_identity_pairing`; older nodes require an update, not manual IDs.
-After naming an HTV145, choose to verify controls now or finish without testing.
-**Verify valve controls** returns to a paired valve's pending setup later.
-Finishing without testing does not finish ACK/control-owner provisioning; if the
-valve stops reporting before verification resumes, it may need to be woken or
-paired again. The flow will not guess its state or send an open without evidence.
+After naming an HTV145, finish radio setup. **Finish valve setup** resumes an
+unfinished owner configuration later. This configures ACK/control ownership
+without sending open/close commands. Leaving setup unfinished can leave the
+valve without its report ACK owner, so complete this before putting it away.
 
-Verification requires explicit approval for two requested 60-second runs (or a
-dry valve): automatic stop, then an early stop after at least 20 seconds. Keep
-the flow open. The gateway derives the selected owner and RF parameters from
-accepted pairing, confirms any old owner's revocation, and requires fresh owner
-telemetry before the idle anchor. If that anchor fails, one fixed first-open
-candidate may initialize this association; only its positive response supplies
-counter authority. No failed open is retried automatically. Independent stop
-reports must complete both tests before public controls become available.
+The two-run qualification experiment no longer gates normal setup. Accepted
+pairing supplies the selected owner and RF parameters; old ownership must still
+be revoked and confirmed before replacement. Setup enables the control path
+without claiming physical verification. Radio readiness,
+fresh device state, counter synchronization and command-response checks remain.
+Recommend a short run with a dry valve or direct visual confirmation of opening
+and closing. No watering runs automatically as part of setup.
 
-Closing the flow stops subsequent test steps; a started bounded run may still
-finish automatically. Failure, owner reconnect, expiry or gateway restart ends
-the verification attempt without replay. Inspect the device before re-pairing
-and granting fresh consent. An old flow cannot act on a newer pairing session.
-The current HTV145 runtime supports one single-zone valve per custom gateway
-identity and per node; onboarding refuses to displace a different valve's owner.
+An old flow cannot act on a newer pairing session. Setup is resumable and does
+not replay watering after a restart. The standalone research qualification
+harness is separate from the user flow.
+
+Confirmed fresh HTV145 pairing initializes counter 1 (`0x81`) once during owner
+setup. Its source is explicitly pairing-derived until a matching positive command
+reply confirms it. Initialization requires timestamped pairing evidence no more
+than five minutes old; this is not a deadline for the first watering. A persisted
+seed survives restarts. Repeated setup, passive reports and battery rejoin cannot
+reseed it, and an unanswered first command invalidates counter readiness.
+This remains an undeployed draft pending end-to-end acceptance.
+HTV145 state is keyed by the full RF association, not the shared gateway endpoint.
+Firmware advertising `htv145_multi_valve` holds up to eight independent single-zone
+associations; older firmware retains one per radio. Counters, pending commands,
+qualification and diagnostics remain independent. A busy radio rejects a second
+valve command instead of interleaving transmissions or displacing an owner.
 Existing qualified valves do not acquire a new test requirement on upgrade.
 See the [roadmap](PROJECT_ROADMAP.md) for staged deployment and physical acceptance.

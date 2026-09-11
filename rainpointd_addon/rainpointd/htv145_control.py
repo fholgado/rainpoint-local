@@ -68,6 +68,11 @@ class Htv145ControlProfile:
             raise ValueError("unknown HTV145 trailer residual")
 
     @property
+    def storage_key(self) -> str:
+        """The complete RF association, independent of its transmitting node."""
+        return f"{self.controller_endpoint}:{self.valve_endpoint}"
+
+    @property
     def link(self) -> ValveLink:
         return ValveLink(
             bytes.fromhex(self.controller_endpoint),
@@ -97,7 +102,7 @@ class Htv145ControlCoordinator:
         self, profile: Htv145ControlProfile, *, observed_at: str
     ) -> dict[str, Any]:
         """Persist a profile without enabling or transmitting anything."""
-        previous = self.store.htv145_control_states(profile.valve_endpoint)
+        previous = self.store.htv145_control_states(profile.storage_key)
         if previous and previous[0]["report_ack_center_hz"] is not None:
             raise RuntimeError("revoke the persistent HTV145 ACK owner before reconfiguration")
         return self.store.configure_htv145_control(
@@ -128,7 +133,7 @@ class Htv145ControlCoordinator:
         if decoded["command_marker_inverted"] != profile.command_marker_inverted:
             raise ValueError("passive command marker differs from HTV145 association")
         return self.store.synchronize_htv145_control_counter(
-            valve_endpoint=profile.valve_endpoint,
+            valve_endpoint=profile.storage_key,
             next_sequence=int(decoded["next_sequence"]),
             source="passive_stock_command",
             observed_at=observed_at,
@@ -139,7 +144,7 @@ class Htv145ControlCoordinator:
         *, observed_at: str,
     ) -> dict[str, Any]:
         """Seed/recover from a positive exchange on the selected association."""
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         self._require_profile(state, profile)
         request = decode_htv145_gateway_command(command, profile.link)
         reply = decode_htv145_command_response(response, profile.link)
@@ -151,7 +156,7 @@ class Htv145ControlCoordinator:
         if state["last_command_started_at"] and datetime.fromisoformat(observed_at) <= datetime.fromisoformat(state["last_command_started_at"]):
             raise ValueError("HTV145 exchange predates the last local command")
         return self.store.synchronize_htv145_control_counter(
-            valve_endpoint=profile.valve_endpoint, next_sequence=int(reply["next_sequence"]),
+            valve_endpoint=profile.storage_key, next_sequence=int(reply["next_sequence"]),
             source="matching_immediate_response", observed_at=observed_at,
         )
 
@@ -168,12 +173,12 @@ class Htv145ControlCoordinator:
         An unknown counter blocks normal control until explicit recovery is confirmed.
         Expired runs raise an observation-only anomaly; never send a close.
         """
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         self._require_profile(state, profile)
         now = datetime.fromisoformat(observed_at)
         if state["pending_started_at"] and (now - datetime.fromisoformat(state["pending_started_at"])).total_seconds() > 15:
             state = self.store.fail_htv145_command(
-                valve_endpoint=profile.valve_endpoint, command_id=state["pending_command_id"],
+                valve_endpoint=profile.storage_key, command_id=state["pending_command_id"],
                 reason="confirmation_timeout_counter_unsynchronized", observed_at=observed_at,
             )
         fresh = bool(state["confirmed_at"] and 0 <= (now - datetime.fromisoformat(state["confirmed_at"])).total_seconds() <= 3600)
@@ -196,7 +201,7 @@ class Htv145ControlCoordinator:
         must first be resolved by valve evidence or explicitly failed.
         """
         self._require_enabled()
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         self._require_profile(state, profile)
         if state["pending_command_id"] is not None:
             raise RuntimeError(
@@ -231,13 +236,13 @@ class Htv145ControlCoordinator:
     def request_idle_anchor(self, profile: Htv145ControlProfile, *, started_at: str) -> dict:
         """Dispatch one fixed close-only anchor from a durable report-triggered request."""
         self._require_enabled()
-        self._require_profile(self._state(profile.valve_endpoint), profile)
+        self._require_profile(self._state(profile.storage_key), profile)
         command = self._command("htv145_control_idle_anchor", controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint)
-        self.store.reserve_htv145_idle_anchor(profile.valve_endpoint, command["command_id"], started_at)
+        self.store.reserve_htv145_idle_anchor(profile.storage_key, command["command_id"], started_at)
         try:
             self.sender(profile.node_id, command)
         except Exception:
-            self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint, command_id=command["command_id"], reason="idle_anchor_transport_failed", observed_at=started_at)
+            self.store.fail_htv145_command(valve_endpoint=profile.storage_key, command_id=command["command_id"], reason="idle_anchor_transport_failed", observed_at=started_at)
             raise
         return command
 
@@ -268,15 +273,15 @@ class Htv145ControlCoordinator:
     def request_bootstrap_open(self, profile, *, started_at, commissioning=False):
         """Reserve an unproven candidate without authenticating a counter."""
         self._require_enabled()
-        self._require_profile(self._state(profile.valve_endpoint), profile)
+        self._require_profile(self._state(profile.storage_key), profile)
         command = self._command("htv145_control_commission_open" if commissioning else "htv145_control_bootstrap_open",
             controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint,
             expected_sequence=0x81, duration_seconds=60)
-        self.store.reserve_htv145_bootstrap(profile.valve_endpoint, command["command_id"], started_at)
+        self.store.reserve_htv145_bootstrap(profile.storage_key, command["command_id"], started_at)
         try:
             self.sender(profile.node_id, command)
         except Exception:
-            self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint,
+            self.store.fail_htv145_command(valve_endpoint=profile.storage_key,
                 command_id=command["command_id"], reason="bootstrap_transport_failed", observed_at=started_at)
             raise
         return command
@@ -301,14 +306,14 @@ class Htv145ControlCoordinator:
         observed_at: str,
     ) -> dict[str, Any]:
         """Persist state and resolve a reservation only with matching evidence."""
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         self._require_profile(state, profile)
         if state["pending_started_at"] and datetime.fromisoformat(observed_at) < datetime.fromisoformat(state["pending_started_at"]):
             raise ValueError("HTV145 evidence predates the pending command")
         if state["pending_action"] == "idle_anchor":
             anchor = decode_htv145_idle_anchor_response(frame, profile.link)
             if anchor is not None:
-                return self.store.confirm_htv145_idle_anchor(profile.valve_endpoint, state["pending_command_id"],
+                return self.store.confirm_htv145_idle_anchor(profile.storage_key, state["pending_command_id"],
                     frame=frame.hex(), result_code=anchor["result_code"], observed_at=observed_at)
         error = decode_htv145_command_error(frame, profile.link)
         if error is not None:
@@ -318,7 +323,7 @@ class Htv145ControlCoordinator:
             ):
                 raise ValueError("HTV145 error has no matching durable reservation")
             return self.store.fail_htv145_command(
-                valve_endpoint=profile.valve_endpoint,
+                valve_endpoint=profile.storage_key,
                 command_id=state["pending_command_id"],
                 reason=f"negative_command_result_{error['result_code']}",
                 observed_at=observed_at,
@@ -331,7 +336,7 @@ class Htv145ControlCoordinator:
             if state["pending_command_id"] is None:
                 raise ValueError("HTV145 response has no durable reservation")
             return self.store.confirm_htv145_command(
-                valve_endpoint=profile.valve_endpoint,
+                valve_endpoint=profile.storage_key,
                 command_id=state["pending_command_id"],
                 sequence=int(response["sequence"]),
                 watering=bool(response["watering"]),
@@ -353,9 +358,9 @@ class Htv145ControlCoordinator:
         watering = bool(report["watering"])
         if state["pending_action"] == "idle_anchor":
             if watering:
-                self.store.fail_htv145_command(valve_endpoint=profile.valve_endpoint,
+                self.store.fail_htv145_command(valve_endpoint=profile.storage_key,
                     command_id=state["pending_command_id"], reason="idle_anchor_state_changed", observed_at=observed_at)
-            return self.store.observe_htv145_control_state(valve_endpoint=profile.valve_endpoint,
+            return self.store.observe_htv145_control_state(valve_endpoint=profile.storage_key,
                 watering=watering, observed_at=observed_at, frame=frame.hex())
         if state["pending_command_id"] is not None:
             expected_watering = state["pending_action"] == "open"
@@ -363,7 +368,7 @@ class Htv145ControlCoordinator:
                 # Telemetry proves physical state but cannot authenticate the
                 # reserved command counter. The store clears its sync gate.
                 return self.store.confirm_htv145_command(
-                    valve_endpoint=profile.valve_endpoint,
+                    valve_endpoint=profile.storage_key,
                     command_id=state["pending_command_id"],
                     sequence=state["pending_sequence"],
                     watering=watering,
@@ -372,7 +377,7 @@ class Htv145ControlCoordinator:
                     frame=frame.hex(),
                 )
         return self.store.observe_htv145_control_state(
-            valve_endpoint=profile.valve_endpoint,
+            valve_endpoint=profile.storage_key,
             watering=watering,
             observed_at=observed_at,
             frame=frame.hex(),
@@ -394,7 +399,7 @@ class Htv145ControlCoordinator:
             return None
         if message.get("node_id") != profile.node_id:
             return None
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         command_id = message.get("command_id")
         if not isinstance(command_id, str) or command_id != state["pending_command_id"]:
             return None
@@ -403,7 +408,7 @@ class Htv145ControlCoordinator:
             if not isinstance(error, str) or "htv145" not in error:
                 return None
             return self.store.fail_htv145_command(
-                valve_endpoint=profile.valve_endpoint,
+                valve_endpoint=profile.storage_key,
                 command_id=command_id,
                 reason=f"node_rejected_{error}_counter_unsynchronized",
                 observed_at=observed_at,
@@ -436,7 +441,7 @@ class Htv145ControlCoordinator:
             if isinstance(failure_class, str) and failure_class:
                 reason = f"{reason}:{failure_class}"
             return self.store.fail_htv145_command(
-                valve_endpoint=profile.valve_endpoint,
+                valve_endpoint=profile.storage_key,
                 command_id=command_id,
                 reason=reason,
                 observed_at=observed_at,
@@ -453,11 +458,14 @@ class Htv145ControlCoordinator:
         expected_idle_at: str | None,
     ) -> dict[str, Any]:
         self._require_enabled()
-        state = self._state(profile.valve_endpoint)
+        state = self._state(profile.storage_key)
         self._require_profile(state, profile)
         command_id = uuid.uuid4().hex
+        if any(s["node_id"] == profile.node_id and s["association_key"] != profile.storage_key
+               and s["pending_command_id"] for s in self.store.htv145_control_states()):
+            raise RuntimeError("radio is handling another valve command")
         reservation = self.store.reserve_htv145_command(
-            valve_endpoint=profile.valve_endpoint,
+            valve_endpoint=profile.storage_key,
             command_id=command_id,
             action=action,
             duration_seconds=duration_seconds,
@@ -479,7 +487,7 @@ class Htv145ControlCoordinator:
             self.sender(profile.node_id, command)
         except Exception:
             self.store.fail_htv145_command(
-                valve_endpoint=profile.valve_endpoint,
+                valve_endpoint=profile.storage_key,
                 command_id=command_id,
                 reason="node_dispatch_failed_counter_unsynchronized",
                 observed_at=started_at,

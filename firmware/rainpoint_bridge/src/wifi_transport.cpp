@@ -220,6 +220,7 @@ void WifiTransport::poll() {
 }
 
 void WifiTransport::connectGateway() {
+    secureClient(client_);
     ++gatewayConnectAttempts_;
     reportNetworkState("connecting_gateway");
     if (!client_.connect(gatewayHost_.c_str(), gatewayPort_)) {
@@ -323,7 +324,7 @@ void WifiTransport::authenticate(const String& nonce) {
         "\"rf_maintenance\",\"node_reboot\""
         ",\"valve_control_tx_candidate\""
         ",\"htv405_bounded_sync_wait\""
-        ",\"htv145_control_tx_candidate\",\"htv145_report_ack_tx\",\"htv145_idle_anchor\""
+        ",\"htv145_control_tx_candidate\",\"htv145_report_ack_tx\",\"htv145_idle_anchor\",\"htv145_multi_valve\""
 #ifdef RAINPOINT_HTV145_BOOTSTRAP_TRIAL
         ",\"htv145_bootstrap_trial\""
 #endif
@@ -335,6 +336,7 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
         ",\"firmware_update_trial\""
+        ",\"firmware_signed_ota\""
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,

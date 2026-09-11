@@ -59,10 +59,11 @@ class Htv145Runtime:
             raise ValueError("HTV145 idle evidence is stale")
         states = self.coordinator.store.htv145_control_states()
         if any(s["report_ack_center_hz"] is not None and
-               (s["valve_endpoint"] == profile.valve_endpoint or s["node_id"] == profile.node_id)
+               (s["controller_endpoint"] == profile.controller_endpoint or
+                (s["node_id"] == profile.node_id and "htv145_multi_valve" not in self.node(profile.node_id).get("capabilities", [])))
                for s in states):
             raise RuntimeError("revoke existing HTV145 ownership before enrollment")
-        previous = next((s for s in states if s["valve_endpoint"] == profile.valve_endpoint), None)
+        previous = next((s for s in states if s["association_key"] == profile.storage_key), None)
         if previous is not None:
             # Pre-ACK dry trials have no report owner to revoke. Preserve the
             # association and unresolved work, even when retiring an old trial.
@@ -96,13 +97,13 @@ class Htv145Runtime:
     def restore(self, profile: Htv145ControlProfile, *, now: str) -> None:
         node = self._ready_node(profile)
         epoch = (node.get("connected_at"), node.get("firmware_version"))
-        if self.restored.get(profile.valve_endpoint) == epoch:
+        if self.restored.get(profile.storage_key) == epoch:
             return
         status = self.coordinator.readiness(profile, observed_at=now)
         if status["state"]["revocation_command_id"]:
             raise RuntimeError("HTV145 ownership revocation is pending")
         self.coordinator.start(profile, observed_at=now)
-        self.restored[profile.valve_endpoint] = epoch
+        self.restored[profile.storage_key] = epoch
 
     def status(self, profile: Htv145ControlProfile, *, now: str) -> dict[str, Any]:
         result = self.coordinator.readiness(profile, observed_at=now)
@@ -134,14 +135,14 @@ class Htv145Runtime:
         if action not in {"open", "close"}:
             raise ValueError("unsupported HTV145 control action")
         store = self.coordinator.store
-        previous_id = store.htv145_transaction(profile.valve_endpoint).get("id")
+        previous_id = store.htv145_transaction(profile.storage_key).get("id")
         try:
             return self._request(profile, action, now=now, duration_seconds=duration_seconds)
         except (RuntimeError, ConnectionError, PermissionError, ValueError):
             # A failed dispatch already has its own durable result. Duplicate
             # calls must not replace the command whose RF evidence is pending.
-            if store.htv145_transaction(profile.valve_endpoint).get("id") == previous_id:
-                store.reject_htv145_request(profile.valve_endpoint,
+            if store.htv145_transaction(profile.storage_key).get("id") == previous_id:
+                store.reject_htv145_request(profile.storage_key,
                     command_id=uuid.uuid4().hex, action=action, observed_at=now)
             raise
 
@@ -165,27 +166,27 @@ class Htv145Runtime:
 
     def revoke(self, profile: Htv145ControlProfile) -> None:
         self._ready_node(profile)
-        state = self.coordinator.store.htv145_control_states(profile.valve_endpoint)[0]
+        state = self.coordinator.store.htv145_control_states(profile.storage_key)[0]
         if state["pending_command_id"]:
             raise RuntimeError("cannot revoke HTV145 owner while command pending")
         # No second owner can be configured until revocation is confirmed by
         # the node. The gateway keeps the profile until that status arrives.
         command = self.coordinator._command("htv145_control_revoke",
             controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint)
-        self.coordinator.store.reserve_htv145_revocation(profile.valve_endpoint, command["command_id"])
+        self.coordinator.store.reserve_htv145_revocation(profile.storage_key, command["command_id"])
         self.coordinator.sender(profile.node_id, command)
 
     def observe_node(self, node_id: str, message: dict[str, Any], *, now: str) -> None:
         for profile in self.profiles():
             if profile.node_id != node_id:
                 continue
-            state = self.coordinator.store.htv145_control_states(profile.valve_endpoint)[0]
+            state = self.coordinator.store.htv145_control_states(profile.storage_key)[0]
             if (state["revocation_command_id"] and message.get("command_id") == state["revocation_command_id"] and
                     message.get("state") == "revoked" and
                     message.get("controller_endpoint") == profile.controller_endpoint and
                     message.get("valve_endpoint") == profile.valve_endpoint):
-                self.coordinator.store.delete_htv145_control(profile.valve_endpoint)
-                self.restored.pop(profile.valve_endpoint, None)
+                self.coordinator.store.delete_htv145_control(profile.storage_key)
+                self.restored.pop(profile.storage_key, None)
                 return
             try:
                 self.coordinator.observe_candidate_status(profile, message, observed_at=now)
@@ -220,4 +221,4 @@ class Htv145Runtime:
                 self.restore(profile, now=now)
                 self.counter_sync.tick(profile, now=now)
             except (RuntimeError, ConnectionError, ValueError, PermissionError):
-                self.restored.pop(profile.valve_endpoint, None)
+                self.restored.pop(profile.storage_key, None)

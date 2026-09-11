@@ -2135,80 +2135,150 @@ class Htv145CommissioningTest(unittest.TestCase):
         self.registration = {"device_id": "test-valve", "model": "HTV145FRF",
             "valve_endpoint": self.profile.controller_endpoint,
             "controller_endpoint": self.profile.valve_endpoint}
-        self.commissioning.record_pairing(self.registration, self.profile.node_id, "pairing-1")
+        self.commissioning.record_pairing(self.registration, self.profile.node_id, "pairing-1",
+            observed_at=self.at(), frame=self.idle.hex())
 
     def act(self, action, seconds=0, consent=False):
         return self.commissioning.act(self.registration, action, now=self.at(seconds), consent=consent)
 
-    def test_pairing_and_status_do_not_actuate_or_grant_authority(self):
-        self.assertEqual("awaiting_consent", self.act("status")["state"])
+    def test_pairing_and_status_do_not_actuate_or_invent_counter_authority(self):
+        self.assertEqual("awaiting_setup", self.act("status")["state"])
         self.assertFalse(self.runtime.qualification.qualified(self.profile))
         self.act("advance")
-        with self.assertRaises(ValueError): self.act("begin")
         self.assertEqual([], self.sent)
 
-    def test_captured_first_open_and_stops_complete_device_based_onboarding(self):
-        self.act("begin", consent=True)
-        self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.sent])
-        with self.assertRaises(RuntimeError): self.act("begin", consent=True)
-        negative = json.loads((ROOT / "research/fixtures/htv145_custom_identity_idle_anchor_20260907.json").read_text())
+    def test_pairing_initializes_first_normal_open_and_response_advances_counter(self):
+        self.act("enable")
+        status = self.runtime.status(self.profile, now=self.at(1))
+        self.assertEqual(0x81, status["next_sequence"])
+        self.assertEqual("fresh_pairing_initialization", status["state"]["counter_source"])
+        self.assertTrue(status["ready"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [c["type"] for _, c in self.sent])
+        command = self.runtime.request(self.profile, "open", duration_seconds=60, now=self.at(2))
+        self.assertEqual("htv145_control_open", command["type"])
+        self.assertEqual(0x81, command["expected_sequence"])
         fixture = json.loads((ROOT / "research/fixtures/htv145_custom_identity_first_open_20260908.json").read_text())
-        self.runtime.observe_counter_sync_report(self.idle, self.profile.node_id, now=self.at(1))
-        self.runtime.observe_frame(bytes.fromhex(negative["response_frame"]), now=self.at(2))
-        self.act("advance", 3)
-        self.assertFalse(any(c["type"].endswith("open") for _, c in self.sent))
-        self.act("advance", 22)
-        self.assertEqual("htv145_control_commission_open", self.sent[-1][1]["type"])
-        sent = len(self.sent)
-        self.act("advance", 22)
-        self.assertEqual(sent, len(self.sent))
-        self.assertFalse(self.runtime.qualification.qualified(self.profile))
-        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["response_frame"]), now=self.at(23))
-        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["idle_frame"]), now=self.at(85))
-        self.act("advance", 86)
-        self.runtime.observe_frame(bytes.fromhex(fixture["second_open"]["response_frame"]), now=self.at(87))
-        self.act("advance", 105)
-        self.assertEqual("htv145_control_open", self.sent[-1][1]["type"])
-        self.act("advance", 106)
-        self.assertEqual("htv145_control_close", self.sent[-1][1]["type"])
-        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["response_frame"]), now=self.at(107))
-        self.runtime.observe_frame(bytes.fromhex(fixture["early_close"]["idle_frame"]), now=self.at(113))
-        self.assertEqual("complete", self.act("advance", 114)["state"])
-        self.assertTrue(self.runtime.qualification.qualified(self.profile))
-        self.assertEqual(2, len([c for _, c in self.sent if c["type"].endswith("open")]))
+        self.runtime.observe_frame(bytes.fromhex(fixture["first_open"]["response_frame"]), now=self.at(3))
+        status = self.runtime.status(self.profile, now=self.at(3))
+        self.assertEqual(0x82, status["next_sequence"])
+        self.assertEqual("matching_immediate_response", status["state"]["counter_source"])
+        self.assertTrue(status["state"]["confirmed_watering"])
+        self.commissioning.record_pairing(self.registration, self.profile.node_id, "pairing-1",
+            observed_at=self.at(4), frame=self.idle.hex())
+        self.act("enable", 4)
+        self.assertEqual(0x82, self.runtime.status(self.profile, now=self.at(4))["next_sequence"])
 
-    def test_cancel_restart_and_reconnection_never_replay(self):
+    def test_failed_first_open_cannot_reuse_pairing_seed(self):
+        self.act("enable")
+        self.runtime.request(self.profile, "open", duration_seconds=60, now=self.at(1))
+        self.runtime.status(self.profile, now=self.at(20))
+        self.commissioning.record_pairing(self.registration, self.profile.node_id, "pairing-1",
+            observed_at=self.at(21), frame=self.idle.hex())
+        self.act("enable", 21)
+        self.assertFalse(self.store.initialize_htv145_pairing_counter(
+            device_id="test-valve", pairing_command_id="pairing-1", observed_at=self.at(21)))
+        self.runtime.observe_frame(self.idle, now=self.at(22))
+        self.assertFalse(self.runtime.status(self.profile, now=self.at(22))["counter_synchronized"])
+
+    def test_expired_pairing_evidence_does_not_initialize_counter(self):
+        self.act("enable", 301)
+        self.assertFalse(self.runtime.status(self.profile, now=self.at(301))["counter_synchronized"])
+        self.assertEqual("expired_or_already_used", self.commissioning._load("test-valve")["counter_seed_state"])
+
+    def test_pairing_seed_survives_database_restart_and_cannot_be_replayed(self):
+        self.act("enable")
+        self.store.close()
+        self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
+        self.assertFalse(self.store.initialize_htv145_pairing_counter(
+            device_id="test-valve", pairing_command_id="pairing-1", observed_at=self.at(1)))
+        state = self.store.htv145_control_states(self.profile.valve_endpoint)[0]
+        self.assertEqual(0x81, state["next_sequence"])
+        self.assertEqual("fresh_pairing_initialization", state["counter_source"])
+        with self.assertRaisesRegex(ValueError, "another pairing session"):
+            self.store.initialize_htv145_pairing_counter(
+                device_id="test-valve", pairing_command_id="old-pairing", observed_at=self.at(1))
+
+    def test_enable_exposes_controls_without_experiments(self):
+        self.assertEqual("ready", self.act("enable")["state"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"], [c["type"] for _, c in self.sent])
+        self.assertTrue(self.runtime.qualification.qualified(self.profile))
+        status = self.runtime.status(self.profile, now=self.at())
+        self.assertTrue(status["counter_synchronized"])
+        self.assertTrue(status["ready"])
+        self.assertEqual("enabled", status["dry_qualification"]["state"])
+        self.assertNotIn("automatic_stop_verified", status["dry_qualification"])
+        count = len(self.sent)
+        for action in ("advance", "status", "enable", "begin"):
+            self.assertEqual("ready", self.act(action, 1)["state"])
+        self.runtime.tick(now=self.at(2))
+        self.assertEqual(count, len(self.sent))
+        self.runtime.request(self.profile, "open", duration_seconds=1260, now=self.at(3))
+        self.assertEqual("htv145_control_open", self.sent[-1][1]["type"])
+        self.assertEqual(1260, self.sent[-1][1]["duration_seconds"])
+
+    def test_restart_retains_setup_without_watering(self):
         from rainpointd.htv145_commissioning import Htv145Commissioning
-        for mode in ("cancel", "restart", "reconnect"):
-            with self.subTest(mode=mode):
-                self.commissioning.record_pairing(self.registration, self.profile.node_id, mode)
-                self.act("begin", consent=True)
-                count = len(self.sent)
-                if mode == "cancel": self.act("cancel")
-                elif mode == "restart": self.commissioning = Htv145Commissioning(self.runtime)
-                else: self.node["connected_at"] = "new-connection"
-                self.assertEqual("interrupted", self.act("advance", 1)["state"])
-                self.assertEqual(count, len(self.sent))
+        self.act("enable")
+        self.commissioning = Htv145Commissioning(self.runtime)
+        count = len(self.sent)
+        self.assertEqual("ready", self.act("status", 1)["state"])
+        self.assertEqual("ready", self.act("enable", 1)["state"])
+        self.assertEqual(count, len(self.sent))
+        self.assertTrue(self.runtime.qualification.qualified(self.profile))
 
     def test_owner_revoke_is_confirmed_before_replacement(self):
         self.coordinator.configure(self.profile, observed_at=self.at())
-        self.act("begin", consent=True)
+        self.act("enable")
         self.assertEqual("htv145_control_revoke", self.sent[-1][1]["type"])
         count = len(self.sent)
         self.act("advance", 1)
         self.assertEqual(count, len(self.sent))
         command = self.sent[-1][1]
         self.runtime.observe_node(self.profile.node_id, {**command, "state": "revoked"}, now=self.at(2))
-        self.act("advance", 3)
-        self.assertEqual("htv145_control_configure", self.sent[-1][1]["type"])
+        self.assertEqual("ready", self.act("advance", 3)["state"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [c["type"] for _, c in self.sent[-2:]])
 
-    def test_association_change_and_expiry_fail_closed(self):
-        self.act("begin", consent=True)
+    def test_offline_retry_and_old_consent_state_do_not_start_tests(self):
+        data = self.commissioning._load("test-valve")
+        data.update(state="awaiting_consent", reason="paired_control_test_required")
+        for key in ("counter_seed_state", "pairing_confirmed_at", "pairing_report_frame"):
+            data.pop(key, None)
+        self.commissioning._save(data)
+        self.assertEqual("awaiting_setup", self.act("status")["state"])
+        self.node["connected"] = False
+        with self.assertRaises(RuntimeError): self.act("enable")
+        self.assertEqual([], self.sent)
+        self.node["connected"] = True
+        self.assertEqual("ready", self.act("enable", 1)["state"])
+        self.assertEqual(["htv145_control_configure"], [c["type"] for _, c in self.sent])
+        self.assertFalse(self.runtime.status(self.profile, now=self.at(1))["counter_synchronized"])
+
+    def test_pending_command_blocks_owner_replacement(self):
+        self.coordinator.configure(self.profile, observed_at=self.at())
+        state = self.store.htv145_control_states(self.profile.valve_endpoint)[0]
+        # Configure/restore is not permission to drop a durable command.
+        from unittest.mock import patch
+        with patch.object(self.store, "htv145_control_states",
+                          return_value=[{**state, "pending_command_id": "in-flight"}]):
+            with self.assertRaisesRegex(RuntimeError, "pending valve command"):
+                self.act("enable")
+        self.assertEqual([], self.sent)
+
+    def test_cancel_expiry_and_association_change_do_not_transmit(self):
+        self.coordinator.configure(self.profile, observed_at=self.at())
+        self.act("enable")
         count = len(self.sent)
-        self.assertEqual("failed", self.act("advance", 901)["state"])
+        self.assertEqual("interrupted", self.act("cancel", 1)["state"])
+        self.act("advance", 2)
         self.assertEqual(count, len(self.sent))
+        self.act("enable", 3)
+        self.assertEqual("failed", self.act("advance", 304)["state"])
         self.registration["controller_endpoint"] = "d1b2c380"
-        self.assertEqual("association_changed", self.act("status", 902)["reason"])
+        self.assertEqual("association_changed", self.act("status", 305)["reason"])
+        with self.assertRaises(RuntimeError): self.act("enable", 306)
+        self.assertEqual(count, len(self.sent))
 
 
 class Htv145RuntimeTest(unittest.TestCase):
@@ -2718,7 +2788,7 @@ class Htv145IdleCounterSyncTest(unittest.TestCase):
         self.store._connection.execute("PRAGMA user_version=21")
         self.store._connection.commit(); self.store.close()
         self.store = SQLiteEventStore(Path(self.temp.name) / "events.sqlite3")
-        self.assertEqual(24,self.store.schema_version())
+        self.assertEqual(25,self.store.schema_version())
         self.assertEqual(before,self.store.htv145_control_states()[0])
         self.assertEqual({},self.store.htv145_counter_sync(self.profile.valve_endpoint))
 

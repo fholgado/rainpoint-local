@@ -48,6 +48,12 @@ class RainPointHTTPServer(ThreadingHTTPServer):
 
     def process_request_thread(self, request, client_address):
         try:
+            if self.tls_context is not None:
+                try:
+                    request = self.tls_context.wrap_socket(request, server_side=True)
+                except (OSError, ValueError):
+                    request.close()
+                    return
             super().process_request_thread(request, client_address)
         finally:
             self._request_slots.release()
@@ -281,7 +287,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 body = self._request_json()
                 if commissioning_path:
                     action = parsed.path[len(commissioning_prefix):]
-                    if action not in {"status", "begin", "advance", "cancel"}:
+                    if action not in {"status", "enable", "begin", "advance", "cancel"}:
                         self._json(404, {"error": "not found"})
                         return
                     result = self.server.gateway.commission_single_valve(
@@ -403,15 +409,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             )
                         )
                     else:
-                        result = (
-                            self.server.gateway.start_radio_node_firmware_update(
-                                node_id,
-                                url=str(body.get("url", "")),
-                                version=str(body.get("version", "")),
-                                size_bytes=int(body.get("size_bytes", 0)),
-                                sha256=str(body.get("sha256", "")),
-                            )
-                        )
+                        raise ValueError("firmware updates require a signed catalog release_id")
                     self._json(202, result)
                     return
                 if separator and node_action == "revoke":
@@ -770,9 +768,10 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 def create_server(
-    gateway: Gateway, host: str = "127.0.0.1", port: int = 8787
+    gateway: Gateway, host: str = "127.0.0.1", port: int = 8787, *, tls_context=None
 ) -> RainPointHTTPServer:
     """Create, but do not start, an HTTP server."""
     server = RainPointHTTPServer((host, port), RequestHandler)
     server.gateway = gateway
+    server.tls_context = tls_context
     return server

@@ -48,26 +48,63 @@ def smoke_test(artifact: Path) -> None:
             archive.extractall(directory, filter="data")
         addon = Path(directory) / "addons/rainpointd"
         script = '''
-import json, pathlib, sys, threading, urllib.request
+import json, os, pathlib, secrets, socket, subprocess, sys, time, urllib.request
 sys.path.insert(0, sys.argv[1])
-from rainpointd.gateway import Gateway
-from rainpointd.http import create_server
-from rainpointd.ingest import FrameIngestor
+from rainpointd.secure_transport import client_context
 root=pathlib.Path(sys.argv[1])
 assert not (root/'fixtures.json').exists()
 assert not (root/'rainpointd/valve_control_bench.py').exists()
+token=secrets.token_urlsafe(32)
+context=client_context(token)
+identity=None
 for _ in range(2):
-    gateway=Gateway(storage_path=str(root/'smoke.sqlite3'),registry_token='test-only')
-    FrameIngestor(gateway).seed()
-    assert gateway.devices()==[] and gateway.registry()==[]
-    server=create_server(gateway,port=0)
-    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
+    launch="import runpy,sys;sys.path.insert(0,sys.argv.pop(1));runpy.run_module('rainpointd',run_name='__main__')"
+    environment=dict(os.environ, RAINPOINT_REGISTRY_TOKEN=token)
+    environment.pop('RAINPOINT_NODE_TOKENS',None)
+    environment.pop('RAINPOINT_CLAIM_CODE',None)
+    process=subprocess.Popen([sys.executable,'-I','-c',launch,str(root),
+        '--transport','network','--host','127.0.0.1','--port',str(port),
+        '--node-listen-port','0','--storage',str(root/'smoke.sqlite3')],
+        env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
     try:
-        with urllib.request.urlopen(f'http://127.0.0.1:{server.server_port}/api/v1/devices') as response:
-            assert json.load(response)=={'devices':[]}
-        assert not gateway.registry_authorized(None)
+        origin=f'https://127.0.0.1:{port}'
+        for attempt in range(100):
+            if process.poll() is not None:
+                raise RuntimeError('packaged gateway failed to start: '+process.stderr.read().decode())
+            try:
+                with urllib.request.urlopen(origin+'/health',context=context,timeout=1) as response:
+                    assert json.load(response)['status']=='ok'
+                break
+            except OSError:
+                time.sleep(.05)
+        else:
+            raise RuntimeError('packaged TLS gateway did not become ready')
+        for path,key in (('/api/v1/devices','devices'),('/api/v1/nodes','nodes')):
+            with urllib.request.urlopen(origin+path,context=context,timeout=2) as response:
+                assert json.load(response)[key]==[]
+        with urllib.request.urlopen(origin+'/api/v1/info',context=context,timeout=2) as response:
+            info=json.load(response)
+        assert info['valve_control_enabled'] is True
+        assert info['htv145_acceptance_enabled'] is False
+        if identity is not None:
+            assert info['rf_controller_identity']==identity
+        identity=info['rf_controller_identity']
+        for url,ctx in ((f'http://127.0.0.1:{port}/health',None),
+                        (origin+'/health',client_context(secrets.token_urlsafe(32)))):
+            try:
+                urllib.request.urlopen(url,context=ctx,timeout=2)
+            except OSError:
+                pass
+            else:
+                raise AssertionError('plaintext or invalid credential accepted')
     finally:
-        server.shutdown();server.server_close();thread.join();gateway.close()
+        process.terminate()
+        try: process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill();process.wait()
+        process.stderr.close()
 '''
         subprocess.run([sys.executable, "-I", "-c", script, str(addon)], check=True)
 

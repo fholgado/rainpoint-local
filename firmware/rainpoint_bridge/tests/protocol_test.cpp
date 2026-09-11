@@ -4,6 +4,7 @@
 #include <string>
 
 #include "rainpoint_protocol.h"
+#include "rainpoint_association_slots.h"
 #include "rainpoint_clocked_transmit.h"
 #include "rainpoint_receive_edge.h"
 #include "rainpoint_pairing.h"
@@ -2394,5 +2395,18 @@ int main() {
     usageAnchor[17] = 0x10; usageAnchor[21] = 1;
     rainpoint::writeTrailer(usageAnchor, 0x4f03);
     assert(!rainpoint::isHtv145IdleAnchorResponse(usageAnchor, ackLink));
+    struct OwnerSlot { bool configured = false; rainpoint::Htv145Link link{}; int counter = 0; };
+    std::array<OwnerSlot, 2> owners{};
+    owners[0] = {true, ackLink, 3};
+    auto secondLink = ackLink;
+    secondLink.controllerEndpoint[0] ^= 1;
+    assert(rainpoint::associationSlot(owners, ackLink, true) == 0);
+    assert(rainpoint::associationSlot(owners, secondLink, false) == owners.size());
+    assert(rainpoint::associationSlot(owners, secondLink, true) == 1);
+    owners[1] = {true, secondLink, 9};
+    assert(rainpoint::associationSlot(owners, secondLink, false) == 1);
+    assert(owners[0].counter == 3 && owners[1].counter == 9);
+    secondLink.controllerEndpoint[0] ^= 2;
+    assert(rainpoint::associationSlot(owners, secondLink, true) == owners.size());
     return 0;
 }

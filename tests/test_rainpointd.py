@@ -890,7 +890,7 @@ class GatewayTest(unittest.TestCase):
 
             restored = Gateway(storage_path=str(path))
             assert restored._store is not None
-            self.assertEqual(24, restored._store.schema_version())
+            self.assertEqual(25, restored._store.schema_version())
             self.assertEqual([], restored.devices())
             self.assertTrue(restored.endpoint_suppressed(endpoint))
             self.assertNotIn(
@@ -1782,7 +1782,7 @@ class GatewayTest(unittest.TestCase):
                     "rf_frame_accepted": True,
                 },
             )
-            self.assertEqual(24, gateway.info()["storage_schema_version"])
+            self.assertEqual(25, gateway.info()["storage_schema_version"])
             gateway.close()
 
             # Recreate the last released schema while retaining its event log.
@@ -1793,7 +1793,7 @@ class GatewayTest(unittest.TestCase):
             connection.close()
 
             migrated = Gateway(transport="rtl433", storage_path=str(path))
-            self.assertEqual(24, migrated.info()["storage_schema_version"])
+            self.assertEqual(25, migrated.info()["storage_schema_version"])
             connection = sqlite3.connect(path)
             registration_columns = {
                 row[1]
@@ -2851,7 +2851,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.assertEqual("reboot_requested", rebooted["state"])
         self.assertEqual("node_reboot", commands[-1][1]["type"])
 
-    def test_ota_trial_api_requires_candidate_node_capability(self) -> None:
+    def test_ota_api_rejects_ad_hoc_unsigned_url(self) -> None:
         commands: list[tuple[str, dict]] = []
         node_id = "rp-001122334455"
         self.server.gateway.update_node(
@@ -2868,19 +2868,13 @@ class RegistryHTTPAPITest(unittest.TestCase):
         self.server.gateway.set_node_command_sender(
             lambda target, message: commands.append((target, message))
         )
-        result = self.post_json(
-            f"/api/v1/nodes/{node_id}/firmware-update",
-            {
-                "url": "http://192.0.2.1:8787/firmware/test.bin",
-                "version": "0.9.0-test.2",
-                "size_bytes": 900_000,
-                "sha256": "AB" * 32,
-            },
-        )
-        self.assertEqual("requested", result["state"])
-        self.assertEqual(node_id, commands[0][0])
-        self.assertEqual("firmware_update_start", commands[0][1]["type"])
-        self.assertEqual("ab" * 32, commands[0][1]["sha256"])
+        with self.assertRaises(HTTPError) as refused:
+            self.post_json(
+                f"/api/v1/nodes/{node_id}/firmware-update",
+                {"url": "https://192.0.2.1:8787/firmware/test.bin", "version": "0.9.0-test.2",
+                 "size_bytes": 900_000, "sha256": "AB" * 32})
+        self.assertEqual(400, refused.exception.code)
+        self.assertEqual([], commands)
 
         self.server.gateway.update_node(
             node_id,
@@ -2890,7 +2884,7 @@ class RegistryHTTPAPITest(unittest.TestCase):
             self.post_json(
                 f"/api/v1/nodes/{node_id}/firmware-update",
                 {
-                    "url": "http://192.0.2.1:8787/firmware/test.bin",
+                    "url": "https://192.0.2.1:8787/firmware/test.bin",
                     "version": "0.9.0-test.2",
                     "size_bytes": 900_000,
                     "sha256": "ab" * 32,
@@ -3085,19 +3079,21 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         with urlopen(request, timeout=2) as response:
             return json.load(response)
 
-    def test_normal_commissioning_requires_auth_pairing_and_consent_not_research_mode(self):
+    def test_normal_setup_requires_auth_pairing_but_no_watering_experiments(self):
         gateway = self.server.gateway
         gateway._htv145_acceptance_enabled = False
-        route = "/api/v1/commissioning/begin"
+        route = "/api/v1/commissioning/enable"
         with self.assertRaises(HTTPError):
             self.post_json(route, {"device_id": "missing", "test_watering_confirmed": True})
         registration = gateway._store.accept_paired_valve_link(
             controller_endpoint="a1b2c380", valve_endpoint="b1c2d38f", device_id="one-zone",
             name="Valve", model="HTV145FRF", area=None, accepted_at=datetime.now(timezone.utc).isoformat())
-        gateway._htv145_commissioning.record_pairing(registration, self.NODE_ID, "pairing")
+        gateway._htv145_commissioning.record_pairing(registration, self.NODE_ID, "pairing",
+            observed_at=datetime.now(timezone.utc).isoformat(),
+            frame="79f4882f28a1b2c380b1c2d38f880107860580804f8000000040800056800000000000001473")
         gateway.update_node(self.NODE_ID, capabilities=["htv145_control_tx_candidate",
             "htv145_report_ack_tx", "htv145_idle_anchor", "htv145_commissioning"])
-        for token, consent in ((None, True), ("wrong", True), ("test-token", False)):
+        for token, consent in ((None, True), ("wrong", True)):
             with self.assertRaises(HTTPError):
                 self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": consent,
                     "pairing_command_id": "pairing"}, token=token)
@@ -3105,15 +3101,19 @@ class Htv145AcceptanceHTTPAPITest(unittest.TestCase):
         result = self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": True,
             "node_id": "rp-deadbeef0000", "center_hz": 0, "expected_sequence": 5,
             "pairing_command_id": "pairing"})
-        self.assertEqual("verifying", result["state"])
+        self.assertEqual("ready", result["state"])
         self.assertEqual(self.NODE_ID, self.commands[-1][0])
-        self.assertEqual("htv145_control_configure", self.commands[-1][1]["type"])
-        with self.assertRaises(HTTPError):
-            self.post_json(route, {"device_id": "one-zone", "test_watering_confirmed": True,
-                "pairing_command_id": "pairing"})
+        self.assertEqual("htv145_control_sync", self.commands[-1][1]["type"])
+        retained = gateway._store.htv145_control_states("a1b2c380")[0]
+        self.assertEqual(0x81, retained["next_sequence"])
+        self.assertEqual("fresh_pairing_initialization", retained["counter_source"])
+        self.assertEqual("ready", self.post_json(route, {"device_id": "one-zone",
+            "pairing_command_id": "pairing"})["state"])
+        self.assertEqual(["htv145_control_configure", "htv145_control_sync"],
+                         [c["type"] for _, c in self.commands])
         with self.assertRaises(HTTPError):
             self.post_json("/api/v1/commissioning/cancel", {"device_id": "one-zone", "pairing_command_id": "old"})
-        self.assertEqual("verifying", self.post_json("/api/v1/commissioning/status", {"device_id": "one-zone"})["state"])
+        self.assertEqual("ready", self.post_json("/api/v1/commissioning/status", {"device_id": "one-zone"})["state"])
 
     def test_new_pairing_qualification_is_gated_and_public_controls_remain_disabled(self):
         gateway = self.server.gateway

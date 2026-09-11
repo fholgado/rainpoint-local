@@ -8,11 +8,12 @@ Persisted unfinished tests are interrupted on restart; no action is replayed.
 """
 from dataclasses import asdict
 from datetime import datetime, timedelta
+from .htv145_control import Htv145ControlProfile
 
 from .valve_protocol import decode_htv145_command_response, decode_htv145_state_report
 
 
-TERMINAL = {"complete", "failed", "interrupted", "awaiting_consent"}
+TERMINAL = {"complete", "enabled", "failed", "interrupted", "awaiting_consent", "awaiting_setup"}
 
 
 class Htv145Qualification:
@@ -24,11 +25,11 @@ class Htv145Qualification:
                 self._fail(data, "gateway_restarted", state="interrupted")
 
     def _save(self, data):
-        self.store.save_htv145_qualification(data["profile"]["valve_endpoint"], data)
+        self.store.save_htv145_qualification(Htv145ControlProfile(**data["profile"]).storage_key, data)
 
     def _fail(self, data, reason, *, state="failed"):
         data.update(state=state, reason=reason)
-        endpoint = data["profile"]["valve_endpoint"]
+        endpoint = Htv145ControlProfile(**data["profile"]).storage_key
         sync = self.store.htv145_counter_sync(endpoint)
         if sync.get("state") == "waiting_for_report":
             sync.update(state="cancelled", deadline=None, reason="qualification_stopped")
@@ -37,10 +38,10 @@ class Htv145Qualification:
         return data
 
     def qualified(self, profile):
-        data = self.store.htv145_qualification(profile.valve_endpoint)
+        data = self.store.htv145_qualification(profile.storage_key)
         # Associations enrolled through the pre-existing positive-exchange path
         # retain their qualification. A new trial never inherits that authority.
-        return not data or (data["state"] == "complete" and data["profile"] == asdict(profile))
+        return not data or (data["state"] in {"complete", "enabled"} and data["profile"] == asdict(profile))
 
     def prepare(self, profile, *, now):
         node = self.runtime._ready_node(profile)
@@ -72,7 +73,7 @@ class Htv145Qualification:
         return data
 
     def status(self, profile, *, now):
-        data = self.store.htv145_qualification(profile.valve_endpoint)
+        data = self.store.htv145_qualification(profile.storage_key)
         if not data or data["state"] in TERMINAL:
             return data
         if data["profile"] != asdict(profile):
@@ -87,7 +88,7 @@ class Htv145Qualification:
             return self._fail(data, "qualification_expired")
         state = self.runtime.coordinator.readiness(profile, observed_at=now)["state"]
         if data["state"] == "waiting_for_idle":
-            sync = self.store.htv145_counter_sync(profile.valve_endpoint)
+            sync = self.store.htv145_counter_sync(profile.storage_key)
             if sync.get("state") == "ready" and state["counter_synchronized"]:
                 data.update(state="ready_for_automatic_stop_test", reason="idle_anchor_confirmed",
                             anchor_frame=sync.get("response_frame"))
@@ -141,7 +142,7 @@ class Htv145Qualification:
         capability = "htv145_commissioning" if commissioning else "htv145_bootstrap_trial"
         if capability not in node.get("capabilities", []):
             raise RuntimeError("bootstrap requires explicitly enabled trial firmware")
-        data = self.store.htv145_qualification(profile.valve_endpoint)
+        data = self.store.htv145_qualification(profile.storage_key)
         if (not data or data["profile"] != asdict(profile) or data["state"] != "failed"
                 or data["reason"] != "idle_anchor_failed" or data["open_count"] != 0
                 or data.get("bootstrap_attempted")):
@@ -165,7 +166,7 @@ class Htv145Qualification:
         return data
 
     def observe(self, profile, frame, *, now):
-        data = self.store.htv145_qualification(profile.valve_endpoint)
+        data = self.store.htv145_qualification(profile.storage_key)
         if not data or data["state"] in TERMINAL or data["profile"] != asdict(profile):
             return
         stamp = datetime.fromisoformat(now)
@@ -183,7 +184,7 @@ class Htv145Qualification:
         response = decode_htv145_command_response(frame, profile.link)
         if data["state"] in {"opening", "closing"} and response is not None:
             expected_watering = data["state"] == "opening"
-            state = self.store.htv145_control_states(profile.valve_endpoint)[0]
+            state = self.store.htv145_control_states(profile.storage_key)[0]
             if (not state["counter_synchronized"] or state["pending_command_id"]
                     or response["sequence"] != data.get("expected_sequence")
                     or response["watering"] != expected_watering
@@ -193,10 +194,10 @@ class Htv145Qualification:
                 return
             data["evidence"].append({"action": "open" if expected_watering else "close", "frame": frame.hex(), "observed_at": now})
             if expected_watering and data.get("bootstrap_attempted") and data["open_count"] == 1:
-                sync = self.store.htv145_counter_sync(profile.valve_endpoint)
+                sync = self.store.htv145_counter_sync(profile.storage_key)
                 sync.update(state="ready", reason="positive_first_open_response", command_id=None,
                             deadline=None, last_success_at=now, response_frame=frame.hex())
-                self.store.save_htv145_counter_sync(profile.valve_endpoint, sync)
+                self.store.save_htv145_counter_sync(profile.storage_key, sync)
             data.update(state="watering" if expected_watering else "waiting_final_idle", positive_response_at=now)
             self._save(data)
             return

@@ -24,6 +24,7 @@ from rainpointd.gateway import Gateway
 from rainpointd.http import create_server
 from rainpointd import http as gateway_http
 from stage_firmware_release import stage_release
+from tests.firmware_signing_fixtures import keys, sign_release
 
 
 class FirmwareCatalogTest(unittest.TestCase):
@@ -34,6 +35,7 @@ class FirmwareCatalogTest(unittest.TestCase):
         self.content = b"firmware" * 8192
         self.artifact.write_bytes(self.content)
         self.catalog_path = self.root / "catalog.json"
+        self.private, self.public = keys()
         self.catalog_path.write_text(
             json.dumps(
                 {
@@ -45,8 +47,8 @@ class FirmwareCatalogTest(unittest.TestCase):
                             "channel": "experimental",
                             "hardware_profile": "esp32dev-cc1101-v1",
                             "firmware_variant": "unified",
-                            "compatible_variants": ["pairing-ota", "unified"],
-                            "required_capability": "firmware_update_trial",
+                            "compatible_variants": ["unified"],
+                            "required_capability": "firmware_signed_ota",
                             "artifact": self.artifact.name,
                             "size_bytes": len(self.content),
                             "sha256": hashlib.sha256(self.content).hexdigest(),
@@ -59,15 +61,26 @@ class FirmwareCatalogTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        self.resign_catalog()
+
+    def resign_catalog(self):
+        payload = json.loads(self.catalog_path.read_text())
+        release = payload["releases"][0]
+        release["signature"] = sign_release(release, self.content, self.private, self.public)
+        self.catalog_path.write_text(json.dumps(payload))
+
+    def load_catalog(self):
+        return FirmwareCatalog.load(self.catalog_path, trusted_keys={"test-only": self.public})
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
     def test_catalog_matches_trial_node_and_rejects_tampering(self) -> None:
-        catalog = FirmwareCatalog.load(self.catalog_path)
+        catalog = self.load_catalog()
         node = {
             "firmware_version": "0.9.0-test.2",
-            "capabilities": ["rx", "firmware_update_trial"],
+            "firmware_variant": "unified",
+            "capabilities": ["rx", "firmware_update_trial", "firmware_signed_ota"],
         }
         release = catalog.latest_for_node(node)
         self.assertIsNotNone(release)
@@ -76,6 +89,34 @@ class FirmwareCatalogTest(unittest.TestCase):
         self.assertTrue(release["artifact_ready"])
         self.artifact.write_bytes(self.content + b"tampered")
         self.assertFalse(catalog.artifact_ready(release["release_id"]))
+
+    def test_signature_and_catalog_fields_are_verified_before_use(self):
+        original = self.catalog_path.read_text()
+        for field, value in (("version", "0.9.1"), ("compatible_variants", ["pairing-ota", "unified"]),
+                             ("required_capability", "firmware_update_trial"), ("signature", {})):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                payload = json.loads(original)
+                payload["releases"][0][field] = value
+                self.catalog_path.write_text(json.dumps(payload))
+                self.load_catalog()
+        self.catalog_path.write_text(original)
+        with self.assertRaisesRegex(ValueError, "unknown signing key"):
+            FirmwareCatalog.load(self.catalog_path, trusted_keys={})
+
+    def test_changed_artifact_cannot_dispatch_update(self):
+        catalog = self.load_catalog()
+        gateway = Gateway(firmware_catalog=catalog)
+        self.addCleanup(gateway.close)
+        sender = Mock()
+        gateway.set_node_command_sender(sender)
+        gateway.update_node("rp-001122334455", connected=True, authenticated=True,
+            firmware_version="0.9.0-test.2", firmware_variant="unified", gateway_host="192.0.2.1",
+            hardware_profile="esp32dev-cc1101-v1", firmware_channel="experimental",
+            capabilities=["firmware_update_trial", "firmware_signed_ota"])
+        self.artifact.write_bytes(b"x" + self.content[1:])
+        with self.assertRaises(ValueError):
+            gateway.install_radio_node_firmware_release("rp-001122334455", release_id="esp32dev-ota-0.9.0-test.3")
+        sender.assert_not_called()
 
     def test_newer_research_variant_is_not_offered_to_unified_node(self) -> None:
         research_artifact = self.root / "radio-node-1.0.0-probe.bin"
@@ -99,19 +140,8 @@ class FirmwareCatalogTest(unittest.TestCase):
         )
         self.catalog_path.write_text(json.dumps(payload), encoding="utf-8")
 
-        catalog = FirmwareCatalog.load(self.catalog_path)
-        release = catalog.latest_for_node(
-            {
-                "firmware_version": "0.9.0-test.2",
-                "firmware_variant": "unified",
-                "firmware_channel": "experimental",
-                "hardware_profile": "esp32dev-cc1101-v1",
-                "capabilities": ["rx", "firmware_update_trial"],
-            }
-        )
-        self.assertIsNotNone(release)
-        assert release is not None
-        self.assertEqual("esp32dev-ota-0.9.0-test.3", release["release_id"])
+        with self.assertRaisesRegex(ValueError, "signature envelope"):
+            self.load_catalog()
 
     def test_staging_refuses_catalog_overflow_before_writing_artifact(
         self,
@@ -194,7 +224,7 @@ class FirmwareCatalogTest(unittest.TestCase):
     ) -> None:
         commands: list[tuple[str, dict]] = []
         gateway = Gateway(
-            firmware_catalog=FirmwareCatalog.load(self.catalog_path)
+            firmware_catalog=self.load_catalog()
         )
         node_id = "rp-001122334455"
         gateway.update_node(
@@ -202,10 +232,10 @@ class FirmwareCatalogTest(unittest.TestCase):
             connected=True,
             authenticated=True,
             firmware_version="0.9.0-test.2",
-            capabilities=["rx", "sensor_pairing_tx", "firmware_update_trial"],
+            capabilities=["rx", "sensor_pairing_tx", "firmware_update_trial", "firmware_signed_ota"],
             tx_armed=False,
             hardware_profile="esp32dev-cc1101-v1",
-            firmware_variant="pairing-ota",
+            firmware_variant="unified",
             firmware_channel="experimental",
             gateway_host="192.0.2.10",
         )
@@ -217,7 +247,7 @@ class FirmwareCatalogTest(unittest.TestCase):
         )
         self.assertEqual("requested", result["state"])
         self.assertEqual(
-            "http://192.0.2.10:8787/firmware/esp32dev-ota-0.9.0-test.3.bin",
+            "https://192.0.2.10:8787/firmware/esp32dev-ota-0.9.0-test.3.bin",
             commands[0][1]["url"],
         )
 
@@ -253,7 +283,8 @@ class FirmwareCatalogTest(unittest.TestCase):
             sha256=hashlib.sha256(self.content).hexdigest(),
         )
         self.catalog_path.write_text(json.dumps(payload))
-        gateway = Gateway(firmware_catalog=FirmwareCatalog.load(self.catalog_path))
+        self.resign_catalog()
+        gateway = Gateway(firmware_catalog=self.load_catalog())
         server = create_server(gateway, port=0)
         accept = server.get_request
 
@@ -327,7 +358,7 @@ class FirmwareCatalogTest(unittest.TestCase):
                     self.assertEqual("progress_timeout", warning.call_args.args[-1])
 
     def test_firmware_capacity_preserves_api_access_and_releases_slots(self):
-        gateway = Gateway(firmware_catalog=FirmwareCatalog.load(self.catalog_path))
+        gateway = Gateway(firmware_catalog=self.load_catalog())
         server = create_server(gateway, port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)

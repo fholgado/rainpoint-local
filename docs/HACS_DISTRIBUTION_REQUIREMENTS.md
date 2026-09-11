@@ -38,6 +38,52 @@ HACS download cannot establish that the gateway is installed or a radio works.
 [Project installation overview](../README.md),
 [getting-started guide](../GETTING_STARTED.md)
 
+## Gateway installation without copying files
+
+HACS explicitly excludes Home Assistant OS apps (formerly add-ons); its
+Integration type downloads into `custom_components/`. The gateway cannot be
+installed by adding this repository to HACS, even though the same GitHub
+repository contains both packages.
+[HACS prerequisites](https://www.hacs.xyz/docs/use/download/prerequisites/),
+[HACS integration installation](https://www.hacs.xyz/docs/use/repositories/type/integration/)
+
+The simplest intended no-copy HA OS route uses two stores: add
+`https://github.com/fholgado/rainpoint-local` under **Settings → Apps → Install
+app → ⋮ → Repositories**, install **RainPoint Local Gateway**, configure and
+start it; separately download the integration through HACS and restart HA.
+The app repository already has the required root `repository.yaml` and an app
+directory containing `config.yaml` and its Docker build sources. This is a
+structurally supported distribution route, not evidence of a completed fresh
+install or a guarantee that unpushed local changes are available there.
+[HA third-party app repository instructions](https://www.home-assistant.io/common-tasks/os/#installing-a-third-party-app-repository),
+[HA app repository requirements](https://developers.home-assistant.io/docs/apps/repository/),
+[repository metadata](../repository.yaml),
+[gateway app configuration](../rainpointd_addon/config.yaml),
+[gateway Dockerfile](../rainpointd_addon/Dockerfile)
+
+A documentation button can use this official redirect:
+[Add RainPoint Local app repository](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ffholgado%2Frainpoint-local).
+It opens a repository-add dialog with the URL prefilled; it does not install or
+start the gateway. The API identifier still uses `addon` despite the newer
+user-facing “app” name.
+[Official My Home Assistant redirect definitions](https://github.com/home-assistant/my.home-assistant.io/blob/main/redirect.json)
+
+RainPoint Local currently accepts discovery from an already installed/running
+gateway and asks the user to confirm integration setup. It does not add the
+app repository, install the gateway, or start it from the integration flow.
+[Existing Supervisor discovery flow](../custom_components/rainpoint_local/config_flow.py)
+
+A more unified setup is technically possible as future integration work:
+Home Assistant's `AddonManager` can install, configure and start a known app
+through Supervisor, and the built-in Z-Wave JS flow demonstrates managed app
+installation. This is an implementation precedent, not a HACS feature or a
+currently implemented RainPoint capability. A RainPoint flow would additionally
+need explicit user consent, third-party repository availability, correct app
+identity, failure handling and separate non-Supervisor behavior, with fresh HA
+OS validation. Keep any implementation decision in the canonical roadmap.
+[HA app manager source](https://github.com/home-assistant/core/blob/dev/homeassistant/components/hassio/addon_manager.py),
+[Z-Wave JS configuration flow](https://github.com/home-assistant/core/blob/dev/homeassistant/components/zwave_js/config_flow.py)
+
 ## Brand asset requirement
 
 The current HACS integration documentation explicitly supports a local `brand/`

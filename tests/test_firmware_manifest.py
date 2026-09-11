@@ -27,6 +27,7 @@ struct Radio {
     bool restoreReceiveChannel(int) { frequency = 433031500; return true; }
 } primaryRadio;
 struct Candidate { bool listeningOnCommandCarrier = true; } htv145ControlCandidate;
+Candidate& htv145Owner() { return htv145ControlCandidate; }
 bool scanChannels = false;
 void selectChannel(int channel) { primaryRadio.setChannel(channel); }
 void reportHtv145CandidateStatus(const char*) {}

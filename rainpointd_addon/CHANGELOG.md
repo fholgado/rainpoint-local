@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.39.0 / Integration 0.18.0 / Firmware 0.19.0 / 2026-09-11
+
+- Require publisher-signed firmware catalogs; remove ad-hoc URL updates.
+- Verify P-256/SHA-256 signatures independently in the gateway and radio before
+  downloading/writing. Bind version, target, release, source commit, image size
+  and digest. Keep streamed digest validation and the existing health rollback.
+- Pin the same public key in both runtimes; private signing material lives only
+  in the protected GitHub environment. No eFuse/Secure Boot changes.
+- Remove obsolete app research switches; ordinary valve controls retain their
+  association/owner/counter checks. Pairing and RF builders are unchanged.
+- Upgrade from 0.18 radio firmware requires a controlled trusted bootstrap to
+  0.19; unsigned legacy catalogs are rejected. Do not upgrade a live gateway
+  without first staging a signed catalog or disabling its catalog path.
+
+
+## 0.38.0 / Integration 0.18.0 / Firmware 0.18.0 / 2026-09-10
+
+- Per-association HTV145 storage (schema 25) preserves retained counters,
+  transactions and ownership; firmware supports eight single-zone owners per
+  radio and rejects overlapping commands. No RF pairing/frame changes.
+- TLS-PSK for operational nodes, HA management and OTA downloads. Requires
+  Python 3.13+ and a coordinated version cutover; no plaintext fallback.
+  Initial provisioning remains trusted-network-only. Publisher signing is deferred
+  to alpha. Spare-node encrypted telemetry, HTTPS OTA and remote reboot passed;
+  coordinated live rollout and multi-valve physical acceptance remain separate gates.
+
+- Separate accepted HTV145 pairing/ACK-owner setup from the mandatory two-run
+  experiment. No automatic watering during setup; counter and response checks
+  remain. Fresh pairing initializes counter 1 (`0x81`) once, with explicit
+  pairing-derived provenance until a positive command response. Replays, restarts
+  and failed commands cannot reuse the seed. Live acceptance remains on the
+  roadmap; existing completed associations are retained.
+- Default HA notification-panel visibility for watering starts/stops, command
+  failures and overdue single-zone runs. Optional mobile forwarding via a
+  notification event; no phone services are called automatically.
+- Shorter agent-assisted setup guide with app-repository and HACS installation.
+
 ## 0.37.2 / Integration 0.17.1 / 2026-09-10
 
 - Include original local integration icons and declare the network component

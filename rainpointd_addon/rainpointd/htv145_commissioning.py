@@ -1,28 +1,25 @@
-"""Device-based onboarding, separate from normal watering and RF research.
+"""Configure an accepted single-zone association without test watering.
 
-Only accepted pairing supplies the association/owner. Explicit consent permits
-two bounded tests, each requiring positive RF evidence. Polling never retries a
-reserved action; closing the flow or restarting interrupts the test sequence.
+Provision one ACK owner; confirm revocation before moving it. Confirmed fresh
+pairing initializes the first command counter, separately from response evidence.
+The optional research qualification harness remains separate from onboarding.
 """
 from dataclasses import asdict
 from datetime import datetime, timedelta
 import json
-import uuid
 
 from .htv145_control import Htv145ControlProfile
+from .valve_protocol import decode_htv145_state_report
 
-# Qualified selector-6 control and report-ACK tune, distinct from assignment TX.
-# See htv145_custom_identity_first_open_20260908.json; no household identity.
 CONTROL_CENTER_HZ = 434_398_811
 REPORT_ACK_CENTER_HZ = 433_518_905
-FINISHED = {"awaiting_consent", "complete", "failed", "interrupted"}
+FINISHED = {"awaiting_setup", "ready", "complete", "failed", "interrupted"}
 
 
 class Htv145Commissioning:
     def __init__(self, runtime):
         self.runtime = runtime
         self.store = runtime.coordinator.store
-        self.epoch = uuid.uuid4().hex
 
     def _load(self, device_id):
         return json.loads(self.store.metadata_value(f"htv145_commissioning:{device_id}") or "{}")
@@ -31,8 +28,8 @@ class Htv145Commissioning:
         self.store.set_metadata_value(f"htv145_commissioning:{data['device_id']}", json.dumps(data))
         return data
 
-    def record_pairing(self, registration, node_id, command_id):
-        """Called only after command-scoped valve-originated pairing evidence."""
+    def record_pairing(self, registration, node_id, command_id, *, observed_at=None, frame=None):
+        """Only command-scoped valve-originated pairing evidence enters here."""
         old = self._load(registration["device_id"])
         if old.get("pairing_command_id") == command_id:
             return old
@@ -43,26 +40,26 @@ class Htv145Commissioning:
             trailer_residual=0x4f03, command_marker_inverted=True,
             report_ack_center_hz=REPORT_ACK_CENTER_HZ)
         data = {"device_id": registration["device_id"], "profile": asdict(profile),
-                "pairing_command_id": command_id, "state": "awaiting_consent",
-                "reason": "paired_control_test_required"}
-        if any(p.controller_endpoint != profile.controller_endpoint and
-               (p.valve_endpoint == profile.valve_endpoint or p.node_id == profile.node_id)
-               for p in self.runtime.profiles()):
-            # The current runtime has one single-zone slot per controller/node.
-            # Never overwrite another physical valve's qualification or owner.
+                "pairing_command_id": command_id, "state": "awaiting_setup",
+                "reason": "paired_owner_setup_required"}
+        # Only the active command-scoped pairing acceptance caller supplies this
+        # evidence. Old onboarding records, boot reports and status reads cannot
+        # acquire a seed retroactively. The seed is spent atomically with SQL.
+        if observed_at is not None and frame is not None:
+            stamp = datetime.fromisoformat(observed_at)
+            report = decode_htv145_state_report(bytes.fromhex(frame), profile.link)
+            if stamp.tzinfo is None or report is None:
+                raise ValueError("pairing initialization requires matching timestamped valve evidence")
+            data.update(counter_seed_state="pending", pairing_confirmed_at=observed_at,
+                        pairing_report_frame=frame)
+        other_owners = [p for p in self.runtime.profiles()
+                        if p.controller_endpoint != profile.controller_endpoint and p.node_id == profile.node_id]
+        capacity = 8 if "htv145_multi_valve" in self.runtime.node(node_id).get("capabilities", []) else 1
+        if len(other_owners) >= capacity:
             data.update(state="failed", reason="single_valve_capacity_in_use")
             return self._save(data)
-        # Invalidate qualification, not counters by inference. Existing ACK
-        # ownership must still be explicitly revoked and confirmed before moving.
-        self.store.save_htv145_qualification(profile.valve_endpoint,
-            {"state": "awaiting_consent", "reason": data["reason"], "profile": asdict(profile)})
-        return self._save(data)
-
-    def _fail(self, data, reason, *, state="failed"):
-        data.update(state=state, reason=reason)
-        q = self.store.htv145_qualification(data["profile"]["valve_endpoint"])
-        if q and q.get("profile") == data["profile"] and q.get("state") != "complete":
-            self.runtime.qualification._fail(q, reason, state=state)
+        self.store.save_htv145_qualification(profile.storage_key,
+            {"state": "awaiting_setup", "reason": data["reason"], "profile": asdict(profile)})
         return self._save(data)
 
     def status(self, registration, *, now):
@@ -73,90 +70,81 @@ class Htv145Commissioning:
         if (registration["model"] != "HTV145FRF" or
                 registration["valve_endpoint"] != profile["controller_endpoint"] or
                 registration["controller_endpoint"] != profile["valve_endpoint"]):
-            return self._fail(data, "association_changed")
-        qualification = self.store.htv145_qualification(profile["valve_endpoint"])
-        if (data["state"] == "verifying" and qualification.get("profile") == profile
-                and qualification.get("state") == "complete"):
-            data.update(state="complete", reason=qualification["reason"])
+            data.update(state="failed", reason="association_changed")
             return self._save(data)
-        if data["state"] not in FINISHED:
-            if data.get("epoch") != self.epoch:
-                return self._fail(data, "gateway_restarted", state="interrupted")
-            if datetime.fromisoformat(now) >= datetime.fromisoformat(data["deadline"]):
-                return self._fail(data, "commissioning_expired")
+        # Retire the old automatic watering experiment without replaying it.
+        if data["state"] in {"awaiting_consent", "verifying"} or (
+                data["state"] == "releasing_previous_owner" and not data.get("setup_only")):
+            data.update(state="awaiting_setup", reason="paired_owner_setup_required")
+            return self._save(data)
+        if data["state"] not in FINISHED and datetime.fromisoformat(now) >= datetime.fromisoformat(data["deadline"]):
+            data.update(state="failed", reason="setup_expired")
+            return self._save(data)
         return data
 
     def act(self, registration, action, *, now, consent=False):
         data = self.status(registration, now=now)
-        if action == "status":
+        if action == "status" or data["state"] in {"not_required", "ready", "complete"}:
             return data
-        if data["state"] == "not_required":
-            raise ValueError("device has no pending onboarding")
-        profile = Htv145ControlProfile(**data["profile"])
         if action == "cancel":
             if data["state"] not in FINISHED:
-                return self._fail(data, "user_cancelled", state="interrupted")
+                data.update(state="interrupted", reason="user_cancelled")
+                self._save(data)
             return data
-        if action == "begin":
-            if consent is not True:
-                raise ValueError("explicit test-watering consent required")
-            if data["state"] != "awaiting_consent":
-                raise RuntimeError("test already started; inspect its outcome before re-pairing")
-            node = self.runtime._ready_node(profile)
-            if "htv145_commissioning" not in node.get("capabilities", []):
-                raise RuntimeError("update the selected radio firmware before testing")
-            data.update(state="releasing_previous_owner", reason="confirming_ack_ownership",
-                        epoch=self.epoch, consent_at=now, node_epoch=node.get("connected_at"),
-                        deadline=(datetime.fromisoformat(now) + timedelta(minutes=15)).isoformat())
-            self._save(data)
+        # Old clients' begin now performs setup only; it never starts experiments.
+        if action in {"enable", "begin"}:
+            if data["state"] in {"awaiting_setup", "failed", "interrupted"}:
+                if data.get("reason") in {"association_changed", "single_valve_capacity_in_use"}:
+                    raise RuntimeError(data["reason"])
+                data.update(state="configuring" if data.get("profile_configured") else "releasing_previous_owner",
+                            reason="confirming_ack_ownership",
+                            setup_only=True,
+                            deadline=(datetime.fromisoformat(now) + timedelta(minutes=5)).isoformat())
+                self._save(data)
         elif action != "advance":
             raise ValueError("unsupported commissioning action")
         if data["state"] in FINISHED:
             return data
-        try:
-            node = self.runtime._ready_node(profile)
-            if node.get("connected_at") != data["node_epoch"]:
-                return self._fail(data, "owner_reconnected", state="interrupted")
-            if data["state"] == "releasing_previous_owner":
-                conflicts = [p for p in self.runtime.profiles() if
-                             p.controller_endpoint == profile.controller_endpoint or
-                             p.valve_endpoint == profile.valve_endpoint or p.node_id == profile.node_id]
-                if conflicts:
-                    for old in conflicts:
-                        if old.controller_endpoint != profile.controller_endpoint:
-                            return self._fail(data, "radio_or_gateway_already_owns_another_single_valve")
-                        state = self.store.htv145_control_states(old.valve_endpoint)[0]
-                        if not state["revocation_command_id"]:
-                            self.runtime.revoke(old)
-                    return data
-                self.runtime.qualification.prepare(profile, now=now)
-                data.update(state="verifying", reason="waiting_for_fresh_idle")
-                return self._save(data)
-            q = self.runtime.qualification.status(profile, now=now)
-            if q["state"] == "complete":
-                data.update(state="complete", reason=q["reason"])
-                return self._save(data)
-            if q["state"] == "failed" and q.get("reason") == "idle_anchor_failed" and not q.get("bootstrap_attempted"):
-                # Fixed first-open initialization is not counter guessing. It
-                # is attempted once, after explicit consent and a failed anchor.
-                state = self.runtime.coordinator.readiness(profile, observed_at=now)["state"]
-                previous = state.get("last_command_started_at")
-                if previous and (datetime.fromisoformat(now) - datetime.fromisoformat(previous)).total_seconds() < 20:
-                    data.update(reason="waiting_for_command_interval")
-                    return self._save(data)
-                q = self.runtime.qualification.bootstrap(profile, now=now, commissioning=True)
-            elif q["state"] in {"failed", "interrupted"}:
-                return self._fail(data, q["reason"], state=q["state"])
-            elif q["state"] in {"ready_for_automatic_stop_test", "ready_for_early_stop_test"}:
-                state = self.runtime.coordinator.readiness(profile, observed_at=now)["state"]
-                previous = state.get("last_command_started_at")
-                if not previous or (datetime.fromisoformat(now) - datetime.fromisoformat(previous)).total_seconds() >= 20:
-                    q = self.runtime.qualification.action(profile, "open", now=now)
-            elif q["state"] == "watering" and q["open_count"] == 2:
-                if (datetime.fromisoformat(now) - datetime.fromisoformat(q["open_started_at"])).total_seconds() >= 20:
-                    q = self.runtime.qualification.action(profile, "close", now=now)
-            data.update(reason=q["state"], qualification_state=q["state"])
-            return self._save(data)
-        except (RuntimeError, ValueError, ConnectionError, PermissionError, KeyError) as err:
-            self._fail(data, str(err))
-            raise
+        profile = Htv145ControlProfile(**data["profile"])
+        self.runtime._ready_node(profile)
+        if data["state"] == "releasing_previous_owner":
+            conflicts = [p for p in self.runtime.profiles() if
+                         p.controller_endpoint == profile.controller_endpoint]
+            for old in conflicts:
+                if old.controller_endpoint != profile.controller_endpoint:
+                    raise RuntimeError("radio_or_gateway_already_owns_another_single_valve")
+                state = self.store.htv145_control_states(old.storage_key)[0]
+                if state["pending_command_id"]:
+                    raise RuntimeError("finish the pending valve command before setup")
+                if not state["revocation_command_id"]:
+                    self.runtime.revoke(old)
+            if conflicts:
+                return data
+            data.update(state="configuring", reason="configuring_ack_owner")
+            self._save(data)
+        # Repeated setup preserves the durable reservation and never re-seeds it.
+        existing = self.store.htv145_control_states(profile.storage_key)
+        if existing:
+            if self.runtime.coordinator.restored_profile(existing[0]) != profile:
+                raise RuntimeError("association_changed_during_setup")
+        else:
+            self.runtime.coordinator.configure(profile, observed_at=now)
+        data["profile_configured"] = True
+        self._save(data)
+        self.store.initialize_htv145_pairing_counter(
+            device_id=registration["device_id"], pairing_command_id=data["pairing_command_id"],
+            observed_at=now)
+        data = self._load(registration["device_id"])
+        # Restore observed physical state independently; never infer idle from
+        # pairing or from an outbound sync/configure message.
+        if data.get("counter_seed_state") == "applied":
+            current = self.store.htv145_control_states(profile.storage_key)[0]
+            if current["confirmed_at"] is None and not current["pending_command_id"]:
+                self.runtime.coordinator.observe_frame(profile,
+                    bytes.fromhex(data["pairing_report_frame"]), observed_at=data["pairing_confirmed_at"])
+        self.runtime.restore(profile, now=now)
+        self.store.save_htv145_qualification(profile.storage_key, {
+            "state": "enabled", "reason": "accepted_pairing_owner_configured",
+            "profile": asdict(profile), "physical_verification": "user_check_recommended"})
+        data.update(state="ready", reason="owner_configured")
+        return self._save(data)

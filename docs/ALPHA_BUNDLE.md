@@ -47,6 +47,27 @@ No serial port is opened by the packaging or verification commands themselves.
 
 ## OTA for an already adopted node
 
+### One-time plaintext-to-TLS cutover
+
+The current candidate requires matching TLS-capable gateway, integration and
+radio firmware. This migration is **not** the routine rolling update described
+below. Qualify on a spare node first. Back up the gateway database and credentials
+before schema 25 is opened; an old gateway requires restoring that backup.
+
+For an approved live cutover, keep valves idle and preserve the old working
+gateway while delivering the candidate images through the old OTA mechanism.
+Updated nodes cannot reconnect to that plaintext gateway. Then update the
+gateway and HA integration together, and verify every node reconnects over TLS,
+restores ACK ownership and retains counters. Avoid repeated node power cycles
+while awaiting the new gateway: three unconfirmed boots trigger rollback.
+If that outage is unsuitable, use USB on a spare node for qualification and
+schedule the live cutover separately. Do not enable plaintext fallback.
+
+Initial adoption remains trusted-network-only. Operational API callers now need
+a TLS credential; older HTTP-only research scripts cannot access the new listener.
+
+### Routine updates after all components support TLS
+
 First back up the HA gateway app and retain the previous bundle/catalog.
 Use the version combination in `compatibility.json`, update while valves are
 idle, and update one radio at a time. Copy the **contents** of `ota/` to
@@ -94,6 +115,13 @@ Commit source first. The tool refuses dirty source, a receipt from a different
 commit, changed/missing images, mismatched versions and unsupported layouts.
 It checks production firmware boundaries and runs the isolated source-install
 smoke test. It creates no tag/release, flashes nothing and contacts no radio.
+Without `--signature firmware-signature.json`, the bundle is an unsigned preview:
+its OTA catalog is deliberately rejected by the production gateway. The protected
+GitHub workflow produces the signature and an installable signed OTA catalog.
+To build a signed full bundle, use `--signature` with the exact matching source
+commit and build; do not relabel an older image. When staging an individual offer,
+pass `--signature` to `stage_firmware_release.py`. `--unsigned-preview` is only
+for non-installable research/package inspection.
 The output is deterministic for identical source and build inputs; this does not
 claim compiler output is reproducible across arbitrary toolchains/hosts.
 

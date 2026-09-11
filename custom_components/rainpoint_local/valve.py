@@ -13,6 +13,7 @@ from .api_models import multi_zone_numbers
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import RainPointLocalCoordinator
 from .entity import RainPointLocalEntity
+from .notifications import notify_command_failure
 
 
 DEFAULT_BOUNDED_RUN_MINUTES = 1
@@ -193,6 +194,7 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
     async def async_open_valve(self, **kwargs) -> None:
         """Start one duration-bounded supervised run."""
         if self.decoded_state.get("rf_control_start_available") is not True:
+            notify_command_failure(self, "open")
             raise HomeAssistantError(
                 self.decoded_state.get("rf_control_start_unavailable_reason")
                 or "RainPoint valve control is unavailable"
@@ -208,6 +210,7 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
                 duration_seconds=run_minutes * 60,
             )
         except RainPointLocalError as error:
+            notify_command_failure(self, "open")
             raise HomeAssistantError(str(error)) from error
         # Run Now waits for this command's transaction ID. A debounced request
         # can return with the previous snapshot during HA's refresh cooldown.
@@ -224,6 +227,7 @@ class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
                 zone=self._zone,
             )
         except RainPointLocalError as error:
+            notify_command_failure(self, "close")
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()
 
@@ -249,6 +253,8 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             "bounded_run_seconds": self.coordinator.htv405_run_minutes.get(
                 (self.device_id, 1), DEFAULT_BOUNDED_RUN_MINUTES) * 60,
             "control_available": self.decoded_state.get("rf_control_available"),
+            "counter_source": self.decoded_state.get("rf_control_counter_source"),
+            "counter_response_confirmed": self.decoded_state.get("rf_control_counter_response_confirmed"),
             "start_available": self.decoded_state.get("rf_control_start_available"),
             "start_unavailable_reason": self.decoded_state.get("rf_control_start_unavailable_reason"),
             "command_pending": self.decoded_state.get("rf_control_command_pending"),
@@ -264,6 +270,7 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
 
     async def async_open_valve(self, **kwargs) -> None:
         if self.decoded_state.get("rf_control_start_available") is not True:
+            notify_command_failure(self, "open")
             raise HomeAssistantError("Valve is not ready; inspect its counter and radio status")
         minutes = self.coordinator.htv405_run_minutes.get(
             (self.device_id, 1), DEFAULT_BOUNDED_RUN_MINUTES)
@@ -271,6 +278,7 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             await self.coordinator.client.open_single_valve(
                 self._token, device_id=self.device_id, duration_seconds=minutes * 60)
         except RainPointLocalError as error:
+            notify_command_failure(self, "open")
             await self.coordinator.async_refresh()
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()
@@ -280,6 +288,7 @@ class RainPointSingleValve(RainPointHtv405ZoneValve):
             await self.coordinator.client.close_single_valve(
                 self._token, device_id=self.device_id)
         except RainPointLocalError as error:
+            notify_command_failure(self, "close")
             await self.coordinator.async_refresh()
             raise HomeAssistantError(str(error)) from error
         await self.coordinator.async_refresh()

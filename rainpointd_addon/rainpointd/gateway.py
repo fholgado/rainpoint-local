@@ -21,6 +21,7 @@ from rainpoint_protocol import decode
 
 from .device_catalog import DeviceCatalog, EMPTY_CATALOG, ValveDefinition
 from .firmware_catalog import FirmwareCatalog
+from .firmware_signatures import wire_signature
 from . import morning_sync
 from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_runtime import Htv145Runtime
@@ -913,7 +914,7 @@ class Gateway:
             if not self._htv145_control_node_ready(node):
                 raise RuntimeError("selected HTV145 radio node is unavailable")
             prior_states = self._store.htv145_control_states(
-                profile.valve_endpoint
+                profile.storage_key
             )
             if prior_states:
                 last_started = prior_states[0].get("last_command_started_at")
@@ -994,7 +995,7 @@ class Gateway:
             report["prepared"] = True
             if self._store is not None:
                 states = self._store.htv145_control_states(
-                    harness.profile.valve_endpoint
+                    harness.profile.storage_key
                 )
                 report["coordinator"] = states[0] if states else None
             return report
@@ -3095,7 +3096,7 @@ class Gateway:
             "blockers": blockers,
         }
 
-    def start_radio_node_firmware_update(
+    def _start_radio_node_firmware_update(
         self,
         node_id: str,
         *,
@@ -3103,11 +3104,12 @@ class Gateway:
         version: str,
         size_bytes: int,
         sha256: str,
+        signature: dict[str, Any],
     ) -> dict[str, Any]:
-        """Start an integrity-checked update on an explicit OTA trial node."""
+        """Dispatch only a previously verified catalog release."""
         node_id = node_id.strip().lower()
         if (
-            not url.startswith("http://")
+            not url.startswith("https://")
             or len(url) > 320
             or any(character.isspace() for character in url)
             or not FIRMWARE_VERSION.fullmatch(version)
@@ -3123,8 +3125,8 @@ class Gateway:
                 or node.get("authenticated") is not True
             ):
                 raise ValueError("radio node is not connected")
-            if "firmware_update_trial" not in node.get("capabilities", []):
-                raise ValueError("radio node does not support OTA trials")
+            if "firmware_signed_ota" not in node.get("capabilities", []):
+                raise ValueError("radio node requires a trusted signed-OTA baseline")
             if node.get("tx_armed") is True:
                 raise ValueError("radio node is armed for RF transmission")
             if self._node_command_sender is None:
@@ -3137,6 +3139,7 @@ class Gateway:
                 "version": version,
                 "size_bytes": size_bytes,
                 "sha256": sha256.lower(),
+                **wire_signature(signature),
             }
             self._node_command_sender(node_id, command)
             node.update(
@@ -3177,15 +3180,16 @@ class Gateway:
         if not FIRMWARE_PUBLIC_HOST.fullmatch(host):
             raise ValueError("firmware public host is unavailable")
         url = (
-            f"http://{host}:{self._firmware_public_port}/firmware/"
+            f"https://{host}:{self._firmware_public_port}/firmware/"
             f"{release.release_id}.bin"
         )
-        result = self.start_radio_node_firmware_update(
+        result = self._start_radio_node_firmware_update(
             node_id,
             url=url,
             version=release.version,
             size_bytes=release.size_bytes,
             sha256=release.sha256,
+            signature=release.signature,
         )
         result["release_id"] = release.release_id
         return result
@@ -3743,7 +3747,8 @@ class Gateway:
             self._ensure_registered_valve_devices()
             if self._htv145_commissioning is not None:
                 registration = next(r for r in self._store.valve_registry() if r["valve_endpoint"] == expected)
-                self._htv145_commissioning.record_pairing(registration, node_id, command_id)
+                self._htv145_commissioning.record_pairing(registration, node_id, command_id,
+                    observed_at=observed_at, frame=frame)
         self._active_pairing_confirmed_valve_endpoint = expected
         self._active_pairing_confirmation_observed_at = observed_at
         receiver = state.get("rf_receiver_id")
@@ -4014,6 +4019,7 @@ class Gateway:
                         else "Radio unavailable" if not status["owner_available"]
                         else "Command pending" if status["state"]["pending_command_id"]
                         else "Waiting for idle report" if not status["ready"]
+                        else "Pairing-derived counter ready" if status["state"]["counter_source"] == "fresh_pairing_initialization"
                         else "Retained counter ready"
                     )
                     device.setdefault("state", {}).update({
@@ -4022,7 +4028,7 @@ class Gateway:
                         "rf_retained_counter_restore_available": status["ready"],
                     })
                     confirmed = status["state"]
-                    transaction = self._store.htv145_transaction(profile.valve_endpoint)
+                    transaction = self._store.htv145_transaction(profile.storage_key)
                     transaction_state = transaction.get("state", "idle")
                     pending = confirmed["pending_command_id"] is not None
                     control_available = bool(status["public_control_qualified"] and status["owner_available"] and status["counter_synchronized"]
@@ -4031,6 +4037,9 @@ class Gateway:
                         counter_status = "Dry qualification: " + str(status["dry_qualification"].get("state", "required"))
                     device["state"].update({
                         "rf_control_enabled": status["public_control_qualified"],
+                        "rf_control_counter_source": confirmed["counter_source"],
+                        "rf_control_counter_response_confirmed": confirmed["counter_source"] in {
+                            "matching_immediate_response", "matching_idle_anchor_response"},
                         "rf_control_qualification_state": status["dry_qualification"].get("state", "qualified"),
                         "rf_control_available": control_available,
                         "rf_control_start_available": status["ready"],
@@ -6714,7 +6723,8 @@ class Gateway:
                         if (valve_registration.get("control_pending_command_id") is not None
                                 or valve_registration.get("control_transaction_state") in HTV405_ACTIVE_TRANSACTION_STATES):
                             raise RuntimeError("finish or cancel the active transaction before forgetting the valve")
-                        htv145 = self._store.htv145_control_states(valve_registration["valve_endpoint"])
+                        htv145 = self._store.htv145_control_states(
+                            f"{valve_registration['valve_endpoint']}:{valve_registration['controller_endpoint']}")
                         if htv145 and htv145[0]["report_ack_center_hz"] is not None:
                             raise RuntimeError("revoke the HTV145 control/ACK owner before forgetting")
                         self._revoke_htv405_ack_locked(valve_registration)

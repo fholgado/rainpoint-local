@@ -21,6 +21,7 @@ from .api import RainPointLocalClient, RainPointLocalError
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN, PLATFORMS
 from .coordinator import RainPointLocalCoordinator
 from .migration import migrate_entry_payload
+from .notifications import setup_notifications
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_HOST],
         entry.data[CONF_PORT],
         async_get_clientsession(hass),
+        token=entry.data.get(CONF_TOKEN),
     )
     try:
         info = await client.info()
@@ -83,6 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_radio_node_metadata(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    setup_notifications(hass, entry, coordinator)
     coordinator.async_start_event_listener()
     return True
 

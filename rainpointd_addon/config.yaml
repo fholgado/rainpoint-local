@@ -1,5 +1,5 @@
 name: RainPoint Local Gateway
-version: 0.37.2
+version: 0.39.0
 slug: rainpointd
 description: Local RainPoint telemetry and bounded device-pairing gateway
 url: https://github.com/fholgado/rainpoint-local
@@ -19,7 +19,9 @@ ports:
 ports_description:
   8787/tcp: RainPoint management API and verified firmware artifacts
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes
-watchdog: http://[HOST]:[PORT:8787]/health
+# Supervisor cannot supply a TLS PSK; monitor the listener without exposing
+# a plaintext management endpoint. Authenticated clients read detailed health.
+watchdog: tcp://[HOST]:[PORT:8787]
 usb: true
 map:
   - share:ro
@@ -35,8 +37,6 @@ options:
   device_catalog_path: ""
   firmware_catalog_path: "/share/rainpoint-local/firmware/catalog.json"
   event_retention_limit: 100000
-  supervised_htv405_control: false
-  htv145_dry_acceptance: false
 schema:
   transport: "list(network|rtl433|esp32_serial)"
   frequency: "int(433000000,435000000)"
@@ -49,5 +49,3 @@ schema:
   device_catalog_path: str?
   firmware_catalog_path: str?
   event_retention_limit: "int(1000,1000000)"
-  supervised_htv405_control: bool
-  htv145_dry_acceptance: bool

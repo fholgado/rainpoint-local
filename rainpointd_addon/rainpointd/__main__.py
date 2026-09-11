@@ -17,12 +17,15 @@ from .network import NetworkTransport
 from .replay import ReplayTransport, load_fixtures
 from .rtl433 import RTL433Transport
 from .storage import DEFAULT_EVENT_RETENTION_LIMIT
+from .secure_transport import server_context
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--insecure-development", action="store_true",
+                        help="plaintext isolated test harness only; never use on a LAN")
     parser.add_argument(
         "--transport",
         choices=("network", "replay", "rtl433", "esp32_serial"),
@@ -84,11 +87,6 @@ def main() -> int:
         help="LAN port nodes use to download verified local artifacts",
     )
     parser.add_argument(
-        "--enable-supervised-htv405-control",
-        action="store_true",
-        help="enable authenticated, duration-bounded HTV405 beta control",
-    )
-    parser.add_argument(
         "--enable-htv145-dry-acceptance",
         action="store_true",
         help="enable the isolated, one-shot HTV145 physical acceptance harness",
@@ -119,7 +117,7 @@ def main() -> int:
         catalog=catalog,
         firmware_catalog=FirmwareCatalog.load(args.firmware_catalog),
         firmware_public_port=args.firmware_public_port,
-        valve_control_enabled=args.enable_supervised_htv405_control,
+        valve_control_enabled=True,
         htv145_acceptance_enabled=args.enable_htv145_dry_acceptance,
     )
     if args.transport == "rtl433":
@@ -140,6 +138,15 @@ def main() -> int:
         transport = ReplayTransport(gateway, fixtures=load_fixtures(args.replay_fixtures), interval=args.interval)
     else:
         transport = NetworkTransport()
+    node_tls = None
+    api_tls = None
+    if not args.insecure_development:
+        if not registry_token or not 32 <= len(registry_token.encode()) <= 256:
+            parser.error("TLS requires a high-entropy RAINPOINT_REGISTRY_TOKEN of 32–256 bytes; short legacy credentials must be rotated explicitly")
+        node_tls = server_context(lambda identity: gateway.radio_node_credential(identity)
+                                 or gateway.pending_radio_node_credential(identity))
+        api_tls = server_context(lambda identity: gateway._registry_token if identity == "management"
+                                else gateway.radio_node_credential(identity))
     transport.seed()
     transport.start()
     node_server = None
@@ -149,6 +156,7 @@ def main() -> int:
             host=args.node_listen_host,
             port=args.node_listen_port,
             node_tokens=load_node_tokens(os.environ.get("RAINPOINT_NODE_TOKENS")),
+            tls_context=node_tls,
             htv145_candidate_observer=(
                 gateway.observe_htv145_acceptance_candidate
             ),
@@ -158,11 +166,11 @@ def main() -> int:
             "rainpointd authenticated node listener on "
             f"{args.node_listen_host}:{node_server.server_port}"
         )
-    server = create_server(gateway, args.host, args.port)
+    server = create_server(gateway, args.host, args.port, tls_context=api_tls)
     gateway.start_morning_sync_scheduler()
     print(
         f"rainpointd {args.transport} API listening on "
-        f"http://{args.host}:{server.server_port}/api/v1"
+        f"{'http' if args.insecure_development else 'https'}://{args.host}:{server.server_port}/api/v1"
     )
     if claim_code:
         print(
