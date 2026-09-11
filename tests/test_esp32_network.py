@@ -1556,7 +1556,13 @@ class ESP32NetworkTest(unittest.TestCase):
                 try:
                     trial._htv145_handoff_trial(variant)
                     self.assertIsNone(trial.gateway.pairing()["completed_endpoint"])
-                    self.assertEqual("d4e5f680", trial.gateway._store.valve_registry()[0]["controller_endpoint"])
+                    # The authenticated peer can still be finishing its report.
+                    # Private store access must follow the same lock boundary as
+                    # gateway APIs; SQLite's shared connection is not a snapshot.
+                    with trial.gateway._lock:
+                        registrations = trial.gateway._store.valve_registry()
+                    self.assertEqual(1, len(registrations))
+                    self.assertEqual("d4e5f680", registrations[0]["controller_endpoint"])
                 finally:
                     trial.tearDown()
 

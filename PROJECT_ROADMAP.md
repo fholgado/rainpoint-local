@@ -60,6 +60,20 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   Coordinated release preparation is now authorized: gateway `0.38.0`, integration
   and unified firmware `0.18.0`. The production gateway, integration and garden
   firmware remain unchanged until backup, CI/container and cutover preflights pass.
+- [x] Qualify the copied production database before coordinated cutover. The
+  September 10 backup actually uses schema 23; migration to 25 preserves all
+  existing values across 18 tables, including counters, ownership, credentials
+  and transactions. Only intended association keys and the explicit RF endpoint
+  column change; SQLite integrity passes. The rollback archive is SHA-256
+  verified on the Mac and retained on HA. Eight superseded local deployment
+  backups were removed, recovering 12.8 GB (14 GB free).
+- [x] Resolve release preflight failures without changing RF pairing. A test's
+  unlocked private-store read raced the authenticated peer on one SQLite
+  connection; applying the gateway lock passed 20 amplified repetitions. The
+  582-test suite passed with two optional skips, plus the added watchdog
+  regression and native protocol tests. Correct version metadata and use a
+  Supervisor TCP watchdog because its HTTP probe cannot authenticate TLS-PSK.
+  CI and coordinated live rollout still need completion.
 
 The user now prioritizes an independent alpha for builders of their own radios,
 covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.

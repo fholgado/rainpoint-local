@@ -19,7 +19,9 @@ ports:
 ports_description:
   8787/tcp: RainPoint management API and verified firmware artifacts
   8790/tcp: Authenticated inbound telemetry from Wi-Fi radio nodes
-watchdog: http://[HOST]:[PORT:8787]/health
+# Supervisor cannot supply a TLS PSK; monitor the listener without exposing
+# a plaintext management endpoint. Authenticated clients read detailed health.
+watchdog: tcp://[HOST]:[PORT:8787]
 usb: true
 map:
   - share:ro

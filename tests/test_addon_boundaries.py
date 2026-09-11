@@ -15,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AddonBoundaryTest(unittest.TestCase):
+    def test_supervisor_watchdog_uses_tls_compatible_tcp_probe(self):
+        config = (ROOT / "rainpointd_addon" / "config.yaml").read_text()
+        self.assertIn("watchdog: tcp://[HOST]:[PORT:8787]", config)
+        self.assertNotIn("watchdog: http://", config)
+
 
 
     def test_runtime_has_no_household_identity_or_research_imports(self):
