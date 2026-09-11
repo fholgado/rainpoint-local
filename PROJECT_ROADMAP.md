@@ -219,7 +219,7 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   Gateway 0.39 is deployed; all eight device IDs, six sensor ACK assignments and
   valve endpoint/control-counter fields survived. Both valves were idle and all
   devices available afterward. Deployed raw-URL OTA returned HTTP 400 without
-  dispatch. Irrigation-node firmware remains 0.18.0 intentionally.
+  dispatch. Irrigation-node promotion was completed separately below.
   Host evidence: 596 Python tests passed (two optional skips), all six CI jobs
   passed, and actual OTA code linked to Mbed TLS rejected 26 invalid inputs
   before download/flash and aborted a tampered download before activation.
@@ -229,12 +229,20 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   requiring it for update dispatch (PRs #14/#15). A real socket test reproduced
   `node_rejected` before the fix. USB serial opens reset this ESP; uninterrupted
   capture isolated the successful software reboot from diagnostic resets.
-- [ ] Coordinate remaining irrigation-node promotion to signed firmware 0.19.
-  The spare-only qualification above is complete; do not interpret it as a
-  completed fleet rollout. Preserve the existing pairs/ACK owners/counters and
-  use a controlled trusted bootstrap or USB, since 0.18 cannot verify signatures
-  and the signed-only gateway deliberately will not send it new OTA requests.
-  Release publication remains a separate explicitly approved action.
+- [x] Coordinate remaining irrigation-node promotion to signed firmware 0.19.
+  September 11: Front Yard and Vegetable Garden were upgraded individually with
+  the approved image (SHA-256 `22d57e428c4b0285…`); both reported `confirmed` /
+  `gateway_and_radio_healthy` before proceeding. A temporary legacy runtime with
+  only the signed-capability hello backport kept mixed-version owners connected;
+  its 40 isolated socket tests passed. The signed-only 0.39 gateway and catalog
+  were then restored; all 41 deployed gateway files match main source.
+  At 12:27 UTC all three nodes were authenticated over TLS on 0.19.0, all eight
+  device IDs and six sensor ACK assignment objects were preserved and available,
+  and both valves were idle with unchanged control counters and start controls
+  available. Current gateway data was backed up and its Mac copy hash verified.
+  Front Yard Wi-Fi was weak (-83 to -85 dBm) despite a successful update/reconnect.
+  No watering was triggered during promotion; post-update irrigation testing and
+  release publication remain separate actions.
 - [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
   Normal controls still require an evidenced association and ready owner/counter;
   standalone research probes remain separate. No RF builders or pairing changed.
