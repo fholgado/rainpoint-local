@@ -2,7 +2,9 @@
 
 The current source candidate encrypts operational radio sessions, the management
 API and OTA downloads using TLS-PSK. This requires the matching gateway, integration
-and radio firmware; it is not yet deployed or physically qualified. Do not expose
+and radio firmware. The matching stack passed the September 10 three-node rollout,
+including encrypted OTA on the spare node. This is first-installation evidence,
+not qualification of every supported installation. Do not expose
 listeners to the public Internet. Rollout status is in [the roadmap](PROJECT_ROADMAP.md).
 
 TLS 1.2 uses the existing per-node 32-byte credential, or the separate management

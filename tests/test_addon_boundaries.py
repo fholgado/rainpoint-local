@@ -156,8 +156,12 @@ class AddonBoundaryTest(unittest.TestCase):
             "supervised_htv405_control",
             "htv145_dry_acceptance",
         ):
-            self.assertIn(f"\n  {option}:\n", translations)
-            self.assertNotIn(f"\n      {option}:\n", translations)
+            self.assertNotIn(option, translations)
+            self.assertNotIn(option, config)
+            self.assertNotIn(option, run_script)
+        main = (ROOT / "rainpointd_addon/rainpointd/__main__.py").read_text()
+        self.assertIn("valve_control_enabled=True", main)
+        self.assertNotIn("--enable-supervised-htv405-control", main)
 
     def test_unified_firmware_accepts_gateway_owned_ack_commands(self) -> None:
         source = (
@@ -224,7 +228,7 @@ class AddonBoundaryTest(unittest.TestCase):
         )
         self.assertIn('type == "valve_control_open"', source)
         self.assertNotIn("-DRAINPOINT_RESEARCH_BENCH=1", platformio)
-        self.assertIn("supervised_htv405_control: false", addon_config)
+        self.assertNotIn("supervised_htv405_control", addon_config)
         boundary_check = (
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
@@ -278,7 +282,7 @@ class AddonBoundaryTest(unittest.TestCase):
             '"RAINPOINT_HTV145_ENABLED"',
             build_profile,
         )
-        self.assertIn("htv145_dry_acceptance: false", config)
+        self.assertNotIn("htv145_dry_acceptance", config)
         self.assertIn("/research/htv145-acceptance/", http_source)
         self.assertIn("--enable-htv145-dry-acceptance", main_source)
         self.assertNotIn("htv145-acceptance", integration_source)

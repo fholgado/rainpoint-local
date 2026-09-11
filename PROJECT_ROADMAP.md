@@ -201,11 +201,27 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   unchanged. Gateway rollback from schema 24 requires a pre-upgrade DB backup.
   Validation: the complete Python suite passed 547 tests (two optional skips),
   including the shipped alert-template and distribution-metadata regressions.
-- [ ] Complete alpha security acceptance: operational TLS is implemented but not
-  hardware-qualified/deployed. Initial commissioning AP and HTTP adoption remain
+- [ ] Complete alpha security acceptance: operational TLS passed the September 10
+  coordinated deployment and spare-node encrypted OTA. Initial commissioning AP and HTTP adoption remain
   trusted-network-only and are unchanged by user direction. Implement publisher
   firmware signing at the alpha milestone as requested. Preserve explicit limits
   for initial provisioning; no Internet port forwarding.
+  September 11 decision: automate signing in a protected GitHub release workflow;
+  keep the private key in an environment secret, never source or build artifacts.
+  `docs/FIRMWARE_SIGNING_DESIGN.md` defines the proposed descriptor/trust boundary.
+  Temporary-key tooling, gateway/node enforcement and release-environment
+  provisioning must be qualified before claiming signed OTA support.
+- [x] Remove obsolete app-level supervised-control and dry-acceptance switches.
+  Normal controls still require an evidenced association and ready owner/counter;
+  standalone research probes remain separate. No RF builders or pairing changed.
+  September 11: 583 Python tests passed (two skips). The extracted package starts
+  its actual TLS CLI with an empty database, rejects plaintext/wrong keys, and
+  preserves its generated RF identity across restart. Source only; not redeployed.
+- [ ] Qualify actual fresh HA Core setup in isolated CI. The new container harness
+  covers discovery, duplicate suppression, model menus, missing-radio feedback,
+  reload and removal without household credentials or RF transmissions. Record
+  the CI result before closing this subgate; it does not replace HA OS/HACS,
+  rendered frontend, physical pairing or default-notification delivery checks.
 - [ ] Record independent-house results for sensors and both valve families,
   including RF reporting/ACK continuity, actual watering duration/stops and
   overnight counter recovery. Preserve first-house evidence but do not use it
@@ -711,14 +727,15 @@ Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
 
 ## Phase 6 — open-source hardening
 
-- [ ] Isolate the intermittent network-test registry race before calling CI
+- [x] Isolate the intermittent network-test registry race before calling CI
   deterministic. September 8 PR run 34270093265 failed
   `test_htv145_pairing_handoff_rejects_unproven_frames` (`wrong_session`):
   a direct private-store registry read returned an empty list. The same commit
   passed the branch CI run and 521 local tests (two skips); 20 repetitions of
-  the entire rejection-variant test also passed. Unsynchronized test setup/read
-  access is a hypothesis, not a proven cause. Preserve rejection assertions and
-  pairing behavior until a deterministic interleaving reproduces the failure.
+  the entire rejection-variant test also passed. September 10: concurrent private
+  SQLite reads reproduced empty results; the same reads under the gateway lock
+  passed 10,000 iterations. The test now uses that lock without changing rejection
+  assertions or pairing behavior; 20 repetitions and the full suite passed.
 
 - [x] Complete the production installation-assumption audit. Empty defaults,
   accepted-observation identity recovery, evidence-based ACK routes and generic

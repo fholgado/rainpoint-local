@@ -29,11 +29,10 @@ duration. The public device-control API uses the saved owner, RF recipe and
 counter; it accepts no caller-supplied RF addresses. Counter sync and morning
 scheduling remain available. An open stays pending until valve-owned evidence
 confirms it; missing replies invalidate the counter and block further opens.
-The `htv145_dry_acceptance` option controls only the separate research harness.
+The separate dry-valve research harness is not exposed as an app option.
 
-HTV405 valve-control POST requests remain rejected unless the explicit
-`supervised_htv405_control` beta option is enabled and the selected
-association-specific radio node advertises its candidate control capability.
+HTV405 valve-control POST requests require an accepted association and a selected
+radio node advertising its control capability; no research enable switch is needed.
 Completing HTV405 naming in HA leaves the radio node's bounded association
 session running so it can finish every modeled protocol reply. Strict
 selector-`0x07` paired-link reports refresh device availability without
@@ -404,8 +403,7 @@ catalog identity instead of creating a duplicate HA device.
 
 This release has no cloud transport. A fresh installation cannot control an
 unassociated valve; pairing and ACK transmission require explicit ownership.
-Qualified HTV145 controls are available through the normal HA flow. When
-`supervised_htv405_control` is explicitly enabled, the API accepts only
+Qualified HTV145 controls are available through the normal HA flow. The API accepts only
 token-authenticated, association-specific, duration-bounded HTV405 operations.
 Each command is reserved durably before RF dispatch and HA state changes only
 after a matching valve response or accepted state report. Restart, missing
@@ -439,7 +437,8 @@ sequence. Negative replies, missing responses and restart do not authorize a ret
 The existing pairing sequence is unchanged. The persisted qualification record uses schema 23;
 restore the pre-update database backup when rolling back to an older gateway.
 
-Requires `htv145_dry_acceptance`, a qualified isolated dry valve, and an owner
+Requires the standalone research CLI's `--enable-htv145-dry-acceptance`,
+a qualified isolated dry valve, and an owner
 advertising `htv145_report_ack_tx`. All routes below require the management token
 and live under `/api/v1/research/htv145-control/`.
 

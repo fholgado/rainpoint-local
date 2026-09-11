@@ -8,6 +8,18 @@ permissions:
   contents: read
 
 jobs:
+  clean-ha-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Qualify fresh integration against actual HA Core
+        run: >-
+          docker run --rm --entrypoint python3
+          -v "$PWD:/work:ro" -w /work
+          ghcr.io/home-assistant/home-assistant:2026.9.1
+          tools/qualify_clean_ha.py
+
   hacs:
     runs-on: ubuntu-latest
     steps:

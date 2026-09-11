@@ -47,8 +47,8 @@ https://github.com/fholgado/rainpoint-local
 ```
 
 Install **RainPoint Local Gateway**. Keep `transport: network`, default ports and
-automatically managed credentials. For four-zone control, enable
-`supervised_htv405_control`; leave unrelated research options at default.
+automatically managed credentials. Supported valve controls are available
+after normal pairing and owner setup; no research switches are required.
 Start the app and enable start-on-boot.
 
 ### HA integration
@@ -128,7 +128,7 @@ unlock requirement. Radio readiness and counter synchronization still apply.
 
 Fresh single-zone pairing initializes the first command counter automatically;
 the first normal watering response confirms it. Setup never waters automatically.
-The revised onboarding is an undeployed review draft; see the roadmap for rollout.
+Check the roadmap for the tested release and remaining physical acceptance.
 
 Finish with a summary of versions, nodes, paired devices and anything still
 unverified. Dashboards and watering automations are a separate setup task.

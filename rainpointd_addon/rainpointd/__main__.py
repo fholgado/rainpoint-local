@@ -87,11 +87,6 @@ def main() -> int:
         help="LAN port nodes use to download verified local artifacts",
     )
     parser.add_argument(
-        "--enable-supervised-htv405-control",
-        action="store_true",
-        help="enable authenticated, duration-bounded HTV405 beta control",
-    )
-    parser.add_argument(
         "--enable-htv145-dry-acceptance",
         action="store_true",
         help="enable the isolated, one-shot HTV145 physical acceptance harness",
@@ -122,7 +117,7 @@ def main() -> int:
         catalog=catalog,
         firmware_catalog=FirmwareCatalog.load(args.firmware_catalog),
         firmware_public_port=args.firmware_public_port,
-        valve_control_enabled=args.enable_supervised_htv405_control,
+        valve_control_enabled=True,
         htv145_acceptance_enabled=args.enable_htv145_dry_acceptance,
     )
     if args.transport == "rtl433":
