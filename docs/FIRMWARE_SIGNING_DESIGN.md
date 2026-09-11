@@ -236,3 +236,18 @@ Once the baseline image is staged, bring up the matching gateway and signed
 catalog before judging candidate health. Repeated USB serial opens can reset
 some ESP boards and consume their unconfirmed-boot allowance; keep one capture
 connection open across a trial or observe it over the network.
+
+For a mixed 0.18/0.19 fleet, a temporary migration artifact can backport only
+the signed-capability hello allowlist entry to the existing 0.38 runtime. This
+keeps already-updated owners authenticated while the remaining legacy nodes
+receive the independently signature-verified baseline through their existing
+TLS updater. This is a trusted bootstrap, not on-device signature enforcement
+by 0.18. Restrict the temporary catalog to that approved image; preserve the
+current database and configuration, and do not restore an older data backup.
+
+Update one idle owner at a time and wait for `confirmed` /
+`gateway_and_radio_healthy`, restored ACK assignments, and preserved valve
+counter state before proceeding. Restore the current signed-only runtime and
+catalog immediately afterward. Keep migration artifacts outside maintained
+production source: this is not an unsigned OTA option in the released gateway.
+Deployment qualification is recorded in `PROJECT_ROADMAP.md`.
