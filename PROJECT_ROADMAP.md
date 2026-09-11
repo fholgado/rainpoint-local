@@ -24,6 +24,43 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ### Alpha cohort preparation
 
+- [x] Implement per-association single-zone storage and eight-owner radio slots.
+  Schema 25 migrates the old shared-route key without discarding counters,
+  reservations, diagnostics or qualification. Each association retains its own
+  command/ACK state; overlapping transmissions are rejected. Temporary-database
+  isolation/migration and native slot-selection tests pass. Source only; no live
+  database changed. Existing firmware remains capacity-one per radio.
+- [x] Implement TLS-PSK for radio sessions, HA management and OTA downloads.
+  Existing credentials are retained, invalid credentials/plaintext are rejected,
+  and current HA client tests exercise encrypted reads, writes and token rotation.
+  Python 3.13+ is required; CI and the container runtime assertion are updated.
+  Firmware builds; coordinated production rollout remains open.
+  Local validation: 582 Python tests passed (two skipped), native C++ protocol
+  tests passed, and the unified ESP32 firmware built successfully. The container
+  image has not yet been qualified; physical TLS/OTA results follow below.
+- [x] Qualify operational TLS and HTTPS OTA on the spare radio. September 10:
+  the unified candidate authenticated with its existing node credential using
+  `PSK-AES128-GCM-SHA256`, received real RF telemetry and retained roughly
+  193–196 KB free heap (observed minimum about 185 KB). An actual HTTPS OTA
+  from `0.18.0-alpha.1` to `0.18.0-alpha.2` verified all 1,090,784 bytes,
+  passed healthy-boot confirmation and reconnected encrypted after a separate
+  remote reboot in 18.1 seconds. This used an isolated Mac gateway/new database,
+  without pairing, valve commands or ACK-owner imports; both garden radios
+  stayed healthy. Receive-only maintenance intentionally blocks OTA, so the
+  spare was returned to ownerless normal mode for the download. With the user's
+  explicit approval, its complete saved flash was then restored and verified;
+  it reconnected authenticated to production HA on `0.17.0`, with no ACK owners
+  and no armed pairing window. The temporary Mac gateway was stopped. Recovery
+  backups and qualification evidence are preserved in the private, Git-ignored
+  `captures/tls-bench-20260910-private/` directory.
+- [ ] Complete the multi-valve/TLS candidate's physical ACK/report continuity,
+  per-valve isolation and longer-soak qualification, plus container-image build.
+  Then approve a coordinated live cutover with a schema-24 backup/rollback plan.
+  See `docs/ALPHA_BUNDLE.md`; do not deploy a mismatched plaintext/TLS combination.
+  Coordinated release preparation is now authorized: gateway `0.38.0`, integration
+  and unified firmware `0.18.0`. The production gateway, integration and garden
+  firmware remain unchanged until backup, CI/container and cutover preflights pass.
+
 The user now prioritizes an independent alpha for builders of their own radios,
 covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.
 This is a separate `rainpoint_local` installation, not a cloud-integration merge.
@@ -40,6 +77,32 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   source installation and explicitly flags unverified distribution/UI paths.
 - [x] Merge alpha setup, packaging and optional-alert preparation (PR #12).
   All Python, firmware and container CI checks passed; no release or live deploy.
+- [x] Review the shorter agent-assisted README/getting-started draft: the agent
+  handles repository installs and radio flashing/adoption, then hands device
+  pairing to the user in HA. Gateway installation uses the HA app repository,
+  not HACS; clean-install qualification remains separate. User approved the
+  direction, with the follow-up changes below; not published yet.
+- [ ] Complete and qualify the revised single-zone onboarding without mandatory
+  two-run experiments. Draft separates ACK-owner provisioning from physical
+  verification and retains real counter/radio/response gates. Fresh accepted
+  pairing now initializes counter 1 (`0x81`) once, atomically with consumption of
+  its pairing evidence. Provenance stays pairing-derived until a matching positive
+  response. Regression coverage checks first open/advance, replay, restart, old
+  onboarding records, expiry, owner transfer and failed-first-command behavior.
+  End-to-end HA/physical acceptance and deployment remain outstanding.
+- [x] Implement one-shot HTV145 fresh-pairing counter initialization and expose
+  pairing-derived versus response-confirmed provenance to HA. Preserve the RF
+  waveform and normal duration path; never water automatically during setup.
+  Local validation: full Python suite ran 574 tests successfully (two optional
+  skips); native C++ protocol regressions passed. The authenticated onboarding
+  HTTP tests also passed after adding the first-counter assertions. Not deployed.
+- [ ] Validate default HA watering notifications on a clean HA instance. Draft
+  emits confirmed start/stop, failed request and overdue notices automatically;
+  mobile forwarding remains optional. Snapshot tests cover dynamic durations,
+  duplicate reports and unknown state. Physical/UI verification and rollout are
+  pending; no live commands are part of this change.
+  Included in the 574-test validation above. No version bump, commit, push,
+  firmware flash or deployment; the revised flow still needs live acceptance.
 - [ ] Validate the guide on a clean HA OS installation without household
   databases, catalogs or tokens: custom app repository and HACS installation,
   discovery, new radio adoption and generated gateway identity. Confirm declared
@@ -108,11 +171,11 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   unchanged. Gateway rollback from schema 24 requires a pre-upgrade DB backup.
   Validation: the complete Python suite passed 547 tests (two optional skips),
   including the shipped alert-template and distribution-metadata regressions.
-- [ ] Make an explicit alpha security decision: current sessions are not
-  encrypted, telemetry is LAN-readable, commissioning AP is open and firmware
-  lacks publisher signatures. Finish the corresponding hardening or document
-  accepted limitations for an invited trusted-LAN cohort; do not silently waive
-  the existing publication gates. No Internet port forwarding.
+- [ ] Complete alpha security acceptance: operational TLS is implemented but not
+  hardware-qualified/deployed. Initial commissioning AP and HTTP adoption remain
+  trusted-network-only and are unchanged by user direction. Implement publisher
+  firmware signing at the alpha milestone as requested. Preserve explicit limits
+  for initial provisioning; no Internet port forwarding.
 - [ ] Record independent-house results for sensors and both valve families,
   including RF reporting/ACK continuity, actual watering duration/stops and
   overnight counter recovery. Preserve first-house evidence but do not use it
@@ -227,8 +290,9 @@ The selected unattended implementation/review pass is complete (original list nu
 - [ ] Complete normal HTV145 onboarding: discover its factory ID on the selected
   radio, retain the custom gateway identity, persist the accepted pairing owner,
   and expose separate paired/control-verification states in HA. Verification
-  must require explicit consent for bounded watering; pairing alone must neither
-  actuate nor authenticate a counter. Keep the frozen counter-2 RF sequence and
+  must require a user-requested bounded watering; pairing alone must not actuate.
+  Fresh-pairing counter initialization is provisional, not response confirmation.
+  Keep the frozen counter-2 RF sequence and
   existing qualified associations unchanged; a sixth transcript row is not a
   prerequisite for independently proven controls.
   September 8 implementation: an isolated discovery helper and native regression
@@ -241,14 +305,17 @@ The selected unattended implementation/review pass is complete (original list nu
   connect discovery to the unchanged pairing exchange and advertise the model
   only to compatible radios. Accepted pairing records the selected owner; an
   authenticated, session-scoped verification flow confirms old-owner revocation
-  before configuring a new owner. Consent permits two fixed one-minute runs,
+  before configuring a new owner. That earlier implementation permitted two fixed one-minute runs,
   including at most one captured first-open initialization, with positive valve
   replies and independent automatic/early-stop evidence required for completion.
   The HA flow exposes progress/failure, supports finishing without testing and
   returning later, and prevents duplicate starts or old-dialog cancellation of
-  a newer pairing. Interrupted tests are not replayed. Existing qualified
-  installations are not reset on upgrade. The current one-single-valve slot per
-  gateway identity/node is enforced without displacing a different valve.
+  a newer pairing. The September 10 review draft supersedes mandatory tests with
+  owner setup and a one-shot pairing-derived counter; see the current alpha gate
+  above. Interrupted tests are not replayed. Existing qualified
+  installations are not reset on upgrade. The original one-single-valve slot is
+  superseded in the September 10 candidate by per-association state and eight
+  firmware slots, without displacing a different valve.
   Candidate validation: all 533 Python tests passed (two optional skips), both
   native C++ protocol tests passed, unified firmware 0.17.0 built successfully,
   and the final deterministic package passed isolated fresh-install/restart smoke

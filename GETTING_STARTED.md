@@ -1,268 +1,160 @@
-# Getting started with RainPoint Local
+# Getting started: agent-assisted setup
 
-This guide is for early testers building their own ESP32/CC1101 radio nodes.
-It describes the current source installation, not a released turnkey product.
-Ask the maintainer for an agreed commit before testing; do not assume the latest
-development branch is a qualified release. A local candidate bundle can now be
-built with [the packaging guide](docs/ALPHA_BUNDLE.md); none is published yet,
-and there is no hosted browser flasher. The live launch checklist is in the
-[project roadmap](PROJECT_ROADMAP.md#alpha-cohort-preparation).
+**Draft for review.** Give this guide to the agent helping you set up RainPoint
+Local. The agent installs the software, flashes the firmware and checks the
+connection. You assemble the radio, enter Wi-Fi details, press its confirmation
+button and pair your devices through Home Assistant.
 
-## What you are installing
+This alpha supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone
+valves and HTV405FRF four-zone valves. A stock RainPoint gateway, cloud account
+and SDR are not required. Cloud-device migration is not automatic.
 
-There are three parts:
+## 1. Agent: confirm the setup
 
-- **RainPoint Local Gateway app** (`rainpointd`): runs on Home Assistant OS and
-  stores device associations, radio ownership and protocol state.
-- **RainPoint Local integration** (`rainpoint_local`): provides HA devices,
-  entities and setup screens. HACS installs this part, not the gateway app.
-- **Custom radio node**: an ESP32 plus one CC1101, powered by USB and connected
-  over Wi-Fi. It does not need to be attached to your HA machine.
+Ask for the user's HA address, device models and available hardware:
 
-The vendor's **stock RainPoint gateway**, vendor account and cloud integration
-are not needed for local operation. An SDR is not needed either. This project
-does not automatically import cloud devices, dashboards or automations.
+- Home Assistant OS on aarch64 or amd64, HA 2026.7.0 or newer, with HACS installed.
+- A classic ESP-WROOM-32 development board (`esp32dev`, not C3/S3), one 433 MHz
+  CC1101 with antenna, jumper wires, USB data cable and USB power supply.
+- 2.4 GHz Wi-Fi reachable from HA, preferably on the same subnet.
+- A computer with USB access to the board for its first flash.
 
-The separate integration domain lets you retain the existing cloud integration
-for other devices. That is software separation, **not RF coexistence validation**.
-Do not command the same valve through both systems. Keep the stock RainPoint
-gateway off during local pairing; plan a separate test window if it waters other
-plants. Returning a device to the stock system may require vendor re-pairing.
+Use authorized HA/browser access to do the installation. Ask the user only for
+actions requiring their credentials, physical input or access you do not have.
+Take an HA backup first.
 
-## Before you begin
+Select a maintainer-approved version combination and record the installed app,
+integration and firmware versions. No alpha release is published yet; repository
+installation currently follows `main`. For a specifically pinned source install,
+consult the [bundle guide](docs/ALPHA_BUNDLE.md).
 
-The alpha includes moisture sensors and both supported valve families. Valve
-tests should initially use a dry valve
-disconnected from the water supply. Do not replace essential irrigation before
-you have verified reporting, actual open/stop behavior and failure feedback.
-Keep a manual watering plan; stale or missing telemetry is not proof a valve
-is closed. Battery replacement/rejoin and sustained stock/local coexistence
-remain incompletely qualified.
+## 2. Agent: install the gateway and integration
 
-Current transports assume a trusted LAN. Node authentication is implemented,
-but traffic is not encrypted and firmware is not publisher-signed. The initial
-Wi-Fi setup access point is open. Commission in a trusted location; never expose
-ports to the Internet. Read [security boundaries](SECURITY.md) before enrolling.
-An invited alpha still needs an explicit decision to accept these limitations;
-this guide does not waive the publication security gates.
+These are separate installs, both using repository-based UI paths:
 
-### Supported starting point
-
-| Item | Requirement |
-|---|---|
-| HA installation | Home Assistant OS, aarch64 or amd64; declared minimum HA 2026.7.0 |
-| Integration | HACS custom repository or manual custom-component install |
-| ESP32 | Tested classic ESP-WROOM-32 development board, USB-C, `esp32dev` target; not an ESP32-C3/S3 substitute |
-| Radio | One 433 MHz CC1101 module with the documented eight-pin connector and antenna |
-| Power/wiring | USB supply, USB data cable for first flash, short jumpers/breadboard; 3.3 V radio power and logic |
-| Network | 2.4 GHz Wi-Fi, preferably same LAN/subnet as HA with multicast discovery allowed |
-| Computer | Git and PlatformIO Core 6.1.19 for the source-based USB flash |
-
-Use the exact board's printed GPIO names, not physical header position. Board
-width, pin count and USB connector alone do not identify a compatible pinout.
-HA Container/Core users need a separately managed gateway; that path is outside
-this first-test guide. Minimum versions are declarations, not a tested matrix
-of every HA/OS/board combination.
-
-### Device scope
-
-| Model/family | What to expect | Important limit |
+| Component | Install through | Purpose |
 |---|---|---|
-| HCS02x / HCS026FRF soil sensor | Local pairing, moisture, categorical battery, report freshness | Do not interpret battery as a measured percentage; validate your hardware revision |
-| HTV405FRF four-zone valve | Local pairing and bounded 1–60 whole-minute controls | Supervised control option; battery not decoded; no water-volume capability |
-| HTV145FRF single-zone valve | Local pairing path, qualified controls, duration, usage and categorical battery | Partial protocol association; new HA onboarding still needs physical acceptance; currently one single-zone valve per gateway identity and per node |
+| RainPoint Local Gateway (`rainpointd`) | HA app/add-on store | Stores associations and manages radios/protocol |
+| RainPoint Local (`rainpoint_local`) | HACS, type **Integration** | Provides HA entities and pairing screens |
 
-An illuminated pairing LED alone does not qualify valve controls. Unknown
-models/frequencies are not supported merely because they look similar.
+### Gateway app
 
-## 1. Select source and back up HA
+[Add the RainPoint Local app repository to HA](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ffholgado%2Frainpoint-local),
+or open the app/add-on store's **Repositories** menu and add:
 
-Create a Home Assistant backup and retain it outside the HA machine. Obtain the
-agreed revision from the maintainer, then clone this repository on your computer:
-
-```sh
-git clone https://github.com/fholgado/rainpoint-local.git
-cd rainpoint-local
+```text
+https://github.com/fholgado/rainpoint-local
 ```
 
-Check out that agreed revision before copying files or building. Use the same
-revision for the app, integration and firmware unless its release notes specify
-a compatible combination. The alpha-preparation source now uses gateway 0.37.2,
-integration 0.17.1 and unified firmware 0.17.0; these are separate version numbers.
-This is not a published alpha release or a claim of fresh-install acceptance.
+Install **RainPoint Local Gateway**. Keep `transport: network`, default ports and
+automatically managed credentials. For four-zone control, enable
+`supervised_htv405_control`; leave unrelated research options at default.
+Start the app and enable start-on-boot.
 
-## 2. Install the gateway app
+### HA integration
 
-For a revision-pinned alpha, copy the checked-out `rainpointd_addon` directory
-to HA's `/addons/rainpointd` using your normal HA file access method. The resulting
-path must contain `/addons/rainpointd/config.yaml`, not an extra nested folder.
-Reload the app store and install **RainPoint Local Gateway** from local apps.
-Keep backups outside `/addons` and exclude macOS `._*` files.
+In HACS, add the same URL under **Custom repositories**, choose **Integration**,
+and download **RainPoint Local**. Arrange the HA restart with the user, then
+accept the discovered gateway in **Settings → Devices & services**.
 
-The repository also has third-party app-store metadata. Adding
-`https://github.com/fholgado/rainpoint-local` through the app store's repository
-menu is the intended easier distribution path, but it follows published
-repository state rather than the commit you selected locally. Fresh installation
-through that route remains an alpha launch check. Follow HA's
-[third-party repository instructions](https://www.home-assistant.io/common-tasks/os/#installing-a-third-party-app-repository).
-Do not install both a local-source and repository copy of the gateway.
+HACS installs the integration, not the gateway app or radio firmware. The app
+repository removes manual gateway file copying. Repository metadata and CI
+validation are present; clean end-to-end installation remains an
+[alpha acceptance gate](PROJECT_ROADMAP.md#alpha-cohort-preparation).
+See [distribution details](docs/HACS_DISTRIBUTION_REQUIREMENTS.md) if installation
+or version selection differs from this path.
 
-Start with these settings; enable the four-zone control option when testing
-that valve as described below:
+**Done when:** the gateway stays running and the integration is loaded.
+Discovery supplies credentials automatically; if it is missing, check app logs
+and the HA restart.
 
-```yaml
-transport: network
-node_listen_port: 8790
-supervised_htv405_control: false
-htv145_dry_acceptance: false
-```
+## 3. Agent + user: wire and flash
 
-Leave management/node credentials and the device catalog at their defaults;
-do not copy another installation's tokens, database or device IDs. The gateway
-generates a persistent local identity and manages credentials. Start the app
-and enable start-on-boot. Its log should show network API and authenticated
-node listeners, without repeated restarts. No USB SDR configuration is required.
-
-The radio must reach HA TCP 8787 (API/firmware) and 8790 (node connection).
-Keep the setup portal/adoption discovery reachable on the local LAN. Guest
-network isolation or blocked multicast can prevent adoption even with good RSSI.
-
-## 3. Install the HA integration
-
-The intended HACS path below still needs clean-install acceptance. Local brand
-assets and metadata validation are included; use the revision-pinned manual
-path for maintainer-led testing until the launch gates are closed.
-
-For HACS, add `https://github.com/fholgado/rainpoint-local` as a custom repository
-of type **Integration**, then download **RainPoint Local** and restart HA.
-See [HACS custom repositories](https://www.hacs.xyz/docs/faq/custom_repositories/).
-If the maintainer-selected revision is not offered by HACS, use the manual path
-instead; do not silently mix versions.
-
-Manual path: copy `custom_components/rainpoint_local` to
-`/config/custom_components/rainpoint_local`, then restart HA. Do not copy the
-repository root or replace the existing cloud integration's directory.
-
-In **Settings → Devices & services**, accept the discovered RainPoint Local
-gateway. Supervisor discovery supplies its management credential privately.
-If it is missing, check that both the app and custom integration are installed,
-the app is running, and HA has restarted. Do not paste credentials from logs
-or another installation to work around discovery.
-
-## 4. Wire and flash one node
-
-With power disconnected, follow the
+Have the user wire the unpowered board using the
 [numbered wiring table](firmware/rainpoint_bridge/README.md#supported-hardware-and-wiring).
-CC1101 VCC goes to **3V3, never 5 V**. GDO0 → GPIO26 is required. GDO2 is unused
-by current firmware and can be left disconnected. Keep the antenna connected
-and include local supply decoupling where practical.
+CC1101 power is **3.3 V, not 5 V**. GDO0 is required; GDO2 is unused and optional.
+Ask them to attach the antenna and connect the ESP32 by USB.
 
-Connect a USB **data** cable, then build:
+On that computer, obtain the selected source revision and install PlatformIO
+Core 6.1.19 if needed. From the checkout, run:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
 pio device list
 ```
 
-Identify the new ESP32's serial port. Upload using the following command,
-replacing `YOUR_SERIAL_PORT` with that exact port:
+Identify the connected ESP32's port, substitute it for `YOUR_SERIAL_PORT`, and
+upload. Run these commands yourself when you have access; otherwise guide the user.
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge \
   --target upload --upload-port YOUR_SERIAL_PORT
 ```
 
-Do not select a port belonging to another controller. PlatformIO handles the
-bootloader, partition table and application; an OTA `firmware.bin` alone is not
-a complete first-flash package. If connection fails, check the data cable and
-hold BOOT while the uploader connects. Avoid erasing an already adopted node
-unless deliberately resetting its configuration.
+**Done when:** upload succeeds and the node boots. If upload cannot connect,
+check the data cable and ask the user to hold BOOT during connection.
+For a supplied prebuilt bundle, use its
+[first-flash instructions](docs/ALPHA_BUNDLE.md#first-usb-flash-new-classic-esp32-only).
 
-## 5. Join Wi-Fi and adopt in HA
+## 4. Agent + user: connect Wi-Fi and adopt
 
-1. Join **RainPoint Local Setup xxxxxx** from a phone or computer.
-2. Open the captive setup page and enter your 2.4 GHz Wi-Fi credentials.
-3. Return to the home network. In HA, accept the discovered radio node.
-4. Give it a friendly name/area. Use **Identify**, then press ESP32 **BOOT** when
-   prompted to confirm the physical node.
-5. Wait for authenticated connection and healthy radio status. No ESP ID,
-   RF endpoint or setup token is required in the normal flow.
+1. Ask the user to join **RainPoint Local Setup xxxxxx**, open its setup page
+   and enter their 2.4 GHz Wi-Fi details.
+2. Once they return to the home network, open the discovered radio in HA and
+   give it a friendly name and area.
+3. Use **Identify** if needed; ask them to press ESP32 **BOOT** when prompted.
+4. Verify adoption completes, the node authenticates and CC1101 health is good.
+   No pasted ESP IDs or setup tokens are needed.
 
-You can now power it from a USB supply away from HA. Start with one node; add
-coverage later. See [onboarding and placement](NODE_ONBOARDING.md). A powered
-ESP32 with good Wi-Fi does not prove the CC1101 is wired correctly: confirm
-radio health and actual sensor reports too.
+**Done when:** HA shows a connected, healthy radio. The user can move it near
+the garden and power it from USB; verify it reconnects there. Repeat for
+additional nodes. See [node onboarding](NODE_ONBOARDING.md) for troubleshooting.
 
-## 6. Pair and verify your devices
+## 5. User: pair devices in HA
 
-The alpha covers all three supported families. Follow the sensor path below
-for moisture sensors, or the valve path for a valve; owning a sensor is not a
-prerequisite for valve testing.
+Once the app, integration and radio are ready, hand the user these instructions:
 
-### Moisture sensors
+1. Temporarily turn off the **stock RainPoint gateway** for pairing.
+2. Open **RainPoint Local → Configure → Add a RainPoint device**.
+3. Choose **Sensors** or **Valves**, the model and the closest radio.
+4. Select **Next**, review, then **Start pairing**. Only then perform the
+   device's pairing gesture. Allow enough time to reach outdoor devices.
+5. Follow HA's result, name the device and finish radio setup.
 
-Turn off the stock RainPoint gateway for the agreed test window. Open
-**RainPoint Local → Configure → Add a RainPoint device → Sensors**, select the
-supported model and closest radio, then choose **Next** to review. **Back**
-preserves the radio/window selection. **Start pairing** arms the radio; only
-then perform the sensor's pairing gesture. Choose a long enough window to walk
-to the sensor. Normal short presses are not the pairing gesture.
+Agent: confirm a fresh sensor reading matches its display. Ask the user to try
+a short valve run either disconnected from water or while visually checking
+that it opens and closes. This is a recommended check, not a two-experiment
+unlock requirement. Radio readiness and counter synchronization still apply.
 
-Wait for HA's outcome and a fresh moisture report. Compare it with the sensor
-display, give the device a name/area, then confirm later reports arrive without
-further button presses. Verify battery/freshness entities without assuming every
-field is supported. Native HA menus provide Back actions, not footer Back/Next
-buttons on every screen.
+Fresh single-zone pairing initializes the first command counter automatically;
+the first normal watering response confirms it. Setup never waters automatically.
+The revised onboarding is an undeployed review draft; see the roadmap for rollout.
 
-Pairing and removal instructions for existing devices are in
-[node onboarding](NODE_ONBOARDING.md#pairing-devices-through-a-node). Removing a
-device from HA does not prove the battery-powered device forgot its RF identity.
-Do not remove an existing HA device merely to recover its association.
+Finish with a summary of versions, nodes, paired devices and anything still
+unverified. Dashboards and watering automations are a separate setup task.
+Watering starts, stops and problems appear in HA's notification panel by default.
+Mobile forwarding is optional; see [notifications](docs/ALPHA_NOTIFICATIONS.md).
 
-### Single-zone and four-zone valves
+## Limits and updates
 
-Choose **Add a RainPoint device → Valves**, select the exact model and closest
-radio, and follow review → Start pairing before performing the valve's gesture.
-Keep the stock gateway off during the exchange. Start dry. HTV405 actuation needs
-the app's explicit `supervised_htv405_control` option. Do not enable unrelated
-research options to bypass unavailable controls. HTV145 has a separate accepted
-pairing and consented control-verification flow; it may request two one-minute
-runs. Read the [verification behavior](NODE_ONBOARDING.md#pairing-devices-through-a-node)
-before consenting. New UI onboarding is not yet physically qualified end to end.
+HTV405 battery is not decoded and it has no water-volume capability. The candidate
+firmware supports up to eight HTV145 associations per radio, sharing a custom
+gateway identity. Older firmware retains its one-valve-per-radio limit.
+Battery-change recovery and stock/local coexistence still need qualification.
+Use a trusted LAN; see [security details](SECURITY.md) and the
+[roadmap](PROJECT_ROADMAP.md) for full alpha limitations.
+Operational connections now require matching TLS-capable gateway, integration
+and firmware versions. Initial Wi-Fi/adoption setup still requires a trusted
+network. Do not mix this candidate with the earlier plaintext transport.
 
-Check the valve's actual open, automatic stop and early-stop behavior against HA.
-After these checks pass, supervised live irrigation is within the alpha scope;
-remain available to inspect the valve and water manually if necessary. Do not
-copy the household dashboard or
-automations under `examples/federico-garden`: their entities, schedules and
-fallback policies are installation-specific, not an automatically installed
-notification/watchdog package for your garden. Optional persistent/mobile alert
-blueprints and their exact coverage limits are described in
-[alpha notifications](docs/ALPHA_NOTIFICATIONS.md). They must be installed and
-configured separately; HTV145 persistent command-failure coverage remains incomplete.
+Updates are separate: app store for the gateway, HACS for the integration and
+HA's radio Update entity once an agent/maintainer has staged a compatible
+[firmware catalog](docs/ALPHA_BUNDLE.md#ota-for-an-already-adopted-node).
 
-## Updates, recovery and feedback
+## Report issues
 
-The gateway app, integration and firmware update independently. Follow the
-maintainer's tested version combination; back up first and update while valves
-are idle. Compatible radio updates appear in HA **only after** a firmware catalog
-and matching artifact have been staged on that installation. HACS does not
-provide radio firmware updates. Catalog staging currently requires maintainer
-or command-line work; an empty list is not evidence of a broken radio.
-
-Keep a known-good source revision and first-flash artifacts. Interrupted OTA
-should retain the running image; a candidate must verify integrity and boot
-health. Do not factory-reset as the first response to a missed report. Holding
-BOOT for ten seconds clears Wi-Fi/adoption state, not the separate sensor/valve's
-memory. See the [firmware recovery guide](firmware/rainpoint_bridge/README.md#usb-recovery).
-
-When reporting an issue, include model/revision, ESP32/CC1101 type, app/integration/
-firmware versions, exact local time **and timezone**, action, expected/observed
-behavior, Wi-Fi RSSI and radio/report diagnostics. State whether the stock
-gateway was on and whether the valve was dry. Review logs before sharing:
-exclude Wi-Fi passwords, bearer/node tokens, HA backups/databases and unrelated
-device information. File issues in the
-[project tracker](https://github.com/fholgado/rainpoint-local/issues).
-
-If a valve's physical state is uncertain, inspect it or shut off its water
-supply; do not interpret a failed UI request as proof that nothing opened.
+Use the [GitHub issue tracker](https://github.com/fholgado/rainpoint-local/issues).
+Include device model, board/radio type, all three software versions, time and
+timezone, what you tried, what happened, Wi-Fi RSSI and relevant diagnostics.
+Mention whether the stock gateway was on and the valve connected to water.
+Remove credentials and unrelated personal data from logs before sharing.

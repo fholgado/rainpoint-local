@@ -6,11 +6,11 @@ associations, ACK ownership, counters, and safety; the HA integration exposes
 telemetry and qualified controls. Normal operation does not need the vendor cloud
 or an SDR.
 
-**Experimental alpha preparation — not a finished irrigation controller.**
-Start with the [getting-started guide](GETTING_STARTED.md) for a separate
-installation, supported hardware, setup, recovery and known limitations.
-Use a maintainer-selected revision; no downloadable alpha release is published
-yet. Existing single-house field results do not prove a fresh installation.
+**Early alpha — sensors and both valve families.**
+Start with [Getting started: agent-assisted setup](GETTING_STARTED.md).
+Give the guide to your agent to install the gateway and integration, help flash
+your radio, and hand you off to device pairing in Home Assistant.
+No downloadable alpha release is published yet; use a maintainer-approved version.
 
 ## Device support
 
@@ -21,25 +21,26 @@ yet. Existing single-house field results do not prove a fresh installation.
 | HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
 
 Read [device communication references](protocol_documentation/) for packet rules
-and [the roadmap](PROJECT_ROADMAP.md) for qualification gates. A supported codec
-or successful RF transmission is not proof of physical acceptance.
+and [the roadmap](PROJECT_ROADMAP.md) for remaining qualification work.
 
 ## Install on Home Assistant OS
 
-HACS installs the integration; the gateway service is a separate app/add-on.
+Install **RainPoint Local Gateway** from HA's app/add-on repository and
+**RainPoint Local** from HACS. Both use this repository URL; HACS installs only
+the integration, not the gateway or radio firmware. The
+[getting-started guide](GETTING_STARTED.md) walks your agent through installation,
+USB flashing and Wi-Fi adoption, then guides you through pairing in HA.
 
-The [getting-started guide](GETTING_STARTED.md) covers the two separate installs:
-the gateway app and the `rainpoint_local` integration, then USB flashing,
-Wi-Fi adoption and device pairing. The existing HomGar/RainPoint cloud integration
-is neither required nor replaced. Installing both integrations does **not** prove
-that stock and custom RF gateways can safely share devices.
-
-Back up HA before changing configuration. Keep source backups under
-`/share/rainpoint-local/source-backups`, outside `/addons`, and exclude macOS
-`._*` files. See the [add-on guide](rainpointd_addon/DOCS.md) for settings and
-[firmware guide](firmware/rainpoint_bridge/README.md) for wiring and recovery.
+The existing HomGar/RainPoint cloud integration is not required or replaced.
+For detailed settings or recovery, see the [add-on guide](rainpointd_addon/DOCS.md)
+and [firmware guide](firmware/rainpoint_bridge/README.md).
 
 ## Operation
+
+The review draft adds default HA watering notifications; mobile forwarding is
+optional. See [notification behavior](docs/ALPHA_NOTIFICATIONS.md). This draft
+is not deployed; fresh-pairing counter initialization is implemented, with
+end-to-end onboarding acceptance still pending.
 
 Each device has one persistent transmitting ACK owner; other radios may receive
 and forward reports. Firmware restores assignments after reconnect. HA state
@@ -75,7 +76,7 @@ environment; production must exclude experimental transmit paths.
 
 | Need | Document |
 |---|---|
-| First installation and alpha limitations | [Getting started](GETTING_STARTED.md) |
+| Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
 | Current work and physical gates | [Roadmap](PROJECT_ROADMAP.md) |
 | Responsibilities and boundaries | [Architecture](FULL_STACK_ARCHITECTURE.md) |

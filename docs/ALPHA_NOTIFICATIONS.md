@@ -1,75 +1,82 @@
-# Alpha notifications and failure coverage
+# Alpha watering notifications
 
-The integration supplies device entities and reports failed service calls to HA.
-It does **not** automatically create a garden dashboard, scheduled irrigation,
-push notifications or a household watchdog. The examples for the original
-installation are not a portable safety package.
+The draft integration enables HA notification-panel messages automatically.
+No blueprint or phone setup is required for basic watering visibility.
 
-## What is currently observable
+## Default messages
 
-| Signal | Available evidence | Limit |
-|---|---|---|
-| Sensor/valve freshness | Device report time; accepted telemetry | HA availability alone can hide a long report gap |
-| HTV405 control failure | Valve `transaction_state`, `transaction_id`, `transaction_error`; Control request status | A failure does not prove no water flowed |
-| HTV145 overdue run | Valve `overdue`, `expected_idle_at`, `confirmed_at` | Missing idle evidence is an anomaly, not proof it is still open |
-| HTV145 command failure | Valve `transaction_state`, `transaction_id`, `transaction_error`; Control request status (gateway 0.37.2/integration 0.17.1) | Covers runtime requests reaching the gateway, not HA-local validation or a gateway that cannot be contacted |
-| Both families' morning sync | Status, reason and last-success time | A successful sync is not a watering confirmation |
+- **Watering:** the valve reports an open state. For a confirmed requested run,
+  include its requested duration (for example, 21 minutes) and zone when known.
+- **Stopped:** a previously watering valve reports idle. This does not claim
+  the full requested duration elapsed or any particular volume was delivered.
+- **Command failed:** a command failed/interrupted at the gateway, or an HA valve
+  request was refused/could not reach the gateway. Inspect the valve before retrying.
+- **Needs attention:** the single-zone valve's expected stop has not been confirmed.
 
-Single-zone command records survive gateway restarts and subsequent telemetry.
-Pre-dispatch rejection is distinct from a transmitted command lacking a matching
-response. Sync maintenance does not erase the last watering outcome. Unknown
-old outcomes are not reconstructed on upgrade. A later successful command replaces
-the last record, but does not dismiss an existing persistent HA notification.
-HA-local validation errors and an unreachable gateway still surface as service
-errors; a gateway cannot durably record a request it never received. Actual alert
-delivery still needs verification. Automation traces are not a permanent log.
+There is one latest-run message and one problem message per physical valve,
+scoped to the integration entry. Repeated telemetry does not repeatedly notify.
+Recovery does not dismiss a problem; users can dismiss it themselves.
+Unknown/unavailable state never counts as a confirmed stop. These notices are
+observation-only: they do not water, retry, synchronize or reboot anything.
 
-## Optional observation-only blueprints
+The notification panel is not a permanent watering-history archive. HA restarts
+can clear panel messages; on integration setup a currently reported watering
+state or outstanding problem may be shown again, but past idle runs are not
+reconstructed. Short runs occurring entirely between snapshots may be missed.
+For automation decisions, use the valve entities and transaction diagnostics,
+not notification delivery as proof of irrigation.
 
-Copy the YAML files from `blueprints/automation/rainpoint_local/` into the same
-directory under HA's `/config/blueprints/automation/rainpoint_local/`. Reload
-automations/blueprints and create an automation from each desired blueprint.
-They are not installed by HACS and are not enabled automatically.
+## Optional mobile forwarding
 
-- **Stale device report:** select that device's **Device report time**, not a
-  morning-sync or other timestamp. Default threshold is eight hours, plus a
-  ten-minute grace period for short disconnects. Unknown/unavailable timestamps
-  or timestamps over five minutes in the future also alert after grace. Create
-  one automation per device. This threshold does not change watering decisions.
-- **Reported valve problem:** select the physical valve's entity. For HTV405,
-  choose one zone entity per physical valve because transaction attributes are
-  shared. It alerts on either valve family's failed/interrupted transactions or an HTV145 overdue
-  transition, not on every unavailable state or every rejected HA service call.
+Each new/updated default message also fires
+`rainpoint_local_watering_notification` with `title`, `message`,
+`notification_id` and `entry_id`. A user can forward it to their own mobile
+notification action. For example, create an HA automation and replace the
+placeholder service below with their phone's actual notification service:
 
-Each creates or updates a stable persistent notification in HA **before** any
-optional phone action. The message remains until manually dismissed; recovery
-does not erase the evidence. A new failure transaction can alert again;
-unrelated attribute changes do not repeatedly push the same failure.
-Stale-report alerts trigger when the condition becomes true, not periodically
-while it stays true. If dismissed while still stale, they are not reminders.
-Grace timers reset after HA restart/automation reload.
+```yaml
+alias: RainPoint watering messages to my phone
+triggers:
+  - trigger: event
+    event_type: rainpoint_local_watering_notification
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "{{ trigger.event.data.title }}"
+      message: "{{ trigger.event.data.message }}"
+      data:
+        tag: "{{ trigger.event.data.notification_id }}"
+mode: queued
+```
 
-In **Additional notification actions**, choose your own mobile notification
-action and set its title to `{{ notify_title }}` and message to
-`{{ notify_message }}`. Leave it empty for HA notifications only. Do not put
-watering, automatic retries, re-pairing or reboot actions in that input.
-Critical push permissions and delivery depend on your phone; the blueprint does
-not enable them or confirm delivery.
+The integration never selects a phone, enables critical alerts or sends mobile
+messages itself. Users with multiple gateways can filter on `entry_id`.
 
-YAML and template decision logic are tested locally. Import, actual trigger
-scheduling and phone delivery still need verification on a clean HA installation.
-Use a temporary timestamp/helper on a test instance to exercise a stale case;
-do not unplug production nodes or deliberately water a garden to test an alert.
+## Optional stale-report monitoring
 
-## Before enabling a tester's irrigation automation
+The **Stale device report** blueprint under
+`blueprints/automation/rainpoint_local/` remains optional. Install it under the
+same path in HA's configuration directory, then create an automation selecting
+the device's **Device report time**. Its default is eight hours plus ten minutes
+of grace; configure this for the device's reporting cadence.
 
-Observe physical start, automatic stop and early stop, then check the matching
-HA state and notification. Retain a fallback water plan. A command being sent,
-a failed request, or stale sensor data must not be interpreted as definitive
-valve state. Do not add automatic open retries without the protocol's confirmed
-command/counter safeguards. If physical state is uncertain, inspect the valve
-or shut off its supply.
+The existing **Reported valve problem** blueprint is retained for older
+integration versions or customized alert routing. On this version its failure
+coverage overlaps the built-in notices, so normally use the event-forwarding
+automation above instead of enabling both.
 
-See HA's [blueprint schema](https://www.home-assistant.io/docs/blueprint/schema/)
-and [template trigger semantics](https://www.home-assistant.io/docs/automation/trigger/#template-trigger).
-The project acceptance checklist remains in [the roadmap](../PROJECT_ROADMAP.md).
+Blueprints are not installed by HACS. Each offers optional mobile actions after
+creating its HA notice; see the blueprint's inputs for setup.
+
+## Status and limits
+
+Default notifications are implemented in the local review draft and covered by
+snapshot/callback tests. Clean HA rendering, notification dismissal and actual
+phone forwarding still need validation before rollout. Nothing has been deployed
+to the household by this change.
+
+The integration does not install watering schedules, garden dashboards or a
+household watchdog. Examples under `examples/federico-garden/` are not a portable
+automation package. Before relying on irrigation, test a valve dry or visually
+confirm its opening and closing. Remaining work belongs in the
+[project roadmap](../PROJECT_ROADMAP.md).
