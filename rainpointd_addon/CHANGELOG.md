@@ -1,5 +1,15 @@
 # Changelog
 
+## Gateway 0.39.0 / Integration 0.18.1 / Firmware 0.19.0 / Unreleased
+
+- Add the missing masked management credential field for manual standalone
+  gateway setup and show invalid-credential errors without exposing secrets.
+  Normal HA OS discovery still supplies credentials automatically.
+- Extend real HA Core qualification with manual TLS setup/reload/removal and
+  default notification delivery, deduplication and dismissal for both valves.
+- Condense the roadmap and document association recovery. Published Alpha 1
+  artifacts, gateway runtime, firmware and RF pairing are unchanged.
+
 ## 0.39.0 / Integration 0.18.0 / Firmware 0.19.0 / 2026-09-11
 
 - Accept the signed-OTA capability during authenticated node enrollment and

@@ -89,6 +89,7 @@ environment; production must exclude experimental transmit paths.
 | Responsibilities and boundaries | [Architecture](FULL_STACK_ARCHITECTURE.md) |
 | HA settings and operation | [Add-on guide](rainpointd_addon/DOCS.md) |
 | Radio commissioning | [Node onboarding](NODE_ONBOARDING.md) |
+| Removal, re-pairing and recovery limits | [Device recovery](docs/DEVICE_RECOVERY.md) |
 | Research procedures and evidence | [Research index](research/README.md) |
 | Proposed cloud migration | [Migration design](CLOUD_TO_LOCAL_MIGRATION.md) |
 | Explicit household examples | [Examples](examples/federico-garden/) |
