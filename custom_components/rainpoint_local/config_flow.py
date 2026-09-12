@@ -115,6 +115,8 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await self._async_validate(user_input)
+            except RainPointLocalUnauthorized:
+                errors["base"] = "invalid_auth"
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"
             except RainPointLocalInvalidResponse:
@@ -127,6 +129,9 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_HOST, default="127.0.0.1"): str,
                 vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=65535)
+                ),
+                vol.Required(CONF_TOKEN): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
             }
         )

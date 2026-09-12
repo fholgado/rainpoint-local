@@ -7,10 +7,11 @@
     "step": {
       "user": {
         "title": "Connect to rainpointd",
-        "description": "Enter the address of the local RainPoint gateway.",
+        "description": "For a standalone gateway, enter its address and existing management credential. HA OS app discovery supplies authorization automatically; use the discovered gateway instead when available.",
         "data": {
           "host": "Host",
-          "port": "Port"
+          "port": "Port",
+          "registry_write_token": "Gateway management credential"
         }
       },
       "hassio_confirm": {
@@ -35,7 +36,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to the local gateway",
+      "cannot_connect": "Unable to connect to the local gateway. Check its address, port and management credential.",
+      "invalid_auth": "The gateway management credential is invalid",
       "invalid_response": "The gateway returned an incompatible response"
     },
     "abort": {
