@@ -131,7 +131,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Decode HTV405 zones, durations and control counters; omit unsupported water usage.
 - [ ] Compare all supported fields against timestamped physical/cloud observations.
 - [ ] Validate HTV405 battery byte 17 mask 0x08 with a controlled normal-to-low transition.
-- [ ] Audit discovery against product codes/capabilities, not names or household endpoints. **Unattended.**
+- [x] Audit discovery against product codes/capabilities, not names or household endpoints; add cross-layer contract tests.
 
 ## Phase 5 — stability qualification
 
@@ -154,9 +154,11 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Implement TLS, credential lifecycle, API limits and approved publisher-signed OTA.
 - [x] Enforce signed OTA and test rejection before flash in the host-linked verifier.
 - [x] Retire dual-radio production builds; keep one supported radio environment.
-- [ ] Audit remaining typed/versioned protocol, gateway, HA and research boundaries.
-- [ ] Retire only superseded probes, temporary endpoints and gates no longer needed by open tests.
-- [ ] Complete an alpha public-artifact security/redaction review.
+- [x] Audit typed/versioned protocol, gateway, HA and research interfaces; preserve established contracts.
+- [x] Retire obsolete firmware-checker variants; retain only research controls required by open tests.
+- [x] Review Alpha 1 installable artifacts and add repeatable private-file/key checks to CI.
+
+See the [software audit](research/ALPHA_SOFTWARE_AUDIT_20260912.md) for scope and evidence.
 
 Always preserve authentication, association-bound TX, bounded duration, spacing,
 device-owned confirmation, at-most-once opens and rollback. These are invariants,

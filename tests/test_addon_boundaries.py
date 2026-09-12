@@ -238,8 +238,8 @@ class AddonBoundaryTest(unittest.TestCase):
         boundary_check = (
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
-        self.assertIn("SUPERVISED_VALVE_CONTROL_COMMANDS", boundary_check)
-        self.assertIn('option == "--supervised"', boundary_check)
+        self.assertIn("VALVE_CONTROL_COMMANDS", boundary_check)
+        self.assertNotIn("--supervised", boundary_check)
         for forbidden in (
             'type == "valve_open"',
             'type == "valve_close"',
@@ -253,9 +253,9 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "tools" / "check_firmware_boundaries.py"
         ).read_text()
         self.assertNotIn("RAINPOINT_HTV145_ENABLED", workflow)
-        self.assertIn("--htv145-pairing", workflow)
+        self.assertIn("check_firmware_boundaries.py", workflow)
         self.assertIn("HTV145_PAIRING_CAPABILITIES", boundary_check)
-        self.assertIn('option == "--htv145-pairing"', boundary_check)
+        self.assertNotIn("--htv145-pairing", boundary_check)
 
     def test_htv145_acceptance_remains_separate_from_promoted_controls(self) -> None:
         source = (
@@ -493,7 +493,7 @@ class AddonBoundaryTest(unittest.TestCase):
             ROOT / "firmware" / "rainpoint_bridge" / "README.md"
         ).read_text()
         self.assertIn("1--60 whole-minute opens", firmware_docs)
-        self.assertIn("disabled by default", firmware_docs)
+        self.assertIn("no separate beta-control option", firmware_docs)
         self.assertNotIn(
             "Keeps valve control absent from the Home Assistant", firmware_docs
         )

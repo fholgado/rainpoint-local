@@ -89,7 +89,7 @@ Build and inspect the sole firmware image:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge
-python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
+python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
