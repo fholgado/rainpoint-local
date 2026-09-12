@@ -155,6 +155,20 @@ async def qualify(config_dir: Path, port: int, token: str) -> None:
         await hass.async_block_till_done()
         assert entry.state.value == "loaded", entry.state
         assert entry.data["registry_write_token"] == token
+        from homeassistant.helpers import device_registry as dr
+        from custom_components.rainpoint_local.registry import device_for_entry
+        from unittest.mock import patch
+        registry = dr.async_get(hass)
+        identifier = ("rainpoint_local", "registry-qualification")
+        device = registry.async_get_or_create(config_entry_id=entry.entry_id, identifiers={identifier})
+        if hasattr(registry, "async_get_device_by_identifier"):
+            with patch.object(registry, "async_get_device", side_effect=AssertionError("deprecated lookup")):
+                assert device_for_entry(registry, entry.entry_id, identifier) is device
+                assert device_for_entry(registry, "other-gateway", identifier) is None
+        else:
+            assert device_for_entry(registry, entry.entry_id, identifier) is device
+            assert device_for_entry(registry, "other-gateway", identifier) is None
+        registry.async_remove_device(device.id)
         assert "persistent_notification" in hass.config.components
         await qualify_notifications(hass, entry)
         duplicate = await hass.config_entries.flow.async_init(

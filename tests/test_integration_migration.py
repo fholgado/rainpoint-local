@@ -19,7 +19,7 @@ PACKAGE = ROOT / "custom_components" / "rainpoint_local"
 package = types.ModuleType("rainpoint_local")
 package.__path__ = [str(PACKAGE)]
 sys.modules.setdefault("rainpoint_local", package)
-for module_name in ("const", "migration", "api_models", "notifications"):
+for module_name in ("const", "migration", "api_models", "notifications", "registry"):
     spec = importlib.util.spec_from_file_location(
         f"rainpoint_local.{module_name}", PACKAGE / f"{module_name}.py"
     )
@@ -30,11 +30,13 @@ for module_name in ("const", "migration", "api_models", "notifications"):
 
 from rainpoint_local.migration import migrate_entry_payload
 from rainpoint_local.api_models import multi_zone_numbers, unsupported_device_entity_ids
+from rainpoint_local.registry import device_for_entry
 
 
 def _integration_function(filename, name, namespace, classname=None):
     """Exercise the actual HA callback with registry/entity APIs stubbed."""
     from rainpoint_local.notifications import notify_command_failure
+    namespace.setdefault("device_for_entry", device_for_entry)
     namespace.setdefault("notify_command_failure", notify_command_failure)
     tree = ast.parse((PACKAGE / filename).read_text())
     if classname is not None:
@@ -352,8 +354,8 @@ class IntegrationMigrationTest(unittest.TestCase):
             self.assertEqual("Sync counter",json.loads((PACKAGE/path).read_text())["entity"]["button"]["resynchronize_counter"]["name"])
 
     def test_known_sensor_details_use_ha_customizations_and_exact_identity(self):
-        entry = types.SimpleNamespace(name_by_user="Right Bed", name="Old name", area_id="garden")
-        registry = Mock()
+        entry = types.SimpleNamespace(name_by_user="Right Bed", name="Old name", area_id="garden", config_entries={"gateway"})
+        registry = Mock(spec=["async_get_device"])
         registry.async_get_device.return_value = entry
         areas = Mock()
         areas.async_get_area_by_name.return_value = types.SimpleNamespace(id="yard")
@@ -364,13 +366,13 @@ class IntegrationMigrationTest(unittest.TestCase):
         })
         devices = [{"device_id": "saved-sensor", "name": "Gateway name", "area": "Yard",
                     "state": {"rf_paired_endpoint": "12345624"}}]
-        self.assertEqual({"name": "Right Bed", "area": "garden"}, resolve(None, devices, "12345624"))
+        self.assertEqual({"name": "Right Bed", "area": "garden"}, resolve(None, devices, "12345624", "gateway"))
         registry.async_get_device.assert_called_with(identifiers={("rainpoint_local", "saved-sensor")})
-        self.assertEqual({}, resolve(None, devices, "99995624"))
+        self.assertEqual({}, resolve(None, devices, "99995624", "gateway"))
         entry.area_id = None
-        self.assertEqual({"name": "Right Bed"}, resolve(None, devices, "12345624"))
+        self.assertEqual({"name": "Right Bed"}, resolve(None, devices, "12345624", "gateway"))
         registry.async_get_device.return_value = None
-        self.assertEqual({"name": "Gateway name", "area": "yard"}, resolve(None, devices, "12345624"))
+        self.assertEqual({"name": "Gateway name", "area": "yard"}, resolve(None, devices, "12345624", "gateway"))
 
     def test_single_zone_factory_ignores_legacy_four_zone_keys(self):
         constructor = Mock()

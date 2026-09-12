@@ -71,3 +71,13 @@ audit of Git history. Published Alpha 1 bytes were not changed.
 Corrected stale app/firmware instructions about manual setup codes, beta-only
 controls, deferred valve-registry migration and the firmware version. Normal
 setup remains discovery plus physical confirmation, with one unified image.
+
+## HA registry compatibility
+
+HA 2026.8 made identifiers entry-scoped and deprecated unscoped lookups until
+2027.8 ([official migration notice](https://developers.home-assistant.io/blog/2026/07/21/device-registry-single-config-entry/)).
+The three metadata/re-pair call sites now use the owning entry through one
+compatibility helper. Only HA 2026.7 uses the old method, with an ownership check.
+Unit tests distinguish two gateway entries sharing an identifier; actual-Core CI
+exercises lookup/removal on both supported test versions and forbids deprecated
+lookup calls on the modern path. No live registry or RF association is changed.

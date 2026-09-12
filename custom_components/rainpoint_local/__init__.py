@@ -22,6 +22,7 @@ from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN, PLATF
 from .coordinator import RainPointLocalCoordinator
 from .migration import migrate_entry_payload
 from .notifications import setup_notifications
+from .registry import device_for_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -105,9 +106,7 @@ async def _async_migrate_radio_node_metadata(
     for node_id, node in coordinator.nodes.items():
         if node.get("name") != node_id and node.get("area") is not None:
             continue
-        device = device_registry.async_get_device(
-            identifiers={(DOMAIN, f"radio-node:{node_id}")}
-        )
+        device = device_for_entry(device_registry, entry.entry_id, (DOMAIN, f"radio-node:{node_id}"))
         if device is None:
             continue
         name = str(device.name_by_user or node.get("name") or node_id).strip()

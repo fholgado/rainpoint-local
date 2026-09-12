@@ -183,7 +183,7 @@ recovery, control, field and stability acceptance is complete. No integration-me
 implementation or hardware optimization in this pass.
 
 - [x] Preserve verbatim source timestamps plus explicit UTC receipt time in the new Mac SDR journal; never reinterpret old captures.
-- [ ] Replace deprecated HA device-registry lookups before HA 2027.8 while retaining the HA minimum.
+- [x] Scope device lookups to their owning gateway on modern HA; retain the 2026.7 fallback and reject cross-entry matches.
 - [ ] Discover new device families and determine whether sensor P1–P6 soil type is local/RF/cloud.
 - [ ] Determine whether pairing can select the long-term telemetry channel.
 - [ ] Characterize compact product/status integrity before generating those messages.
