@@ -2,7 +2,8 @@
 
 The single live checklist remains [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 This document separates reproducible package checks from an actual new-user
-installation. It does not mark HACS, HA OS or radio adoption accepted.
+installation. [Alpha 1](ALPHA_1.md) is available for external testing; publishing
+it does not mark HACS, HA OS or radio adoption independently accepted.
 
 ## Automated evidence
 
@@ -59,8 +60,10 @@ assets with editable source and PNG structure/dimension regressions. Current
 [HACS integration requirements](https://www.hacs.xyz/docs/publish/integration/)
 include brand assets. Official HACS and hassfest jobs are now configured in CI;
 their results must be checked per revision. Metadata unit tests are not a
-substitute for those validators or a real HACS install. Without a published release, HACS follows the
-default branch; an alpha needs an intentionally selected update channel.
+substitute for those validators or a real HACS install. Alpha testers should
+select `v0.18.0-alpha.1` in HACS rather than the default branch or firmware-only
+release. The gateway repository still follows `main`; verify its version against
+the release combination or install the pinned source package.
 
 On a new HA OS test instance, follow the getting-started guide with an empty
 gateway, no copied credentials/IDs, a self-built node and each supported device
