@@ -14,11 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Qualify fresh integration against actual HA Core
-        run: >-
-          docker run --rm --entrypoint python3
-          -v "$PWD:/work:ro" -w /work
-          ghcr.io/home-assistant/home-assistant:2026.9.1
-          tools/qualify_clean_ha.py
+        run: |
+          for version in 2026.7.0 2026.9.1; do
+            docker run --rm --entrypoint python3 \
+              -v "$PWD:/work:ro" -w /work \
+              "ghcr.io/home-assistant/home-assistant:$version" \
+              tools/qualify_clean_ha.py
+          done
 
   hacs:
     runs-on: ubuntu-latest

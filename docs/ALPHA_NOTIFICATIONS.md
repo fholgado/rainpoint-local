@@ -1,6 +1,6 @@
 # Alpha watering notifications
 
-The draft integration enables HA notification-panel messages automatically.
+The integration enables HA notification-panel messages automatically.
 No blueprint or phone setup is required for basic watering visibility.
 
 ## Default messages
@@ -70,10 +70,10 @@ creating its HA notice; see the blueprint's inputs for setup.
 
 ## Status and limits
 
-Default notifications are implemented in the local review draft and covered by
-snapshot/callback tests. Clean HA rendering, notification dismissal and actual
-phone forwarding still need validation before rollout. Nothing has been deployed
-to the household by this change.
+Default notifications are implemented, covered by snapshot/callback tests and
+deployed in the reference installation. Independent clean HA rendering,
+notification dismissal and optional phone forwarding still require their own
+qualification. Deployment is not proof of those fresh-install checks.
 
 The integration does not install watering schedules, garden dashboards or a
 household watchdog. Examples under `examples/federico-garden/` are not a portable

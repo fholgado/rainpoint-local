@@ -30,13 +30,29 @@ installation. It does not mark HACS, HA OS or radio adoption accepted.
 
 ## What these checks do not cover
 
-No isolated HA OS machine or browser-control tool was available for this pass.
-The developer computer has no configured Docker executable. The extracted
-gateway smoke test does not exercise Supervisor discovery, HACS installation,
-frontend selectors, physical BOOT adoption, Wi-Fi commissioning or actual valve
-pairing. The container CI currently exercises amd64, not a complete aarch64
-fresh-install test. Do not use the existing configured house as proof of a
-household-independent installation.
+September 11: a dedicated Colima ARM64 VM ran the existing
+`tools/qualify_clean_ha.py` against HA **2026.7.0** and **2026.9.1**, using tracked
+source from `d31b516`. Both passed real-Core authenticated TLS setup, duplicate
+discovery, model menus, no-radio feedback, reload and removal. Resolved HA image
+digests were `sha256:cb76c9922b530f6a5063a15463eb3ad6de287d297c826713abda16795bb98980`
+and `sha256:612d76760b544cb40b7ba01387fdac964c59a6a550a50a4d30b4773c822d2918`,
+respectively. The gateway used a new database and generated test credentials;
+the container had no host mounts, privilege, USB devices, published ports or
+outbound default route. The extracted-source package fresh/restart smoke and
+the ten existing package/distribution tests also passed.
+
+A separate fresh HA frontend serves its onboarding page (HTTP 200) through a
+Mac-loopback SSH tunnel into the same isolated network. This is reachability
+evidence, not a completed owner setup or rendered integration-flow check. See
+[isolated HA testing](ISOLATED_HA_TESTING.md) for the procedure.
+
+The automated Core test supplies a Supervisor-style discovery object; it does
+not run Supervisor. No isolated HA OS or browser-control tool was available.
+The manual form's missing TLS credential input is a source-level qualification
+risk, not yet a reproduced browser result. These tests do not establish HACS
+installation, frontend selectors, physical BOOT adoption, Wi-Fi commissioning or
+valve pairing. The declared HA minimum now has Core-flow evidence, not complete
+new-user acceptance. Do not use the configured house as independent-install proof.
 
 The integration now includes original local `brand/icon.png` and `icon@2x.png`
 assets with editable source and PNG structure/dimension regressions. Current

@@ -28,6 +28,25 @@ integration and firmware versions. No alpha release is published yet; repository
 installation currently follows `main`. For a specifically pinned source install,
 consult the [bundle guide](docs/ALPHA_BUNDLE.md).
 
+### Quick BOM (per radio node)
+
+| Part | Quantity needed | Amazon US link / what to select |
+|---|---:|---|
+| ESP32 development board | 1 | [ELEGOO ESP-WROOM-32 USB-C, 3-pack](https://www.amazon.com/dp/B0D8T53CQ5). This is the board used in our reference build: classic ESP32, 30 pins, pre-soldered headers. Not ESP32-C3/S3. |
+| CC1101 radio with antenna | 1 | [CC1101 with SMA antenna, 2-pack](https://www.amazon.com/dp/B01DS1WUEQ). Choose a **433 MHz module and matching antenna**, with the 2×4, 2.54 mm male header used in our wiring guide. |
+| Short female-to-female Dupont jumpers | 7 wires | [EDGELEC 10 cm female/female, 120-pack](https://www.amazon.com/dp/B07GD312VG). Select **10 cm / 3.9 inch**, **female-to-female**, **2.54 mm**, individually separable connectors. GDO2 is unused, so an eighth wire is unnecessary. |
+
+Also have a USB data cable for flashing and a USB power supply for deployment.
+The ESP32's **3.3 V** output powers the radio; a breadboard or carrier PCB is
+not required for this jumper-wire build. A 100 nF bypass capacitor at the radio
+is recommended when practical; see the
+[wiring guide](firmware/rainpoint_bridge/README.md#supported-hardware-and-wiring).
+
+Links checked September 12, 2026; pack sizes, sellers and availability may change.
+The radio and jumper links are sourcing examples, not separately qualified
+supplier batches. Before buying, match the radio pin labels to the wiring table;
+a listing advertising several bands does not guarantee a 433 MHz antenna.
+
 ## 2. Agent: install the gateway and integration
 
 These are separate installs, both using repository-based UI paths:
