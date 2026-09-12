@@ -26,7 +26,7 @@ not need a reflash, re-pair or database reset merely to adopt the alpha label.
 
 Follow [Getting started](../GETTING_STARTED.md) with an agent: install the gateway
 and integration, wire/flash the radio, configure Wi-Fi and adopt it in HA. Then
-pair sensors or valves in HA. Use HA OS 2026.7.0 or newer and the classic 4 MB
+pair sensors or valves in HA. Use HA OS with Core 2026.7.0 or newer and the classic 4 MB
 ESP32 reference hardware. Both aarch64 and amd64 gateway builds are declared;
 independent install reports on each are welcome.
 
