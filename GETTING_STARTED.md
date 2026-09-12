@@ -1,6 +1,6 @@
 # Getting started: agent-assisted setup
 
-**Draft for review.** Give this guide to the agent helping you set up RainPoint
+Give this guide to the agent helping you set up RainPoint
 Local. The agent installs the software, flashes the firmware and checks the
 connection. You assemble the radio, enter Wi-Fi details, press its confirmation
 button and pair your devices through Home Assistant.
