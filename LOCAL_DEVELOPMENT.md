@@ -1,5 +1,8 @@
 # Local development
 
+Optional Mac research listening: [managed SDR receiver](docs/MAC_SDR_RECEIVER.md).
+It remains receive-only and independent of HA's production radio nodes.
+
 The repository has three runtime layers and one standard firmware build:
 
 - `rainpointd_addon/rainpointd` — local gateway and API;

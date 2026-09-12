@@ -168,7 +168,8 @@ not tasks to mark “done once.”
 
 - [x] Keep current device protocols separate from historical experiments.
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
-- [ ] Manage receive-only SDR capture on the Mac with optional normalized forwarding.
+- [x] Implement a storage-bounded Mac SDR journal/service runner and receive-only TLS forwarding; test child lifecycle and real gateway authentication.
+- [ ] Install/qualify the Mac SDR service with its dedicated receiver identity, USB reconnect and sustained reception.
 - [ ] Decide whether to split research into a separate repo before a stable release.
 - [x] Keep one canonical checkout; preserve raw RF evidence and installed/rollback artifacts.
 
@@ -181,7 +182,7 @@ Cloud-to-local migration and a HomGar merge remain deferred until lifecycle,
 recovery, control, field and stability acceptance is complete. No integration-merge
 implementation or hardware optimization in this pass.
 
-- [ ] Preserve explicit SDR timestamps/timezones; never reinterpret ambiguous old timestamps.
+- [x] Preserve verbatim source timestamps plus explicit UTC receipt time in the new Mac SDR journal; never reinterpret old captures.
 - [ ] Replace deprecated HA device-registry lookups before HA 2027.8 while retaining the HA minimum.
 - [ ] Discover new device families and determine whether sensor P1–P6 soil type is local/RF/cloud.
 - [ ] Determine whether pairing can select the long-term telemetry channel.
