@@ -43,7 +43,8 @@ power before changing wires.
 - Authenticated pairing supplies controller, device and companion identities.
   Unknown sensors still need an explicit user pairing gesture.
 - HTV405 controls support 1--60 whole-minute opens and use the existing bounded
-  transaction, counter and morning-sync rules. The add-on `supervised_htv405_control` gate remains disabled by default.
+  transaction, counter and morning-sync rules. Controls require a configured
+  association and authenticated owner; there is no separate beta-control option.
 - HTV145 uses a persistent control/ACK profile. Commands
   carry both association endpoints and an expected counter. A rejected profile
   cannot accidentally direct a following command at the previous association.
@@ -67,11 +68,11 @@ power before changing wires.
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
-python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
+python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The source version is `0.18.0`. Both valve families are always included;
+The firmware version is `0.19.0`. Both valve families are always included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
 Historical captures remain regression fixtures; preserve a verified rollback

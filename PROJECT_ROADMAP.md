@@ -131,7 +131,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Decode HTV405 zones, durations and control counters; omit unsupported water usage.
 - [ ] Compare all supported fields against timestamped physical/cloud observations.
 - [ ] Validate HTV405 battery byte 17 mask 0x08 with a controlled normal-to-low transition.
-- [ ] Audit discovery against product codes/capabilities, not names or household endpoints. **Unattended.**
+- [x] Audit discovery against product codes/capabilities, not names or household endpoints; add cross-layer contract tests.
 
 ## Phase 5 — stability qualification
 
@@ -154,9 +154,11 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Implement TLS, credential lifecycle, API limits and approved publisher-signed OTA.
 - [x] Enforce signed OTA and test rejection before flash in the host-linked verifier.
 - [x] Retire dual-radio production builds; keep one supported radio environment.
-- [ ] Audit remaining typed/versioned protocol, gateway, HA and research boundaries.
-- [ ] Retire only superseded probes, temporary endpoints and gates no longer needed by open tests.
-- [ ] Complete an alpha public-artifact security/redaction review.
+- [x] Audit typed/versioned protocol, gateway, HA and research interfaces; preserve established contracts.
+- [x] Retire obsolete firmware-checker variants; retain only research controls required by open tests.
+- [x] Review Alpha 1 installable artifacts and add repeatable private-file/key checks to CI.
+
+See the [software audit](research/ALPHA_SOFTWARE_AUDIT_20260912.md) for scope and evidence.
 
 Always preserve authentication, association-bound TX, bounded duration, spacing,
 device-owned confirmation, at-most-once opens and rollback. These are invariants,
@@ -166,7 +168,8 @@ not tasks to mark “done once.”
 
 - [x] Keep current device protocols separate from historical experiments.
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
-- [ ] Manage receive-only SDR capture on the Mac with optional normalized forwarding.
+- [x] Implement a storage-bounded Mac SDR journal/service runner and receive-only TLS forwarding; test child lifecycle and real gateway authentication.
+- [ ] Install/qualify the Mac SDR service, dedicated identity and USB recovery; Sep 12 check found no supported USB receiver.
 - [ ] Decide whether to split research into a separate repo before a stable release.
 - [x] Keep one canonical checkout; preserve raw RF evidence and installed/rollback artifacts.
 
@@ -179,8 +182,8 @@ Cloud-to-local migration and a HomGar merge remain deferred until lifecycle,
 recovery, control, field and stability acceptance is complete. No integration-merge
 implementation or hardware optimization in this pass.
 
-- [ ] Preserve explicit SDR timestamps/timezones; never reinterpret ambiguous old timestamps.
-- [ ] Replace deprecated HA device-registry lookups before HA 2027.8 while retaining the HA minimum.
+- [x] Preserve verbatim source timestamps plus explicit UTC receipt time in the new Mac SDR journal; never reinterpret old captures.
+- [x] Scope device lookups to their owning gateway on modern HA; retain the 2026.7 fallback and reject cross-entry matches.
 - [ ] Discover new device families and determine whether sensor P1–P6 soil type is local/RF/cloud.
 - [ ] Determine whether pairing can select the long-term telemetry channel.
 - [ ] Characterize compact product/status integrity before generating those messages.

@@ -142,7 +142,8 @@ migration metadata identifies the exact `HCS026FRF` variant. The registry
 retains the protocol family and identification source so lifecycle operations
 do not depend on a display-model string.
 
-Installing this app does not make the physical irrigation system work offline.
+Installing this app alone does not make the physical irrigation system work offline;
+devices must be paired to an adopted custom local radio node.
 New installations default to `network` mode. Select `rtl433` only after
 attaching a supported RTL-SDR receiver to the Home Assistant host. Replay and
 raw-capture tooling remain available through the development CLI, not this app.
@@ -163,17 +164,16 @@ second. This window covers both the lower data-rich sensor channel near
 
 ### Installation device catalog
 
-The old prototype installation retains a compatibility catalog so upgrades do
-not fork its established Home Assistant device IDs. Other installations can
-set `device_catalog_path` to a JSON file available inside the app, such as a
+New installations start with an empty managed registry. Sensor and valve
+associations are persisted there when paired through Home Assistant. Existing
+installations retain their device IDs through storage migrations. Advanced
+users can set `device_catalog_path` to a JSON file available inside the app, such as a
 file beneath `/share`. The schema is demonstrated by
 `examples/device-catalog.example.json` and supports arbitrary sensor endpoints,
 valve endpoint pairs, stable device IDs, names, models, and pairing peers.
 
-This file is an interim valve-identity boundary. Newly paired sensors are
-already persisted in the managed registry. Valve links will move into that
-registry through a versioned migration before the legacy compatibility catalog
-is removed.
+This optional import is not needed for normal setup and does not authorize RF
+control by itself. Do not copy another installation's identities or credentials.
 
 For `esp32_serial`, set `serial_device` to the ESP32 USB serial path and leave
 `serial_baud` at `115200`. The stable `/dev/serial/by-id/...` path is preferable
@@ -197,8 +197,9 @@ and per-device counts, integrity decisions, duplicates, RSSI averages, and last
 reception times are available from `/api/v1/receivers`.
 
 Existing `node_tokens` entries are imported once into the private persistent
-radio-node registry. New provisioned nodes can be registered from Home
-Assistant with one independent 64-hex-character setup token per stable node ID.
+radio-node registry. New nodes are discovered and adopted through Home Assistant,
+with Identify and physical BOOT confirmation. Credentials are exchanged during
+adoption; users do not paste a setup token.
 The legacy option remains a migration fallback and does not overwrite a token,
 name, or area subsequently managed through Home Assistant:
 
@@ -206,7 +207,8 @@ name, or area subsequently managed through Home Assistant:
 {"rp-001122334455":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
 ```
 
-Leave `node_tokens` empty to reject every connection. Set `node_listen_port` to
+Leave `node_tokens` empty for normal discovery/adoption; adopted nodes authenticate
+using their stored credentials. Set `node_listen_port` to
 `0` to disable the listener, or leave it at `8790`. Never reuse one node's
 token for another node and do not post real tokens in issues or logs. Current
 node state and receive counters are available from the read-only
@@ -218,9 +220,9 @@ and signal, reconnect/authentication counters, and network byte counters. The
 integration exposes supported fields beneath the custom local radio-node HA
 device. The current unified firmware includes receive, generalized sensor
 pairing, bounded routine acknowledgements, managed OTA updates, and the bounded
-HTV405 enrollment implementation in one source tree. A compatible supervised
-build advertises association and control capabilities to the gateway; Home
-Assistant exposes them only while the explicit HTV405 beta option is enabled.
+HTV405 and HTV145 enrollment implementations in one production build. Home
+Assistant exposes controls according to the identified valve, selected owner,
+and current association/control state. There is no separate beta-control option.
 The same firmware answers the captured paired-state recovery sequence only for
 sensors already assigned to the node as ACK owner.
 ACK-owning nodes remain on the validated HCS026 telemetry channel so the
@@ -247,11 +249,12 @@ An authenticated reconnect atomically replaces a stale session for the same
 managed node, so a software reboot or power loss does not require restarting
 the custom local gateway.
 
-This configuration is intended for trusted-LAN hardware testing. Protocol v2
+Keep this local service on a trusted LAN; do not expose it to the internet.
+TLS-PSK encrypts the transport using each node's private credential. Protocol v2
 uses separate nonce/HMAC proofs to authenticate both the node and gateway
 before accepting a command. Protocol-v1 nodes remain receive-only. Protocol-v2
 firmware advertises `rx`, `sensor_pairing_tx`, routine-acknowledgement, and the
-non-RF `identify` capability. Supervised builds additionally advertise narrowly
+non-RF `identify` capability. The unified build additionally advertises narrowly
 scoped HTV405 pairing/control capabilities; there is no generic RF-transmit
 API. The app sends a time-limited pairing or valve command only after an
 authenticated Home Assistant request selects the assigned node. Its state,

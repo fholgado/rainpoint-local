@@ -1,5 +1,8 @@
 # Local development
 
+Optional Mac research listening: [managed SDR receiver](docs/MAC_SDR_RECEIVER.md).
+It remains receive-only and independent of HA's production radio nodes.
+
 The repository has three runtime layers and one standard firmware build:
 
 - `rainpointd_addon/rainpointd` — local gateway and API;
@@ -89,7 +92,7 @@ Build and inspect the sole firmware image:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge
-python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
+python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 

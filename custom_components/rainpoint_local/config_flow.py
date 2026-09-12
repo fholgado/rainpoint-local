@@ -37,6 +37,7 @@ from .api_models import (
     pairing_progress_action,
 )
 from .const import CONF_HOST, CONF_PORT, CONF_TOKEN, DEFAULT_PORT, DOMAIN
+from .registry import device_for_entry
 
 
 LEGACY_TRANSPORT_GATEWAY_IDS = {
@@ -59,7 +60,7 @@ def _selected_area(hass: Any, value: Any) -> tuple[str | None, str | None]:
     return selected, area.name
 
 
-def _known_device_details(hass: Any, devices: list[dict[str, Any]], endpoint: str) -> dict[str, str]:
+def _known_device_details(hass: Any, devices: list[dict[str, Any]], endpoint: str, entry_id: str) -> dict[str, str]:
     """Resolve paired identity to saved metadata, preferring HA customization."""
     for device in devices:
         state = device.get("state", {})
@@ -68,9 +69,7 @@ def _known_device_details(hass: Any, devices: list[dict[str, Any]], endpoint: st
             str(state.get("rf_paired_endpoint", "")).lower(),
         }:
             continue
-        entry = dr.async_get(hass).async_get_device(
-            identifiers={(DOMAIN, device["device_id"])}
-        )
+        entry = device_for_entry(dr.async_get(hass), entry_id, (DOMAIN, device["device_id"]))
         name = (entry.name_by_user or entry.name) if entry is not None else None
         result = {"name": name or device["name"]} if name or device.get("name") else {}
         if entry is not None:
@@ -1102,9 +1101,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 device_id = device.get("device_id")
                 if isinstance(device_id, str):
                     device_registry = dr.async_get(self.hass)
-                    device_entry = device_registry.async_get_device(
-                        identifiers={(DOMAIN, device_id)}
-                    )
+                    device_entry = device_for_entry(device_registry, self._entry.entry_id, (DOMAIN, device_id))
                     if device_entry is not None:
                         device_registry.async_update_device(
                             device_entry.id,
@@ -1128,7 +1125,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         if user_input is None:
             try:
                 defaults = _known_device_details(
-                    self.hass, await self._client().devices(), self._paired_endpoint
+                    self.hass, await self._client().devices(), self._paired_endpoint,
+                    self._entry.entry_id,
                 )
             except RainPointLocalCannotConnect:
                 errors["base"] = "cannot_connect"

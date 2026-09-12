@@ -121,7 +121,6 @@ def bundle(destination: Path, *, allow_dirty: bool = False, signature_path: Path
     receipt, images = collect_firmware(build, revision=revision, version=version,
                                       allow_dirty=allow_dirty)
     subprocess.run([sys.executable, str(ROOT / "tools/check_firmware_boundaries.py"),
-                    "--supervised", "--htv145-pairing", "--htv145-control",
                     str(build / "firmware.bin")], check=True)
     manifest = build_manifest(build / "firmware.bin", version=version, environment="rainpoint_bridge")
     verify_manifest(build / "firmware.bin", manifest)

@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import RainPointLocalClient, RainPointLocalError
 from .api_models import unsupported_device_entity_ids, events_require_refresh, apply_sensor_event_page
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LEGACY_SCAN_INTERVAL
+from .registry import device_for_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,9 +126,7 @@ class RainPointLocalCoordinator(DataUpdateCoordinator[dict[str, dict]]):
         """Keep HA model metadata aligned with gateway identification evidence."""
         device_registry = dr.async_get(self.hass)
         for local_id, device in devices.items():
-            entry = device_registry.async_get_device(
-                identifiers={(DOMAIN, local_id)}
-            )
+            entry = device_for_entry(device_registry, self.config_entry_id, (DOMAIN, local_id))
             model = device.get("model")
             if (
                 entry is not None

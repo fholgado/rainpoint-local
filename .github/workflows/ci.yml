@@ -53,6 +53,7 @@ jobs:
           python tools/package_release.py /tmp/rainpoint-release-a.tar.gz --smoke-test
           python tools/package_release.py /tmp/rainpoint-release-b.tar.gz
           cmp /tmp/rainpoint-release-a.tar.gz /tmp/rainpoint-release-b.tar.gz
+          python tools/check_public_artifact.py /tmp/rainpoint-release-a.tar.gz
       - name: Verify actual OTA flash boundary with real Mbed TLS
         run: |
           curl --fail --location --retry 3 https://github.com/Mbed-TLS/mbedtls/archive/refs/tags/v2.28.7.tar.gz -o "$RUNNER_TEMP/mbedtls.tar.gz"
@@ -88,11 +89,12 @@ jobs:
         run: |
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target release_receipt
-          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control \
+          python tools/check_firmware_boundaries.py \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           python tools/package_alpha.py /tmp/rainpoint-alpha-candidate.zip
           python tools/package_alpha.py /tmp/rainpoint-alpha-candidate-repeat.zip
           cmp /tmp/rainpoint-alpha-candidate.zip /tmp/rainpoint-alpha-candidate-repeat.zip
+          python tools/check_public_artifact.py /tmp/rainpoint-alpha-candidate.zip
 
   container:
     runs-on: ubuntu-latest

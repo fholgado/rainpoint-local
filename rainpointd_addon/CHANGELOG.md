@@ -2,6 +2,9 @@
 
 ## Gateway 0.39.0 / Integration 0.18.1 / Firmware 0.19.0 / Unreleased
 
+- Scope device metadata/re-pair lookups to the owning integration entry on HA
+  2026.8+, while retaining the HA 2026.7 compatibility path.
+
 - Add the missing masked management credential field for manual standalone
   gateway setup and show invalid-credential errors without exposing secrets.
   Normal HA OS discovery still supplies credentials automatically.
