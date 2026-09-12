@@ -24,6 +24,11 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
 
 ### Alpha cohort preparation
 
+- [x] Add a compact per-node BOM to the getting-started guide, linked from
+  README: reference ESP32 board, 433 MHz CC1101/antenna and short female/female
+  jumpers, with direct Amazon US links, quantities and variant-selection notes
+  (September 12). Supplier links are not additional hardware qualification.
+
 - [x] Implement per-association single-zone storage and eight-owner radio slots.
   Schema 25 migrates the old shared-route key without discarding counters,
   reservations, diagnostics or qualification. Each association retains its own

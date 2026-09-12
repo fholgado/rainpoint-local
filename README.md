@@ -77,6 +77,7 @@ environment; production must exclude experimental transmit paths.
 | Need | Document |
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
+| Node parts and Amazon shopping links | [Quick BOM](GETTING_STARTED.md#quick-bom-per-radio-node) |
 | Fresh installation tests without household devices | [Isolated HA testing](docs/ISOLATED_HA_TESTING.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
 | Current work and physical gates | [Roadmap](PROJECT_ROADMAP.md) |
