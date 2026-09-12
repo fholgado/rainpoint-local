@@ -5,6 +5,11 @@ evidence or another checklist. Track results in
 [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md); use
 [ALPHA_INSTALL_VALIDATION.md](ALPHA_INSTALL_VALIDATION.md) for evidence boundaries.
 
+The September 11 disposable environment was removed after qualification at the
+user's request, including its VM, containers, images, HA volume and UI tunnel.
+No owner setup had been completed. The localhost URL is no longer active;
+the procedure below describes how to recreate the environment when needed.
+
 ## Choose the right level
 
 | Environment | Valid evidence | Not established |
@@ -100,8 +105,8 @@ colima stop rainpoint-alpha
 
 Stop the test-specific SSH forward as well. Do not use global Docker prune or
 delete other profiles. This qualification environment is not a production
-gateway install; its empty frontend does not yet have an owner or an integration
-connection. The automated Core test runs its own temporary gateway and cleans
+gateway install; creating the empty frontend does not configure an owner or an
+integration connection. The automated Core test runs its own temporary gateway and cleans
 that gateway up on completion.
 
 For the gateway, override the image entrypoint to `python3`, use its existing

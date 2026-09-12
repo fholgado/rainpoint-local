@@ -143,6 +143,10 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   the test network has no default route. See `docs/ISOLATED_HA_TESTING.md` and
   `docs/ALPHA_INSTALL_VALIDATION.md` for isolation and evidence boundaries.
   The full local Python suite passed: 596 tests, two optional skips.
+  After qualification, the user requested cleanup: the dedicated VM, all three
+  test containers, two HA images, empty HA volume, UI tunnel and temporary source
+  archives were removed September 11. No owner onboarding was completed.
+  Results and the recreation procedure are retained; no test HA remains running.
 - [ ] Qualify manual standalone TLS setup before advertising HA Container as
   an installation path. Source inspection found that the manual form accepts
   host/port but not the gateway credential; the successful automated test
