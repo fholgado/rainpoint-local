@@ -22,6 +22,7 @@ class MacSDRReceiverTest(unittest.TestCase):
     def test_command_is_receive_only_and_plist_contains_no_credentials(self):
         command = receiver_command({"rtl433_path": "/opt/homebrew/bin/rtl_433"})
         self.assertIn("json", command)
+        self.assertIn("log", command)
         self.assertNotIn("-S", command)
         self.assertNotIn("-r", command)
         agent = launch_agent(Path("/private/receiver.json"), Path(sys.executable))
@@ -57,6 +58,15 @@ class MacSDRReceiverTest(unittest.TestCase):
             self.assertEqual("stopped", run({"output_directory": directory},
                 stop=lambda: time.monotonic() >= deadline,
                 command=[sys.executable, "-c", "import time; time.sleep(30)"]))
+
+    def test_decoder_startup_failure_remains_visible_after_stop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            deadline = time.monotonic() + .5
+            run({"output_directory": directory}, stop=lambda: time.monotonic() >= deadline,
+                command=[sys.executable, "-c", "print('No supported USB device'); raise SystemExit(2)"])
+            status = json.loads((Path(directory) / "status.json").read_text())
+            self.assertEqual(2, status["decoder_exit_code"])
+            self.assertEqual("No supported USB device", status["decoder_message"])
 
     def test_symlink_output_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

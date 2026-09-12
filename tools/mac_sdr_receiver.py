@@ -45,7 +45,7 @@ def receiver_command(config):
     device = str(config.get("device", "0"))
     if not re.fullmatch(r"[A-Za-z0-9._-]+", device):
         raise ValueError("invalid SDR device selector")
-    command += ["-d", device]
+    command += ["-d", device, "-F", "log"]
     for key in ("frequency_hz", "sample_rate"):
         if key in config and (type(config[key]) is not int or config[key] <= 0):
             raise ValueError(f"{key} must be a positive integer")
@@ -234,6 +234,8 @@ def run(config, *, stop=None, command=None):
                                 discard_line = False
                                 if record is None:
                                     status["invalid_lines"] += 1
+                                    if line and not line.startswith(b"{"):
+                                        status["decoder_message"] = line[:240].decode("utf-8", errors="replace")
                                     continue
                                 encoded = (json.dumps(record, sort_keys=True) + "\n").encode()
                                 if size + len(encoded) > limit:

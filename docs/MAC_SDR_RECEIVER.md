@@ -32,7 +32,7 @@ same USB SDR first. Ctrl-C/SIGTERM stops the child decoder cleanly.
   source timestamps and explicit UTC receipt timestamps. The live decoder runs
   with `TZ=UTC`; this does **not** reinterpret timestamps in older recordings.
 - `status.json`: listening/disconnected/stopped/failed/storage-full state,
-  current-run counts, decoder exits and optional forwarding counts.
+  current-run counts, decoder exits, last startup diagnostic and forwarding counts.
 - The journal stops at its byte budget. It never deletes existing recordings.
   Stop the service and archive/move the journal before resuming with an empty
   one. Counters in `status.json` restart per process, not per journal.

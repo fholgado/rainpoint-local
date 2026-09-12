@@ -81,3 +81,13 @@ compatibility helper. Only HA 2026.7 uses the old method, with an ownership chec
 Unit tests distinguish two gateway entries sharing an identifier; actual-Core CI
 exercises lookup/removal on both supported test versions and forbids deprecated
 lookup calls on the modern path. No live registry or RF association is changed.
+
+## Mac receiver verification
+
+The new research runner passed tests using real child processes and the actual
+gateway's TLS-PSK receiver. Tests cover bounded storage across restart, child
+termination, explicit UTC receipt/verbatim source time, receive-only capability
+negotiation, forwarding failure/drop behavior, and visible decoder failure.
+The receive-only USB preflight on Sep 12 reported `No supported devices found`
+(decoder exit 2); no RF reception or launchd qualification is claimed. No
+background job, gateway credential or live forwarding route was installed.

@@ -169,7 +169,7 @@ not tasks to mark “done once.”
 - [x] Keep current device protocols separate from historical experiments.
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
 - [x] Implement a storage-bounded Mac SDR journal/service runner and receive-only TLS forwarding; test child lifecycle and real gateway authentication.
-- [ ] Install/qualify the Mac SDR service with its dedicated receiver identity, USB reconnect and sustained reception.
+- [ ] Install/qualify the Mac SDR service, dedicated identity and USB recovery; Sep 12 check found no supported USB receiver.
 - [ ] Decide whether to split research into a separate repo before a stable release.
 - [x] Keep one canonical checkout; preserve raw RF evidence and installed/rollback artifacts.
 
