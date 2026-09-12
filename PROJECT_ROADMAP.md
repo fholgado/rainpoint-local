@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-11
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -54,9 +54,10 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   and no armed pairing window. The temporary Mac gateway was stopped. Recovery
   backups and qualification evidence are preserved in the private, Git-ignored
   `captures/tls-bench-20260910-private/` directory.
-- [ ] Complete longer-soak and physical multi-valve-per-node isolation checks,
-  plus authorized post-update valve actuation. Initial ACK/report continuity
-  passed after the coordinated cutover; it does not prove longer-term stability
+- [ ] Complete longer-soak and physical multi-valve-per-node isolation checks.
+  Authorized post-update actuation passed for both valve families September 11
+  (600/60 seconds; evidence below). Initial ACK/report continuity and those runs
+  do not prove longer-term stability
   or concurrent ownership of multiple physical single-zone valves on one radio.
   See `docs/ALPHA_BUNDLE.md`; never mix plaintext/TLS operational versions.
 - [x] Qualify the copied production database before coordinated cutover. The
@@ -125,15 +126,30 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   skips); native C++ protocol regressions passed. The authenticated onboarding
   HTTP tests also passed after adding the first-counter assertions. Deployed in
   the September 10 coordinated rollout; fresh physical acceptance remains above.
-- [ ] Validate default HA watering notifications on a clean HA instance. Draft
+- [ ] Validate default HA watering notifications on a clean HA instance. The integration
   emits confirmed start/stop, failed request and overdue notices automatically;
   mobile forwarding remains optional. Snapshot tests cover dynamic durations,
-  duplicate reports and unknown state. Physical/UI verification and rollout are
-  pending; no live commands are part of this change.
-  Included in the 574-test validation above. No version bump, commit, push,
-  firmware flash or deployment occurred in that earlier validation; the
-  September 10 coordinated rollout deploys it, with clean-install acceptance
-  still outstanding.
+  duplicate reports and unknown state. Deployed in the September 10 coordinated
+  rollout; clean-instance delivery and physical/UI acceptance remain outstanding.
+- [x] Establish an isolated ARM64 HA Container qualification environment on the
+  Mac (September 11), without production data, host mounts or radio listeners.
+  Existing real-Core qualification passed on HA 2026.7.0 and 2026.9.1 from
+  `d31b516`: authenticated TLS setup via supplied Supervisor-style discovery,
+  duplicate discovery, both valve model menus, no-radio feedback, reload and
+  removal. Extracted-source fresh/restart smoke also passed. CI now runs that
+  existing qualification against both versions. This is not real Supervisor,
+  HACS installation, rendered-flow acceptance or physical commissioning.
+  A separate fresh frontend reaches its onboarding page via Mac loopback only;
+  the test network has no default route. See `docs/ISOLATED_HA_TESTING.md` and
+  `docs/ALPHA_INSTALL_VALIDATION.md` for isolation and evidence boundaries.
+  The full local Python suite passed: 596 tests, two optional skips.
+- [ ] Qualify manual standalone TLS setup before advertising HA Container as
+  an installation path. Source inspection found that the manual form accepts
+  host/port but not the gateway credential; the successful automated test
+  supplies it through Supervisor-style discovery. Reproduce the public form,
+  then fix and regression-test authenticated setup without adding credential
+  entry to normal Supervisor discovery or weakening TLS. This does not block
+  existing HA OS installations, but does block standalone fresh-install claims.
 - [ ] Validate the guide on a clean HA OS installation without household
   databases, catalogs or tokens: custom app repository and HACS installation,
   discovery, new radio adoption and generated gateway identity. Confirm declared
@@ -349,7 +365,9 @@ The selected unattended implementation/review pass is complete (original list nu
   module runs remain supported. September 8 validation: all 533 Python tests
   passed (two optional skips), with test logic unchanged. Native firmware tests
   remain under `firmware/rainpoint_bridge/tests/`.
-- [ ] Finish fleet qualification of standard firmware 0.17.0 after staged OTA.
+- [x] Complete the September 9 standard firmware 0.17.0 fleet installation.
+  Superseded by the signed 0.19.0 rollout and post-update watering tests above;
+  unchanged-release soak and fresh onboarding remain their own open gates.
   Front Yard's prior 0.16.2 custom-ID open/automatic stop/early-close evidence is
   retained, but does not qualify fresh onboarding or the new fleet version.
   September 9: OTA Test and Vegetable Garden installed the identical verified
@@ -438,10 +456,10 @@ The selected unattended implementation/review pass is complete (original list nu
   gateway identity, device associations and all three authenticated radios.
   No RF sequence, credential, schedule or control behavior changed.
 
-Gateway 0.37.1 and integration 0.17.0 are deployed. Standard firmware retains the
-post-command RX restoration fix without changing the frozen pairing sequence.
-Current fleet: OTA Test, Vegetable Garden and Front Yard all run 0.17.0 with
-healthy-boot confirmation. Fleet soak and physical onboarding gates remain open.
+Latest verified reference deployment (September 11): gateway 0.39.0, integration
+0.18.0, and signed unified firmware 0.19.0 on OTA Test, Vegetable Garden and
+Front Yard, with healthy-boot confirmation. Both authorized post-upgrade watering
+tests passed as recorded above. Fleet soak and physical onboarding gates remain open.
 Software/research completion does not resolve the physical or publication gates.
 
 The existing 72-hour collector continues independently. Software completion does
@@ -799,8 +817,11 @@ Passive monitoring alone cannot qualify battery-cycle or coexistence operations.
   obsolete gates, firmware artifacts, and dormant two-radio support.
 - [ ] Preserve authentication, association-bound TX, bounded duration,
   device-owned confirmation, command spacing, at-most-once opens, and rollback.
-- [ ] Add encrypted node sessions, replay protection, credential lifecycle
-  review, API limits, reproducible packaging, and asymmetric OTA signatures.
+- [x] Add encrypted node sessions, TLS record replay protection, credential
+  lifecycle controls, API limits, reproducible packaging, and asymmetric OTA
+  signatures. Implemented and deployed; see alpha security/fleet evidence above.
+  Initial adoption remains explicitly trusted-network-only, and physical RF
+  counters remain distinct from transport replay protection.
 - [ ] Run CI, security/redaction review, and clean-environment installation tests.
 
 Exit: contributors can build one production stack without household knowledge;

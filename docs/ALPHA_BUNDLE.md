@@ -10,8 +10,10 @@ and must not be distributed. The maintainer must explicitly approve a release.
 Extract into a new directory. On macOS run `shasum -a 256 -c SHA256SUMS`; on
 Linux run `sha256sum -c SHA256SUMS`. All entries must pass. Obtain the bundle
 from the maintainer's agreed channel; checksums detect corruption, not a
-malicious replacement of both files and checksums. Publisher signing is not
-implemented. Never mix USB parts from different bundles.
+malicious replacement of both files and checksums. Approved OTA images carry a
+publisher signature enforced by gateway 0.39 and radio firmware 0.19. This does
+not authenticate every file in a USB/source bundle or replace trusted first-flash
+distribution. Never mix USB parts from different bundles.
 
 `rainpoint-source.tar.gz` contains the gateway app under `addons/rainpointd`
 and the separate HA integration under `custom_components/rainpoint_local`.
@@ -66,7 +68,12 @@ schedule the live cutover separately. Do not enable plaintext fallback.
 Initial adoption remains trusted-network-only. Operational API callers now need
 a TLS credential; older HTTP-only research scripts cannot access the new listener.
 
-### Routine updates after all components support TLS
+### Routine updates after all components support TLS and signed OTA
+
+An older TLS-only radio still needs a trusted signed-OTA baseline first. Follow
+the maintainer's [legacy rollout procedure](FIRMWARE_SIGNING_DESIGN.md#legacy-rollout-ordering)
+or use a deliberate USB upgrade; a TLS connection alone does not establish
+publisher-signature enforcement.
 
 First back up the HA gateway app and retain the previous bundle/catalog.
 Use the version combination in `compatibility.json`, update while valves are

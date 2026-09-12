@@ -37,20 +37,20 @@ and [firmware guide](firmware/rainpoint_bridge/README.md).
 
 ## Operation
 
-The review draft adds default HA watering notifications; mobile forwarding is
-optional. See [notification behavior](docs/ALPHA_NOTIFICATIONS.md). This draft
-is not deployed; fresh-pairing counter initialization is implemented, with
-end-to-end onboarding acceptance still pending.
+HA watering notifications are enabled by default; mobile forwarding is optional.
+See [notification behavior](docs/ALPHA_NOTIFICATIONS.md). These features and
+fresh-pairing counter initialization are deployed in the reference installation;
+independent clean-install and physical onboarding acceptance remain separate.
 
 Each device has one persistent transmitting ACK owner; other radios may receive
 and forward reports. Firmware restores assignments after reconnect. HA state
 comes from device responses or independent telemetry, not command intent.
 
-Four-zone actuation requires the explicit `supervised_htv405_control` option and
-a capable owner. Default starts use a fixed-zero counter anchor before watering.
-Optional morning synchronization allows direct daytime starts with a retained
-counter. One-zone counter status and morning settings are available on its
-verified owner, with one valve control and one watering-duration setting.
+Valve actuation requires a supported paired device and a capable, available owner;
+no research switch or mandatory two-run unlock is required. Counter readiness and
+device-response confirmation still apply. Both valve families expose counter
+status and morning synchronization settings. Each single-zone association has
+its own control, duration and persisted counter state.
 
 Both families enforce bounded durations, command spacing, and durable command
 reservations. Startup and missing telemetry never send a speculative close.
@@ -77,6 +77,7 @@ environment; production must exclude experimental transmit paths.
 | Need | Document |
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
+| Fresh installation tests without household devices | [Isolated HA testing](docs/ISOLATED_HA_TESTING.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
 | Current work and physical gates | [Roadmap](PROJECT_ROADMAP.md) |
 | Responsibilities and boundaries | [Architecture](FULL_STACK_ARCHITECTURE.md) |
