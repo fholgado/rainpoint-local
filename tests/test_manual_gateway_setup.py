@@ -51,6 +51,13 @@ class ManualGatewaySetupTest(unittest.IsolatedAsyncioTestCase):
         self.flow._async_validate.assert_awaited_once_with(data)
         self.flow._async_create_gateway_entry.assert_awaited_once_with(data, "metadata")
 
+    async def test_empty_credential_never_attempts_plaintext_validation(self):
+        result = await self.step(self.flow, {"host": "gateway.example", "port": 8787,
+            "registry_write_token": ""})
+        self.assertEqual({"base": "invalid_auth"}, result["errors"])
+        self.flow._async_validate.assert_not_awaited()
+        self.flow._async_create_gateway_entry.assert_not_awaited()
+
     async def test_rejected_credential_returns_a_redacted_form_error(self):
         self.flow._async_validate.side_effect = Unauthorized("do-not-echo-this-secret")
         result = await self.step(self.flow, {"host": "gateway.example", "port": 8787,

@@ -71,7 +71,11 @@ creating its HA notice; see the blueprint's inputs for setup.
 ## Status and limits
 
 Default notifications are implemented, covered by snapshot/callback tests and
-deployed in the reference installation. Independent clean HA rendering,
+deployed in the reference installation. September 12 real-Core CI additionally
+verified backend delivery, dynamic duration, deduplication, unknown state,
+failed/overdue messages and dismissal on HA 2026.7.0/2026.9.1 for both valve
+families. See [installation evidence](ALPHA_INSTALL_VALIDATION.md).
+Independent clean HA rendering,
 notification dismissal and optional phone forwarding still require their own
 qualification. Deployment is not proof of those fresh-install checks.
 

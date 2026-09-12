@@ -104,7 +104,10 @@ async def qualify_manual_setup(hass, port: int, token: str) -> None:
     secret = next(value for key, value in schema.items() if str(key) == "registry_write_token")
     assert isinstance(secret, selector.TextSelector)
     assert secret.config["type"] == selector.TextSelectorType.PASSWORD
-    request = {"host": "127.0.0.1", "port": port, "registry_write_token": "too-short"}
+    request = {"host": "127.0.0.1", "port": port, "registry_write_token": ""}
+    result = await hass.config_entries.flow.async_configure(flow["flow_id"], request)
+    assert result["type"] == "form" and result["errors"]["base"] == "invalid_auth"
+    request["registry_write_token"] = "too-short"
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], request)
     assert result["type"] == "form" and result["errors"]["base"] == "invalid_auth"
     request["registry_write_token"] = secrets.token_urlsafe(32)

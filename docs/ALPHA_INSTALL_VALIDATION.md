@@ -5,6 +5,29 @@ This document separates reproducible package checks from an actual new-user
 installation. [Alpha 1](ALPHA_1.md) is available for external testing; publishing
 it does not mark HACS, HA OS or radio adoption independently accepted.
 
+## Post-Alpha 1 backend qualification — September 12
+
+Integration 0.18.1 adds a masked management credential field to the standalone
+manual setup form. The regression reproduced the missing field and uncaught
+credential error before the fix. Invalid credentials create no entry; normal
+Supervisor discovery still supplies credentials without asking the user.
+
+[CI run 34718676952](https://github.com/fholgado/rainpoint-local/actions/runs/34718676952)
+passed the expanded real-Core harness on 2026.7.0 and 2026.9.1: public manual
+form → isolated TLS gateway, invalid credentials, successful setup, duplicate
+suppression, reload and removal. It also exercises the installed integration's
+notification listener against fabricated valve snapshots, then reads actual HA
+notification storage through the notification WebSocket handler. Both valve
+families passed dynamic 21-minute text, duplicate suppression, unknown/failed
+snapshot handling, confirmed stop, failed/overdue notices, optional forwarding
+events and service-based dismissal.
+
+No household configuration, RF command or mobile service was used. These checks
+prove backend behavior, not rendered pixels or actual device observations. The
+fix is post-release source work, not a replacement of Alpha 1's 0.18.0 artifact.
+HA Container first-install instructions remain outside Alpha 1's supported
+onboarding path until their separate user-facing validation is complete.
+
 ## Automated evidence
 
 - CI and `tools/package_release.py --smoke-test` extract only tracked runtime
@@ -49,8 +72,8 @@ evidence, not a completed owner setup or rendered integration-flow check. See
 
 The automated Core test supplies a Supervisor-style discovery object; it does
 not run Supervisor. No isolated HA OS or browser-control tool was available.
-The manual form's missing TLS credential input is a source-level qualification
-risk, not yet a reproduced browser result. These tests do not establish HACS
+The manual form's missing TLS credential input was subsequently reproduced and
+fixed in 0.18.1 as recorded above. The original checks did not establish HACS
 installation, frontend selectors, physical BOOT adoption, Wi-Fi commissioning or
 valve pairing. The declared HA minimum now has Core-flow evidence, not complete
 new-user acceptance. Do not use the configured house as independent-install proof.

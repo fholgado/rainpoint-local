@@ -114,6 +114,8 @@ class RainPointLocalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
+                if not user_input.get(CONF_TOKEN):
+                    raise RainPointLocalUnauthorized("management credential required")
                 info = await self._async_validate(user_input)
             except RainPointLocalUnauthorized:
                 errors["base"] = "invalid_auth"

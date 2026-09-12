@@ -27,8 +27,8 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 - [x] Audit default notifications and provide optional mobile/stale-report blueprints.
 - [x] Deploy TLS, signed OTA and per-association single-zone state to all reference radios.
 - [x] Verify post-update watering and automatic stop for both valve families.
-- [ ] Fix and qualify the standalone manual TLS credential form; keep normal discovery automatic. **Unattended.**
-- [ ] Verify notification delivery, deduplication and dismissal in clean HA Core. **Unattended.**
+- [x] Fix standalone manual TLS credentials; qualify setup/reload/removal on HA Core 2026.7.0/2026.9.1 (integration 0.18.1, not deployed).
+- [x] Verify default notification delivery/deduplication/dismissal for both valves on clean HA Core (not rendered UI).
 - [ ] Validate fresh HA OS app/HACS installation and adoption on aarch64 and amd64. **Tester.**
 - [ ] Exercise rendered pairing/removal/cancellation screens for sensors and both valves. **Tester.**
 - [ ] Verify default notifications in the rendered HA panel and optional mobile forwarding. **Tester.**

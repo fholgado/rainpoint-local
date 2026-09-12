@@ -115,6 +115,16 @@ See [the full collection review](RELIABILITY_COLLECTION_REVIEW_20260910.md).
 
 ## Cleanup decisions
 
+Post-alpha source work (integration 0.18.1) fixes manual TLS setup's missing
+credential field and uncaught credential validation error. A focused regression
+went red before the change and green afterward. Real HA Core CI run
+[34718676952](https://github.com/fholgado/rainpoint-local/actions/runs/34718676952)
+passed manual setup, failed authentication, reload/removal and actual backend
+notification delivery/deduplication/dismissal on both qualified Core versions.
+The observations are synthetic; no RF or mobile service was called. Rendered
+frontend and physical qualification remain separate. Alpha 1 artifacts and
+the live household installation were not changed by this pass.
+
 The roadmap audit separates implementation from physical acceptance. Metadata,
 issue templates, notification audit, migrations, unified builds and Alpha 1
 publication are complete. Fresh install, battery rejoin, repeated pairing,
