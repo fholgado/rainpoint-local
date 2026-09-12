@@ -42,11 +42,13 @@ entity attributes, diagnostics, and logs never expose it.
 - USB serial remains a recovery path through `show_node`, `configure_wifi`, and
   `clear_wifi`; it is not normal UX.
 
-The candidate encrypts operational sessions with TLS-PSK using existing radio
+Alpha 1 encrypts operational sessions with TLS-PSK using existing radio
 credentials; the HA management interface and OTA downloads also use TLS.
 There is no plaintext fallback. Initial HTTP adoption/Wi-Fi provisioning remains
 a trusted-network operation; see [security details](SECURITY.md). Publisher
-signing remains an alpha milestone, not something supplied by TLS.
+signing is enforced by gateway 0.39.0 and radio 0.19.0; TLS alone does not provide it.
+See [device recovery](docs/DEVICE_RECOVERY.md) before deleting devices, removing
+nodes or resetting commissioning state.
 
 ## Placement and acceptance
 
@@ -117,7 +119,7 @@ reply confirms it. Initialization requires timestamped pairing evidence no more
 than five minutes old; this is not a deadline for the first watering. A persisted
 seed survives restarts. Repeated setup, passive reports and battery rejoin cannot
 reseed it, and an unanswered first command invalidates counter readiness.
-This remains an undeployed draft pending end-to-end acceptance.
+This is included in Alpha 1; repeated fresh end-to-end acceptance remains open.
 HTV145 state is keyed by the full RF association, not the shared gateway endpoint.
 Firmware advertising `htv145_multi_valve` holds up to eight independent single-zone
 associations; older firmware retains one per radio. Counters, pending commands,

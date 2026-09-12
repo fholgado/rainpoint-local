@@ -93,7 +93,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [ ] Restart HA, gateway and assigned radios while idle; preserve state with no command replay.
 - [ ] Reassign a sensor ACK owner; prove revocation occurs before replacement transmissions.
 - [ ] Qualify stock/custom coexistence with separate identities and no duplicate HA devices.
-- [ ] Document supported recovery and limits for destructive association changes. **Unattended.**
+- [x] Document [device/association recovery](docs/DEVICE_RECOVERY.md), deletion guards and unverified battery-rejoin limits.
 
 ## Phase 3 — reliable valve control
 
