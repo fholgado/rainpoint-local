@@ -1101,9 +1101,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 device_id = device.get("device_id")
                 if isinstance(device_id, str):
                     device_registry = dr.async_get(self.hass)
-                    device_entry = device_registry.async_get_device(
-                        identifiers={(DOMAIN, device_id)}
-                    )
+                    device_entry = device_for_entry(device_registry, self._entry.entry_id, (DOMAIN, device_id))
                     if device_entry is not None:
                         device_registry.async_update_device(
                             device_entry.id,

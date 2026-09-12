@@ -1,8 +1,9 @@
 import types
 import unittest
-from unittest.mock import Mock
+import asyncio
+from unittest.mock import AsyncMock, Mock
 
-from tests.test_integration_migration import device_for_entry
+from tests.test_integration_migration import device_for_entry, _integration_function, PACKAGE
 
 
 class DeviceRegistryCompatTest(unittest.TestCase):
@@ -25,6 +26,28 @@ class DeviceRegistryCompatTest(unittest.TestCase):
         self.assertIsNone(device_for_entry(registry, "second", identifier))
         registry.async_get_device.return_value = None
         self.assertIsNone(device_for_entry(registry, "first", identifier))
+
+    def test_pairing_completion_updates_only_its_entry_device(self):
+        device = types.SimpleNamespace(id="owned-device", name_by_user=None)
+        registry = types.SimpleNamespace(async_get_device_by_identifier=Mock(return_value=device),
+            async_update_device=Mock(), async_get_device=Mock(side_effect=AssertionError("unscoped lookup")))
+        callback = _integration_function("config_flow.py", "async_step_device_details", {
+            "DOMAIN": "rainpoint_local", "_selected_area": lambda *_: ("area-id", "Garden"),
+            "dr": types.SimpleNamespace(async_get=lambda _: registry),
+        }, classname="RainPointLocalOptionsFlow")
+        client = types.SimpleNamespace(complete_pairing=AsyncMock(return_value={"device": {"device_id": "local-id"}}))
+        flow = types.SimpleNamespace(_paired_endpoint="91234524", _token="test-only",
+            _entry=types.SimpleNamespace(entry_id="owner-entry"), _pairing_profile=None,
+            hass=types.SimpleNamespace(data={}), _client=lambda: client,
+            async_create_entry=Mock(return_value={"type": "create_entry"}))
+        self.assertEqual({"type": "create_entry"}, asyncio.run(callback(flow, {"name": "New name"})))
+        registry.async_get_device_by_identifier.assert_called_once_with(("rainpoint_local", "local-id"), "owner-entry")
+        registry.async_update_device.assert_called_once_with("owned-device", name="New name", name_by_user=None, area_id="area-id")
+
+    def test_legacy_lookup_is_confined_to_compatibility_helper(self):
+        for path in PACKAGE.glob("*.py"):
+            if path.name != "registry.py":
+                self.assertNotIn(".async_get_device(", path.read_text(), str(path))
 
 
 if __name__ == "__main__":

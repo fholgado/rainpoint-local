@@ -76,7 +76,7 @@ setup remains discovery plus physical confirmation, with one unified image.
 
 HA 2026.8 made identifiers entry-scoped and deprecated unscoped lookups until
 2027.8 ([official migration notice](https://developers.home-assistant.io/blog/2026/07/21/device-registry-single-config-entry/)).
-The three metadata/re-pair call sites now use the owning entry through one
+The four metadata/re-pair call sites now use the owning entry through one
 compatibility helper. Only HA 2026.7 uses the old method, with an ownership check.
 Unit tests distinguish two gateway entries sharing an identifier; actual-Core CI
 exercises lookup/removal on both supported test versions and forbids deprecated
