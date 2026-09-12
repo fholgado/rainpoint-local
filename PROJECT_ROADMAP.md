@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-11
+Last reviewed: 2026-09-12
 
 This is the only live project-status checklist. Device references describe
 current protocol facts; research records and fixtures preserve experimental
@@ -23,6 +23,16 @@ evidence. A transmitted frame alone never closes a physical acceptance gate.
   no extra irrigation was triggered for this template change.
 
 ### Alpha cohort preparation
+
+- [x] Designate the current stack as **Alpha 1**, `v0.18.0-alpha.1`, with the
+  user's approval (September 12): gateway 0.39.0, HA integration 0.18.0 and
+  unified firmware 0.19.0. Keep existing component versions and RF code intact.
+  README, agent-assisted setup and release/bundle docs identify the combination,
+  HACS prerelease selection, downloads and known limitations. The separately
+  published `firmware-v0.19.0` provides the original approved signed image.
+  Remaining independent-install, UI, lifecycle/coexistence and soak gates below
+  stay open for alpha-cohort validation; they are not prerequisites to inviting
+  testers and are not marked successful by release publication.
 
 - [x] Add a compact per-node BOM to the getting-started guide, linked from
   README: reference ESP32 board, 433 MHz CC1101/antenna and short female/female
@@ -99,7 +109,9 @@ covering **HCS02x sensors, HTV145 single-zone and HTV405 four-zone valves**.
 This is a separate `rainpoint_local` installation, not a cloud-integration merge.
 Do not drop valve coverage to a sensor-only alpha. Dry valve verification comes
 before supervised live irrigation; the alpha is not yet a broad stable release.
-These launch tasks complement, rather than mark complete, the physical gates below.
+Alpha 1 invites external testing now. The remaining tasks complement, rather
+than mark complete, the physical gates below; they no longer all block alpha
+publication. A stable release still requires the corresponding acceptance work.
 
 - [x] Merge the CI-green OTA fix and completed collection review into main
   (PR #11). Gateway 0.37.1 was already deployed; merging changes no live RF state.
@@ -168,11 +180,17 @@ These launch tasks complement, rather than mark complete, the physical gates bel
   control-qualified outcomes explicit. Check removal/re-enrollment, cancellation,
   no-radio/offline-radio feedback and unsupported-model rejection. Record any
   remaining battery-rejoin limits in alpha notes instead of promising recovery.
-- [ ] Prepare an immutable alpha tag and version compatibility table, source
-  bundle, first-USB-flash artifacts with offsets/tool instructions, OTA artifact
-  and installable local catalog, checksums and rollback notes. The stale CI
-  manifest label is fixed: version and actual flash inputs now come from the
-  unified build. No release/tag has been published.
+- [x] Prepare and approve Alpha 1 distribution: stack tag `v0.18.0-alpha.1`,
+  compatibility metadata and runtime source archive alongside the already
+  published signed firmware 0.19.0 bundle. Source/package CI must pass before
+  tagging the merged docs revision. This release does not require repeating
+  physical tests or rebuilding the approved firmware; retain the original
+  signed-image source identity. The [Alpha 1 release](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1)
+  is the distribution entry point; remaining acceptance work stays open.
+  First-USB-flash parts/offsets, signed OTA catalog, checksums and rollback notes
+  are already available in `firmware-v0.19.0` (September 12).
+  The stale CI manifest label is fixed: version and actual flash inputs now come from the
+  unified build. Full-stack publication remains distinct from the firmware tag.
   Unattended preparation now implements a single source firmware version,
   PlatformIO-generated receipt of actual flash parts/offsets, and a local alpha
   bundle with source, USB/OTA images, catalog, compatibility metadata, checksums

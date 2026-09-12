@@ -6,11 +6,15 @@ associations, ACK ownership, counters, and safety; the HA integration exposes
 telemetry and qualified controls. Normal operation does not need the vendor cloud
 or an SDR.
 
-**Early alpha — sensors and both valve families.**
+**Alpha 1 is available — sensors and both valve families.**
 Start with [Getting started: agent-assisted setup](GETTING_STARTED.md).
 Give the guide to your agent to install the gateway and integration, help flash
 your radio, and hand you off to device pairing in Home Assistant.
-No downloadable alpha release is published yet; use a maintainer-approved version.
+Download [Alpha 1 (`v0.18.0-alpha.1`)](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1).
+Use gateway **0.39.0**, HA integration **0.18.0** and signed radio firmware
+**0.19.0** together. See [release notes and known limitations](docs/ALPHA_1.md).
+We're inviting builders to help validate fresh installs and device lifecycle
+behavior; alpha does not mean those remaining tests have already passed.
 
 ## Device support
 
@@ -77,6 +81,7 @@ environment; production must exclude experimental transmit paths.
 | Need | Document |
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
+| Alpha 1 versions, downloads and known limitations | [Alpha 1](docs/ALPHA_1.md) |
 | Node parts and Amazon shopping links | [Quick BOM](GETTING_STARTED.md#quick-bom-per-radio-node) |
 | Fresh installation tests without household devices | [Isolated HA testing](docs/ISOLATED_HA_TESTING.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |

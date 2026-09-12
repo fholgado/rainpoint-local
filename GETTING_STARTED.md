@@ -23,10 +23,12 @@ Use authorized HA/browser access to do the installation. Ask the user only for
 actions requiring their credentials, physical input or access you do not have.
 Take an HA backup first.
 
-Select a maintainer-approved version combination and record the installed app,
-integration and firmware versions. No alpha release is published yet; repository
-installation currently follows `main`. For a specifically pinned source install,
-consult the [bundle guide](docs/ALPHA_BUNDLE.md).
+Use [Alpha 1](docs/ALPHA_1.md): gateway **0.39.0**, integration **0.18.0** and
+signed firmware **0.19.0**. Record all three installed versions. The release tag
+is **`v0.18.0-alpha.1`**; component version numbers remain independent.
+The app repository follows `main`, so check its offered gateway version against
+this combination before installing. For a pinned source install, use the source
+package on the release and the [bundle guide](docs/ALPHA_BUNDLE.md).
 
 ### Quick BOM (per radio node)
 
@@ -73,13 +75,16 @@ Start the app and enable start-on-boot.
 ### HA integration
 
 In HACS, add the same URL under **Custom repositories**, choose **Integration**,
-and download **RainPoint Local**. Arrange the HA restart with the user, then
+and download **RainPoint Local**, selecting **`v0.18.0-alpha.1`** in the version
+selector (enable prereleases if necessary). Do not select the firmware-only
+`firmware-v0.19.0` tag or `main` for a pinned Alpha 1 installation.
+Arrange the HA restart with the user, then
 accept the discovered gateway in **Settings → Devices & services**.
 
 HACS installs the integration, not the gateway app or radio firmware. The app
 repository removes manual gateway file copying. Repository metadata and CI
-validation are present; clean end-to-end installation remains an
-[alpha acceptance gate](PROJECT_ROADMAP.md#alpha-cohort-preparation).
+validation are present; testers are invited to report their fresh-install
+results against the [alpha acceptance work](PROJECT_ROADMAP.md#alpha-cohort-preparation).
 See [distribution details](docs/HACS_DISTRIBUTION_REQUIREMENTS.md) if installation
 or version selection differs from this path.
 
@@ -94,8 +99,13 @@ Have the user wire the unpowered board using the
 CC1101 power is **3.3 V, not 5 V**. GDO0 is required; GDO2 is unused and optional.
 Ask them to attach the antenna and connect the ESP32 by USB.
 
-On that computer, obtain the selected source revision and install PlatformIO
-Core 6.1.19 if needed. From the checkout, run:
+For Alpha 1, download **`rainpoint-radio-0.19.0.zip`** from the
+[release](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1),
+verify its checksums and follow the included README's first-USB-flash command.
+This uses the approved signed build without compiling it again.
+
+Alternatively, to build from source, obtain the selected release tag and install
+PlatformIO Core 6.1.19 if needed. From the checkout, run:
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
@@ -112,8 +122,7 @@ pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge \
 
 **Done when:** upload succeeds and the node boots. If upload cannot connect,
 check the data cable and ask the user to hold BOOT during connection.
-For a supplied prebuilt bundle, use its
-[first-flash instructions](docs/ALPHA_BUNDLE.md#first-usb-flash-new-classic-esp32-only).
+Source-built images are for USB flashing, not publisher-signed OTA distribution.
 
 ## 4. Agent + user: connect Wi-Fi and adopt
 
@@ -156,7 +165,7 @@ Mobile forwarding is optional; see [notifications](docs/ALPHA_NOTIFICATIONS.md).
 
 ## Limits and updates
 
-HTV405 battery is not decoded and it has no water-volume capability. The candidate
+HTV405 battery is not decoded and it has no water-volume capability. Alpha 1
 firmware supports up to eight HTV145 associations per radio, sharing a custom
 gateway identity. Older firmware retains its one-valve-per-radio limit.
 Battery-change recovery and stock/local coexistence still need qualification.
@@ -164,7 +173,7 @@ Use a trusted LAN; see [security details](SECURITY.md) and the
 [roadmap](PROJECT_ROADMAP.md) for full alpha limitations.
 Operational connections now require matching TLS-capable gateway, integration
 and firmware versions. Initial Wi-Fi/adoption setup still requires a trusted
-network. Do not mix this candidate with the earlier plaintext transport.
+network. Do not mix Alpha 1 with the earlier plaintext transport.
 
 Updates are separate: app store for the gateway, HACS for the integration and
 HA's radio Update entity once an agent/maintainer has staged a compatible

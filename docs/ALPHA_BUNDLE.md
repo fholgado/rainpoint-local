@@ -1,9 +1,16 @@
 # Alpha bundle: flashing, updating and rollback
 
-This bundle is an **unpublished candidate**, not evidence that physical release
-gates passed. Read `compatibility.json` for the exact source commit and three
-component versions. A bundle marked `source_dirty: true` is a developer preview
-and must not be distributed. The maintainer must explicitly approve a release.
+[Alpha 1](ALPHA_1.md) is the first published stack prerelease: gateway **0.39.0**,
+integration **0.18.0**, firmware **0.19.0**. Download its source archive and
+radio ZIP from the release page; they are separate assets, not one combined ZIP.
+Read the release's `compatibility.json` for both the stack source commit and
+original signed firmware commit. Physical acceptance still in progress is
+documented in the roadmap and release notes for alpha testers.
+
+The local `tools/package_alpha.py` output remains an **unpublished candidate**
+until separately approved and published. A bundle marked `source_dirty: true`
+is a developer preview and must not be distributed. Do not confuse a locally
+rebuilt candidate with the approved signed release image.
 
 ## Verify before use
 
@@ -19,6 +26,15 @@ distribution. Never mix USB parts from different bundles.
 and the separate HA integration under `custom_components/rainpoint_local`.
 Extract to a temporary directory, inspect, then use the getting-started guide.
 It is not a Home Assistant backup: do not use Restore backup to install it.
+
+For pinned gateway installation instead of the app repository's moving default
+branch, an agent can copy the extracted `addons/rainpointd` directory into HA's
+`/addons/rainpointd`, reload the app store and install the local gateway app.
+Do not also install a second gateway from the repository. HACS can install the
+integration at the Alpha 1 tag; alternatively copy the extracted
+`custom_components/rainpoint_local` into HA's configuration directory and restart
+HA. Back up any existing source/configuration before replacing it. Normal new
+users should prefer the two-store flow in the getting-started guide.
 
 ## First USB flash: new classic ESP32 only
 
@@ -51,7 +67,7 @@ No serial port is opened by the packaging or verification commands themselves.
 
 ### One-time plaintext-to-TLS cutover
 
-The current candidate requires matching TLS-capable gateway, integration and
+Alpha 1 requires matching TLS-capable gateway, integration and
 radio firmware. This migration is **not** the routine rolling update described
 below. Qualify on a spare node first. Back up the gateway database and credentials
 before schema 25 is opened; an old gateway requires restoring that backup.
@@ -76,7 +92,7 @@ or use a deliberate USB upgrade; a TLS connection alone does not establish
 publisher-signature enforcement.
 
 First back up the HA gateway app and retain the previous bundle/catalog.
-Use the version combination in `compatibility.json`, update while valves are
+Use the version combination in the release's `compatibility.json`, update while valves are
 idle, and update one radio at a time. Copy the **contents** of `ota/` to
 `/share/rainpoint-local/firmware/` on HA: the `catalog.json` and the `.bin` it
 references must remain together. Keep the app's `firmware_catalog_path` pointed
