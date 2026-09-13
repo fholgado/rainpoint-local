@@ -1,11 +1,11 @@
 # Example HA package. Copy tools/reliability_soak.py into /config/rainpoint-local/.
-# Set the gateway URL for your installation. The output contains private RF data.
+# Reuse HA's existing TLS credential privately. Output contains private RF data.
 shell_command:
   rainpoint_collect_reliability: >-
     python3 /config/rainpoint-local/reliability_soak.py collect
     --database /config/rainpoint-local/reliability.sqlite3
     --status-output /config/rainpoint-local/reliability-status.json
-    --gateway-url http://homeassistant.local:8787
+    --ha-config /config
     --hours 72
 
 automation:
@@ -13,6 +13,7 @@ automation:
     alias: RainPoint reliability evidence collection
     description: Read-only snapshots and RF events for a fixed 72-hour window.
     mode: single
+    initial_state: true
     triggers:
       - trigger: homeassistant
         event: start
