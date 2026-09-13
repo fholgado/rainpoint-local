@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-12
+Last reviewed: 2026-09-13
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -8,8 +8,8 @@ qualification. Detailed history and proof are in the
 
 ## Current work order
 
-1. Build/test the dedicated pairing wizard without changing the live RF paths.
-2. Observe the fixed 72-hour baseline; keep gateway/radio versions and schedules unchanged.
+1. Physically test the deployed pairing wizard, starting with a test sensor; keep live RF implementations unchanged.
+2. Start a new fixed 72-hour baseline after wizard testing; keep gateway/radio versions and schedules unchanged.
 3. Collect physical lifecycle results, then complete stable-release qualification.
 
 No extra watering, pairing, battery cycles, radio flashing or outage tests without
@@ -64,7 +64,8 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Remove the “Add with setup code” menu; use discovery and BOOT confirmation.
 - [x] Build the catalog-driven wizard with Back/Next, staged progress, scoped cancellation and refresh recovery; pass isolated browser and real HA lifecycle checks.
 - [x] Return to the device list after removal in the new panel; native HA's separate device page is unchanged.
-- [ ] Deploy integration 0.18.2 after the baseline; physically qualify the new wizard for sensors and both valves.
+- [x] Deploy integration 0.18.2 with backup, HA configuration check/restart and served-asset verification; gateway 0.39.0 and radio firmware 0.19.0 unchanged.
+- [ ] Physically qualify the new wizard for sensors and both valves.
 - [ ] Complete three sensor pair → report → remove → re-pair cycles on unchanged firmware.
 - [ ] Verify removal clears entities, suppression and ACK ownership; re-addition stays duplicate-free.
 
@@ -140,7 +141,8 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Implement the durable, fixed-window, read-only reliability collector.
 - [x] Review the completed 72-hour collection: 874 snapshots, 66,569 events, no collector gaps.
 - [x] Update standalone collection for TLS using HA's saved credential; retain the old evidence database.
-- [ ] Review the unchanged-version baseline started Sep 13 00:24 UTC; ends Sep 16 00:24 UTC (gateway 0.39.0, integration 0.18.1, firmware 0.19.0).
+- [x] Preserve the partial Sep 13 integration 0.18.1 baseline; pause collection and its follow-up for the user-approved wizard deployment/testing. This is not a completed qualification.
+- [ ] After wizard testing, start and review a new 72-hour baseline with fresh evidence paths (gateway 0.39.0, integration 0.18.2, firmware 0.19.0).
 - [ ] Include coexistence and three successful local scheduled watering cycles.
 - [ ] Include HA/gateway restart, node reboot/OTA and device battery cycle without state loss/replay.
 - [ ] Validate weak-link placement from evidence before relocating radios.
