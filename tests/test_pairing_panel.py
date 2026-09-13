@@ -12,7 +12,8 @@ class UnknownFlow(Exception):
 
 class PairingPanelTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.client = SimpleNamespace(stop_pairing=AsyncMock(), commission_valve=AsyncMock())
+        self.client = SimpleNamespace(stop_pairing=AsyncMock(), commission_valve=AsyncMock(),
+            pairing=AsyncMock(return_value={"command_id": "owned-command"}))
         self.manager = SimpleNamespace(async_get=Mock(return_value={
             "handler": "gateway-a", "context": {"rainpoint_pairing_command_id": "owned-command"}}),
             async_abort=Mock())
@@ -58,3 +59,22 @@ class PairingPanelTests(unittest.IsolatedAsyncioTestCase):
         await self.cancel(self.hass, "gateway-a", "flow")
         self.client.commission_valve.assert_awaited_once_with("private", "valve-a", "cancel", pairing_command_id="association-a")
         self.client.stop_pairing.assert_not_awaited()
+
+    async def test_superseded_flow_closes_without_cancelling_new_pairing(self):
+        self.client.pairing.return_value = {"command_id": "somebody-elses-command"}
+        self.assertFalse((await self.cancel(self.hass, "gateway-a", "old-flow"))["stop_requested"])
+        self.client.stop_pairing.assert_not_awaited()
+        self.manager.async_abort.assert_called_once_with("old-flow")
+
+    async def test_progress_cannot_accept_another_sessions_device(self):
+        import asyncio
+        parse = Mock(side_effect=AssertionError("must reject before interpreting another session"))
+        wait = _integration_function("config_flow.py", "_async_wait_for_device", {
+            "asyncio": asyncio, "RainPointLocalCannotConnect": OSError,
+            "RainPointLocalInvalidResponse": ValueError, "pairing_completed_endpoint": parse},
+            classname="RainPointLocalOptionsFlow")
+        self.client.pairing.return_value = {"command_id": "new-session", "completed_endpoint": "another-device"}
+        flow = SimpleNamespace(_client=lambda: self.client, _pairing_command_id="owned-command", _pairing_error=None)
+        await wait(flow)
+        self.assertEqual("pairing_session_changed", flow._pairing_error)
+        parse.assert_not_called()

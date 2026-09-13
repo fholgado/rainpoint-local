@@ -62,8 +62,9 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 - [x] Add native Next/review Back actions, friendly radio labels and preserved selections.
 - [x] Remove the “Add with setup code” menu; use discovery and BOOT confirmation.
-- [ ] Build/test a dedicated wizard with Back/Next, staged progress and scoped cancellation. **Active; no physical tests yet.**
-- [ ] Return to the device list after removal; native HA has no backend navigation hook.
+- [x] Build the catalog-driven wizard with Back/Next, staged progress, scoped cancellation and refresh recovery; pass isolated browser and real HA lifecycle checks.
+- [x] Return to the device list after removal in the new panel; native HA's separate device page is unchanged.
+- [ ] Deploy integration 0.18.2 after the baseline; physically qualify the new wizard for sensors and both valves.
 - [ ] Complete three sensor pair → report → remove → re-pair cycles on unchanged firmware.
 - [ ] Verify removal clears entities, suppression and ACK ownership; re-addition stays duplicate-free.
 

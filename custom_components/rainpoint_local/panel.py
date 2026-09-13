@@ -104,13 +104,17 @@ async def cancel_flow(hass, entry_id, flow_id):
     if device_id:
         await coordinator.client.commission_valve(token, device_id, "cancel",
             pairing_command_id=context.get("rainpoint_commission_command_id"))
+    stop_requested = bool(device_id)
     if command_id:
-        await coordinator.client.stop_pairing(token, command_id=command_id)
+        current = await coordinator.client.pairing()
+        if current.get("command_id") == command_id:
+            await coordinator.client.stop_pairing(token, command_id=command_id)
+            stop_requested = True
     try:
         manager.async_abort(flow_id)
     except UnknownFlow:
         pass  # Completion may race a successful cancellation request.
-    return {"closed": True, "stop_requested": bool(command_id or device_id)}
+    return {"closed": True, "stop_requested": stop_requested}
 
 
 @websocket_api.require_admin

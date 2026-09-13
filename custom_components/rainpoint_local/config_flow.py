@@ -931,6 +931,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     self._pairing_error = "invalid_response"
                     return
 
+                if (self._pairing_command_id is not None
+                        and progress.get("command_id") != self._pairing_command_id):
+                    self._pairing_error = "pairing_session_changed"
+                    return
                 try:
                     completed_endpoint = pairing_completed_endpoint(progress)
                     finalizing = pairing_is_finalizing(progress)
