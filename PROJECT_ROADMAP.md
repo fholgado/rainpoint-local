@@ -8,9 +8,9 @@ qualification. Detailed history and proof are in the
 
 ## Current work order
 
-1. Finish unattended software checks below; preserve published Alpha 1 artifacts.
-2. Collect alpha testers' installation and device-lifecycle results.
-3. Complete recovery, control and stability qualification before a stable release.
+1. Build/test the dedicated pairing wizard without changing the live RF paths.
+2. Observe the fixed 72-hour baseline; keep gateway/radio versions and schedules unchanged.
+3. Collect physical lifecycle results, then complete stable-release qualification.
 
 No extra watering, pairing, battery cycles, radio flashing or outage tests without
 the required user authorization. Keep RF pairing prefixes frozen unless evidence
@@ -27,7 +27,7 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 - [x] Audit default notifications and provide optional mobile/stale-report blueprints.
 - [x] Deploy TLS, signed OTA and per-association single-zone state to all reference radios.
 - [x] Verify post-update watering and automatic stop for both valve families.
-- [x] Fix standalone manual TLS credentials; qualify setup/reload/removal on HA Core 2026.7.0/2026.9.1 (integration 0.18.1, not deployed).
+- [x] Fix standalone manual TLS credentials and entry-scoped registry lookups; qualify HA Core 2026.7.0/2026.9.1 and deploy integration 0.18.1.
 - [x] Verify default notification delivery/deduplication/dismissal for both valves on clean HA Core (not rendered UI).
 - [ ] Validate fresh HA OS app/HACS installation and adoption on aarch64 and amd64. **Tester.**
 - [ ] Exercise rendered pairing/removal/cancellation screens for sensors and both valves. **Tester.**
@@ -62,7 +62,9 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 - [x] Add native Next/review Back actions, friendly radio labels and preserved selections.
 - [x] Remove the “Add with setup code” menu; use discovery and BOOT confirmation.
-- [ ] Return to the device list after removal; native HA has no backend navigation hook.
+- [x] Build the catalog-driven wizard with Back/Next, staged progress, scoped cancellation and refresh recovery; pass isolated browser and real HA lifecycle checks.
+- [x] Return to the device list after removal in the new panel; native HA's separate device page is unchanged.
+- [ ] Deploy integration 0.18.2 after the baseline; physically qualify the new wizard for sensors and both valves.
 - [ ] Complete three sensor pair → report → remove → re-pair cycles on unchanged firmware.
 - [ ] Verify removal clears entities, suppression and ACK ownership; re-addition stays duplicate-free.
 
@@ -137,7 +139,8 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 - [x] Implement the durable, fixed-window, read-only reliability collector.
 - [x] Review the completed 72-hour collection: 874 snapshots, 66,569 events, no collector gaps.
-- [ ] Collect an unchanged-release baseline; the completed mixed-version window is not a final soak.
+- [x] Update standalone collection for TLS using HA's saved credential; retain the old evidence database.
+- [ ] Review the unchanged-version baseline started Sep 13 00:24 UTC; ends Sep 16 00:24 UTC (gateway 0.39.0, integration 0.18.1, firmware 0.19.0).
 - [ ] Include coexistence and three successful local scheduled watering cycles.
 - [ ] Include HA/gateway restart, node reboot/OTA and device battery cycle without state loss/replay.
 - [ ] Validate weak-link placement from evidence before relocating radios.
@@ -170,7 +173,8 @@ not tasks to mark “done once.”
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
 - [x] Implement a storage-bounded Mac SDR journal/service runner and receive-only TLS forwarding; test child lifecycle and real gateway authentication.
 - [ ] Install/qualify the Mac SDR service, dedicated identity and USB recovery; Sep 12 check found no supported USB receiver.
-- [ ] Decide whether to split research into a separate repo before a stable release.
+- [x] Keep research in this repo through alpha, excluded from installation artifacts (user approved Sep 12).
+- [ ] Revisit research-repo separation before stable release.
 - [x] Keep one canonical checkout; preserve raw RF evidence and installed/rollback artifacts.
 
 HA must remain independent of SDR. Check current hardware availability when
@@ -188,7 +192,6 @@ implementation or hardware optimization in this pass.
 - [ ] Determine whether pairing can select the long-term telemetry channel.
 - [ ] Characterize compact product/status integrity before generating those messages.
 - [ ] Optimize channel scheduling/placement beyond the required stability floor.
-- [ ] Build a dedicated pairing wizard with footer Back/Next; native improvements shipped first.
 - [ ] Finish carrier manufacturing/enclosure work under its separate physical checklist.
 
 Promote side work only if it blocks acceptance, invalidates evidence or protects
