@@ -1,5 +1,16 @@
 # Changelog
 
+## Gateway 0.39.0 / Integration 0.18.2 / Firmware 0.19.0 / Unreleased
+
+- Add the administrator-only RainPoint devices panel with catalog-driven
+  sensor/valve setup, Back/Next, staged progress, resumable HA flows and removal
+  that returns to the device list. Keep native HA setup available.
+- Cancel only the active flow's pairing/setup request and report failed
+  cancellation without silently closing. Never replay Start pairing on refresh.
+- Add rendered UI/navigation tests and real HA panel lifecycle checks.
+- Keep RF builders, gateway runtime, radio firmware and published Alpha 1
+  artifacts unchanged. Physical wizard acceptance remains on the roadmap.
+
 ## Gateway 0.39.0 / Integration 0.18.1 / Firmware 0.19.0 / Unreleased
 
 - Scope device metadata/re-pair lookups to the owning integration entry on HA

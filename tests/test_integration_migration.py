@@ -130,7 +130,7 @@ class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
         def create_task(coro):
             coro.close()
             return "task"
-        flow = types.SimpleNamespace(_client=lambda: client, _token="token",
+        flow = types.SimpleNamespace(_client=lambda: client, _token="token", context={},
             _commission_device_id="valve", _commission_pairing_command_id="pair-1",
             hass=types.SimpleNamespace(async_create_task=create_task),
             _async_commission_wait=wait, async_step_commission_progress=AsyncMock())

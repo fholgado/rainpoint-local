@@ -62,6 +62,9 @@ Unknown counters block ordinary control until explicit recovery is confirmed.
 
 ## Development
 
+The unreleased integration adds a [device setup wizard](docs/PAIRING_WIZARD.md).
+Alpha 1 continues to use the native HA options flow until a new release is published.
+
 Use the canonical checkout and Git branches; do not create additional worktrees.
 
 ```sh

@@ -195,6 +195,7 @@
     "abort": {
       "no_pending_valves": "No single-zone valves need control verification.",
       "pairing_timeout": "The pairing window expired before the device completed enrollment",
+      "pairing_session_changed": "Another pairing session replaced this window. Its result will not be used here. Go Back to start a new attempt.",
       "pairing_failed": "The local radio node could not complete the device enrollment exchange",
       "no_supported_devices": "This gateway does not currently advertise any user-pairable device models",
       "no_radio_nodes": "No adopted radio nodes are available to remove",

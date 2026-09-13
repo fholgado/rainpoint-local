@@ -832,6 +832,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                 else:
                     self._pairing_command_id = (started.get("command_id")
                                                 if started.get("scoped_cancellation") is True else None)
+                    self.context["rainpoint_pairing_command_id"] = self._pairing_command_id
                     self._pairing_node_name = self._pairing_nodes[node_id]
                     self._pairing_duration_seconds = duration_seconds
                     self._pairing_deadline = time.monotonic() + duration_seconds + 60
@@ -930,6 +931,10 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     self._pairing_error = "invalid_response"
                     return
 
+                if (self._pairing_command_id is not None
+                        and progress.get("command_id") != self._pairing_command_id):
+                    self._pairing_error = "pairing_session_changed"
+                    return
                 try:
                     completed_endpoint = pairing_completed_endpoint(progress)
                     finalizing = pairing_is_finalizing(progress)
@@ -938,6 +943,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                     return
                 if completed_endpoint is not None and not finalizing:
                     self._paired_endpoint = completed_endpoint
+                    self.context.pop("rainpoint_pairing_command_id", None)
                     return
                 if progress.get("stage") == "transmitter_failed":
                     self._pairing_error = "pairing_failed"
@@ -1000,6 +1006,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
     async def async_step_commission_start(self, user_input=None) -> FlowResult:
         errors = {}
         if user_input is not None:
+            self.context["rainpoint_commission_device_id"] = self._commission_device_id
+            self.context["rainpoint_commission_command_id"] = self._commission_pairing_command_id
             try:
                 await self._client().commission_valve(self._token,
                     self._commission_device_id, "enable",

@@ -88,6 +88,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     setup_notifications(hass, entry, coordinator)
     coordinator.async_start_event_listener()
+    from .panel import async_setup_panel
+    await async_setup_panel(hass)
     return True
 
 
@@ -170,6 +172,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)
+        if not hass.data[DOMAIN]:
+            from .panel import async_remove_panel
+            async_remove_panel(hass)
     elif isinstance(coordinator, RainPointLocalCoordinator):
         coordinator.async_start_event_listener()
     return unloaded

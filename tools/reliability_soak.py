@@ -11,17 +11,66 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
+import ssl
 from typing import Callable
-from urllib.request import urlopen
+from urllib.parse import urlsplit
+from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def fetch(base: str, resource: str) -> dict:
-    with urlopen(f"{base.rstrip('/')}/api/v1/{resource}", timeout=5) as response:
-        return json.load(response)
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def gateway_getter(base: str, token: str) -> Callable[[str], dict]:
+    """Read-only TLS-PSK client; no plaintext fallback or redirected requests.
+
+    Kept standalone for HA shell_command deployment. Its TLS settings are
+    contract-tested against rainpointd.secure_transport.client_context.
+    """
+    parsed = urlsplit(base)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username
+            or parsed.password or parsed.query or parsed.fragment
+            or parsed.path not in ("", "/")):
+        raise ValueError("an HTTPS gateway origin is required")
+    key = token.encode()
+    if not 32 <= len(key) <= 256:
+        raise ValueError("invalid management credential")
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE  # Peer authenticated by PSK, not X.509.
+    context.minimum_version = context.maximum_version = ssl.TLSVersion.TLSv1_2
+    context.set_ciphers("ECDHE-PSK-CHACHA20-POLY1305:PSK-AES128-GCM-SHA256")
+    context.set_psk_client_callback(lambda hint: ("management", key))
+    opener = build_opener(HTTPSHandler(context=context), NoRedirect())
+
+    def fetch(resource: str) -> dict:
+        # Only collector resources; this helper cannot issue management writes.
+        if resource not in {"devices", "nodes", "receivers"} and not (
+                resource.startswith("events?since=") and resource[13:].isdigit()):
+            raise ValueError("unsupported collection resource")
+        with opener.open(f"{base.rstrip('/')}/api/v1/{resource}", timeout=5) as response:
+            return json.load(response)
+    return fetch
+
+
+def ha_credentials(config: Path, entry_id: str | None) -> tuple[str, str]:
+    """Reuse one existing HA entry privately; never modify its credential."""
+    entries = json.loads((config / ".storage/core.config_entries").read_text())
+    matches = [entry for entry in entries["data"]["entries"]
+               if entry["domain"] == "rainpoint_local"
+               and (entry_id is None or entry["entry_id"] == entry_id)]
+    if len(matches) != 1:
+        raise ValueError("select exactly one RainPoint entry with --entry-id")
+    data = matches[0]["data"]
+    host = data["host"]
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"https://{host}:{data['port']}", data["registry_write_token"]
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -112,14 +161,24 @@ def main() -> int:
     parser.add_argument("command", choices=("collect", "status"))
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--gateway-url")
+    parser.add_argument("--token-file", type=Path)
+    parser.add_argument("--ha-config", type=Path)
+    parser.add_argument("--entry-id")
     parser.add_argument("--hours", type=float, default=72)
     parser.add_argument("--status-output", type=Path)
     args = parser.parse_args()
-    if args.command == "collect" and not args.gateway_url:
-        parser.error("collect requires --gateway-url")
+    getter = None
+    if args.command == "collect":
+        if args.ha_config and not (args.gateway_url or args.token_file):
+            base, token = ha_credentials(args.ha_config, args.entry_id)
+        elif args.gateway_url and args.token_file and not args.ha_config:
+            base, token = args.gateway_url, args.token_file.read_text().strip()
+        else:
+            parser.error("collect requires --ha-config or --gateway-url with --token-file")
+        getter = gateway_getter(base, token)
     db = connect(args.database)
     try:
-        result = (collect(db, lambda resource: fetch(args.gateway_url, resource),
+        result = (collect(db, getter,
                           now=utcnow(), hours=args.hours)
                   if args.command == "collect" else summary(db))
         encoded = json.dumps(result, sort_keys=True)
