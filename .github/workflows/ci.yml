@@ -13,6 +13,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Check pairing wizard navigation
+        run: node --test tests/frontend/wizard.test.mjs
+      - name: Exercise rendered pairing wizard without live RF
+        run: |
+          npm install --prefix "$RUNNER_TEMP/rainpoint-ui" --no-save playwright@1.62.1
+          "$RUNNER_TEMP/rainpoint-ui/node_modules/.bin/playwright" install --with-deps chromium
+          RAINPOINT_PLAYWRIGHT_MODULE="$RUNNER_TEMP/rainpoint-ui/node_modules/playwright" node tests/frontend/browser.mjs
       - name: Qualify fresh integration against actual HA Core
         run: |
           for version in 2026.7.0 2026.9.1; do
