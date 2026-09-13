@@ -9,8 +9,8 @@ qualification. Detailed history and proof are in the
 ## Current work order
 
 1. Physically test the deployed pairing wizard, starting with a test sensor; keep live RF implementations unchanged.
-2. Start a new fixed 72-hour baseline after wizard testing; keep gateway/radio versions and schedules unchanged.
-3. Collect physical lifecycle results, then complete stable-release qualification.
+2. Collect targeted physical lifecycle results without requiring a new 72-hour baseline.
+3. Continue stable-release qualification; revisit extended soak testing if reliability changes warrant it.
 
 No extra watering, pairing, battery cycles, radio flashing or outage tests without
 the required user authorization. Keep RF pairing prefixes frozen unless evidence
@@ -142,7 +142,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Review the completed 72-hour collection: 874 snapshots, 66,569 events, no collector gaps.
 - [x] Update standalone collection for TLS using HA's saved credential; retain the old evidence database.
 - [x] Preserve the partial Sep 13 integration 0.18.1 baseline; pause collection and its follow-up for the user-approved wizard deployment/testing. This is not a completed qualification.
-- [ ] After wizard testing, start and review a new 72-hour baseline with fresh evidence paths (gateway 0.39.0, integration 0.18.2, firmware 0.19.0).
+- [ ] **Deferred by user Sep 13:** revisit a new 72-hour baseline if needed; it does not block wizard testing or current alpha work. Keep collection/follow-up paused and preserve existing evidence; do not automatically restart after wizard tests.
 - [ ] Include coexistence and three successful local scheduled watering cycles.
 - [ ] Include HA/gateway restart, node reboot/OTA and device battery cycle without state loss/replay.
 - [ ] Validate weak-link placement from evidence before relocating radios.
