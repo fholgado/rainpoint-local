@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-13
+Last reviewed: 2026-09-22
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -81,7 +81,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Implement generic factory-ID discovery, custom-ID handoff and persistent selected ownership.
 - [x] Define operational pairing separately from full six-stage terminal completion.
 - [ ] Physically verify current discovery → pairing → owner setup → user-requested control.
-- [ ] Verify sustained reporting/control on the custom-ID association.
+- [x] Verify sustained reporting/control on the reference custom-ID association; four scheduled runs and reported stops in the [Sep 17–22 field review](research/FIELD_RELIABILITY_20260922.md).
 - [ ] Compare stock reset/enrollment, retained long-press pairing and battery rejoin with fresh batteries.
 - [ ] Complete the terminal stage without changing the proven prefix; repeat each new boundary twice.
 - [ ] Complete three unchanged full local enrollments.
@@ -90,10 +90,12 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 ## Phase 2 — persistence, recovery, and coexistence
 
 - [x] Confirm direct ESP32 sensor reporting recovery without SDR assistance.
-- [ ] Qualify repeated HTV405 report cycles and longer gateway/node restarts with one ACK owner.
+- [x] Verify repeated HTV405 report/ACK cycles with one assigned owner across five days.
+- [ ] Qualify longer, controlled gateway/node outages with one ACK owner.
 - [ ] Battery-cycle sensors; restore the same HA identity and reports without arming pairing.
 - [ ] Capture stock battery rejoin for both valves, then prove equivalent local recovery.
-- [ ] Restart HA, gateway and assigned radios while idle; preserve state with no command replay.
+- [x] Observe production-node reconnection, restored ownership and fresh device reports after the Sep 22 HA-host restart.
+- [ ] Qualify controlled HA/gateway/radio idle restarts with explicit state-persistence and no-replay assertions.
 - [ ] Reassign a sensor ACK owner; prove revocation occurs before replacement transmissions.
 - [ ] Qualify stock/custom coexistence with separate identities and no duplicate HA devices.
 - [x] Document [device/association recovery](docs/DEVICE_RECOVERY.md), deletion guards and unverified battery-rejoin limits.
@@ -116,6 +118,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Verify idle and active-run restart recovery, automatic stop and early close without replay.
 - [x] Promote the proven association to standard firmware and HA controls.
 - [x] Verify the first front-garden scheduled run and valve-reported stop.
+- [x] Correlate the Sep 21 scheduled single-zone run's HA trace with RF-reported start/stop and 35-minute duration.
 - [ ] Measure report/summary ACK timing, residue and retry suppression independently on air.
 - [ ] Complete the command-phase model for arbitrary action order, including consecutive opens.
 - [ ] Repeat operational acceptance on fresh associations/batteries.
@@ -142,11 +145,14 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Review the completed 72-hour collection: 874 snapshots, 66,569 events, no collector gaps.
 - [x] Update standalone collection for TLS using HA's saved credential; retain the old evidence database.
 - [x] Preserve the partial Sep 13 integration 0.18.1 baseline; pause collection and its follow-up for the user-approved wizard deployment/testing. This is not a completed qualification.
+- [x] Review the [Sep 17–22 passive field evidence](research/FIELD_RELIABILITY_20260922.md): sustained reporting, seven bounded runs and restart recovery; record the brief sensor freshness exception.
 - [ ] **Deferred by user Sep 13:** revisit a new 72-hour baseline if needed; it does not block wizard testing or current alpha work. Keep collection/follow-up paused and preserve existing evidence; do not automatically restart after wizard tests.
-- [ ] Include coexistence and three successful local scheduled watering cycles.
+- [x] Observe at least three successful local scheduled watering cycles; six scheduled runs plus one manual run had valve-reported starts/stops.
+- [ ] Include the separately qualified stock/custom coexistence scenario in stability acceptance.
 - [ ] Include HA/gateway restart, node reboot/OTA and device battery cycle without state loss/replay.
 - [ ] Validate weak-link placement from evidence before relocating radios.
-- [ ] Observe no phantom devices, duplicate ACK owners, false states, stale decisions or alert flapping.
+- [x] Verify the Sep 22 gateway inventory has eight expected devices and six unique sensor ACK assignments.
+- [ ] Qualify historical HA duplicate/false-state absence, stale-data decisions and alert flapping under failure conditions.
 - [x] Verify interrupted OTA retains the running image and a later retry can succeed.
 - [ ] Physically test bad-checksum OTA, boot-time power loss, unhealthy rollback and USB recovery.
 
