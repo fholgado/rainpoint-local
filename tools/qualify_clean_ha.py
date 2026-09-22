@@ -155,13 +155,8 @@ async def qualify(config_dir: Path, port: int, token: str) -> None:
         await hass.async_block_till_done()
         assert entry.state.value == "loaded", entry.state
         assert entry.data["registry_write_token"] == token
-        from custom_components.rainpoint_local.panel import PANEL_KEY, inventory, cancel_flow
-        assert hass.data[PANEL_KEY]["registered"]
-        panel_data = inventory(hass, entry.entry_id)
-        assert panel_data["gateways"][0]["entry_id"] == entry.entry_id
-        assert not panel_data["devices"]
         import json
-        assert token not in json.dumps(panel_data)
+        assert "rainpoint_local_panel" not in hass.data
         from homeassistant.helpers import device_registry as dr
         from custom_components.rainpoint_local.registry import device_for_entry
         from unittest.mock import patch
@@ -204,16 +199,15 @@ async def qualify(config_dir: Path, port: int, token: str) -> None:
         assert {field["name"] for field in serialized["data_schema"]} == {"node_id", "duration_seconds"}
         assert any(field.get("options") for field in serialized["data_schema"])
         assert token not in json.dumps(serialized)
-        assert await cancel_flow(hass, entry.entry_id, no_node["flow_id"]) == {
-            "closed": True, "stop_requested": False}
+        hass.config_entries.options.async_abort(no_node["flow_id"])
         assert await hass.config_entries.async_reload(entry.entry_id)
         await hass.async_block_till_done()
         assert entry.state.value == "loaded"
-        assert hass.data[PANEL_KEY]["registered"]
+        assert "rainpoint_local_panel" not in hass.data
         removed = await hass.config_entries.async_remove(entry.entry_id)
         assert removed["require_restart"] is False
         assert not hass.config_entries.async_entries("rainpoint_local")
-        assert not hass.data[PANEL_KEY]["registered"]
+        assert "rainpoint_local_panel" not in hass.data
         await qualify_manual_setup(hass, port, token)
         print("PASS: real HA Core TLS setup, duplicate discovery, model menus, "
               "no-radio feedback, reload/removal, manual TLS credentials and "

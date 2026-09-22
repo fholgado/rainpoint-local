@@ -62,8 +62,8 @@ Unknown counters block ordinary control until explicit recovery is confirmed.
 
 ## Development
 
-The unreleased integration adds a [device setup wizard](docs/PAIRING_WIZARD.md).
-Alpha 1 continues to use the native HA options flow until a new release is published.
+Manage pairing through **Settings → Devices & services → RainPoint Local**.
+Device setup uses HA's native options flow; no separate sidebar panel is required.
 
 Use the canonical checkout and Git branches; do not create additional worktrees.
 

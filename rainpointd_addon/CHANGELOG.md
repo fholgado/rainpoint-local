@@ -1,5 +1,15 @@
 # Changelog
 
+## Gateway 0.39.0 / Integration 0.18.3 / Firmware 0.19.0 / Unreleased
+
+- Remove the custom pairing wizard, sidebar panel, frontend assets, and
+  panel-only dependencies/tests. Use the existing native HA device setup flow.
+- Retain native model selection, review/Next actions, valve setup and rejection
+  of results from a superseded pairing session. RF and gateway code are unchanged.
+- A full HA restart is required when replacing deployed 0.18.2 to discard its
+  in-memory panel registration and WebSocket handlers; browser refresh alone is
+  insufficient. This source change has not yet been deployed.
+
 ## Gateway 0.39.0 / Integration 0.18.2 / Firmware 0.19.0 / Unreleased
 
 - Add the administrator-only RainPoint devices panel with catalog-driven

@@ -8,7 +8,7 @@ qualification. Detailed history and proof are in the
 
 ## Current work order
 
-1. Physically test the deployed pairing wizard, starting with a test sensor; keep live RF implementations unchanged.
+1. Deploy the native-only integration after review, then improve/test pairing under Devices & services; keep live RF implementations unchanged.
 2. Collect targeted physical lifecycle results without requiring a new 72-hour baseline.
 3. Continue stable-release qualification; revisit extended soak testing if reliability changes warrant it.
 
@@ -62,10 +62,10 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 - [x] Add native Next/review Back actions, friendly radio labels and preserved selections.
 - [x] Remove the “Add with setup code” menu; use discovery and BOOT confirmation.
-- [x] Build the catalog-driven wizard with Back/Next, staged progress, scoped cancellation and refresh recovery; pass isolated browser and real HA lifecycle checks.
-- [x] Return to the device list after removal in the new panel; native HA's separate device page is unchanged.
-- [x] Deploy integration 0.18.2 with backup, HA configuration check/restart and served-asset verification; gateway 0.39.0 and radio firmware 0.19.0 unchanged.
-- [ ] Physically qualify the new wizard for sensors and both valves.
+- [x] Remove the custom wizard/sidebar from source at user request; preserve native pairing and session-ownership checks. The removed implementation remains in Git history.
+- [ ] Deploy native-only integration 0.18.3 with an HA restart; live HA still has 0.18.2's panel until then.
+- [ ] Improve and physically qualify native pairing for sensors and both valves.
+- [ ] Revisit native HA device-page navigation after removal; the removed panel's redirect does not apply there.
 - [ ] Complete three sensor pair → report → remove → re-pair cycles on unchanged firmware.
 - [ ] Verify removal clears entities, suppression and ACK ownership; re-addition stays duplicate-free.
 
@@ -146,7 +146,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Update standalone collection for TLS using HA's saved credential; retain the old evidence database.
 - [x] Preserve the partial Sep 13 integration 0.18.1 baseline; pause collection and its follow-up for the user-approved wizard deployment/testing. This is not a completed qualification.
 - [x] Review the [Sep 17–22 passive field evidence](research/FIELD_RELIABILITY_20260922.md): sustained reporting, seven bounded runs and restart recovery; record the brief sensor freshness exception.
-- [ ] **Deferred by user Sep 13:** revisit a new 72-hour baseline if needed; it does not block wizard testing or current alpha work. Keep collection/follow-up paused and preserve existing evidence; do not automatically restart after wizard tests.
+- [ ] **Deferred by user Sep 13:** revisit a new 72-hour baseline if needed; it does not block native-flow testing or current alpha work. Keep collection/follow-up paused and preserve existing evidence; do not automatically restart.
 - [x] Observe at least three successful local scheduled watering cycles; six scheduled runs plus one manual run had valve-reported starts/stops.
 - [ ] Include the separately qualified stock/custom coexistence scenario in stability acceptance.
 - [ ] Include HA/gateway restart, node reboot/OTA and device battery cycle without state loss/replay.
