@@ -91,6 +91,10 @@ class ESP32SerialTransport:
                 return 0
             message["node_id"] = authenticated_node_id
         message_type = message.get("type")
+        if authenticated_node_id and message_type in {"ack_ownership_status", "command_error"}:
+            self.gateway.observe_ack_ownership_status(authenticated_node_id, message)
+            if message_type == "ack_ownership_status":
+                return 0
         if message_type in {"fatal", "radio_error"}:
             detail = str(message.get("error", "bridge reported a radio error"))
             radio = message.get("radio")

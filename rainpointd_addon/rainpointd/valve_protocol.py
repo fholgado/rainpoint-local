@@ -110,12 +110,17 @@ def _decode_htv405_duration(encoded: bytes, extension: int) -> int:
 def _decode_htv405_remaining_duration(
     encoded: bytes, extension: int
 ) -> int:
-    """Decode remaining time after clearing its high-byte status marker."""
+    """Recover native little-endian seconds across the normalized bit boundary."""
     if len(encoded) != 2:
         raise ValueError("HTV405 remaining duration must contain two bytes")
-    normalized = bytearray(encoded)
-    normalized[1] &= 0x7F
-    return _decode_htv405_duration(bytes(normalized), extension)
+    if encoded[0] & 0x80 == 0 or extension & 0x7F:
+        raise ValueError("HTV405 remaining duration marker is invalid")
+    low = ((encoded[0] << 1) | (encoded[1] >> 7)) & 0xFF
+    high = ((encoded[1] << 1) | (extension >> 7)) & 0xFF
+    seconds = low | (high << 8)
+    if seconds > 3_600:
+        raise ValueError("HTV405 remaining duration is outside validated bounds")
+    return seconds
 
 
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:

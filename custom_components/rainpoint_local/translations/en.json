@@ -284,6 +284,9 @@
       "node_last_seen": {
         "name": "Last heartbeat"
       },
+      "ack_ownership_state": {
+        "name": "ACK ownership cleanup"
+      },
       "ip_address": {
         "name": "IP address"
       },

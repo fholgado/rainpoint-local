@@ -449,6 +449,9 @@ class ESP32NetworkServer:
                         pairing_htv145_stage0_rejected=message.get(
                             "htv145_stage0_rejected"
                         ),
+                        pairing_htv145_plan_reply_retries=message.get(
+                            "htv145_plan_reply_retries"
+                        ),
                         pairing_factory_endpoint=message.get(
                             "factory_endpoint"
                         ),
@@ -585,7 +588,9 @@ class ESP32NetworkServer:
                         ),
                         {},
                     )
-                    if self.gateway.observe_valve_control_error(
+                    if self.gateway.observe_ack_ownership_status(node_id, message):
+                        pass
+                    elif self.gateway.observe_valve_control_error(
                         node_id, message
                     ):
                         self.gateway.update_node(
@@ -734,6 +739,8 @@ class ESP32NetworkServer:
                         "node_reboot",
                         "routine_sensor_ack_tx",
                         "htv405_routine_ack_tx",
+                        "correlated_ack_ownership",
+                        "retained_sensor_rejoin_channel",
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",

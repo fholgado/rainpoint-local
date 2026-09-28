@@ -335,6 +335,8 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"htv145_commissioning\""
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
+        ",\"correlated_ack_ownership\""
+        ",\"retained_sensor_rejoin_channel\""
         ",\"firmware_update_trial\""
         ",\"firmware_signed_ota\""
         "],"

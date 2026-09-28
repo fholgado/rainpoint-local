@@ -492,6 +492,7 @@ class ESP32NetworkTest(unittest.TestCase):
                     "htv145_accepted_factory_counter": 0,
                     "htv145_stage0_accepted": False,
                     "htv145_stage0_rejected": True,
+                    "htv145_plan_reply_retries": 2,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -504,6 +505,7 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("armed", self.gateway.nodes()[0]["pairing_state"])
         self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
+        self.assertEqual(2, self.gateway.nodes()[0]["pairing_htv145_plan_reply_retries"])
         self.assertEqual(
             5, self.gateway.nodes()[0]["pairing_assigned_channel"]
         )
@@ -1993,11 +1995,15 @@ class ESP32NetworkTest(unittest.TestCase):
                 "identify",
                 "routine_sensor_ack_tx",
                 "htv405_routine_ack_tx",
+                "correlated_ack_ownership",
+                "retained_sensor_rejoin_channel",
             ],
         )
         self.assertEqual("node_authenticated", response["type"])
         node = self.gateway.nodes()[0]
         self.assertIn("routine_sensor_ack_tx", node["capabilities"])
+        self.assertIn("correlated_ack_ownership", node["capabilities"])
+        self.assertIn("retained_sensor_rejoin_channel", node["capabilities"])
         configure = {
             "type": "routine_ack_configure",
             "command_id": "34" * 16,
@@ -2013,6 +2019,8 @@ class ESP32NetworkTest(unittest.TestCase):
             "type": "routine_ack_revoke",
             "command_id": "56" * 16,
             "paired_endpoint": "9bce0024",
+            "ownership_generation": "ab" * 16,
+            "ownership_session": "test-connection",
         }
         self.server.send_command(NODE_A, revoke)
         self.assertEqual(revoke, json.loads(stream.readline()))

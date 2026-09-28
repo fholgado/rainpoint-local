@@ -317,9 +317,18 @@ class Htv145ControlCoordinator:
                     frame=frame.hex(), result_code=anchor["result_code"], observed_at=observed_at)
         error = decode_htv145_command_error(frame, profile.link)
         if error is not None:
+            # Idle anchors use their separately qualified fixed phase zero,
+            # independent of the ordinary association marker policy.
+            expected_phase_low = False if state["pending_action"] == "idle_anchor" else (
+                (state["pending_action"] == "open") == profile.command_marker_inverted
+            )
             if (
                 state["pending_command_id"] is None
                 or error["sequence"] != state["pending_sequence"]
+                or state["pending_action"] not in {"open", "close", "idle_anchor"}
+                # Match the sixth native phase bit too; negative replies have
+                # no action field from which the profile marker can be inferred.
+                or bool(frame[14] & 0x80) != expected_phase_low
             ):
                 raise ValueError("HTV145 error has no matching durable reservation")
             return self.store.fail_htv145_command(

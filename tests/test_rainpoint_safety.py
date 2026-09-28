@@ -1423,6 +1423,9 @@ class Htv145ControlCoordinatorTest(unittest.TestCase):
         frame[5:9] = self.profile.link.valve_endpoint
         frame[9:13] = self.profile.link.controller_endpoint
         frame[13] = sequence
+        # This fixture is adapted to this test's CLOSE reservation. Preserve
+        # all six phase bits, not only byte 13; the stored capture is unchanged.
+        frame[14] = 0x50 if self.profile.command_marker_inverted else 0xD0
         frame[-2:] = (binascii.crc_hqx(frame[:-2], 0) ^ 0xC713).to_bytes(2, "big")
         return bytes(frame)
 

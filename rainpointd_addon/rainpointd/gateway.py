@@ -23,6 +23,7 @@ from .device_catalog import DeviceCatalog, EMPTY_CATALOG, ValveDefinition
 from .firmware_catalog import FirmwareCatalog
 from .firmware_signatures import wire_signature
 from . import morning_sync
+from .ack_ownership import AckOwnership
 from .htv145_acceptance import Htv145DryValveAcceptance
 from .htv145_runtime import Htv145Runtime
 from .htv145_commissioning import Htv145Commissioning
@@ -294,7 +295,9 @@ class Gateway:
         self._ensure_registered_sensor_devices()
         self._ensure_registered_valve_devices()
         self._next_event_id = self.latest_event_id() + 1
-        self._lock = threading.Lock()
+        # A command sender can synchronously report its result. Journal writes
+        # precede dispatch, and reentrant status delivery must not deadlock.
+        self._lock = threading.RLock()
         self._event_condition = threading.Condition(self._lock)
         self._htv405_resync_timers: dict[str, threading.Timer] = {}
         self._htv405_transaction_timers: dict[str, threading.Timer] = {}
@@ -325,6 +328,11 @@ class Gateway:
         self._active_pairing_sensor_identity_mismatch_at: str | None = None
         self._pending_node_adoptions: dict[str, dict[str, Any]] = {}
         self._automatic_rejoin_started: dict[str, float] = {}
+        self._ack_ownership = (
+            AckOwnership(self._store, self._nodes, self._send_ack_ownership_command,
+                         self._commit_ack_ownership)
+            if self._store else None
+        )
         self._recover_pending_htv405_air_responses()
         self._reconcile_htv405_control_state_from_events()
         self._cancel_interrupted_htv405_transactions()
@@ -339,6 +347,7 @@ class Gateway:
             all_node_ids = managed_node_ids | set(self._nodes)
             return {
                 "api_version": API_VERSION,
+                "ack_ownership_operations": self._ack_ownership.snapshot() if self._ack_ownership else [],
                 "api_versions": [API_VERSION],
                 "gateway_id": self.gateway_id,
                 "rf_controller_identity": {
@@ -2338,6 +2347,7 @@ class Gateway:
         """Select one capable RF egress node without changing association IDs."""
         timestamp = (now or datetime.now(timezone.utc)).isoformat()
         with self._lock:
+            self._require_no_active_pairing_for_ownership()
             if not self._valve_control_enabled:
                 raise PermissionError("HTV405 supervised control is disabled")
             if self._store is None:
@@ -2362,8 +2372,19 @@ class Gateway:
                 raise RuntimeError("finish or cancel the active transaction before changing radio owner")
             if self._unresolved_direct_open(registration):
                 raise RuntimeError("previous watering outcome is unresolved; await independent idle evidence")
-            if registration.get("control_node_id") != node_id:
-                self._revoke_htv405_ack_locked(registration)
+            endpoint = str(registration["valve_endpoint"])
+            if self._ack_cleanup_pending("htv405", endpoint):
+                raise RuntimeError("ACK ownership cleanup is pending")
+            if registration.get("control_node_id") and registration.get("control_node_id") != node_id:
+                target = {**registration, "control_node_id": node_id, "ownership_updated_at": timestamp}
+                self._ack_ownership.start(
+                    kind="htv405", endpoint=endpoint, old_node=registration["control_node_id"],
+                    revoke={"type": "htv405_routine_ack_revoke", "valve_endpoint": endpoint},
+                    new_node=node_id, configure=self._htv405_ack_configuration_command(target), target=target)
+                if not self._ack_cleanup_pending("htv405", endpoint):
+                    return next(item for item in self._store.valve_registry()
+                                if item["valve_endpoint"] == endpoint)
+                return {**registration, "ownership_state": "pending", "requested_control_node_id": node_id}
             result = self._store.assign_htv405_control_node(
                 valve_endpoint=str(registration["valve_endpoint"]),
                 node_id=node_id,
@@ -2376,11 +2397,12 @@ class Gateway:
             self._refresh_registry_catalog()
             return result
 
-    @staticmethod
     def _htv405_control_profile(
-        registration: dict[str, Any],
+        self, registration: dict[str, Any],
     ) -> Htv405ControlProfile:
         """Build a strict control profile from one durable association."""
+        if self._ack_cleanup_pending("htv405", str(registration.get("valve_endpoint"))):
+            raise RuntimeError("ACK ownership cleanup is pending; valve control is blocked")
         values = (
             registration.get("control_node_id"),
             registration.get("controller_endpoint"),
@@ -2430,10 +2452,12 @@ class Gateway:
         with self._lock:
             if self._store is None or self._node_command_sender is None:
                 return 0
+            self._ack_ownership.resume(node_id)
             node = self._nodes.get(node_id, {})
             if "routine_sensor_ack_tx" not in node.get("capabilities", []):
                 return 0
-            assignments = self._store.ack_assignments(node_id)
+            assignments = [item for item in self._store.ack_assignments(node_id)
+                           if not self._ack_cleanup_pending("sensor", item["paired_endpoint"])]
             sender = self._node_command_sender
         restored = 0
         unsupported = 0
@@ -2447,7 +2471,13 @@ class Gateway:
                 continue
             command = self._ack_configuration_command(assignment)
             try:
-                sender(node_id, command)
+                with self._lock:
+                    if self._ack_cleanup_pending("sensor", assignment["paired_endpoint"]):
+                        continue
+                    if assignment not in self._store.ack_assignments(node_id):
+                        continue
+                    node["routine_ack_command_id"] = command["command_id"]
+                    sender(node_id, command)
             except (ConnectionError, KeyError, RuntimeError, ValueError):
                 break
             self.update_node(
@@ -2467,6 +2497,7 @@ class Gateway:
         with self._lock:
             if self._store is None or self._node_command_sender is None:
                 return 0
+            self._ack_ownership.resume(node_id)
             node = self._nodes.get(node_id, {})
             if (
                 node.get("tx_armed") is True
@@ -2478,6 +2509,7 @@ class Gateway:
                 item
                 for item in self._store.valve_registry()
                 if item.get("model") == "HTV405FRF"
+                and not self._ack_cleanup_pending("htv405", item["valve_endpoint"])
                 and item.get("control_node_id") == node_id
                 and item.get("control_companion_endpoint") is not None
                 and item.get("control_frequency_offset_hz") is not None
@@ -2493,7 +2525,14 @@ class Gateway:
                 node_id, htv405_routine_ack_command_id=command["command_id"]
             )
             try:
-                sender(node_id, command)
+                with self._lock:
+                    if self._ack_cleanup_pending("htv405", registration["valve_endpoint"]):
+                        continue
+                    current = next((item for item in self._store.valve_registry()
+                                    if item["valve_endpoint"] == registration["valve_endpoint"]), None)
+                    if not current or current.get("control_node_id") != node_id:
+                        continue
+                    sender(node_id, command)
             except (ConnectionError, KeyError, RuntimeError, ValueError):
                 break
             restored += 1
@@ -2528,6 +2567,8 @@ class Gateway:
         self, registration: dict[str, Any]
     ) -> None:
         node_id = registration.get("control_node_id")
+        if self._ack_cleanup_pending("htv405", str(registration.get("valve_endpoint"))):
+            return
         if not isinstance(node_id, str) or self._node_command_sender is None:
             return
         node = self._nodes.get(node_id, {})
@@ -2552,21 +2593,35 @@ class Gateway:
         if (
             not isinstance(node_id, str)
             or not isinstance(endpoint, str)
-            or self._node_command_sender is None
+            or self._ack_ownership is None
         ):
             return
-        try:
-            command = {
-                "type": "htv405_routine_ack_revoke",
-                "command_id": uuid.uuid4().hex,
-                "valve_endpoint": endpoint,
-            }
-            self._node_command_sender(node_id, command)
-            self._nodes.setdefault(node_id, {"node_id": node_id})[
-                "htv405_routine_ack_command_id"
-            ] = command["command_id"]
-        except (ConnectionError, KeyError, RuntimeError, ValueError):
-            pass
+        self._ack_ownership.start(kind="htv405", endpoint=endpoint, old_node=node_id,
+            revoke={"type": "htv405_routine_ack_revoke", "valve_endpoint": endpoint})
+
+    def _ack_cleanup_pending(self, kind: str, endpoint: str) -> bool:
+        return bool(self._ack_ownership and self._ack_ownership.pending(kind, endpoint))
+
+    def _require_no_active_pairing_for_ownership(self):
+        if self._active_pairing_node_id is not None:
+            raise RuntimeError("finish or cancel pairing before changing ACK ownership")
+
+    def _send_ack_ownership_command(self, node_id, command):
+        if self._node_command_sender is None:
+            raise ConnectionError("node transport unavailable")
+        self._node_command_sender(node_id, command)
+
+    def _commit_ack_ownership(self, kind, target):
+        if kind == "sensor":
+            self._store.upsert_ack_assignment(target)
+        else:
+            self._store.assign_htv405_control_node(valve_endpoint=target["valve_endpoint"],
+                node_id=target["control_node_id"], observed_at=target["ownership_updated_at"])
+            self._refresh_registry_catalog()
+
+    def observe_ack_ownership_status(self, node_id, message):
+        with self._lock:
+            return bool(self._ack_ownership and self._ack_ownership.observe(node_id, message))
 
     def assign_radio_node_ack(
         self,
@@ -2599,6 +2654,9 @@ class Gateway:
         with self._lock:
             if self._store is None:
                 raise RuntimeError("persistent ACK assignment storage unavailable")
+            self._require_no_active_pairing_for_ownership()
+            if self._ack_cleanup_pending("sensor", paired_endpoint):
+                raise RuntimeError("ACK ownership cleanup is pending")
             if paired_endpoint not in {
                 str(item["paired_endpoint"])
                 for item in self._store.enrollment_records()
@@ -2655,19 +2713,14 @@ class Gateway:
             if (
                 previous is not None
                 and previous["node_id"] != node_id
-                and self._node_command_sender is not None
             ):
-                try:
-                    self._node_command_sender(
-                        str(previous["node_id"]),
-                        {
-                            "type": "routine_ack_revoke",
-                            "command_id": uuid.uuid4().hex,
-                            "paired_endpoint": paired_endpoint,
-                        },
-                    )
-                except (ConnectionError, KeyError, RuntimeError, ValueError):
-                    pass
+                self._ack_ownership.start(kind="sensor", endpoint=paired_endpoint,
+                    old_node=previous["node_id"],
+                    revoke={"type": "routine_ack_revoke", "paired_endpoint": paired_endpoint},
+                    new_node=node_id, configure=self._ack_configuration_command(assignment), target=assignment)
+                if not self._ack_cleanup_pending("sensor", paired_endpoint):
+                    return copy.deepcopy(assignment)
+                return {**previous, "ownership_state": "pending", "requested_node_id": node_id}
             self._store.upsert_ack_assignment(assignment)
             if (
                 self._node_command_sender is not None
@@ -2684,7 +2737,11 @@ class Gateway:
     def ack_assignments(self) -> list[dict[str, Any]]:
         """Return the persistent ownership map without node credentials."""
         with self._lock:
-            return self._store.ack_assignments() if self._store else []
+            assignments = self._store.ack_assignments() if self._store else []
+            for assignment in assignments:
+                if self._ack_cleanup_pending("sensor", assignment["paired_endpoint"]):
+                    assignment.update(ownership_state="pending", confirmed_active_owner=None)
+            return assignments
 
     @staticmethod
     def _ack_configuration_command(assignment: dict[str, Any]) -> dict[str, Any]:
@@ -2703,28 +2760,13 @@ class Gateway:
     def _delete_ack_assignment_locked(self, endpoint: str) -> None:
         if self._store is None:
             return
-        assignment = self._store.delete_ack_assignment(endpoint)
-        if assignment is None or self._node_command_sender is None:
+        assignment = next((item for item in self._store.ack_assignments()
+                           if item["paired_endpoint"] == endpoint), None)
+        if assignment is None:
             return
-        try:
-            command = (
-                {
-                    "type": "routine_ack_revoke",
-                    "command_id": uuid.uuid4().hex,
-                    "paired_endpoint": endpoint,
-                }
-            )
-            self._node_command_sender(
-                str(assignment["node_id"]),
-                command,
-            )
-            node = self._nodes.setdefault(
-                str(assignment["node_id"]),
-                {"node_id": str(assignment["node_id"])},
-            )
-            node["routine_ack_command_id"] = command["command_id"]
-        except (ConnectionError, KeyError, RuntimeError, ValueError):
-            pass
+        self._ack_ownership.start(kind="sensor", endpoint=endpoint, old_node=assignment["node_id"],
+            revoke={"type": "routine_ack_revoke", "paired_endpoint": endpoint})
+        self._store.delete_ack_assignment(endpoint)
 
     def nodes(self) -> list[dict[str, Any]]:
         """Return radio-node connection and receiver diagnostics."""
@@ -2754,6 +2796,14 @@ class Gateway:
                 )
             result = list(nodes.values())
             for node in result:
+                node["ack_ownership_operations"] = [
+                    item for item in (self._ack_ownership.snapshot() if self._ack_ownership else [])
+                    if node["node_id"] in (item["old_node"], item["new_node"])]
+                operations = node["ack_ownership_operations"]
+                node["ack_ownership_state"] = (
+                    "blocked" if any(item["state"] in {"owner_offline", "owner_firmware_upgrade_required",
+                        "delivery_failed", "command_failed"} for item in operations)
+                    else "pending" if operations else "ready")
                 if self._store is not None:
                     node["routine_ack_assigned_sensors"] = len(
                         self._store.ack_assignments(str(node["node_id"]))
@@ -2913,6 +2963,12 @@ class Gateway:
         if not self._store:
             raise RuntimeError("persistent radio-node registry is unavailable")
         with self._lock:
+            if self._ack_ownership and any(node_id in (item["old_node"], item["new_node"])
+                    for item in self._ack_ownership.snapshot()):
+                raise RuntimeError("finish ACK ownership cleanup before removing its radio node")
+            if self._store.ack_assignments(node_id) or any(
+                    item.get("control_node_id") == node_id for item in self._store.valve_registry()):
+                raise RuntimeError("move or remove this node's RF devices before removing the radio node")
             revoked = self._store.delete_radio_node(node_id)
             self._pending_node_adoptions.pop(node_id, None)
             node = self._nodes.get(node_id)
@@ -3854,6 +3910,9 @@ class Gateway:
             result["reason"] = "ack_owner_unassigned"
             return result
         result["ack_owner_node_id"] = str(assignment["node_id"])
+        if self._ack_cleanup_pending("sensor", endpoint):
+            result["reason"] = "ack_ownership_cleanup_pending"
+            return result
         now_monotonic = time.monotonic()
         previous_request = self._automatic_rejoin_started.get(endpoint)
         if (
@@ -3864,6 +3923,10 @@ class Gateway:
             return result
         node_id = str(assignment["node_id"])
         node = self._nodes.get(node_id, {})
+        if (int(assignment["assigned_channel"]) != 4
+                and "retained_sensor_rejoin_channel" not in node.get("capabilities", [])):
+            result["reason"] = "ack_owner_firmware_incompatible"
+            return result
         if (
             node.get("connected") is True
             and node.get("authenticated") is True
@@ -3900,6 +3963,7 @@ class Gateway:
             "controller_endpoint": str(assignment["controller_endpoint"]),
             "companion_endpoint": str(assignment["companion_endpoint"]),
             "known_rejoin": True,
+            "assigned_channel": int(assignment["assigned_channel"]),
             "duration_seconds": 60,
             "local_clock": local_clock,
             "frequency_offset_hz": int(assignment["frequency_offset_hz"]),
@@ -4291,6 +4355,9 @@ class Gateway:
                                 candidates.index(resync_candidate) + 1
                             )
                             resync_total = len(candidates)
+                    if self._ack_cleanup_pending("htv405", str(valve_registration["valve_endpoint"])):
+                        control_available = start_available = False
+                        unavailable_reason = start_unavailable_reason = "ack_ownership_cleanup_pending"
                     state.update(
                         {
                             "rf_control_enabled": self._valve_control_enabled,
@@ -4576,6 +4643,8 @@ class Gateway:
                         state.update(copy.deepcopy(
                             self._sensor_link_diagnostics[endpoint]
                         ))
+                    if self._ack_cleanup_pending("sensor", endpoint):
+                        state.update(rf_ack_owner_node_id=None, rf_ack_state="ownership_cleanup_pending")
                 elif device.get("model") in {HTV145_MODEL, "HTV405FRF"}:
                     if device.get("model") == "HTV405FRF":
                         # HTV405 declares no flow/volume capability. Older
@@ -5140,6 +5209,11 @@ class Gateway:
                 or not isinstance(command_id, str)
                 or registration.get("control_pending_sequence") != sequence
                 or not 0 <= response_age <= HTV405_RESPONSE_WINDOW_SECONDS
+                # The normalized marker is the sixth native phase bit. The
+                # current command builders use odd OPEN and even CLOSE/anchor.
+                or bool(raw[14] & 0x80) != (
+                    registration.get("control_pending_action") == "open"
+                )
             ):
                 return None
             try:
@@ -5746,6 +5820,8 @@ class Gateway:
         with self._lock:
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
+            if self._ack_ownership and self._ack_ownership.snapshot():
+                raise RuntimeError("finish pending ACK ownership cleanup before pairing")
             self._pairing.start(duration_seconds, now=now)
             self._active_pairing_started_at = now or datetime.now(timezone.utc)
             if self._active_pairing_started_at.tzinfo is None:
@@ -6704,6 +6780,7 @@ class Gateway:
     def forget_registry_device(self, device_id: str) -> dict[str, Any]:
         """Forget local metadata and enrollment without RF transmission."""
         with self._lock:
+            self._require_no_active_pairing_for_ownership()
             if not self._store:
                 raise RuntimeError("persistent registry is unavailable")
             try:

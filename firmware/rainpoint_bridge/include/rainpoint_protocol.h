@@ -11,6 +11,23 @@ constexpr std::size_t kHardwareSyncBytes = 2;
 constexpr std::size_t kRadioPayloadBytes = kFrameBytes - kHardwareSyncBytes;
 constexpr std::array<std::uint8_t, 5> kSync = {0x79, 0xf4, 0x88, 0x2f, 0x28};
 
+// Normalized frames start one bit before the native radio sync. The command
+// sequence spans these two bytes; the low bit is not an independent action bit.
+// Callers must validate frame family, route and trailer separately.
+inline std::uint8_t nativeSequence(
+    const std::array<std::uint8_t, kFrameBytes>& frame
+) {
+    return static_cast<std::uint8_t>(
+        ((frame[13] & 0x1fU) << 1U) | (frame[14] >> 7U));
+}
+
+inline bool sameNativeSequence(
+    const std::array<std::uint8_t, kFrameBytes>& response,
+    const std::array<std::uint8_t, kFrameBytes>& command
+) {
+    return nativeSequence(response) == nativeSequence(command);
+}
+
 struct PackedDuration {
     std::array<std::uint8_t, 2> field{};
     std::uint8_t extension = 0;

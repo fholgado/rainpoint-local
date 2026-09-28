@@ -42,6 +42,10 @@ constexpr std::uint32_t kConfigurationReplyStartDelayUs = 2'848'400;
 constexpr std::uint32_t kStep3ReplyStartDelayUs = 53'300;
 constexpr std::uint32_t kStep4ReplyStartDelayUs = 52'550;
 constexpr std::uint32_t kStep5ReplyStartDelayUs = 47'500;
+// Policy bounds, not claimed valve limits. Captures show four plan-read
+// retries across ~4 seconds (native phases 8..11 after the phase-7 request).
+constexpr std::uint8_t kMaximumPlanReplyRetries = 4;
+constexpr std::uint32_t kPlanReplyRetryWindowMs = 10'000;
 
 constexpr std::uint32_t replyStartDelayUs(std::size_t stepIndex) {
     return stepIndex == 0 ? kAssignmentReplyStartDelayUs
@@ -106,7 +110,8 @@ inline bool buildProfile(
 inline bool requestMatches(
     const PairingProfile& profile,
     std::size_t stepIndex,
-    const std::array<std::uint8_t, kFrameBytes>& frame
+    const std::array<std::uint8_t, kFrameBytes>& frame,
+    bool allowPlanPhaseVariation = false
 ) {
     if (stepIndex >= profile.steps.size() || !hasSync(frame) ||
         !hasOrdinaryTrailer(frame)) {
@@ -122,7 +127,14 @@ inline bool requestMatches(
     }
     const std::size_t firstComparedBodyByte = stepIndex == 0 ? 2 : 0;
     for (std::size_t index = firstComparedBodyByte; index < 23; ++index) {
-        if (frame[13 + index] != profile.steps[stepIndex].requestBody[index]) {
+        // Only the final plan/parameter request seam can vary phase. Preserve
+        // upper header bits, command, length, port, payload and padding exactly.
+        const std::uint8_t mask = allowPlanPhaseVariation &&
+                (stepIndex == 4 || stepIndex == 5)
+            ? (index == 0 ? 0xe0 : index == 1 ? 0x7f : 0xff)
+            : 0xff;
+        if ((frame[13 + index] & mask) !=
+                (profile.steps[stepIndex].requestBody[index] & mask)) {
             return false;
         }
     }
@@ -241,6 +253,12 @@ public:
         expiresAtMs_ = nowMs + durationMs;
         claimedAtMs_ = 0;
         pending_ = false;
+        retryCount_ = 0;
+        planFirstPhase_ = 0;
+        planLastPhase_ = 0;
+        planAnsweredAtMs_ = 0;
+        claimedStep_ = 0;
+        claimedPhase_ = 0;
         assignmentLocked_ = false;
         stage0Accepted_ = false;
         stage0Rejected_ = false;
@@ -254,6 +272,7 @@ public:
         failureReason_ = PairingFailureReason::None;
         step_ = 0;
         pending_ = false;
+        retryCount_ = 0;
         assignmentLocked_ = false;
         stage0Accepted_ = false;
         stage0Rejected_ = false;
@@ -289,18 +308,39 @@ public:
             assignmentLocked_ = true;
             acceptedFactoryCounter_ = sweepCounter;
             pending_ = true;
+            claimedStep_ = 0;
+            claimedPhase_ = nativeSequence(frame);
             claimedAtMs_ = nowMs;
             return &profile_.steps[0];
         }
-        if (!assignmentLocked_ || step_ == 0 ||
-            step_ >= profile_.steps.size() ||
-            !requestMatches(profile_, step_, frame)) {
+        if (!assignmentLocked_ || step_ == 0 || step_ >= profile_.steps.size()) {
+            return nullptr;
+        }
+        std::size_t candidate = step_;
+        const auto phase = nativeSequence(frame);
+        if (step_ == 5 && requestMatches(profile_, 4, frame, true)) {
+            const auto advance = static_cast<std::uint8_t>((phase - planFirstPhase_) & 63U);
+            const auto previousAdvance = static_cast<std::uint8_t>((planLastPhase_ - planFirstPhase_) & 63U);
+            if (retryCount_ >= kMaximumPlanReplyRetries ||
+                nowMs - planAnsweredAtMs_ > kPlanReplyRetryWindowMs ||
+                advance > kMaximumPlanReplyRetries || advance < previousAdvance) {
+                return nullptr;
+            }
+            candidate = 4;
+        } else if (step_ == 5 && retryCount_ != 0) {
+            // Continue only at the next phase after the last answered plan
+            // request; never accept an arbitrary old terminal packet.
+            if (!requestMatches(profile_, 5, frame, true) ||
+                phase != static_cast<std::uint8_t>((planLastPhase_ + 1U) & 63U)) {
+                return nullptr;
+            }
+        } else if (!requestMatches(profile_, step_, frame)) {
             return nullptr;
         }
         if (step_ == 1) {
             stage0Accepted_ = true;
         }
-        const auto& step = profile_.steps[step_];
+        const auto& step = profile_.steps[candidate];
         if (!step.replyExpected) {
             ++step_;
             if (step_ == profile_.steps.size()) {
@@ -309,16 +349,34 @@ public:
             return nullptr;
         }
         pending_ = true;
+        claimedStep_ = candidate;
+        claimedPhase_ = phase;
         claimedAtMs_ = nowMs;
         return &step;
     }
 
+    bool buildClaimedReply(
+        const PairingLocalDateTime& clock,
+        std::array<std::uint8_t, kFrameBytes>& frame
+    ) const {
+        if (!pending_ || state_ != PairingSessionState::Armed ||
+            !buildReply(profile_, claimedStep_, clock, frame)) return false;
+        if (claimedStep_ == 4 || claimedStep_ == 5) {
+            frame[13] = static_cast<std::uint8_t>((frame[13] & 0xe0U) | (claimedPhase_ >> 1U));
+            frame[14] = static_cast<std::uint8_t>((frame[14] & 0x7fU) | ((claimedPhase_ & 1U) << 7U));
+            writeTrailer(frame, profile_.steps[claimedStep_].trailerResidual);
+        }
+        return true;
+    }
+
     bool finishReply(bool success, std::uint32_t nowMs) {
-        if (state_ != PairingSessionState::Armed || !pending_ || !success) {
+        tick(nowMs);
+        if (state_ != PairingSessionState::Armed) return false;
+        if (!pending_ || !success) {
             fail(PairingFailureReason::ReplyFailed);
             return false;
         }
-        const std::uint32_t deadlineMs = step_ == 1
+        const std::uint32_t deadlineMs = claimedStep_ == 1
             ? kConfigurationReplyDeadlineMs
             : kPairingReplyDeadlineMs;
         if (nowMs - claimedAtMs_ > deadlineMs) {
@@ -326,6 +384,15 @@ public:
             return false;
         }
         pending_ = false;
+        if (claimedStep_ == 4) {
+            planLastPhase_ = claimedPhase_;
+            if (step_ == 5) {
+                ++retryCount_;
+                return true; // retransmission is not a new enrollment stage
+            }
+            planFirstPhase_ = claimedPhase_;
+            planAnsweredAtMs_ = nowMs;
+        }
         ++step_;
         if (step_ == profile_.steps.size()) {
             state_ = PairingSessionState::Completed;
@@ -343,6 +410,10 @@ public:
     PairingSessionState state() const { return state_; }
     PairingFailureReason failureReason() const { return failureReason_; }
     std::size_t completedSteps() const { return step_; }
+    std::uint8_t planReplyRetries() const { return retryCount_; }
+    bool requiresReceiveEndCapture() const {
+        return state_ == PairingSessionState::Armed && (step_ == 4 || step_ == 5);
+    }
     bool assignmentLocked() const { return assignmentLocked_; }
     bool stage0Accepted() const { return stage0Accepted_; }
     bool stage0Rejected() const { return stage0Rejected_; }
@@ -368,6 +439,12 @@ private:
     std::uint32_t expiresAtMs_ = 0;
     std::uint32_t claimedAtMs_ = 0;
     bool pending_ = false;
+    std::size_t claimedStep_ = 0;
+    std::uint8_t claimedPhase_ = 0;
+    std::uint8_t planFirstPhase_ = 0;
+    std::uint8_t planLastPhase_ = 0;
+    std::uint8_t retryCount_ = 0;
+    std::uint32_t planAnsweredAtMs_ = 0;
     bool assignmentLocked_ = false;
     bool stage0Accepted_ = false;
     bool stage0Rejected_ = false;

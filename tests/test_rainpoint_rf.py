@@ -1183,7 +1183,11 @@ class RainPointRFTest(unittest.TestCase):
                 self.assertIsNotNone(decoded)
                 self.assertEqual(zone, decoded["zone"])
                 self.assertEqual(duration, decoded["duration_seconds"])
-                self.assertEqual(duration - 6, decoded["remaining_seconds"])
+                # Captured reports arrive after either five or six seconds;
+                # normalized byte 27 bit 7 carries the odd remaining second.
+                expected = {(1, 60): 55, (1, 120): 115, (2, 60): 55, (2, 120): 114,
+                            (3, 60): 55, (3, 120): 114, (4, 60): 54, (4, 120): 115}
+                self.assertEqual(expected[zone, duration], decoded["remaining_seconds"])
                 self.assertTrue(decoded["is_watering"])
 
     def test_decodes_htv405_stop_without_stale_duration(self) -> None:
@@ -1239,9 +1243,9 @@ class RainPointRFTest(unittest.TestCase):
         first = decode_htv405_control_frame(first_report)
         second = decode_htv405_control_frame(second_report)
         self.assertEqual(644, first["duration_seconds"])
-        self.assertEqual(638, first["remaining_seconds"])
+        self.assertEqual(639, first["remaining_seconds"])
         self.assertEqual(644, second["duration_seconds"])
-        self.assertEqual(636, second["remaining_seconds"])
+        self.assertEqual(637, second["remaining_seconds"])
 
     def test_decodes_htv405_displaced_duration_bit(self) -> None:
         frame = bytearray.fromhex(
@@ -1258,7 +1262,7 @@ class RainPointRFTest(unittest.TestCase):
         self.assertIsNotNone(decoded)
         assert decoded is not None
         self.assertEqual(900, decoded["duration_seconds"])
-        self.assertEqual(894, decoded["remaining_seconds"])
+        self.assertEqual(895, decoded["remaining_seconds"])
 
     def test_five_minute_duration_extension_preserves_response_and_link(
         self,
