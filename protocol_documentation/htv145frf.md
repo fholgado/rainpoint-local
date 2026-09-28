@@ -8,7 +8,8 @@ command ordering remain unqualified. These are separate protocol boundaries:
 operational command acceptance does not imply a complete pairing transcript.
 
 Read [common.md](common.md) for radio framing, offsets, and integrity rules.
-All offsets below include the five-byte sync word.
+Unqualified frame offsets below include the five-byte normalized sync word;
+`P` denotes the native payload defined in [common.md](common.md).
 
 ## Association and radio profile
 
@@ -41,20 +42,31 @@ lifecycle operations. A reset removes batteries for at least ten seconds, then
 holds the timer button while reinstalling four fresh alkaline cells until the
 red LED flashes rapidly. New local enrollment requires the stock gateway off.
 
-The stock protocol has six numbered stages plus a delayed configuration:
+The captured stock transcript has six numbered stages plus a delayed
+configuration. These are our transcript labels, not six recovered authorization
+steps. Native command families explain the rows:
 
 | Stage | Valve request | Gateway action |
 |---|---|---|
-| 0 | Factory announcement | Assign a coherent association profile |
-| 1 | Addressed `01 07 82 25` family | Ordinary short reply |
-| 1a | No new request | Delayed configuration with a 2,400-symbol wake |
-| 2 | Configuration response `50 00 80` family | Observe only |
-| 3 | Addressed `82 81 02` family | Configuration continuation reply |
-| 4 | Addressed `03 01 82` family | Short continuation reply |
-| 5 | Terminal `2c 80 99` family | Terminal `6c 81 80 19` reply |
+| 0 | `01`, factory announcement, 8 data bytes | `81`, assignment, 11 data bytes |
+| 1 | `02`, addressed state/confirmation-family report, 15 data bytes | `82`, data `00 01` |
+| 1a | No new request | `20`, data `02 00`, delayed configuration with a 2,400-symbol wake |
+| 2 | `a0`, data `00`, response to the gateway's `20` | Observe only |
+| 3 | `05`, per-port parameter request | `85`, 15 data bytes including result |
+| 4 | `06`, plan-parameter request | `86`, data `00` |
+| 5 | `59`, device parameter request, data `32` | `d9`, data `00 32 00` |
 
-Prefixes omit changing sequence/repeat bits. Complete matchers and reply bytes
-are defined in `valve_pairing_protocol.py`; branch fields cannot be mixed.
+Direct replies echo the request's full phase; the gateway-originated `20` has
+its own phase, echoed by `a0`. Do not derive it from the preceding valve request.
+The final `59` is an ordinary parameter read. In the retained HTV145 model
+configuration, `00 32 00` selects an empty per-port array; it is not evidence of
+a new authorization key or universal completion token.
+The delayed `20` data `02 00` fits configuration version 2 and update kind 0,
+not channel 2. The short `02` response's version byte is conditional metadata,
+not a universal completion suffix; keep the qualified profile bytes intact.
+Complete matchers and reply bytes are defined in `valve_pairing_protocol.py`;
+branch fields cannot be mixed. See the
+[comparison and exact capture sources](../research/PAIRING_NATIVE_COMPARISON.md).
 Short replies use a 320-symbol wake. For the local counter-2 branch, delayed
 configuration is scheduled 2,952.55 ms after the normalized stage-1 request end.
 The configuration response uses the assigned response carrier; other valve
@@ -65,6 +77,15 @@ accepted prefix through the stage-4 request. It reaches 5/6; the final terminal
 request remains unproven. A white LED supports initial association acceptance,
 but only addressed valve traffic proves progress. The accepted partial
 association can produce routine telemetry and positively acknowledged controls.
+
+The source implementation also supports a bounded plan-request recovery seam
+(hardware qualification pending): while waiting for the terminal request, reply
+to at most four matching plan retries within ten seconds, echoing their full
+six-bit phase. Phases may repeat or advance monotonically by up to four; route,
+command, port, length, body and trailer checks remain. Retries do not advance
+the stage or extend its window. After a retry, terminal must use the next phase.
+Initial replies and earlier enrollment stages are unchanged. These bounds are
+local policy, not device-specified limits; 6/6 completion remains unproven.
 
 HA association recognition uses a valid valve-originated state report matching
 the active pairing session's controller, valve endpoint and correlated node
@@ -100,7 +121,11 @@ watering, confirm a pending close, or replace a valid battery reading.
 
 ## Duration and water usage
 
-Duration is a packed scalar in two-second units:
+Native open-command duration is unsigned little-endian **seconds** at
+`P[15..16]`. Both valves use command `21`, five data bytes for open:
+`[port, 02, 01, seconds_low, seconds_high]`. Close uses three data bytes:
+`[port, 02, 00]`. The legacy normalized view splits the duration across bytes
+19–21. For the whole-minute control range, its equivalent packing is:
 
 ```text
 units = seconds / 2
@@ -111,9 +136,11 @@ seconds = ((high << 8) | (low & 0x7f) | (extension & 0x80)) * 2
 ```
 
 Open-command duration occupies bytes 19–20; its extension is byte 21 bit 7.
-The marker bit is mandatory and is separate from command-phase polarity.
+The marker bit is part of the qualified normalized envelope, separate from phase.
 Examples are 60 seconds `9e 00 / 00`, 300 seconds `96 00 / 80`, and 900 seconds
 `c2 01 / 80`. Runtime controls accept whole minutes from 60 to 3,600 seconds.
+Do not apply the even-seconds shortcut to remaining or elapsed telemetry:
+native fields retain their low seconds bit.
 
 Usage is encoded in a three-byte field:
 
@@ -141,13 +168,19 @@ without the battery field must preserve the last valid category.
 
 ## Command and response
 
-The ordinary command envelope includes:
+The native command is `21`, with phase `P[9] & 63` and declared data length
+5 for open or 3 for close. In the qualified alternating-control implementation,
+the equivalent normalized envelope includes:
 
 ```text
 frame[13] = 0x80 | (sequence & 0x1f)
 frame[14] = command-phase marker, 0x10 or 0x90
 frame[15] = 0x82 open, 0x81 close
 ```
+
+Normalized `82/81` here encodes data length, not two distinct action opcodes.
+The `90/10` polarity includes the sixth phase bit; it is not a universal action
+flag. Correlation must check the full phase, including negative replies.
 
 Both actions require 2,400 alternating wake symbols. One logical command uses a
 bounded burst of identical RF attempts and stops on a matching reply; it is not

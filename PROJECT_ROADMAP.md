@@ -1,6 +1,6 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-22
+Last reviewed: 2026-09-27
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -8,9 +8,26 @@ qualification. Detailed history and proof are in the
 
 ## Current work order
 
-1. Deploy the native-only integration after review, then improve/test pairing under Devices & services; keep live RF implementations unchanged.
-2. Collect targeted physical lifecycle results without requiring a new 72-hour baseline.
-3. Continue stable-release qualification; revisit extended soak testing if reliability changes warrant it.
+Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
+with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
+is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
+
+1. Review the validated [stock-informed source fixes](research/STOCK_FIRMWARE_IMPROVEMENT_PLAN.md), then approve the [short canary test plan](docs/STOCK_INFORMED_VALIDATION.md) before deployment.
+2. Deploy the native-only integration after review, then improve/test pairing under Devices & services.
+3. Collect targeted lifecycle results and continue stable-release qualification; no new 72-hour baseline is required.
+
+Stock-hub research remains hardware-read-only; no new hardware tests without
+approval. The approved off-device update lookup offered no newer image for this
+hub on Sep 27. The user approved source changes/tests for ownership cleanup,
+retained-channel recovery and remaining-time decoding; **no deployment**.
+The subsequent unattended-work approval also covers source/test repairs for
+full-phase reply matching and bounded single-zone plan-request retries. These
+are implemented offline; hardware acceptance and deployment remain separate.
+See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
+and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
+Research branch: `codex/stock-hub-research`. Refine and qualify our existing
+firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
+as a reference, and keep vendor images private.
 
 No extra watering, pairing, battery cycles, radio flashing or outage tests without
 the required user authorization. Keep RF pairing prefixes frozen unless evidence
@@ -97,6 +114,10 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Observe production-node reconnection, restored ownership and fresh device reports after the Sep 22 HA-host restart.
 - [ ] Qualify controlled HA/gateway/radio idle restarts with explicit state-persistence and no-replay assertions.
 - [ ] Reassign a sensor ACK owner; prove revocation occurs before replacement transmissions.
+- [x] Implement explicit sensor/HTV405 owner handoff and deletion journaling, correlated confirmations and HA cleanup diagnostics; source-only, physical qualification pending.
+- [x] Preserve sensor selector 4/5 in recovery requests/profile construction; test storage/reconnect and reject incompatible older firmware.
+- [ ] Qualify selector-5 recovery and cleanup on the OTA test node after deployment approval; include lost confirmation, reconnect and deletion/re-addition.
+- [ ] Audit re-pairing onto a different node separately from explicit owner reassignment; preserve proven RF prefixes and require old-owner revocation before any new automatic ACK grant.
 - [ ] Qualify stock/custom coexistence with separate identities and no duplicate HA devices.
 - [x] Document [device/association recovery](docs/DEVICE_RECOVERY.md), deletion guards and unverified battery-rejoin limits.
 
@@ -111,6 +132,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [ ] Qualify late replies, RF timeout, duplicates, spacing, recovery and observed overdue runs.
 - [ ] Test retained counters at 1/4/8/12 hours after sync without intervening commands.
 - [ ] Separate counter-staleness causes: elapsed time, restart/reconnect, ACK gaps and stock traffic.
+- [x] Restore HTV405 remaining-time low bit; test captured 895-versus-894, 0–3,600 seconds and existing valve regressions. Not deployed.
 - [ ] Repeat association/control on another specimen or compatible hardware profile.
 
 ### Single-zone valve
@@ -126,6 +148,8 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 ### HA and irrigation
 
+- [x] Prove soil ACK/nonmeasurement traffic preserves stale moisture through ingestion, restart and HA reporting properties (Sep 27); local regression tests pass.
+- [ ] Verify deployed watering stale-input fallback and valve state/link timestamp presentation; offline soil tests do not qualify these consumers.
 - [ ] Verify end-to-end watering state comes only from responses/telemetry, never outbound intent.
 - [ ] Qualify one-active-zone enforcement, per-zone durations, schedules, notices and watchdog.
 - [ ] Exercise scheduled fallback with some/all moisture readings stale beyond 6–8 hours.
@@ -177,6 +201,35 @@ not tasks to mark “done once.”
 
 ## Phase 7 — documentation and research infrastructure
 
+- [x] Verify private stock-hub backup and document offline implementation audit, reproduced ACK defects and custom-firmware feasibility (Sep 27); no hardware port or protocol fix implied.
+- [x] Resolve and run approved model/region-specific firmware lookup (Sep 27): no newer image offered for 1.1.1040; private response retained, no download or hub update.
+- [x] Consolidate the retained firmware reference and prepare a review-first local improvement plan; keep unresolved protocol coverage explicit.
+- [x] Replace the crashing offline analysis path with the official S3 decoder; verify synthetic raw-input decoding and nine bounded firmware regions (Sep 27).
+- [x] Qualify offline Ghidra decompilation: six matching load segments, seven selected functions and counter-harness checks; [evidence](research/STOCK_HUB_DECOMPILATION.md), Sep 27.
+- [x] Expand to 215 function exports; verify boot sequence zero-fill, reconnect migration setter/storage and conditional per-port parameter replies (Sep 27).
+- [x] Corroborate native framing/CRC against 516 valid public frames; explain the one-bit offset and both legacy residues without changing runtime codecs.
+- [x] Trace six-bit command generation, retained-packet retries, ACK matching and native valve durations; add capture-backed tests (Sep 27).
+- [x] Trace report-mode server ACK and compact-state grammar across both retained versions; rule out a direct soil-wake interpretation of that path.
+- [x] Validate stock-informed source repairs with the complete Python suite, native protocol tests and unified firmware build; no deployment (Sep 27; results in the improvement plan).
+- [x] Trace `ReciCH` to native `20` channel notification and startup notification; both consume the shared sequence. No qualifying channel-change capture yet.
+- [ ] Qualify channel-change acceptance, absolute RF mapping and durable retune with an approved capture.
+- [x] Trace report-mode readers: class-0x50 report replies carry the mode; captured HCS026 class 0x48 is excluded. This is not a soil wake mechanism.
+- [x] Trace HCS026 offline callbacks and known-announcement recovery: no wake TX on the inspected expiry path; incoming known announcements retain association/channel.
+- [x] Resolve retained HTV145 heartbeat selector 31 to compact field 24; no HCS026/HTV405 descriptor available in this snapshot.
+- [ ] Resolve model-qualified heartbeat descriptors and capture reconnect-result-9 acceptance before new recovery behavior.
+- [x] Decode terminal `59/D9` as parameter read; prove failed trials repeat preceding `06` requests ignored by the pre-fix matcher.
+- [x] Reproduce three sequence-correlation defects offline: wrong-phase negative replies consume reservations; an opposite-action positive reply authenticates the HTV405 node, unlike the gateway.
+- [x] Fix full-six-bit response matching and bounded HTV145 plan retries in source; preserve first-reply bytes and idle-anchor behavior. Offline regressions pass; not deployed.
+- [ ] Qualify those repairs on the idle node using the short canary plan; count only observed device acceptance, not transmitted replies.
+- [x] Qualify retained HTV145 descriptor: no category-0 parameters, so fresh initialization selects the empty per-port terminal array.
+- [x] Trace cloud-gated startup notifications consuming the shared sequence before transmission acceptance.
+- [x] Trace stock ACK/timeout lifecycle: four retained-packet retries at 700-ms timer intervals; no reset established on those paths. Qualify conditional hidden phase consumption.
+- [x] Compare retained versions: generator instruction body and full-phase ACK matching agree; no generator-algorithm change found.
+- [x] Compare native pairing shapes across HCS026/HTV145/HTV405: 42 captured rows; distinguish shared commands, per-port repeats and gateway-originated phases (Sep 28).
+- [x] Replay three recorded HTV145 failures through the native session; preserve initial replies, bound retries and reject false completion; reconcile native/legacy protocol docs (Sep 28).
+- [x] Trace model-specific `05` settings and `06` plan paging; correct `20` notification byte to configuration version, not RF channel. Offline suite: 696 passed, two skips; native protocol passed (Sep 28).
+- [ ] Resolve later sequence restoration/reset rules and HTV405 terminal descriptors; boot clear alone does not explain overnight failures.
+- [ ] Qualify active CMT profile, physical GPIOs, absolute channels and full CRC bit with passive capture; static tables/FIFO mapping are documented.
 - [x] Keep current device protocols separate from historical experiments.
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
 - [x] Implement a storage-bounded Mac SDR journal/service runner and receive-only TLS forwarding; test child lifecycle and real gateway authentication.
@@ -197,10 +250,16 @@ implementation or hardware optimization in this pass.
 - [x] Preserve verbatim source timestamps plus explicit UTC receipt time in the new Mac SDR journal; never reinterpret old captures.
 - [x] Scope device lookups to their owning gateway on modern HA; retain the 2026.7 fallback and reject cross-entry matches.
 - [ ] Discover new device families and determine whether sensor P1–P6 soil type is local/RF/cloud.
+- [ ] Identify sensor MCU/debug pads from the planned PCB inspection; assess read-only firmware access before connecting a programmer. Not an alpha release gate.
+- [ ] Trace stock per-model capabilities, rain-gauge reset/calibration and timezone serialization; promote only model-qualified fields with packet evidence.
+- [ ] Decide whether to support the stock ESP32-S3/CMT2300A hub as another radio platform after passive mapping; require shared protocol logic, board-specific signed OTA and approved restore/RX-only tests before any TX.
 - [ ] Determine whether pairing can select the long-term telemetry channel.
 - [ ] Characterize compact product/status integrity before generating those messages.
 - [ ] Optimize channel scheduling/placement beyond the required stability floor.
-- [ ] Finish carrier manufacturing/enclosure work under its separate physical checklist.
+- [x] Correct Rev A's reversed radio rows with Rev B; pass four physical-position tests, ERC/DRC/parity and regenerate fabrication/assembly/fit artifacts. Withdraw Rev A order archives; physical acceptance remains separate.
+- [ ] Verify Rev B module numbering, all eight connections and first-board power/RF operation; CAD checks alone do not pass this gate.
+- [ ] Verify a removable Rev A crossover harness if salvaging existing boards; no live testing without user readiness.
+- [ ] Finish carrier enclosure work under its separate physical checklist.
 
 Promote side work only if it blocks acceptance, invalidates evidence or protects
 irrigation reliability; otherwise keep it in the backlog.

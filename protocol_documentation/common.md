@@ -27,7 +27,36 @@ An `rtl_433` flex decoder for normalized frames is:
 n=RainPoint,m=FSK_PCM,s=50,l=50,r=50000,bits>=620,match={40}79f4882f28
 ```
 
-## Frame layout
+## Frame representations
+
+There is one radio protocol with two representations. Existing runtime codecs
+and fixture offsets use the **normalized 38-byte capture** `N`. Stock firmware
+uses a **32-byte native payload** `P` after hardware sync `f3 e9 10 5e`.
+The normalized view starts one bit before that hardware sync:
+
+```text
+P[i] = ((N[i + 4] << 1) | (N[i + 5] >> 7)) & 0xff   # i = 0..31
+```
+
+The native envelope is:
+
+| Native offset | Meaning |
+| --- | --- |
+| `P[0]` | Header `51` |
+| `P[1..4]`, `P[5..8]` | Association identities; roles depend on direction/family |
+| `P[9] & 0x3f` | Full six-bit phase/sequence |
+| `P[10] & 0x7f` | Command family |
+| `P[10] & 0x80` | Response flag for the captured request/reply families |
+| `P[11] & 0x1f` | Declared data length, at most 20 bytes in this envelope |
+| `P[12..]` | Command-specific data, followed by padding |
+
+Upper bits of `P[9]` and `P[11]` are not universally defined. A response flag
+does not establish success or identify the sender: devices also answer
+gateway-originated requests. Match association, full phase, command and
+command-specific result/state. The normalized five-bit field alone is not the
+whole phase: `phase = ((N[13] & 31) << 1) | (N[14] >> 7)`.
+
+The historical normalized layout remains:
 
 ```text
 offset  length  meaning
@@ -43,24 +72,37 @@ destination fields. Their direction reverses in several acknowledgements. A
 paired endpoint is commonly the corresponding factory endpoint with bit `0x80`
 set in its first byte, but each device definition states the validated rule.
 
-Integers are little-endian unless stated otherwise. Offsets in these documents
-refer to the normalized 38-byte frame, including the five-byte sync word.
+Integers are little-endian unless stated otherwise. Unqualified `frame` offsets
+in device documents mean normalized `N`; native offsets are explicitly `P`.
+This interpretation does not change the proven wire bytes, radio settings or
+runtime framing. The legacy capture window omits the final physical CRC bit;
+do not construct a new hardware trailer merely by shifting it.
+
+See the [stock/capture boundary evidence](../research/STOCK_HUB_VALVE_STATE_TRACE.md)
+and [cross-device pairing comparison](../research/PAIRING_NATIVE_COMPARISON.md).
 
 ## Integrity trailer
 
 Compute CRC-CCITT over bytes `0..35`, initial value `0x0000`, then XOR the
 received two-byte trailer. Every accepted frame seen so far produces one of
-these association residues:
+these legacy residues:
 
 ```text
 0xc713
 0x4f03
 ```
 
-Both residues are valid. The selection rule is not fully generalized, so a
-transmitter must use the residue proven by the relevant association or
-captured transcript. It must never select a residue by trial and error while
-controlling a valve.
+Both arise from native CRC-CCITT seeded `0xa8a8` over the 32-byte payload.
+The old window includes the last payload bit in its apparent trailer and
+retains only 15 hardware CRC bits. Changing just the legacy residue can change
+that last payload bit; the residues are not two proven device-specific CRC keys.
+The native interpretation matches 516 valid public fixture frames' observable
+CRC bits, not 516 independent trials. See the
+[radio boundary evidence](../research/STOCK_HUB_RADIO_PATH_TRACE.md).
+
+Transmitters must retain the bytes/residue proven by the association profile
+and captured transcript until the complete physical tail is qualified. Never
+select a residue by trial and error while controlling a valve.
 
 ## Association selectors and carriers
 
@@ -98,8 +140,10 @@ the RainPoint device.
 
 ## State and command invariants
 
-- Pairing counters, routine telemetry counters, and valve command counters are
-  independent state machines.
+- Pairing phases and incoming report phases do not authenticate the next local
+  valve-control counter. The stock hub can use a shared generator for its own
+  controls and configuration notifications; do not assume each traffic family
+  has an independent stock generator.
 - A valve command counter is advanced only by its authenticated command
   response, never by periodic telemetry.
 - Routine device reports may require an acknowledgement to keep the device

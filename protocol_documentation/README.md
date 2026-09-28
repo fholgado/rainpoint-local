@@ -15,7 +15,12 @@ Read [common.md](common.md) first, then the file for the device family:
 
 Exact frames and experiment chronology live under [`research/`](../research/).
 The executable specification lives in `rainpointd_addon/rainpointd/`, with
-regression coverage in root `test_*.py` files and the firmware native protocol test.
+regression coverage in `tests/` and the firmware native protocol tests.
+
+The common reference distinguishes native payload fields from historical
+one-bit-shifted capture offsets. The
+[cross-device comparison](../research/PAIRING_NATIVE_COMPARISON.md) maps retained
+pairing transcripts into that native representation without changing runtime bytes.
 
 ## Interpretation rules
 
