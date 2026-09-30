@@ -2,6 +2,17 @@ name: Prepare signed firmware (no publication)
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Firmware profile to build and submit for approval
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - phase-trial
+
+run-name: Sign ${{ inputs.profile }} firmware at ${{ github.sha }}
 
 permissions:
   contents: read
@@ -32,14 +43,25 @@ jobs:
           python tools/check_signing_environment.py
           test -f rainpointd_addon/rainpointd/firmware_keys/rainpoint-release-2026.pem
       - name: Validate and build without signing credentials
+        env:
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           pip install -r tests/requirements.txt 'platformio==6.1.19'
           python -m unittest discover -s tests -t . -v
           c++ -std=c++17 -Ifirmware/rainpoint_bridge/include firmware/rainpoint_bridge/tests/protocol_test.cpp -o /tmp/protocol-test
           /tmp/protocol-test
+          case "$BUILD_PROFILE" in
+            production) boundary_args=() ;;
+            phase-trial)
+              export RAINPOINT_VALVE_PHASE_EXPERIMENT=1
+              export RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.1
+              boundary_args=(--phase-trial)
+              ;;
+            *) exit 2 ;;
+          esac
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target release_receipt
-          python tools/check_firmware_boundaries.py --supervised --htv145-pairing --htv145-control firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+          python tools/check_firmware_boundaries.py "${boundary_args[@]}" firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
           mkdir "$RUNNER_TEMP/firmware-signing-input"
           cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin "$RUNNER_TEMP/firmware-signing-input/firmware.bin"
           cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/release-input.json "$RUNNER_TEMP/firmware-signing-input/release-input.json"
@@ -104,7 +126,9 @@ jobs:
           stage_release(Path('signed/firmware.bin'), Path('signed/ota'),
               release_id=descriptor['release_id'], version=descriptor['version'],
               summary='Publisher-signed RainPoint radio firmware',
-              notes='Unified sensors and valves; use the matching gateway release.',
+              notes=('Bounded phase trial; requires the matching experimental gateway. Not for general rollout.'
+                     if '-phase-trial.' in descriptor['version'] else
+                     'Unified sensors and valves; use the matching gateway release.'),
               firmware_variant='unified', signature=envelope)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

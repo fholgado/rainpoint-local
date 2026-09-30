@@ -19,6 +19,10 @@
 #include "rainpoint_valve_pairing.h"
 #include "wifi_transport.h"
 #include "ota_trial.h"
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+#include <Preferences.h>
+#include "rainpoint_phase_canary.h"
+#endif
 
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
@@ -2108,6 +2112,10 @@ void pollIdentify() {
     }
 }
 
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+#include "valve_phase_runtime.inc"
+#endif
+
 void handleNetworkCommand() {
     String command;
     if (!wifiTransport.takeCommand(command)) {
@@ -2145,6 +2153,9 @@ void handleNetworkCommand() {
         reportNetworkCommandError("invalid", "invalid_command_id");
         return;
     }
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    if (handleValvePhaseCommand(type,command,commandId)) return;
+#endif
     if (type == "rf_mode_set") {
         const String mode = jsonStringField(command, "mode");
         if (mode == "normal") {
@@ -3289,6 +3300,9 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    if (&radio==&primaryRadio) observeValvePhase(frame);
+#endif
     bool htv405PairingReplyRestoredReceive = false;
     bool valveProbeTransmitted = false;
     if (&radio == &primaryRadio) {
@@ -3648,6 +3662,9 @@ bool beginRadio(
 }  // namespace
 
 void setup() {
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    loadValvePhaseRecord();
+#endif
     Serial.begin(115200);
     delay(250);
     otaTrial.begin();
@@ -3745,6 +3762,9 @@ void loop() {
     handleSerialCommand();
     pollRadio("primary", primaryRadio);
     pollValveProbeResponseListener();
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    pollValvePhase();
+#endif
 
     if (scanChannels) {
         // Locally enrolled HCS026 sensors return to telemetry channel 0 after

@@ -95,6 +95,14 @@ jobs:
           python tools/package_alpha.py /tmp/rainpoint-alpha-candidate-repeat.zip
           cmp /tmp/rainpoint-alpha-candidate.zip /tmp/rainpoint-alpha-candidate-repeat.zip
           python tools/check_public_artifact.py /tmp/rainpoint-alpha-candidate.zip
+      - name: Build and check the explicitly enabled valve phase trial
+        env:
+          RAINPOINT_VALVE_PHASE_EXPERIMENT: "1"
+          RAINPOINT_FIRMWARE_VERSION: "0.19.0-phase-trial.1"
+        run: |
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          python tools/check_firmware_boundaries.py --phase-trial \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 
   container:
     runs-on: ubuntu-latest

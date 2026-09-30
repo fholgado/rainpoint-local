@@ -1,5 +1,14 @@
 # RainPoint Local project roadmap
 
+### Installed-valve phase trial build — September 30
+
+- [x] Implement the explicitly enabled two-run radio guard, full-phase builders and offline guard/replay tests.
+- [x] Add the protected `phase-trial` signing profile and production-exclusion check.
+- [ ] Finish gateway admission, counter handback and integration verification before deployment.
+- [ ] Obtain signing approval and run the authorized two 60-second tests per installed valve; require independent automatic-stop reports.
+
+Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
+
 Last reviewed: 2026-09-12
 
 This is the only live checklist. Completed implementation does not imply physical
