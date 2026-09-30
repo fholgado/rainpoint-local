@@ -270,6 +270,10 @@ void WifiTransport::handleGatewayLine(const String& line) {
     }
     if (authenticated_ &&
         (type == "pairing_start" || type == "pairing_cancel" ||
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+         type == "valve_phase_trial_open" || type == "valve_phase_trial_status" ||
+         type == "valve_phase_trial_release" ||
+#endif
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
          || type == "htv145_control_configure" ||
@@ -335,7 +339,12 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"htv145_commissioning\""
         ",\"routine_sensor_ack_tx\""
         ",\"htv405_routine_ack_tx\""
+        ",\"correlated_ack_ownership\""
+        ",\"retained_sensor_rejoin_channel\""
         ",\"firmware_update_trial\""
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+        ",\"valve_phase_trial\""
+#endif
         ",\"firmware_signed_ota\""
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",

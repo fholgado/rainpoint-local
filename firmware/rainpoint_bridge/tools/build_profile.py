@@ -21,6 +21,15 @@ if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", version):
     raise ValueError("RAINPOINT_FIRMWARE_VERSION is invalid")
 variant = "unified"
 env["RAINPOINT_BUILD_VERSION"] = version
+phase_experiment = os.environ.get("RAINPOINT_VALVE_PHASE_EXPERIMENT", "0")
+if phase_experiment not in {"0", "1"}:
+    raise ValueError("RAINPOINT_VALVE_PHASE_EXPERIMENT must be 0 or 1")
+if phase_experiment == "1":
+    if ("-phase-trial." not in version or
+            os.environ.get("RAINPOINT_HTV213_PAIRING_EXPERIMENT", "0") != "0" or
+            os.environ.get("RAINPOINT_HTV213_CONTROL_EXPERIMENT", "0") != "0"):
+        raise ValueError("Phase experiment requires its own prerelease and no HTV213 experiment")
+    env.Append(CPPDEFINES=["RAINPOINT_VALVE_PHASE_EXPERIMENT"])
 env.Append(CPPDEFINES=[
     ("RAINPOINT_FIRMWARE_VERSION", f'\\"{version}\\"'),
     ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{variant}\\"'),

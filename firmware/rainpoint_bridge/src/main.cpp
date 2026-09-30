@@ -19,6 +19,10 @@
 #include "rainpoint_valve_pairing.h"
 #include "wifi_transport.h"
 #include "ota_trial.h"
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+#include <Preferences.h>
+#include "rainpoint_phase_canary.h"
+#endif
 
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
@@ -1245,8 +1249,7 @@ bool observeValveProbeFrame(
             );
             return false;
         }
-        if (response.sequence !=
-                valveControlProbe.transmittedPhase.sequence) {
+        if (!rainpoint::sameNativeSequence(frame, valveControlProbe.commandFrame)) {
             reportValveProbeStatus(
                 "gateway_command_response_sequence_mismatch", &frame
             );
@@ -1303,8 +1306,7 @@ bool observeValveProbeFrame(
     rainpoint::Htv405GatewayCommandRejection rejection{};
     if (rainpoint::decodeHtv405GatewayCommandRejection(frame, rejection)) {
         if (!valveControlProbe.commandPendingConfirmation ||
-            rejection.sequence !=
-                valveControlProbe.transmittedPhase.sequence) {
+            !rainpoint::sameNativeSequence(frame, valveControlProbe.commandFrame)) {
             reportValveProbeStatus(
                 "unsolicited_gateway_command_rejection_observed", &frame
             );
@@ -1994,7 +1996,7 @@ void observeHtv145CandidateFrame(
             frame, htv145Owner().link, error
         )) {
         ++htv145Owner().classifiedResponseFrames;
-        if (error.sequence == htv145Owner().transmittedSequence) {
+        if (rainpoint::sameNativeSequence(frame, htv145Owner().commandFrame)) {
             failHtv145Candidate("negative_command_response", &frame);
         }
         return;
@@ -2004,11 +2006,12 @@ void observeHtv145CandidateFrame(
             frame, htv145Owner().link, response
         )) {
         ++htv145Owner().classifiedResponseFrames;
-        if (response.sequence != htv145Owner().transmittedSequence ||
+        if (!rainpoint::sameNativeSequence(frame, htv145Owner().commandFrame) ||
             response.commandMarkerInverted !=
                 htv145Owner().commandMarkerInverted ||
             response.watering != htv145Owner().commandWatering) {
-            failHtv145Candidate("conflicting_command_response");
+            // A stale or unrelated response must not consume this reservation.
+            reportHtv145CandidateStatus("unmatched_command_response_ignored", nullptr, &frame);
             return;
         }
         confirmHtv145Candidate("matching_immediate_response", frame);
@@ -2074,6 +2077,36 @@ void reportNetworkCommandError(const String& commandId, const char* error) {
     emitLine(line);
 }
 
+// Mutation confirmations are separate from ordinary liveness telemetry. Echo
+// only bounded identifier characters so correlation metadata cannot break JSON.
+void reportAckOwnershipResult(const String& command, const char* kind,
+                              const char* endpointKey, const char* state) {
+    const String generation = jsonStringField(command, "ownership_generation");
+    const String session = jsonStringField(command, "ownership_session");
+    if (generation.isEmpty() || session.isEmpty()) return; // Legacy caller.
+    const String values[] = {generation, session, jsonStringField(command, "command_id"),
+                             jsonStringField(command, endpointKey)};
+    for (const auto& value : values) {
+        if (value.isEmpty() || value.length() > 80) return;
+        for (unsigned int i = 0; i < value.length(); ++i) {
+            const char c = value[i];
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                  (c >= 'A' && c <= 'Z') || c == '-' || c == '_' ||
+                  c == ':' || c == '+' || c == '.')) return;
+        }
+    }
+    String line = "{\"type\":\"ack_ownership_status\",\"node_id\":\"";
+    line += wifiTransport.nodeId();
+    line += "\",\"command_id\":\""; line += values[2];
+    line += "\",\"ownership_generation\":\""; line += generation;
+    line += "\",\"ownership_session\":\""; line += session;
+    line += "\",\"kind\":\""; line += kind;
+    line += "\",\"endpoint\":\""; line += values[3];
+    line += "\",\"state\":\""; line += state;
+    line += "\"}";
+    emitLine(line);
+}
+
 void setIdentifyLed(bool on) {
     identifyLedOn = on;
     digitalWrite(RAINPOINT_STATUS_LED_PIN, on ? HIGH : LOW);
@@ -2107,6 +2140,10 @@ void pollIdentify() {
         setIdentifyLed(!identifyLedOn);
     }
 }
+
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+#include "valve_phase_runtime.inc"
+#endif
 
 void handleNetworkCommand() {
     String command;
@@ -2145,6 +2182,9 @@ void handleNetworkCommand() {
         reportNetworkCommandError("invalid", "invalid_command_id");
         return;
     }
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    if (handleValvePhaseCommand(type,command,commandId)) return;
+#endif
     if (type == "rf_mode_set") {
         const String mode = jsonStringField(command, "mode");
         if (mode == "normal") {
@@ -2561,6 +2601,7 @@ void handleNetworkCommand() {
             authorized ? "configured_by_gateway" : "configuration_rejected",
             authorization
         );
+        reportAckOwnershipResult(command, "sensor", "paired_endpoint", authorized ? "configured" : "rejected");
         return;
     }
     if (type == "routine_ack_revoke") {
@@ -2580,6 +2621,8 @@ void handleNetworkCommand() {
             revoked ? "revoked_by_gateway" : "authorization_not_found",
             authorization
         );
+        // Absence is an idempotent successful revoke, including after reboot.
+        reportAckOwnershipResult(command, "sensor", "paired_endpoint", "revoked");
         return;
     }
     if (type == "htv405_routine_ack_configure") {
@@ -2628,6 +2671,7 @@ void handleNetworkCommand() {
             authorized ? "configured_by_gateway" : "configuration_rejected",
             authorization
         );
+        reportAckOwnershipResult(command, "htv405", "valve_endpoint", authorized ? "configured" : "rejected");
         return;
     }
     if (type == "htv405_routine_ack_revoke") {
@@ -2646,6 +2690,7 @@ void handleNetworkCommand() {
             revoked ? "revoked_by_gateway" : "authorization_not_found",
             authorization
         );
+        reportAckOwnershipResult(command, "htv405", "valve_endpoint", "revoked");
         return;
     }
     if (type == "firmware_update_start") {
@@ -2695,6 +2740,7 @@ void handleNetworkCommand() {
     const rainpoint::PairingProfile* requestedProfile = nullptr;
     bool requestedAutomaticDiscovery = false;
     bool requestedAutomaticRejoin = false;
+    long requestedAssignedChannel = 4;
     bool requestedValvePairing = false;
     bool requestedValveRejoin = false;
     bool requestedValveAutomaticDiscovery = false;
@@ -2754,6 +2800,14 @@ void handleNetworkCommand() {
     }
     if (requestedProfile == nullptr && !requestedValvePairing) {
         reportNetworkCommandError(commandId, "unsupported_pairing_profile");
+        return;
+    }
+    // A known association must retain its selector. Missing metadata is not
+    // permission to silently move a sensor back onto the discovery default.
+    if (requestedAutomaticRejoin &&
+        (!jsonLongField(command, "assigned_channel", requestedAssignedChannel) ||
+         (requestedAssignedChannel != 4 && requestedAssignedChannel != 5))) {
+        reportNetworkCommandError(commandId, "rejoin_channel_invalid");
         return;
     }
     if (!jsonLongField(command, "duration_seconds", durationSeconds) ||
@@ -2830,7 +2884,7 @@ void handleNetworkCommand() {
         activePairingProfile = *requestedProfile;
     // Same-selector coexistence is physically validated: addressed sensors can
     // share one RF channel, so selector allocation must not imply uniqueness.
-    pairingAssignedChannel = 4;
+    pairingAssignedChannel = static_cast<std::uint8_t>(requestedAssignedChannel);
     const bool channelAssigned = requestedAutomaticDiscovery
         ? rainpoint::buildAutomaticHcs026Profile(
             std::array<std::uint8_t, 4>{{0, 0, 0, 0x24}},
@@ -3289,6 +3343,9 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         return;
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    if (&radio==&primaryRadio) observeValvePhase(frame);
+#endif
     bool htv405PairingReplyRestoredReceive = false;
     bool valveProbeTransmitted = false;
     if (&radio == &primaryRadio) {
@@ -3648,6 +3705,9 @@ bool beginRadio(
 }  // namespace
 
 void setup() {
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    loadValvePhaseRecord();
+#endif
     Serial.begin(115200);
     delay(250);
     otaTrial.begin();
@@ -3745,6 +3805,9 @@ void loop() {
     handleSerialCommand();
     pollRadio("primary", primaryRadio);
     pollValveProbeResponseListener();
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    pollValvePhase();
+#endif
 
     if (scanChannels) {
         // Locally enrolled HCS026 sensors return to telemetry channel 0 after

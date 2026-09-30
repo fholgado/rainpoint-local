@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 FORBIDDEN_BENCH_COMMANDS = (
+    b"htv213_pairing_experiment", b"htv213_pairing_start", b"htv213_pairing_cancel",
+    b"htv213_control_experiment", b"htv213_control_probe_open", b"htv213_control_probe_close",
+    b"htv213_routine_owner", b"htv213_owner_set", b"htv213_owner_clear", b"htv213_duration_3600",
     b"hcs026_15a98024_v1", b"hcs026_1bce0024_candidate_v1",
     b"htv145_dry_open_probe", b"htv145_dry_close_probe",
     b"htv145_post_frame_tail_candidate",
@@ -26,6 +29,8 @@ FORBIDDEN_BENCH_COMMANDS = (
 REQUIRED_CAPABILITIES = (
     b"configurable_rf_controller_identity",
     b"routine_sensor_ack_tx",
+    b"correlated_ack_ownership",
+    b"retained_sensor_rejoin_channel",
     b"valve_pairing_tx_candidate",
     b"htv405_auto_identity_pairing",
     b"firmware_update_start",
@@ -56,14 +61,23 @@ HTV145_CONTROL_COMMANDS = (
     b"htv145_control_revoke", b"htv145_report_ack_tx",
 )
 
+PHASE_TRIAL_COMMANDS = (
+    b"valve_phase_trial_open", b"valve_phase_trial_status", b"valve_phase_trial_release",
+)
+
 
 def main() -> int:
     arguments = sys.argv[1:]
+    phase_trial = arguments[:1] == ["--phase-trial"]
+    if phase_trial:
+        arguments = arguments[1:]
     if len(arguments) != 1:
-        print("usage: check_firmware_boundaries.py FIRMWARE_BIN")
+        print("usage: check_firmware_boundaries.py [--phase-trial] FIRMWARE_BIN")
         return 2
     firmware = Path(arguments[0]).read_bytes()
     leaked = [value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware]
+    if not phase_trial:
+        leaked.extend(value.decode() for value in PHASE_TRIAL_COMMANDS if value in firmware)
     leaked.extend(
         value.decode()
         for value in FORBIDDEN_VALVE_CONTROL_COMMANDS
@@ -75,6 +89,9 @@ def main() -> int:
             + HTV145_PAIRING_CAPABILITIES + HTV145_CONTROL_COMMANDS
         ) if value not in firmware
     ]
+    if phase_trial:
+        missing.extend(value.decode() for value in PHASE_TRIAL_COMMANDS + (b"-phase-trial.",)
+                       if value not in firmware)
     if leaked:
         print(f"firmware contains forbidden commands: {', '.join(leaked)}")
     if missing:
