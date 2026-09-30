@@ -29,6 +29,8 @@ FORBIDDEN_BENCH_COMMANDS = (
 REQUIRED_CAPABILITIES = (
     b"configurable_rf_controller_identity",
     b"routine_sensor_ack_tx",
+    b"correlated_ack_ownership",
+    b"retained_sensor_rejoin_channel",
     b"valve_pairing_tx_candidate",
     b"htv405_auto_identity_pairing",
     b"firmware_update_start",

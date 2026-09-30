@@ -996,6 +996,19 @@ int main() {
         detectedFactory, stockController, stockCompanion, 4, automaticRejoin
     ));
     assert(automaticRejoin.stepCount == 1);
+    // Recovery preserves an association on selector 5, rather than moving it
+    // onto the selector-4 default used for new enrollments.
+    rainpoint::PairingProfile selectorFiveRejoin{};
+    rainpoint::PairingProfile selectorFiveEnrollment{};
+    assert(rainpoint::buildAutomaticHcs026RejoinProfile(
+        detectedFactory, stockController, stockCompanion, 5, selectorFiveRejoin));
+    assert(rainpoint::buildAutomaticHcs026Profile(
+        detectedFactory, stockController, stockCompanion, 5, selectorFiveEnrollment));
+    assert(selectorFiveRejoin.steps[0].frame == selectorFiveEnrollment.steps[0].frame);
+    assert(selectorFiveRejoin.steps[0].frame != automaticRejoin.steps[0].frame);
+    assert(rainpoint::validPairingProfile(selectorFiveRejoin));
+    assert(!rainpoint::buildAutomaticHcs026RejoinProfile(
+        detectedFactory, stockController, stockCompanion, 6, selectorFiveRejoin));
     assert(automaticRejoin.completeAfterFinalReply);
     rainpoint::PairingSession automaticRejoinSession(automaticRejoin);
     automaticRejoinSession.arm(10'000);

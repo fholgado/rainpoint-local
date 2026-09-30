@@ -5,6 +5,8 @@ The optional `phase-trial` signing profile builds firmware
 It uses the existing RF waveform, association, body and trailer builders with
 the complete six-bit command phase supplied separately from the action.
 Ordinary production builds omit its commands and capability.
+The build retains correlated ACK-ownership confirmations, saved sensor rejoin
+channels, and full-phase response matching used by the current garden radios.
 
 The authenticated radio accepts two adjacent, 60-second port-1 opens per
 authorization. It persists each attempted command before transmission, rejects
