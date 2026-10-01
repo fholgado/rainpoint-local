@@ -1,0 +1,11 @@
+{
+  "model": "HTV405FRF",
+  "port": 2,
+  "phase": 1,
+  "source": "Oct 1 local-generated association; actual normal 60-second Zone 2 ACK/active/automatic-idle RX; route anonymized and CRC recomputed",
+  "events": [
+    {"kind": "ack", "elapsed_ms": 766, "frame": "79f4882f28b1c2d38fa1b2c38000d0868020cf80000000409e00569e00000000000000008854"},
+    {"kind": "active", "elapsed_ms": 1406, "frame": "79f4882f28b1c2d38fa1b2c380120107820580a0cf80000000409e00569e000000000000e94c"},
+    {"kind": "idle", "elapsed_ms": 62339, "frame": "79f4882f28b1c2d38fa1b2c380148107820580804f8000000040800056800000000000008120"}
+  ]
+}

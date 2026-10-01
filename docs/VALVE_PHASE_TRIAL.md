@@ -1,7 +1,7 @@
 # Bounded valve command-phase trial
 
 The optional `phase-trial` signing profile builds firmware
-`0.19.0-phase-trial.3` for the installed HTV145FRF and HTV405FRF experiment.
+`0.19.0-phase-trial.4` for the installed HTV145FRF and HTV405FRF experiment.
 It uses the existing RF waveform, association, body and trailer builders with
 the complete six-bit command phase supplied separately from the action.
 Ordinary production builds omit its commands and capability.
@@ -12,7 +12,7 @@ The authenticated radio accepts two adjacent, 60-second opens on one reserved
 outlet per authorization (HTV145: port 1; HTV405: ports 1–4). It persists each attempted command before transmission, rejects
 duplicates and phase jumps, and blocks ordinary valve commands while locked.
 Each run requires a matching positive `a1` response and independent active then
-idle port-1 reports. Missing or negative confirmation stops the trial. A reboot
+idle reports for the selected outlet. Missing or negative confirmation stops the trial. A reboot
 retains a failed lock; it cannot restart the allowance. This trial excludes
 phase zero and counter-boundary experiments.
 
@@ -27,7 +27,7 @@ signing an image does not establish physical acceptance.
 
 Use the single `rainpoint_bridge` environment. A local validation build uses
 `RAINPOINT_VALVE_PHASE_EXPERIMENT=1` and
-`RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.3`; check the binary with
+`RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.4`; check the binary with
 `tools/check_firmware_boundaries.py --phase-trial FIRMWARE_BIN`.
 The default checker rejects trial commands in production images.
 
@@ -151,14 +151,45 @@ inventoried manual recovery copies and identified Mac HA database/archive copies
 were removed; the live gateway journal and original RF/firmware research remain.
 Consequently the pre-recovery backup referenced above is no longer retained.
 
-### Dry-outlet selection (source only)
+### October 1 adjacent-phase confirmation
+
+After the user's 35-minute front irrigation reported idle, gateway `0.39.11`
+and front firmware `0.19.0-phase-trial.2` completed exactly two guarded
+60-second runs at adjacent native phases **8 then 9**, without retry, sync,
+reset or flashing. Admission used the user's positive phase-7 ACK and retained
+counter 132; its request was reconstructed from the known 2,100-second command,
+not captured independently over the air.
+
+| Phase | Positive ACK | Active report | Automatic idle |
+| --- | --- | --- | --- |
+| 8 | 0.71 s | 6.70 s | 62.59 s |
+| 9 | 0.71 s | 6.87 s | 62.28 s |
+
+Offsets are from each local attempt marker, not measured mechanical durations.
+A separate read-only audit of CRC-valid, accepted matching-route node RX
+confirmed both full-phase positive `a1` replies with 60-second duration and
+independent port-1 active/idle `02` reports. The second run followed the first
+confirmed idle. The gateway then recorded `released`, the authenticated owner's
+matching authorization reported release, and the production retained counter
+was 133. The valve was idle and normal controls unlocked; no further watering
+was sent to test that handback.
+
+This qualifies adjacent even/odd opens for this HTV145 association and build,
+not phase wrap, long-idle behavior or the four-zone model. The failed September
+30 trial remains in history. Private receipts, RF events and the independent
+audit are in
+`captures/installed-phase-20260930/front-adjacent-after-user-run-20261001/`.
+
+### Dry-outlet selection and local-profile correction
 
 The user identified HTV405 outlets 2–4 as dry. Gateway `0.39.12` and trial
 firmware `.3` add an explicit `port` to admission, durable reservations and
 radio commands. A non-default port requires `valve_phase_trial_ports` at both
 admission and authenticated transport; an older radio cannot silently run port 1.
-The selected outlet cannot change for the second run. The positive `a1` still
-reports control/work mode, not outlet identity; acceptance also requires matching
+The selected outlet cannot change for the second run. Stock `a1` carries
+control/work mode rather than outlet identity. Generated local associations
+pack the outlet into the state nibble: Zone 2's positive open returned `41`
+instead of stock `21`. Acceptance also requires matching
 outlet-specific active and idle `02` reports. The baseline request must identify
 that same outlet, so use an authorized normal dry-outlet baseline first if none
 is available. Do not reuse a Zone 1 baseline for Zone 2.
@@ -166,5 +197,28 @@ is available. Do not reuse a Zone 1 baseline for Zone 2.
 The radio record remains 88 bytes with `port` in former padding. Its new magic
 version distinguishes valid outlet records from legacy padding: old records
 migrate explicitly to port 1, and malformed new outlets fail closed. No pairing
-prefix, ordinary production control builder or RF waveform changes. This version
-has not been deployed or physically qualified; the front remains on signed `.2`.
+prefix, ordinary production control builder or RF waveform changes.
+
+On Oct 1, gateway `0.39.12` and signed veggie firmware `.3` were deployed after
+backup `6497cbd1`, publisher verification and gateway-package tests. Both garden
+radios reconnected. One ordinary Zone 2 request specified 60 seconds and native
+phase 1. The owner received a positive ACK after ~0.77 seconds; independent
+accepted reports showed active Zone 2 after ~1.41 seconds and automatic idle
+after ~62.34 seconds. Production retained the next counter 1. The helper
+incorrectly reported missing confirmation: the ACK was logged under its control
+alias, and it assumed the stock native outlet layout. No adjacent trial was
+admitted or transmitted.
+
+The generated command body is `[01, port << 1, 01, seconds_low, seconds_high]`,
+preserving the existing builder; the stock form is
+`[port, 02, 01, seconds_low, seconds_high]`. Local active `02` rows retain native
+port byte `01` and pack the active outlet into state `port << 5 | 01`; local
+idle clears that state to zero. The production decoder already handles this.
+Gateway `.13` and trial firmware `.4` reuse that decoder for the experiment,
+accept the model-qualified local ACK layout, and require selected-outlet active
+evidence before global idle can complete a run. Persisted model selection uses
+another former padding byte; older records migrate without reopening locks.
+The [anonymized actual exchange](../research/fixtures/htv405_local_port2_baseline_20261001.json)
+reproduces the old failure in both radio and gateway regressions. It proves
+normal phase-1 control, not acceptance of adjacent phases. The front remains
+on signed `.2`; four-zone adjacent qualification awaits the corrected build.

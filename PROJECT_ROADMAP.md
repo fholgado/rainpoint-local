@@ -14,13 +14,16 @@
 - [x] Restore front command availability through verified no-RF recovery (Oct 1): gateway 0.39.11, signed front firmware `phase-trial.2`, correlated radio acknowledgment and retained counter 129; preserve failed history.
 - [x] Verify normal front controls after recovery: two 60-second runs, positive phase-3/5 ACKs, active/automatic-idle reports and counters 129 → 130 → 131 (Oct 1).
 - [x] Remove inventoried local HA/Mac backups with user approval; retain live data, RF evidence and stock firmware. HA ~42.5 GB free, Mac ~89 GiB free (Oct 1).
-- [ ] Finish reauthorized front adjacent-phase runs after the user's 35-minute run reports idle; finite follow-up expires Oct 1 at 10:30 a.m. Eastern.
-- [ ] Sign/deploy explicit HTV405 dry-outlet trial support, then qualify on Zone 2 after front success; never substitute wet Zone 1. Source implemented; validation in progress.
+- [x] Qualify front adjacent phases 8 → 9 after the user's 35-minute run: two 60-second runs with positive ACK, active/automatic-idle RF and verified production handback; idle, retained counter 133 (Oct 1).
+- [x] Implement explicit dry-outlet trial selection and legacy-record migration; 886-test suite passed/two skips, final 39 focused tests and ESP32/boundary/native checks passed. Firmware PR #27; gateway companion remains source-only.
+- [x] Merge dry-outlet firmware PR #27; submit protected signing run 36864829701 (`phase-trial.3`).
+- [x] Deploy gateway 0.39.12 and signed veggie firmware `phase-trial.3`; confirm both radios healthy. One normal Zone 2/60-second baseline opened and stopped automatically at phase 1; adjacent trials withheld on verifier mismatch.
+- [x] Replay/fix generated-association HTV405 outlet packing in gateway/radio verifiers; actual Zone 2 regression, wrong-outlet/model and migration checks pass. Full suite: 890 tests/two skips; final 36 focused tests and ESP32/native/boundary checks pass.
+- [ ] Sign `phase-trial.4` and deploy gateway 0.39.13; qualify two adjacent runs on dry Zone 2 using the retained phase-1 baseline.
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
-Last reviewed: 2026-10-01This is the only live checklist. Completed implementation does not imply physical
-qualification. Detailed history and proof are in the
+Last reviewed: 2026-10-01qualification. Detailed history and proof are in the
 [evidence index](research/IMPLEMENTATION_EVIDENCE_20260912.md), not the task text.
 
 ## Current work order

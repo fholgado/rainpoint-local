@@ -159,3 +159,34 @@ class PhaseCanaryFirmwareTest(unittest.TestCase):
             with self.subTest(port=port):
                 rows=self.run_guard([begin,f"frame 1500 {ack}",f"frame 4000 {active}",f"frame 62000 {idle}"])
                 self.assertEqual(rows[-1],(1,3,1,6,1))
+
+    def test_actual_generated_four_zone_port2_exchange(self):
+        capture=json.loads((ROOT/'research/fixtures/htv405_local_port2_baseline_20261001.json').read_text())
+        rows=self.run_guard([f"begin 1 1 4 1000 1 {'1'*32} b1c2d38fa1b2c380 2 1",
+            *[f"frame {1000+e['elapsed_ms']} {e['frame']}" for e in capture['events']]])
+        self.assertEqual(rows[1][0],1,'actual local Zone 2 positive ACK must be recognized')
+        self.assertEqual(rows[-1],(1,3,1,1,1),'actual active/automatic-idle must finish the run')
+
+    def test_local_four_zone_requires_selected_outlet_and_model(self):
+        capture=json.loads((ROOT/'research/fixtures/htv405_local_port2_baseline_20261001.json').read_text())
+        ack,active,idle=[e['frame'] for e in capture['events']]
+        begin=f"begin 1 1 4 1000 1 {'1'*32} b1c2d38fa1b2c380 2"
+        self.assertEqual(self.run_guard([begin,f'frame 1800 {ack}'])[1][0],0)
+        wrong_ack=bytearray(decode(ack).data);wrong_ack[1]=0x61
+        wrong_active=bytearray(decode(active).data);wrong_active[3]=0x61
+        rows=self.run_guard([begin+' 1',f'frame 1700 {alter(ack,data=wrong_ack)}',
+            f'frame 1800 {ack}',f'frame 2500 {alter(active,data=wrong_active)}',
+            f'frame 63000 {idle}',f'frame 64000 {active}',f'frame 65000 {idle}',
+            f"begin 2 2 4 70000 1 {'2'*32} b1c2d38fa1b2c380 2 0"])
+        self.assertEqual(rows[1][0],0)
+        self.assertEqual(rows[3][0],0)
+        self.assertEqual(rows[4][0],0) # Global idle needs a matching active first.
+        self.assertEqual(rows[6][1],3)
+        self.assertEqual(rows[7][0],0) # Model cannot change mid-authorization.
+
+    def test_port_record_migration_ignores_old_model_padding_and_new_bad_model_locks(self):
+        rows=self.run_guard([self.begin(),*self.cycle(6),self.begin(7,2,70000),
+            *self.cycle(7,70000),'release','port_restart'])
+        self.assertEqual(rows[-1],(1,6,2,7,0))
+        rows=self.run_guard([self.begin(),'corrupt_model'])
+        self.assertEqual(rows[-1][1],5)

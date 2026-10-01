@@ -22,15 +22,15 @@ int main() {
         std::istringstream input(line); std::string operation; input>>operation;
         bool ok=false;
         if (operation=="begin") {
-            unsigned phase,ordinal,selector,now,commit,port=1; std::string id,route;
+            unsigned phase,ordinal,selector,now,commit,port=1,fourZone=0; std::string id,route;
             input>>phase>>ordinal>>selector>>now>>commit>>id>>route;
-            input>>port;
+            input>>port>>fourZone;
             std::array<std::uint8_t,8> bytes{};
             for (unsigned i=0;i<8;++i) bytes[i]=std::stoul(route.substr(i*2,2),nullptr,16);
             ok=guard.begin(auth,id.c_str(),phase,ordinal,selector,bytes,now,[&](const auto& record) {
                 if (!commit) return false;
                 saved=record; return true;
-            },port);
+            },port,fourZone!=0);
         } else if (operation=="frame") {
             unsigned now; std::string raw; input>>now>>raw;
             rainpoint::commandPhase::Frame frame{};
@@ -43,6 +43,11 @@ int main() {
         } else if (operation=="legacy_restart") {
             saved.magic=0x50484331; saved.port=255;
             guard={}; guard.restore(saved); ok=guard.record.port==1;
+        } else if (operation=="port_restart") {
+            saved.magic=0x50484332; saved.fourZone=255;
+            guard={}; guard.restore(saved); ok=guard.record.fourZone==0;
+        } else if (operation=="corrupt_model") {
+            saved.fourZone=255; guard={}; guard.restore(saved); ok=true;
         } else if (operation=="corrupt_port") {
             saved.port=5; guard={}; guard.restore(saved); ok=true;
         } else if (operation=="recover") {
