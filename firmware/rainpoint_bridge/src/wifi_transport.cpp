@@ -272,7 +272,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
         (type == "pairing_start" || type == "pairing_cancel" ||
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
          type == "valve_phase_trial_open" || type == "valve_phase_trial_status" ||
-         type == "valve_phase_trial_release" ||
+         type == "valve_phase_trial_release" || type == "valve_phase_trial_recover" ||
 #endif
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
@@ -343,7 +343,7 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"retained_sensor_rejoin_channel\""
         ",\"firmware_update_trial\""
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
-        ",\"valve_phase_trial\""
+        ",\"valve_phase_trial\",\"valve_phase_trial_recovery\""
 #endif
         ",\"firmware_signed_ota\""
         "],"

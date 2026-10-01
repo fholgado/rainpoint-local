@@ -8,7 +8,7 @@ namespace rainpoint::phaseCanary {
 // Disabled-by-default installed-valve experiment. The gateway owns admission,
 // association selection and durable reservations. This second guard lives on
 // the radio: two one-minute transmissions, never retries or phase searches.
-enum class Stage : std::uint8_t { Empty, Ready, Awaiting, Between, Complete, Failed, Released };
+enum class Stage : std::uint8_t { Empty, Ready, Awaiting, Between, Complete, Failed, Released, Recovered };
 struct Record {
     std::uint32_t magic = 0x50484331;
     char authorization[33]{};
@@ -18,6 +18,7 @@ struct Record {
     std::uint8_t phase = 0, count = 0, selector = 0;
     bool acknowledged = false, active = false, idle = false;
 };
+static_assert(sizeof(Record)==88, "phase-trial.1 NVS layout requires explicit migration if changed");
 
 inline bool identifier(const char* value) {
     if (!value || std::strlen(value) != 32) return false;
@@ -29,14 +30,14 @@ inline bool identifier(const char* value) {
 class Guard {
 public:
     Record record{};
-    bool locked() const { return record.stage != Stage::Empty && record.stage != Stage::Released; }
+    bool locked() const { return record.stage != Stage::Empty && record.stage != Stage::Released && record.stage != Stage::Recovered; }
     bool listening() const { return record.stage == Stage::Awaiting && !record.acknowledged; }
     bool inFlight() const { return record.stage == Stage::Awaiting; }
     void restore(const Record& saved) {
         record = saved;
         if (record.magic != 0x50484331 || record.authorization[32] != '\0' ||
                 record.commandId[32] != '\0' ||
-                static_cast<unsigned>(record.stage)>static_cast<unsigned>(Stage::Released) ||
+                static_cast<unsigned>(record.stage)>static_cast<unsigned>(Stage::Recovered) ||
                 (record.stage != Stage::Empty && (!identifier(record.authorization) ||
                     !identifier(record.commandId) || record.count<1 || record.count>2 ||
                     record.phase<1 || record.phase>62 || record.selector<1 || record.selector>15))) {
@@ -89,24 +90,53 @@ public:
             return static_cast<std::uint8_t>((frame[i+4]<<1U)|(frame[i+5]>>7U));
         };
         if (native(0)!=0x51 || (native(9)&0x40)) return false;
-        const auto word = [&native](unsigned i) { return native(i) | (unsigned(native(i+1))<<8U); };
+        // Avoid Arduino's word(...) macro, which silently replaces a call to
+        // a lambda named word with makeWord(index), discarding the packet data.
+        const auto readLe16 = [&native](unsigned i) { return native(i) | (unsigned(native(i+1))<<8U); };
         const auto age = now-startedAt_;
         if (native(10)==0xa1 && (native(11)&31)==13 && commandPhase::fromNormalized(frame)==record.phase) {
             if (tick(now)) return true;
             if (native(12)!=0) { fail(); return true; }
-            if (native(13)!=0x21 || word(23)!=60 || word(20)==0 || word(20)>61) return false;
+            if (native(13)!=0x21 || readLe16(23)!=60 || readLe16(20)==0 || readLe16(20)>61) return false;
             record.acknowledged = true;
         } else if (native(10)==2 && (native(11)&31)==15 && native(12)==record.selector && native(14)==1) {
             if (tick(now)) return true;
-            if (native(15)==0x21 && word(25)==60 && word(22)>0 && word(22)<=61)
+            if (native(15)==0x21 && readLe16(25)==60 && readLe16(22)>0 && readLe16(22)<=61)
                 record.active = true;
-            else if (record.active && age>=55'000 && native(15)==0 && word(25)==0 && word(22)==0)
+            else if (record.active && age>=55'000 && native(15)==0 && readLe16(25)==0 && readLe16(22)==0)
                 record.idle = true;
             else return false;
         } else return false;
         if (record.acknowledged && record.active && record.idle)
             record.stage = record.count==2 ? Stage::Complete : Stage::Between;
         return true;
+    }
+    template<class Save>
+    bool recover(const char* authorization, const char* recoveryId, const char* attemptedId,
+                 const commandPhase::Frame& ack, const commandPhase::Frame& active,
+                 const commandPhase::Frame& idle, std::uint32_t ackAge,
+                 std::uint32_t activeAge, std::uint32_t idleAge, Save save) {
+        // Explicit repair of the first phase-2 HTV145 trial, not a general
+        // counter search, new watering grant, or automatic timeout recovery.
+        // Record layout is unchanged so phase-trial.1 NVS remains readable.
+        if (record.stage!=Stage::Failed || record.count!=1 || record.phase!=2 ||
+                !identifier(authorization) || !identifier(recoveryId) || !identifier(attemptedId) ||
+                std::strcmp(record.authorization,authorization)!=0 ||
+                std::strcmp(record.commandId,attemptedId)!=0 ||
+                std::strcmp(recoveryId,attemptedId)==0 ||
+                !(ackAge<activeAge && activeAge<idleAge && ackAge<=15'000 && idleAge<=125'000)) return false;
+        Guard proof;
+        proof.record=record; proof.record.stage=Stage::Awaiting;
+        proof.record.acknowledged=proof.record.active=proof.record.idle=false;
+        if (!proof.observe(ack,ackAge) || !proof.record.acknowledged ||
+                !proof.observe(active,activeAge) || !proof.record.active ||
+                !proof.observe(idle,idleAge) || proof.record.stage!=Stage::Between) return false;
+        auto next=record; next.stage=Stage::Recovered;
+        std::strcpy(next.commandId,recoveryId);
+        // Preserve original observation flags; external evidence is not a
+        // claim that this radio recognized these frames during the old run.
+        if (!save(next)) return false;
+        record=next; return true;
     }
     template<class Save>
     bool release(const char* authorization, Save save) {

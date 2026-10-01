@@ -62,7 +62,7 @@ HTV145_CONTROL_COMMANDS = (
 )
 
 PHASE_TRIAL_COMMANDS = (
-    b"valve_phase_trial_open", b"valve_phase_trial_status", b"valve_phase_trial_release",
+    b"valve_phase_trial_open", b"valve_phase_trial_status", b"valve_phase_trial_release", b"valve_phase_trial_recover",
 )
 
 

@@ -4,13 +4,18 @@
 
 - [x] Implement the explicitly enabled two-run radio guard, full-phase builders and offline guard/replay tests.
 - [x] Add the protected `phase-trial` signing profile and production-exclusion check.
-- [ ] Finish gateway admission, counter handback and integration verification before deployment.
-- [ ] Obtain signing approval and run the authorized two 60-second tests per installed valve; require independent automatic-stop reports.
+- [x] Obtain protected signing approval; verify the unpublished `0.19.0-phase-trial.1` artifact (run 36787747965).
+- [x] Test atomic counter handback, release acknowledgment and four-zone telemetry coexistence offline.
+- [x] Verify gateway admission/handback; back up HA and deploy gateway 0.39.10 plus signed trial firmware to the front node only.
+- [x] Capture front HTV145 phase-2 acceptance, watering and automatic stop after one 60-second run; stop further trials on monitor failure.
+- [x] Reproduce/fix Arduino `word(...)` macro collision in the trial verifier; replay actual RX with Arduino-compatible regression tests.
+- [x] Implement explicit no-watering recovery with stored RF evidence, atomic counter handoff and correlated radio release; preserve failed history.
+- [ ] Restore front irrigation through an approved evidence-based handoff; preserve the failed journal. **Front commands currently locked.**
+- [ ] Sign/deploy the verifier correction, then reauthorize remaining adjacent-run qualification; veggie radio remains unchanged.
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
-Last reviewed: 2026-09-12
-
+Last reviewed: 2026-09-30
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
 [evidence index](research/IMPLEMENTATION_EVIDENCE_20260912.md), not the task text.
