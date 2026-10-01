@@ -1,6 +1,31 @@
 # RainPoint Local project roadmap
 
-Last reviewed: 2026-09-27
+### Installed-valve phase trial build — September 30
+
+- [x] Implement the explicitly enabled two-run radio guard, full-phase builders and offline guard/replay tests.
+- [x] Add the protected `phase-trial` signing profile and production-exclusion check.
+- [x] Obtain protected signing approval; verify the unpublished `0.19.0-phase-trial.1` artifact (run 36787747965).
+- [x] Test atomic counter handback, release acknowledgment and four-zone telemetry coexistence offline.
+- [x] Verify gateway admission/handback; back up HA and deploy gateway 0.39.10 plus signed trial firmware to the front node only.
+- [x] Capture front HTV145 phase-2 acceptance, watering and automatic stop after one 60-second run; stop further trials on monitor failure.
+- [x] Reproduce/fix Arduino `word(...)` macro collision in the trial verifier; replay actual RX with Arduino-compatible regression tests.
+- [x] Implement explicit no-watering recovery with stored RF evidence, atomic counter handoff and correlated radio release; preserve failed history.
+- [x] Merge focused recovery firmware PR #26; submit protected `phase-trial.2` build 36796917397. Local full suite: 879 tests, two optional skips.
+- [x] Restore front command availability through verified no-RF recovery (Oct 1): gateway 0.39.11, signed front firmware `phase-trial.2`, correlated radio acknowledgment and retained counter 129; preserve failed history.
+- [x] Verify normal front controls after recovery: two 60-second runs, positive phase-3/5 ACKs, active/automatic-idle reports and counters 129 → 130 → 131 (Oct 1).
+- [x] Remove inventoried local HA/Mac backups with user approval; retain live data, RF evidence and stock firmware. HA ~42.5 GB free, Mac ~89 GiB free (Oct 1).
+- [x] Qualify front adjacent phases 8 → 9 after the user's 35-minute run: two 60-second runs with positive ACK, active/automatic-idle RF and verified production handback; idle, retained counter 133 (Oct 1).
+- [x] Implement explicit dry-outlet trial selection and legacy-record migration; 886-test suite passed/two skips, final 39 focused tests and ESP32/boundary/native checks passed. Firmware PR #27; gateway companion remains source-only.
+- [x] Merge dry-outlet firmware PR #27; submit protected signing run 36864829701 (`phase-trial.3`).
+- [x] Deploy gateway 0.39.12 and signed veggie firmware `phase-trial.3`; confirm both radios healthy. One normal Zone 2/60-second baseline opened and stopped automatically at phase 1; adjacent trials withheld on verifier mismatch.
+- [x] Replay/fix generated-association HTV405 outlet packing in gateway/radio verifiers; actual Zone 2 regression, wrong-outlet/model and migration checks pass. Full suite: 890 tests/two skips; final 36 focused tests and ESP32/native/boundary checks pass.
+- [x] Merge focused verifier fix PR #28; submit protected `phase-trial.4` signing run 36872047806. Gateway 0.39.13 correction package: 28 staged-runtime tests passed.
+- [x] Verify approved signing run 36872047806; deploy tested gateway 0.39.13 and signed veggie `.4`, with healthy OTA confirmation and exact source hashes (Oct 1).
+- [ ] Qualify dry Zone 2 adjacent phases 2 → 3 after fresh independent idle evidence. Admission rejected the 81-minute-old state; recent RF traffic is not fresh idle. No trial open sent, counter 1 unchanged.
+
+Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
+
+Last reviewed: 2026-10-01
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -16,13 +41,44 @@ is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 2. Deploy the native-only integration after review, then improve/test pairing under Devices & services.
 3. Collect targeted lifecycle results and continue stable-release qualification; no new 72-hour baseline is required.
 
-Stock-hub research remains hardware-read-only; no new hardware tests without
-approval. The approved off-device update lookup offered no newer image for this
-hub on Sep 27. The user approved source changes/tests for ownership cleanup,
-retained-channel recovery and remaining-time decoding; **no deployment**.
+Completed stock-reference trials: dry HTV213FRF two-zone valve, both ports,
+early stop, >30-minute/>3-hour idle controls, hub-only RST restart, and valve battery rejoin. Follow the [capture procedure](research/TWO_ZONE_STOCK_CAPTURE_PLAN.md)
+for separately approved lifecycle tests; the finite unattended controls are finished.
+Do not alter production irrigation or claim local support from stock-only tests.
+
+Completed passive baseline: used HCS012ARF rain gauge, battery boot and
+stock-app pairing; zero rain/battery OK confirmed. Nonzero rainfall remains
+unqualified. No local enrollment or transmit path is enabled.
+
+Stock firmware research remains read-only. Sep 30 authorization also covers two
+60-second adjacent-phase runs on the installed front-garden HTV145, then two on
+the vegetable-garden HTV405 Zone 1: confirmed closure between runs, no retry or
+counter jump, stop on the first missing/negative confirmation. These installed
+tests stopped after the first front run: authenticated RF confirms phase-2
+acceptance and automatic closure, but the trial verifier missed the response
+because Arduino's `word(...)` macro replaced its field-reader calls. The source
+fix passes offline replay. On Oct 1, approved gateway 0.39.11 and signed front
+firmware `phase-trial.2` completed the evidence-backed no-RF handoff. The exact
+radio recovery acknowledgment released the lock; the failed trial remains
+recorded. Both valves were idle, with no additional watering or veggie flash.
+Normal front command availability is restored. Two subsequently authorized
+normal 60-second runs confirmed positive phase-3/5 ACKs, active reports and
+automatic closure, with retained counters 129 → 130 → 131. These ordinary
+odd-phase runs do not complete the adjacent full-phase experiment. See the
+[trial result](docs/VALVE_PHASE_TRIAL.md#september-30-installed-trial-result).
+The approved off-device update lookup offered no newer image for this
+hub on Sep 27. The user initially approved source changes/tests for ownership
+cleanup, retained-channel recovery and remaining-time decoding without deployment.
+On Sep 29, gateway-only `0.39.1` was approved and deployed to match the new
+research radio's capabilities. Both garden radios reconnected with ACK ownership
+ready; existing radio firmware and integration stayed unchanged.
 The subsequent unattended-work approval also covers source/test repairs for
 full-phase reply matching and bounded single-zone plan-request retries. These
 are implemented offline; hardware acceptance and deployment remain separate.
+The latest valve-learning implementation adds capture-tested reply builders and
+durable recovery configuration/progress with owner checks. **Live recovery is
+disabled**: model-specific node handlers and RF qualification remain unfinished.
+Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
 Research branch: `codex/stock-hub-research`. Refine and qualify our existing
@@ -47,6 +103,9 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 - [x] Fix standalone manual TLS credentials and entry-scoped registry lookups; qualify HA Core 2026.7.0/2026.9.1 and deploy integration 0.18.1.
 - [x] Verify default notification delivery/deduplication/dismissal for both valves on clean HA Core (not rendered UI).
 - [ ] Validate fresh HA OS app/HACS installation and adoption on aarch64 and amd64. **Tester.**
+- [x] Deploy matched gateway 0.39.1; verify garden-node authentication and ACK restoration without watering.
+- [x] Complete fresh native adoption of the research test node on gateway 0.39.1; verify authentication, health and accepted RF reception.
+- [ ] Make failed native radio adoption retryable without repeating Wi-Fi setup; align UI and credential expiry.
 - [ ] Exercise rendered pairing/removal/cancellation screens for sensors and both valves. **Tester.**
 - [ ] Verify default notifications in the rendered HA panel and optional mobile forwarding. **Tester.**
 - [ ] Qualify multiple physical single-zone valves on one node; eight slots are implemented. **Hardware.**
@@ -123,6 +182,16 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 
 ## Phase 3 — reliable valve control
 
+### Shared command-phase qualification
+
+- [x] Reconcile all three models' six-bit phase evidence; retain prior one-/four-zone rollover qualifications ([audit](research/VALVE_FULL_PHASE_CROSS_MODEL_AUDIT.md), Sep 30).
+- [x] Add offline one-/four-zone full-phase builders; replay captured commands and all 64 phase/action combinations without runtime changes (Sep 30).
+- [x] Decode native reply control/work mode separately from phase; reproduce the stock port-4 reply mislabel and retain native negative results in offline tests (Sep 30).
+- [x] Add source-only two-run journal; test durable pre-send reservations, restart/commit failure, evidence matching, timeout and budget exhaustion (Sep 30). No live caller.
+- [x] Prepare an isolated full-phase canary with durable reservations and parity-independent reply matching; preserve production counters, recovery and exact retry bytes.
+- [x] Complete HTV145 adjacent phases 8 → 9 and verified counter handback (Oct 1).
+- [ ] Complete HTV405 dry Zone 2 adjacent-phase tests after fresh idle evidence; stop on missing confirmation. Boundary tests need separate approval.
+
 ### Four-zone valve
 
 - [ ] Correlate one installed run's RF, duration, HA feedback, automation and watchdog outcomes.
@@ -132,7 +201,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [ ] Qualify late replies, RF timeout, duplicates, spacing, recovery and observed overdue runs.
 - [ ] Test retained counters at 1/4/8/12 hours after sync without intervening commands.
 - [ ] Separate counter-staleness causes: elapsed time, restart/reconnect, ACK gaps and stock traffic.
-- [x] Restore HTV405 remaining-time low bit; test captured 895-versus-894, 0–3,600 seconds and existing valve regressions. Not deployed.
+- [x] Restore HTV405 remaining-time low bit; test captured 895-versus-894 and 0–3,600 seconds; deployed with gateway 0.39.1.
 - [ ] Repeat association/control on another specimen or compatible hardware profile.
 
 ### Single-zone valve
@@ -192,6 +261,8 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Audit typed/versioned protocol, gateway, HA and research interfaces; preserve established contracts.
 - [x] Retire obsolete firmware-checker variants; retain only research controls required by open tests.
 - [x] Review Alpha 1 installable artifacts and add repeatable private-file/key checks to CI.
+- [ ] Define and test the signed catalog v2 compatibility contract for independently versioned integration, gateway and firmware releases; authenticate hardware/profile/variant/channel, protocol ranges, capabilities and monotonic generation, and reject tampering, replay and downgrade.
+- [ ] Add a GitHub Releases catalog adapter behind the gateway's existing resolver, retain the strict local/offline adapter and last-known-good cache, publish immutable channel-specific assets through the approved workflow, and qualify dependency ordering plus offline staged updates. The HA integration remains a presentation/install client, not a second release resolver.
 
 See the [software audit](research/ALPHA_SOFTWARE_AUDIT_20260912.md) for scope and evidence.
 
@@ -228,7 +299,62 @@ not tasks to mark “done once.”
 - [x] Compare native pairing shapes across HCS026/HTV145/HTV405: 42 captured rows; distinguish shared commands, per-port repeats and gateway-originated phases (Sep 28).
 - [x] Replay three recorded HTV145 failures through the native session; preserve initial replies, bound retries and reject false completion; reconcile native/legacy protocol docs (Sep 28).
 - [x] Trace model-specific `05` settings and `06` plan paging; correct `20` notification byte to configuration version, not RF channel. Offline suite: 696 passed, two skips; native protocol passed (Sep 28).
+- [x] Trace configuration revisions and fourteen-byte valve settings; distinguish asynchronous settings arrival from fixed pairing stages ([evidence](research/STOCK_HUB_CONFIGURATION_LIFECYCLE.md), Sep 28).
+- [x] Trace saved associations, known rejoin and three direct sequence-generator callers; no periodic reset established ([evidence](research/STOCK_HUB_ASSOCIATION_PERSISTENCE.md), Sep 28).
+- [x] Add offline semantic trace analysis and capture-backed retry/missing-response checks; 708 tests passed, two optional NumPy skips, native protocol passed (Sep 28). No device acceptance implied.
+- [ ] Audit local enrollment durability under storage failures; inject save/restart failures before changing admission behavior.
+- [ ] Qualify valve settings units and notification triggers with controlled one-field changes; keep proven pairing prefixes frozen.
 - [ ] Resolve later sequence restoration/reset rules and HTV405 terminal descriptors; boot clear alone does not explain overnight failures.
+- [x] Capture HTV213 stock enrollment and both-zone automatic stops; verify 60/120-second RF commands, replies and summaries ([evidence](research/HTV213_STOCK_CAPTURE_FINDINGS_20260928.md), Sep 28).
+- [x] Qualify stock HTV213 explicit close after 35 seconds: matched response, independent idle and 34-second summary; preserve redacted fixtures (Sep 28).
+- [x] Freeze HTV213 stock evidence in 44 redacted frames and six tests; full suite 714 passed/two optional skips, native protocol passed (Sep 28). No local two-zone TX enabled.
+- [x] Qualify stock HTV213 control after >30 minutes idle: phase-7 open, matching reply, idle and 60-second summary (Sep 28). Unrecorded intervals remain coverage gaps.
+- [x] Qualify stock HTV213 control after >3 hours idle: phase 8, matching reply, port-2 idle and 60-second summary (Sep 28). Gaps do not establish counter resets.
+- [x] Capture HTV213 hub-only RST recovery: startup `20` kind 1/phase 2, then accepted phase-3 open and 60-second stop with valve left powered (Sep 28); no decoded re-pairing.
+- [x] Capture HTV213 battery rejoin without pairing mode: retained assignment, per-port state/settings/plans, then phase-4 control and confirmed 60-second stop (Sep 28).
+- [x] Implement offline firmware `02/05/06` responder: retained revision/selector, per-model ports, full-phase echo and explicit settings/plan knowledge; replay 44 captured exchanges across all three valves.
+- [x] Preserve 64 redacted lifecycle frames and regression coverage for idle, hub restart, battery rejoin and report-phase wrap; no inferred counter-reset rule.
+- [x] Add explicit `20` kind-0/kind-1 body builder without automatic counter allocation, reset or production dispatch.
+- [x] Validate valve-learning source: 728 Python tests passed/two optional skips, both native protocol executables passed, unified firmware compiled; no deployment.
+- [x] Persist explicit recovery settings/progress; check authenticated ownership and journal before dispatch. Test restart, duplicate delivery and failed commits without changing counters.
+- [x] Delete recovery state atomically with its association; test rollback and isolation from other valves.
+- [x] Trace/build HTV213 retained `01/81`: distinguish device address, request carrier selector, saved routine selector and native clock. Keep other models unqualified.
+- [x] Validate recovery source: 741 Python tests passed/two optional skips, both native protocol executables passed and unified firmware compiled (Sep 29); no deployment.
+- [x] Implement isolated HTV213 dry-pairing candidate: stock-byte replay, full-phase replies, both-port configuration and bounded authenticated cancellation; default firmware excludes it.
+- [x] Validate candidate offline: 762 Python tests (two optional skips), native protocol test, canary/default builds and production exclusion check passed (Sep 29); not deployed or RF-qualified.
+- [x] Deploy gateway 0.39.2 and HTV213 pairing.1 to the unassigned test node; verify flash hash, authentication, valid radio RX and disarmed state. Garden firmware unchanged (Sep 29).
+- [x] Reproduce/fix HTV213 firmware ingress dropping start/cancel commands; compile the actual gate in both modes and pass 41 targeted tests. RF sequence unchanged (Sep 29).
+- [x] Flash/verify pairing.2 and confirm start/cancel reach the test node; first RF trial captured a rejected announcement variant (Sep 29).
+- [x] Replay/fix exact HTV213 repeat announcement `0b…07`; retain original assignment bytes, timing, configuration and rejoin rejection.
+- [x] Restore/verify pairing.3 after USB reconnection: application hash verified, authenticated reconnect, radio configured and TX disarmed (Sep 29).
+- [x] SDR-confirm three pairing.3 assignment replies; valve still rejects. Reproduce selector-11/request versus selector-12/TX mismatch and measure ~45.5-kHz configured/on-air offset.
+- [x] Fix request-derived HTV213 reply carrier with native regression and two-slot cache test; preserve payload, phase echo and timing. Prepare a bounded node-only correction from captured RF.
+- [x] Restore/verify pairing.4 via explicit USB RTS reset and one serial retry: device hash verified, authenticated reconnect and TX disarmed (Sep 30).
+- [x] SDR-verify pairing.4 corrected carrier, accepted assignment and both-port reports/ACKs on Test Node B (Sep 30); freeze this prefix, not a universal frequency correction.
+- [x] Reproduce/fix HTV213 post-notification RX handoff: restore base frequency, not just channel index; native runtime replay covers positive/missing/mismatched ACK and restore failure (Sep 30).
+- [x] Validate/deploy pairing.5 to Test Node B only: 770 tests/two optional skips, native protocol and both builds passed; USB hash verified, authenticated and disarmed (Sep 30).
+- [x] SDR-verify pairing.5 assignment, positive notification ACK and both-port settings/plan replies; preserve 30 redacted frames and native replay, 17 focused tests passed (Sep 30).
+- [x] Implement isolated HTV213 controls and durable phase reservations; replay stock open/stop, channel handoff, disconnect and no-retry paths. Default firmware excludes controls (Sep 30).
+- [x] Deploy the control canary to Test Node B; capture one phase-3/60-second port-1 command. No acceptance; later port-2 idle confirms retained local identity. Preserve negative fixture (Sep 30).
+- [x] Diagnose/fix the omitted final native CRC bit in the experimental RMT path; preserve pairing and production streams (Sep 30).
+- [x] RF-qualify control.2 on Test Node B: one authorized phase-3/60-second port-1 retry produced matching open ACK, countdown, idle and summary. Preserve both attempts and redacted replay (Sep 30).
+- [x] RF-qualify HTV213 port-2/60s at phase 4 and port-1 early stop at phases 5→6; preserve redacted native replay (Sep 30).
+- [x] Implement/deploy isolated HTV213 routine owner; SDR confirms both-port reports with phase-echo ACKs (Sep 30).
+- [x] Recover Test Node B with a hash-verified control.4 flash and authenticated reconnect (Sep 30); intermittent USB failures remain unexplained.
+- [x] Verify radio/gateway owner restoration, 300-second Port 2 and post-HA-restart 60-second Port 1 runs with RF acceptance/idle/summaries (Sep 30).
+- [x] Expose two-outlet dry-canary HA controls; verify duplicate-open disabling and persistent notifications. Fix ACK-before-watering duration omission (Sep 30).
+- [x] Replay missing/late confirmations and overdue completion; fix stale-idle display, missing-summary classification and duplicate overdue alerts (Sep 30; offline qualification).
+- [x] Prepare opt-in retained-rejoin replies with request-derived carrier and both-port replay; leave deployed responder disabled and pairing unchanged (Sep 30).
+- [x] Independently audit stock master wrap through zero and shared allocation; preserve [evidence](research/HTV213_COUNTER_WRAP_AUDIT.md) (Sep 30).
+- [x] RF-qualify HTV213 master phases 62→63→0→1: four one-minute runs, full completion evidence and redacted replay; enable wrap only for the qualified association (Sep 30).
+- [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
+- [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
+- [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
+- [ ] Qualify HTV213 routine ACK ownership and retained rejoin before HA model-menu or operational support; preserve existing one-/four-zone paths.
+- [ ] Implement qualified node recovery handlers and explicit configuration population; verify bounded dry-valve rejoin before enabling automatic replies.
+- [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
+- [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
+- [ ] Qualify HCS012 rainfall increments, accumulation/reset and battery flags against stock-app readings before adding a local model profile.
 - [ ] Qualify active CMT profile, physical GPIOs, absolute channels and full CRC bit with passive capture; static tables/FIFO mapping are documented.
 - [x] Keep current device protocols separate from historical experiments.
 - [x] Shorten this roadmap; preserve detailed evidence and distinguish implementation from acceptance.
@@ -242,6 +368,8 @@ HA must remain independent of SDR. Check current hardware availability when
 scheduling capture tests rather than treating an old unplugged-device note as current.
 
 ## Deferred migration and backlog
+
+- [ ] Review and finalize the separate [irrigation app requirements](docs/IRRIGATION_APP_REQUIREMENTS.md), including the daily overview and advisory overlap warnings, alongside the [initial UI concepts](docs/irrigation-ui/README.md). Requirements and design work only; implementation waits for product review and does not change the hardware qualification order.
 
 Cloud-to-local migration and a HomGar merge remain deferred until lifecycle,
 recovery, control, field and stability acceptance is complete. No integration-merge
