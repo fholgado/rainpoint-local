@@ -147,7 +147,7 @@ bool handleValvePhaseCommand(const String& type,const String& command,const Stri
         reportValvePhase(); return true;
     }
     if (!valvePhaseGuard.begin(authorization.c_str(),id.c_str(),
-            phase,ordinal,selector,route,millis(),saveValvePhaseRecord,port)) return error();
+            phase,ordinal,selector,route,millis(),saveValvePhaseRecord,port,model=="HTV405FRF")) return error();
     scanChannels=false; valvePhaseSentAt=millis();
     const bool sent=primaryRadio.prepareTransmit() && primaryRadio.transmitAsync(frame,center,kValveProbeWakeSymbols,false,
         rainpoint::pairingPaTableValue(power));
