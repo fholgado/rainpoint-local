@@ -54,7 +54,7 @@ jobs:
             production) boundary_args=() ;;
             phase-trial)
               export RAINPOINT_VALVE_PHASE_EXPERIMENT=1
-              export RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.2
+              export RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.3
               boundary_args=(--phase-trial)
               ;;
             *) exit 2 ;;

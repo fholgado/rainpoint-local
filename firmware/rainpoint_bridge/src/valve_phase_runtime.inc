@@ -70,7 +70,9 @@ bool handleValvePhaseCommand(const String& type,const String& command,const Stri
     std::array<std::uint8_t,8> route{};
     std::uint32_t center=0; std::int8_t power=0;
     rainpoint::commandPhase::Frame frame{};
-    long phase=-1, ordinal=0, selector=0, seconds=0;
+    long phase=-1, ordinal=0, selector=0, seconds=0, port=1;
+    if (open && command.indexOf("\"port\"")>=0 && !jsonLongField(command,"port",port)) return error();
+    if (port<1 || port>4 || (model=="HTV145FRF" && port!=1)) return error();
     if (open && (!jsonLongField(command,"phase",phase) ||
             !jsonLongField(command,"ordinal",ordinal) ||
             !jsonLongField(command,"selector",selector) ||
@@ -97,7 +99,7 @@ bool handleValvePhaseCommand(const String& type,const String& command,const Stri
         if (open && ((!valveControlProbe.commandCounterAuthenticated && ordinal==1) ||
                 (ordinal==1 && (phase>>1)!=valveControlProbe.commandSequence) ||
                 !rainpoint::commandPhase::buildHtv405(valveControlProbe.gatewayControlLink,phase,true,
-                    60,1,valveControlProbe.selector,kValveProbeTrailerResidual,frame))) return error();
+                    60,static_cast<std::uint8_t>(port),valveControlProbe.selector,kValveProbeTrailerResidual,frame))) return error();
     } else return error();
     if (recover) {
         if (route!=valvePhaseGuard.record.responseRoute) return error();
@@ -145,7 +147,7 @@ bool handleValvePhaseCommand(const String& type,const String& command,const Stri
         reportValvePhase(); return true;
     }
     if (!valvePhaseGuard.begin(authorization.c_str(),id.c_str(),
-            phase,ordinal,selector,route,millis(),saveValvePhaseRecord)) return error();
+            phase,ordinal,selector,route,millis(),saveValvePhaseRecord,port)) return error();
     scanChannels=false; valvePhaseSentAt=millis();
     const bool sent=primaryRadio.prepareTransmit() && primaryRadio.transmitAsync(frame,center,kValveProbeWakeSymbols,false,
         rainpoint::pairingPaTableValue(power));

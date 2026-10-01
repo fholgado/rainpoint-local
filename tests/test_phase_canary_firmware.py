@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from tests.valve_native_helpers import alter
+from tests.valve_native_helpers import alter, decode
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -113,3 +113,49 @@ class PhaseCanaryFirmwareTest(unittest.TestCase):
         self.assertEqual(result[-1][0],0)
         for phase in (0,62,63,64):
             self.assertEqual(self.run_guard([self.begin(phase)])[0][0],0)
+
+    def test_dry_ports_require_matching_active_idle_and_cannot_switch_mid_trial(self):
+        for port in (2,3,4):
+            with self.subTest(port=port):
+                def routed(frame):
+                    data=bytearray(decode(frame).data);data[2]=port
+                    return alter(frame,data=data)
+                lines=[self.begin()+f" {port}",
+                    f"frame 1500 {alter(self.ack,phase=6)}",
+                    f"frame 4000 {self.active}", # Wrong outlet cannot advance.
+                    f"frame 5000 {routed(self.active)}",
+                    f"frame 62000 {self.idle}",
+                    f"frame 63000 {routed(self.idle)}",
+                    self.begin(7,2,70000)+" 1",
+                    self.begin(7,2,70000)+f" {port}"]
+                rows=self.run_guard(lines)
+                self.assertEqual(rows[2][0],0)
+                self.assertEqual(rows[4][0],0)
+                self.assertEqual(rows[5][1],3)
+                self.assertEqual(rows[6][0],0)
+                self.assertEqual(rows[7][0],1)
+        for port in (0,5,255):
+            self.assertEqual(self.run_guard([self.begin()+f" {port}"])[0][0],0)
+
+    def test_legacy_record_padding_migrates_to_port_one_and_new_bad_port_locks(self):
+        rows=self.run_guard([self.begin(),*self.cycle(6),self.begin(7,2,70000),
+            *self.cycle(7,70000),"release","legacy_restart"])
+        self.assertEqual(rows[-1],(1,6,2,7,0))
+        rows=self.run_guard([self.begin()+" 2","restart"])
+        self.assertEqual(rows[-1][1],5) # Active restored record remains locked.
+        rows=self.run_guard([self.begin(),"corrupt_port"])
+        self.assertEqual(rows[-1][1],5)
+
+    def test_captured_four_zone_outlet_shapes_with_synthetic_ack_and_timing(self):
+        matrix=json.loads((ROOT/"research/fixtures/htv405_stock_cloud_control_matrix_20260824.json").read_text())
+        for trial in matrix["trials"]:
+            port=trial["zone"];active=trial["active_report_frame"];idle=trial["idle_report_frame"]
+            shape=decode(active);route=b''.join(shape.route).hex()
+            raw=bytearray.fromhex(self.ack);raw[5:13]=bytes.fromhex(route)
+            ack=alter(raw.hex(),phase=6)
+            # Recorded idle follows an explicit close. Retiming it here checks
+            # parsing only; this is not evidence of a live automatic stop.
+            begin=f"begin 6 1 {shape.data[0]} 1000 1 {'1'*32} {route} {port}"
+            with self.subTest(port=port):
+                rows=self.run_guard([begin,f"frame 1500 {ack}",f"frame 4000 {active}",f"frame 62000 {idle}"])
+                self.assertEqual(rows[-1],(1,3,1,6,1))
