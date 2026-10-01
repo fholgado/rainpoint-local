@@ -21,7 +21,7 @@
 - [x] Replay/fix generated-association HTV405 outlet packing in gateway/radio verifiers; actual Zone 2 regression, wrong-outlet/model and migration checks pass. Full suite: 890 tests/two skips; final 36 focused tests and ESP32/native/boundary checks pass.
 - [x] Merge focused verifier fix PR #28; submit protected `phase-trial.4` signing run 36872047806. Gateway 0.39.13 correction package: 28 staged-runtime tests passed.
 - [x] Verify approved signing run 36872047806; deploy tested gateway 0.39.13 and signed veggie `.4`, with healthy OTA confirmation and exact source hashes (Oct 1).
-- [ ] Qualify dry Zone 2 adjacent phases 2 → 3 after fresh independent idle evidence. Admission rejected the 81-minute-old state; recent RF traffic is not fresh idle. No trial open sent, counter 1 unchanged.
+- [x] Qualify dry Zone 2 adjacent phases 4 → 5 after the separately approved phase-3/60-second baseline: positive owner ACKs, active/automatic-idle RF, correlated release and production counter 3 (Oct 1). Preserve the earlier stale-idle rejection.
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
@@ -50,22 +50,14 @@ Completed passive baseline: used HCS012ARF rain gauge, battery boot and
 stock-app pairing; zero rain/battery OK confirmed. Nonzero rainfall remains
 unqualified. No local enrollment or transmit path is enabled.
 
-Stock firmware research remains read-only. Sep 30 authorization also covers two
-60-second adjacent-phase runs on the installed front-garden HTV145, then two on
-the vegetable-garden HTV405 Zone 1: confirmed closure between runs, no retry or
-counter jump, stop on the first missing/negative confirmation. These installed
-tests stopped after the first front run: authenticated RF confirms phase-2
-acceptance and automatic closure, but the trial verifier missed the response
-because Arduino's `word(...)` macro replaced its field-reader calls. The source
-fix passes offline replay. On Oct 1, approved gateway 0.39.11 and signed front
-firmware `phase-trial.2` completed the evidence-backed no-RF handoff. The exact
-radio recovery acknowledgment released the lock; the failed trial remains
-recorded. Both valves were idle, with no additional watering or veggie flash.
-Normal front command availability is restored. Two subsequently authorized
-normal 60-second runs confirmed positive phase-3/5 ACKs, active reports and
-automatic closure, with retained counters 129 → 130 → 131. These ordinary
-odd-phase runs do not complete the adjacent full-phase experiment. See the
-[trial result](docs/VALVE_PHASE_TRIAL.md#september-30-installed-trial-result).
+Stock firmware research remains read-only. Installed adjacent-phase qualification
+completed Oct 1: HTV145 phases 8 → 9 and HTV405 dry Zone 2 phases 4 → 5, each
+with two 60-second opens, full-phase positive ACKs, independent active/automatic
+idle and correlated production handback. No retries, counter jumps or wet
+Zone 1 commands were used for the four-zone trial. Earlier verifier failures
+and stale-idle rejection remain preserved in the
+[trial evidence](docs/VALVE_PHASE_TRIAL.md). Production counter allocation is
+unchanged; counter-boundary and broader lifecycle trials are separate gates.
 The approved off-device update lookup offered no newer image for this
 hub on Sep 27. The user initially approved source changes/tests for ownership
 cleanup, retained-channel recovery and remaining-time decoding without deployment.
@@ -190,7 +182,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Add source-only two-run journal; test durable pre-send reservations, restart/commit failure, evidence matching, timeout and budget exhaustion (Sep 30). No live caller.
 - [x] Prepare an isolated full-phase canary with durable reservations and parity-independent reply matching; preserve production counters, recovery and exact retry bytes.
 - [x] Complete HTV145 adjacent phases 8 → 9 and verified counter handback (Oct 1).
-- [ ] Complete HTV405 dry Zone 2 adjacent-phase tests after fresh idle evidence; stop on missing confirmation. Boundary tests need separate approval.
+- [x] Complete HTV405 dry Zone 2 adjacent phases 4 → 5 with positive ACK, active/automatic-idle and verified production counter handback to 3 (Oct 1). Boundary tests need separate approval.
 
 ### Four-zone valve
 

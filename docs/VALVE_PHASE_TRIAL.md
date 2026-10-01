@@ -246,3 +246,41 @@ remained idle, production counter 1 was unchanged, and no experimental lock was
 created. Fresh independent idle evidence is required before another admission;
 additional baseline watering requires user approval. Private deployment,
 signed-OTA and rejection receipts remain beside the baseline evidence.
+
+### October 1 four-zone adjacent-phase confirmation
+
+The user separately approved one fresh 60-second baseline on dry Zone 2,
+followed by the two guarded trials. The old admission attempt and its evidence
+were preserved. No firmware/configuration change, pairing, reset, sync or
+counter guess was needed. Gateway `0.39.13` and veggie firmware `.4` remained
+healthy; the wet Zone 1 outlet and front garden were untouched.
+
+The ordinary baseline used the retained counter 1 and native phase 3. Its
+positive owner ACK arrived at 0.73 seconds, Zone 2 active at 1.93 seconds, and
+automatic idle at 62.94 seconds. This supplied fresh independent state and
+advanced the ordinary counter to 2 before admission.
+
+| Trial phase | Positive ACK | Zone 2 active | Automatic idle |
+| --- | --- | --- | --- |
+| 4 | 0.67 s | 1.53 s | 62.54 s |
+| 5 | 0.81 s | 1.55 s | 62.55 s |
+
+Offsets are from each private attempt marker, not measured mechanical durations.
+A separate read-only RF audit confirmed matching-route, CRC-valid accepted
+packets: both full-phase owner `a1` replies were positive with local mode `41`
+and duration 60, followed by independent selected-outlet active and automatic
+idle `02` reports. Phase 5 followed confirmed phase-4 idle. Exactly these three
+60-second commands were sent; there was no retry or additional handback run.
+
+The gateway recorded two completed transactions and `released`; the owner radio
+reported the same released authorization. All four outlets were idle, no
+production command was pending, and the retained production counter was 3.
+This qualifies adjacent even/odd opens for this HTV405 association and build,
+not a general phase allocator, boundary rollover or battery-rejoin policy.
+The normal production counter recipe remains unchanged.
+
+Private baseline, trial, independent RF audit and release receipts are retained
+in `captures/installed-phase-20260930/four-zone-fresh-baseline-20261001T1653/`.
+The evidence uses authenticated radio RX; no independently decoded SDR TX
+capture is claimed. Admission reconstructed the baseline request from its exact
+positive ACK and known Zone 2/60-second parameters.

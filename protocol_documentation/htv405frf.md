@@ -38,6 +38,13 @@ application meaning is not established by their repeated `64` values; do not
 label them percentages or authorization tokens. See the
 [cross-device comparison](../research/PAIRING_NATIVE_COMPARISON.md).
 
+Each captured `85` contains status plus fourteen per-port settings bytes, not
+watering telemetry. The [field layout](../research/STOCK_HUB_CONFIGURATION_LIFECYCLE.md#fourteen-byte-valve-configuration-layout)
+separates default work time, mist timing, soil link, threshold, flags, delay,
+calibration and pressure-labelled fields; units/effects remain qualified there.
+Native `02` request flags mask `0x02` controls a configuration revision in `82`.
+That revision is separate from device software version and the RF command phase.
+
 The custom profile uses a
 generated controller/companion identity and association-specific clock,
 carrier, selector branch, and integrity residue.
@@ -152,6 +159,19 @@ open and `[port, 02, 00]` for close. Native offsets and six-bit phase are define
 in [common.md](common.md). The physically accepted alternating-control recipe
 has this normalized envelope:
 
+Generated local associations use `[01, port << 1, 01, seconds_low, seconds_high]`
+for open with the same existing normalized builder below. Their positive `a1`
+state byte is `(port << 5) | 01` (Zone 2: `41`); local `02` active reports pack
+the outlet into that state byte and clear it to zero when all outlets are idle.
+Use the qualified state decoder rather than treating native payload byte 2 as
+the outlet for every association. The experimental verifier follows both
+layouts. Two guarded 60-second opens at adjacent native phases 4 then 5 were
+physically accepted on a generated local association's Zone 2, with matching
+positive replies and active/automatic-idle reports. Command phase parity does
+not itself select open versus close; the body carries that action. The public
+production builder still uses the alternating-control recipe below. See the
+[qualified trial evidence](../docs/VALVE_PHASE_TRIAL.md#october-1-four-zone-adjacent-phase-confirmation).
+
 ```text
 frame[13] = 0x80 | five-bit command sequence
 frame[14] = 0x90 open, 0x10 close
@@ -165,6 +185,12 @@ frame[21] bit 7 = displaced duration bit for open; zero for close
 The `90/10` polarity contains the sixth phase bit; `82/81` encodes declared
 data length, not separate open/close opcodes. Do not generalize this recipe
 to arbitrary action order by ignoring the phase's low bit.
+
+Stock captures also contain **even-phase opens and odd-phase closes** (ports
+3 and 4, phases 20/21 and 22/23). The fixed parity above is the current local
+recipe, not a receiver requirement. Source-only full-phase adapters preserve
+this recipe's body packing; they are not enabled in the runtime. See the
+[cross-model phase audit](../research/VALVE_FULL_PHASE_CROSS_MODEL_AUDIT.md).
 
 The controller route is the paired valve endpoint and the destination is its
 association companion endpoint. The current local transmitter uses residue
@@ -187,7 +213,14 @@ Representative encodings are:
 
 ## Command response and sequence
 
-A valid immediate response has this envelope:
+The following is the **legacy local decoder contract**, not a general stock
+reply definition. Stock `a1` data byte 1 carries control/work mode; its old
+normalized "zone" nibble does not reliably identify the requested port. A
+generalized matcher must obtain that port from the pending command and verify
+its independent state report. See the
+[reply-context correction](../research/VALVE_FULL_PHASE_CROSS_MODEL_AUDIT.md#reply-context-correction).
+
+The current decoder recognizes this envelope:
 
 ```text
 frame[14] low 7 bits == 0x50
@@ -203,9 +236,10 @@ the paired valve endpoint.
 
 The stored logical counter is `frame[13] & 0x1f`, but response matching requires
 the full phase `((frame[13] & 31) << 1) | (frame[14] >> 7)` as well as action,
-identity and result. A watering response advances the
+identity and result. Under the current local allocation policy, a watering response advances the
 durable next command sequence by one; an idle/close response retains the same
-sequence. The sequence wraps in its five-bit field.
+sequence. The stored sequence wraps in its five-bit field. This policy is not
+the stock hub's general six-bit allocation rule.
 
 ## Counter synchronization and scheduling
 
