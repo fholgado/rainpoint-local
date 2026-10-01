@@ -10,13 +10,16 @@
 - [x] Capture front HTV145 phase-2 acceptance, watering and automatic stop after one 60-second run; stop further trials on monitor failure.
 - [x] Reproduce/fix Arduino `word(...)` macro collision in the trial verifier; replay actual RX with Arduino-compatible regression tests.
 - [x] Implement explicit no-watering recovery with stored RF evidence, atomic counter handoff and correlated radio release; preserve failed history.
-- [ ] Restore front irrigation through an approved evidence-based handoff; preserve the failed journal. **Front commands currently locked.**
-- [ ] Sign/deploy the verifier correction, then reauthorize remaining adjacent-run qualification; veggie radio remains unchanged.
+- [x] Merge focused recovery firmware PR #26; submit protected `phase-trial.2` build 36796917397. Local full suite: 879 tests, two optional skips.
+- [x] Restore front command availability through verified no-RF recovery (Oct 1): gateway 0.39.11, signed front firmware `phase-trial.2`, correlated radio acknowledgment and retained counter 129; preserve failed history.
+- [x] Verify normal front controls after recovery: two 60-second runs, positive phase-3/5 ACKs, active/automatic-idle reports and counters 129 → 130 → 131 (Oct 1).
+- [x] Remove inventoried local HA/Mac backups with user approval; retain live data, RF evidence and stock firmware. HA ~42.5 GB free, Mac ~89 GiB free (Oct 1).
+- [ ] Finish reauthorized front adjacent-phase runs after the user's 35-minute run reports idle; finite follow-up expires Oct 1 at 10:30 a.m. Eastern.
+- [ ] Sign/deploy explicit HTV405 dry-outlet trial support, then qualify on Zone 2 after front success; never substitute wet Zone 1. Source implemented; validation in progress.
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
-Last reviewed: 2026-09-30
-This is the only live checklist. Completed implementation does not imply physical
+Last reviewed: 2026-10-01This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
 [evidence index](research/IMPLEMENTATION_EVIDENCE_20260912.md), not the task text.
 

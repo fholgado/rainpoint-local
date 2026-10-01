@@ -343,7 +343,7 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"retained_sensor_rejoin_channel\""
         ",\"firmware_update_trial\""
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
-        ",\"valve_phase_trial\",\"valve_phase_trial_recovery\""
+        ",\"valve_phase_trial\",\"valve_phase_trial_recovery\",\"valve_phase_trial_ports\""
 #endif
         ",\"firmware_signed_ota\""
         "],"

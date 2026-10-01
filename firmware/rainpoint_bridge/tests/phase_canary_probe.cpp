@@ -22,14 +22,15 @@ int main() {
         std::istringstream input(line); std::string operation; input>>operation;
         bool ok=false;
         if (operation=="begin") {
-            unsigned phase,ordinal,selector,now,commit; std::string id,route;
+            unsigned phase,ordinal,selector,now,commit,port=1; std::string id,route;
             input>>phase>>ordinal>>selector>>now>>commit>>id>>route;
+            input>>port;
             std::array<std::uint8_t,8> bytes{};
             for (unsigned i=0;i<8;++i) bytes[i]=std::stoul(route.substr(i*2,2),nullptr,16);
             ok=guard.begin(auth,id.c_str(),phase,ordinal,selector,bytes,now,[&](const auto& record) {
                 if (!commit) return false;
                 saved=record; return true;
-            });
+            },port);
         } else if (operation=="frame") {
             unsigned now; std::string raw; input>>now>>raw;
             rainpoint::commandPhase::Frame frame{};
@@ -39,6 +40,11 @@ int main() {
             unsigned now; input>>now; ok=guard.tick(now); saved=guard.record;
         } else if (operation=="restart") {
             guard={}; guard.restore(saved); ok=true;
+        } else if (operation=="legacy_restart") {
+            saved.magic=0x50484331; saved.port=255;
+            guard={}; guard.restore(saved); ok=guard.record.port==1;
+        } else if (operation=="corrupt_port") {
+            saved.port=5; guard={}; guard.restore(saved); ok=true;
         } else if (operation=="recover") {
             std::string id,attempt,ack,active,idle;
             unsigned ackAge,activeAge,idleAge,commit;

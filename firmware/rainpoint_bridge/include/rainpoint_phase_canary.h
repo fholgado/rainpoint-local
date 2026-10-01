@@ -2,6 +2,7 @@
 
 #include "rainpoint_valve_command_phase.h"
 #include <cstring>
+#include <cstddef>
 
 namespace rainpoint::phaseCanary {
 
@@ -10,15 +11,17 @@ namespace rainpoint::phaseCanary {
 // the radio: two one-minute transmissions, never retries or phase searches.
 enum class Stage : std::uint8_t { Empty, Ready, Awaiting, Between, Complete, Failed, Released, Recovered };
 struct Record {
-    std::uint32_t magic = 0x50484331;
+    std::uint32_t magic = 0x50484332;
     char authorization[33]{};
     char commandId[33]{};
     std::array<std::uint8_t, 8> responseRoute{};
     Stage stage = Stage::Empty;
     std::uint8_t phase = 0, count = 0, selector = 0;
     bool acknowledged = false, active = false, idle = false;
+    std::uint8_t port = 1; // Uses former padding; legacy records migrate to port 1.
 };
 static_assert(sizeof(Record)==88, "phase-trial.1 NVS layout requires explicit migration if changed");
+static_assert(offsetof(Record,port)==85, "port must occupy legacy padding, not a saved field");
 
 inline bool identifier(const char* value) {
     if (!value || std::strlen(value) != 32) return false;
@@ -35,7 +38,8 @@ public:
     bool inFlight() const { return record.stage == Stage::Awaiting; }
     void restore(const Record& saved) {
         record = saved;
-        if (record.magic != 0x50484331 || record.authorization[32] != '\0' ||
+        if (record.magic == 0x50484331) { record.magic=0x50484332; record.port=1; }
+        if (record.magic != 0x50484332 || record.port<1 || record.port>4 || record.authorization[32] != '\0' ||
                 record.commandId[32] != '\0' ||
                 static_cast<unsigned>(record.stage)>static_cast<unsigned>(Stage::Recovered) ||
                 (record.stage != Stage::Empty && (!identifier(record.authorization) ||
@@ -50,21 +54,22 @@ public:
     template<class Save>
     bool begin(const char* authorization, const char* commandId, unsigned phase,
                unsigned ordinal, unsigned selector,
-               const std::array<std::uint8_t, 8>& route, std::uint32_t now, Save save) {
+               const std::array<std::uint8_t, 8>& route, std::uint32_t now, Save save,
+               unsigned port=1) {
         if (!identifier(authorization) || !identifier(commandId) || phase > 62 ||
-                phase == 0 || selector == 0 || selector > 15) return false;
+                phase == 0 || selector == 0 || selector > 15 || port<1 || port>4) return false;
         const bool first = ordinal == 1 && !locked() &&
             std::strcmp(record.authorization, authorization) != 0;
         const bool second = ordinal == 2 && record.stage == Stage::Between &&
             record.count == 1 && std::strcmp(record.authorization, authorization) == 0 &&
             std::strcmp(record.commandId, commandId) != 0 && phase == record.phase + 1U &&
-            selector == record.selector && route == record.responseRoute &&
+            selector == record.selector && port == record.port && route == record.responseRoute &&
             now - grantedAt_ <= 3'600'000;
         if ((!first && !second) || (first && phase > 61)) return false;
         auto next = record;
         std::strcpy(next.authorization, authorization);
         std::strcpy(next.commandId, commandId);
-        next.responseRoute = route; next.selector = selector;
+        next.responseRoute = route; next.selector = selector; next.port=port;
         next.phase = phase; next.count = ordinal; next.stage = Stage::Awaiting;
         next.acknowledged = next.active = next.idle = false;
         // Persistence precedes the caller's only transmission. Failed storage
@@ -99,7 +104,7 @@ public:
             if (native(12)!=0) { fail(); return true; }
             if (native(13)!=0x21 || readLe16(23)!=60 || readLe16(20)==0 || readLe16(20)>61) return false;
             record.acknowledged = true;
-        } else if (native(10)==2 && (native(11)&31)==15 && native(12)==record.selector && native(14)==1) {
+        } else if (native(10)==2 && (native(11)&31)==15 && native(12)==record.selector && native(14)==record.port) {
             if (tick(now)) return true;
             if (native(15)==0x21 && readLe16(25)==60 && readLe16(22)>0 && readLe16(22)<=61)
                 record.active = true;
@@ -119,7 +124,7 @@ public:
         // Explicit repair of the first phase-2 HTV145 trial, not a general
         // counter search, new watering grant, or automatic timeout recovery.
         // Record layout is unchanged so phase-trial.1 NVS remains readable.
-        if (record.stage!=Stage::Failed || record.count!=1 || record.phase!=2 ||
+        if (record.stage!=Stage::Failed || record.count!=1 || record.phase!=2 || record.port!=1 ||
                 !identifier(authorization) || !identifier(recoveryId) || !identifier(attemptedId) ||
                 std::strcmp(record.authorization,authorization)!=0 ||
                 std::strcmp(record.commandId,attemptedId)!=0 ||
