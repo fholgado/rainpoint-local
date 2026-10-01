@@ -1,0 +1,34 @@
+{
+  "description": "Installed HTV145 port-1 phase-2 open, 60 seconds, September 30. Synthetic endpoints and cleared wall clocks; CRC regenerated. RX packets are authentic radio observations, not successful trial-monitor output. No decoded independent IQ corroboration; request reconstructed from sent command parameters. Only one run; automatic closure observed, trial failed because Arduino word macro shadowed the duration reader.",
+  "phase": 2,
+  "seconds": 60,
+  "selector": 12,
+  "response_route": "a1b2c380b1c2d38f",
+  "events": [
+    {
+      "elapsed_ms": 629,
+      "frame": "79f4882f28a1b2c380b1c2d38f8150868010cf80000000409e00569e0000000000000000da77",
+      "source": "authenticated_radio_rx"
+    },
+    {
+      "elapsed_ms": 6608,
+      "frame": "79f4882f28a1b2c380b1c2d38f9b810786058090cf80000000409b80569e0000000000007abe",
+      "source": "authenticated_radio_rx"
+    },
+    {
+      "elapsed_ms": 62711,
+      "frame": "79f4882f28a1b2c380b1c2d38f9e8107860580804f800000004080005680000000000000589b",
+      "source": "authenticated_radio_rx"
+    },
+    {
+      "elapsed_ms": 64645,
+      "frame": "79f4882f28a1b2c380b1c2d38f9f0107860580804f8000000040800056800000000000008705",
+      "source": "authenticated_radio_rx"
+    },
+    {
+      "elapsed_ms": 65274,
+      "frame": "79f4882f28a1b2c380b1c2d38f9f82078600808000000010da8000001e000000000000009d27",
+      "source": "authenticated_radio_rx"
+    }
+  ]
+}
