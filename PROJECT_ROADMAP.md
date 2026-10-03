@@ -373,6 +373,7 @@ not tasks to mark “done once.”
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
 - [x] Push recovery source for review in PR #31; prepare matched gateway 0.39.15 and protected control.5 signing profile (Oct 3). Deployment remains pending.
+- [x] Keep 0.39.15 gateway documentation aligned with release metadata; CI caught the version-label mismatch and the existing regression confirms the fix (Oct 3).
 - [ ] Sign/deploy the HTV213 recovery candidate to Test Node B, then verify battery rejoin without pairing mode and one short dry control; no counter reset inferred.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
