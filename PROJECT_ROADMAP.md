@@ -45,9 +45,9 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Review the validated [stock-informed source fixes](research/STOCK_FIRMWARE_IMPROVEMENT_PLAN.md), then approve the [short canary test plan](docs/STOCK_INFORMED_VALIDATION.md) before deployment.
-2. Deploy the native-only integration after review, then improve/test pairing under Devices & services.
-3. Collect targeted lifecycle results and continue stable-release qualification; no new 72-hour baseline is required.
+1. Prepare normal HTV213 pairing/control/recovery support from the qualified canary; finish the remaining short enrollment/failure checks before enabling it.
+2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
+3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
 Completed stock-reference trials: dry HTV213FRF two-zone valve, both ports,
 early stop, >30-minute/>3-hour idle controls, hub-only RST restart, and valve battery rejoin. Follow the [capture procedure](research/TWO_ZONE_STOCK_CAPTURE_PLAN.md)
@@ -92,7 +92,7 @@ Repeat/lifecycle qualification and other model recovery handlers remain unfinish
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
-Recovery source is merged to main in PR #31; the follow-up is in PR #34. Refine and qualify our existing
+Recovery source and its qualified follow-up are merged to main in PRs #31 and #34. Refine and qualify our existing
 firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
 as a reference, and keep vendor images private.
 
@@ -180,7 +180,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Verify repeated HTV405 report/ACK cycles with one assigned owner across five days.
 - [ ] Qualify longer, controlled gateway/node outages with one ACK owner.
 - [ ] Battery-cycle sensors; restore the same HA identity and reports without arming pairing.
-- [ ] Capture stock battery rejoin for both valves, then prove equivalent local recovery.
+- [ ] Capture known-owner battery rejoin for HTV405 and HTV145, then prove equivalent local recovery and retained-phase control.
 - [x] Observe production-node reconnection, restored ownership and fresh device reports after the Sep 22 HA-host restart.
 - [ ] Qualify controlled HA/gateway/radio idle restarts with explicit state-persistence and no-replay assertions.
 - [ ] Reassign a sensor ACK owner; prove revocation occurs before replacement transmissions.
@@ -372,6 +372,7 @@ not tasks to mark “done once.”
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
 - [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
+- [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
@@ -390,6 +391,7 @@ not tasks to mark “done once.”
 - [x] RF-verify one control.8 battery-only recovery: known-owner `01/81`, both-port `02/82`, `05/85`, `06/86` and idle reports; unchanged registry/gateway counter 2. Preserve redacted replay (Oct 3).
 - [x] Verify post-battery control.8 dry run at retained phase 2: positive ACK, active/automatic idle and elapsed-60 summary; next phase 3, no reset/retry. Preserve native replay (Oct 3).
 - [x] Validate recovery/control fixtures: 968 Python tests pass/two optional skips; native protocol passes (Oct 3).
+- [x] Merge PR #34 after green CI; delete completed recovery/signing branches, preserve unfinished PCB work (Oct 3).
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
