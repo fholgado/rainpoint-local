@@ -83,13 +83,15 @@ full-phase reply matching and bounded single-zone plan-request retries. These
 are implemented offline; hardware acceptance and deployment remain separate.
 The latest valve-learning implementation adds capture-tested reply builders and
 durable recovery configuration/progress with owner checks. The HTV213 reply-owner
-handler now consumes explicit per-port configuration and opt-in retained rejoin
-(Oct 3; source only). **Live recovery is disabled** pending signed deployment and
-physical acceptance; other model handlers remain unfinished.
+handler now consumes explicit per-port configuration and opt-in retained rejoin.
+Development control.7 and matched gateway 0.39.16 are deployed to Test Node B
+only (Oct 3); its recovery owner is enabled, but physical recovery failed on an
+unhandled `07` boot announcement. The corrected source passes capture replay;
+live acceptance is still pending. Other model handlers remain unfinished.
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
-Recovery source is merged to main in PR #31; signed deployment remains pending. Refine and qualify our existing
+Recovery source is merged to main in PR #31; the follow-up is in PR #34. Refine and qualify our existing
 firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
 as a reference, and keep vendor images private.
 
@@ -382,7 +384,8 @@ not tasks to mark “done once.”
 - [x] Verify development-signed OTA with idle ownership enabled: full signed/hash-verified transfer, reboot, healthy confirmation and restored owner; association/master counter unchanged. Preserve failed partial-download evidence too (Oct 3).
 - [x] Enable and verify HTV213 retained-rejoin configuration echo on Test Node B; association and master counter remain unchanged (Oct 3).
 - [x] Capture/diagnose Oct 3 HTV213 recovery failure: boot body ends `07`, but retained replies require `03`; real-builder replay reproduces rejection. No watering or counter change.
-- [ ] Confirm battery-only procedure and qualify known-owner recovery for the observed `07` announcement, then one short dry control. Preserve identity/configuration; do not infer a counter reset.
+- [x] Confirm Oct 3 startup was battery-only; admit exact known-owner `03`/`07` announcements. Private replay, 964 CI tests/two skips, native protocol and both builds pass; no master phase allocation.
+- [ ] Deploy corrected control.8 to Test Node B and qualify battery-only recovery, then one short dry control. Preserve identity/configuration; do not infer a counter reset.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.

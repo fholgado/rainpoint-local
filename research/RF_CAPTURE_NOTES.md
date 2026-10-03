@@ -13,7 +13,7 @@ large and may include unrelated nearby traffic.
 Test Node B ran development-signed control.7 with its durable reply owner and
 retained rejoin enabled. The user was instructed to remove batteries for
 15 seconds and reinstall without pressing a button; insertion was reported.
-Explicit confirmation that no button was pressed remains pending. No fresh
+The user explicitly confirmed that neither button was pressed. No fresh
 pairing mode or watering command was started.
 
 The complete receive-only recording is retained privately under
@@ -39,9 +39,15 @@ bad reply timing or a rejected valve command. No meaning for the `03`/`07`
 flag difference, counter reset, or accepted recovery reply is established.
 
 The earlier long-press local pairing fixture already contains this same `07`
-body. A recovery correction must remain restricted to the existing owner and
-stored configuration; it must not silently admit unknown devices or reset the
-master phase. Qualification status is in [the roadmap](../PROJECT_ROADMAP.md).
+body. A source regression using that redacted body failed for every six-bit
+phase, and the actual runtime rejected it too. Admitting only suffix `03` or
+`07` after the unchanged six-byte prefix corrected both regressions and the
+private replay of all three actual node RX frames. Unknown factories and
+altered prefixes remain rejected; replies still require explicit opt-in and
+return saved address, selector, timing and revision with result `00`, not fresh
+admission `0a`. No master phase is allocated. This verifies reply generation,
+not physical acceptance. Qualification status is in
+[the roadmap](../PROJECT_ROADMAP.md).
 
 ## Interim reliability review — 2026-09-08
 

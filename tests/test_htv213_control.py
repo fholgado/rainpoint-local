@@ -9,6 +9,7 @@ import unittest
 
 from research.pairing_native_transcripts import decode
 from tests.test_valve_configuration import alter
+from tests.test_htv213_pairing import REPEAT_FACTORY
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -170,11 +171,32 @@ class Htv213ControlTest(unittest.TestCase):
         for selector in (0, 1, 10, 13, 15, 16):
             data = bytearray(decode(frame).data); data[0] = selector
             self.assertEqual(self.run_ops([f'owner_rejoin 0 {alter(frame, data=data)}'])[0][0], 0)
-        for suffix in (5, 7):
+        for suffix in (0, 1, 2, 4, 5, 6, 8, 255):
             data = bytearray(decode(frame).data); data[-1] = suffix
             self.assertEqual(self.run_ops([f'owner_rejoin 0 {alter(frame, data=data)}'])[0][0], 0)
         wrong = bytearray.fromhex(frame); wrong[12] ^= 1
         self.assertEqual(self.run_ops([f'owner_rejoin 0 {alter(wrong.hex())}'])[0][0], 0)
+
+    def test_battery_only_07_announcement_reuses_owner_without_master_phase_change(self):
+        # Oct 3 battery-only startup has the same body as this redacted local
+        # repeat-pairing fixture. The bytes do not identify a button press.
+        self.assertEqual(decode(REPEAT_FACTORY).data, bytes.fromhex('0bff200501043e07'))
+        for phase in range(64):
+            with self.subTest(phase=phase):
+                request = alter(REPEAT_FACTORY, phase=phase)
+                self.assertEqual(self.run_ops([f'owner_ack 0 {request}'])[0][0], 0)
+                row = self.run_ops([f'owner_rejoin 0 {request}'])[0]
+                self.assertEqual(row[0], 1)
+                reply = decode(row[-1])
+                self.assertEqual((reply.command, reply.phase), (0x81, phase))
+                self.assertEqual(reply.data, bytes.fromhex('00020be001000000000102'))
+                self.assertEqual(row[13], 434241500)
+                self.assertEqual(row[1:3], [0, 0])  # No master command allocation.
+        wrong = bytearray.fromhex(REPEAT_FACTORY); wrong[12] ^= 1
+        self.assertEqual(self.run_ops([f'owner_rejoin 0 {alter(wrong.hex())}'])[0][0], 0)
+        for index in range(1, 7):
+            data = bytearray(decode(REPEAT_FACTORY).data); data[index] ^= 1
+            self.assertEqual(self.run_ops([f'owner_rejoin 0 {alter(REPEAT_FACTORY, data=data)}'])[0][0], 0)
 
     def test_retained_rejoin_configuration_replays_both_ports_without_master_commands(self):
         fixture = json.loads((ROOT / 'research/fixtures/htv213_stock_lifecycle_20260928.json').read_text())

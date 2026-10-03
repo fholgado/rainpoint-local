@@ -112,7 +112,9 @@ inline bool encodeNativeTime(unsigned year, unsigned month, unsigned day,
     return true;
 }
 
-// Qualified body shape for the captured HTV213 retained announcement only.
+// Captured HTV213 known-owner announcement shapes only. Suffix 07 occurs
+// after battery-only startup as well as explicit pairing; it does not identify
+// a button press.
 // Still not a live radio profile: physical timing/carrier and owner approval
 // are external. Other models keep their proven fresh enrollment untouched.
 inline Result prepareRetainedAssignment(
@@ -143,9 +145,10 @@ inline Result prepareRetainedAssignment(
         native[i] = static_cast<std::uint8_t>((frame[i+4] << 1U) | (frame[i+5] >> 7U));
     if ((native[9] & 0x40U) || native[10] != 1 || (native[11] & 31U) != 8)
         return Result::UnsupportedRequest;
-    const std::array<std::uint8_t, 7> retained{{0xff,0x20,0x05,0x01,0x04,0x3e,0x03}};
+    const std::array<std::uint8_t, 6> retained{{0xff,0x20,0x05,0x01,0x04,0x3e}};
     for (std::size_t i = 0; i < retained.size(); ++i)
         if (native[13+i] != retained[i]) return Result::UnsupportedRequest;
+    if (native[19] != 0x03 && native[19] != 0x07) return Result::UnsupportedRequest;
     if (native[12] == 0 || native[12] > 15) return Result::UnsupportedRequest;
     if (!context.timeKnown) return Result::MissingContext;
     reply.command = 0x81;

@@ -8,6 +8,7 @@ import unittest
 
 from tests.test_htv213_runtime import function
 from research.pairing_native_transcripts import decode
+from tests.test_htv213_pairing import REPEAT_FACTORY
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -126,7 +127,8 @@ int main(int argc,char** argv) {
     if (mode=="rf-disabled") rfMaintenance.allowed=false;
     if (mode=="timeout" || mode=="tx-failure") fakeNow=1501;
     if (mode=="restore-failure") primaryRadio.restoreOk=false;
-    const bool owner=mode=="owner" || mode=="rejoin";
+    const bool rejoin=mode=="rejoin" || mode=="rejoin-boot07";
+    const bool owner=mode=="owner" || rejoin;
     if (owner) {
         htv213OwnerEnabled=true; htv213OwnerId="test-owner";
         auto& a=htv213RetainedConfiguration;
@@ -161,9 +163,9 @@ int main(int argc,char** argv) {
                 const auto count=primaryRadio.commands.size();
                 processHtv213Control(frame(frames[0]),rainpoint::RadioPacket{fakeNow*1000});
                 if (primaryRadio.commands.size()!=count+1 || !htv213OwnerEnabled) return 12;
-                if (mode=="rejoin") {
+                if (rejoin) {
                     const auto before=primaryRadio.commands.size();
-                    const auto announcement=frame("ANNOUNCEMENT");
+                    const auto announcement=frame(mode=="rejoin-boot07" ? "BOOT07" : "ANNOUNCEMENT");
                     processHtv213Control(announcement,rainpoint::RadioPacket{fakeNow*1000});
                     if (primaryRadio.commands.size()!=before) return 14; // Disabled by default.
                     htv213RetainedRejoinEnabled=true;
@@ -185,11 +187,11 @@ int main(int argc,char** argv) {
     unsigned opens=0;
     for (auto command:primaryRadio.commands) {
         if (command==0x21) ++opens;
-        else if (command!=0x82 && command!=0x84 && (mode!="rejoin" || command!=0x81)) return 10;
+        else if (command!=0x82 && command!=0x84 && (!rejoin || command!=0x81)) return 10;
     }
     return opens==1 ? 0 : 11;
 }
-'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement)
+'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement).replace("BOOT07", REPEAT_FACTORY)
         with tempfile.TemporaryDirectory() as directory:
             exe = str(Path(directory) / "runtime")
             result = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
@@ -197,7 +199,7 @@ int main(int argc,char** argv) {
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             for mode in ("ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
-                         "accepted", "owner", "rejoin", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
+                         "accepted", "owner", "rejoin", "rejoin-boot07", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
                 with self.subTest(mode=mode):
                     result = subprocess.run([exe, mode], text=True, capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)

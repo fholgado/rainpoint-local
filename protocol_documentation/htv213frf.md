@@ -30,9 +30,11 @@ timing, configuration revision, fourteen-byte settings for each port and known
 empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
 `06/86` answer incoming requests with their full six-bit phase. Unknown settings,
 plans, time context or announcement selectors do not receive guessed replies.
-The current retained assignment filter admits only the captured suffix `03`.
-An announcement ending `07` was received during the reported local battery
-cycle but is rejected by this filter; its recovery behavior remains unqualified.
+The retained assignment filter admits the exact prefix `ff 20 05 01 04 3e`
+followed by captured suffix `03` or `07`, only for the saved factory endpoint.
+Battery-only startup also produced `07`; it does not establish a button press
+or a counter reset. Builder/runtime replay is verified, but physical local
+recovery for this variant remains unqualified.
 
 Assignment uses the incoming announcement selector's carrier, not the saved
 routine selector's carrier. Replies retain the corrected native CRC tail and
