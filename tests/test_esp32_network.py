@@ -236,6 +236,31 @@ class ESP32NetworkTest(unittest.TestCase):
         finally:
             stream.close();connection.close()
 
+    def test_htv213_discovery_requires_its_distinct_authenticated_capability(self):
+        from rainpointd.htv213_enrollment import CAPABILITY, EnrollmentProfile
+        command = EnrollmentProfile(address=2, initial_center_hz=434351500,
+            routine_center_hz=434241500).command(
+                controller=self.gateway.rf_identity.controller_endpoint,
+                companion=self.gateway.rf_identity.companion_endpoint)
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+                                              capabilities=['rx', 'sensor_pairing_tx', CAPABILITY])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+            self.assertNotIn('factory_endpoint', command)
+            self.assertEqual(self.gateway._store.valve_registry(), [])
+        finally:
+            stream.close(); connection.close()
+        connection, stream, response = self._connect(NODE_B, TOKEN_B, protocol_version=2,
+                                              capabilities=['rx', 'sensor_pairing_tx', 'htv213_pairing_experiment'])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            with self.assertRaisesRegex(ValueError, 'capability'):
+                self.server.send_command(NODE_B, command)
+        finally:
+            stream.close(); connection.close()
+
     def test_htv213_dry_control_transport_capability_and_error_correlation(self):
         from rainpointd.htv213_control_trial import ControlJournal
         connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,

@@ -105,6 +105,17 @@ there is no live migration or firmware change. Temporary-database tests replay
 post-battery control and verify restart, cross-association isolation and old
 trial compatibility. Normal enrollment/model-menu integration remains pending.
 
+The next source step adds automatic factory-identity discovery to the same
+pairing state machine. Native replay reproduces targeted assignment/carrier and
+configuration replies; wrong-model announcements are ignored and the first
+matching identity is frozen. A normal enrollment recipe hides research inputs
+from callers and validates actual positive configuration ACK/post-configuration
+report receipts before preparing retained configuration and an ACK-based phase
+seed. Neither association persistence nor HA flow binding is enabled yet.
+Candidate and default build checks keep this runtime out of production; no
+radio has been updated for this source step. Offline replay is not a new
+physical enrollment qualification.
+
 Actual production enablement still depends on the existing roadmap's reviewed
 qualification boundaries: reconcile repeat-enrollment/post-configuration
 evidence, complete the remaining dry missing-response/overdue check, and verify

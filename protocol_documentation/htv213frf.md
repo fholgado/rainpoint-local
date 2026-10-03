@@ -114,6 +114,24 @@ promotion gates remain in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Enrollment
 
+Source preparation adds authenticated `htv213_enrollment_start` under the same
+experimental build flag, advertised by `htv213_auto_identity_pairing`. The
+gateway recipe supplies an available address, local identities and calibrated
+carriers; it does not require a known factory ID. During an explicitly armed
+window, firmware binds the first checksum-valid broadcast with either captured
+body `0cff200501043e05` or `0bff200501043e07`. The identity then stays fixed for
+that window. Assignment bytes, carrier selection, phase echo and configuration
+replies are unchanged from targeted pairing.
+
+Completion receipts contain the actual positive full-phase `a0` and a later
+post-configuration `02`, after both ports' settings and plans were sent. The
+normal enrollment module validates those receipts and prepares retained
+configuration plus a control seed from the acknowledged hub phase, not the
+device-report phase. It does not persist an association or enable controls.
+Normal HA flow binding and atomic association/re-pair handoff remain pending;
+this source-only preparation does not advertise general support or change
+deployed firmware. See [the roadmap](../PROJECT_ROADMAP.md).
+
 The observed successful stock association consists of:
 
 | Native exchange | Meaning |

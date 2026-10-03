@@ -22,8 +22,8 @@ REPEAT_FACTORY = "79f4882f28800000001155667700808405ff900280821f0380000000000000
 class Htv213PairingTest(unittest.TestCase):
     def test_actual_runtime_prepares_both_assignment_carriers_with_two_cache_slots(self):
         source = (ROOT / "firmware/rainpoint_bridge/src/htv213_pairing_runtime.inc").read_text()
-        preparation = source.split("    if (!rainpoint::htv213::valid(p)", 1)[1].split("    htv213CommandId=id", 1)[0]
-        preparation = "    if (!rainpoint::htv213::valid(p)" + preparation
+        preparation = source.split("    if (!(discover ? rainpoint::htv213::validTransport(p)", 1)[1].split("    htv213CommandId=id", 1)[0]
+        preparation = "    if (!(discover ? rainpoint::htv213::validTransport(p)" + preparation
         preparation = preparation.replace('reportNetworkCommandError(id,"htv213_prepare_failed"); return true;', 'return false;')
         harness = '''#include <set>
 #include "rainpoint_htv213_pairing.h"
@@ -37,9 +37,10 @@ struct Radio {
     }
 };
 unsigned millis() { return 0; }
-bool prepare(unsigned routine) {
+bool prepare(unsigned routine, bool discover) {
     rainpoint::htv213::Profile p{};
     p.factory={{0x11,0x55,0x66,0x77}};
+    if (discover) p.factory={};
     p.controller={{0xa2,0x44,0x66,0x88}}; p.companion={{0x22,0x44,0x66,0x88}};
     p.address=2; p.selector=11; p.notificationPhase=2; p.timingRaw=480;
     p.initialHz=434391500; p.routineHz=routine;
@@ -50,7 +51,8 @@ bool prepare(unsigned routine) {
     return primaryRadio.cache == std::set<unsigned>{434391500,434281500}
         && htv213Session.state()==rainpoint::htv213::State::Armed;
 }
-int main() { return prepare(434281500) && prepare(433801500) ? 0 : 1; }
+int main() { return prepare(434281500,false) && prepare(433801500,false)
+    && prepare(434281500,true) && prepare(433801500,true) ? 0 : 1; }
 '''
         exe = str(Path(self.temp.name) / "frequency-cache")
         subprocess.run([shutil.which("c++"), "-std=c++17", "-I"+str(ROOT/"firmware/rainpoint_bridge/include"),
@@ -79,7 +81,7 @@ int main() {
 #else
     constexpr bool controlExpected=false;
 #endif
-    for (const auto* command : {"htv213_pairing_start", "htv213_pairing_cancel"}) {
+    for (const auto* command : {"htv213_pairing_start", "htv213_pairing_cancel", "htv213_enrollment_start"}) {
         if (allowed(true,command)!=expected) return 1;
         if (allowed(false,command)) return 2;
     }
@@ -187,6 +189,80 @@ int main() {
         for phase in range(64):
             rows=self.run_ops(["arm 0",f"frame 1 {alter(FACTORY,phase=phase)}"])
             self.assertEqual(decode(rows[-1][-1]).phase,phase)
+
+    def test_discovery_preserves_full_captured_assignment_and_all_phase_values(self):
+        for factory in (FACTORY, REPEAT_FACTORY):
+            for phase in range(64):
+                frame = alter(factory, phase=phase)
+                discovery = self.run_ops(["discover 0", "bound 0", f"frame 1 {frame}", "bound 1"])
+                explicit = self.run_ops(["arm 0", f"frame 1 {frame}"])
+                self.assertEqual(discovery[1][0], 0)
+                self.assertEqual(discovery[2], explicit[1])
+                self.assertEqual(discovery[3][0], 1)
+
+    def test_discovery_freezes_first_matching_identity_without_rebinding(self):
+        other = bytearray.fromhex(FACTORY)
+        other[12] ^= 1
+        other = alter(other.hex())
+        rows = self.run_ops(["discover 0", f"frame 1 {other}", "finish 2 1", f"frame 3 {FACTORY}"])
+        self.assertEqual(rows[1][0], 1)
+        self.assertEqual(decode(rows[1][-1]).route[0].hex(), "91556676")
+        self.assertEqual(rows[-1][0], 0)
+        # The exact-target arm() continues to reject another factory.
+        self.assertEqual(self.run_ops(["arm 0", f"frame 1 {other}"])[-1][0], 0)
+
+    def test_discovery_rejects_wrong_model_shape_checksum_routes_and_rejoin(self):
+        body = bytearray(decode(FACTORY).data)
+        rejected = []
+        for index in range(1, len(body)):
+            wrong = body.copy(); wrong[index] ^= 1
+            rejected.append(alter(FACTORY, data=wrong))
+        wrong = bytearray.fromhex(FACTORY); wrong[5] ^= 1
+        rejected.append(alter(wrong.hex()))
+        for factory in ("00000000", "91556677"):
+            wrong = bytearray.fromhex(FACTORY); wrong[9:13] = bytes.fromhex(factory)
+            rejected.append(alter(wrong.hex()))
+        wrong = bytearray.fromhex(FACTORY); wrong[37] ^= 1
+        rejected.extend((wrong.hex(), alter(FACTORY, command=0x21)))
+        for frame in rejected:
+            rows = self.run_ops(["discover 0", f"frame 1 {frame}", "bound 1", f"frame 2 {FACTORY}"])
+            self.assertEqual(rows[1][0], 0)
+            self.assertEqual(rows[2][0], 0, "unmatched traffic bound an endpoint")
+            self.assertEqual(rows[3][0], 1)
+
+    def test_discovery_preserves_configuration_and_terminal_evidence_requirement(self):
+        ops, _ = self.enrollment()
+        explicit = self.run_ops(ops)
+        ops[0] = "discover 0"
+        self.assertEqual(self.run_ops(ops), explicit)
+        self.assertEqual(explicit[-1][1], 1, "last plan TX is not enrollment completion")
+        report = self.events[0]["frame"]
+        self.assertEqual(self.run_ops(ops + [f"frame 25000 {report}", "finish 25001 1"])[-1][1], 2)
+
+    def test_discovery_exposes_only_the_actual_positive_ack_and_terminal_report(self):
+        ops, _ = self.enrollment()
+        ops[0] = "discover 0"
+        before = self.run_ops(ops + ["ack-proof 24000", "completion-proof 24000"])
+        ack = next(e['frame'] for e in self.events
+                   if e['direction'] == 'device' and decode(e['frame']).command == 0xa0)
+        self.assertEqual(before[-2][0], 1)
+        self.assertEqual(before[-2][-1], ack)
+        self.assertEqual(before[-1][0], 0, "plan TX must not invent a completion report")
+        self.assertEqual(before[-1][-1], "00" * 38)
+        report = self.events[0]['frame']
+        completed = self.run_ops(ops + [f"frame 25000 {report}", "finish 25001 1", "completion-proof 25002"])
+        self.assertEqual(completed[-1][0], 1)
+        self.assertEqual(completed[-1][-1], report)
+        reset = self.run_ops(ops + [f"frame 25000 {report}", "finish 25001 1",
+                                  "discover 25002", "ack-proof 25003", "completion-proof 25003"])
+        self.assertEqual(reset[-2][-1], "00" * 38)
+        self.assertEqual(reset[-1][-1], "00" * 38)
+
+    def test_discovery_timeout_disconnect_cancel_and_failed_tx_do_not_rebind(self):
+        for op, reason in (("finish 2 0", 2), ("tick 300000", 1), ("cancel 2", 4), ("disconnect 2", 3)):
+            rows = self.run_ops(["discover 0", f"frame 1 {FACTORY}", op, f"frame 300001 {REPEAT_FACTORY}"])
+            self.assertEqual(rows[-1][1:3], [3, reason])
+            self.assertEqual(rows[-1][0], 0)
 
     def test_captured_repeat_announcement_uses_unchanged_assignment_and_continuation(self):
         self.assertEqual(decode(REPEAT_FACTORY).data, bytes.fromhex("0bff200501043e07"))

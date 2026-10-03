@@ -143,6 +143,7 @@ class ESP32NetworkServer:
             "valve_phase_trial_open", "valve_phase_trial_release", "valve_phase_trial_status", "valve_phase_trial_recover",
             "htv213_pairing_start",
             "htv213_pairing_cancel",
+            "htv213_enrollment_start",
             "htv213_control_probe_open",
             "htv213_control_probe_close",
             "htv213_owner_set",
@@ -233,6 +234,8 @@ class ESP32NetworkServer:
             required_capability = "htv145_commissioning"
         elif command_type in {"htv213_pairing_start", "htv213_pairing_cancel"}:
             required_capability = "htv213_pairing_experiment"
+        elif command_type == "htv213_enrollment_start":
+            required_capability = "htv213_auto_identity_pairing"
         elif command_type in {"htv213_owner_set", "htv213_owner_clear"}:
             required_capability = ("htv213_retained_rejoin_v1" if
                 message.get("retained_rejoin_enabled") is True else "htv213_routine_owner")
@@ -812,6 +815,7 @@ class ESP32NetworkServer:
                         "correlated_ack_ownership",
                         "retained_sensor_rejoin_channel",
                         "htv213_pairing_experiment",
+                        "htv213_auto_identity_pairing",
                         "htv213_control_experiment",
                         "htv213_routine_owner",
                         "htv213_retained_rejoin_v1",
