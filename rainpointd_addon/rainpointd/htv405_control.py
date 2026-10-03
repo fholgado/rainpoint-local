@@ -354,6 +354,8 @@ class Htv405ControlCoordinator:
         return result
 
     def _require_profile(self, profile: Htv405ControlProfile) -> None:
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.store, profile.node_id)
         registration = next(
             (
                 item

@@ -223,8 +223,8 @@ class FirmwareCatalog:
         self._verify_signature(release, content)
         return content
 
-    def latest_for_node(self, node: dict[str, Any]) -> dict[str, Any] | None:
-        """Return the newest ready release compatible with a node contract."""
+    def _matches_node(self, release: FirmwareRelease, node: dict[str, Any]) -> bool:
+        """Apply the same signed hardware/channel contract to every selection."""
         capabilities = set(node.get("capabilities", []))
         hardware_profile = str(
             node.get("hardware_profile")
@@ -250,14 +250,18 @@ class FirmwareCatalog:
                 else "base"
             )
         )
+        return (release.required_capability in capabilities
+                and release.hardware_profile == hardware_profile
+                and firmware_variant in release.compatible_variants
+                and release.channel == channel
+                and self.artifact_ready(release.release_id))
+
+    def latest_for_node(self, node: dict[str, Any]) -> dict[str, Any] | None:
+        """Recommend the newest ready release without changing explicit selection."""
         candidates = [
             release
             for release in self._releases.values()
-            if release.required_capability in capabilities
-            and release.hardware_profile == hardware_profile
-            and firmware_variant in release.compatible_variants
-            and release.channel == channel
-            and self.artifact_ready(release.release_id)
+            if self._matches_node(release, node)
         ]
         if not candidates:
             return None
@@ -272,8 +276,13 @@ class FirmwareCatalog:
         return result
 
     def compatible(self, release_id: str, node: dict[str, Any]) -> bool:
-        latest = self.latest_for_node(node)
-        return latest is not None and latest["release_id"] == release_id
+        """Validate an explicitly requested signed release, including a canary.
+
+        Version ordering governs recommendations, not hardware compatibility.
+        This also permits an explicit rollback to a retained signed artifact.
+        """
+        release = self._releases.get(release_id)
+        return release is not None and self._matches_node(release, node)
 
 
 def _version_key(version: str) -> tuple[tuple[int, ...], tuple[Any, ...]]:

@@ -148,6 +148,8 @@ class Htv145Runtime:
 
     def _request(self, profile: Htv145ControlProfile, action: str, *, now: str,
                  duration_seconds: int | None = None) -> dict[str, Any]:
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.coordinator.store, profile.node_id)
         if not self.qualification.qualified(profile):
             raise RuntimeError("single-zone control qualification is incomplete")
         self.restore(profile, now=now)
@@ -177,6 +179,8 @@ class Htv145Runtime:
         self.coordinator.sender(profile.node_id, command)
 
     def observe_node(self, node_id: str, message: dict[str, Any], *, now: str) -> None:
+        if self.coordinator.store.native_valve_node_owned(node_id):
+            return
         for profile in self.profiles():
             if profile.node_id != node_id:
                 continue
@@ -199,6 +203,8 @@ class Htv145Runtime:
         # Run before cross-radio deduplication: only the assigned owner can
         # authorize the anchor, even if a neighboring receiver reported first.
         for profile in self.profiles():
+            if self.coordinator.store.native_valve_node_owned(profile.node_id):
+                continue
             try:
                 self.qualification.status(profile, now=now)
                 self.counter_sync.observe(profile, frame, node_id, now=now)
@@ -207,6 +213,8 @@ class Htv145Runtime:
 
     def observe_frame(self, frame: bytes, *, now: str) -> None:
         for profile in self.profiles():
+            if self.coordinator.store.native_valve_node_owned(profile.node_id):
+                continue
             try:
                 self.coordinator.observe_frame(profile, frame, observed_at=now)
                 self.qualification.observe(profile, frame, now=now)
@@ -215,6 +223,8 @@ class Htv145Runtime:
 
     def tick(self, *, now: str) -> None:
         for profile in self.profiles():
+            if self.coordinator.store.native_valve_node_owned(profile.node_id):
+                continue
             self.coordinator.readiness(profile, observed_at=now)
             self.qualification.status(profile, now=now)
             try:

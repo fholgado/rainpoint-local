@@ -103,6 +103,26 @@ class FirmwareCatalogTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown signing key"):
             FirmwareCatalog.load(self.catalog_path, trusted_keys={})
 
+    def test_explicit_signed_canary_does_not_need_to_be_latest(self):
+        payload = json.loads(self.catalog_path.read_text())
+        canary = payload["releases"][0]
+        stable = {**canary, "version":"0.9.0", "release_id":"esp32dev-ota-0.9.0"}
+        stable["signature"] = sign_release(stable,self.content,self.private,self.public)
+        payload["releases"].append(stable)
+        self.catalog_path.write_text(json.dumps(payload))
+        catalog = self.load_catalog()
+        node = dict(firmware_variant="unified", hardware_profile="esp32dev-cc1101-v1",
+                    firmware_channel="experimental", capabilities=["firmware_signed_ota"])
+        self.assertEqual(stable["release_id"],catalog.latest_for_node(node)["release_id"])
+        self.assertTrue(catalog.compatible(canary["release_id"],node))
+        self.assertFalse(catalog.compatible("missing",node))
+        for changed in ({"firmware_channel":"stable"},{"hardware_profile":"wrong"},
+                        {"firmware_variant":"wrong"},{"capabilities":[]}):
+            with self.subTest(changed=changed):
+                self.assertFalse(catalog.compatible(canary["release_id"],{**node,**changed}))
+        self.artifact.write_bytes(self.content+b"tampered")
+        self.assertFalse(catalog.compatible(canary["release_id"],node))
+
     def test_changed_artifact_cannot_dispatch_update(self):
         catalog = self.load_catalog()
         gateway = Gateway(firmware_catalog=catalog)

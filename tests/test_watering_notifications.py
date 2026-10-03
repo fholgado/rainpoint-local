@@ -72,6 +72,24 @@ class WateringNotificationTest(unittest.TestCase):
         self.assertIn("close request", self.publish.call_args.args[0])
         self.assertIn("does not confirm", self.publish.call_args.args[0])
 
+    def test_failed_overdue_snapshot_emits_one_problem_not_two_events(self):
+        self.snapshot(True)
+        self.publish.reset_mock()
+        self.snapshot(True, rf_control_transaction_state="failed", rf_control_transaction_id="late",
+                      rf_control_overdue=True)
+        self.assertEqual(self.publish.call_count, 1)
+        self.assertIn("expected stop has not been confirmed", self.publish.call_args.args[0])
+        self.snapshot(True, rf_control_transaction_state="failed", rf_control_transaction_id="late",
+                      rf_control_overdue=True)
+        self.assertEqual(self.publish.call_count, 1)
+
+    def test_missing_summary_notification_preserves_confirmed_stop(self):
+        self.snapshot(False, rf_control_transaction_state="failed", rf_control_transaction_id="summary",
+                      rf_control_completion_missing=True)
+        self.assertEqual(self.publish.call_count, 1)
+        self.assertIn("confirmed idle", self.publish.call_args.args[0])
+        self.assertIn("summary", self.publish.call_args.args[0])
+
     def test_new_manual_run_does_not_reuse_old_requested_duration(self):
         values = {"rf_control_transaction_id": "old", "rf_control_transaction_state": "confirmed",
                   "rf_control_transaction_duration_seconds": 1260}
@@ -95,6 +113,41 @@ class WateringNotificationTest(unittest.TestCase):
             "rf_control_transaction_action": "open", "rf_control_transaction_state": "confirmed",
             "rf_control_transaction_duration_seconds": 120}}})
         self.assertIn("2 minutes", self.publish.call_args.args[0])
+
+    def test_two_outlet_model_reports_confirmed_duration_and_failure(self):
+        self.reporter.observe({"two": {"model": "HTV213FRF", "state": {
+            "is_watering": True, "active_zone": 2, "rf_control_transaction_id": "two-run",
+            "rf_control_transaction_action": "open", "rf_control_transaction_state": "watering_confirmed",
+            "rf_control_transaction_duration_seconds": 180}}})
+        self.assertIn("3 minutes", self.publish.call_args.args[0])
+        self.assertIn("zone 2", self.publish.call_args.args[0])
+        self.reporter.observe({"two": {"model": "HTV213FRF", "state": {
+            "is_watering": None, "rf_control_transaction_id": "failed-two",
+            "rf_control_transaction_state": "failed"}}})
+        self.assertIn("may have flowed", self.publish.call_args.args[0])
+
+    def test_ack_before_watering_report_preserves_duration_for_first_notice(self):
+        # Live HTV213 order: command pending, positive ACK while the latest
+        # port report is still idle, then the first watering report.
+        for model in ("HTV145FRF", "HTV213FRF", "HTV405FRF"):
+            with self.subTest(model=model):
+                publish = Mock()
+                reporter = module.WateringNotifications("entry", publish)
+                state = {"is_watering": False, "active_zone": 2,
+                         "rf_control_transaction_id": "run-new",
+                         "rf_control_transaction_action": "open",
+                         "rf_control_transaction_duration_seconds": 300,
+                         "rf_control_transaction_state": "awaiting_confirmation"}
+                device = {"valve": {"model": model, "state": state}}
+                reporter.observe(device)
+                state["rf_control_transaction_state"] = "watering_confirmed"
+                reporter.observe(device)
+                publish.assert_not_called()
+                state["is_watering"] = True
+                reporter.observe(device)
+                self.assertIn("5 minutes", publish.call_args.args[0])
+                reporter.observe(device)
+                self.assertEqual(publish.call_count, 1)
 
     def test_ha_setup_subscribes_by_default_and_emits_mobile_opt_in_event(self):
         persistent = types.SimpleNamespace(async_create=Mock())

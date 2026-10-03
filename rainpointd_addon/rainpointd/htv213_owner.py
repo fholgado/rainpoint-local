@@ -1,0 +1,126 @@
+"""Durable reply ownership for a qualified HTV213 test association.
+
+No command phase allocation, implicit re-pairing or opening occurs here.
+Commands remain in the independent control journal. Fresh authenticated node
+sessions receive only the retained reply configuration, never an open replay.
+"""
+from __future__ import annotations
+
+import copy
+import json
+from datetime import datetime, timezone
+
+from . import htv213_pairing
+from .htv213_control_experiment import eligible
+from .htv213_control_trial import ControlJournal, packet
+
+KEY = "htv213_reply_owner_v1"
+CAPABILITY = "htv213_routine_owner"
+
+
+def records(gateway):
+    return json.loads(gateway._store.metadata_value(KEY) or "{}") if gateway._store else {}
+
+
+def configure(gateway, request):
+    with gateway._lock:
+        node_id = request.get("node_id")
+        node = eligible(gateway, node_id)
+        if CAPABILITY not in node.get("capabilities", []):
+            raise ValueError("HTV213 reply-owner firmware required")
+        if htv213_pairing.busy(gateway) or any(n.get("tx_armed") for n in gateway.nodes()):
+            raise ValueError("wait for the bounded trial to finish")
+        command = htv213_pairing.build_command(request,
+            controller=gateway.rf_identity.controller_endpoint,
+            companion=gateway.rf_identity.companion_endpoint)
+        valve = f'{int(command["factory_endpoint"],16) | 0x80000000:08x}'
+        key = command["controller_endpoint"] + ":" + valve
+        state = ControlJournal(gateway._store).snapshot(key)
+        if (state["state"] != "complete" or state["identity"]["node_id"] != node_id
+                or state["transaction"]["command_id"] != request.get("trial_command_id")
+                or state["identity"]["selector"] != command["assigned_selector"]
+                or gateway.endpoint_suppressed(valve)):
+            raise ValueError("matching completed dry control evidence required")
+        saved = records(gateway)
+        if key in saved or any(r["node_id"] == node_id for r in saved.values()):
+            raise ValueError("existing owner must be restored or revoked, not replaced")
+        command.update(type="htv213_owner_set", port=1, seconds=60)
+        saved[key] = dict(node_id=node_id, command=command, ports={},
+                          evidence_command_id=state["transaction"]["command_id"])
+        gateway._store.save_htv213_owner(json.dumps(saved, sort_keys=True))
+        restore(gateway, node_id)
+        return {"state": "owner_pending", "command_id": command["command_id"], "operational": False}
+
+
+def restore(gateway, node_id):
+    """Called once for an authenticated connection. Sends configuration only."""
+    with gateway._lock:
+        node = gateway._nodes.get(node_id, {})
+        if not (node.get("connected") and node.get("authenticated")
+                and CAPABILITY in node.get("capabilities", [])):
+            return
+        for key, record in records(gateway).items():
+            if record["node_id"] != node_id:
+                continue
+            if record.get("revoking"):
+                gateway._node_command_sender(node_id, {"type": "htv213_owner_clear",
+                    "command_id": record["command"]["command_id"] + "-revoke",
+                    "owner_id": record["command"]["command_id"]})
+                continue
+            if gateway.endpoint_suppressed(key.split(":")[1]):
+                continue
+            # Never restore an owner onto a node subsequently assigned elsewhere.
+            if (gateway._store.ack_assignments(node_id) or any(
+                    r.get("control_node_id") == node_id for r in gateway._store.valve_registry())):
+                continue
+            command = copy.deepcopy(record["command"])
+            command["local_clock"] = datetime.now().astimezone().strftime("%Y%m%d%H%M%S")
+            gateway.update_node(node_id, htv213_owner={"state": "pending", "command_id": command["command_id"]})
+            gateway._node_command_sender(node_id, command)
+
+
+def observe(gateway, node_id, message):
+    with gateway._lock:
+        saved = records(gateway)
+        match = next(((key,r) for key,r in saved.items() if r["node_id"] == node_id and
+                      r["command"]["command_id"] == message.get("command_id")), None)
+        node = gateway._nodes.get(node_id, {})
+        if not match or not (node.get("connected") and node.get("authenticated")):
+            return
+        if type(message.get("enabled")) is not bool:
+            return
+        key, record = match
+        enabled = message["enabled"]
+        if record.get("revoking"):
+            if not enabled:
+                record["revoked"] = True
+                gateway._store.save_htv213_owner(json.dumps(saved, sort_keys=True))
+            return
+        status = {"state": "ready" if enabled else "disabled", "command_id": message["command_id"]}
+        decoded = packet(message.get("frame"))
+        if decoded:
+            raw, command, phase, data = decoded
+            controller, valve = key.split(":")
+            if raw[5:9].hex() != controller or raw[9:13].hex() != valve or raw[13] & 0x20:
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            if (command == 2 and len(data) == 15 and data[0] == record["command"]["assigned_selector"]
+                    and data[2] in (1,2) and data[3] in (0,0x21)):
+                remaining = int.from_bytes(data[10:12], "little")
+                requested = int.from_bytes(data[13:15], "little")
+                if (data[3] == 0 and (remaining or requested)) or remaining > requested+1:
+                    return
+                record["ports"][str(data[2])] = dict(watering=data[3]==0x21,
+                    remaining_seconds=remaining, requested_seconds=requested, observed_at=now,
+                    phase=phase)
+            record["last_seen"] = now
+            # Ordinary retained reports may complete an acknowledged run after
+            # gateway reconnect. They never allocate or reset master phases.
+            ControlJournal(gateway._store).observe(key, node_id=node_id, frame=message["frame"])
+            gateway._store.save_htv213_owner(json.dumps(saved, sort_keys=True))
+            status.update(last_seen=now, ports=copy.deepcopy(record["ports"]))
+        else:
+            status.update(ports=copy.deepcopy(record["ports"]))
+        gateway.update_node(node_id, htv213_owner=status)
+        if record.get("device_id"):
+            gateway.notify_node_update(node_id, "htv213_report")

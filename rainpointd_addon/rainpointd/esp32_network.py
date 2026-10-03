@@ -138,6 +138,15 @@ class ESP32NetworkServer:
     def send_command(self, node_id: str, message: dict[str, Any]) -> None:
         """Send one bounded command to an authenticated protocol-v2 node."""
         if message.get("type") not in {
+            "valve_native_adopt", "valve_native_command", "valve_native_status",
+            "valve_native_recover", "valve_native_handback",
+            "valve_phase_trial_open", "valve_phase_trial_release", "valve_phase_trial_status", "valve_phase_trial_recover",
+            "htv213_pairing_start",
+            "htv213_pairing_cancel",
+            "htv213_control_probe_open",
+            "htv213_control_probe_close",
+            "htv213_owner_set",
+            "htv213_owner_clear",
             "pairing_start",
             "pairing_cancel",
             "identify_start",
@@ -172,7 +181,26 @@ class ESP32NetworkServer:
         if session["protocol_version"] != 2:
             raise ValueError("radio node protocol does not permit commands")
         command_type = message.get("type")
-        if command_type == "identify_start":
+        from .valve_phase_experiment import authorize_send
+        with self.gateway._lock:
+            native = self.gateway._native_control
+            if command_type.startswith("valve_native_"):
+                if native is None:
+                    raise ValueError("native control unavailable")
+                native.authorize(node_id, message)
+            else:
+                if native and native.owner(node_id=node_id) and (
+                        command_type == "pairing_start" or command_type.startswith("valve_phase_trial_")
+                        or command_type.startswith("valve_control_") and command_type not in
+                            {"valve_control_configure", "valve_control_status"}
+                        or command_type.startswith("htv145_control_") and command_type not in
+                            {"htv145_control_configure", "htv145_control_status"}):
+                    raise RuntimeError("radio has an exclusive native counter owner")
+                authorize_send(self.gateway, node_id, message)
+        if command_type.startswith("valve_native_"):
+            required_capability = ("valve_native_handoff_v1" if command_type in
+                {"valve_native_recover", "valve_native_handback"} else "valve_native_phase_v1")
+        elif command_type == "identify_start":
             required_capability = "identify"
         elif command_type == "rf_mode_set":
             required_capability = "rf_maintenance"
@@ -180,6 +208,12 @@ class ESP32NetworkServer:
             required_capability = "node_reboot"
         elif command_type == "firmware_update_start":
             required_capability = "firmware_signed_ota"
+        elif command_type == "valve_phase_trial_recover":
+            required_capability = "valve_phase_trial_recovery"
+        elif command_type == "valve_phase_trial_open" and message.get("port",1)!=1:
+            required_capability = "valve_phase_trial_ports"
+        elif command_type.startswith("valve_phase_trial_"):
+            required_capability = "valve_phase_trial"
         elif command_type in {"routine_ack_configure", "routine_ack_revoke"}:
             required_capability = "routine_sensor_ack_tx"
         elif command_type in {
@@ -197,6 +231,12 @@ class ESP32NetworkServer:
             if message.get("expected_sequence") != 0x81 or message.get("duration_seconds") != 60:
                 raise ValueError("commissioning permits only counter 0x81 and 60 seconds")
             required_capability = "htv145_commissioning"
+        elif command_type in {"htv213_pairing_start", "htv213_pairing_cancel"}:
+            required_capability = "htv213_pairing_experiment"
+        elif command_type in {"htv213_owner_set", "htv213_owner_clear"}:
+            required_capability = "htv213_routine_owner"
+        elif command_type in {"htv213_control_probe_open", "htv213_control_probe_close"}:
+            required_capability = "htv213_control_experiment"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -372,6 +412,8 @@ class ESP32NetworkServer:
             self.gateway.notify_node_update(node_id, "radio_node_connected")
             self.gateway.restore_radio_node_ack_assignments(node_id)
             self.gateway.restore_radio_node_htv405_ack_assignments(node_id)
+            from .htv213_owner import restore as restore_htv213_owner
+            restore_htv213_owner(self.gateway, node_id)
             received_frames = 0
             invalid_messages = 0
             while not self._stop.is_set():
@@ -391,6 +433,25 @@ class ESP32NetworkServer:
                     self.gateway.update_node(
                         node_id, received_frames=received_frames
                     )
+                if message.get("type") == "htv213_owner_status":
+                    from .htv213_owner import observe as observe_htv213_owner
+                    observe_htv213_owner(self.gateway, node_id, message)
+                    continue
+                if message.get("type") == "valve_phase_trial_status":
+                    from .valve_phase_experiment import observe as observe_phase_trial
+                    observe_phase_trial(self.gateway, node_id, message)
+                    continue
+                if message.get("type") == "valve_native_receipt":
+                    self.gateway.observe_native_valve_receipt(node_id, message, now=now)
+                    continue
+                if message.get("type") == "htv213_control_status":
+                    from .htv213_control_experiment import observe
+                    observe(self.gateway, node_id, message)
+                    continue
+                if message.get("type") == "htv213_pairing_status":
+                    from .htv213_pairing import observe
+                    observe(self.gateway, node_id, message)
+                    continue
                 if message.get("type") == "pairing_tx_status":
                     self.gateway.update_node(
                         node_id,
@@ -448,6 +509,9 @@ class ESP32NetworkServer:
                         ),
                         pairing_htv145_stage0_rejected=message.get(
                             "htv145_stage0_rejected"
+                        ),
+                        pairing_htv145_plan_reply_retries=message.get(
+                            "htv145_plan_reply_retries"
                         ),
                         pairing_factory_endpoint=message.get(
                             "factory_endpoint"
@@ -577,6 +641,14 @@ class ESP32NetworkServer:
                     if observer is not None:
                         observer(node_id, message)
                 if message.get("type") == "command_error":
+                    if self.gateway.observe_native_valve_error(node_id, message, now=now):
+                        continue
+                    from .htv213_control_experiment import observe_error as observe_control_error
+                    if observe_control_error(self.gateway, node_id, message):
+                        continue
+                    from .htv213_pairing import observe_error
+                    if observe_error(self.gateway, node_id, message):
+                        continue
                     current_node = next(
                         (
                             item
@@ -585,7 +657,9 @@ class ESP32NetworkServer:
                         ),
                         {},
                     )
-                    if self.gateway.observe_valve_control_error(
+                    if self.gateway.observe_ack_ownership_status(node_id, message):
+                        pass
+                    elif self.gateway.observe_valve_control_error(
                         node_id, message
                     ):
                         self.gateway.update_node(
@@ -734,6 +808,12 @@ class ESP32NetworkServer:
                         "node_reboot",
                         "routine_sensor_ack_tx",
                         "htv405_routine_ack_tx",
+                        "correlated_ack_ownership",
+                        "retained_sensor_rejoin_channel",
+                        "htv213_pairing_experiment",
+                        "htv213_control_experiment",
+                        "htv213_routine_owner",
+                        "htv213_duration_3600",
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
@@ -747,6 +827,7 @@ class ESP32NetworkServer:
                         "htv145_multi_valve",
                         "htv145_idle_anchor",
                         "htv145_bootstrap_trial",
+                        "valve_phase_trial", "valve_phase_trial_recovery", "valve_phase_trial_ports", "valve_native_phase_v1", "valve_native_handoff_v1", "valve_native_scope_v1",
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                         "firmware_signed_ota",

@@ -1537,16 +1537,23 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual(
                 "9bce0024", restored_commands[-1][1]["paired_endpoint"]
             )
+            from tests.test_ack_ownership import connect, response
+            connect(restored, "rp-001122334455")
+            connect(restored, "rp-aabbccddeeff")
             restored.assign_radio_node_ack(
                 node_id="rp-aabbccddeeff",
                 paired_endpoint="9bce0024",
                 assigned_channel=5,
             )
             self.assertEqual(1, len(restored.ack_assignments()))
+            self.assertEqual("rp-001122334455", restored.ack_assignments()[0]["node_id"])
+            self.assertEqual("routine_ack_revoke", restored_commands[-1][1]["type"])
+            restored.observe_ack_ownership_status("rp-001122334455", response(restored_commands[-1][1]))
+            restored.observe_ack_ownership_status("rp-aabbccddeeff", response(restored_commands[-1][1]))
             self.assertEqual(
                 "rp-aabbccddeeff", restored.ack_assignments()[0]["node_id"]
             )
-            self.assertEqual("routine_ack_revoke", restored_commands[-1][1]["type"])
+            self.assertEqual("routine_ack_configure", restored_commands[-1][1]["type"])
             restored.observe_decoded(
                 device_id="hcs026-9bce0024",
                 name="Test Sensor A",
@@ -1635,10 +1642,18 @@ class GatewayTest(unittest.TestCase):
             self.assertEqual("6e86de80", configured[1]["companion_endpoint"])
             self.assertEqual(97_154, configured[1]["frequency_offset_hz"])
 
-            moved = gateway.assign_htv405_control_node(
+            from tests.test_ack_ownership import connect, response
+            connect(gateway, "rp-001122334455")
+            connect(gateway, "rp-aabbccddeeff")
+            pending = gateway.assign_htv405_control_node(
                 device_id="htv405-94a98013",
                 node_id="rp-aabbccddeeff",
             )
+            self.assertEqual("pending", pending["ownership_state"])
+            self.assertEqual("rp-001122334455", pending["control_node_id"])
+            gateway.observe_ack_ownership_status("rp-001122334455", response(commands[-1][1]))
+            gateway.observe_ack_ownership_status("rp-aabbccddeeff", response(commands[-1][1]))
+            moved = gateway._store.valve_registry()[0]
             self.assertEqual("rp-aabbccddeeff", moved["control_node_id"])
             self.assertEqual(
                 [
@@ -4813,12 +4828,19 @@ class ValveControlHTTPAPITest(unittest.TestCase):
         self.assertEqual(commands_before_cancel, len(self.commands))
 
     def test_control_node_can_move_without_changing_association(self) -> None:
+        from tests.test_ack_ownership import connect, response
+        connect(self.server.gateway, self.NODE_ID)
+        connect(self.server.gateway, self.SECOND_NODE_ID)
         before = self.server.gateway._store.valve_registry()[0]
-        result = self.post_json(
+        pending = self.post_json(
             f"/api/v1/devices/{self.DEVICE_ID}/valve/node",
             {"node_id": self.SECOND_NODE_ID},
         )["control"]
-
+        self.assertEqual("pending", pending["ownership_state"])
+        self.assertEqual(self.NODE_ID, pending["control_node_id"])
+        self.server.gateway.observe_ack_ownership_status(self.NODE_ID, response(self.commands[-1][1]))
+        self.server.gateway.observe_ack_ownership_status(self.SECOND_NODE_ID, response(self.commands[-1][1]))
+        result = self.server.gateway._store.valve_registry()[0]
         self.assertEqual(self.SECOND_NODE_ID, result["control_node_id"])
         self.assertEqual(
             before["controller_endpoint"], result["controller_endpoint"]

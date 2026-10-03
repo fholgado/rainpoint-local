@@ -6,10 +6,14 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import sys
 
 from tests.valve_native_helpers import decode
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'rainpointd_addon'))
+from rainpointd.valve_command_phase import build_command, decode_envelope, matches_positive_result
+from rainpointd.valve_protocol import ValveLink
 FIXTURES = ROOT / "research/fixtures"
 
 
@@ -69,6 +73,37 @@ class FullCommandPhaseTests(unittest.TestCase):
                 # Every previously emitted phase is byte-for-byte unchanged.
                 if bool(phase & 1) == opened:
                     self.assertEqual(actual, legacy)
+
+    def test_gateway_builder_matches_radio_for_all_phases_actions_ports_and_durations(self):
+        link = ValveLink(bytes.fromhex('b1c2d38f'), bytes.fromhex('a1b2c380'))
+        cases = [(model, phase, action, port, seconds)
+                 for model in ('145', '405') for phase in range(64)
+                 for action in ('open', 'close')
+                 for port in (range(1, 5) if model == '405' else (1,))
+                 for seconds in ((60, 1260, 3600) if action == 'open' else (None,))]
+        expected = self.build([self.row(model, phase, action == 'open',
+            seconds=seconds or 0, port=port) for model, phase, action, port, seconds in cases])
+        for case, wire in zip(cases, expected):
+            model, phase, action, port, seconds = case
+            with self.subTest(case=case):
+                actual = build_command(model='HTV' + model + 'FRF', link=link,
+                    phase=phase, action=action, port=port, duration_seconds=seconds,
+                    residue=0x4f03, selector=5)
+                self.assertEqual(actual.hex(), wire)
+                self.assertEqual(decode_envelope(actual).phase, phase)
+
+    def test_native_result_codec_replays_captured_success_and_negative_results(self):
+        data = fixture('htv145_active_counter_recovery_20260906.json')
+        matched = 0
+        for transaction in data['command_transactions']:
+            response = transaction.get('response_frame')
+            if response:
+                request, reply = [decode_envelope(f) for f in (transaction['command_frame'], response)]
+                if reply.command == 0xa1:
+                    self.assertEqual(matches_positive_result(request, reply,
+                        model='HTV145FRF', port=1), reply.data[0] == 0)
+                    matched += 1
+        self.assertGreaterEqual(matched, 3)
 
     def test_both_existing_single_zone_marker_policies_are_unchanged(self):
         rows = []
@@ -198,6 +233,21 @@ class FullCommandPhaseTests(unittest.TestCase):
         damaged[20] ^= 1
         invalid.append(damaged.hex())
         self.assertEqual(self.result_views(invalid), [(0, 0, 0, 0, 0)] * 3)
+
+    def test_gateway_and_radio_reject_reserved_phase_bit_even_with_valid_trailer(self):
+        data = fixture('htv145_active_counter_recovery_20260906.json')
+        raw = bytearray.fromhex(data['command_transactions'][0]['response_frame'])
+        raw[13] |= 0x20  # Native phase bit 6, not one of the six counter bits.
+        raw[-2:] = (binascii.crc_hqx(raw[:-2],0) ^ 0xc713).to_bytes(2,'big')
+        self.assertIsNone(decode_envelope(bytes(raw)))
+        self.assertEqual(self.result_views([raw.hex()]), [(0,0,0,0,0)])
+
+    def test_stock_four_zone_port_four_ack_matches_retained_request_not_mode_nibble(self):
+        row = fixture('htv405_stock_early_stop_20260824.json')['authenticated_counter_examples'][0]
+        request = decode_envelope(row['open_command']['frame'])
+        response = decode_envelope(row['open_response']['frame'])
+        self.assertTrue(matches_positive_result(request,response,model='HTV405FRF',port=4))
+        self.assertFalse(matches_positive_result(request,response,model='HTV405FRF',port=1))
 
     def test_runtime_import_requires_the_explicit_experiment_flag(self):
         source = (ROOT / "firmware/rainpoint_bridge/src/main.cpp").read_text()

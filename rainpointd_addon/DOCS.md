@@ -9,7 +9,7 @@ integration separately from this app; no cloud integration is required.
 
 ## Current behavior
 
-Version 0.39.0 supports authenticated network radio nodes, receive-only USB
+Version 0.39.14 supports authenticated network radio nodes, receive-only USB
 RTL-SDR, receive-only ESP32/CC1101 serial mode, and authenticated inbound
 telemetry from one or more Wi-Fi ESP32 nodes. It does not connect to the
 RainPoint cloud. A protocol-v2 node can perform bounded automatic HCS026 pairing through
@@ -403,6 +403,12 @@ comes from the accepted association, and re-registration reuses an established
 catalog identity instead of creating a duplicate HA device.
 
 ## Safety
+
+HTV213 remains an isolated dry-test candidate, not an HA product option. Its
+authenticated experimental open/close endpoints require an unassigned canary
+node and explicit association evidence. Phases are durably reserved before
+dispatch; result, target-port idle and summary reports establish completion.
+No automatic retry, startup close or counter reseeding is permitted.
 
 This release has no cloud transport. A fresh installation cannot control an
 unassociated valve; pairing and ACK transmission require explicit ownership.

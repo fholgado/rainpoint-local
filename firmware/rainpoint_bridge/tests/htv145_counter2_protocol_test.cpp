@@ -1,6 +1,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -26,7 +27,7 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> fromHex(
 }  // namespace
 
 // Synthetic endpoints; captured bodies and original CRC residues preserved.
-int main() {
+int main(int argc, char** argv) {
     static_assert(
         rainpoint::htv145::kTargetFactoryCounter == 2,
         "compile this regression with the counter-2 research define"
@@ -38,6 +39,54 @@ int main() {
         {{0x21, 0xb2, 0xc3, 0x80}},
         profile
     ));
+    if (argc == 2 && std::string(argv[1]) == "--replay") {
+        // Offline fixture driver. These partial IQ transcripts start after
+        // assignment; supply only that synthetic prerequisite, then consume
+        // every recorded request at its relative millisecond observation time.
+        rainpoint::htv145::PairingSession replay(profile);
+        replay.arm(0);
+        const auto assignment = fromHex(
+            "79f4882f288000000031c2d38f82008402ff8f970080bf06000000000000000000000000273d");
+        assert(replay.claimReply(assignment, 1) == &profile.steps[0]);
+        assert(replay.finishReply(true, 2));
+        const rainpoint::PairingLocalDateTime clock{2026, 9, 1, 12, 12, 48};
+        std::uint32_t observedAtMs;
+        int expectedStep;
+        std::string requestHex, expectedReplyHex;
+        std::size_t rows = 0;
+        while (std::cin >> observedAtMs >> expectedStep >> requestHex >> expectedReplyHex) {
+            const auto request = fromHex(requestHex);
+            const auto* claimed = replay.claimReply(request, observedAtMs);
+            if (expectedStep < 0) {
+                assert(claimed == nullptr); // recorded configuration ACK
+                assert(replay.completedSteps() == 3);
+            } else {
+                assert(claimed == &profile.steps[expectedStep]);
+                std::array<std::uint8_t, rainpoint::kFrameBytes> actual{};
+                assert(replay.buildClaimedReply(clock, actual));
+                assert(rainpoint::nativeSequence(actual) == rainpoint::nativeSequence(request));
+                assert(rainpoint::hasOrdinaryTrailer(actual));
+                if (expectedReplyHex != "-") {
+                    assert(actual == fromHex(expectedReplyHex));
+                }
+                assert(replay.finishReply(true, observedAtMs + 1));
+            }
+            ++rows;
+        }
+        assert(std::cin.eof());
+        assert(rows == 8);
+        assert(replay.planReplyRetries() == 4);
+        assert(replay.completedSteps() == 5);
+        replay.tick(119'999);
+        assert(replay.state() == rainpoint::PairingSessionState::Armed);
+        replay.tick(120'000);
+        assert(replay.state() == rainpoint::PairingSessionState::Failed);
+        assert(replay.failureReason() == rainpoint::PairingFailureReason::SessionTimeout);
+        assert(replay.completedSteps() == 5); // no fabricated terminal completion
+        std::cout << "recorded_rows=8 plan_retries=4 completed_steps=5 expired=1\n";
+        return 0;
+    }
+    assert(argc == 1);
     assert(rainpoint::htv145::replyStartDelayUs(0) == 49'650);
     assert(rainpoint::htv145::replyStartDelayUs(1) == 68'700);
     assert(rainpoint::htv145::replyStartDelayUs(3) == 53'300);
@@ -160,6 +209,27 @@ int main() {
     assert(session.finishReply(true, 11'001));
     assert(session.completedSteps() == 5);
     assert(session.state() == rainpoint::PairingSessionState::Armed);
+    // Captured missed-reply recovery: native 06 repeats at phases 8..11.
+    // Answer the last stage without advancing logical progress or reopening
+    // assignment. This must not change any first-response bytes above.
+    auto retry = request4;
+    retry[13] = 0x84;
+    retry[14] = 0x03;
+    rainpoint::writeTrailer(retry, 0x4f03);
+    assert(session.claimReply(retry, 11'900) == &profile.steps[4]);
+    assert(session.finishReply(true, 11'901));
+    assert(session.completedSteps() == 5);
+    // Existing no-retry completion remains covered with a separate session.
+    session.arm(0);
+    assert(session.claimReply(factory2, 1) == &profile.steps[0]);
+    assert(session.finishReply(true, 2));
+    assert(session.claimReply(request1, 3) == &profile.steps[1]);
+    assert(session.finishReply(true, 4));
+    assert(session.claimReply(configurationResponse, 5) == nullptr);
+    assert(session.claimReply(request3, 6) == &profile.steps[3]);
+    assert(session.finishReply(true, 7));
+    assert(session.claimReply(request4, 8) == &profile.steps[4]);
+    assert(session.finishReply(true, 9));
     auto corrupt = request5; corrupt[37] ^= 1;
     assert(session.claimReply(corrupt, 12'000) == nullptr);
     assert(session.claimReply(request5, 12'100) == &profile.steps[5]);
@@ -172,5 +242,188 @@ int main() {
     assert(rejected.claimReply(factory0, 3) == nullptr);
     assert(rejected.stage0Rejected());
     assert(rejected.state() == rainpoint::PairingSessionState::Failed);
+
+    const auto prepare = [&](rainpoint::htv145::PairingSession& trial,
+                             std::uint32_t startMs = 0) {
+        trial.arm(startMs);
+        const std::array<std::array<std::uint8_t, rainpoint::kFrameBytes>, 5> requests{
+            factory2, request1, configurationResponse, request3, request4};
+        for (std::size_t i = 0; i < requests.size(); ++i) {
+            const auto* claimed = trial.claimReply(requests[i], startMs + 100 + i * 1'000);
+            if (i == 2) { assert(claimed == nullptr); continue; }
+            assert(claimed == &profile.steps[i]);
+            std::array<std::uint8_t, rainpoint::kFrameBytes> frozen{}, actual{};
+            assert(rainpoint::htv145::buildReply(profile, i, capturedClock, frozen));
+            assert(trial.buildClaimedReply(capturedClock, actual));
+            assert(frozen == actual); // byte-identical first responses, all stages
+            assert(trial.finishReply(true, startMs + 101 + i * 1'000));
+        }
+        assert(trial.completedSteps() == 5);
+        assert(trial.requiresReceiveEndCapture());
+    };
+    const auto withPhase = [](auto frame, std::uint8_t phase) {
+        frame[13] = static_cast<std::uint8_t>((frame[13] & 0xe0U) | (phase >> 1U));
+        frame[14] = static_cast<std::uint8_t>((frame[14] & 0x7fU) | ((phase & 1U) << 7U));
+        rainpoint::writeTrailer(frame, 0x4f03);
+        return frame;
+    };
+    rainpoint::htv145::PairingSession retrySession(profile);
+    prepare(retrySession);
+    auto bad = withPhase(request4, 8);
+    bad[37] ^= 1;
+    assert(retrySession.claimReply(bad, 5'000) == nullptr);
+    for (const std::size_t offset : {5U, 9U, 13U, 14U, 15U, 16U, 17U, 18U, 35U}) {
+        bad = withPhase(request4, 8);
+        // At byte 13 mutate a non-phase header bit; the rest are exact gates.
+        bad[offset] ^= offset == 13 ? 0x20 : 1;
+        rainpoint::writeTrailer(bad, 0x4f03);
+        assert(retrySession.claimReply(bad, 5'000) == nullptr);
+    }
+    assert(retrySession.claimReply(withPhase(request4, 6), 5'000) == nullptr);
+    assert(retrySession.claimReply(withPhase(request4, 12), 5'000) == nullptr);
+    assert(retrySession.claimReply(request1, 5'000) == nullptr); // no prefix rewind
+    for (std::uint8_t phase = 8; phase <= 11; ++phase) {
+        auto request = withPhase(request4, phase);
+        assert(retrySession.claimReply(request, 5'000 + phase * 100) == &profile.steps[4]);
+        assert(retrySession.claimReply(request, 5'001 + phase * 100) == nullptr); // in flight
+        assert(retrySession.buildClaimedReply(capturedClock, reply));
+        assert(rainpoint::nativeSequence(reply) == phase);
+        assert(rainpoint::hasOrdinaryTrailer(reply));
+        auto frozen = reply;
+        assert(rainpoint::htv145::buildReply(profile, 4, capturedClock, frozen));
+        for (std::size_t i = 0; i < 36; ++i) {
+            if (i != 13 && i != 14) assert(reply[i] == frozen[i]);
+        }
+        assert(retrySession.finishReply(true, 5'010 + phase * 100));
+        assert(retrySession.completedSteps() == 5);
+        assert(retrySession.planReplyRetries() == phase - 7);
+    }
+    assert(retrySession.claimReply(withPhase(request4, 11), 7'000) == nullptr); // retry cap
+    assert(retrySession.claimReply(request5, 7'000) == nullptr); // stale terminal phase
+    const auto advancedTerminal = withPhase(request5, 12);
+    assert(retrySession.claimReply(advancedTerminal, 7'000) == &profile.steps[5]);
+    assert(retrySession.buildClaimedReply(capturedClock, reply));
+    assert(rainpoint::nativeSequence(reply) == 12);
+    assert(retrySession.finishReply(true, 7'010));
+    assert(retrySession.state() == rainpoint::PairingSessionState::Completed);
+    assert(!retrySession.requiresReceiveEndCapture());
+    assert(retrySession.claimReply(advancedTerminal, 7'020) == nullptr);
+
+    prepare(retrySession);
+    assert(retrySession.claimReply(request4, 5'000) == &profile.steps[4]); // exact repeat
+    assert(retrySession.buildClaimedReply(capturedClock, reply));
+    assert(rainpoint::nativeSequence(reply) == 7);
+    assert(retrySession.finishReply(true, 5'001));
+    assert(retrySession.completedSteps() == 5);
+    assert(retrySession.claimReply(withPhase(request4, 8), 14'102) == nullptr); // window elapsed
+    assert(retrySession.claimReply(request5, 14'103) == &profile.steps[5]); // bounded retries do not block tail
+    assert(!retrySession.finishReply(true, 120'000)); // session deadline still wins
+    assert(retrySession.failureReason() == rainpoint::PairingFailureReason::SessionTimeout);
+    retrySession.cancel();
+    assert(!retrySession.requiresReceiveEndCapture());
+    assert(!retrySession.buildClaimedReply(capturedClock, reply));
+    assert(retrySession.claimReply(request4, 120'001) == nullptr);
+    prepare(retrySession);
+    assert(retrySession.planReplyRetries() == 0);
+    assert(retrySession.claimReply(withPhase(request4, 8), 5'000) == &profile.steps[4]);
+    assert(!retrySession.finishReply(true, 6'000)); // reply deadline, not just session deadline
+    assert(retrySession.failureReason() == rainpoint::PairingFailureReason::ReplyDeadlineMissed);
+
+    // Missing continuation never upgrades partial enrollment to completion.
+    prepare(retrySession);
+    retrySession.tick(119'999);
+    assert(retrySession.state() == rainpoint::PairingSessionState::Armed);
+    assert(retrySession.completedSteps() == 5);
+    retrySession.tick(120'000);
+    assert(retrySession.state() == rainpoint::PairingSessionState::Failed);
+    assert(retrySession.failureReason() == rainpoint::PairingFailureReason::SessionTimeout);
+    assert(retrySession.claimReply(request5, 120'001) == nullptr);
+
+    // A delayed terminal request still completes before the session deadline,
+    // even after the retry window closed. Exactly 250 ms is permitted.
+    prepare(retrySession);
+    assert(retrySession.claimReply(withPhase(request4, 8), 5'000) == &profile.steps[4]);
+    assert(retrySession.finishReply(true, 5'001));
+    assert(retrySession.claimReply(withPhase(request4, 9), 14'102) == nullptr);
+    assert(retrySession.claimReply(withPhase(request5, 9), 119'749) == &profile.steps[5]);
+    assert(retrySession.finishReply(true, 119'999));
+    assert(retrySession.state() == rainpoint::PairingSessionState::Completed);
+
+    // Window is inclusive at 10 seconds and is measured from the first reply,
+    // not extended by subsequent retries. Rejecting a late packet is inert.
+    prepare(retrySession);
+    assert(retrySession.claimReply(withPhase(request4, 8), 14'101) == &profile.steps[4]);
+    assert(retrySession.finishReply(true, 14'102));
+    assert(retrySession.claimReply(withPhase(request4, 9), 14'103) == nullptr);
+    assert(retrySession.planReplyRetries() == 1);
+    assert(retrySession.claimReply(withPhase(request5, 9), 14'104) == &profile.steps[5]);
+    assert(retrySession.finishReply(true, 14'105));
+
+    // Four exact repeats consume the same bounded retry budget as advancing
+    // phases. They preserve full reply bytes and do not advance enrollment.
+    prepare(retrySession);
+    for (std::uint8_t attempt = 1; attempt <= 4; ++attempt) {
+        assert(retrySession.claimReply(request4, 5'000 + attempt * 100) == &profile.steps[4]);
+        assert(retrySession.buildClaimedReply(capturedClock, reply));
+        std::array<std::uint8_t, rainpoint::kFrameBytes> frozen{};
+        assert(rainpoint::htv145::buildReply(profile, 4, capturedClock, frozen));
+        assert(reply == frozen);
+        assert(retrySession.finishReply(true, 5'001 + attempt * 100));
+        assert(retrySession.completedSteps() == 5);
+        assert(retrySession.planReplyRetries() == attempt);
+    }
+    assert(retrySession.claimReply(request4, 6'000) == nullptr);
+    assert(retrySession.claimReply(request5, 6'001) == &profile.steps[5]);
+    assert(retrySession.finishReply(true, 6'002));
+
+    // Retried terminal matching preserves every non-phase gate. Corrupted
+    // identity, reserved bits, command, native length, data and padding cannot
+    // consume the valid next terminal request or mutate progress/retry budget.
+    prepare(retrySession);
+    assert(retrySession.claimReply(withPhase(request4, 8), 5'000) == &profile.steps[4]);
+    assert(retrySession.finishReply(true, 5'001));
+    const auto terminal9 = withPhase(request5, 9);
+    for (std::size_t offset = 5; offset < 36; ++offset) {
+        bad = terminal9;
+        bad[offset] ^= offset == 13 ? 0x20 : 1;
+        rainpoint::writeTrailer(bad, rainpoint::trailerResidual(terminal9));
+        assert(retrySession.claimReply(bad, 5'100) == nullptr);
+        assert(retrySession.completedSteps() == 5);
+        assert(retrySession.planReplyRetries() == 1);
+        assert(retrySession.state() == rainpoint::PairingSessionState::Armed);
+    }
+    for (std::uint8_t phase : {7, 8, 10, 63, 0}) {
+        assert(retrySession.claimReply(withPhase(request5, phase), 5'100) == nullptr);
+    }
+    assert(retrySession.claimReply(terminal9, 5'101) == &profile.steps[5]);
+    assert(retrySession.buildClaimedReply(capturedClock, reply));
+    assert(rainpoint::nativeSequence(reply) == 9);
+    assert(retrySession.finishReply(true, 5'102));
+
+    // The frozen prefix begins plan phase 7; the source-only retry policy permits +4;
+    // phase wrap is intentionally unreachable. Do not broaden the profile to
+    // manufacture a successful 63->0 pairing that has never been observed.
+    prepare(retrySession);
+    for (std::uint8_t phase : {63, 0, 1, 2}) {
+        assert(retrySession.claimReply(withPhase(request4, phase), 5'000) == nullptr);
+    }
+    assert(retrySession.planReplyRetries() == 0);
+    assert(retrySession.claimReply(request5, 5'001) == &profile.steps[5]);
+    assert(retrySession.finishReply(true, 5'002));
+
+    // Clock rollover is a different kind of wrap and is valid: retry-window
+    // arithmetic and whole-session expiry must survive uint32_t millis wrap.
+    constexpr std::uint32_t nearWrap = 0xfffff000U;
+    prepare(retrySession, nearWrap);
+    assert(retrySession.claimReply(withPhase(request4, 8), nearWrap + 5'000U) == &profile.steps[4]);
+    assert(retrySession.finishReply(true, nearWrap + 5'001U));
+    assert(retrySession.claimReply(withPhase(request5, 9), nearWrap + 6'000U) == &profile.steps[5]);
+    assert(retrySession.finishReply(true, nearWrap + 6'001U));
+    assert(retrySession.state() == rainpoint::PairingSessionState::Completed);
+    prepare(retrySession, nearWrap);
+    retrySession.tick(nearWrap + 119'999U);
+    assert(retrySession.state() == rainpoint::PairingSessionState::Armed);
+    retrySession.tick(nearWrap + 120'000U);
+    assert(retrySession.failureReason() == rainpoint::PairingFailureReason::SessionTimeout);
 
 }

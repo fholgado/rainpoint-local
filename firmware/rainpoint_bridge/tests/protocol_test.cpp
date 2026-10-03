@@ -4,6 +4,7 @@
 #include <string>
 
 #include "rainpoint_protocol.h"
+#include "rainpoint_valve_configuration.h"
 #include "rainpoint_association_slots.h"
 #include "rainpoint_clocked_transmit.h"
 #include "rainpoint_receive_edge.h"
@@ -66,6 +67,85 @@ std::array<std::uint8_t, rainpoint::kFrameBytes> htv405Request(
 }  // namespace
 
 int main() {
+    // Notification preparation is explicit and cannot reset/allocate a master
+    // sequence. Report phases never enter this interface.
+    {
+        using namespace rainpoint::valveConfiguration;
+        Reply reply{};
+        for (std::uint8_t phase = 0; phase < 64; ++phase) {
+            assert(prepareNotification(2, phase, NotificationKind::Startup, reply));
+            assert(reply.command == 0x20 && reply.phase == phase);
+            assert(reply.length == 2 && reply.data[0] == 2 && reply.data[1] == 1);
+            assert(prepareNotification(9, phase, NotificationKind::ConfigurationChanged, reply));
+            assert(reply.phase == phase && reply.data[0] == 9 && reply.data[1] == 0);
+        }
+        assert(!prepareNotification(0, 2, NotificationKind::Startup, reply));
+        assert(reply.length == 0);
+        assert(!prepareNotification(2, 64, NotificationKind::Startup, reply));
+        assert(!prepareNotification(2, 2, static_cast<NotificationKind>(4), reply));
+
+        Association association{};
+        association.model = Model::Htv213;
+        association.selector = 11;
+        association.configurationRevision = 2;
+        association.requestRouteA = {{0xa2, 0x44, 0x66, 0x88}};
+        association.requestRouteB = {{0x91, 0x55, 0x66, 0x77}};
+        association.ports[0].settingsKnown = true;
+        association.ports[1].settingsKnown = true;
+        association.ports[0].settings[0] = 17;
+        association.ports[1].settings[0] = 29;
+        const auto port1 = fromHex("79f4882f28a2446688915566770382810580800000000000000000000000000000000000eb25");
+        const auto port2 = fromHex("79f4882f28a2446688915566770402810581000000000000000000000000000000000000cbb0");
+        assert(prepareReply(association, port2, {}, reply) == Result::Ready);
+        assert(reply.port == 2 && reply.data[1] == 29 && reply.phase == 8);
+        assert(prepareReply(association, port1, {}, reply) == Result::Ready);
+        assert(reply.port == 1 && reply.data[1] == 17 && reply.phase == 7);
+        association.ports[0].settingsKnown = false;
+        assert(prepareReply(association, port1, {}, reply) == Result::MissingConfiguration);
+        assert(reply.length == 0 && reply.command == 0); // No stale reply reuse.
+        assert(association.configurationRevision == 2 && association.selector == 11);
+
+        association.factoryEndpoint = {{0x11,0x55,0x66,0x77}};
+        association.address = 2;
+        association.timingRaw = 480;
+        association.timingKnown = true;
+        const auto announcement = fromHex("79f4882f28800000001155667700808405ff900280821f018000000000000000000000001bcd");
+        ReportContext context{};
+        assert(prepareRetainedAssignment(association, announcement, context, reply) == Result::MissingContext);
+        assert(encodeNativeTime(2026, 9, 28, 21, 3, 39, 1, context));
+        assert((context.time == std::array<std::uint8_t,5>{{0xe7,0x50,0x79,0x1a,1}}));
+        assert(prepareRetainedAssignment(association, announcement, context, reply) == Result::Ready);
+        assert(reply.command == 0x81 && reply.phase == 1 && reply.length == 11);
+        assert(reply.assignmentReplySelector == 11);
+        const std::array<std::uint8_t,11> retained{{0,2,11,0xe0,1,0xe7,0x50,0x79,0x1a,1,2}};
+        for (std::size_t i = 0; i < retained.size(); ++i) assert(reply.data[i] == retained[i]);
+        // Device address is independent of model port count. Request selector
+        // controls reply transport even when saved routine selector differs.
+        association.address = 7;
+        association.selector = 12;
+        assert(prepareRetainedAssignment(association, announcement, context, reply) == Result::Ready);
+        assert(reply.data[1] == 7 && reply.data[2] == 12 && reply.assignmentReplySelector == 11);
+        for (std::uint8_t phase = 0; phase < 64; ++phase) {
+            auto retry = announcement;
+            retry[13] = (retry[13] & 0xe0U) | (phase >> 1U);
+            retry[14] = (retry[14] & 0x7fU) | ((phase & 1U) << 7U);
+            rainpoint::writeTrailer(retry, 0xc713);
+            assert(prepareRetainedAssignment(association, retry, context, reply) == Result::Ready);
+            assert(reply.phase == phase && reply.data[1] == 7 && reply.data[10] == 2);
+        }
+        auto alternate = announcement;
+        alternate[13] |= 0x20; // Native P9 bit0x40 has an unqualified 10-byte body.
+        rainpoint::writeTrailer(alternate, 0xc713);
+        assert(prepareRetainedAssignment(association, alternate, context, reply) == Result::UnsupportedRequest);
+        association.model = Model::Htv405;
+        assert(prepareRetainedAssignment(association, announcement, context, reply) == Result::UnsupportedRequest);
+        assert(!encodeNativeTime(2019, 1, 1, 0, 0, 0, 1, context));
+        assert(!encodeNativeTime(2084, 1, 1, 0, 0, 0, 1, context));
+        assert(!encodeNativeTime(2026, 2, 29, 0, 0, 0, 1, context));
+        assert(encodeNativeTime(2024, 2, 29, 23, 59, 59, 4, context));
+        assert(!encodeNativeTime(2024, 2, 29, 23, 59, 59, 7, context));
+        assert(!context.timeKnown);
+    }
     // A known-idle counter-zero anchor can report the last watered zone.
     for (std::uint8_t zone = 1; zone <= 4; ++zone) {
         assert(rainpoint::htv405ResponseZoneMatches({0, zone, false}, 1, true));

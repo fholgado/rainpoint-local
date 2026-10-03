@@ -276,6 +276,13 @@ void WifiTransport::handleGatewayLine(const String& line) {
          type == "valve_phase_trial_open" || type == "valve_phase_trial_status" ||
          type == "valve_phase_trial_release" || type == "valve_phase_trial_recover" ||
 #endif
+#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
+         type == "htv213_pairing_start" || type == "htv213_pairing_cancel" ||
+#endif
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+         type == "htv213_control_probe_open" || type == "htv213_control_probe_close" ||
+         type == "htv213_owner_set" || type == "htv213_owner_clear" ||
+#endif
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
          || type == "htv145_control_configure" ||
@@ -343,6 +350,14 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"htv405_routine_ack_tx\""
         ",\"correlated_ack_ownership\""
         ",\"retained_sensor_rejoin_channel\""
+#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
+        ",\"htv213_pairing_experiment\""
+#endif
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        ",\"htv213_control_experiment\""
+        ",\"htv213_routine_owner\""
+        ",\"htv213_duration_3600\""
+#endif
         ",\"firmware_update_trial\""
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
         ",\"valve_phase_trial\",\"valve_phase_trial_recovery\",\"valve_phase_trial_ports\",\"valve_native_phase_v1\",\"valve_native_handoff_v1\",\"valve_native_scope_v1\""

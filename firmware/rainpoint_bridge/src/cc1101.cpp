@@ -438,11 +438,17 @@ bool Cc1101::transmitAsync(
     std::uint8_t deviationRegister,
     std::uint32_t startAtMicros,
     std::uint16_t postFrameLowHoldMicros
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+    , std::int8_t finalSymbol
+#endif
 ) {
     if (!transmitEnabled_) {
         ++blockedTransmitCount_;
         return false;
     }
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+    if (finalSymbol < -1 || finalSymbol > 1) return false;
+#endif
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) || wakeSymbols == 0 ||
         wakeSymbols > 2'400 || postFrameLowHoldMicros > 500 ||
         centerFrequencyHz < 433'000'000 || centerFrequencyHz > 435'000'000 ||
@@ -504,9 +510,20 @@ bool Cc1101::transmitAsync(
 
     const std::size_t symbolCount = rainpointSymbolCount(
         wakeSymbols
-    );
+    )
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        + (finalSymbol >= 0 ? 1U : 0U)
+#endif
+        ;
     std::vector<rmt_item32_t> items((symbolCount + 1) / 2);
     const auto symbolAt = [&](std::size_t index) -> std::uint8_t {
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        // The normalized 38-byte window omits the last native CRC bit.
+        // Only explicit HTV213 control callers append it; every existing
+        // pairing/production call retains the original stream unchanged.
+        if (finalSymbol >= 0 && index == symbolCount - 1)
+            return static_cast<std::uint8_t>(finalSymbol) ^ (invert ? 1U : 0U);
+#endif
         return rainpointSymbol(
             frame,
             wakeSymbols,

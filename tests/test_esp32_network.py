@@ -145,6 +145,76 @@ class ESP32NetworkTest(unittest.TestCase):
         stream.close()
         connection.close()
 
+    def test_htv213_canary_transport_is_capability_gated_and_correlated(self):
+        from rainpointd import htv213_pairing
+        connection, stream, response = self._connect(
+            NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", htv213_pairing.CAPABILITY],
+        )
+        try:
+            self.assertEqual("node_authenticated", response["type"])
+            command={"type":"htv213_pairing_start","command_id":"canary-test"}
+            self.gateway._htv213_experiment_owner=(NODE_A,"canary-test")
+            self.gateway.update_node(NODE_A,htv213_pairing={"command_id":"canary-test","state":"requested"})
+            self.server.send_command(NODE_A,command)
+            self.assertEqual(command,json.loads(stream.readline()))
+            stream.write(json.dumps({"type":"htv213_pairing_status","command_id":"canary-test",
+                                     "state":"armed","reports":0}).encode()+b"\n")
+            for _ in range(50):
+                node=self.gateway._nodes[NODE_A]
+                if node["htv213_pairing"]["state"]=="armed":break
+                time.sleep(0.01)
+            self.assertEqual(node["htv213_pairing"]["state"],"armed")
+            self.assertTrue(node["tx_armed"])
+            self.assertFalse(node["htv213_pairing"]["operational"])
+        finally:
+            stream.close();connection.close()
+        connection,stream,response=self._connect(NODE_B,TOKEN_B,protocol_version=2)
+        try:
+            with self.assertRaises(ValueError):
+                self.server.send_command(NODE_B,{"type":"htv213_pairing_start","command_id":"not-capable"})
+        finally:
+            stream.close();connection.close()
+
+    def test_htv213_dry_control_transport_capability_and_error_correlation(self):
+        from rainpointd.htv213_control_trial import ControlJournal
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=["rx", "sensor_pairing_tx", "htv213_control_experiment"])
+        try:
+            self.assertEqual(response["type"], "node_authenticated")
+            journal = ControlJournal(self.gateway._store)
+            key = journal.seed(node_id=NODE_A, controller="a2446688", valve="91556677",
+                selector=11, acknowledged_phase=2, evidence_id="ab"*16)
+            tx = journal.reserve(key, action="open", port=1, seconds=60, dry_confirmed=True)
+            journal.dispatch(key, tx, lambda *_: None)
+            self.gateway._htv213_control_owner = (NODE_A, tx["command_id"], key)
+            self.gateway.update_node(NODE_A, htv213_control={"state":"indeterminate"})
+            for name in ("htv213_control_probe_open", "htv213_control_probe_close"):
+                command = {"type":name, "command_id":tx["command_id"]}
+                self.server.send_command(NODE_A, command)
+                self.assertEqual(json.loads(stream.readline()), command)
+            stream.write(json.dumps({"type":"htv213_control_status", "command_id":tx["command_id"],
+                "state":"awaiting_response"}).encode()+b"\n")
+            for _ in range(50):
+                if self.gateway._nodes[NODE_A]["htv213_control"].get("node_state")=="awaiting_response": break
+                time.sleep(.01)
+            self.assertEqual(self.gateway._nodes[NODE_A]["htv213_control"]["node_state"], "awaiting_response")
+            stream.write(json.dumps({"type":"command_error", "command_id":tx["command_id"],
+                "error":"test_rejection"}).encode()+b"\n")
+            for _ in range(50):
+                if self.gateway._nodes[NODE_A]["htv213_control"].get("node_state")=="command_rejected": break
+                time.sleep(.01)
+            self.assertEqual(self.gateway._nodes[NODE_A]["htv213_control"]["node_state"], "command_rejected")
+            self.assertEqual(journal.snapshot(key)["state"], "indeterminate")
+        finally:
+            stream.close(); connection.close()
+        connection, stream, _ = self._connect(NODE_B, TOKEN_B, protocol_version=2)
+        try:
+            for name in ("htv213_control_probe_open", "htv213_control_probe_close"):
+                with self.assertRaises(ValueError): self.server.send_command(NODE_B, {"type":name})
+        finally:
+            stream.close(); connection.close()
+
     def test_signed_ota_node_authenticates(self) -> None:
         connection, stream, response = self._connect(
             NODE_A, TOKEN_A, protocol_version=2,
@@ -492,6 +562,7 @@ class ESP32NetworkTest(unittest.TestCase):
                     "htv145_accepted_factory_counter": 0,
                     "htv145_stage0_accepted": False,
                     "htv145_stage0_rejected": True,
+                    "htv145_plan_reply_retries": 2,
                     "tx_armed": True,
                     "detail": "reply_transmitted",
                 }
@@ -504,6 +575,7 @@ class ESP32NetworkTest(unittest.TestCase):
             time.sleep(0.01)
         self.assertEqual("armed", self.gateway.nodes()[0]["pairing_state"])
         self.assertEqual(1, self.gateway.nodes()[0]["pairing_completed_steps"])
+        self.assertEqual(2, self.gateway.nodes()[0]["pairing_htv145_plan_reply_retries"])
         self.assertEqual(
             5, self.gateway.nodes()[0]["pairing_assigned_channel"]
         )
@@ -1993,11 +2065,15 @@ class ESP32NetworkTest(unittest.TestCase):
                 "identify",
                 "routine_sensor_ack_tx",
                 "htv405_routine_ack_tx",
+                "correlated_ack_ownership",
+                "retained_sensor_rejoin_channel",
             ],
         )
         self.assertEqual("node_authenticated", response["type"])
         node = self.gateway.nodes()[0]
         self.assertIn("routine_sensor_ack_tx", node["capabilities"])
+        self.assertIn("correlated_ack_ownership", node["capabilities"])
+        self.assertIn("retained_sensor_rejoin_channel", node["capabilities"])
         configure = {
             "type": "routine_ack_configure",
             "command_id": "34" * 16,
@@ -2013,6 +2089,8 @@ class ESP32NetworkTest(unittest.TestCase):
             "type": "routine_ack_revoke",
             "command_id": "56" * 16,
             "paired_endpoint": "9bce0024",
+            "ownership_generation": "ab" * 16,
+            "ownership_session": "test-connection",
         }
         self.server.send_command(NODE_A, revoke)
         self.assertEqual(revoke, json.loads(stream.readline()))
@@ -2158,6 +2236,40 @@ class ESP32NetworkTest(unittest.TestCase):
                     self.server.send_command(NODE_A,command)
             stream.close(); connection.close()
 
+    def test_phase_recovery_requires_new_capability_on_authenticated_transport(self):
+        command={"type":"valve_phase_trial_recover","command_id":"79"*16}
+        for supported in (False,True):
+            capabilities=["rx","sensor_pairing_tx","valve_phase_trial"]
+            if supported: capabilities.append("valve_phase_trial_recovery")
+            connection,stream,response=self._connect(NODE_A,TOKEN_A,protocol_version=2,capabilities=capabilities)
+            self.assertEqual(response["type"],"node_authenticated")
+            try:
+                if supported:
+                    self.server.send_command(NODE_A,command)
+                    self.assertEqual(command,json.loads(stream.readline()))
+                else:
+                    with self.assertRaisesRegex(ValueError,"valve_phase_trial_recovery"):
+                        self.server.send_command(NODE_A,command)
+            finally:
+                stream.close();connection.close()
+
+    def test_phase_dry_port_requires_capability_and_preserves_selected_outlet(self):
+        for supported in (False,True):
+            capabilities=["rx","sensor_pairing_tx","valve_phase_trial"]
+            if supported:capabilities.append("valve_phase_trial_ports")
+            connection,stream,response=self._connect(NODE_A,TOKEN_A,protocol_version=2,capabilities=capabilities)
+            self.assertEqual(response["type"],"node_authenticated")
+            try:
+                for port in (2,3,4):
+                    command={"type":"valve_phase_trial_open","command_id":"7a"*16,"port":port}
+                    if supported:
+                        self.server.send_command(NODE_A,command)
+                        self.assertEqual(json.loads(stream.readline()),command)
+                    else:
+                        with self.assertRaisesRegex(ValueError,"valve_phase_trial_ports"):
+                            self.server.send_command(NODE_A,command)
+            finally:stream.close();connection.close()
+
     def test_bootstrap_trial_requires_explicit_capability_and_fixed_command(self):
         command = {"type": "htv145_control_bootstrap_open", "command_id": "76" * 16,
                    "controller_endpoint": "b1c2d38f", "valve_endpoint": "a1b2c380",
@@ -2180,6 +2292,26 @@ class ESP32NetworkTest(unittest.TestCase):
             connection.close()
 
     def test_pending_adoption_authenticates_once_then_becomes_managed(self) -> None:
+        self._assert_pending_adoption(["rx", "sensor_pairing_tx", "identify"])
+
+    def test_pending_adoption_accepts_stock_research_ownership_capabilities(self) -> None:
+        # Initial adoption must accept the research firmware's complete hello,
+        # not only reconnects from already-managed nodes.
+        self._assert_pending_adoption([
+            "rx", "sensor_pairing_tx", "identify",
+            "configurable_rf_controller_identity", "rf_maintenance", "node_reboot",
+            "valve_control_tx_candidate", "htv405_bounded_sync_wait",
+            "htv145_control_tx_candidate", "htv145_report_ack_tx",
+            "htv145_idle_anchor", "htv145_multi_valve",
+            "valve_pairing_tx_candidate", "htv405_auto_identity_pairing",
+            "htv145_pairing_tx_candidate", "htv145_auto_identity_pairing",
+            "htv145_commissioning", "routine_sensor_ack_tx", "htv405_routine_ack_tx",
+            "correlated_ack_ownership", "retained_sensor_rejoin_channel",
+            "firmware_update_trial", "firmware_signed_ota",
+            "valve_native_phase_v1", "valve_native_handoff_v1", "valve_native_scope_v1",
+        ])
+
+    def _assert_pending_adoption(self, capabilities: list[str]) -> None:
         adoption = self.gateway.start_radio_node_adoption(
             node_id=NODE_C,
             name="Front Garden Radio",
@@ -2193,7 +2325,7 @@ class ESP32NetworkTest(unittest.TestCase):
             NODE_C,
             adoption["node_token"],
             protocol_version=2,
-            capabilities=["rx", "sensor_pairing_tx", "identify"],
+            capabilities=capabilities,
         )
         self.assertEqual("node_authenticated", response["type"])
         self.assertEqual("adopted", self.gateway.radio_node_adoption(NODE_C)["state"])

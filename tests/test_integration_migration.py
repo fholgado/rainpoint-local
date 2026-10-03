@@ -49,6 +49,51 @@ def _integration_function(filename, name, namespace, classname=None):
 
 
 class HardeningFlowTest(unittest.IsolatedAsyncioTestCase):
+    async def test_progress_cannot_accept_another_sessions_device(self):
+        import asyncio
+        parse = Mock(side_effect=AssertionError("must reject another session first"))
+        wait = _integration_function("config_flow.py", "_async_wait_for_device", {
+            "asyncio": asyncio, "RainPointLocalCannotConnect": OSError,
+            "RainPointLocalInvalidResponse": ValueError,
+            "pairing_completed_endpoint": parse}, classname="RainPointLocalOptionsFlow")
+        client = types.SimpleNamespace(pairing=AsyncMock(return_value={
+            "command_id": "new-session", "completed_endpoint": "another-device"}))
+        flow = types.SimpleNamespace(_client=lambda: client,
+            _pairing_command_id="owned-command", _pairing_error=None)
+        await wait(flow)
+        self.assertEqual("pairing_session_changed", flow._pairing_error)
+        parse.assert_not_called()
+
+    async def test_native_progress_accepts_owned_completion_without_panel_context(self):
+        import asyncio
+        progress = {"command_id": "owned-command", "completed_endpoint": "paired-device"}
+        parse = Mock(return_value="paired-device")
+        wait = _integration_function("config_flow.py", "_async_wait_for_device", {
+            "asyncio": asyncio, "RainPointLocalCannotConnect": OSError,
+            "RainPointLocalInvalidResponse": ValueError,
+            "pairing_completed_endpoint": parse,
+            "pairing_is_finalizing": Mock(return_value=False)},
+            classname="RainPointLocalOptionsFlow")
+        client = types.SimpleNamespace(pairing=AsyncMock(return_value=progress))
+        flow = types.SimpleNamespace(_client=lambda: client,
+            _pairing_command_id="owned-command", _pairing_error=None,
+            _paired_endpoint=None)
+        await wait(flow)
+        self.assertIsNone(flow._pairing_error)
+        self.assertEqual("paired-device", flow._paired_endpoint)
+        parse.assert_called_once_with(progress)
+
+    def test_native_setup_has_no_custom_panel_dependency(self):
+        manifest = json.loads((PACKAGE / "manifest.json").read_text())
+        self.assertFalse({"frontend", "http", "panel_custom", "websocket_api"}
+                         & set(manifest["dependencies"]))
+        self.assertFalse((PACKAGE / "panel.py").exists())
+        self.assertFalse((PACKAGE / "frontend/panel.js").exists())
+        self.assertFalse((PACKAGE / "frontend/wizard.js").exists())
+        source = (PACKAGE / "__init__.py").read_text()
+        self.assertNotIn("async_setup_panel", source)
+        self.assertNotIn("async_remove_panel", source)
+
     async def test_pairing_review_has_no_radio_side_effect_and_back_preserves_choice(self):
         profile = types.SimpleNamespace(display_name="Valve")
         flow = types.SimpleNamespace(_pairing_profile=profile, _pairing_nodes={"n":"Radio"},

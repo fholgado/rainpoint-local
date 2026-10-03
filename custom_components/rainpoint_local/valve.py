@@ -61,7 +61,7 @@ async def async_setup_entry(
 
 
 class RainPointHtv405ZoneValve(RainPointLocalEntity, ValveEntity):
-    """One mutually exclusive zone of an HTV405 four-zone timer."""
+    """One gateway-supervised outlet of an identified multi-outlet timer."""
 
     _attr_translation_key = "htv405_zone"
     _attr_reports_position = False

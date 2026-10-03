@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Compare recorded HTV145 command phases; no device access or transmission.
 
-The six-bit interpretation is a research hypothesis. Recorded stock commands
-support monotonic progression locally; alternating control and anchor rollover
-are qualified, while arbitrary action ordering remains unqualified. Analysis
-never authenticates a runtime counter.
+The six-bit field is established by stock firmware and retained captures.
+General receiver acceptance remains unqualified; alternating control and anchor
+rollover are qualified. Analysis never authenticates a runtime counter.
 """
 from __future__ import annotations
 import argparse
@@ -35,7 +34,7 @@ def analyze_transactions(rows: list[dict], link: ValveLink) -> dict:
         commands.append({'phase': phase, 'counter': command[13], 'marker': command[14],
                          'watering': decoded['watering'], 'response_marker': response[14]})
     adjacent = [right['phase'] == (left['phase'] + 1) % 64 for left, right in zip(commands, commands[1:])]
-    return {'scope': 'offline phase-progression hypothesis; no counter authenticated',
+    return {'scope': 'offline native-phase observation; no counter authenticated',
             'commands': commands, 'adjacent_progression': adjacent,
             'all_adjacent_increment': bool(adjacent) and all(adjacent)}
 

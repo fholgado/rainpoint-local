@@ -134,8 +134,8 @@ inline bool buildHtv405GatewayOpenFrame(
     }
 
     frame[13] = static_cast<std::uint8_t>(0x80U | phase.sequence);
-    // Gateway control byte 14 is the operation marker, not the
-    // primary/repeat bit used by lower-channel valve reports.
+    // Retain the qualified odd-phase OPEN recipe. Bit 7 is the low bit of
+    // the six-bit native phase, not an action flag or a telemetry counter.
     frame[14] = 0x90;
     frame[15] = 0x82;
     frame[16] = 0x80;
@@ -271,10 +271,11 @@ inline bool decodeHtv405GatewayCommandResponse(
     Htv405GatewayCommandResponse& response
 ) {
     // The valve answers accepted gateway commands on the command carrier.
-    // Open and close responses share the 50/86 envelope; byte 17 contains a
-    // one-hot-looking zone nibble (0x10..0x40), while the high bit of both
-    // byte 14 and byte 18 reports the resulting watering state. Byte 16 has
-    // varied across accepted captures, so it is deliberately excluded.
+    // This is the legacy odd-OPEN/even-CLOSE response policy. Byte 14's
+    // high bit is phase, while byte 18's high bit carries watering state;
+    // their equality below is a local-policy guard, not a general wire rule.
+    // Preserve the existing nibble/body interpretation until separately
+    // qualified. Byte 16 varied across accepted captures and is excluded.
     if (!hasSync(frame) || !hasOrdinaryTrailer(frame) ||
         (frame[14] & 0x7fU) != 0x50 || frame[15] != 0x86 ||
         (frame[17] & 0x0fU) != 0 ||
@@ -313,9 +314,9 @@ inline std::uint8_t nextHtv405GatewayCommandSequence(
     std::uint8_t acceptedSequence,
     bool watering
 ) {
-    // Stock early-stop captures show that the first accepted open advances
-    // the watering-session counter, while a confirmed close leaves that next
-    // session counter unchanged. Lower telemetry uses a separate counter.
+    // Legacy odd-OPEN/even-CLOSE allocation policy, not the general stock
+    // six-bit generator. Preserve it until a full-phase canary is qualified.
+    // Lower telemetry uses a separate counter.
     return watering
         ? static_cast<std::uint8_t>((acceptedSequence + 1U) & 0x1fU)
         : acceptedSequence;
