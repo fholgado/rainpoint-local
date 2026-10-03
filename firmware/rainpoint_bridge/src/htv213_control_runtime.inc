@@ -100,6 +100,10 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         return true;
     }
     if (!open && !close && !owner) {
+        // Persistent ACK ownership is not an active valve transaction. Let
+        // idle OTA reach the shared signed-update validator, retaining this
+        // owner until reboot; the gateway restores it after authentication.
+        if (type=="firmware_update_start" && !htv213ControlActive()) return false;
         if (!htv213ControlActive() && !htv213OwnerEnabled) return false;
         if (type=="rf_mode_set" || type=="node_reboot") {
             htv213OwnerEnabled=false; reportHtv213Owner();

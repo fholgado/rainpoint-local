@@ -9,8 +9,10 @@ import json
 import socket
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -119,6 +121,21 @@ class ESP32NetworkTest(unittest.TestCase):
                     expected_server_proof, response.get("server_proof", "")
                 )
             )
+        if response.get("type") == "node_authenticated":
+            # Authentication is sent before the gateway commits node readiness.
+            # A successful handshake alone is not permission to start pairing.
+            deadline = time.monotonic() + 2
+            while True:
+                node = next((n for n in self.gateway.nodes() if n.get("node_id") == node_id), {})
+                if (node.get("connected") and node.get("authenticated")
+                        and node.get("protocol_version") == protocol_version
+                        and set(node.get("capabilities", [])) == set(hello["capabilities"])):
+                    break
+                if time.monotonic() >= deadline:
+                    stream.close()
+                    connection.close()
+                    self.fail("authenticated test node was not registered")
+                time.sleep(.01)
         return connection, stream, response
 
     def test_development_rejoin_firmware_authenticates_with_both_new_capabilities(self) -> None:
@@ -137,6 +154,32 @@ class ESP32NetworkTest(unittest.TestCase):
         finally:
             stream.close()
             connection.close()
+
+    def test_connect_waits_for_registration_after_authentication_reply(self) -> None:
+        release = threading.Event()
+        adopt = self.gateway.complete_radio_node_adoption
+        nodes = self.gateway.nodes
+
+        def delayed_adoption(node_id):
+            if not release.wait(2):
+                raise RuntimeError("test readiness barrier was not released")
+            return adopt(node_id)
+
+        def snapshot_then_release():
+            snapshot = nodes()
+            release.set()
+            return snapshot
+
+        with mock.patch.object(self.gateway, "complete_radio_node_adoption", side_effect=delayed_adoption), \
+             mock.patch.object(self.gateway, "nodes", side_effect=snapshot_then_release):
+            connection, stream, _ = self._connect(NODE_A, TOKEN_A, protocol_version=2)
+            try:
+                self.assertTrue(any(n.get("node_id") == NODE_A and n.get("authenticated")
+                                    and n.get("connected") for n in self.gateway.nodes()))
+            finally:
+                release.set()
+                stream.close()
+                connection.close()
 
     def test_v2_node_reports_firmware_compatibility_contract(self) -> None:
         connection, stream, response = self._connect(
@@ -1567,6 +1610,10 @@ class ESP32NetworkTest(unittest.TestCase):
         connection, stream, _ = self._connect(NODE_A, TOKEN_A, protocol_version=2,
             capabilities=["rx", "sensor_pairing_tx", "htv145_pairing_tx_candidate",
                           "configurable_rf_controller_identity"])
+        # Pairing's public result still depends on a connected selected node.
+        # Keep this peer alive through the caller's result assertions.
+        self.addCleanup(connection.close)
+        self.addCleanup(stream.close)
         deadline = time.monotonic() + 2
         while not self.gateway.nodes()[0].get("capabilities"):
             self.assertLess(time.monotonic(), deadline)
@@ -1616,8 +1663,6 @@ class ESP32NetworkTest(unittest.TestCase):
         while not any(e.get("raw") == frame for e in self.gateway.events()):
             self.assertLess(time.monotonic(), deadline)
             time.sleep(.01)
-        stream.close()
-        connection.close()
         return frame
 
     def test_htv145_pairing_new_identity_preserves_device_and_decodes_first_report(self):
@@ -1647,6 +1692,28 @@ class ESP32NetworkTest(unittest.TestCase):
         finally:
             restored.close()
 
+    def test_htv145_handoff_keeps_peer_open_until_result_assertions(self):
+        connect = self._connect
+        peers = []
+
+        def tracked_connect(*args, **kwargs):
+            connection, stream, response = connect(*args, **kwargs)
+            connection = mock.Mock(wraps=connection)
+            stream = mock.Mock(wraps=stream)
+            peers.append((connection, stream))
+            return connection, stream, response
+
+        with mock.patch.object(self, "_connect", side_effect=tracked_connect):
+            self._htv145_handoff_trial()
+        for connection, stream in peers:
+            try:
+                connection.close.assert_not_called()
+                stream.close.assert_not_called()
+                self.assertEqual("b1c2d38f", self.gateway.pairing()["completed_endpoint"])
+            finally:
+                stream.close()
+                connection.close()
+
     def test_htv145_pairing_handoff_rejects_unproven_frames(self):
         # Each variant gets a separate persistent gateway and authenticated peer.
         for variant in ("wrong_controller", "wrong_valve", "reversed_route", "bad_crc", "command",
@@ -1665,6 +1732,7 @@ class ESP32NetworkTest(unittest.TestCase):
                     self.assertEqual(1, len(registrations))
                     self.assertEqual("d4e5f680", registrations[0]["controller_endpoint"])
                 finally:
+                    trial.doCleanups()
                     trial.tearDown()
 
     def test_pairing_power_override_is_research_only_and_bounded(self) -> None:

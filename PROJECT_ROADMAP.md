@@ -83,13 +83,16 @@ full-phase reply matching and bounded single-zone plan-request retries. These
 are implemented offline; hardware acceptance and deployment remain separate.
 The latest valve-learning implementation adds capture-tested reply builders and
 durable recovery configuration/progress with owner checks. The HTV213 reply-owner
-handler now consumes explicit per-port configuration and opt-in retained rejoin
-(Oct 3; source only). **Live recovery is disabled** pending signed deployment and
-physical acceptance; other model handlers remain unfinished.
+handler now consumes explicit per-port configuration and opt-in retained rejoin.
+Development control.8 and matched gateway 0.39.16 are deployed to Test Node B
+only (Oct 3); its recovery owner is enabled. The `07` boot rejection is fixed;
+one battery-only recovery is RF-verified through both-port state/settings/plans,
+followed by accepted phase-2/60-second control and automatic stop; next phase 3.
+Repeat/lifecycle qualification and other model recovery handlers remain unfinished.
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
-Recovery source is merged to main in PR #31; signed deployment remains pending. Refine and qualify our existing
+Recovery source is merged to main in PR #31; the follow-up is in PR #34. Refine and qualify our existing
 firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
 as a reference, and keep vendor images private.
 
@@ -368,16 +371,25 @@ not tasks to mark “done once.”
 - [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
-- [ ] Qualify HTV213 routine ACK ownership and retained rejoin before HA model-menu or operational support; preserve existing one-/four-zone paths.
+- [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
 - [x] Push recovery source for review in PR #31; prepare matched gateway 0.39.15 and protected control.5 signing profile (Oct 3). Deployment remains pending.
 - [x] Keep 0.39.15 gateway documentation aligned with release metadata; CI caught the version-label mismatch and the existing regression confirms the fix (Oct 3).
 - [x] Merge PR #31; verify approved [control.5 signing run 37118161224](https://github.com/fholgado/rainpoint-local/actions/runs/37118161224) from `036144e` (Oct 3). Deployment superseded by development-trust bootstrap below.
-- [x] Implement/provision separate development signing and explicit test-image trust; preserve production approval. 962 tests pass/two skips, real OTA trust-isolation replay and both target builds pass (Oct 3).
-- [ ] Bootstrap Test Node B over USB and verify automatically signed development OTA; garden radio trust unchanged.
-- [ ] Sign/deploy the HTV213 recovery candidate to Test Node B, then verify battery rejoin without pairing mode and one short dry control; no counter reset inferred.
+- [x] Merge development/release signing separation (PR #33); verify automatic [development control.6 signing run](https://github.com/fholgado/rainpoint-local/actions/runs/37121593916) without approval. 963 CI tests pass/two skips; actual OTA trust-isolation and both target builds pass (Oct 3).
+- [x] Deploy matched gateway 0.39.16 and development-only catalog; verify exact source hashes, restored ownership and unchanged counter projections. Garden firmware unchanged (Oct 3).
+- [x] Bootstrap Test Node B with hash-verified development control.6 after USB power cycle; authenticated ownership restored, master counter remains 2. NVS untouched (Oct 3).
+- [x] Fix HTV213 idle ownership blocking signed OTA; actual-dispatch regression, 963 CI tests/two skips and both builds pass. Deploy automatically signed control.7 to Test Node B only (Oct 3).
+- [x] Verify development-signed OTA with idle ownership enabled: full signed/hash-verified transfer, reboot, healthy confirmation and restored owner; association/master counter unchanged. Preserve failed partial-download evidence too (Oct 3).
+- [x] Enable and verify HTV213 retained-rejoin configuration echo on Test Node B; association and master counter remain unchanged (Oct 3).
+- [x] Capture/diagnose Oct 3 HTV213 recovery failure: boot body ends `07`, but retained replies require `03`; real-builder replay reproduces rejection. No watering or counter change.
+- [x] Confirm Oct 3 startup was battery-only; admit exact known-owner `03`/`07` announcements. Private replay, 964 CI tests/two skips, native protocol and both builds pass; no master phase allocation.
+- [x] Verify automatic [control.8 signing](https://github.com/fholgado/rainpoint-local/actions/runs/37129717077) from `73475cd`: 966 CI tests/two skips; full verified OTA, new boot, healthy confirmation and restored recovery owner. Test Node B only, master counter still 2 (Oct 3).
+- [x] RF-verify one control.8 battery-only recovery: known-owner `01/81`, both-port `02/82`, `05/85`, `06/86` and idle reports; unchanged registry/gateway counter 2. Preserve redacted replay (Oct 3).
+- [x] Verify post-battery control.8 dry run at retained phase 2: positive ACK, active/automatic idle and elapsed-60 summary; next phase 3, no reset/retry. Preserve native replay (Oct 3).
+- [x] Validate recovery/control fixtures: 968 Python tests pass/two optional skips; native protocol passes (Oct 3).
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
@@ -396,6 +408,9 @@ scheduling capture tests rather than treating an old unplugged-device note as cu
 
 ## Deferred migration and backlog
 
+- [x] Fix control.8 CI network-test races: await registered-node readiness and keep the handoff peer connected through assertions. Both deterministic regressions fail before/pass after; production code unchanged (Oct 3).
+- [ ] Preserve OTA correlation across reboot and expose radio command rejection; control.6 idle status hid rejection and reboot drops the command ID (Oct 3).
+- [ ] Investigate Test Node B OTA transfer stalls if repeated; one partial transfer hit the 10-second progress timeout at −76 dBm, later full OTA passed (Oct 3).
 - [ ] Review and finalize the separate [irrigation app requirements](docs/IRRIGATION_APP_REQUIREMENTS.md), including the daily overview and advisory overlap warnings, alongside the [initial UI concepts](docs/irrigation-ui/README.md). Requirements and design work only; implementation waits for product review and does not change the hardware qualification order.
 
 Cloud-to-local migration and a HomGar merge remain deferred until lifecycle,
