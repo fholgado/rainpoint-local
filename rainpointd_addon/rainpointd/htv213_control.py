@@ -16,6 +16,14 @@ from datetime import datetime, timezone
 
 # Keep the existing key and record format: promotion must not reset counters.
 KEY = "htv213_dry_control_trial_v1"
+# Stock generator plus the captured 62/63/0/1 dry trial. Normal enrollment
+# records this model policy, not a fabricated per-association trial result.
+MODEL_PHASE_POLICY = "htv213_modulo64_v1"
+
+
+def wraps(record):
+    return (record.get("phase_policy") == MODEL_PHASE_POLICY or
+            (record.get("counter_boundary") or {}).get("complete") is True)
 
 
 def packet(frame):
@@ -97,7 +105,7 @@ class ControlJournal:
         boundary = record.get("counter_boundary") or {}
         if boundary and not boundary.get("complete"):
             raise ValueError("explicit counter-boundary experiment in progress")
-        wrap_qualified = boundary.get("complete") is True
+        wrap_qualified = wraps(record)
         if record["next_phase"] > 63 and not wrap_qualified:
             raise ValueError("counter wrap requires separate qualification")
         prior = record["transaction"]

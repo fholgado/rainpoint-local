@@ -12,7 +12,7 @@ import json
 from datetime import datetime, timezone
 
 from . import htv213_owner as owner, htv213_control_transport as control
-from .htv213_control import ControlJournal
+from .htv213_control import ControlJournal, wraps
 
 MODEL = "HTV213FRF"
 FRESH_SECONDS = 1200
@@ -117,7 +117,7 @@ def project(gateway, now=None):
         boundary_active = bool(journal.get("counter_boundary") and not journal["counter_boundary"].get("complete"))
         start = (qualified and connected and not unresolved and not boundary_active and
                  watering == [False, False] and
-                 (journal["next_phase"] <= 63 or journal.get("counter_boundary", {}).get("complete") is True))
+                 (journal["next_phase"] <= 63 or wraps(journal)))
         same_session = (_age(node.get("connected_at"), now) >= age)
         stop = (qualified and connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
                 and not tx.get("idle") and not overdue)

@@ -6810,7 +6810,7 @@ class Gateway:
             observed = datetime.now(timezone.utc)
         self._pairing.observe(fields, now=observed)
 
-    def configure_htv213_radio(self, node_id: str, *, initial_center_hz: int, routine_center_hz: int) -> None:
+    def configure_htv213_radio(self, node_id: str, *, initial_center_hz: int, routine_center_hz: int) -> dict[str, Any]:
         """Save explicitly measured carriers; normal HA users need no RF fields."""
         from .htv213_enrollment import EnrollmentJournal
         with self._lock:
@@ -6818,6 +6818,8 @@ class Gateway:
                 raise ValueError("managed radio node required")
             EnrollmentJournal(self._store).configure_radio(node_id,
                 initial_center_hz=initial_center_hz, routine_center_hz=routine_center_hz)
+            return dict(node_id=node_id, model="HTV213FRF", initial_center_hz=initial_center_hz,
+                        routine_center_hz=routine_center_hz)
 
     def _htv213_pairing_profiles(self) -> list[dict[str, Any]]:
         from .htv213_enrollment import CAPABILITY, profile_metadata

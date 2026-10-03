@@ -116,12 +116,16 @@ and that seed together. Re-pair archives the old epoch only after acknowledged
 owner revocation; duplicate completion and reconnects never reseed counters.
 The existing native HA start/status/cancel/naming contract is bound to this
 journal, including persisted progress after restart and model-specific window
-limits. Per-node carrier calibration still needs explicit provisioning, and
-address allocation currently covers HTV213 associations, not mixed models.
+limits. An authenticated node-scoped interface now provisions measured carriers
+without RF or counter changes. New HTV213 slots avoid the frozen legacy slots,
+same-controller retained configurations, tombstones and prior attempts; it does
+not rewrite the other models' pairing recipes. Normal enrollment records staged
+modulo-64 model policy without fabricating a per-association boundary trial;
+old canary records retain their qualification policy.
 Candidate and default build checks keep this runtime out of production; no
 radio has been updated for this source step. Offline replay is not a new
-physical enrollment qualification. Normal controls/model-menu enablement and
-model-level wrap policy remain part of promotion, not inferred from these tests.
+physical enrollment qualification. Normal controls/model-menu enablement remains
+part of promotion, not inferred from these tests.
 
 Actual production enablement still depends on the existing roadmap's reviewed
 qualification boundaries: reconcile repeat-enrollment/post-configuration

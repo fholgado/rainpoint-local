@@ -377,7 +377,7 @@ not tasks to mark “done once.”
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
 - [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).
 - [x] Bind HTV213 to native HA pairing progress/cancel/naming; test authentication, failure, restart and model-specific duration limits (Oct 3; source only).
-- [ ] Finish HTV213 promotion plumbing: provision measured radio carriers, reconcile mixed-model slots and model-qualified wrap policy; enable the model after existing physical checks.
+- [x] Prepare HTV213 carrier-provisioning interface, legacy/retained slot reservations and staged model-level wrap policy; preserve existing canary records (Oct 3; source only).
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

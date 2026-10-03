@@ -54,13 +54,8 @@ def start(gateway, *, node_id, duration_seconds, factory_endpoint=None, now=None
         replacement_key = gateway.rf_identity.controller_endpoint + ":" + f"{int(factory_endpoint, 16) | 0x80000000:08x}"
         if replacement_key not in saved:
             raise ValueError("re-pair target has no existing association")
-    # Tombstones retain their slots until explicit re-pair/removal completes.
-    used = {r["configuration"]["address"] for r in saved.values() if r.get("configuration")}
-    # Re-pair retains its slot; new associations get the first unused slot.
-    address = saved[replacement_key]["configuration"]["address"] if replacement_key else next((a for a in range(1, 256) if a not in used), None)
-    if address is None:
-        raise ValueError("no available HTV213 device address")
     journal = enrollment.EnrollmentJournal(gateway._store)
+    address = journal.address(gateway.rf_identity.controller_endpoint, replacement_key=replacement_key)
     command = journal.profile(node_id, address).command(
         controller=gateway.rf_identity.controller_endpoint, companion=gateway.rf_identity.companion_endpoint,
         duration_seconds=duration_seconds, now=now)

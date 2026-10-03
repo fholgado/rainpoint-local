@@ -193,7 +193,7 @@ class EnrollmentFlowTest(unittest.TestCase):
         key = self.gateway.rf_identity.controller_endpoint + ":91556677"
         self.assertEqual(ControlJournal(self.gateway._store).snapshot(key)["next_phase"], 3)
         self.assertFalse(self.gateway.pairing()["active"])
-        self.assertEqual(self.sent[0][1]["device_address"], 1)
+        self.assertEqual(self.sent[0][1]["device_address"], 2)
         self.assertNotIn("factory_endpoint", self.sent[0][1])
         self.assertEqual(started["active_profile_id"], enrollment.PROFILE_ID)
 

@@ -24,6 +24,10 @@ PROFILE_ID = "htv213_auto_candidate_v1"
 KEY = "htv213_enrollment_v1"
 # Existing roadmap qualification still precedes general model-menu promotion.
 USER_PAIRING_SUPPORTED = False
+# The unchanged legacy assignment recipes encode these slots (native 81 data
+# byte 1): HTV145=1, HTV405=6, HCS026=6. Reserve them even before those models
+# are installed; later legacy pairing must not collide with a new HTV213 slot.
+LEGACY_ADDRESSES = frozenset({1, 6})
 
 
 def profile_metadata():
@@ -190,6 +194,42 @@ class EnrollmentJournal:
             raise ValueError("selected radio has no saved HTV213 carrier calibration")
         return EnrollmentProfile(address=address, **values)
 
+    def address(self, controller, *, replacement_key=None):
+        """Allocate around frozen legacy recipes, retained state and attempts.
+
+        A failed/expired window may have sent an assignment, so its slot is
+        retained too. Never rewrite another model's proven assignment bytes.
+        """
+        from .valve_recovery import KEY as recovery_key, configuration
+        from .htv213_owner import reply_configuration
+        enrollment, owners, _, _ = self._load()
+        occupied = set(LEGACY_ADDRESSES)
+        for record in json.loads(self.store.metadata_value(recovery_key) or "{}").values():
+            config = configuration(record["configuration"])
+            if config["controller_endpoint"] == controller:
+                occupied.add(config["address"])
+        target_address = None
+        for key, record in owners.items():
+            config = configuration(record.get("configuration") or
+                                   reply_configuration({**record["command"], "node_id": record["node_id"]}))
+            if config["controller_endpoint"] != controller:
+                continue
+            if key == replacement_key:
+                target_address = config["address"]
+            else:
+                occupied.add(config["address"])
+        if replacement_key is not None:
+            if target_address is None or target_address in occupied:
+                raise ValueError("re-pair slot conflicts with retained or legacy configuration")
+            return target_address
+        for record in enrollment["sessions"].values():
+            if record["command"]["controller_endpoint"] == controller:
+                occupied.add(record["command"]["device_address"])
+        address = next((value for value in range(1, 256) if value not in occupied), None)
+        if address is None:
+            raise ValueError("no available device address")
+        return address
+
     def current(self, now=None):
         enrollment = self._load()[0]
         record = enrollment["sessions"].get(enrollment["current"])
@@ -274,7 +314,7 @@ class EnrollmentJournal:
         return True
 
     def complete(self, node_id, command_id, *, name, area=None):
-        from .htv213_control import initial_record
+        from .htv213_control import initial_record, MODEL_PHASE_POLICY
         from .htv213_owner import apply_reply_configuration
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100:
             raise ValueError("device name required (1–100 characters)")
@@ -314,6 +354,7 @@ class EnrollmentJournal:
             name=name.strip(), area=area.strip() if area is not None else None)
         owners[key] = owner
         controls[key] = initial_record(**result["control_seed"])
+        controls[key]["phase_policy"] = MODEL_PHASE_POLICY
         record.update(state="complete", completed_at=datetime.now(timezone.utc).isoformat())
         self._save(expected, enrollment, owners, controls)
         return copy.deepcopy(owner)

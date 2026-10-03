@@ -135,7 +135,13 @@ do not reseed counters or replay enrollment.
 The source-prepared flow uses HA's existing node/model, progress, cancellation
 and naming contract. Pending completion proof survives a gateway restart;
 retained configuration is sent only after the association commits. Radios need
-explicitly provisioned calibrated carriers. General model-menu and control
+explicitly provisioned calibrated carriers. Authenticated
+`POST /api/v1/nodes/{node_id}/htv213-calibration` saves the measured integer
+`initial_center_hz` and `routine_center_hz`; it sends no RF and changes no counter.
+The node/model setup flow uses those saved values without exposing RF fields.
+Slot allocation avoids the frozen legacy slots 1 (HTV145) and 6 (HCS026/HTV405),
+retained same-controller configurations, tombstones and prior assignment attempts.
+It does not modify the other models' proven pairing bytes. General model-menu and control
 enablement remain withheld by existing physical qualification, and deployed
 firmware is unchanged. See [the roadmap](../PROJECT_ROADMAP.md).
 
@@ -242,8 +248,8 @@ wrap. Report phases must never reseed the command journal.
 
 Static stock firmware uses one shared master allocator with wire sequence
 `1..63,0,1`; see the [independent audit](../research/HTV213_COUNTER_WRAP_AUDIT.md).
-This differs from the observed report sequence. The normal local journal stops
-before wrap for unqualified associations. A once-only, explicitly authorized dry
+This differs from the observed report sequence. Legacy canary records stop
+before wrap unless their boundary audit is complete. A once-only, explicitly authorized dry
 boundary probe preserves the true starting phase and records deliberate
 62→63→0→1 attempts; every next attempt requires the previous ACK, idle and
 summary. An unanswered attempt blocks the sequence rather than reseeding it.
@@ -257,6 +263,14 @@ out-of-order/duplicate policy, shared multi-device allocation or reset behavior.
 Qualified associations persist and increment the next phase modulo 64; ordinary
 report phases still cannot reseed it. See
 `research/fixtures/htv213_local_counter_boundary_20260930.json`.
+
+Source-prepared normal enrollment records model policy `htv213_modulo64_v1`:
+increment modulo 64 from the real ACK-based seed, with no jump, reset or per-user
+boundary experiment. This applies the stock generator and qualified local
+transition to the staged model; it does not fabricate a completed trial for each
+new association or prove other hardware versions. Model-menu/control enablement
+still depends on the existing physical checks. Old canary records and other
+valve models retain their existing policy; uncertain sends remain reserved.
 
 An attempted open supersedes pre-command idle on its target outlet: until a new
 report, current state is unknown, not closed. Missing command confirmation
