@@ -404,6 +404,7 @@ scheduling capture tests rather than treating an old unplugged-device note as cu
 
 ## Deferred migration and backlog
 
+- [x] Fix control.8 CI network-test races: await registered-node readiness and keep the handoff peer connected through assertions. Both deterministic regressions fail before/pass after; production code unchanged (Oct 3).
 - [ ] Preserve OTA correlation across reboot and expose radio command rejection; control.6 idle status hid rejection and reboot drops the command ID (Oct 3).
 - [ ] Investigate Test Node B OTA transfer stalls if repeated; one partial transfer hit the 10-second progress timeout at −76 dBm, later full OTA passed (Oct 3).
 - [ ] Review and finalize the separate [irrigation app requirements](docs/IRRIGATION_APP_REQUIREMENTS.md), including the daily overview and advisory overlap warnings, alongside the [initial UI concepts](docs/irrigation-ui/README.md). Requirements and design work only; implementation waits for product review and does not change the hardware qualification order.
