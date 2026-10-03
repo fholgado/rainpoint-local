@@ -27,7 +27,7 @@ class WateringNotifications:
 
     def observe(self, devices):
         for device_id, device in devices.items():
-            if device.get("model") not in {"HTV145FRF", "HTV405FRF"}:
+            if device.get("model") not in {"HTV145FRF", "HTV213FRF", "HTV405FRF"}:
                 continue
             state = device.get("state", {})
             name = device.get("name") or device.get("model") or "RainPoint valve"
@@ -46,12 +46,17 @@ class WateringNotifications:
                     and isinstance(duration, (int, float)) and not isinstance(duration, bool)
                     and 0 < duration <= 3600):
                 self.durations[device_id] = duration
+            overdue = state.get("rf_control_overdue") is True
             if phase in {"failed", "interrupted"} and transaction and self.failures.get(device_id) != transaction:
                 self.failures[device_id] = transaction
-                self._emit(device_id, "problem", f"{name}: watering command failed",
+                if state.get("rf_control_completion_missing") is True:
+                    self._emit(device_id, "problem", f"{name}: watering summary missing",
+                               "The valve confirmed idle, but its completion summary is missing. "
+                               "New runs remain blocked pending reconciliation; do not resend the previous run.")
+                elif not overdue:
+                    self._emit(device_id, "problem", f"{name}: watering command failed",
                            "The valve did not confirm the requested operation. Check its control "
                            "status and inspect the valve before retrying; water may have flowed.")
-            overdue = state.get("rf_control_overdue") is True
             if overdue and (old is None or not old["overdue"]):
                 self._emit(device_id, "problem", f"{name}: watering needs attention",
                            "The expected stop has not been confirmed. Inspect the valve; missing "
@@ -74,7 +79,10 @@ class WateringNotifications:
             # later confirmed idle can close it without inventing a transition.
             self.previous[device_id] = {"watering": watering if isinstance(watering, bool) else prior_watering,
                                         "zone": zone, "overdue": overdue,
-                                        "confirmed_transaction": transaction if confirmed else (
+                                        # An ACK can precede the first watering
+                                        # report. Only consume its duration once
+                                        # watering is observed, not at ACK time.
+                                        "confirmed_transaction": transaction if confirmed and watering is True else (
                                             old.get("confirmed_transaction") if old else None)}
         for records in (self.previous, self.failures, self.durations):
             for device_id in set(records) - set(devices):

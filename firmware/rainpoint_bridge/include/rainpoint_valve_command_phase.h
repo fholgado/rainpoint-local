@@ -29,7 +29,8 @@ inline bool decodeResultEnvelope(const Frame& frame, ResultEnvelope& result) {
     const auto native = [&frame](unsigned index) {
         return static_cast<std::uint8_t>((frame[index+4] << 1U) | (frame[index+5] >> 7U));
     };
-    if (native(0) != 0x51 || native(10) != 0xa1 || (native(11) & 31U) != 13) return false;
+    if (native(0) != 0x51 || (native(9) & 0x40U) ||
+        native(10) != 0xa1 || (native(11) & 31U) != 13) return false;
     result.phase = fromNormalized(frame);
     result.result = native(12);
     result.controlMode = native(13) >> 4U;

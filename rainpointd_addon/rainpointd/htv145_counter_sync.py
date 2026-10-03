@@ -54,6 +54,8 @@ class Htv145CounterSync:
 
     def _require_owner(self, profile):
         self.coordinator._require_enabled()
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.store, profile.node_id)
         if "htv145_idle_anchor" not in self.ready_node(profile).get("capabilities", []):
             raise RuntimeError("counter sync requires idle-anchor radio firmware")
 

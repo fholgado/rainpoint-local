@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -278,6 +279,10 @@ class SQLiteEventStore:
                     })
                 self._connection.execute("PRAGMA user_version = 24")
         self._migrate_htv145_association_keys()
+        self._connection.execute("""CREATE TABLE IF NOT EXISTS receiver_observations (
+            reception_id INTEGER PRIMARY KEY, node_id TEXT NOT NULL,
+            observed_at TEXT NOT NULL, frame TEXT NOT NULL, payload TEXT NOT NULL
+        )""")
         self._rebuild_endpoint_inventory()
         self._backfill_device_metrics()
         self._backfill_reception_metrics()
@@ -307,6 +312,267 @@ class SQLiteEventStore:
             (key, value),
         )
         self._connection.commit()
+
+    def save_valve_recovery(self, payload: str) -> None:
+        """Commit retained configuration/progress or roll back on any failure.
+
+        This deliberately cannot alter registry admission or command counters.
+        """
+        from .valve_recovery import KEY
+        with self._connection:
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                (KEY, payload),
+            )
+
+    def save_htv213_owner(self, payload: str) -> None:
+        """Persist reply-only HTV213 ownership before configuring its radio."""
+        with self._connection:
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                ("htv213_reply_owner_v1", payload),
+            )
+
+    def save_htv213_control_trial(self, payload: str) -> None:
+        """Commit dry-trial reservations before dispatch, or roll back wholly."""
+        from .htv213_control_trial import KEY
+        with self._connection:
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                (KEY, payload),
+            )
+
+    def save_valve_phase_trial(self, payload: str) -> None:
+        """Commit the bounded canary journal or roll back on storage failure."""
+        from .valve_phase_trial import KEY
+        with self._connection:
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                (KEY, payload),
+            )
+
+    def native_valve_commands(self) -> list[dict]:
+        """Retained native owners, including failed/uncertain epochs."""
+        from .valve_phase_commands import PREFIX
+        return [json.loads(row[0]) for row in self._connection.execute(
+            "SELECT value FROM storage_metadata WHERE key LIKE ?", (PREFIX + "%",))]
+
+    def native_valve_node_owned(self, node_id: str) -> bool:
+        return any(r.get("active") and r["node_id"] == node_id
+                   for r in self.native_valve_commands())
+
+    def _assert_legacy_native_owner(self, model: str, storage_key: str) -> None:
+        if any(r.get("active") and r["model"] == model and r["storage_key"] == storage_key
+               for r in self.native_valve_commands()):
+            raise RuntimeError("association has an exclusive native counter owner")
+
+    def valve_phase_migration_state(self, model: str, storage_key: str) -> dict:
+        """Stable legacy control state for source-only full-phase preparation.
+
+        Do not include reception timestamps or independent state-report bytes:
+        they may change without transmitting a command. Pending transactions,
+        owner/profile changes and counter changes must invalidate preparation.
+        """
+        if model == "HTV145FRF":
+            rows = self.htv145_control_states(storage_key)
+            if not rows or rows[0]["association_key"] != storage_key:
+                raise KeyError(storage_key)
+            row = rows[0]
+            sync = self.htv145_counter_sync(storage_key)
+            return dict(
+                node_id=row["node_id"],
+                profile={k: row[k] for k in (
+                    "controller_endpoint", "valve_endpoint", "center_hz", "power_dbm", "invert",
+                    "trailer_residual", "command_marker_inverted", "close_trailer_residual",
+                    "report_ack_center_hz")},
+                next_counter=row["next_sequence"], synchronized=row["counter_synchronized"],
+                source=row["counter_source"], latest_send=row["last_command_started_at"],
+                pending=row["pending_command_id"], revocation=row["revocation_command_id"],
+                maintenance=sync.get("state"), maintenance_command=sync.get("command_id"),
+            )
+        if model != "HTV405FRF":
+            raise ValueError("unsupported full-phase migration model")
+        row = next((r for r in self.valve_registry() if r["valve_endpoint"] == storage_key), None)
+        if row is None:
+            raise KeyError(storage_key)
+        if row["model"] != model:
+            raise ValueError("association model differs from requested phase encoding")
+        return dict(
+            node_id=row["control_node_id"],
+            profile={k: row[k] for k in ("valve_endpoint", "control_companion_endpoint",
+                "control_selector", "control_frequency_offset_hz")},
+            next_counter=row["control_next_sequence"],
+            source=row["control_last_result"], latest_send=row["control_last_command_started_at"],
+            pending=row["control_pending_command_id"],
+            maintenance=row["control_transaction_state"],
+            recovery=row["control_recovery_not_before"],
+        )
+
+    def compare_and_save_valve_command_phase(self, key: str, *, expected: str | None,
+                                             payload: str, model: str,
+                                             storage_key: str, legacy_state: dict) -> None:
+        """CAS one prepared journal and unchanged legacy association atomically.
+
+        This never migrates a pending legacy command or changes its bytes,
+        counter, pairing, transaction or physical-state projection. Future live
+        integration must hold the gateway lock and exclude both allocators.
+        """
+        with self._connection:
+            # Acquire the SQLite writer lock before checking either snapshot;
+            # a second connection cannot insert/change the journal between them.
+            self._connection.execute(
+                "UPDATE storage_metadata SET value=value WHERE key=?", (key,))
+            if self.metadata_value(key) != expected:
+                raise RuntimeError("phase reservation changed; reload instead of replaying")
+            if self.valve_phase_migration_state(model, storage_key) != legacy_state:
+                raise RuntimeError("legacy association, counter or transaction changed")
+            incoming = json.loads(payload)
+            previous = json.loads(expected) if expected is not None else None
+            if (previous and previous.get("state") == "handed_back" and not previous.get("active")
+                    and incoming.get("state") == "ready" and not incoming.get("commands")
+                    and not incoming.get("epoch")):
+                # Preserve every retired epoch before explicit, fresh admission.
+                archive_key = "valve_native_phase_archive_v1:" + previous["epoch"]
+                self._connection.execute(
+                    "INSERT INTO storage_metadata(key,value) VALUES (?,?)", (archive_key, expected))
+            if incoming.get("active") and any(r.get("active") and r["node_id"] == incoming["node_id"]
+                    and (r["model"], r["storage_key"]) != (model, storage_key)
+                    for r in self.native_valve_commands()):
+                raise RuntimeError("radio already has an exclusive native owner")
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key,value) VALUES (?,?)", (key, payload))
+
+    def complete_native_valve_handback(self, key: str, *, expected: str, observed_at: str) -> dict:
+        """Commit the correlated radio release and legacy counter in one transaction.
+
+        Until this succeeds the native journal remains the exclusive owner.
+        A receipt is not permission to erase failed transactions or pairing.
+        """
+        with self._connection:
+            self._connection.execute("UPDATE storage_metadata SET value=value WHERE key=?", (key,))
+            if self.metadata_value(key) != expected:
+                raise RuntimeError("native handback changed; reload without replay")
+            record = json.loads(expected)
+            handoff = record.get("handoff") or {}
+            if (not record.get("active") or record["state"] != "handing_back"
+                    or handoff.get("kind") != "handback" or handoff.get("state") not in ("requested", "uncertain")
+                    or self.valve_phase_migration_state(record["model"], record["storage_key"]) != record["legacy_state"]):
+                raise RuntimeError("native handback no longer owns the unchanged association")
+            tx = record["commands"][-1]
+            counter = handoff["legacy_counter"]
+            if (type(counter) is not int or not 0 <= counter <= 31 or counter != (tx["phase"]+1)//2
+                    or tx["phase"] > 62 or (tx["action"] == "close" and tx["phase"] & 1)
+                    or (record.get("transaction") or {}).get("state") != "confirmed"):
+                raise ValueError("unqualified native handback")
+            if record["model"] == "HTV145FRF":
+                cursor = self._connection.execute("""
+                    UPDATE htv145_control_state SET next_sequence=?, counter_synchronized=1,
+                        counter_source='matching_immediate_response', confirmed_watering=0,
+                        confirmed_at=?, expected_idle_at=NULL, last_result='counter_synchronized',
+                        last_response_frame=?, last_command_started_at=?, updated_at=?
+                    WHERE valve_endpoint=? AND node_id=? AND pending_command_id IS NULL
+                    """, (0x80 | counter, handoff["idle_at"], tx["result_frame"], tx["attempted_at"], observed_at,
+                           record["storage_key"], record["node_id"]))
+            elif record["model"] == "HTV405FRF":
+                cursor = self._connection.execute("""
+                    UPDATE valve_registry SET control_next_sequence=?, control_last_sequence=?,
+                        control_response_frame=?, control_confirmed_watering=0,
+                        control_confirmed_at=?, control_active_zone=NULL, control_run_started_at=NULL,
+                        control_run_duration_seconds=NULL, control_expected_idle_at=NULL,
+                        control_last_result='counter_synchronized:authenticated_command_response',
+                        control_last_command_started_at=?, updated_at=?
+                    WHERE valve_endpoint=? AND control_node_id=? AND control_pending_command_id IS NULL
+                    """, (counter, tx["phase"] >> 1, tx["result_frame"], handoff["idle_at"], tx["attempted_at"], observed_at,
+                           record["storage_key"], record["node_id"]))
+            else:
+                raise ValueError("unsupported native handback model")
+            if cursor.rowcount != 1:
+                raise RuntimeError("native handback association is missing or busy")
+            handoff.update(state="completed", completed_at=observed_at)
+            record.update(active=False, state="handed_back", radio_ready=False)
+            self._connection.execute("UPDATE storage_metadata SET value=? WHERE key=?",
+                                     (json.dumps(record, sort_keys=True), key))
+        return record
+
+    def release_valve_phase_trial(self, key: str, *, observed_at: str) -> dict:
+        """Atomically return a completed trial to the established odd-open recipe.
+
+        Keep the lock until the authenticated radio acknowledges release. This
+        does not introduce a general six-bit production allocator.
+        """
+        from .valve_phase_trial import KEY
+        records = json.loads(self.metadata_value(KEY) or "{}")
+        record = records[key]
+        if record["state"] == "releasing":
+            return record
+        if record["state"] != "complete" or len(record["transactions"]) != 2:
+            raise ValueError("release requires two independently completed runs")
+        identity = record["identity"]; admission = identity["admission"]
+        last = record["transactions"][-1]
+        if not all(last[k] for k in ("ack_at", "watering_at", "idle_at")) or last["phase"] > 62:
+            raise ValueError("unqualified return to production counter")
+        counter = (last["phase"] + 1) // 2
+        with self._connection:
+            if identity["model"] == "HTV145FRF":
+                cursor = self._connection.execute("""
+                    UPDATE htv145_control_state SET next_sequence=?, counter_synchronized=1,
+                        counter_source='matching_immediate_response', confirmed_watering=0,
+                        confirmed_at=?, expected_idle_at=NULL, last_result='counter_synchronized', updated_at=?
+                    WHERE valve_endpoint=? AND node_id=? AND pending_command_id IS NULL
+                    """, (0x80 | counter, last["idle_at"], observed_at,
+                           admission["storage_key"], identity["node_id"]))
+            else:
+                cursor = self._connection.execute("""
+                    UPDATE valve_registry SET control_next_sequence=?, control_confirmed_watering=0,
+                        control_confirmed_at=?, control_active_zone=NULL,
+                        control_run_started_at=NULL, control_run_duration_seconds=NULL,
+                        control_expected_idle_at=NULL, control_last_result='counter_synchronized:authenticated_command_response',
+                        updated_at=? WHERE valve_endpoint=? AND control_node_id=?
+                        AND control_pending_command_id IS NULL
+                    """, (counter, last["idle_at"], observed_at,
+                           admission["storage_key"], identity["node_id"]))
+            if not cursor.rowcount:
+                raise RuntimeError("trial association missing, reassigned or busy")
+            record.update(state="releasing", release_command_id=uuid.uuid4().hex)
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key,value) VALUES (?,?)",
+                (KEY, json.dumps(records, sort_keys=True)))
+        return record
+
+    def recover_valve_phase_trial(self, key: str, *, evidence: dict, observed_at: str) -> dict:
+        """Atomic, explicitly approved no-RF handoff; retain failed run history.
+
+        Caller validates stored RF evidence and unchanged ownership under the
+        gateway lock. Radio confirmation is still required before unlocking.
+        """
+        from .valve_phase_trial import KEY
+        records = json.loads(self.metadata_value(KEY) or "{}")
+        record = records[key]
+        if record["state"] == "recovering":
+            if record["recovery"]["evidence"] != evidence:
+                raise ValueError("recovery evidence cannot change")
+            return record
+        if (record["state"] != "failed" or record["identity"]["model"] != "HTV145FRF"
+                or len(record["transactions"]) != 1 or record["transactions"][0]["phase"] != 2
+                or record.get("failure") not in ("missing_confirmation", "radio_trial_failed")):
+            raise ValueError("recovery is limited to the first failed phase-2 HTV145 trial")
+        identity = record["identity"]; admission = identity["admission"]
+        with self._connection:
+            cursor = self._connection.execute("""
+                UPDATE htv145_control_state SET next_sequence=129, counter_synchronized=1,
+                    counter_source='matching_immediate_response', confirmed_watering=0,
+                    confirmed_at=?, expected_idle_at=NULL, last_result='counter_synchronized', updated_at=?
+                WHERE valve_endpoint=? AND node_id=? AND pending_command_id IS NULL
+                AND last_command_started_at IS ?
+                """, (evidence["idle"]["observed_at"], observed_at, admission["storage_key"],
+                       identity["node_id"], admission["latest_send"]))
+            if cursor.rowcount != 1:
+                raise RuntimeError("trial association changed or command is unresolved")
+            record.update(state="recovering", recovery=dict(command_id=uuid.uuid4().hex,
+                requested_at=observed_at, previous_state="failed", evidence=evidence))
+            self._connection.execute("INSERT OR REPLACE INTO storage_metadata(key,value) VALUES (?,?)",
+                (KEY, json.dumps(records, sort_keys=True)))
+        return record
 
     def _migrate_v1_to_v2(self) -> None:
         """Add durable latest-device snapshots and event query indexes."""
@@ -693,6 +959,7 @@ class SQLiteEventStore:
     def reserve_htv145_idle_anchor(self, valve_endpoint: str, command_id: str, started_at: str) -> dict:
         """Consume an explicit queued request using fresh independent idle evidence."""
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
             if row is not None and self._connection.execute(
@@ -953,6 +1220,7 @@ class SQLiteEventStore:
         self._update_device_metrics(event)
         self._update_reception_metrics(event)
         self._update_receiver_metrics(event)
+        self._record_receiver_observation(event)
         if (
             event.get("event_type") == "device_observation"
             and isinstance(event.get("device_id"), str)
@@ -973,7 +1241,36 @@ class SQLiteEventStore:
     def record_receiver_duplicate(self, event: dict[str, Any]) -> None:
         """Retain receiver coverage for a deduplicated air transmission."""
         self._update_receiver_metrics(event, duplicate=True)
+        self._record_receiver_observation(event)
         self._connection.commit()
+
+    def _record_receiver_observation(self, event: dict[str, Any]) -> None:
+        """Keep bounded RF provenance independently of logical deduplication."""
+        node_id = event.get("state", {}).get("rf_node_id")
+        frame, observed_at = event.get("raw"), event.get("observed_at")
+        if not all(isinstance(value, str) and value for value in (node_id, frame, observed_at)):
+            return
+        if frame_accepted(event) is False:
+            return
+        self._connection.execute(
+            "INSERT INTO receiver_observations(node_id, observed_at, frame, payload) VALUES (?, ?, ?, ?)",
+            (node_id, observed_at, frame, json.dumps(event, separators=(",", ":"), sort_keys=True)))
+        self._connection.execute("DELETE FROM receiver_observations WHERE reception_id <= ("
+            "SELECT reception_id FROM receiver_observations ORDER BY reception_id DESC LIMIT 1 OFFSET 512)")
+
+    def receiver_observations(self, node_id: str) -> list[dict[str, Any]]:
+        """Recent physical receptions, including suppressed duplicate events."""
+        return [json.loads(row[0]) for row in self._connection.execute(
+            "SELECT payload FROM receiver_observations WHERE node_id = ? ORDER BY reception_id", (node_id,))]
+
+    def has_receiver_observation(self, node_id: str, frame: str, observed_at: str) -> bool:
+        """Exact owner evidence from either retained journal, including restart."""
+        return self._connection.execute(
+            "SELECT 1 FROM receiver_observations WHERE node_id=? AND frame=? AND observed_at=? "
+            "UNION ALL SELECT 1 FROM events WHERE observed_at=? "
+            "AND json_extract(payload, '$.raw')=? "
+            "AND json_extract(payload, '$.state.rf_node_id')=? LIMIT 1",
+            (node_id, frame, observed_at, observed_at, frame, node_id)).fetchone() is not None
 
     def _prune_events(self) -> None:
         """Bound the journal without touching durable derived state."""
@@ -1029,14 +1326,14 @@ class SQLiteEventStore:
                 continue
         return None
 
-    def device_observation_events(self, device_id: str) -> list[dict[str, Any]]:
+    def device_observation_events(self, device_id: str, *, since: int = 0) -> list[dict[str, Any]]:
         """Return retained observations for one device in event order."""
         rows = self._connection.execute(
             "SELECT payload FROM events "
             "WHERE event_type = 'device_observation' "
-            "AND json_extract(payload, '$.device_id') = ? "
+            "AND json_extract(payload, '$.device_id') = ? AND event_id > ? "
             "ORDER BY event_id",
-            (device_id,),
+            (device_id, since),
         ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
@@ -1279,7 +1576,17 @@ class SQLiteEventStore:
         if row is None:
             raise KeyError(device_id)
         device = dict(row)
+        if any(r.get("active") and r["device_id"] == device_id for r in self.native_valve_commands()):
+            raise RuntimeError("native owner requires verified handoff before deletion")
         with self._connection:
+            from .valve_recovery import KEY
+            retained = json.loads(self.metadata_value(KEY) or "{}")
+            retained = {key: value for key, value in retained.items()
+                        if value["configuration"]["valve_endpoint"] != device["valve_endpoint"]}
+            self._connection.execute(
+                "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                (KEY, json.dumps(retained, sort_keys=True)),
+            )
             self._connection.execute(
                 "DELETE FROM valve_registry WHERE device_id = ?", (device_id,)
             )
@@ -1517,6 +1824,7 @@ class SQLiteEventStore:
         observed_at: str,
     ) -> dict[str, Any]:
         """Persist association-scoped control routing after local enrollment."""
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -1572,6 +1880,7 @@ class SQLiteEventStore:
         observed_at: str,
     ) -> dict[str, Any]:
         """Move RF egress to one node without changing the valve association."""
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         cursor = self._connection.execute(
             """
             UPDATE valve_registry SET
@@ -1619,6 +1928,7 @@ class SQLiteEventStore:
         transaction_id: str | None = None,
     ) -> dict[str, Any]:
         """Atomically reserve one authenticated HTV405 command counter."""
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         if action not in {"open", "close"}:
             raise ValueError("HTV405 action must be open or close")
         if zone not in range(1, 5):
@@ -1783,6 +2093,7 @@ class SQLiteEventStore:
         sync_only: bool = False,
     ) -> dict[str, Any]:
         """Atomically queue watering and reserve its non-actuating anchor."""
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         if zone not in range(1, 5):
             raise ValueError("HTV405 zone must be between 1 and 4")
         if not sync_only and (
@@ -2038,8 +2349,9 @@ class SQLiteEventStore:
         never creates an open command or exposes the anchor as synchronized
         before an authenticated closed response.
         """
-        if zone != 1:
-            raise ValueError("HTV405 idle-close probe is restricted to Zone 1")
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
+        if isinstance(zone, bool) or not isinstance(zone, int) or zone not in range(1, 5):
+            raise ValueError("HTV405 recovery outlet must be 1-4")
         try:
             started = datetime.fromisoformat(started_at)
         except ValueError as error:
@@ -2121,7 +2433,7 @@ class SQLiteEventStore:
                 control_pending_command_id = ?,
                 control_pending_action = 'idle_close_probe',
                 control_pending_sequence = ?,
-                control_pending_zone = 1,
+                control_pending_zone = ?,
                 control_pending_duration_seconds = NULL,
                 control_pending_started_at = ?,
                 control_last_command_started_at = ?,
@@ -2141,6 +2453,7 @@ class SQLiteEventStore:
             (
                 command_id,
                 sequence,
+                zone,
                 started_at,
                 started_at,
                 retry_count,
@@ -2177,6 +2490,7 @@ class SQLiteEventStore:
         ambiguous and invalidates that certainty; only the frozen prior
         baseline may then be rechecked.
         """
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         if (
             not isinstance(candidate_sequence, int)
             or isinstance(candidate_sequence, bool)
@@ -2314,6 +2628,7 @@ class SQLiteEventStore:
         watering response. Timeout or rejection stays terminal so generic HA
         recovery cannot advance beyond the explicitly selected candidate.
         """
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         if zone != 1 or duration_seconds != 60:
             raise ValueError(
                 "HTV405 guarded open probe is restricted to Zone 1 for 60 seconds"
@@ -2419,6 +2734,7 @@ class SQLiteEventStore:
         observed_at: str,
     ) -> dict[str, Any]:
         """Restore a counter from explicit, externally retained evidence."""
+        self._assert_legacy_native_owner("HTV405FRF", valve_endpoint)
         if next_sequence not in range(0x20):
             raise ValueError("HTV405 counter must be in 0x00..0x1f")
         if source not in {
@@ -2678,7 +2994,7 @@ class SQLiteEventStore:
             )
         elif probe_dispatch_failure:
             recovery_sequence = int(state["control_pending_sequence"])
-            recovery_zone = 1
+            recovery_zone = int(state["control_pending_zone"])
             reason = "idle_close_probe_dispatch_retry"
             try:
                 recovery_not_before = (
@@ -2708,7 +3024,7 @@ class SQLiteEventStore:
                 reason = "idle_close_probe_search_exhausted"
             if next_candidate is not None:
                 recovery_sequence = next_candidate
-                recovery_zone = 1
+                recovery_zone = int(state["control_pending_zone"])
                 try:
                     recovery_not_before = (
                         datetime.fromisoformat(observed_at)
@@ -3255,6 +3571,7 @@ class SQLiteEventStore:
 
     def reserve_htv145_revocation(self, valve_endpoint: str, command_id: str) -> None:
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         with self._connection:
             cursor = self._connection.execute(
                 "UPDATE htv145_control_state SET revocation_command_id = ? WHERE valve_endpoint = ? AND pending_command_id IS NULL",
@@ -3266,6 +3583,7 @@ class SQLiteEventStore:
     def delete_htv145_control(self, valve_endpoint: str) -> None:
         """Remove an association only after its radio acknowledged revocation."""
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         with self._connection:
             self._connection.execute(
                 "DELETE FROM htv145_control_state WHERE valve_endpoint = ? AND pending_command_id IS NULL",
@@ -3401,6 +3719,7 @@ class SQLiteEventStore:
         """Persist an association-specific profile with control unsynchronized."""
         rf_valve_endpoint = valve_endpoint
         valve_endpoint = f"{controller_endpoint}:{valve_endpoint}"
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         cursor = self._connection.execute(
             """
             INSERT INTO htv145_control_state(
@@ -3508,6 +3827,7 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Set an outbound counter only from explicit, evidenced state."""
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         if next_sequence not in range(0x80, 0xA0):
             raise ValueError("HTV145 sequence must be in 0x80..0x9f")
         if source not in {
@@ -3565,6 +3885,7 @@ class SQLiteEventStore:
     def reserve_htv145_bootstrap(self, valve_endpoint, command_id, started_at):
         """Reserve only the fixed dry-test open, keeping candidate != known state."""
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         with self._connection:
             row = self._connection.execute("SELECT * FROM htv145_control_state WHERE valve_endpoint=?", (valve_endpoint,)).fetchone()
             trial = self.htv145_qualification(valve_endpoint)
@@ -3597,6 +3918,7 @@ class SQLiteEventStore:
     ) -> dict[str, Any]:
         """Atomically reserve one logical command before any node write."""
         valve_endpoint = self._htv145_key(valve_endpoint)
+        self._assert_legacy_native_owner("HTV145FRF", valve_endpoint)
         if action not in {"open", "close"}:
             raise ValueError("HTV145 action must be open or close")
         if action == "open" and (

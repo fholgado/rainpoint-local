@@ -1,0 +1,7 @@
+{
+  "description": "Unconfirmed local port-1 control: one phase-3 60-second command, then a later same-association port-2 idle. No decoded a1 or run summary; not a successful watering trace. Endpoints synthetic, report clock zeroed, normalized trailers regenerated.",
+  "events": [
+    {"time_s": 15.47808, "direction": "gateway", "frame": "79f4882f2891556677224466888190828081009e0000000000000000000000000000000079e8"},
+    {"time_s": 153.281068, "direction": "device", "frame": "79f4882f28a2446688915566770b010785870100000000000040800056800000000000001204"}
+  ]
+}

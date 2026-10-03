@@ -20,6 +20,20 @@ version = os.environ.get(
 if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,47}", version):
     raise ValueError("RAINPOINT_FIRMWARE_VERSION is invalid")
 variant = "unified"
+experiment = os.environ.get("RAINPOINT_HTV213_PAIRING_EXPERIMENT", "0")
+if experiment not in {"0", "1"}:
+    raise ValueError("RAINPOINT_HTV213_PAIRING_EXPERIMENT must be 0 or 1")
+if experiment == "1":
+    if "htv213" not in version or "-" not in version:
+        raise ValueError("HTV213 experiment requires an explicit htv213 prerelease version")
+    env.Append(CPPDEFINES=["RAINPOINT_HTV213_PAIRING_EXPERIMENT"])
+control_experiment = os.environ.get("RAINPOINT_HTV213_CONTROL_EXPERIMENT", "0")
+if control_experiment not in {"0", "1"}:
+    raise ValueError("RAINPOINT_HTV213_CONTROL_EXPERIMENT must be 0 or 1")
+if control_experiment == "1":
+    if experiment != "1":
+        raise ValueError("HTV213 dry control requires the isolated pairing canary")
+    env.Append(CPPDEFINES=["RAINPOINT_HTV213_CONTROL_EXPERIMENT"])
 env["RAINPOINT_BUILD_VERSION"] = version
 phase_experiment = os.environ.get("RAINPOINT_VALVE_PHASE_EXPERIMENT", "0")
 if phase_experiment not in {"0", "1"}:

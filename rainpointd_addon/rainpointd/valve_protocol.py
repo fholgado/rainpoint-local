@@ -110,12 +110,17 @@ def _decode_htv405_duration(encoded: bytes, extension: int) -> int:
 def _decode_htv405_remaining_duration(
     encoded: bytes, extension: int
 ) -> int:
-    """Decode remaining time after clearing its high-byte status marker."""
+    """Recover native little-endian seconds across the normalized bit boundary."""
     if len(encoded) != 2:
         raise ValueError("HTV405 remaining duration must contain two bytes")
-    normalized = bytearray(encoded)
-    normalized[1] &= 0x7F
-    return _decode_htv405_duration(bytes(normalized), extension)
+    if encoded[0] & 0x80 == 0 or extension & 0x7F:
+        raise ValueError("HTV405 remaining duration marker is invalid")
+    low = ((encoded[0] << 1) | (encoded[1] >> 7)) & 0xFF
+    high = ((encoded[1] << 1) | (extension >> 7)) & 0xFF
+    seconds = low | (high << 8)
+    if seconds > 3_600:
+        raise ValueError("HTV405 remaining duration is outside validated bounds")
+    return seconds
 
 
 def decode_htv405_control_frame(frame: bytes) -> dict[str, int | bool] | None:
@@ -348,7 +353,8 @@ def decode_htv405_gateway_command_response(
 
     This envelope was physically validated for accepted opens on Zones 1--4
     and a Zone 1 close. It proves resulting watering state, accepted controller
-    counter, and the selected zone.
+    counter, and the selected zone under the existing local recipe. Its parity
+    guard is not a general stock decoder: phase and watering are independent.
     """
     if len(frame) != FRAME_BYTES or not frame.startswith(SYNC):
         return None
@@ -442,7 +448,7 @@ def next_sequence(sequence: int) -> int:
 
 
 def next_htv145_command_sequence(sequence: int, *, watering: bool) -> int:
-    """Accepted opens advance the session; accepted closes retain its counter."""
+    """Retain the qualified legacy policy, not a general native-phase allocator."""
     _validate_sequence(sequence)
     return next_sequence(sequence) if watering else sequence
 
@@ -479,10 +485,10 @@ def decode_htv145_gateway_command(
         or frame[13] not in range(0x80, 0xA0)
     ):
         return None
-    # The high bit of byte 14 is an association-branch marker, not the
-    # watering action. Selector-5 used 10=open/90=close, while the captured
-    # selector-6 branch reverses those markers. Body byte 15 remains 82 for
-    # open and 81 for close in both branches.
+    # The high bit of byte 14 is the low bit of the full native phase, not
+    # an association or watering flag. Keep the historical marker-policy
+    # return field for current callers; a single stock association can use
+    # both polarities for OPEN. Byte 15 contains the declared data length.
     if frame[14] in {0x10, 0x90} and frame[15] == 0x82:
         if (
             frame[15:19] != bytes.fromhex("82808100")
@@ -539,8 +545,8 @@ def decode_htv145_command_response(
     ):
         return None
     # Offset 18's high bit is the stable valve-state bit across both captured
-    # marker polarities: cf=watering and 4f=idle. Offset 14 flips between the
-    # selector-5 and selector-6 associations and must not define state.
+    # phase parities: cf=watering and 4f=idle. Offset 14 contains phase, and
+    # must not define state or be treated as a fixed association property.
     watering = bool(frame[18] & 0x80)
     result: dict[str, int | bool] = {
         "sequence": frame[13],

@@ -14,14 +14,17 @@ PAIRING_DEVICE_CATEGORIES = frozenset({"sensor", "valve"})
 
 
 def multi_zone_numbers(device: dict[str, Any]) -> tuple[int, ...]:
-    """Only the identified four-outlet model has separate zone entities."""
-    return (1, 2, 3, 4) if device.get("model") == "HTV405FRF" else ()
+    """Derive outlet topology from the exact model, never reported field count."""
+    return {"HTV213FRF": (1, 2), "HTV405FRF": (1, 2, 3, 4)}.get(device.get("model"), ())
 
 
 def unsupported_device_entity_ids(device_id: str, device: dict[str, Any]) -> set[str]:
     """Exact obsolete IDs, preserving the single valve's overall watering entity."""
     if device.get("model") == "HTV405FRF":
         return {f"{device_id}_last_usage"}
+    if device.get("model") == "HTV213FRF":
+        return {f"{device_id}_zone_{zone}_{suffix}" for zone in (3, 4)
+                for suffix in ("watering", "duration", "control")}
     if device.get("model") == "HTV145FRF":
         return {
             f"{device_id}_zone_{zone}_{suffix}"

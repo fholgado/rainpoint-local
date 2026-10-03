@@ -1,0 +1,227 @@
+"""HA-facing dry canary qualification, controls, pending UI and deletion."""
+import copy
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+
+from tests import test_htv213_owner as fixture
+from tests.test_htv213_control_experiment import NODE
+from tests.test_valve_configuration import alter
+from research.pairing_native_transcripts import decode
+from rainpointd import htv213_device as device, htv213_owner as owner, htv213_control_experiment as control
+from rainpointd.htv213_control_trial import ControlJournal
+from tests.test_watering_notifications import module as notification_module
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+class Htv213DeviceTest(unittest.TestCase):
+    def setUp(self):
+        fixture.Htv213OwnerTest.setUp(self)
+        self.owner=owner.configure(self.gateway,self.request)
+        self.journal=ControlJournal(self.gateway._store)
+        trials=json.loads((ROOT/'research/fixtures/htv213_local_outlet_stop_20260930.json').read_text())['trials']
+        for trial in trials:
+            for event in trial['events']:
+                packet=decode(event['frame'])
+                if event['direction']=='gateway' and packet.command==0x21:
+                    action='open' if packet.data[2] else 'close'
+                    seconds=int.from_bytes(packet.data[3:5],'little') if action=='open' else 0
+                    self.tx=self.journal.reserve(self.key,action=action,port=packet.data[0],seconds=seconds,dry_confirmed=True)
+                    self.journal.dispatch(self.key,self.tx,lambda *_:None)
+                elif event['direction']=='device':
+                    raw=bytearray.fromhex(event['frame']);raw[5:9]=bytes.fromhex(self.gateway.rf_identity.controller_endpoint)
+                    frame=alter(raw.hex())
+                    self.journal.observe(self.key,node_id=NODE,frame=frame)
+                    owner.observe(self.gateway,NODE,dict(command_id=self.owner['command_id'],enabled=True,frame=frame))
+        self.assertEqual(self.journal.snapshot(self.key)['state'],'complete')
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'],7)
+        self.sent.clear()
+
+    def publish(self):
+        return device.publish(self.gateway,dict(association_key=self.key,name='Two outlets'))
+
+    def test_qualified_device_has_two_real_outlets_and_no_speculative_telemetry(self):
+        result=self.publish()
+        state=result['state']
+        self.assertEqual(result['model'],'HTV213FRF')
+        self.assertTrue(state['rf_control_start_available'])
+        self.assertFalse(state['zone_1_is_watering'])
+        self.assertFalse(state['zone_2_is_watering'])
+        self.assertNotIn('zone_3_is_watering',state)
+        self.assertNotIn('last_usage_liters',state)
+        self.assertNotIn('battery_percent',state)
+        self.assertEqual(self.sent,[])
+        self.assertIn(result['device_id'], {d['device_id'] for d in self.gateway.devices()})
+
+    def test_publish_requires_real_completion_and_fresh_both_port_idle(self):
+        records=owner.records(self.gateway)
+        records[self.key]['ports']['2']['watering']=True
+        self.gateway._store.save_htv213_owner(json.dumps(records))
+        with self.assertRaises(ValueError): self.publish()
+        self.assertEqual(self.sent,[])
+
+    def test_reconnected_node_without_trial_status_projects_retained_idle(self):
+        # A real reconnect has no in-memory control trial, unlike the setup
+        # fixture that just completed an experiment on the same connection.
+        self.gateway.update_node(NODE, htv213_control=None)
+        result = self.publish()
+        self.assertTrue(result['state']['rf_control_start_available'])
+        self.assertEqual(result['state']['rf_control_transaction_state'], 'confirmed')
+        self.assertEqual(self.sent, [])
+
+    def test_public_control_uses_persisted_profile_no_repeat_and_no_optimistic_open(self):
+        target=self.publish()['device_id']
+        result=self.gateway.request_valve_control(device_id=target,action='open',zone=2,duration_seconds=60)
+        command=self.sent[-1][1]
+        self.assertEqual((command['phase'],command['port'],command['seconds']),(7,2,60))
+        self.assertEqual(command['factory_endpoint'],self.request['factory_endpoint'])
+        state=device.project(self.gateway)[target]['state']
+        self.assertTrue(state['rf_control_command_pending'])
+        self.assertFalse(state['rf_control_start_available'])
+        self.assertIsNone(state['is_watering'])
+        self.assertIsNone(state['zone_2_is_watering'])
+        self.assertFalse(state['zone_1_is_watering'])
+        with self.assertRaises(ValueError):
+            self.gateway.request_valve_control(device_id=target,action='open',zone=2,duration_seconds=60)
+        self.assertEqual(len(self.sent),1)
+        later=device.project(self.gateway,datetime.now(timezone.utc)+timedelta(seconds=12))[target]['state']
+        self.assertFalse(later['rf_control_command_pending'])
+        self.assertEqual(later['rf_control_transaction_state'],'failed')
+        self.assertIsNotNone(later['rf_control_transaction_error'])
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'],8)
+
+    def replay_report(self, command, *, idle=False):
+        event = next(e for e in self.events if e['direction'] == 'device' and
+                     decode(e['frame']).command == command and
+                     (command != 2 or (decode(e['frame']).data[3] == 0) == idle))
+        raw = bytearray.fromhex(event['frame'])
+        raw[5:9] = bytes.fromhex(self.gateway.rf_identity.controller_endpoint)
+        frame = alter(raw.hex(), phase=7) if command == 0xa1 else alter(raw.hex())
+        self.journal.observe(self.key, node_id=NODE, frame=frame)
+        owner.observe(self.gateway, NODE, dict(command_id=self.owner['command_id'], enabled=True, frame=frame))
+
+    def test_missing_ack_never_reuses_precommand_idle_and_late_evidence_recovers(self):
+        target = self.publish()['device_id']
+        device.request(self.gateway, target, 'open', 1, 60)
+        later = datetime.now(timezone.utc) + timedelta(seconds=12)
+        state = device.project(self.gateway, later)[target]['state']
+        self.assertIsNone(state['zone_1_is_watering'])
+        self.assertEqual(state['valve_state'], 'unknown')
+        self.assertEqual(state['rf_control_transaction_state'], 'failed')
+        self.assertFalse(state['rf_control_available'])
+        for action in ('open', 'close'):
+            with self.assertRaises(ValueError): device.request(self.gateway, target, action, 1, 60)
+        self.replay_report(0xa1)
+        self.assertIsNone(device.project(self.gateway)[target]['state']['is_watering'])
+        self.replay_report(2)
+        self.assertTrue(device.project(self.gateway)[target]['state']['is_watering'])
+        self.replay_report(2, idle=True)
+        self.replay_report(4)
+        state = device.project(self.gateway)[target]['state']
+        self.assertFalse(state['is_watering'])
+        self.assertTrue(state['rf_control_start_available'])
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'], 8)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_confirmed_idle_missing_summary_is_not_an_overdue_open(self):
+        target = self.publish()['device_id']
+        device.request(self.gateway, target, 'open', 1, 60)
+        self.replay_report(0xa1)
+        self.replay_report(2)
+        self.replay_report(2, idle=True)
+        state = device.project(self.gateway, datetime.now(timezone.utc) + timedelta(seconds=130))[target]['state']
+        self.assertFalse(state['is_watering'])
+        self.assertFalse(state['rf_control_overdue'])
+        self.assertEqual(state['rf_control_transaction_state'], 'failed')
+        self.assertIn('summary', state['rf_control_transaction_error'].lower())
+        self.assertFalse(state['rf_control_start_available'])
+        self.assertEqual(len(self.sent), 1)
+
+    def test_overdue_report_does_not_invent_stop_and_completion_needs_rf(self):
+        target = self.publish()['device_id']
+        device.request(self.gateway, target, 'open', 1, 60)
+        self.replay_report(0xa1)
+        self.replay_report(2)
+        now = datetime.now(timezone.utc) + timedelta(seconds=130)
+        state = device.project(self.gateway, now)[target]['state']
+        self.assertTrue(state['is_watering'])
+        self.assertTrue(state['rf_control_overdue'])
+        self.assertFalse(state['rf_control_available'])
+        self.assertEqual(state['rf_control_transaction_state'], 'failed')
+        self.replay_report(2, idle=True)
+        self.replay_report(4)
+        state = device.project(self.gateway, now)[target]['state']
+        self.assertFalse(state['rf_control_overdue'])
+        self.assertFalse(state['is_watering'])
+        self.assertTrue(state['rf_control_start_available'])
+        self.assertEqual(len(self.sent), 1)
+
+    def test_gateway_failure_replay_drives_one_persistent_alert_and_real_stop(self):
+        target = self.publish()['device_id']
+        notices = []
+        reporter = notification_module.WateringNotifications('test', lambda message, **kw: notices.append((message, kw)))
+        reporter.observe(device.project(self.gateway))
+        device.request(self.gateway, target, 'open', 1, 60)
+        reporter.observe(device.project(self.gateway))
+        self.assertEqual(notices, [])
+        self.replay_report(0xa1); self.replay_report(2)
+        reporter.observe(device.project(self.gateway))
+        self.assertEqual(len(notices), 1)
+        later = datetime.now(timezone.utc) + timedelta(seconds=130)
+        reporter.observe(device.project(self.gateway, later))
+        reporter.observe(device.project(self.gateway, later))
+        self.assertEqual(len(notices), 2)
+        self.assertIn('expected stop has not been confirmed', notices[-1][0])
+        self.assertTrue(notices[-1][1]['notification_id'].endswith('_problem'))
+        self.replay_report(2, idle=True); self.replay_report(4)
+        reporter.observe(device.project(self.gateway, later))
+        self.assertEqual(len(notices), 3)
+        self.assertIn('reported that watering stopped', notices[-1][0])
+        self.assertEqual(len(self.sent), 1)
+
+    def test_disconnect_and_stale_reports_do_not_invent_idle_or_enable_commands(self):
+        target=self.publish()['device_id']
+        self.gateway.update_node(NODE,connected=False)
+        self.assertFalse(device.project(self.gateway)[target]['available'])
+        with self.assertRaises(ValueError): device.request(self.gateway,target,'open',1,60)
+        self.gateway.update_node(NODE,connected=True)
+        state=device.project(self.gateway,datetime.now(timezone.utc)+timedelta(hours=1))[target]['state']
+        self.assertIsNone(state['is_watering'])
+        self.assertFalse(state['rf_control_start_available'])
+        self.assertEqual(self.sent,[])
+
+    def test_forget_persists_revoke_tombstone_before_clear_and_restart_never_restores(self):
+        target=self.publish()['device_id']
+        result=self.gateway.forget_registry_device(target)
+        self.assertTrue(result['ownership_cleanup_pending'])
+        self.assertNotIn(target,device.project(self.gateway))
+        self.assertEqual(self.sent[-1][1]['type'],'htv213_owner_clear')
+        self.sent.clear()
+        owner.restore(self.gateway,NODE)
+        self.assertEqual(self.sent[-1][1]['type'],'htv213_owner_clear')
+        owner.observe(self.gateway,NODE,dict(command_id=self.owner['command_id'],enabled=False))
+        self.assertTrue(owner.records(self.gateway)[self.key]['revoked'])
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'],7)
+        with self.assertRaises(ValueError): owner.configure(self.gateway,self.request)
+
+    def test_persistence_failure_does_not_publish_or_dispatch(self):
+        with patch.object(self.gateway._store,'save_htv213_owner',side_effect=OSError):
+            with self.assertRaises(OSError): self.publish()
+        self.assertEqual(device.project(self.gateway),{})
+        self.assertEqual(self.sent,[])
+
+    def test_boundary_api_requires_published_idle_owner_and_explicit_authorization(self):
+        proof = dict(prior_command_id=self.journal.snapshot(self.key)['transaction']['command_id'],
+                     authorization_id='ef'*16)
+        request = {**self.request, 'counter_boundary':proof}
+        with self.assertRaises(ValueError): control.start(self.gateway, request)
+        self.publish()
+        result = control.start(self.gateway, request)
+        self.assertEqual(result['phase'], 62)
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent[0][1]['phase'], 62)
+        with self.assertRaises(ValueError): control.start(self.gateway, request)
+        self.assertEqual(len(self.sent), 1)

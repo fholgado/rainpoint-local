@@ -20,8 +20,32 @@ or per zone.
 
 ## New enrollment
 
-The validated stock transcript contains 18 observed valve stages and 17
-gateway transmissions. The custom profile reproduces that transcript using a
+The validated stock transcript contains 18 observed valve rows and 17
+gateway transmissions, not 18 distinct authorization commands. Its native
+command structure is:
+
+| Exchange | Captured shape |
+| --- | --- |
+| `01 / 81` | Factory announcement and assignment |
+| `02 / 82` | Five addressed report rows covering ports 1–4; one row has no reply |
+| `05 / 85` | Four per-port parameter reads, ports 1–4 |
+| `06 / 86` | Four plan-parameter reads, ports 1–4; replies contain `00` |
+| `59 / d9` | Four device-parameter reads, IDs `32..35`; each reply contains result, ID, length 12 and twelve `64` bytes |
+
+Numbers in this table are hexadecimal native commands, not normalized byte
+prefixes. Direct replies echo the full six-bit phase. The parameter arrays'
+application meaning is not established by their repeated `64` values; do not
+label them percentages or authorization tokens. See the
+[cross-device comparison](../research/PAIRING_NATIVE_COMPARISON.md).
+
+Each captured `85` contains status plus fourteen per-port settings bytes, not
+watering telemetry. The [field layout](../research/STOCK_HUB_CONFIGURATION_LIFECYCLE.md#fourteen-byte-valve-configuration-layout)
+separates default work time, mist timing, soil link, threshold, flags, delay,
+calibration and pressure-labelled fields; units/effects remain qualified there.
+Native `02` request flags mask `0x02` controls a configuration revision in `82`.
+That revision is separate from device software version and the RF command phase.
+
+The custom profile uses a
 generated controller/companion identity and association-specific clock,
 carrier, selector branch, and integrity residue.
 
@@ -47,8 +71,8 @@ fixture `research/fixtures/htv405_gateway_pairing_replies.json` preserves the
 captured reference transcript.
 
 A fresh generated association initializes the independent valve command
-sequence at `1`. Pairing sequence bytes, routine telemetry sequence bytes, and
-the command sequence are unrelated.
+sequence at `1`. Pairing or routine telemetry phases must not reseed that local
+control state; the stock hub's shared generator is a separate implementation fact.
 
 ## Routine link report and acknowledgement
 
@@ -102,22 +126,14 @@ independent strict state report, never from a transmitted command.
 
 ## Duration
 
-HTV405 duration is a packed counter in two-second units. Bit 7 of the low wire
-byte is always the protocol marker, so the data bit that would occupy that
-position is carried in bit 7 of an adjacent extension byte:
+Native durations are **little-endian seconds**. The normalized frame starts one
+bit before the native payload, splitting each value across three bytes. For the
+fields below, reconstruct the two native bytes as follows:
 
 ```text
-units = seconds / 2
-
-encode:
-    field_low = 0x80 | (units & 0x7f)
-    field_high = (units >> 8) & 0xff
-    extension = units & 0x80
-
-decode:
-    units = (field_high << 8) | (field_low & 0x7f) |
-            (extension & 0x80)
-    seconds = units * 2
+native_low  = ((field_low << 1) | (field_high >> 7)) & 0xff
+native_high = ((field_high << 1) | (extension >> 7)) & 0xff
+seconds = native_low | (native_high << 8)
 ```
 
 The locations are:
@@ -128,16 +144,33 @@ The locations are:
 | Requested duration in valve state | `frame[29..30]` | `frame[31] & 0x80` |
 | Remaining duration in valve state | `frame[26..27]` | `frame[28] & 0x80` |
 
-The remaining-duration high byte also carries an unrelated status bit which is
-cleared before reconstruction. The supported product range is every whole
-minute from 1 through 60. The same scalar layout appears in retained HTV145
-stock commands; notably, a non-inverted 17-minute command carries extension
-`0x80`, proving that the extension is duration data rather than selector
-polarity.
+Bit 7 of the normalized high byte is the low seconds bit, **not a status flag**.
+Keep it for odd remaining times: the captured 900-second run reports 895,
+not 894. The source decoder covers remaining values 0–3,600. The public control
+range remains every whole minute from 1 through 60; its existing even-seconds
+builder is unchanged. The same native units appear in retained HTV145 commands.
+The non-inverted 17-minute command's extension `0x80` is duration data, not
+selector polarity. See the [stock/capture trace](../research/STOCK_HUB_VALVE_STATE_TRACE.md).
 
 ## Control request
 
-The physically accepted gateway-command envelope is:
+Native command `21` carries `[port, 02, 01, seconds_low, seconds_high]` for
+open and `[port, 02, 00]` for close. Native offsets and six-bit phase are defined
+in [common.md](common.md). The physically accepted alternating-control recipe
+has this normalized envelope:
+
+Generated local associations use `[01, port << 1, 01, seconds_low, seconds_high]`
+for open with the same existing normalized builder below. Their positive `a1`
+state byte is `(port << 5) | 01` (Zone 2: `41`); local `02` active reports pack
+the outlet into that state byte and clear it to zero when all outlets are idle.
+Use the qualified state decoder rather than treating native payload byte 2 as
+the outlet for every association. The experimental verifier follows both
+layouts. Two guarded 60-second opens at adjacent native phases 4 then 5 were
+physically accepted on a generated local association's Zone 2, with matching
+positive replies and active/automatic-idle reports. Command phase parity does
+not itself select open versus close; the body carries that action. The public
+production builder still uses the alternating-control recipe below. See the
+[qualified trial evidence](../docs/VALVE_PHASE_TRIAL.md#october-1-four-zone-adjacent-phase-confirmation).
 
 ```text
 frame[13] = 0x80 | five-bit command sequence
@@ -148,6 +181,16 @@ frame[17] = 0x80 | one-based zone
 frame[19..20] = encoded duration for open; zero for close
 frame[21] bit 7 = displaced duration bit for open; zero for close
 ```
+
+The `90/10` polarity contains the sixth phase bit; `82/81` encodes declared
+data length, not separate open/close opcodes. Do not generalize this recipe
+to arbitrary action order by ignoring the phase's low bit.
+
+Stock captures also contain **even-phase opens and odd-phase closes** (ports
+3 and 4, phases 20/21 and 22/23). The fixed parity above is the current local
+recipe, not a receiver requirement. Source-only full-phase adapters preserve
+this recipe's body packing; they are not enabled in the runtime. See the
+[cross-model phase audit](../research/VALVE_FULL_PHASE_CROSS_MODEL_AUDIT.md).
 
 The controller route is the paired valve endpoint and the destination is its
 association companion endpoint. The current local transmitter uses residue
@@ -170,7 +213,14 @@ Representative encodings are:
 
 ## Command response and sequence
 
-A valid immediate response has this envelope:
+The following is the **legacy local decoder contract**, not a general stock
+reply definition. Stock `a1` data byte 1 carries control/work mode; its old
+normalized "zone" nibble does not reliably identify the requested port. A
+generalized matcher must obtain that port from the pending command and verify
+its independent state report. See the
+[reply-context correction](../research/VALVE_FULL_PHASE_CROSS_MODEL_AUDIT.md#reply-context-correction).
+
+The current decoder recognizes this envelope:
 
 ```text
 frame[14] low 7 bits == 0x50
@@ -184,9 +234,12 @@ frame[26] low 7 bits == 0x56
 It routes from the association companion with its first-byte high bit set to
 the paired valve endpoint.
 
-The response sequence is `frame[13] & 0x1f`. A watering response advances the
+The stored logical counter is `frame[13] & 0x1f`, but response matching requires
+the full phase `((frame[13] & 31) << 1) | (frame[14] >> 7)` as well as action,
+identity and result. Under the current local allocation policy, a watering response advances the
 durable next command sequence by one; an idle/close response retains the same
-sequence. The sequence wraps in its five-bit field.
+sequence. The stored sequence wraps in its five-bit field. This policy is not
+the stock hub's general six-bit allocation rule.
 
 ## Counter synchronization and scheduling
 
@@ -196,7 +249,9 @@ companion, selector, and valve identities are unchanged. Restart restores the
 stored value; routine report sequences never overwrite it.
 
 An authenticated idle close assigns its submitted five-bit counter. Recovery
-therefore uses a fixed Zone 1 close at counter 0, not a counter search:
+therefore uses a selected-outlet close at counter 0, not a counter search.
+The API defaults to Zone 1; explicit dry-outlet diagnostics retain their selected
+zone across timeout/retry. Zone 2 close-only recovery was confirmed October 2.
 
 1. Independently confirm the valve is idle.
 2. Send close 0 with no duration and require a matching authenticated idle reply.

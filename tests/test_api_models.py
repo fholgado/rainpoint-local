@@ -61,6 +61,11 @@ class APIModelsTest(unittest.TestCase):
         four = {"model": "HTV405FRF"}
         self.assertEqual((), api_models.multi_zone_numbers(single))
         self.assertEqual((1, 2, 3, 4), api_models.multi_zone_numbers(four))
+        two = {"model": "HTV213FRF", "state": {"zone_4_is_watering": False}}
+        self.assertEqual((1, 2), api_models.multi_zone_numbers(two))
+        self.assertEqual({f"two_zone_{zone}_{suffix}" for zone in (3, 4)
+                          for suffix in ("watering", "duration", "control")},
+                         api_models.unsupported_device_entity_ids("two", two))
         self.assertEqual((), api_models.multi_zone_numbers({}))
         obsolete = api_models.unsupported_device_entity_ids("single", single)
         self.assertEqual(12, len(obsolete))

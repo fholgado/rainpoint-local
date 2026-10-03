@@ -62,6 +62,9 @@ Unknown counters block ordinary control until explicit recovery is confirmed.
 
 ## Development
 
+Manage pairing through **Settings → Devices & services → RainPoint Local**.
+Device setup uses HA's native options flow; no separate sidebar panel is required.
+
 Use the canonical checkout and Git branches; do not create additional worktrees.
 
 ```sh

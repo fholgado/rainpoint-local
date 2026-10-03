@@ -292,6 +292,12 @@ class RainPointNodeSensorDescription(SensorEntityDescription):
 
 NODE_DESCRIPTIONS = (
     RainPointNodeSensorDescription(
+        key="ack_ownership_state",
+        translation_key="ack_ownership_state",
+        path=("ack_ownership_state",),
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    RainPointNodeSensorDescription(
         key="node_last_seen",
         translation_key="node_last_seen",
         path=("last_seen",),
@@ -687,6 +693,19 @@ class RainPointRadioNodeSensor(RainPointRadioNodeEntity, SensorEntity):
     """Expose one custom local radio-node diagnostic."""
 
     entity_description: RainPointNodeSensorDescription
+
+    @property
+    def available(self) -> bool:
+        # Cleanup can be blocked precisely because the old node is offline.
+        if self.entity_description.key == "ack_ownership_state":
+            return bool(self.coordinator.last_update_success)
+        return super().available
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key == "ack_ownership_state":
+            return {"operations": self.node.get("ack_ownership_operations", [])}
+        return None
 
     def __init__(
         self,

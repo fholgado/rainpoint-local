@@ -235,6 +235,8 @@ class Htv145ControlCoordinator:
 
     def request_idle_anchor(self, profile: Htv145ControlProfile, *, started_at: str) -> dict:
         """Dispatch one fixed close-only anchor from a durable report-triggered request."""
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.store, profile.node_id)
         self._require_enabled()
         self._require_profile(self._state(profile.storage_key), profile)
         command = self._command("htv145_control_idle_anchor", controller_endpoint=profile.controller_endpoint, valve_endpoint=profile.valve_endpoint)
@@ -272,6 +274,8 @@ class Htv145ControlCoordinator:
 
     def request_bootstrap_open(self, profile, *, started_at, commissioning=False):
         """Reserve an unproven candidate without authenticating a counter."""
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.store, profile.node_id)
         self._require_enabled()
         self._require_profile(self._state(profile.storage_key), profile)
         command = self._command("htv145_control_commission_open" if commissioning else "htv145_control_bootstrap_open",
@@ -317,9 +321,18 @@ class Htv145ControlCoordinator:
                     frame=frame.hex(), result_code=anchor["result_code"], observed_at=observed_at)
         error = decode_htv145_command_error(frame, profile.link)
         if error is not None:
+            # Idle anchors use their separately qualified fixed phase zero,
+            # independent of the ordinary association marker policy.
+            expected_phase_low = False if state["pending_action"] == "idle_anchor" else (
+                (state["pending_action"] == "open") == profile.command_marker_inverted
+            )
             if (
                 state["pending_command_id"] is None
                 or error["sequence"] != state["pending_sequence"]
+                or state["pending_action"] not in {"open", "close", "idle_anchor"}
+                # Match the sixth native phase bit too; negative replies have
+                # no action field from which the profile marker can be inferred.
+                or bool(frame[14] & 0x80) != expected_phase_low
             ):
                 raise ValueError("HTV145 error has no matching durable reservation")
             return self.store.fail_htv145_command(
@@ -459,6 +472,8 @@ class Htv145ControlCoordinator:
     ) -> dict[str, Any]:
         self._require_enabled()
         state = self._state(profile.storage_key)
+        from .valve_phase_trial import assert_node_available
+        assert_node_available(self.store, profile.node_id)
         self._require_profile(state, profile)
         command_id = uuid.uuid4().hex
         if any(s["node_id"] == profile.node_id and s["association_key"] != profile.storage_key

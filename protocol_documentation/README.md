@@ -11,11 +11,17 @@ Read [common.md](common.md) first, then the file for the device family:
 | Stock RainPoint gateway (`HWG023WBRF-V2`) | [hwg023wbrf-v2.md](hwg023wbrf-v2.md) | Reference implementation and coexistence constraint |
 | Soil-moisture sensors (`HCS02x`, validated as `HCS026FRF`) | [hcs026frf.md](hcs026frf.md) | Pair, receive, acknowledge, and recover |
 | Single-zone valve (`HTV145FRF`) | [htv145frf.md](htv145frf.md) | Decode, ACK, and dry-test control/sync on a partial association; full terminal pairing unqualified |
+| Two-zone valve (`HTV213FRF`) | [htv213frf.md](htv213frf.md) | Stock-reference decoding; local support unqualified |
 | Four-zone valve (`HTV405FRF`) | [htv405frf.md](htv405frf.md) | Pair, receive, acknowledge, and control |
 
 Exact frames and experiment chronology live under [`research/`](../research/).
 The executable specification lives in `rainpointd_addon/rainpointd/`, with
-regression coverage in root `test_*.py` files and the firmware native protocol test.
+regression coverage in `tests/` and the firmware native protocol tests.
+
+The common reference distinguishes native payload fields from historical
+one-bit-shifted capture offsets. The
+[cross-device comparison](../research/PAIRING_NATIVE_COMPARISON.md) maps retained
+pairing transcripts into that native representation without changing runtime bytes.
 
 ## Interpretation rules
 

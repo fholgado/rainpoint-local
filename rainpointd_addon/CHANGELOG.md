@@ -1,5 +1,140 @@
 # Changelog
 
+## 0.39.14 / Unreleased
+
+- Add an opt-in native six-bit control adapter with durable command receipts,
+  independent watering evidence and counter-preserving legacy handback.
+- Preserve controlling-radio reception evidence when another receiver wins
+  duplicate suppression; keep logical report cadence unchanged.
+- Use explicit valve-control authorization consistently on the network gateway.
+- Accept the qualified HTV405 routine idle form without treating cycling fields
+  as outlet state. Active routine reports remain undecoded in this path.
+- Preserve the selected HTV405 outlet during close-only recovery and retry.
+  Reconcile a confirmed recovery into morning readiness once, without overriding
+  later commands or carrying yesterday's confirmation into a new morning.
+
+## 0.39.13 / Unreleased
+
+- Recognize the captured generated-association HTV405 outlet packing during
+  experimental phase admission and verification. Reuse the production state
+  decoder and retain full-phase, duration, owner and selected-outlet checks.
+
+## 0.39.12 / Unreleased
+
+- Pin the experimental adjacent-phase trial to an explicit outlet (1–4 for
+  HTV405, 1 for HTV145). Non-default outlets require the signed multi-port
+  capability; wrong-outlet telemetry cannot complete a run. No production
+  control or pairing changes. Live dry-outlet qualification remains pending.
+
+## 0.39.11 / Unreleased
+
+- Add explicitly approved no-watering recovery for the first failed HTV145
+  phase-2 trial. Verify retained RF evidence, preserve the failure, and require
+  the signed radio's correlated handoff acknowledgment before lifting the lock.
+
+## 0.39.10 / Unreleased
+
+- Add an explicitly authorized two-run command-phase trial for existing HTV145
+  and HTV405 associations, with durable no-retry guards and atomic counter handback.
+- Block normal control and counter maintenance while a trial is unresolved.
+- Permit explicitly selecting a compatible signed canary or rollback release;
+  retain newest-version recommendations and all artifact/security checks.
+
+## 0.39.9 / Unreleased
+
+- Allow six-bit command wrap through zero only after that HTV213 association
+  completes the explicit dry boundary qualification. Keep other associations
+  fail-closed and retain uncertainty/duplicate protection.
+- Disable normal HA controls during the explicit boundary experiment.
+
+## 0.39.8 / Unreleased
+
+- Mark pre-command idle as unknown after an unanswered HTV213 open; distinguish
+  confirmed idle with a missing summary from an unconfirmed stop.
+- Add an explicitly authorized, once-only dry 62→63→0→1 counter-boundary probe.
+  Preserve real history; require completion at every step and never retry.
+- Deduplicate overdue HA alerts and describe missing summaries accurately.
+
+## 0.39.7 / Unreleased
+
+- Handle an absent in-memory HTV213 control trial after radio reconnect without
+  losing the durable command state or breaking HA device projection.
+
+## 0.39.6 / Unreleased
+
+- Expose explicitly qualified dry HTV213 associations as two-outlet HA devices.
+- Use persisted command phases and valve responses for control state; block
+  duplicates and surface missing-confirmation failures.
+- Retain reply ownership across radio reconnects and revoke it on removal.
+- Advertise 1–60 minute durations only on the capable HTV213 canary. General
+  pairing and battery-rejoin promotion remain separate qualification gates.
+
+## Integration 0.18.4 / Unreleased
+
+- Recognize HTV213 as exactly two outlets and include its confirmed watering
+  and command-failure events in default HA persistent notifications.
+- Preserve the requested duration when a command ACK precedes its first
+  watering report; keep old manual-run duration suppression and deduplication.
+
+## 0.39.5 / Unreleased
+
+- Add isolated retained HTV213 report ownership after completed dry control
+  evidence. Restore reply configuration on authenticated reconnect without
+  replaying opens or resetting counters. Battery rejoin remains disabled.
+
+## 0.39.4 / Unreleased
+
+- Allow one explicitly authorized HTV213 corrected-CRC dry retrial on the
+  control.2 canary. Preserve the original failed attempt and its phase;
+  require capture evidence and authorization references. No automatic retry,
+  production control-policy change or implicit counter reset.
+
+## 0.39.3 / Unreleased
+
+- Add authenticated, opt-in HTV213 dry-control trials on unassigned canary nodes.
+  Reserve command phases durably before dispatch; require RF result, target-port
+  idle and summary evidence for completion. No automatic retries or startup close.
+- Keep experimental controls out of default firmware and HA product menus.
+
+## 0.39.2 / Unreleased
+
+- Add authenticated, bounded HTV213 two-zone dry-test pairing commands and
+  correlated progress/cancellation. Require an unassigned experimental node
+  and explicit target, timing, carrier and local gateway identity.
+- Replay stock assignment and both-port settings/plan exchanges in tests;
+  isolate the canary behind an opt-in firmware build flag. No HA model-menu
+  entry, operational association, watering controls or live deployment yet.
+
+## 0.39.1 / 2026-09-29
+
+- Match research-node enrollment to the correlated ACK ownership and retained
+  sensor-channel capabilities, including their handlers and legacy-node fallback.
+- Add a pending-adoption regression for the research firmware capability set.
+- Include stock-informed full-phase reply matching and remaining-time decoding.
+  Deployment uses committed runtime `adf4687`; unfinished valve-recovery source,
+  integration/UI changes and radio firmware updates are excluded.
+
+## Gateway 0.39.0 / Integration 0.18.3 / Firmware 0.19.0 / Unreleased
+
+- Remove the custom pairing wizard, sidebar panel, frontend assets, and
+  panel-only dependencies/tests. Use the existing native HA device setup flow.
+- Retain native model selection, review/Next actions, valve setup and rejection
+  of results from a superseded pairing session. RF and gateway code are unchanged.
+- A full HA restart is required when replacing deployed 0.18.2 to discard its
+  in-memory panel registration and WebSocket handlers; browser refresh alone is
+  insufficient. This source change has not yet been deployed.
+
+## Gateway 0.39.0 / Integration 0.18.2 / Firmware 0.19.0 / Unreleased
+
+- Add the administrator-only RainPoint devices panel with catalog-driven
+  sensor/valve setup, Back/Next, staged progress, resumable HA flows and removal
+  that returns to the device list. Keep native HA setup available.
+- Cancel only the active flow's pairing/setup request and report failed
+  cancellation without silently closing. Never replay Start pairing on refresh.
+- Add rendered UI/navigation tests and real HA panel lifecycle checks.
+- Keep RF builders, gateway runtime, radio firmware and published Alpha 1
+  artifacts unchanged. Physical wizard acceptance remains on the roadmap.
+
 ## Gateway 0.39.0 / Integration 0.18.1 / Firmware 0.19.0 / Unreleased
 
 - Scope device metadata/re-pair lookups to the owning integration entry on HA

@@ -27,7 +27,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create one bounded duration control for each HTV405 zone."""
+    """Create one bounded duration control for each declared valve outlet."""
     coordinator: RainPointLocalCoordinator = hass.data[DOMAIN][entry.entry_id]
     known: set[tuple[str, int]] = set()
 

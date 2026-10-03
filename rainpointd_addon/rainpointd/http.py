@@ -267,6 +267,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             htv145_acceptance_prefix
         )
         pairing_path = parsed.path.startswith(f"{base}/pairing/")
+        phase_trial_prefix = f"{base}/experiments/valve-phase/"
+        phase_trial_path = parsed.path.startswith(phase_trial_prefix)
+        htv213_control_path = parsed.path in {
+            f"{base}/experiments/htv213/open", f"{base}/experiments/htv213/close",
+            f"{base}/experiments/htv213/owner",
+            f"{base}/experiments/htv213/publish",
+        }
         commissioning_prefix = f"{base}/commissioning/"
         commissioning_path = parsed.path.startswith(commissioning_prefix)
         node_path = parsed.path.startswith(f"{base}/nodes/")
@@ -278,6 +285,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             or htv145_control_path
             or htv145_acceptance_path
             or pairing_path
+            or phase_trial_path
+            or htv213_control_path
             or commissioning_path
             or node_path
         ):
@@ -285,6 +294,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             try:
                 body = self._request_json()
+                if phase_trial_path:
+                    from . import valve_phase_experiment
+                    result = valve_phase_experiment.act(self.server.gateway,
+                        parsed.path[len(phase_trial_prefix):], body)
+                    self._json(202, result)
+                    return
                 if commissioning_path:
                     action = parsed.path[len(commissioning_prefix):]
                     if action not in {"status", "enable", "begin", "advance", "cancel"}:
@@ -417,6 +432,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                         200,
                         self.server.gateway.revoke_radio_node(node_id),
                     )
+                    return
+                if parsed.path == f"{base}/experiments/htv213/owner":
+                    from . import htv213_owner
+                    self._json(202, htv213_owner.configure(self.server.gateway, body))
+                    return
+                if parsed.path == f"{base}/experiments/htv213/publish":
+                    from . import htv213_device
+                    self._json(201, htv213_device.publish(self.server.gateway, body))
+                    return
+                if parsed.path in {f"{base}/experiments/htv213/open", f"{base}/experiments/htv213/close"}:
+                    from . import htv213_control_experiment
+                    action = htv213_control_experiment.start if parsed.path.endswith("/open") else htv213_control_experiment.close
+                    self._json(202, action(self.server.gateway, body))
+                    return
+                if parsed.path in {f"{base}/pairing/htv213/start", f"{base}/pairing/htv213/cancel"}:
+                    from . import htv213_pairing
+                    action = htv213_pairing.start if parsed.path.endswith("/start") else htv213_pairing.cancel
+                    self._json(202, action(self.server.gateway, body))
                     return
                 if parsed.path == f"{base}/pairing/start":
                     result = self.server.gateway.start_pairing(
@@ -584,7 +617,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     elif action == "probe-idle-close":
                         result = (
                             self.server.gateway.request_htv405_idle_close_probe(
-                                device_id=device_id
+                                device_id=device_id, zone=body.get("zone", 1)
                             )
                         )
                     elif action == "probe-close-counter":
