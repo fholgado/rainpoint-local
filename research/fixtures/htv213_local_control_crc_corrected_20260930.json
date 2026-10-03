@@ -1,0 +1,15 @@
+{
+  "description": "Successful control.2 local port-1/60s corrected-CRC trial. Same command phase as the prior unconfirmed trial; one authorized retry, no explicit close. Endpoints synthetic; report and ACK wall-clock bytes zeroed; native CRC regenerated. Raw physical CRC-tail evidence is recorded separately in validation notes.",
+  "events": [
+    {"time_s": 0.0, "direction": "gateway", "frame": "79f4882f2891556677224466888190828081009e0000000000000000000000000000000079e8"},
+    {"time_s": 0.30908, "direction": "device", "frame": "79f4882f28a24466889155667701d0868010cf80000000409e80569e00000000000000006627"},
+    {"time_s": 6.901093, "direction": "device", "frame": "79f4882f28a2446688915566770d810785858090cf80000000409b80569e00000000000047a0"},
+    {"time_s": 6.982496, "direction": "gateway", "frame": "79f4882f2891556677224466888dc10100010000000000000000000000000000000000004baa"},
+    {"time_s": 42.902332, "direction": "device", "frame": "79f4882f28a2446688915566770e010785870090cf80000000408980569e0000000000005334"},
+    {"time_s": 42.982744, "direction": "gateway", "frame": "79f4882f2891556677224466888e4103800100000000018000000000000000000000000041d5"},
+    {"time_s": 62.940596, "direction": "device", "frame": "79f4882f28a2446688915566770e8107858580804f8000000040800056800000000000002b9e"},
+    {"time_s": 63.021834, "direction": "gateway", "frame": "79f4882f2891556677224466888ec10100010000000000000000000000000000000000006ca7"},
+    {"time_s": 63.939808, "direction": "device", "frame": "79f4882f28a2446688915566770f02070580808000000010800000001e0000000000000040b4"},
+    {"time_s": 64.02084, "direction": "gateway", "frame": "79f4882f2891556677224466888f420080000000000000000000000000000000000000006443"}
+  ]
+}

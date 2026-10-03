@@ -1231,3 +1231,36 @@ is replayed through the real runtime in a regression test: one anchor, no open,
 no retry and no public-control authority. Raw radio/gateway events remain private;
 there was no independent SDR recording. Follow-up acceptance is tracked only in
 the [roadmap](../PROJECT_ROADMAP.md).
+## Native pairing reinterpretation — 2026-09-28 (offline, no new capture)
+
+The [native comparison](PAIRING_NATIVE_COMPARISON.md) reinterprets 42 existing
+stock rows across HCS026, HTV145 and HTV405. It preserves original frames,
+profile-specific timing and acceptance outcomes. No radio was armed or used.
+
+Superseded terminology retained here for provenance:
+
+- HTV145 normalized `01 07 82 25`, `50 00 80`, `82 81 02`, `03 01 82`,
+  `2c 80 99` and `6c 81 80 19` were transcript-family labels. Native decoding
+  identifies `02` report, `a0` notification response, `05` settings read,
+  `06` plan read, `59` parameter read and `d9` parameter response respectively.
+  Their sequence-dependent normalized prefixes are not independent opcodes.
+- “18 steps” for HTV405 describes observed rows, including repetitions and
+  per-port reads. It is not evidence of 18 mandatory authorization operations.
+- “Three sensor replies” describes the validated local/repeat profile, not
+  every stock enrollment: two first-enrollment fixtures contain five replies.
+- “Two-second duration units” describes the old even-seconds normalized codec.
+  Native duration is little-endian seconds; telemetry must preserve odd seconds.
+- The Sep 27 channel-change note incorrectly named the first native `20`
+  data byte a per-device channel. Slot-3 `subdev_ver` and its setters instead
+  establish a configuration update version. The appended channel value for
+  kind 4, routing selector and six-bit phase remain different fields.
+- The `4201F650`/`tmp_buf` call was initially described as a prepared-packet
+  store. Its complete helper formats and logs a stack-local diagnostic; it is
+  not a response cache. Duplicate suppression elsewhere remains unresolved.
+
+The [configuration trace](STOCK_HUB_PAIRING_CONFIGURATION_TRACE.md) records
+instruction anchors and the remaining unknown settings/plan semantics. Three
+old HTV145 failure traces now replay through the source-only bounded retry
+logic, preserve initial replies and correctly expire at 5/6 without a terminal
+request. This does not prove a real valve accepted a new reply. Production
+protocol behavior was not changed by this documentation/test pass.
