@@ -49,12 +49,28 @@ env.Append(CPPDEFINES=[
     ("RAINPOINT_FIRMWARE_VARIANT", f'\\"{variant}\\"'),
 ])
 
-# Both the gateway package and radio compile pin this same reviewed key set.
+# Production trusts release keys only. Explicit test images additionally trust
+# development keys so they can receive unattended updates and release handback.
+development = os.environ.get("RAINPOINT_DEVELOPMENT_OTA", "0")
+if development not in {"0", "1"}:
+    raise ValueError("RAINPOINT_DEVELOPMENT_OTA must be 0 or 1")
+if development == "1":
+    if "RAINPOINT_FIRMWARE_VERSION" not in os.environ or "-" not in version:
+        raise ValueError("development OTA requires an explicit prerelease version")
+    env.Append(CPPDEFINES=["RAINPOINT_DEVELOPMENT_OTA"])
+
+# Both the gateway package and radio compile pin reviewed public keys.
 # An empty set is fail-closed (useful for source checks before provisioning),
 # never an implicit unsigned development mode.
-keys = Path(env.subst("$PROJECT_DIR")).parents[1] / "rainpointd_addon/rainpointd/firmware_keys"
+package = Path(env.subst("$PROJECT_DIR")).parents[1] / "rainpointd_addon/rainpointd"
+key_paths = list((package / "firmware_keys").glob("*.pem"))
+if development == "1":
+    development_keys = list((package / "firmware_development_keys").glob("*.pem"))
+    if not development_keys or any(not p.stem.startswith("rainpoint-development-") for p in development_keys):
+        raise ValueError("development OTA requires pinned development public keys")
+    key_paths.extend(development_keys)
 entries = []
-for path in sorted(keys.glob("*.pem")):
+for path in sorted(key_paths):
     if not re.fullmatch(r"[a-z0-9-]{1,32}", path.stem):
         raise ValueError("invalid firmware signing key id")
     pem = path.read_text(encoding="ascii")

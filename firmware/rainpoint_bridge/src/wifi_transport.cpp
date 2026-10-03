@@ -364,6 +364,9 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"valve_phase_trial\",\"valve_phase_trial_recovery\",\"valve_phase_trial_ports\",\"valve_native_phase_v1\",\"valve_native_handoff_v1\",\"valve_native_scope_v1\""
 #endif
         ",\"firmware_signed_ota\""
+#ifdef RAINPOINT_DEVELOPMENT_OTA
+        ",\"firmware_development_ota\""
+#endif
         "],"
         "\"tx_armed\":false,\"proof\":\"%s\"}\n",
         kProtocolVersion,

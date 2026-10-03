@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from tools.sign_firmware import descriptor_bytes, load_json, prepare, sign, verify
 from tools.check_signing_environment import validate
+from rainpointd.firmware_signatures import trusted_keys, signed_ota_capability
 
 
 def keys():
@@ -45,6 +46,48 @@ class SigningTest(unittest.TestCase):
                     self.descriptor["release_id"] + "\nsize_bytes=65536\nsha256=" +
                     hashlib.sha256(self.image).hexdigest() + "\n").encode()
         self.assertEqual(descriptor_bytes(self.descriptor), expected)
+
+    def test_package_keys_keep_production_trust_separate(self):
+        release = trusted_keys()
+        development = trusted_keys(include_development=True)
+        self.assertNotIn('rainpoint-development-2026', release)
+        self.assertIn('rainpoint-development-2026', development)
+        self.assertEqual(development['rainpoint-release-2026'], release['rainpoint-release-2026'])
+        self.assertEqual(signed_ota_capability('rainpoint-development-2026'), 'firmware_development_ota')
+
+    def test_development_signing_requires_prerelease_and_development_trust(self):
+        key_id = 'rainpoint-development-test'
+        with self.assertRaises(ValueError):
+            prepare(self.image, self.receipt, expected_commit='a' * 40, key_id=key_id)
+        receipt = dict(self.receipt, version='0.19.0-dev.1')
+        with self.assertRaises(ValueError):
+            prepare(self.image, receipt, expected_commit='a' * 40, key_id=key_id)
+        image = b'firmware_development_ota' + self.image[24:]
+        receipt['parts'] = [{'path': 'firmware.bin', 'size_bytes': len(image),
+                             'sha256': hashlib.sha256(image).hexdigest()}]
+        descriptor = prepare(image, receipt, expected_commit='a' * 40, key_id=key_id)
+        envelope = sign(descriptor, self.private, self.public, image)
+        with self.assertRaises(ValueError):
+            verify(envelope, {'release-only': self.public}, image)
+        verify(envelope, {key_id: self.public}, image)
+
+    def test_development_workflow_never_exposes_release_secret(self):
+        workflow = yaml.load((Path(__file__).resolve().parents[1] /
+                              '.github/workflows/sign-development-firmware.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
+        self.assertEqual(workflow['permissions']['contents'], 'read')
+        prepare_job, sign_job = workflow['jobs']['prepare'], workflow['jobs']['sign']
+        self.assertEqual(sign_job['environment'], 'firmware-development-signing')
+        self.assertEqual(sign_job['needs'], 'prepare')
+        self.assertNotIn('secrets.', str(prepare_job))
+        self.assertNotIn('secrets.FIRMWARE_SIGNING_KEY_PEM', str(workflow))
+        secret_steps = [step for step in sign_job['steps'] if 'secrets.' in str(step)]
+        self.assertEqual(len(secret_steps), 1)
+        self.assertIn('secrets.FIRMWARE_DEVELOPMENT_SIGNING_KEY_PEM', str(secret_steps))
+        for job in workflow['jobs'].values():
+            for step in job['steps']:
+                if 'uses' in step:
+                    self.assertRegex(step['uses'], r'@[0-9a-f]{40}$')
 
     def test_every_field_is_bound(self):
         for field, value in self.descriptor.items():

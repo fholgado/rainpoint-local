@@ -103,6 +103,16 @@ jobs:
           pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
           python tools/check_firmware_boundaries.py --phase-trial \
             firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+      - name: Build and check development-only HTV213 recovery trust
+        env:
+          RAINPOINT_DEVELOPMENT_OTA: "1"
+          RAINPOINT_HTV213_PAIRING_EXPERIMENT: "1"
+          RAINPOINT_HTV213_CONTROL_EXPERIMENT: "1"
+          RAINPOINT_FIRMWARE_VERSION: "0.19.0-htv213-control.6"
+        run: |
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          python tools/check_firmware_boundaries.py --development --htv213-recovery \
+            firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 
   container:
     runs-on: ubuntu-latest

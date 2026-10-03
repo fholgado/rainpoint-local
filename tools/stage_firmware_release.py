@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
-from rainpointd.firmware_signatures import verify, trusted_keys, load_json
+from rainpointd.firmware_signatures import verify, trusted_keys, load_json, signed_ota_capability
 
 
 MAXIMUM_CATALOG_RELEASES = 32
@@ -30,13 +30,14 @@ def stage_release(
     release_url: str | None = None,
     supersede_release_ids: list[str] | None = None,
     signature: dict | None = None,
+    development: bool = False,
 ) -> dict:
     """Copy an artifact and atomically replace its bounded catalog entry."""
     content = artifact.read_bytes()
     if not 64 * 1024 <= len(content) <= 2 * 1024 * 1024:
         raise ValueError("firmware artifact size is outside OTA limits")
     if signature is not None:
-        verify(signature, trusted_keys(), content)
+        verify(signature, trusted_keys(include_development=development), content)
         descriptor = signature["descriptor"]
         if (descriptor["release_id"] != release_id or descriptor["version"] != version
                 or descriptor["firmware_variant"] != firmware_variant
@@ -108,7 +109,7 @@ def stage_release(
         "hardware_profile": HARDWARE_PROFILE,
         "firmware_variant": firmware_variant,
         "compatible_variants": compatible_variants or [firmware_variant],
-        "required_capability": "firmware_signed_ota" if signature is not None else "firmware_update_trial",
+        "required_capability": signed_ota_capability(signature["descriptor"]["key_id"]) if signature is not None else "firmware_update_trial",
         "artifact": filename,
         "size_bytes": len(content),
         "sha256": hashlib.sha256(content).hexdigest(),
@@ -151,6 +152,7 @@ def main() -> int:
     parser.add_argument("--release-url")
     parser.add_argument("--signature", type=Path, help="publisher signature envelope from the protected signing workflow")
     parser.add_argument("--unsigned-preview", action="store_true", help="prepare a draft catalog that the production gateway will reject")
+    parser.add_argument("--development", action="store_true", help="allow development signatures for explicitly development-capable nodes")
     parser.add_argument(
         "--supersede-release-id",
         action="append",
@@ -175,6 +177,7 @@ def main() -> int:
         release_url=args.release_url,
         supersede_release_ids=args.supersede_release_ids,
         signature=load_json(args.signature) if args.signature else None,
+        development=args.development,
     )
     print(json.dumps(release, indent=2, sort_keys=True))
     return 0

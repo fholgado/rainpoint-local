@@ -121,6 +121,23 @@ class ESP32NetworkTest(unittest.TestCase):
             )
         return connection, stream, response
 
+    def test_development_rejoin_firmware_authenticates_with_both_new_capabilities(self) -> None:
+        capabilities = ['rx', 'sensor_pairing_tx', 'firmware_update_trial', 'firmware_signed_ota',
+                        'firmware_development_ota', 'htv213_pairing_experiment',
+                        'htv213_control_experiment', 'htv213_routine_owner', 'htv213_retained_rejoin_v1']
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+                                                     capabilities=capabilities)
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            deadline = time.monotonic() + 2
+            while not self.gateway.nodes() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertIn('firmware_development_ota', self.gateway.nodes()[0]['capabilities'])
+            self.assertIn('htv213_retained_rejoin_v1', self.gateway.nodes()[0]['capabilities'])
+        finally:
+            stream.close()
+            connection.close()
+
     def test_v2_node_reports_firmware_compatibility_contract(self) -> None:
         connection, stream, response = self._connect(
             NODE_A,

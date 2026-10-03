@@ -41,13 +41,14 @@ def qualify(mbedtls: Path):
         header += public.decode() + ')KEY"}, {"wrong-test", R"KEY(' + wrong_public.decode() + ')KEY"}}};\n}\n'
         (root / "firmware_trust.h").write_text(header)
         binary = root / "signed-ota-test"
-        subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-sign-compare",
+        compiler = ["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wno-sign-compare",
             "-I" + str(ROOT / "tests/firmware_stubs"), "-I" + str(root),
             "-I" + str(ROOT / "firmware/rainpoint_bridge/include"),
             "-I" + str(ROOT / "firmware/rainpoint_bridge/src"), "-I" + str(mbedtls / "include"),
             str(ROOT / "firmware/rainpoint_bridge/tests/signed_ota_test.cpp"),
             str(ROOT / "firmware/rainpoint_bridge/src/ota_trial.cpp"),
-            str(mbedtls / "library/libmbedcrypto.a"), "-o", str(binary)], check=True)
+            str(mbedtls / "library/libmbedcrypto.a"), "-o", str(binary)]
+        subprocess.run(compiler, check=True)
         def run(value, body=image):
             (root / "command.json").write_text(value if isinstance(value, str) else json.dumps(value))
             (root / "image.bin").write_bytes(body)
@@ -77,7 +78,25 @@ def qualify(mbedtls: Path):
         result = run(command, b"x" + image[1:])
         assert result["begins"] == result["aborts"] == 1 and result["writes"] > 0, result
         assert all(result[field] == 0 for field in ("success", "ends", "pending", "restart_pending")), result
+        development_private, development_public = keys()
+        development_descriptor = dict(descriptor, key_id='rainpoint-development-test')
+        development_envelope = sign(development_descriptor, development_private, development_public, image)
+        development_command = dict(command, **wire_signature(development_envelope))
+        result = run(development_command)
+        assert all(result[field] == 0 for field in
+                   ('success', 'downloads', 'begins', 'writes', 'ends', 'pending', 'restart_pending')), result
+        # The same OTA implementation, with an explicitly expanded test-image
+        # trust set, accepts development and retains the production handback key.
+        header = header.replace('array<FirmwareSigningKey,2>', 'array<FirmwareSigningKey,3>')
+        header = header.replace('}}};\n}', '}, {"rainpoint-development-test", R"KEY(' +
+                                development_public.decode() + ')KEY"}}};\n}')
+        (root / 'firmware_trust.h').write_text(header)
+        subprocess.run(compiler, check=True)
+        for accepted in (development_command, command):
+            result = run(accepted)
+            assert result['success'] == result['begins'] == result['ends'] == 1, result
         print(f"PASS: real OTA/Mbed TLS valid vector, {len(cases)} pre-flash rejections and tampered-download abort")
+        print('PASS: production rejects development before download/flash; test trust accepts development and release handback')
 
 
 if __name__ == "__main__":

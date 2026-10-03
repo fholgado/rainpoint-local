@@ -25,6 +25,7 @@ from rainpointd.http import create_server
 from rainpointd import http as gateway_http
 from stage_firmware_release import stage_release
 from tests.firmware_signing_fixtures import keys, sign_release
+from tools.sign_firmware import sign
 
 
 class FirmwareCatalogTest(unittest.TestCase):
@@ -74,6 +75,34 @@ class FirmwareCatalogTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
+
+    def test_development_signature_is_offered_only_to_test_radios(self):
+        payload = json.loads(self.catalog_path.read_text())
+        release = payload['releases'][0]
+        key_id = 'rainpoint-development-test'
+        descriptor = dict(release['signature']['descriptor'], key_id=key_id)
+        release['signature'] = sign(descriptor, self.private, self.public, self.content)
+        # An unsigned catalog capability cannot relax authenticated key scope.
+        self.catalog_path.write_text(json.dumps(payload))
+        with self.assertRaises(ValueError):
+            FirmwareCatalog.load(self.catalog_path, trusted_keys={key_id: self.public})
+        release['required_capability'] = 'firmware_development_ota'
+        self.catalog_path.write_text(json.dumps(payload))
+        catalog = FirmwareCatalog.load(self.catalog_path, trusted_keys={key_id: self.public})
+        node = {'firmware_version': '0.9.0-test.2', 'firmware_variant': 'unified',
+                'capabilities': ['firmware_update_trial', 'firmware_signed_ota']}
+        self.assertIsNone(catalog.latest_for_node(node))
+        node['capabilities'].append('firmware_development_ota')
+        self.assertIsNotNone(catalog.latest_for_node(node))
+        with patch('stage_firmware_release.trusted_keys', side_effect=lambda **kw:
+                   {key_id: self.public} if kw.get('include_development') else {}):
+            args = dict(release_id=descriptor['release_id'], version=descriptor['version'],
+                        summary='Development', notes='Test only', firmware_variant='unified',
+                        signature=release['signature'])
+            with self.assertRaises(ValueError):
+                stage_release(self.artifact, self.root / 'stage', **args)
+            staged = stage_release(self.artifact, self.root / 'stage', development=True, **args)
+            self.assertEqual(staged['required_capability'], 'firmware_development_ota')
 
     def test_catalog_matches_trial_node_and_rejects_tampering(self) -> None:
         catalog = self.load_catalog()
