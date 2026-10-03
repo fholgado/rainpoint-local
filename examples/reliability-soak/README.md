@@ -6,7 +6,8 @@ a qualification gate passed.
 
 1. Back up HA configuration.
 2. Copy `tools/reliability_soak.py` into `/config/rainpoint-local/`.
-3. Include [package.yaml](package.yaml) through HA packages and set its gateway URL.
+3. Include [package.yaml](package.yaml) through HA packages. If more than one
+   RainPoint gateway is configured, add `--entry-id` with the intended HA entry ID.
 4. Check HA configuration and restart/reload the affected integrations.
 5. Verify `/config/rainpoint-local/reliability-status.json` advances every five
    minutes. Database and status output are private installation artifacts.
@@ -25,5 +26,9 @@ cycles, controlled coexistence, and scheduled watering need their own evidence.
 
 The call uses bounded API pages and five-second request timeouts to fit HA's
 [shell command execution limit](https://www.home-assistant.io/integrations/shell_command/).
-No API write credential is needed. To start a separate trial, preserve the old
+The collector reuses HA's saved credential for TLS authentication but only issues
+allowlisted GET requests. It never prints, rotates, or modifies that credential.
+Outside HA, use `--gateway-url https://HOST:8787 --token-file PRIVATE_FILE`
+instead of `--ha-config`; Python 3.13+ with TLS-PSK is required.
+To start a separate trial, preserve the old
 database and deliberately choose a new path; never reset an ongoing window.

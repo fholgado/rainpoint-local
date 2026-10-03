@@ -24,6 +24,18 @@ to the integration's device list; automatic return is still a roadmap item.
 
 ## Re-pair and change owners
 
+The Sep 27 source changes (not yet deployed) add **ACK ownership cleanup** to
+each radio's HA diagnostics. Explicit sensor/HTV405 owner moves stay pending
+until the old radio confirms revocation and the replacement confirms setup.
+Deletion retains cleanup across restart even after the device is hidden. An
+offline/incompatible old radio blocks completion; reconnect it with compatible
+firmware. Lost confirmations retry on reconnect, never by assuming success.
+Do not remove that radio or downgrade the gateway while cleanup is pending.
+
+This qualifies the source-level explicit ownership API, not re-pairing a known
+device on a different radio. The latter still needs the separate pre-grant
+ownership audit and physical test in the roadmap.
+
 1. Keep the existing HA device when possible and turn off the stock RainPoint
    gateway during pairing.
 2. In Configure → Add a RainPoint device, choose its model and intended radio.

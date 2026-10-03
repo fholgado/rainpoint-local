@@ -35,7 +35,9 @@ nodes connect outbound to TCP 8790 using protocol v2.
 
 ## API
 
-The default development API is `http://127.0.0.1:8787/api/v1`.
+The installed API is `https://HOST:8787/api/v1`, authenticated with TLS-PSK.
+Use `rainpointd.secure_transport.client_context` for research clients. Plain HTTP
+is only for explicitly unencrypted, isolated development listeners.
 
 Useful read-only endpoints:
 

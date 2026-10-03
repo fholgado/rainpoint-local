@@ -195,6 +195,70 @@ so unsigned-bundle reproducibility and signed-bundle authenticity are separate
 tests. No key creation, secret upload, release, or device flash is authorized
 by this design note.
 
+## Release discovery and version compatibility
+
+GitHub Releases should be the publication and discovery source for released
+radio firmware, but it is not the runtime compatibility authority. The
+gateway owns firmware selection because it already knows each node's hardware
+profile, firmware variant, channel, protocol version and capabilities. The HA
+integration continues to expose the gateway-selected candidate through its
+firmware Update entity and requests installation; it must not independently
+interpret GitHub tags, choose an image or bypass the gateway catalog.
+
+Keep three independently versioned products: the HA integration, the gateway
+app and the radio firmware. Do not require their SemVer values to match. Their
+contracts meet at two explicit seams:
+
+- Firmware-to-gateway compatibility uses the node network-protocol range,
+  required/provided capabilities, hardware profile, firmware variant and
+  release channel.
+- Gateway-to-integration compatibility uses a versioned public response schema
+  and capabilities. Add an integration minimum only when a firmware feature
+  truly changes the HA-facing schema; otherwise preserve the stable gateway
+  interface.
+
+A catalog schema v2 must authenticate every compatibility field that can admit
+or reject an update. At minimum it carries the immutable release ID, firmware
+version, hardware profile, variant, channel, network-protocol range, required
+gateway capabilities, compatible source variants/versions, artifact size and
+digest, source commit, release URL and rollback policy. A signed, monotonic
+catalog generation prevents an older valid index from silently replacing a
+newer one. These fields require a new signed descriptor schema; they must not
+be added as unsigned flags around the existing v1 descriptor.
+
+Implement release discovery as another gateway catalog adapter alongside the
+strict local catalog. It reads a bounded signed index from a fixed GitHub
+Release asset, verifies it with the provisioned publisher trust, downloads the
+exact immutable asset, verifies its size, digest and artifact signature, then
+stages it locally. The existing local adapter remains available for development,
+offline installation and recovery. Nodes continue downloading from the local
+gateway rather than GitHub, so a staged update remains usable without Internet
+access and the node does not need GitHub/TLS trust machinery.
+
+Persist only a fully verified last-known-good index and artifacts. If GitHub is
+unavailable, the index is malformed, its signature or generation is invalid,
+or no candidate satisfies the complete contract, expose no new update and keep
+the running firmware untouched. Do not follow raw branch files, mutable
+"latest" binary URLs or workflow artifacts. Normal releases use immutable
+GitHub Release assets; stable, beta and research channels require explicit
+selection, and research builds never appear on the stable channel.
+
+The release pipeline builds an image once at an immutable source commit, runs
+the protocol and compatibility matrix, signs the artifact and index, and only
+then publishes through the approved release environment. When a change is not
+backward compatible, publish and install in dependency order: integration
+support first when the HA schema changes, gateway support second, and firmware
+last. HACS remains responsible for integration updates and the HA app repository
+for gateway updates; the firmware Update entity is intentionally separate.
+Start with user-approved firmware installation rather than automatic rollout.
+
+Qualification must cover wrong hardware/profile/variant/channel, older and
+newer network protocols, missing capabilities, incompatible gateway/API
+schemas, tampered index and artifact, replayed catalog generations, downgrade,
+offline cached operation, interrupted download and rollback. The resolver must
+return either one verified eligible release or no release, with a diagnostic
+reason suitable for HA; it must never return a merely newer SemVer.
+
 ## Verification evidence required
 
 Use a clearly test-only key with no production trust. Cover golden canonical
