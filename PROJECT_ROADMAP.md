@@ -85,9 +85,10 @@ The latest valve-learning implementation adds capture-tested reply builders and
 durable recovery configuration/progress with owner checks. The HTV213 reply-owner
 handler now consumes explicit per-port configuration and opt-in retained rejoin.
 Development control.8 and matched gateway 0.39.16 are deployed to Test Node B
-only (Oct 3); its recovery owner is enabled. The `07` boot rejection is fixed
-and capture replay passes, but physical recovery acceptance is still pending.
-Other model handlers remain unfinished.
+only (Oct 3); its recovery owner is enabled. The `07` boot rejection is fixed;
+one battery-only recovery is RF-verified through both-port state/settings/plans,
+followed by accepted phase-2/60-second control and automatic stop; next phase 3.
+Repeat/lifecycle qualification and other model recovery handlers remain unfinished.
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
@@ -370,7 +371,7 @@ not tasks to mark “done once.”
 - [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
-- [ ] Qualify HTV213 routine ACK ownership and retained rejoin before HA model-menu or operational support; preserve existing one-/four-zone paths.
+- [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
@@ -386,7 +387,9 @@ not tasks to mark “done once.”
 - [x] Capture/diagnose Oct 3 HTV213 recovery failure: boot body ends `07`, but retained replies require `03`; real-builder replay reproduces rejection. No watering or counter change.
 - [x] Confirm Oct 3 startup was battery-only; admit exact known-owner `03`/`07` announcements. Private replay, 964 CI tests/two skips, native protocol and both builds pass; no master phase allocation.
 - [x] Verify automatic [control.8 signing](https://github.com/fholgado/rainpoint-local/actions/runs/37129717077) from `73475cd`: 966 CI tests/two skips; full verified OTA, new boot, healthy confirmation and restored recovery owner. Test Node B only, master counter still 2 (Oct 3).
-- [ ] Qualify control.8 battery-only recovery, then one short dry control. Preserve identity/configuration; do not infer a counter reset.
+- [x] RF-verify one control.8 battery-only recovery: known-owner `01/81`, both-port `02/82`, `05/85`, `06/86` and idle reports; unchanged registry/gateway counter 2. Preserve redacted replay (Oct 3).
+- [x] Verify post-battery control.8 dry run at retained phase 2: positive ACK, active/automatic idle and elapsed-60 summary; next phase 3, no reset/retry. Preserve native replay (Oct 3).
+- [x] Validate recovery/control fixtures: 968 Python tests pass/two optional skips; native protocol passes (Oct 3).
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.

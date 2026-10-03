@@ -1,0 +1,73 @@
+{
+  "model": "HTV213FRF",
+  "date": "2026-10-03",
+  "scope": "One dry post-battery port-1 60-second run at retained phase 2; no reset, re-pairing, close or retry. Next gateway phase 3.",
+  "redaction": "Synthetic controller a2446688, paired 91556677 and companion 22446688; time bytes zeroed. Normalized checksum reconstructed; physical final CRC symbol not represented.",
+  "events": [
+    {
+      "time_s": 0.0,
+      "direction": "gateway",
+      "frame": "79f4882f2891556677224466888110828081009e000000000000000000000000000000004b6d"
+    },
+    {
+      "time_s": 0.314458,
+      "direction": "device",
+      "frame": "79f4882f28a2446688915566770150868010cf80000000409e80569e000000000000000054a2"
+    },
+    {
+      "time_s": 6.302062,
+      "direction": "device",
+      "frame": "79f4882f28a24466889155667706810785858090cf80000000409b80569e0000000000007896"
+    },
+    {
+      "time_s": 6.383346,
+      "direction": "gateway",
+      "frame": "79f4882f28915566772244668886c1010001000000000000000000000000000000000000749c"
+    },
+    {
+      "time_s": 34.264447,
+      "direction": "device",
+      "frame": "79f4882f28a24466889155667707010785870090cf80000000408d80569e0000000000000b21"
+    },
+    {
+      "time_s": 54.245553,
+      "direction": "device",
+      "frame": "79f4882f28a244668891556677078107858701004f8000000040800056800000000000009587"
+    },
+    {
+      "time_s": 54.326595,
+      "direction": "gateway",
+      "frame": "79f4882f28915566772244668887c1038001000000000000000000000000000000000000c0a1"
+    },
+    {
+      "time_s": 62.274044,
+      "direction": "device",
+      "frame": "79f4882f28a244668891556677080107858580804f8000000040800056800000000000005700"
+    },
+    {
+      "time_s": 62.35561,
+      "direction": "gateway",
+      "frame": "79f4882f28915566772244668888410100010000000000000000000000000000000000009829"
+    },
+    {
+      "time_s": 65.302265,
+      "direction": "device",
+      "frame": "79f4882f28a2446688915566770882070580808000000010800000001e000000000000005921"
+    },
+    {
+      "time_s": 65.38264,
+      "direction": "gateway",
+      "frame": "79f4882f28915566772244668888c2008000000000000000000000000000000000000000f5c6"
+    },
+    {
+      "time_s": 94.284796,
+      "direction": "device",
+      "frame": "79f4882f28a244668891556677090107858700804f800000004080005680000000000000790b"
+    },
+    {
+      "time_s": 94.365889,
+      "direction": "gateway",
+      "frame": "79f4882f28915566772244668889410380010000000000000000000000000000000000002c14"
+    }
+  ]
+}

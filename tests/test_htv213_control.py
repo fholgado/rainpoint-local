@@ -220,6 +220,50 @@ class Htv213ControlTest(unittest.TestCase):
         announcement = next(e['frame'] for e in events if decode(e['frame']).command == 1)
         self.assertEqual(self.run_ops([f'owner_ack 0 {announcement}'])[0][0], 0)
 
+    def test_local_battery_rejoin_replays_all_verified_exchanges(self):
+        events = json.loads((ROOT / 'research/fixtures/htv213_local_battery_rejoin_20261003.json').read_text())['events']
+        covered = set()
+        for request, response in zip(events[::2], events[1::2], strict=True):
+            incoming, expected = decode(request['frame']), decode(response['frame'])
+            self.assertEqual((request['direction'], response['direction']), ('device', 'gateway'))
+            row = self.run_ops([f"owner_rejoin 0 {request['frame']}"])[0]
+            self.assertEqual(row[0], 1)
+            # Redaction rebuilds a valid normalized checksum; changing routes
+            # can change the omitted physical CRC bit and its legacy residue.
+            actual = decode(row[-1])
+            self.assertEqual(bytes.fromhex(row[-1])[:-2], bytes.fromhex(response['frame'])[:-2])
+            self.assertEqual((actual.command, actual.phase, actual.data, actual.route),
+                             (expected.command, expected.phase, expected.data, expected.route))
+            self.assertEqual(row[1:3], [0, 0])  # No master command allocation.
+            self.assertEqual((expected.command, expected.phase), (incoming.command | 128, incoming.phase))
+            self.assertLess(response['time_s'] - request['time_s'], .1)
+            if incoming.command in (2, 5, 6):
+                port = incoming.data[2 if incoming.command == 2 else 1]
+                covered.add((incoming.command, port))
+        self.assertEqual(covered, {(command, port) for command in (2, 5, 6) for port in (1, 2)})
+
+    def test_post_battery_retained_phase_control_capture(self):
+        fixture = json.loads((ROOT / 'research/fixtures/htv213_local_post_battery_control_20261003.json').read_text())
+        events = fixture['events']
+        opens = [decode(e['frame']) for e in events if decode(e['frame']).command == 0x21]
+        self.assertEqual(len(opens), 1)
+        self.assertEqual((opens[0].phase, opens[0].data), (2, bytes.fromhex('0102013c00')))
+        ops = ['start 0 1 60 2', 'finish 1 1']
+        active_ports = set()
+        for event in events:
+            incoming = decode(event['frame'])
+            if event['direction'] != 'device':
+                continue
+            if incoming.command == 0xa1:
+                self.assertEqual(incoming.phase, 2)
+            if incoming.command == 2 and incoming.data[3] == 0x21:
+                active_ports.add(incoming.data[2])
+            ops.append(f"observe {round(event['time_s'] * 1000)} {event['frame']}")
+        result = self.run_ops(ops)[-1]
+        self.assertEqual(result[1], 6)  # Positive ACK plus idle and summary.
+        self.assertEqual(result[3:9], [1, 0, 1, 1, 1, 60])
+        self.assertEqual(active_ports, {1})
+
     def test_owner_configuration_is_per_port_and_never_guesses_unknown_values(self):
         report = self.packet(2)
         data = bytearray(decode(report).data)

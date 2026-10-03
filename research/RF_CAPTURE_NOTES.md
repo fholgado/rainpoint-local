@@ -8,6 +8,92 @@ keeps chronology and correlation details out of those normative references.
 Raw IQ captures are retained locally and are not committed because they can be
 large and may include unrelated nearby traffic.
 
+## HTV213 post-battery retained-phase control — 2026-10-03
+
+After the successful battery-only recovery below, the user authorized exactly
+one 60-second dry run. Test Node B used its existing command journal's next
+phase 2, without reseeding, re-pairing, an explicit close or an automatic retry.
+The stock hub remained off; no installed garden valve was commanded.
+
+The independent recording is
+`captures/htv213-local-post-rejoin-control-20261003/20261003-110451/`:
+180 seconds, CU8, 2 Msps, center 433.7 MHz, gain 0.9 dB,
+720,000,000 bytes; independently verified SHA-256
+`eb606cbb0a8fc6f164185d0885bf999e9b0b4cf8cd4a85b0121d887e67ce2c5a`.
+Private baseline, dispatch, observations, final state and RF verification are
+preserved alongside it. Bounded overlapping eight-second decode covers seconds
+0–112; unrelated traffic is excluded by the saved association.
+
+| Native evidence | Capture time (s) | Result |
+| --- | --- | --- |
+| `21`, phase 2 | 16.313815 | Port 1 open, `01 02 01 3c 00` |
+| `a1`, phase 2 | 16.628273 | Result `00`, requested 60, initial remaining 61 |
+| `02`, phase 13 | 22.615877 | Port 1 active, remaining 55; matching `82` |
+| `02`, phase 16 | 78.587859 | Port 1 idle; matching `82` |
+| `04`, phase 17 | 81.616080 | Port 1 elapsed 60; matching `84` |
+
+These decisive decoded windows were unclipped. An intermediate countdown
+window had a small ADC-endpoint clipping fraction, so this is not a claim of
+uniform capture quality or complete RF coverage. Port 2 independently reported
+idle during the run. Report phases 13–18 did not reseed the master command.
+The gateway journal completed with ACK/idle/summary, retained next phase 3;
+both outlets were idle, the authenticated reply owner ready, and registry
+unchanged. One accepted phase-2 command establishes this post-battery control
+path, not every phase-retention/reset policy or a repeated reliability soak.
+
+The selected exchanges are redacted in
+`fixtures/htv213_local_post_battery_control_20261003.json`; the native control
+state machine replays acceptance, automatic idle and summary to completion.
+Synthetic routes and zeroed clock bytes preserve command/report semantics,
+not the original physical CRC tail. Qualification status is in
+[the roadmap](../PROJECT_ROADMAP.md).
+Final validation passed 968 Python tests (two optional skips), including both
+new native replay regressions, plus the standalone native protocol executable.
+
+## HTV213 local battery recovery — 2026-10-03
+
+The corrected control.8 development image on Test Node B recovered the dry
+valve after the requested 15-second battery removal/reinsertion, without either
+button or fresh pairing mode. The user reported success. The stock gateway
+remained off. No local master-command phase was seeded or reset, and no watering
+command was sent.
+
+The complete receive-only recording is preserved under
+`captures/htv213-local-rejoin-control8-20261003/20261003-104124/`: 600 seconds,
+CU8, 2 Msps, center 433.7 MHz, gain 0.9 dB, 2,400,000,000 bytes. Independent
+SHA-256 agrees with the capture receipt:
+`fabbb708f84a1652f0adeac85a0c4f3c0aa506fd14dfb851e0496814d0590287`.
+Private baseline, gateway journal, bounded decode and verification receipts are
+alongside it. Overlapping eight-second decoding of seconds 96–152 recovered
+checksum-valid, unclipped exchanges independently of the node.
+
+Native `01` body `0b ff 20 05 01 04 3e 07` received saved-association `81`
+replies at phases 1 and 4; announcements continued after the first reply, so it
+alone is not acceptance proof. After phase 4, both ports progressed through:
+
+| Exchange | Full phases | Verified result |
+| --- | --- | --- |
+| `02 / 82` | 5, 6 | Both ports idle; configuration revision 2 |
+| `05 / 85` | 7, 8 | Result `00` plus each saved fourteen-byte settings block |
+| `06 / 86` | 9, 10 | Result `00` for each known-empty plan page |
+
+The assignment result remained `00`, with saved address, selector, timing and
+revision plus current clock. The registry matched the pre-test baseline exactly;
+the owner stayed ready and the gateway's retained next command phase stayed 2.
+At this point it did not prove valve-side command acceptance; the separately
+authorized post-rejoin test above subsequently qualified the retained phase.
+No `20/a0` or `21/a1` was decoded in this window; this is not a universal absence
+claim. One successful recovery is not a long-term reliability soak or coverage
+of every reset/announcement variant.
+
+Selected successful pairs are frozen in
+`fixtures/htv213_local_battery_rejoin_20261003.json`, with synthetic routes and
+test clock context. Native builder replay matches their headers and bodies,
+including both ports, without master allocation. The fixture rebuilds normalized
+integrity; it does not preserve the physical CRC tail after identity redaction.
+Remaining control/lifecycle qualification is in
+[the roadmap](../PROJECT_ROADMAP.md).
+
 ## HTV213 local recovery rejection — 2026-10-03
 
 Test Node B ran development-signed control.7 with its durable reply owner and

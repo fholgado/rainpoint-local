@@ -1,7 +1,8 @@
 # HTV213FRF two-zone valve protocol
 
-**Stock reference plus locally verified dry pairing, both-outlet control and
-explicit stop. General production support and local battery rejoin remain unqualified.**
+**Stock reference plus locally verified dry pairing, both-outlet control,
+explicit stop and one battery-only recovery with subsequent control.
+General production support remains unqualified.**
 The HTV213FRF is one RF device with ports `1` and `2`. Follow
 [common framing](common.md) and the
 [capture evidence](../research/HTV213_STOCK_CAPTURE_FINDINGS_20260928.md).
@@ -33,8 +34,11 @@ plans, time context or announcement selectors do not receive guessed replies.
 The retained assignment filter admits the exact prefix `ff 20 05 01 04 3e`
 followed by captured suffix `03` or `07`, only for the saved factory endpoint.
 Battery-only startup also produced `07`; it does not establish a button press
-or a counter reset. Builder/runtime replay is verified, but physical local
-recovery for this variant remains unqualified.
+or a counter reset. Local known-owner `07` recovery is RF-verified: assignment
+is followed by both-port `02/82`, `05/85` and `06/86`, with idle reports.
+One subsequent port-1 60-second command at retained phase 2 received positive
+`a1`, active/automatic-idle reports and an elapsed-60 summary. No command phase
+was reset; the gateway advanced its next phase from 2 to 3.
 
 Assignment uses the incoming announcement selector's carrier, not the saved
 routine selector's carrier. Replies retain the corrected native CRC tail and
@@ -45,8 +49,8 @@ Authenticated POST `/api/v1/experiments/htv213/recovery` accepts an existing
 `association_key`, explicit `configuration` (schema in `valve_recovery.py`) and
 boolean `enabled`. It installs configuration through the existing reply owner;
 it does not enroll or water. Nodes require `htv213_retained_rejoin_v1`. Normal
-builds omit this handler. Local battery
-rejoin is still unqualified until physical testing.
+builds omit this handler. One local battery-only rejoin is physically verified;
+repeat/lifecycle qualification remains tracked in the roadmap.
 
 Both signing workflows have an unpublished `htv213-recovery` profile. Release
 signing requires approval; separate development signing is automatic and only
@@ -98,7 +102,7 @@ positive `20/a0`, and both-port `05/85` and `06/86`, including repeated plan
 requests. Preserve this working path. Subsequent dry trials qualify addressed
 reports, both-outlet control and explicit stop as described below; transmitted
 plan replies alone are not the acceptance evidence. General enrollment and
-battery-change recovery remain separate qualification gates.
+repeat/lifecycle recovery remain separate qualification gates.
 
 Capture-backed tests verify the normalized bytes, not the physical final CRC
 bit, oscillator calibration or valve acceptance. The candidate currently
@@ -148,7 +152,16 @@ positive `a1`, port-2 countdown/idle and 60-second session summary after the
 device's report sequence restarted.
 Do not reset the hub's next command from a battery-start announcement or copy
 the captured selector/phase into a generic implementation. These observations
-qualify one stock rejoin, not local firmware recovery or every reset branch.
+qualify one stock rejoin, not every reset branch.
+
+Local known-owner recovery is also verified once for an announcement ending
+`07`: result-`00` assignment retains saved address, selector, timing and revision;
+both ports complete the same state/settings/empty-plan request sequence without
+fresh pairing or an unsolicited configuration notification. The local gateway
+counter remained 2 through recovery. A subsequent 60-second port-1 open at
+that phase was accepted and stopped automatically, with full-phase positive
+`a1`, independent active/idle reports and elapsed-60 summary; next phase became
+3. This qualifies one local recovery/control path, not universal reset behavior.
 
 The opt-in retained-owner builder now replays `81/82/85/86` independently of
 fresh pairing. Assignment TX uses the announcement's qualified selector (11 or
@@ -188,7 +201,8 @@ the [validation record](../docs/STOCK_INFORMED_VALIDATION.md).
 Retained reply ownership persists the association at the gateway and restores
 configuration only on authenticated node reconnect. It acknowledges addressed
 `02/04` and answers `05/06`; it never resets the command phase or replays an open.
-The battery-rejoin responder is not enabled. General HA pairing-menu support,
+Battery rejoin is explicitly enabled on the qualified development test owner,
+not on production radios. General HA pairing-menu support,
 multi-device master allocation and recovery from unconfirmed commands remain separate gates.
 The qualified dry-device HA adapter exposes exactly two outlets and actual
 per-port report state; it must not invent battery percentage or water volume.
@@ -288,8 +302,9 @@ advertises a flow meter, water-usage statistics and manual duration selection.
 That establishes advertised capability, not RF volume units or calibration.
 Dry zero usage must not be interpreted as absence of a flow meter. Battery
 categorization and volume scaling are not established by these dry controls.
-Stock hub-reset and valve battery-rejoin observations do not qualify recovery
-in our local implementation.
+Stock observations alone do not qualify local recovery. One local battery-only
+recovery and subsequent retained-phase control are now verified; repeat cycles,
+other reset branches and general production support remain separate gates.
 
 Carriers and timings are association-specific. The retained stock profile uses
 different request/reply carriers. Earlier 433.7 MHz-center captures alias one
