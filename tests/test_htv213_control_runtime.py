@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from tests.test_htv213_runtime import function
+from research.pairing_native_transcripts import decode
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +42,8 @@ std::int8_t htv213ControlPower=0;
 bool htv213ControlListening=false, scanning=false;
 unsigned htv213ControlAcks=0, reports=0;
 bool htv213OwnerEnabled=false;
+bool htv213RetainedRejoinEnabled=false;
+rainpoint::valveConfiguration::Association htv213RetainedConfiguration{};
 std::string htv213OwnerId;
 void reportHtv213Owner(const rainpoint::htv213::Frame* =nullptr) {}
 struct Wifi { bool allowed=true; bool authenticated() { return allowed; } } wifiTransport;
@@ -54,6 +57,10 @@ void restoreScanningAfterPairing() { scanning=true; }
         fixture = json.loads((ROOT / "research/fixtures/htv213_stock_pairing_controls_20260928.json").read_text())
         trial = next(t for t in fixture["trials"] if t["name"] == "zone1_auto60")
         device = [e["frame"] for e in trial["events"] if e["direction"] == "device"]
+        lifecycle = json.loads((ROOT / "research/fixtures/htv213_stock_lifecycle_20260928.json").read_text())
+        battery = next(t for t in lifecycle["trials"] if t["name"] == "battery_rejoin")
+        announcement = next(e["frame"] for e in battery["events"] if e["direction"] == "device" and
+                            decode(e["frame"]).command == 1)
         support += '''
 rainpoint::htv213::Frame frame(const char* text) {
     rainpoint::htv213::Frame out{};
@@ -81,8 +88,21 @@ int main(int argc,char** argv) {
     if (mode=="rf-disabled") rfMaintenance.allowed=false;
     if (mode=="timeout" || mode=="tx-failure") fakeNow=1501;
     if (mode=="restore-failure") primaryRadio.restoreOk=false;
-    if (mode=="owner") { htv213OwnerEnabled=true; htv213OwnerId="test-owner"; }
-    if (mode=="accepted" || mode=="owner" || mode=="restore-failure") {
+    const bool owner=mode=="owner" || mode=="rejoin";
+    if (owner) {
+        htv213OwnerEnabled=true; htv213OwnerId="test-owner";
+        auto& a=htv213RetainedConfiguration;
+        a.model=rainpoint::valveConfiguration::Model::Htv213;
+        a.factoryEndpoint=p.factory; a.requestRouteA=p.controller;
+        a.requestRouteB=p.factory; a.requestRouteB[0]|=128;
+        a.address=p.address; a.selector=p.selector; a.timingKnown=true; a.timingRaw=p.timingRaw;
+        a.configurationRevision=2;
+        for (unsigned i=0;i<2;++i) {
+            a.ports[i].settingsKnown=true; a.ports[i].emptyPlanKnown=true;
+            a.ports[i].settings={{0x58,2,10,0,30,0,0,0,0,0,0,0,0,0}};
+        }
+    }
+    if (mode=="accepted" || owner || mode=="restore-failure") {
         fakeNow=313;
         processHtv213Control(frame("ACK_FRAME"),rainpoint::RadioPacket{313000});
     }
@@ -91,18 +111,30 @@ int main(int argc,char** argv) {
         if (htv213ControlActive() || !scanning) return 4;
     } else {
         if (primaryRadio.baseHz!=rainpoint::kReportHz) return 5;
-        if (mode=="accepted" || mode=="owner") {
+        if (mode=="accepted" || owner) {
             const char* frames[]={REPORT_FRAMES};
             for (const char* text:frames) {
                 fakeNow+=1000;
                 processHtv213Control(frame(text),rainpoint::RadioPacket{fakeNow*1000});
             }
-            if (htv213ControlTrial.state()!=rainpoint::htv213Control::State::Complete || scanning==(mode=="owner")) return 6;
+            if (htv213ControlTrial.state()!=rainpoint::htv213Control::State::Complete || scanning==owner) return 6;
             if (primaryRadio.commands.back()!=0x84) return 7;
-            if (mode=="owner") {
+            if (owner) {
                 const auto count=primaryRadio.commands.size();
                 processHtv213Control(frame(frames[0]),rainpoint::RadioPacket{fakeNow*1000});
                 if (primaryRadio.commands.size()!=count+1 || !htv213OwnerEnabled) return 12;
+                if (mode=="rejoin") {
+                    const auto before=primaryRadio.commands.size();
+                    const auto announcement=frame("ANNOUNCEMENT");
+                    processHtv213Control(announcement,rainpoint::RadioPacket{fakeNow*1000});
+                    if (primaryRadio.commands.size()!=before) return 14; // Disabled by default.
+                    htv213RetainedRejoinEnabled=true;
+                    processHtv213Control(announcement,rainpoint::RadioPacket{fakeNow*1000});
+                    processHtv213Control(announcement,rainpoint::RadioPacket{fakeNow*1000});
+                    if (primaryRadio.commands.size()!=before+2 || primaryRadio.commands.back()!=0x81 ||
+                        primaryRadio.baseHz!=rainpoint::kReportHz ||
+                        htv213ControlTrial.phase()!=3) return 15;
+                }
                 wifiTransport.allowed=false; pollHtv213Control();
                 if (htv213OwnerEnabled || !scanning) return 13;
             }
@@ -115,18 +147,18 @@ int main(int argc,char** argv) {
     unsigned opens=0;
     for (auto command:primaryRadio.commands) {
         if (command==0x21) ++opens;
-        else if (command!=0x82 && command!=0x84) return 10;
+        else if (command!=0x82 && command!=0x84 && (mode!="rejoin" || command!=0x81)) return 10;
     }
     return opens==1 ? 0 : 11;
 }
-'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:]))
+'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement)
         with tempfile.TemporaryDirectory() as directory:
             exe = str(Path(directory) / "runtime")
             result = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
                 "-I"+str(ROOT / "firmware/rainpoint_bridge/include"), "-x", "c++", "-", "-o", exe],
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for mode in ("accepted", "owner", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
+            for mode in ("accepted", "owner", "rejoin", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
                 with self.subTest(mode=mode):
                     result = subprocess.run([exe, mode], text=True, capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)

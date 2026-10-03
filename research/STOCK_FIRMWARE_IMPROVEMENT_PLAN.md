@@ -41,6 +41,18 @@ separate model-qualified retained `01/81` branch; it must not simply feed a
 battery announcement into the fixed fresh-enrollment transcript. No new HTV213
 HA pairing/control option is exposed by this implementation.
 
+**October 3 source follow-up.** The isolated HTV213 reply-owner runtime now takes
+explicit durable configuration and opt-in retained rejoin through its existing
+authenticated setup command. It caches both assignment carriers, returns to the
+report receiver, and uses the corrected native tail. Repeated battery announcements
+receive phase-echo replies without entering enrollment, sending `20`, allocating a
+master phase or replaying controls. Each port keeps its own settings; the original
+canary's previously implicit empty configuration is persisted during upgrade.
+Other models and default production dispatch remain unchanged. Actual RX/TX replay,
+configuration persistence/authentication and public native OPEN/CLOSE/OPEN rehearsals
+are offline evidence only; local battery rejoin still needs a signed candidate and
+physical acceptance. The [roadmap](../PROJECT_ROADMAP.md) tracks those gates.
+
 Lifecycle evidence is frozen in
 [`htv213_stock_lifecycle_20260928.json`](fixtures/htv213_stock_lifecycle_20260928.json)
 and `tests/test_htv213_stock_lifecycle.py`. See the

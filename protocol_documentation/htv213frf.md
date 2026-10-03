@@ -16,10 +16,37 @@ particular sweep counter or reuse the four-zone fixed transcript. Only the
 two captured explicit-pairing announcement bodies are admitted:
 `0c ff 20 05 01 04 3e 05` (stock enrollment) and
 `0b ff 20 05 01 04 3e 07` (repeat local trial). Retained battery rejoin ending
-in `03` remains excluded. These are exact experimental allowlist entries,
+in `03` remains excluded from fresh enrollment. These are exact experimental allowlist entries,
 not a general pairing-flag interpretation. The repeat variant received a
 locally accepted assignment in two dry trials, followed by addressed reports
 and acknowledgements for both ports. Preserve that proven prefix.
+
+### Retained reply owner
+
+The source-only control candidate adds an opt-in retained owner, separate from
+fresh enrollment. Its saved association supplies address, routine selector,
+timing, configuration revision, fourteen-byte settings for each port and known
+empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
+`06/86` answer incoming requests with their full six-bit phase. Unknown settings,
+plans, time context or announcement selectors do not receive guessed replies.
+
+Assignment uses the incoming announcement selector's carrier, not the saved
+routine selector's carrier. Replies retain the corrected native CRC tail and
+restore the report receiver afterward. Configuration restoration transmits no
+unsolicited RF and never allocates/resets a master command phase.
+
+Authenticated POST `/api/v1/experiments/htv213/recovery` accepts an existing
+`association_key`, explicit `configuration` (schema in `valve_recovery.py`) and
+boolean `enabled`. It installs configuration through the existing reply owner;
+it does not enroll or water. Nodes require `htv213_retained_rejoin_v1`. Normal
+builds omit this handler; deployed control.4 remains unchanged. Local battery
+rejoin is still unqualified until physical testing.
+
+The existing protected **Prepare signed firmware (no publication)** workflow's
+`htv213-recovery` profile builds `0.19.0-htv213-control.5`; the binary checker
+accepts only its two-zone candidate commands and rejects native-phase/other
+research commands. Signing still requires the release approver; no publication
+or deployment occurs as part of the workflow.
 
 The gateway supplies its generated local identity and an exact target factory
 endpoint. Carrier, selector, address, reply delay, power and the independent

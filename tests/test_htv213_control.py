@@ -195,8 +195,26 @@ class Htv213ControlTest(unittest.TestCase):
             elif request.command == 6:
                 self.assertEqual(reply.data, b'\0')
         self.assertTrue({0x81, 0x82, 0x85, 0x86}.issubset(commands))
-        runtime = (ROOT / 'firmware/rainpoint_bridge/src/htv213_control_runtime.inc').read_text()
-        self.assertIn('context,false', runtime.replace(' ', ''))
+        announcement = next(e['frame'] for e in events if decode(e['frame']).command == 1)
+        self.assertEqual(self.run_ops([f'owner_ack 0 {announcement}'])[0][0], 0)
+
+    def test_owner_configuration_is_per_port_and_never_guesses_unknown_values(self):
+        report = self.packet(2)
+        data = bytearray(decode(report).data)
+        data[1] = 2  # Explicit configuration-version request.
+        report = alter(report, data=data)
+        settings = '0102030405060708090a0b0c0d0e'
+        setup = f'config 0 7 2 {settings} 1 1'
+        self.assertEqual(decode(self.run_ops([setup, f'owner_ack 0 {report}'])[-1][-1]).data, b'\0\7')
+        for port in (1, 2):
+            request = alter(report, command=5, data=bytes((11, port)))
+            response = decode(self.run_ops([setup, f'owner_ack 0 {request}'])[-1][-1])
+            expected = settings if port == 2 else '58020a001e000000000000000000'
+            self.assertEqual(response.data, b'\0' + bytes.fromhex(expected))
+        for command, known, empty in ((5, 0, 1), (6, 1, 0)):
+            request = alter(report, command=command, data=bytes((11, 2)) + (b'\0' if command == 6 else b''))
+            rows = self.run_ops([f'config 0 7 2 {settings} {known} {empty}', f'owner_ack 0 {request}'])
+            self.assertEqual(rows[-1][0], 0)
 
     def test_local_second_outlet_and_explicit_stop_captures(self):
         fixture=json.loads((ROOT / 'research/fixtures/htv213_local_outlet_stop_20260930.json').read_text())

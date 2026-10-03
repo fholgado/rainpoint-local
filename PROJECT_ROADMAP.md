@@ -33,7 +33,7 @@
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-03
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -82,12 +82,14 @@ The subsequent unattended-work approval also covers source/test repairs for
 full-phase reply matching and bounded single-zone plan-request retries. These
 are implemented offline; hardware acceptance and deployment remain separate.
 The latest valve-learning implementation adds capture-tested reply builders and
-durable recovery configuration/progress with owner checks. **Live recovery is
-disabled**: model-specific node handlers and RF qualification remain unfinished.
+durable recovery configuration/progress with owner checks. The HTV213 reply-owner
+handler now consumes explicit per-port configuration and opt-in retained rejoin
+(Oct 3; source only). **Live recovery is disabled** pending signed deployment and
+physical acceptance; other model handlers remain unfinished.
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
-Research branch: `codex/stock-hub-research`. Refine and qualify our existing
+Recovery branch: `codex/retained-valve-recovery`; earlier research is merged to main. Refine and qualify our existing
 firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
 as a reference, and keep vendor images private.
 
@@ -203,6 +205,7 @@ Alpha 1 is available now; the remaining acceptance items do not block participat
 - [x] Audit older tests against current paths and evidence; retain legacy, migration and captured-packet regressions. No obsolete or exact duplicate tests found (Oct 2).
 - [x] Prepare private dry-outlet qualification limits: two 60-second native attempts, durable budget, expiry/reboot lock and blocked HA commands; gateway/radio enforce scope independently (Oct 2; source only).
 - [x] Qualify HTV405 native OPEN phases 2 → 3 and correlated no-RF handback on dry Zone 2; restore ordinary startup and retained counter 2 (Oct 2).
+- [x] Rehearse public native OPEN → CLOSE → OPEN for HTV145/HTV405 with adjacent phases and independently confirmed state (Oct 3; offline only).
 - [ ] Qualify native no-RF recovery, reboot/lost receipts and fresh-epoch readmission on dry hardware.
 - [ ] Qualify native-mode OPEN/CLOSE and same-action rollover on dry outlets with bounded, separately approved tests.
 - [ ] Consolidate/sign the production build without experiment controls; stage the matched gateway/radio rollout after qualification.
@@ -366,7 +369,11 @@ not tasks to mark “done once.”
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
 - [ ] Qualify HTV213 routine ACK ownership and retained rejoin before HA model-menu or operational support; preserve existing one-/four-zone paths.
-- [ ] Implement qualified node recovery handlers and explicit configuration population; verify bounded dry-valve rejoin before enabling automatic replies.
+- [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
+- [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
+- [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
+- [ ] Sign/deploy the HTV213 recovery candidate to Test Node B, then verify battery rejoin without pairing mode and one short dry control; no counter reset inferred.
+- [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
 - [ ] Qualify HCS012 rainfall increments, accumulation/reset and battery flags against stock-app readings before adding a local model profile.
