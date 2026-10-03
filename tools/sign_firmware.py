@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rainpointd_addon"))
 from rainpointd.firmware_signatures import (
     CONSTANTS, ALGORITHM, descriptor_bytes, load_json, public_key, verify,
+    signed_ota_capability,
 )
 
 
@@ -50,6 +51,9 @@ def prepare(image: bytes, receipt: dict, *, expected_commit: str, key_id: str) -
              "release_id": f"unified-{str(version).lower()}-{expected_commit[:8]}-{digest[:8]}",
              "size_bytes": len(image), "sha256": digest}
     descriptor_bytes(value)
+    if signed_ota_capability(key_id) == "firmware_development_ota":
+        if "-" not in str(version) or b"firmware_development_ota" not in image:
+            raise ValueError("development signing requires a development-capable prerelease image")
     return value
 
 
@@ -74,7 +78,9 @@ def main() -> None:
             parser.error("signing requires a receipt and expected source commit")
         if pem + b"\0" not in image:
             parser.error("release image does not contain the pinned public key")
-        private_pem = os.environ.pop("RAINPOINT_RELEASE_SIGNING_KEY_PEM", "")
+        development = signed_ota_capability(args.key_id) == "firmware_development_ota"
+        private_pem = os.environ.pop("RAINPOINT_DEVELOPMENT_SIGNING_KEY_PEM" if development
+                                    else "RAINPOINT_RELEASE_SIGNING_KEY_PEM", "")
         if not private_pem:
             parser.error("release signing secret is not configured")
         value = prepare(image, load_json(args.receipt), expected_commit=args.expected_commit, key_id=args.key_id)

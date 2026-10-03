@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .firmware_signatures import verify, trusted_keys as package_keys
+from .firmware_signatures import verify, trusted_keys as package_keys, signed_ota_capability
 
 
 CATALOG_SCHEMA_VERSION = 1
@@ -66,7 +66,7 @@ class FirmwareCatalog:
 
     def __init__(self, releases: list[FirmwareRelease] | None = None, *,
                  trusted_keys: dict[str, bytes] | None = None) -> None:
-        self._trusted_keys = dict(package_keys() if trusted_keys is None else trusted_keys)
+        self._trusted_keys = dict(package_keys(include_development=True) if trusted_keys is None else trusted_keys)
         self._releases = {
             release.release_id: release for release in (releases or [])
         }
@@ -174,7 +174,8 @@ class FirmwareCatalog:
                     "firmware_variant", "size_bytes", "sha256"):
             if descriptor[key] != getattr(release, key):
                 raise ValueError(f"catalog differs from signed {key}")
-        if release.compatible_variants != ("unified",) or release.required_capability != "firmware_signed_ota":
+        if (release.compatible_variants != ("unified",) or
+                release.required_capability != signed_ota_capability(descriptor["key_id"])):
             raise ValueError("signed OTA requires the unified signature-verifying node")
 
     @property

@@ -27,7 +27,40 @@ class PhaseTrialBuildTest(unittest.TestCase):
             with patch.dict(os.environ, settings, clear=True):
                 runpy.run_path(str(ROOT / "firmware/rainpoint_bridge/tools/build_profile.py"),
                               init_globals={"env": env, "Import": lambda _: None})
+            self.trust = (Path(directory) / "firmware_trust.h").read_text()
             return env.defines
+
+    def test_development_key_requires_explicit_test_build(self):
+        self.build_profile({})
+        self.assertNotIn("rainpoint-development-2026", self.trust)
+        self.assertIn("rainpoint-release-2026", self.trust)
+        defines = self.build_profile({"RAINPOINT_DEVELOPMENT_OTA": "1",
+                                      "RAINPOINT_FIRMWARE_VERSION": "0.19.0-dev.1"})
+        self.assertIn("RAINPOINT_DEVELOPMENT_OTA", defines)
+        self.assertIn("rainpoint-development-2026", self.trust)
+        self.assertIn("rainpoint-release-2026", self.trust)
+        for settings in ({"RAINPOINT_DEVELOPMENT_OTA": "1"},
+                         {"RAINPOINT_DEVELOPMENT_OTA": "1", "RAINPOINT_FIRMWARE_VERSION": "0.19.0"},
+                         {"RAINPOINT_DEVELOPMENT_OTA": "yes"}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                self.build_profile(settings)
+
+    def test_binary_checker_rejects_development_trust_in_production(self):
+        from tools import check_firmware_boundaries as boundary
+        common = b'\0'.join(boundary.REQUIRED_CAPABILITIES + boundary.VALVE_CONTROL_COMMANDS
+                            + boundary.HTV145_PAIRING_CAPABILITIES + boundary.HTV145_CONTROL_COMMANDS)
+        public = (ROOT / 'rainpointd_addon/rainpointd/firmware_development_keys/rainpoint-development-2026.pem').read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'firmware.bin'
+            for image, option, expected in ((common + public, '', 1),
+                                           (common + b'firmware_development_ota', '', 1),
+                                           (common, '--development', 1),
+                                           (common + b'firmware_development_ota', '--development', 0)):
+                with self.subTest(option=option, expected=expected):
+                    path.write_bytes(image)
+                    result = subprocess.run([sys.executable, str(ROOT / 'tools/check_firmware_boundaries.py'),
+                                             *([option] if option else []), str(path)], capture_output=True)
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
     def test_phase_commands_require_explicit_versioned_build(self):
         self.assertNotIn("RAINPOINT_VALVE_PHASE_EXPERIMENT", self.build_profile({}))

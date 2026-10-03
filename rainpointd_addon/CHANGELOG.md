@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.39.15 / Unreleased
+## 0.39.16 / Unreleased
+
+- Separate unattended development signing from protected production signing;
+  development-signed OTA is offered only to explicitly development-trusted radios.
+
+## 0.39.15
 
 - Persist explicit HTV213 per-port configuration and restore it through the
   existing reply owner. Add opt-in retained battery-rejoin configuration for

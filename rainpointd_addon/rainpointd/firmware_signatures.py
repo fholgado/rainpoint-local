@@ -99,10 +99,25 @@ def verify(envelope: dict, trusted_keys: dict[str, bytes], image: bytes | None =
 
 
 
-def trusted_keys() -> dict[str, bytes]:
+def signed_ota_capability(key_id: str) -> str:
+    """The authenticated signing identity selects the required node trust set."""
+    return ("firmware_development_ota" if key_id.startswith("rainpoint-development-")
+            else "firmware_signed_ota")
+
+
+def trusted_keys(*, include_development: bool = False) -> dict[str, bytes]:
     """Only package-pinned public keys; never trust a key from an offer."""
-    return {path.stem: path.read_bytes() for path in
-            (Path(__file__).parent / "firmware_keys").glob("*.pem")}
+    root = Path(__file__).parent
+    paths = list((root / "firmware_keys").glob("*.pem"))
+    if include_development:
+        paths.extend((root / "firmware_development_keys").glob("*.pem"))
+    result = {}
+    for path in paths:
+        if path.stem in result or (path.parent.name == "firmware_development_keys" and
+                                  signed_ota_capability(path.stem) != "firmware_development_ota"):
+            raise ValueError("invalid or duplicate firmware trust anchor")
+        result[path.stem] = path.read_bytes()
+    return result
 
 
 def wire_signature(envelope: dict) -> dict[str, str]:

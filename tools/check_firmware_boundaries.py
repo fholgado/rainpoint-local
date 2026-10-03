@@ -75,14 +75,27 @@ PHASE_TRIAL_COMMANDS = (
 
 def main() -> int:
     arguments = sys.argv[1:]
+    development = "--development" in arguments
+    if development:
+        arguments.remove("--development")
     phase_trial = arguments[:1] == ["--phase-trial"]
     htv213_recovery = arguments[:1] == ["--htv213-recovery"]
     if phase_trial or htv213_recovery:
         arguments = arguments[1:]
     if len(arguments) != 1:
-        print("usage: check_firmware_boundaries.py [--phase-trial|--htv213-recovery] FIRMWARE_BIN")
+        print("usage: check_firmware_boundaries.py [--development] [--phase-trial|--htv213-recovery] FIRMWARE_BIN")
         return 2
     firmware = Path(arguments[0]).read_bytes()
+    development_present = b"firmware_development_ota" in firmware
+    if development_present != development:
+        print("firmware development trust does not match the requested boundary")
+        return 1
+    if not development:
+        for path in (Path(__file__).resolve().parents[1] /
+                     "rainpointd_addon/rainpointd/firmware_development_keys").glob("*.pem"):
+            if path.read_bytes() in firmware:
+                print("production firmware contains a development trust anchor")
+                return 1
     leaked = [value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware and
               not (htv213_recovery and value in HTV213_RECOVERY_COMMANDS)]
     if not phase_trial:

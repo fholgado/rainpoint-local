@@ -1,0 +1,137 @@
+name: Sign development firmware (test radios only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Development radio profile
+        type: choice
+        required: true
+        default: htv213-recovery
+        options:
+          - unified
+          - phase-trial
+          - htv213-recovery
+      version:
+        description: Explicit prerelease version
+        type: string
+        required: true
+        default: 0.19.0-htv213-control.6
+
+run-name: Development ${{ inputs.profile }} ${{ inputs.version }} at ${{ github.sha }}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: development-firmware-signing
+  cancel-in-progress: false
+
+# A separate key/environment: no release secret and no reviewer gate. This is
+# maintainer-dispatched only, never a privileged follow-up to pull-request CI.
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Test and build without signing credentials
+        env:
+          BUILD_PROFILE: ${{ inputs.profile }}
+          RAINPOINT_FIRMWARE_VERSION: ${{ inputs.version }}
+          RAINPOINT_DEVELOPMENT_OTA: '1'
+        run: |
+          pip install -r tests/requirements.txt 'platformio==6.1.19'
+          python -m unittest discover -s tests -t . -v
+          c++ -std=c++17 -Ifirmware/rainpoint_bridge/include firmware/rainpoint_bridge/tests/protocol_test.cpp -o /tmp/protocol-test
+          /tmp/protocol-test
+          case "$BUILD_PROFILE" in
+            unified) boundary_args=() ;;
+            phase-trial)
+              export RAINPOINT_VALVE_PHASE_EXPERIMENT=1
+              boundary_args=(--phase-trial)
+              ;;
+            htv213-recovery)
+              export RAINPOINT_HTV213_PAIRING_EXPERIMENT=1
+              export RAINPOINT_HTV213_CONTROL_EXPERIMENT=1
+              boundary_args=(--htv213-recovery)
+              ;;
+            *) exit 2 ;;
+          esac
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge
+          pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge --target release_receipt
+          python tools/check_firmware_boundaries.py --development "${boundary_args[@]}" firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
+          mkdir "$RUNNER_TEMP/development-signing-input"
+          cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin "$RUNNER_TEMP/development-signing-input/firmware.bin"
+          cp firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/release-input.json "$RUNNER_TEMP/development-signing-input/release-input.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: development-signing-input
+          retention-days: 3
+          if-no-files-found: error
+          path: ${{ runner.temp }}/development-signing-input/
+
+  sign:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: firmware-development-signing
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: development-signing-input
+          path: signed
+      - name: Install verifier without signing credentials
+        run: pip install -r tools/signing-requirements.txt
+      - name: Sign development artifact with the separate development key
+        env:
+          RAINPOINT_DEVELOPMENT_SIGNING_KEY_PEM: ${{ secrets.FIRMWARE_DEVELOPMENT_SIGNING_KEY_PEM }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: >-
+          python tools/sign_firmware.py sign
+          --image signed/firmware.bin --receipt signed/release-input.json
+          --expected-commit "$SOURCE_COMMIT" --key-id rainpoint-development-2026
+          --public-key rainpointd_addon/rainpointd/firmware_development_keys/rainpoint-development-2026.pem
+          --envelope signed/firmware-signature.json
+      - name: Verify and stage without signing credentials
+        run: |
+          python tools/sign_firmware.py verify --image signed/firmware.bin \
+            --key-id rainpoint-development-2026 \
+            --public-key rainpointd_addon/rainpointd/firmware_development_keys/rainpoint-development-2026.pem \
+            --envelope signed/firmware-signature.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.stage_firmware_release import stage_release
+          envelope = json.loads(Path('signed/firmware-signature.json').read_text())
+          descriptor = envelope['descriptor']
+          stage_release(Path('signed/firmware.bin'), Path('signed/ota'),
+              release_id=descriptor['release_id'], version=descriptor['version'],
+              summary='Development firmware — test radios only',
+              notes='Requires a development-trust USB baseline. Production radios reject this signing key.',
+              firmware_variant='unified', signature=envelope, development=True)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signed-development-firmware-unpublished
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            signed/firmware.bin
+            signed/release-input.json
+            signed/firmware-signature.json
+            signed/ota/catalog.json
+            signed/ota/*.bin

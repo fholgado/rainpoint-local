@@ -814,6 +814,7 @@ class ESP32NetworkServer:
                         "htv213_pairing_experiment",
                         "htv213_control_experiment",
                         "htv213_routine_owner",
+                        "htv213_retained_rejoin_v1",
                         "htv213_duration_3600",
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
@@ -832,6 +833,7 @@ class ESP32NetworkServer:
                         "paired_sensor_recovery_tx",
                         "firmware_update_trial",
                         "firmware_signed_ota",
+                        "firmware_development_ota",
                     }
                 )
             ):

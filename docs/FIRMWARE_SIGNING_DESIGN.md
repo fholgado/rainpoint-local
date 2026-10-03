@@ -121,6 +121,31 @@ decision, not trust in a newly downloaded replacement key.
 
 ## Protected GitHub release workflow
 
+### Development versus production
+
+Production images compile only `firmware_keys/` (release public keys).
+Test images built with `RAINPOINT_DEVELOPMENT_OTA=1` and an explicit prerelease
+version also compile `firmware_development_keys/`. Their authenticated hello
+advertises `firmware_development_ota`. A trusted application-only USB flash
+bootstraps this test trust without erasing node configuration or associations.
+Returning the radio to a production image removes development trust.
+
+`.github/workflows/sign-development-firmware.yml` is maintainer-dispatched on
+`main` or `codex/*`, with no reviewer gate. Its separate
+`firmware-development-signing` environment holds only
+`FIRMWARE_DEVELOPMENT_SIGNING_KEY_PEM`; it cannot access the production secret.
+Build/test jobs have no signing credentials. The fresh signing job uses the
+development key and emits an unpublished artifact; it never deploys automatically.
+
+Development key IDs use the `rainpoint-development-` namespace. The gateway
+derives the required node capability from this **signed** identity, rejecting
+catalog edits that try to offer development signatures to production radios.
+The production radio independently rejects that key before downloading or
+writing flash. Default packaging/staging remains release-key-only; development
+staging must be explicit. The existing protected release environment and
+human approval below are unchanged, including research images intentionally
+deployed to installed garden radios under the release key.
+
 The repository now includes `.github/workflows/sign-firmware.yml` and
 `tools/sign_firmware.py`. Manual dispatch on protected `main` builds without the
 signing key, then waits for the `firmware-signing` environment before signing.
