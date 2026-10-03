@@ -278,6 +278,7 @@ void WifiTransport::handleGatewayLine(const String& line) {
 #endif
 #ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
          type == "htv213_pairing_start" || type == "htv213_pairing_cancel" ||
+         type == "htv213_enrollment_start" ||
 #endif
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
          type == "htv213_control_probe_open" || type == "htv213_control_probe_close" ||
@@ -352,6 +353,7 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"retained_sensor_rejoin_channel\""
 #ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
         ",\"htv213_pairing_experiment\""
+        ",\"htv213_auto_identity_pairing\""
 #endif
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
         ",\"htv213_control_experiment\""

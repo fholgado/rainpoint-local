@@ -45,7 +45,7 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Prepare normal HTV213 pairing/control/recovery support from the qualified canary; finish the remaining short enrollment/failure checks before enabling it.
+1. Finish short HTV213 physical qualification, then promote its normal setup/control path. HA flow and atomic enrollment/re-pair persistence are source-prepared; general support is not enabled.
 2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
 3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
@@ -323,7 +323,7 @@ not tasks to mark “done once.”
 - [x] Trace configuration revisions and fourteen-byte valve settings; distinguish asynchronous settings arrival from fixed pairing stages ([evidence](research/STOCK_HUB_CONFIGURATION_LIFECYCLE.md), Sep 28).
 - [x] Trace saved associations, known rejoin and three direct sequence-generator callers; no periodic reset established ([evidence](research/STOCK_HUB_ASSOCIATION_PERSISTENCE.md), Sep 28).
 - [x] Add offline semantic trace analysis and capture-backed retry/missing-response checks; 708 tests passed, two optional NumPy skips, native protocol passed (Sep 28). No device acceptance implied.
-- [ ] Audit local enrollment durability under storage failures; inject save/restart failures before changing admission behavior.
+- [ ] Audit remaining models' enrollment durability under save/restart failures; HTV213 atomic rollback and pending-proof restart tests pass.
 - [ ] Qualify valve settings units and notification triggers with controlled one-field changes; keep proven pairing prefixes frozen.
 - [ ] Resolve later sequence restoration/reset rules and HTV405 terminal descriptors; boot clear alone does not explain overnight failures.
 - [x] Capture HTV213 stock enrollment and both-zone automatic stops; verify 60/120-second RF commands, replies and summaries ([evidence](research/HTV213_STOCK_CAPTURE_FINDINGS_20260928.md), Sep 28).
@@ -373,6 +373,11 @@ not tasks to mark “done once.”
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
 - [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
 - [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
+- [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
+- [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
+- [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).
+- [x] Bind HTV213 to native HA pairing progress/cancel/naming; test authentication, failure, restart and model-specific duration limits (Oct 3; source only).
+- [ ] Finish HTV213 promotion plumbing: provision measured radio carriers, reconcile mixed-model slots and model-qualified wrap policy; enable the model after existing physical checks.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

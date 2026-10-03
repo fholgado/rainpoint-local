@@ -93,6 +93,18 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertIsNotNone(later['rf_control_transaction_error'])
         self.assertEqual(self.journal.snapshot(self.key)['next_phase'],8)
 
+    def test_public_controls_do_not_use_experimental_admission_or_journal(self):
+        with patch.object(control, 'eligible', side_effect=AssertionError('experimental admission')), \
+             patch.object(control, 'dispatch', side_effect=AssertionError('experimental dispatch')), \
+             patch.object(ControlJournal, 'reserve', side_effect=AssertionError('experimental reservation')):
+            target = self.publish()['device_id']
+            self.gateway.request_valve_control(device_id=target, action='open', zone=1, duration_seconds=60)
+        self.assertEqual(len(self.sent), 1)
+        command = self.sent[0][1]
+        self.assertEqual((command['phase'], command['port'], command['seconds']), (7, 1, 60))
+        self.assertTrue(device.project(self.gateway)[target]['state']['rf_control_command_pending'])
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'], 8)
+
     def replay_report(self, command, *, idle=False):
         event = next(e for e in self.events if e['direction'] == 'device' and
                      decode(e['frame']).command == command and

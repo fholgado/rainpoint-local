@@ -14,7 +14,11 @@ HTV213_RECOVERY_COMMANDS = (
     b"htv213_retained_rejoin_v1",
 )
 
-FORBIDDEN_BENCH_COMMANDS = HTV213_RECOVERY_COMMANDS + (
+HTV213_ENROLLMENT_COMMANDS = (
+    b"htv213_auto_identity_pairing", b"htv213_enrollment_start",
+)
+
+FORBIDDEN_BENCH_COMMANDS = HTV213_RECOVERY_COMMANDS + HTV213_ENROLLMENT_COMMANDS + (
     b"hcs026_15a98024_v1", b"hcs026_1bce0024_candidate_v1",
     b"htv145_dry_open_probe", b"htv145_dry_close_probe",
     b"htv145_post_frame_tail_candidate",
@@ -97,7 +101,7 @@ def main() -> int:
                 print("production firmware contains a development trust anchor")
                 return 1
     leaked = [value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware and
-              not (htv213_recovery and value in HTV213_RECOVERY_COMMANDS)]
+              not (htv213_recovery and value in HTV213_RECOVERY_COMMANDS + HTV213_ENROLLMENT_COMMANDS)]
     if not phase_trial:
         leaked.extend(value.decode() for value in PHASE_TRIAL_COMMANDS if value in firmware)
     leaked.extend(

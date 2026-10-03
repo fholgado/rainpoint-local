@@ -25,6 +25,10 @@ int main() {
             p.selector=selector;
         }
         else if (op=="arm") claimed=s.arm(p,now,300000);
+        else if (op=="discover") { auto discovery=p; discovery.factory={}; claimed=s.armDiscovery(discovery,now,300000); }
+        else if (op=="bound") claimed=rainpoint::valveConfiguration::nonzero(s.profile().factory);
+        else if (op=="ack-proof") { claimed=s.notificationAccepted(); out.command=0xa0; out.frame=s.notificationAck(); }
+        else if (op=="completion-proof") { claimed=s.state()==State::Observed; out.command=2; out.frame=s.completionReport(); }
         else if (op=="frame") { std::string raw; Frame f{}; std::cin>>raw; if (!hex(raw,f)) return 2; claimed=s.claim(f,ctx,now,out); }
         else if (op=="notification") claimed=s.claimNotification(now,out);
         else if (op=="listening") claimed=s.notificationResponseWindow(now);
