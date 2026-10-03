@@ -49,6 +49,20 @@ admission `0a`. No master phase is allocated. This verifies reply generation,
 not physical acceptance. Qualification status is in
 [the roadmap](../PROJECT_ROADMAP.md).
 
+The corrected development image `0.19.0-htv213-control.8` was automatically
+signed from `73475cd75ed8954e6363c12fcd28f03538512300` after 966 CI tests
+(two optional skips), native protocol and firmware-boundary checks. Two CI
+failures first exposed test-only authentication-readiness and premature-peer-
+closure races; deterministic regressions corrected both without production
+changes. The image is 1,116,384 bytes, SHA-256
+`107ed41c4a6a06323ccb6db1cec1d1cf6e180c8ef4e9d377f05ae13c84a8d654`.
+Independent signature/source/boundary verification preceded Test Node B OTA.
+Private receipts under `captures/development-signing-20261003/control8-idle-owner-ota/`
+correlate the full verified download, new candidate boot and healthy confirmation;
+the recovery owner was restored, the association unchanged and master counter
+still 2. No fresh pairing or watering command was sent. A new battery-only
+trial remains necessary to establish RF acceptance.
+
 ## Interim reliability review — 2026-09-08
 
 A read-only Mac copy of the HA collector database passed SQLite integrity checking;
