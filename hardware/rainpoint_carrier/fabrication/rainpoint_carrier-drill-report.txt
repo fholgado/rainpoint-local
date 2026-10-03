@@ -1,5 +1,5 @@
 Drill report for rainpoint_carrier.kicad_pcb
-Created on 2026-08-12T21:24:22
+Created on 2026-09-14T14:08:34
 
 Copper Layer Stackup:
     =============================================================
@@ -10,10 +10,10 @@ Copper Layer Stackup:
 Drill file 'rainpoint_carrier-PTH.drl' contains
     plated through holes:
     =============================================================
-    T1  0.300mm  0.0118"  (2 holes))
+    T1  0.300mm  0.0118"  (6 holes))
     T2  1.000mm  0.0394"  (38 holes))
 
-    Total plated holes count 40
+    Total plated holes count 44
 
 
 Drill file 'rainpoint_carrier-NPTH.drl' contains

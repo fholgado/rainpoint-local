@@ -28,7 +28,7 @@ def _circle(canvas: Canvas, x_mm: float, y_mm: float, radius_mm: float) -> None:
 
 
 def _draw_carrier(canvas: Canvas, origin_x_mm: float, origin_y_mm: float) -> None:
-    """Draw the Rev A placement using millimetre-native coordinates."""
+    """Draw Rev B, including physical pin numbers, at millimetre scale."""
     canvas.saveState()
     canvas.translate(origin_x_mm * mm, origin_y_mm * mm)
 
@@ -71,9 +71,13 @@ def _draw_carrier(canvas: Canvas, origin_x_mm: float, origin_y_mm: float) -> Non
     canvas.rect(39 * mm, 25.5 * mm, 28 * mm, 15 * mm, fill=1)
     canvas.setStrokeColor(HexColor("#6b4f00"))
     for row in range(4):
-        y_mm = 29.19 + row * HEADER_PITCH_MM
+        y_mm = 36.81 - row * HEADER_PITCH_MM
         _circle(canvas, 41.0, y_mm, 1.05)
         _circle(canvas, 43.54, y_mm, 1.05)
+        canvas.setFillColor(black)
+        canvas.setFont("Helvetica-Bold", 4)
+        canvas.drawCentredString(41.0 * mm, (y_mm - 0.45) * mm, str(row * 2 + 1))
+        canvas.drawCentredString(43.54 * mm, (y_mm - 0.45) * mm, str(row * 2 + 2))
 
     canvas.setFillColor(black)
     canvas.setFont("Helvetica-Bold", 7)
@@ -139,12 +143,12 @@ def generate(output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     canvas = Canvas(str(output), pagesize=letter, pageCompression=1)
     width, height = letter
-    canvas.setTitle("RainPoint radio-node carrier Rev A - 1:1 fit check")
+    canvas.setTitle("RainPoint radio-node carrier Rev B - 1:1 fit and pin check")
     canvas.setAuthor("RainPoint Local project")
 
     canvas.setFillColor(black)
     canvas.setFont("Helvetica-Bold", 15)
-    canvas.drawString(16 * mm, height - 17 * mm, "RainPoint carrier Rev A - 1:1 fit check")
+    canvas.drawString(16 * mm, height - 17 * mm, "RainPoint carrier Rev B - 1:1 fit and pin check")
     canvas.setFont("Helvetica-Bold", 9)
     canvas.setFillColor(HexColor("#b91c1c"))
     canvas.drawString(16 * mm, height - 25 * mm, "PRINT AT ACTUAL SIZE / 100%")
@@ -164,13 +168,29 @@ def generate(output: Path) -> None:
     _draw_carrier(canvas, 16, 102)
     _draw_calibration(canvas, 16, 55)
 
+    canvas.setFont("Helvetica-Bold", 9)
+    canvas.drawString(98 * mm, 165 * mm, "TOP VIEW: USB down, antenna right")
+    canvas.setFont("Helvetica", 8)
+    for index, line in enumerate((
+        "Radio top row: 1 GND / 2 3V3",
+        "Next: 3 GPIO26 / 4 GPIO27",
+        "Next: 5 GPIO18 / 6 GPIO23",
+        "Bottom row: 7 GPIO19 / 8 GPIO25",
+        "Match the module's printed 1/2 and 7/8.",
+        "Hole alignment alone is NOT verification.",
+        "Rev A has reversed radio rows: do not use",
+        "it with the radio plugged directly in.",
+        "Rev B awaits physical electrical validation.",
+    )):
+        canvas.drawString(98 * mm, (157 - index * 5) * mm, line)
+
     canvas.setFont("Helvetica", 7.5)
     canvas.drawString(16 * mm, 44 * mm, "Nominal carrier outline: 68 x 66 mm")
     canvas.drawString(16 * mm, 39 * mm, "ESP32 outline: 29 x 51.74 mm; 2 x 15 pins at 2.54 mm pitch")
     canvas.drawString(16 * mm, 34 * mm, "ESP32 header-row center spacing: 25.40 mm (verify against the physical board)")
     canvas.drawString(16 * mm, 29 * mm, "CC1101 connector: 2 x 4 pins at 2.54 mm pitch")
     canvas.setFont("Helvetica-Bold", 7.5)
-    canvas.drawString(16 * mm, 20 * mm, "Do not fabricate from this fit sheet until both modules physically align.")
+    canvas.drawString(16 * mm, 20 * mm, "Verify pin numbering AND fit before ordering; meter-check the first assembled board.")
     canvas.setFont("Helvetica", 6.5)
     canvas.setFillColor(HexColor("#4b5563"))
     canvas.drawRightString(width - 16 * mm, 12 * mm, "Generated from millimetre-native vector geometry")

@@ -18,7 +18,7 @@
   </style>
 
   <!-- Page title. All geometry is in millimetres. -->
-  <text x="5" y="3" class="label">RainPoint radio-node carrier Rev A — 1:1 top placement</text>
+  <text x="5" y="3" class="label">RainPoint radio-node carrier Rev B — 1:1 top placement</text>
 
   <!-- 68 x 66 mm carrier outline, offset 5 mm from the page origin. -->
   <rect x="5" y="5" width="68" height="66" rx="0.8" class="board"/>

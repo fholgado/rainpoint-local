@@ -1,4 +1,4 @@
-# Revision A layout specification
+# Revision B layout specification
 
 All coordinates below are in millimetres, measured from the lower-left corner
 of the finished PCB in the top assembly view. This matches the fit-check PDF's
@@ -59,18 +59,21 @@ Place the 2x4 socket pad centers as follows:
 
 | Pin | Signal | X | Y |
 |---:|---|---:|---:|
-| 1 | GND | 41.00 | 29.19 |
-| 2 | 3V3 | 43.54 | 29.19 |
-| 3 | GDO0 | 41.00 | 31.73 |
-| 4 | CSN | 43.54 | 31.73 |
-| 5 | SCK | 41.00 | 34.27 |
-| 6 | MOSI | 43.54 | 34.27 |
-| 7 | MISO/GDO1 | 41.00 | 36.81 |
-| 8 | GDO2 | 43.54 | 36.81 |
+| 1 | GND | 41.00 | 36.81 |
+| 2 | 3V3 | 43.54 | 36.81 |
+| 3 | GDO0 | 41.00 | 34.27 |
+| 4 | CSN | 43.54 | 34.27 |
+| 5 | SCK | 41.00 | 31.73 |
+| 6 | MOSI | 43.54 | 31.73 |
+| 7 | MISO/GDO1 | 41.00 | 29.19 |
+| 8 | GDO2 | 43.54 | 29.19 |
 
 The table is a **top carrier view**, with the radio plugged into female sockets.
 Confirm that this produces the intended signal order on the actual module; a
-bottom-view vendor diagram can otherwise mirror the footprint.
+bottom-view vendor diagram can otherwise mirror the footprint. Y increases
+upward here: the physical top row MUST have the highest Y. Rev A incorrectly
+numbered upward from the bottom; the September 14 module photo and pin-1-to-
+GPIO19 measurement exposed this error. See `REV_A_REWORK.md`.
 
 Place C1 and C2 on the carrier underside immediately beside pins 1 and 2 so the
 radio can sit flat in its socket. Their ground and 3V3 connections should be as
@@ -95,7 +98,7 @@ only to the development board's onboard BOOT button and status LED.
 
 The top side must show:
 
-- `RAINPOINT RADIO NODE — REV A`
+- `RAINPOINT RADIO NODE — REV B`
 - `USB / POWER` at the ESP32 USB-C edge
 - `Wi-Fi ANTENNA — NO COPPER` at the top
 - `433 MHz ANTENNA` at the radio edge

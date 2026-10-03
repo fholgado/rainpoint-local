@@ -211,7 +211,7 @@ def create_board(output, identifiers):
 
     title = board.GetTitleBlock()
     title.SetTitle("RainPoint radio-node carrier")
-    title.SetRevision("A")
+    title.SetRevision("B")
     title.SetCompany("RainPoint Local project")
     title.SetComment(0, "Physically verified 30-pin ESP32 footprint")
 
@@ -311,8 +311,8 @@ def create_board(output, identifiers):
     for row in range(4):
         radio_positions.extend(
             (
-                physical_point(41.00, 29.19 + row * 2.54),
-                physical_point(43.54, 29.19 + row * 2.54),
+                physical_point(41.00, 36.81 - row * 2.54),
+                physical_point(43.54, 36.81 - row * 2.54),
             )
         )
     add_header(
@@ -337,7 +337,7 @@ def create_board(output, identifiers):
     add_capacitor(
         board,
         "C1",
-        point(146.5, 86.0),
+        point(146.5, 77.0),
         nets["3V3"],
         nets["GND"],
         "/%s/%s" % (identifiers["root"], identifiers["C1"]),
@@ -346,7 +346,7 @@ def create_board(output, identifiers):
     add_capacitor(
         board,
         "C2",
-        point(146.5, 89.0),
+        point(146.5, 74.0),
         nets["3V3"],
         nets["GND"],
         "/%s/%s" % (identifiers["root"], identifiers["C2"]),
@@ -373,7 +373,7 @@ def create_board(output, identifiers):
     add_shape(board, pcbnew.S_RECT, pcbnew.F_SilkS, (139, 75.5), (167, 90.5), width=0.2)
     add_shape(board, pcbnew.S_RECT, pcbnew.Dwgs_User, (107, 50.5), (138, 68.5), width=0.2)
 
-    add_text(board, "RAINPOINT RADIO NODE - REV A", (134, 113.0), pcbnew.F_SilkS, 1.1)
+    add_text(board, "RAINPOINT RADIO NODE - REV B", (134, 113.0), pcbnew.F_SilkS, 1.1)
     add_text(board, "USB / POWER", (122.5, 110.5), pcbnew.F_SilkS, 0.9)
     add_text(board, "WI-FI ANTENNA - NO COPPER", (122.5, 52.5), pcbnew.F_SilkS, 0.8)
     add_text(board, "433 MHz ANTENNA ->", (154.0, 73.8), pcbnew.F_SilkS, 0.8)
@@ -382,6 +382,13 @@ def create_board(output, identifiers):
     add_text(board, "3V3 ONLY", (146.0, 92.0), pcbnew.F_SilkS, 0.8)
     add_text(board, "github.com/fholgado/rainpoint-local", (134, 113.0), pcbnew.B_SilkS, 0.8, mirrored=True)
     add_text(board, "NODE: __________", (134, 110.5), pcbnew.B_SilkS, 0.8, mirrored=True)
+    # Label the physical rows on both views; the module obscures the top pads.
+    for row, labels in enumerate((("1 GND", "2 3V3"), ("3 GDO0", "4 CSN"),
+                                 ("5 SCK", "6 MOSI"), ("7 MISO", "8 GDO2"))):
+        y = 79.19 + row * 2.54
+        add_text(board, labels[0], (130, y), pcbnew.B_SilkS, 0.8, mirrored=True)
+        add_text(board, labels[1], (161, y), pcbnew.B_SilkS, 0.8, mirrored=True)
+    add_text(board, "1 GND / 2 3V3", (144.0, 76.8), pcbnew.F_SilkS, 0.8)
 
     # The ESP32's right through-hole row is a barrier on both copper layers.
     # Route all left-row signals around the USB end, below the final header pad.
@@ -395,10 +402,13 @@ def create_board(output, identifiers):
             (106.0, 88.21),
             (106.0, 114.5),
             (155.0, 114.5),
-            (155.0, 79.19),
-            (143.54, 79.19),
+            (155.0, 86.81),
+            (154.0, 86.81),
         ),
     )
+    add_via(board, nets["RADIO_GDO2"], (154.0, 86.81))
+    add_track(board, nets["RADIO_GDO2"], pcbnew.F_Cu, 0.30,
+              ((154.0, 86.81), (143.54, 86.81)))
     add_track(
         board,
         nets["RADIO_CSN"],
@@ -408,8 +418,8 @@ def create_board(output, identifiers):
             (107.0, 93.29),
             (107.0, 113.5),
             (152.0, 113.5),
-            (152.0, 84.27),
-            (143.54, 84.27),
+            (152.0, 81.73),
+            (143.54, 81.73),
         ),
     )
     add_via(board, nets["RADIO_CSN"], (107.0, 93.29))
@@ -439,13 +449,17 @@ def create_board(output, identifiers):
         nets["RADIO_GDO0"],
         pcbnew.F_Cu,
         0.30,
-        ((138.5, 95.0), (138.5, 84.27), (141.0, 84.27)),
+        ((138.5, 95.0), (138.5, 81.73), (141.0, 81.73)),
     )
 
     # Right-side SPI signals on F.Cu.
-    add_track(board, nets["RADIO_SCK"], pcbnew.B_Cu, 0.30, ((135.08, 85.67), (137.0, 85.67), (141.00, 81.73)))
-    add_track(board, nets["RADIO_MISO"], pcbnew.F_Cu, 0.30, ((135.08, 83.13), (137.0, 83.13), (140.94, 79.19), (141.00, 79.19)))
-    add_track(board, nets["RADIO_MOSI"], pcbnew.F_Cu, 0.30, ((135.08, 70.43), (139.0, 70.43), (147.0, 78.43), (147.0, 80.27), (145.54, 81.73), (143.54, 81.73)))
+    add_track(board, nets["RADIO_SCK"], pcbnew.F_Cu, 0.30, ((135.08, 85.67), (137.7, 85.67)))
+    add_via(board, nets["RADIO_SCK"], (137.7, 85.67))
+    add_track(board, nets["RADIO_SCK"], pcbnew.B_Cu, 0.30, ((137.7, 85.67), (139.2, 85.67)))
+    add_via(board, nets["RADIO_SCK"], (139.2, 85.67))
+    add_track(board, nets["RADIO_SCK"], pcbnew.F_Cu, 0.30, ((139.2, 85.67), (139.2, 84.27), (141.0, 84.27)))
+    add_track(board, nets["RADIO_MISO"], pcbnew.B_Cu, 0.30, ((135.08, 83.13), (136.8, 83.13), (136.8, 88.3), (141.0, 88.3), (141.0, 86.81)))
+    add_track(board, nets["RADIO_MOSI"], pcbnew.F_Cu, 0.30, ((135.08, 70.43), (139.0, 70.43), (148.0, 79.43), (148.0, 82.0), (145.73, 84.27), (143.54, 84.27)))
 
     # Power and ground trunks.
     add_track(
@@ -453,10 +467,11 @@ def create_board(output, identifiers):
         nets["3V3"],
         pcbnew.F_Cu,
         0.50,
-        ((135.08, 105.99), (140.0, 105.99), (140.0, 92.0), (146.0, 86.81), (143.54, 86.81)),
+        ((135.08, 105.99), (157.0, 105.99), (157.0, 71.0), (150.5, 71.0)),
     )
-    add_track(board, nets["3V3"], pcbnew.B_Cu, 0.50, ((143.54, 86.81), (145.5, 86.0)))
-    add_track(board, nets["3V3"], pcbnew.B_Cu, 0.50, ((145.5, 86.0), (145.5, 89.0)))
+    add_via(board, nets["3V3"], (150.5, 71.0))
+    add_track(board, nets["3V3"], pcbnew.B_Cu, 0.50, ((150.5, 71.0), (144.5, 71.0), (144.5, 77.0), (143.54, 79.19)))
+    add_track(board, nets["3V3"], pcbnew.B_Cu, 0.50, ((143.54, 79.19), (145.5, 77.0), (145.5, 74.0)))
 
     add_keepout(board, pcbnew.F_Cu)
     add_keepout(board, pcbnew.B_Cu)
@@ -675,7 +690,7 @@ def create_schematic(output, identifiers):
   (title_block
     (title "RainPoint radio-node carrier")
     (date "2026-08-12")
-    (rev "A")
+    (rev "B")
     (company "RainPoint Local project")
     (comment 1 "Physically verified 30-pin ESP32 footprint"))
   (lib_symbols
@@ -729,7 +744,8 @@ def connector_footprint(name, rows, columns=1, row_spacing=2.54, column_spacing=
             pads.append(
                 '(pad "%d" thru_hole %s (at %.3f %.3f) (size 2 2) '
                 '(drill 1) (layers "*.Cu" "*.Mask"))'
-                % (number, shape, column * column_spacing, -row * row_spacing)
+                % (number, shape, column * column_spacing,
+                   row * row_spacing if name == "CC1101_2x4" else -row * row_spacing)
             )
             number += 1
     width = max(2.54, (columns - 1) * column_spacing + 2.54)

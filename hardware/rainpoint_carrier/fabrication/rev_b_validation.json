@@ -1,0 +1,12 @@
+{
+  "revision": "B",
+  "kicad": "10.0.6",
+  "physical_acceptance": "pending",
+  "source_board_sha256": "a465079856b16d4b7cd4c3aee69818afbd90358b176489a1ff8d437140ea6e3f",
+  "artifacts": {
+    "rainpoint_carrier_rev_b_gerbers.zip": "62e7d5868befa56b123bb5f6006dfa25e776287e5f1200731656947d2192e0c4",
+    "rainpoint_carrier_rev_b_pcba_bom.csv": "44ff11283d1492dc800ab092412d6838e6d16629baf7e47368395ec055b1b3e1",
+    "rainpoint_carrier_rev_b_pcba_cpl.csv": "b134da718b991d3f759af9e660721f0c29ac54968fc21fe74a6806039366a100",
+    "rainpoint_carrier_rev_b_pcba_gerbers.zip": "410b055fdb2115e1f848397cb952af4cfa0a86462c4e568c2c75a2662bb1d7e6"
+  }
+}

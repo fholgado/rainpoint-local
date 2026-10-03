@@ -1,4 +1,7 @@
-# Revision A preorder checklist
+# Revision B preorder checklist
+
+Rev A is defective; see `REV_A_REWORK.md`. Mechanical checks retained below
+apply to the unchanged geometry only, not electrical approval of Rev B.
 
 This checklist governs one physical fabrication operation; its boxes do not
 represent overall project status. Carrier work is scheduled only through
@@ -9,7 +12,7 @@ the same physical modules that will be installed.
 
 ## Mechanical fit
 
-- [ ] Print `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf` at
+- [ ] Print `../../output/pdf/rainpoint_carrier_rev_b_fit_check.pdf` at
       **Actual Size / 100%**, with Fit, Shrink, and Scale to printable area
       disabled.
 - [x] Confirm the 100 mm calibration ruler measures exactly 100 mm on paper.
@@ -29,6 +32,8 @@ the same physical modules that will be installed.
 
 ## Pin orientation
 
+- [ ] With USB down and antenna right, physical module pins 1/2 match the TOP socket row; 7/8 match the BOTTOM row.
+- [ ] Match every module pin to its carrier pad number, signal and ESP32 destination, not just the square-pad marker.
 - [ ] With the module oriented as drawn, CC1101 pin 1 is labeled GND.
 - [ ] Pin 2 is VCC and the module is explicitly rated for 3.3 V operation.
 - [ ] Pins 3 through 8 read GDO0, CSN, SCK, MOSI, MISO/GDO1, GDO2 in order.
@@ -52,6 +57,7 @@ the same physical modules that will be installed.
 - [ ] Install the ESP32 only and verify normal USB boot.
 - [ ] Measure approximately 3.3 V, with correct polarity, at the empty radio
       socket.
+- [ ] With power off, verify all eight end-to-end radio connections and no 3V3/GND short; record actual resistance values.
 - [ ] Remove USB power before inserting the CC1101.
 - [ ] Attach the correct 433 MHz antenna before enabling transmit tests.
 - [ ] Run the firmware radio self-test and compare reception with the known-good

@@ -6,8 +6,12 @@ a socketed assembly without replacing either module.
 
 ## Design status
 
-**Revision A is a fabrication-ready engineering prototype.** Its electrical
-mapping follows the working bridge exactly. The carrier footprint follows the
+**Revision A is defective: do not fabricate or plug a radio directly into it.**
+Its radio rows are reversed. See [salvage and verification](REV_A_REWORK.md).
+
+**Revision B corrects the radio footprint; physical electrical acceptance is
+still required.** Passing CAD checks is not proof that a manufactured board works.
+The carrier footprint follows the
 physically verified 30-pin ELEGOO ESP-WROOM-32 USB-C board: two 15-pin rows at
 2.54 mm pitch,
 anchored toward the USB end. Before ordering, print the generated Letter-size
@@ -103,13 +107,17 @@ external interfaces reachable after the carrier is installed in a case.
 
 ## Files
 
+- `REV_A_REWORK.md`: known defect, reversible crossover and first-board checks.
+- `build.py`: KiCad 10 regeneration, ERC/DRC/parity and physical-pin checks
+  before creating Rev B order archives. Set `KICAD_CLI` and `KICAD_PYTHON`
+  (the latter must import `pcbnew`); run with a Python that has `reportlab`.
 - `bom.csv`: prototype bill of materials.
 - `pinout.csv`: machine-readable net mapping.
 - `placement.svg`: 1:1 top-view assembly and fit-check drawing.
 - `generate_fit_check_pdf.py`: generator for the print-calibrated Letter PDF.
 - `generate_kicad.py`: deterministic KiCad project and board generator; run
   with KiCad's bundled Python interpreter.
-- `../../output/pdf/rainpoint_carrier_rev_a_fit_check.pdf`: preferred printable
+- `../../output/pdf/rainpoint_carrier_rev_b_fit_check.pdf`: preferred printable
   fit-check sheet, including independent metric and inch calibration marks.
 - `kicad/`: KiCad 10 schematic, PCB, local libraries, ERC/DRC reports, and
   schematic preview.
@@ -119,17 +127,17 @@ external interfaces reachable after the carrier is installed in a case.
 - `preview/`: rendered top and mirrored-bottom board views.
 - `FABRICATION.md`: validated order settings, package contents, and assembly
   orientation.
-- `../../output/manufacturing/rainpoint_carrier_rev_a_gerbers.zip`: compact
+- `../../output/manufacturing/rainpoint_carrier_rev_b_gerbers.zip`: compact
   bare-PCB upload archive for PCBWay, JLCPCB, or an equivalent fabricator.
-- `../../output/manufacturing/rainpoint_carrier_rev_a_pcba_gerbers.zip`:
+- `../../output/manufacturing/rainpoint_carrier_rev_b_pcba_gerbers.zip`:
   Gerber upload archive for a PCBWay mixed-assembly quote.
 - `LAYOUT.md`: placement coordinates, stackup, routing, and enclosure rules.
 - `PREORDER_CHECKLIST.md`: physical, electrical, and manufacturing gates.
 
-KiCad schematic and PCB files should not be released for fabrication until the
-1:1 fit check confirms the actual CC1101 header orientation and the ESP32
-header-row measurement. The documentation here is the frozen input to that
-layout rather than an invitation to infer missing dimensions.
+Do not order until the numbered 1:1 fit sheet confirms the actual CC1101 header
+orientation and ESP32 row spacing. Rev B's automated checks inspect physical
+pin positions in the PCB and exported netlist independently of the generator.
+They supplement, not replace, first-board continuity, power and RF tests.
 
 ## Mechanical references
 

@@ -1,4 +1,8 @@
-# Revision A PCBWay assembly quote
+# Revision B PCBWay assembly quote
+
+Rev A is defective and must not be ordered. Quote only the Rev B files after
+the numbered pin-orientation review. C1/C2 positions changed; do not reuse the
+Rev A centroid file. Physical electrical acceptance remains required.
 
 Quote this as a **turnkey mixed assembly**. PCBWay supplies and installs the
 three through-hole female sockets and the two bottom-side 0805 capacitors.
@@ -40,6 +44,8 @@ For **Detailed information of assembly**, use:
 - J1 and J2 are separate 1x15 sockets, not one 2x15 connector.
 - J3 is one 2x4 socket with 2.54 mm pitch in both axes.
 - Connector pin 1 is identified by the rectangular pad and silkscreen marking.
+- On J3, pin 1 is the TOP LEFT with USB down and the radio antenna right;
+  compare the module's printed 1/2 and 7/8 markings before installation.
 - C1 and C2 are non-polar ceramic capacitors.
 
 ## Acceptable substitutions

@@ -1,19 +1,33 @@
-# Revision A fabrication package
+# Revision B fabrication package
 
-Revision A is a passive carrier for the physically verified 30-pin ESP32 board
+**Rev A is withdrawn: its CC1101 rows are reversed. Do not order the old ZIPs.**
+Git history preserves the original files for defect analysis. Existing boards
+require the verified crossover described in `REV_A_REWORK.md`.
+
+Revision B is a passive carrier for the physically verified 30-pin ESP32 board
 and the tested 2x4 CC1101 radio module. The PCB supplies no independent power;
 the completed node is powered through the ESP32 USB-C connector.
 
 ## Validation status
 
+Mechanical alignment does not certify pin orientation. Rev B requires all
+physical pin, continuity and power checks in `PREORDER_CHECKLIST.md` before
+direct-plug functional acceptance. CAD validation results must be regenerated
+for this revision, not inherited from Rev A.
+
 - ESP32 footprint physically overlaid at 1:1 scale: **passed**
 - ESP32 sockets: two 1x15 rows, 2.54 mm pitch, 25.40 mm row spacing
-- CC1101 connector overlay: **passed**
-- KiCad 10 ERC: **0 violations**
-- KiCad 10 DRC: **0 violations, 0 unconnected pads, 0 footprint errors**
-- KiCad 10 schematic-to-PCB parity: **0 issues**
+- CC1101 hole overlay: **passed mechanically only**; Rev B numbered orientation review required
+- KiCad 10.0.6 ERC: **0 violations** (Rev B, Sep 14)
+- KiCad 10.0.6 DRC: **0 violations, 0 unconnected pads, 0 footprint errors**
+- KiCad 10.0.6 schematic-to-PCB parity: **0 issues**
+- Four physical-position/net regression tests: **passed**, including exported IPC-D-356
 - Finished board outline reported by KiCad: **68.00 x 66.00 mm**
-- Drill inventory: 38 x 1.00 mm PTH, 2 x 0.30 mm vias, 4 x 3.20 mm NPTH
+- Drill inventory: 38 x 1.00 mm PTH, 6 x 0.30 mm vias, 4 x 3.20 mm NPTH
+
+`fabrication/rev_b_validation.json` records the CAD version and SHA-256 hashes
+of the source board and order artifacts. `build.py` regenerates these only after
+ERC, DRC/parity and physical-pin tests pass. It does not authorize ordering.
 
 ## PCBWay/JLCPCB order settings
 

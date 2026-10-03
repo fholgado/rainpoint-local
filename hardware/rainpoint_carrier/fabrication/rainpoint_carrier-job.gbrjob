@@ -3,15 +3,15 @@
     "GenerationSoftware": {
       "Vendor": "KiCad",
       "Application": "Pcbnew",
-      "Version": "10.0.5"
+      "Version": "10.0.6"
     },
-    "CreationDate": "2026-08-12T21:24:19-04:00"
+    "CreationDate": "2026-09-14T14:08:33-04:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
       "Name": "rainpoint_carrier",
       "GUID": "7261696e-706f-4696-9e74-5f6361727269",
-      "Revision": "A"
+      "Revision": "B"
     },
     "Size": {
       "X": 68.05,
