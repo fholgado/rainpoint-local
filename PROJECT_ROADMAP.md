@@ -375,9 +375,10 @@ not tasks to mark “done once.”
 - [x] Push recovery source for review in PR #31; prepare matched gateway 0.39.15 and protected control.5 signing profile (Oct 3). Deployment remains pending.
 - [x] Keep 0.39.15 gateway documentation aligned with release metadata; CI caught the version-label mismatch and the existing regression confirms the fix (Oct 3).
 - [x] Merge PR #31; verify approved [control.5 signing run 37118161224](https://github.com/fholgado/rainpoint-local/actions/runs/37118161224) from `036144e` (Oct 3). Deployment superseded by development-trust bootstrap below.
-- [x] Implement/provision separate development signing and explicit test-image trust; preserve production approval. 962 tests pass/two skips, real OTA trust-isolation replay and both target builds pass (Oct 3).
-- [ ] Bootstrap Test Node B over USB and verify automatically signed development OTA; garden radio trust unchanged.
-- [ ] Sign/deploy the HTV213 recovery candidate to Test Node B, then verify battery rejoin without pairing mode and one short dry control; no counter reset inferred.
+- [x] Merge development/release signing separation (PR #33); verify automatic [development control.6 signing run](https://github.com/fholgado/rainpoint-local/actions/runs/37121593916) without approval. 963 CI tests pass/two skips; actual OTA trust-isolation and both target builds pass (Oct 3).
+- [x] Deploy matched gateway 0.39.16 and development-only catalog; verify exact source hashes, restored ownership and unchanged counter projections. Garden firmware unchanged (Oct 3).
+- [ ] Finish Test Node B USB bootstrap and verify development-signed OTA. Stub/ROM transfers both disconnected mid-write; node needs USB power-cycle/reflash. NVS untouched (Oct 3).
+- [ ] Enable HTV213 retained-rejoin replies after bootstrap; verify battery rejoin without pairing mode and one short dry control. Do not infer a counter reset.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
