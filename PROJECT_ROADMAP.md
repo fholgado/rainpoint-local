@@ -213,3 +213,9 @@ implementation or hardware optimization in this pass.
 
 Promote side work only if it blocks acceptance, invalidates evidence or protects
 irrigation reliability; otherwise keep it in the backlog.
+
+
+## Native-control candidate qualification
+
+- [x] Source-only durable native receipts, no-RF handback and bounded dry-outlet firmware guard; 942 tests passed (2 optional skips).
+- [ ] Qualify signed phase-trial.6 on dry HTV405 Zone 2 with the matched private gateway: at most three 60-second runs total, no retries, pairing or resets. No native-control production promotion until full-phase ACK, independent active/idle and correlated legacy handback are verified.

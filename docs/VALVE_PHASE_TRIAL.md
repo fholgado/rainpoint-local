@@ -222,3 +222,64 @@ The [anonymized actual exchange](../research/fixtures/htv405_local_port2_baselin
 reproduces the old failure in both radio and gateway regressions. It proves
 normal phase-1 control, not acceptance of adjacent phases. The front remains
 on signed `.2`; four-zone adjacent qualification awaits the corrected build.
+
+
+## Bounded native qualification preparation
+
+The optional private admission scope adds `valve_native_scope_v1`: one retained
+outlet, at most two native OPEN attempts of exactly 60 seconds, and a 120–900
+second window. Both gateway and radio enforce the outlet/duration/budget. The
+gateway requires the internal epoch argument, which the HTTP handler does not
+accept or forward; HA controls display unavailable during the scoped trial.
+There is no public enrollment/activation switch. Unscoped source/offline standard-
+control tests remain unchanged; installed qualification must use the scope.
+
+The reservation/attempt counts against the durable budget regardless of success.
+Duplicates return the same receipt, never allocate a new allowance. Repeated
+adoption cannot refresh the radio deadline or quota. An MCU restart disables
+further scoped RF instead of reconstructing a deadline from untrusted wall time;
+fresh status tells the gateway that RF permission is disabled. Explicit no-RF
+recovery/handback remains possible with the required fresh proof. Expiry never
+clears ownership or restores legacy control by itself.
+
+Proposed first installed test, requiring separate deployment/control approval
+and confirmation that HTV405 Zone 2 is still dry:
+
+1. Verify both installed valves idle, healthy ACK ownership, no pending command
+   or firmware update, and no scheduled/user watering overlapping the trial.
+   Use the matched gateway and signed candidate on the Vegetable Garden radio
+   only. Keep the front radio firmware, pairing and irrigation settings intact.
+2. Send one legacy Zone 2/60-second baseline. Require exact positive owner ACK,
+   independent active and automatic-idle reports. The baseline must leave two
+   adjacent nonzero native phases with final phase at most 62; otherwise stop
+   without a counter jump. Admit the verified idle association with a 900-second,
+   two-attempt native scope. Admission itself transmits no RF.
+3. Perform up to two separately journaled native Zone 2/60-second opens. Wait
+   for positive full-phase ACK, persisted radio receipt, selected-outlet active
+   and automatic idle for each, with at least the existing 15-second spacing.
+   Stop on the first missing/negative/mismatched result. Do not retry, probe a
+   counter, close another outlet, or force release.
+4. After confirmed automatic idle, request non-transmitting handback. Verify
+   correlated radio release, atomic retained-counter projection, no active
+   native owner, fresh idle and ordinary HA control availability. Persist the
+   raw owner RX and maintenance receipts privately. A source/capability match
+   or HTTP success is not RF acceptance.
+
+This is at most three one-minute **dry Zone 2** runs including the baseline.
+There are no Zone 1/front-garden commands, pairing or valve resets. A failure
+without sufficient proof can retain an exclusive lock and require user-assisted
+re-pairing; do not erase it to complete the test. Successful normal runs qualify
+control and handback, not missing-state recovery or power-loss behavior. Those
+remain separate approved tests in the roadmap; no fault is injected silently.
+
+October 2 readiness check: the front, Vegetable Garden and Test Node B radios
+were connected/authenticated and all three valves reported idle. The active dry
+test valve is HTV213FRF; this one-/four-zone candidate must not be applied to it.
+The OTA-test node was offline, and no live node advertised the new native
+capabilities. No firmware, gateway, control, reset or pairing change was made
+during this readiness check.
+
+Scoped preparation validation: full suite 942 tests, two optional skips, no
+failures; candidate `.6` and production builds, both binary-boundary checks,
+the native protocol executable and `git diff --check` passed. Nothing was
+signed, deployed or actuated. The default production binary remains built last.

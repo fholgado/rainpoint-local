@@ -22,6 +22,7 @@
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
 #include <Preferences.h>
 #include "rainpoint_phase_canary.h"
+#include "rainpoint_native_receipt.h"
 #endif
 
 #ifndef RAINPOINT_STATUS_LED_PIN
@@ -2143,6 +2144,7 @@ void pollIdentify() {
 
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
 #include "valve_phase_runtime.inc"
+#include "native_valve_runtime.inc"
 #endif
 
 void handleNetworkCommand() {
@@ -2183,6 +2185,7 @@ void handleNetworkCommand() {
         return;
     }
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+    if (handleNativeValveCommand(type,command,commandId)) return;
     if (handleValvePhaseCommand(type,command,commandId)) return;
 #endif
     if (type == "rf_mode_set") {
@@ -3344,11 +3347,17 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     }
     const auto frame = rainpoint::reconstructFrame(packet.payload);
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
-    if (&radio==&primaryRadio) observeValvePhase(frame);
+    if (&radio==&primaryRadio) {
+        observeNativeValve(frame);
+        observeValvePhase(frame);
+    }
 #endif
     bool htv405PairingReplyRestoredReceive = false;
     bool valveProbeTransmitted = false;
     if (&radio == &primaryRadio) {
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+        if (!nativeValveGuard.locked())
+#endif
         valveProbeTransmitted = observeValveProbeFrame(
             frame, radio, packet.receivedAtMicros
         );
@@ -3356,6 +3365,9 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
     if (&radio == &primaryRadio) {
         for (std::size_t i = 0; i < htv145Owners.size(); ++i) {
             Htv145OwnerSelection selection(i);
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+            if (!nativeValveGuard.locked())
+#endif
             observeHtv145CandidateFrame(frame);
             if (!htv145Pending() || htv145Owner().pending)
                 acknowledgeHtv145Report(frame, radio, packet.receivedAtMicros);
@@ -3707,6 +3719,7 @@ bool beginRadio(
 void setup() {
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
     loadValvePhaseRecord();
+    loadNativeValveRecord();
 #endif
     Serial.begin(115200);
     delay(250);
@@ -3786,6 +3799,9 @@ void loop() {
     }
     if (gatewayReconnected) {
         reportRfMaintenanceStatus("gateway_reconnected");
+#ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
+        if (nativeValveGuard.locked()) reportNativeValveReceipt();
+#endif
     }
     if (nodeRestartPending) {
         delay(250);
@@ -3807,6 +3823,7 @@ void loop() {
     pollValveProbeResponseListener();
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
     pollValvePhase();
+    pollNativeValve();
 #endif
 
     if (scanChannels) {

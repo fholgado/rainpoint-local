@@ -62,6 +62,9 @@ HTV145_CONTROL_COMMANDS = (
 )
 
 PHASE_TRIAL_COMMANDS = (
+    b"valve_native_adopt", b"valve_native_command", b"valve_native_status", b"valve_native_phase_v1",
+    b"valve_native_recover", b"valve_native_handback", b"valve_native_handoff_v1",
+    b"valve_native_scope_v1",
     b"valve_phase_trial_open", b"valve_phase_trial_status", b"valve_phase_trial_release", b"valve_phase_trial_recover",
 )
 
