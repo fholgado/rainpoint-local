@@ -272,6 +272,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         htv213_control_path = parsed.path in {
             f"{base}/experiments/htv213/open", f"{base}/experiments/htv213/close",
             f"{base}/experiments/htv213/owner",
+            f"{base}/experiments/htv213/recovery",
             f"{base}/experiments/htv213/publish",
         }
         commissioning_prefix = f"{base}/commissioning/"
@@ -432,6 +433,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                         200,
                         self.server.gateway.revoke_radio_node(node_id),
                     )
+                    return
+                if parsed.path == f"{base}/experiments/htv213/recovery":
+                    from . import htv213_owner
+                    self._json(202, htv213_owner.configure_recovery(self.server.gateway, body))
                     return
                 if parsed.path == f"{base}/experiments/htv213/owner":
                     from . import htv213_owner

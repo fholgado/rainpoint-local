@@ -234,7 +234,8 @@ class ESP32NetworkServer:
         elif command_type in {"htv213_pairing_start", "htv213_pairing_cancel"}:
             required_capability = "htv213_pairing_experiment"
         elif command_type in {"htv213_owner_set", "htv213_owner_clear"}:
-            required_capability = "htv213_routine_owner"
+            required_capability = ("htv213_retained_rejoin_v1" if
+                message.get("retained_rejoin_enabled") is True else "htv213_routine_owner")
         elif command_type in {"htv213_control_probe_open", "htv213_control_probe_close"}:
             required_capability = "htv213_control_experiment"
         elif command_type.startswith("htv145_control_"):

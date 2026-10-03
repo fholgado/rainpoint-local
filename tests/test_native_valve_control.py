@@ -124,6 +124,34 @@ class NativeGatewayControlTest(unittest.TestCase):
         self.observe(self.idle, now=at(70))
         return self.snapshot()["commands"][-1]
 
+    def check_open_close_open(self, model):
+        """Rehearse the next dry trial through public controls, not allocator-only."""
+        self.setup_model(model)
+        phases = []
+        baseline = self.owner['next_phase']
+        for index, action in enumerate(('open', 'close', 'open')):
+            started = 10 + index * 20
+            self.command(action=action, now=at(started))
+            tx = self.snapshot()['commands'][-1]
+            phases.append(tx['phase'])
+            self.observe(self.ack_for(tx), now=at(started+1))
+            self.receipt(stage='accepted', phase=tx['phase'], command_id=tx['command_id'],
+                         frame=tx['frame'], now=at(started+1))
+            self.observe(self.active if action == 'open' else self.idle, now=at(started+2))
+            state = self.state(at(started+3))
+            self.assertEqual(state['rf_control_transaction_state'], 'confirmed')
+            self.assertEqual(state['is_watering'], action == 'open')
+            self.assertEqual(decode_envelope(tx['frame']).phase, tx['phase'])
+        self.assertEqual(phases, [baseline, baseline+1, baseline+2])
+        self.assertEqual([command['type'] for _, command in self.sent],
+                         ['valve_native_adopt'] + ['valve_native_command'] * 3)
+
+    def test_single_public_open_close_open_uses_three_adjacent_phases(self):
+        self.check_open_close_open('HTV145FRF')
+
+    def test_four_public_open_close_open_uses_three_adjacent_phases(self):
+        self.check_open_close_open('HTV405FRF')
+
     def test_recovery_requires_exact_positive_and_idle_preserves_failed_watering(self):
         self.setup_model("HTV145FRF")
         self.completed_run(physical=False)

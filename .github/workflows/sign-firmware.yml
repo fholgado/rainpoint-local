@@ -11,6 +11,7 @@ on:
         options:
           - production
           - phase-trial
+          - htv213-recovery
 
 run-name: Sign ${{ inputs.profile }} firmware at ${{ github.sha }}
 
@@ -56,6 +57,12 @@ jobs:
               export RAINPOINT_VALVE_PHASE_EXPERIMENT=1
               export RAINPOINT_FIRMWARE_VERSION=0.19.0-phase-trial.6
               boundary_args=(--phase-trial)
+              ;;
+            htv213-recovery)
+              export RAINPOINT_HTV213_PAIRING_EXPERIMENT=1
+              export RAINPOINT_HTV213_CONTROL_EXPERIMENT=1
+              export RAINPOINT_FIRMWARE_VERSION=0.19.0-htv213-control.5
+              boundary_args=(--htv213-recovery)
               ;;
             *) exit 2 ;;
           esac
@@ -128,6 +135,8 @@ jobs:
               summary='Publisher-signed RainPoint radio firmware',
               notes=('Bounded phase trial; requires the matching experimental gateway. Not for general rollout.'
                      if '-phase-trial.' in descriptor['version'] else
+                     'Experimental two-zone retained rejoin; dry research node and matching gateway only. Not for general rollout.'
+                     if '-htv213-control.' in descriptor['version'] else
                      'Unified sensors and valves; use the matching gateway release.'),
               firmware_variant='unified', signature=envelope)
           PY
