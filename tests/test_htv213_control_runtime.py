@@ -50,10 +50,29 @@ struct Wifi { bool allowed=true; bool authenticated() { return allowed; } } wifi
 struct Maintenance { bool allowed=true; bool transmitAllowed() { return allowed; } } rfMaintenance;
 void reportHtv213Control(const rainpoint::htv213::Frame* =nullptr) { ++reports; }
 void restoreScanningAfterPairing() { scanning=true; }
+using String=std::string;
+String htv213ControlCommandId, htv213ControlOpenId, lastCommandError;
+bool radiosHealthy=true, scanChannels=false;
+bool htv213Armed() { return false; }
+rainpoint::PairingSessionState currentPairingState() { return rainpoint::PairingSessionState::Disarmed; }
+struct Authorizations { unsigned activeCount() { return 0; } } routineAckAuthorizations, htv405RoutineAckAuthorizations;
+bool htv145OwnsReports() { return false; }
+bool htv145Pending() { return false; }
+struct Probe { bool commandPendingConfirmation=false, openQueued=false, closeQueued=false; } valveControlProbe;
+String jsonStringField(const String&,const char*) { return ""; }
+bool jsonLongField(const String&,const char*,long&) { return false; }
+bool jsonBoolField(const String&,const char*,bool&) { return false; }
+bool parseRawHexEndpoint(const String&,std::array<std::uint8_t,4>&) { return false; }
+bool parsePairingLocalDateTime(const String&,rainpoint::PairingLocalDateTime&) { return false; }
+void reportNetworkCommandError(const String&,const char* error) { lastCommandError=error; }
 '''
+        support = support.replace("bool enterIdle() {", "bool prepareTransmit() { return true; }\n"
+            "    bool cacheTransmitFrequency(unsigned) { return true; }\n    bool enterIdle() {")
         support += "\n".join(function(source, signature) for signature in (
+            "bool parseHtv213Settings(",
             "bool htv213ControlActive(", "void restoreHtv213ControlReceiver(",
-            "void transmitHtv213Control(", "void processHtv213Control(", "void pollHtv213Control("))
+            "void transmitHtv213Control(", "bool handleHtv213ControlCommand(",
+            "void processHtv213Control(", "void pollHtv213Control("))
         fixture = json.loads((ROOT / "research/fixtures/htv213_stock_pairing_controls_20260928.json").read_text())
         trial = next(t for t in fixture["trials"] if t["name"] == "zone1_auto60")
         device = [e["frame"] for e in trial["events"] if e["direction"] == "device"]
@@ -77,7 +96,26 @@ int main(int argc,char** argv) {
     p.initialHz=434397000; p.routineHz=434287000;
     p.replyDelayUs=49000; p.notificationDelayMs=1000;
     rainpoint::htv213::Transmission tx{};
+    if (mode=="ota-idle-owner" || mode=="ota-no-owner") {
+        htv213OwnerEnabled=mode=="ota-idle-owner";
+        htv213OwnerId="test-owner";
+        // The real dispatcher must reach signed OTA validation without clearing
+        // a persistent, idle RF owner. No parser fake is reached by this path.
+        if (handleHtv213ControlCommand("firmware_update_start","{}","ota-test")) {
+            std::cerr << "Idle OTA intercepted: " << lastCommandError << '\\n'; return 21;
+        }
+        if (htv213OwnerEnabled!=(mode=="ota-idle-owner") || htv213OwnerId!="test-owner" ||
+            !primaryRadio.commands.empty() || htv213ControlTrial.phase()!=0) return 22;
+        return 0;
+    }
     if (!htv213ControlTrial.start(p,1,60,3,0,tx)) return 1;
+    if (mode=="ota-active-owner" || mode=="ota-active-no-owner") {
+        htv213OwnerEnabled=mode=="ota-active-owner";
+        if (!handleHtv213ControlCommand("firmware_update_start","{}","ota-test") ||
+            lastCommandError!="htv213_control_experiment_busy" || !htv213ControlActive() ||
+            htv213ControlTrial.phase()!=3 || !primaryRadio.commands.empty()) return 23;
+        return 0;
+    }
     if (mode=="tx-failure") primaryRadio.restoreOk=false;
     transmitHtv213Control(tx);
     if (mode=="tx-failure") {
@@ -158,7 +196,8 @@ int main(int argc,char** argv) {
                 "-I"+str(ROOT / "firmware/rainpoint_bridge/include"), "-x", "c++", "-", "-o", exe],
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for mode in ("accepted", "owner", "rejoin", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
+            for mode in ("ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+                         "accepted", "owner", "rejoin", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
                 with self.subTest(mode=mode):
                     result = subprocess.run([exe, mode], text=True, capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
