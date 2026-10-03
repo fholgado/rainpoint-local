@@ -54,6 +54,10 @@ def observe(gateway, node_id, message):
                          "close_confirmed", "complete", "uncertain", "overdue", "cancelled"}:
             return
         journal = ControlJournal(gateway._store)
+        current = journal.snapshot(owner[2])
+        if ((current.get("transaction") or {}).get("command_id") != message.get("command_id")
+                or current["identity"]["node_id"] != node_id):
+            return  # A fresh enrollment superseded the old in-memory command.
         if isinstance(message.get("frame"), str):
             journal.observe(owner[2], node_id=node_id, frame=message["frame"])
         record = journal.snapshot(owner[2])

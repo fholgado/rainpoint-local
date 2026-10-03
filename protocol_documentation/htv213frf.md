@@ -125,12 +125,19 @@ replies are unchanged from targeted pairing.
 
 Completion receipts contain the actual positive full-phase `a0` and a later
 post-configuration `02`, after both ports' settings and plans were sent. The
-normal enrollment module validates those receipts and prepares retained
-configuration plus a control seed from the acknowledged hub phase, not the
-device-report phase. It does not persist an association or enable controls.
-Normal HA flow binding and atomic association/re-pair handoff remain pending;
-this source-only preparation does not advertise general support or change
-deployed firmware. See [the roadmap](../PROJECT_ROADMAP.md).
+normal enrollment module validates those receipts and atomically saves the
+enrollment proof, retained reply ownership and control seed from the acknowledged
+hub phase, not the device-report phase. Re-pair requires prior acknowledged
+owner revocation; the new epoch archives old control history before seeding its
+counter. Duplicate naming requests, ordinary reconnects and battery reports
+do not reseed counters or replay enrollment.
+
+The source-prepared flow uses HA's existing node/model, progress, cancellation
+and naming contract. Pending completion proof survives a gateway restart;
+retained configuration is sent only after the association commits. Radios need
+explicitly provisioned calibrated carriers. General model-menu and control
+enablement remain withheld by existing physical qualification, and deployed
+firmware is unchanged. See [the roadmap](../PROJECT_ROADMAP.md).
 
 The observed successful stock association consists of:
 

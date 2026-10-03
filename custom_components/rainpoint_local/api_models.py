@@ -45,6 +45,7 @@ class PairingProfileMetadata:
     required_node_capability: str
     automatic_discovery: bool
     user_pairing_supported: bool
+    maximum_duration_seconds: int = 900
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> PairingProfileMetadata:
@@ -67,6 +68,9 @@ class PairingProfileMetadata:
         supported = payload.get("user_pairing_supported")
         if not isinstance(automatic, bool) or not isinstance(supported, bool):
             raise APIModelError("pairing profile support flags must be booleans")
+        maximum = payload.get("maximum_duration_seconds", 900)
+        if type(maximum) is not int or not 10 <= maximum <= 900:
+            raise APIModelError("pairing profile duration bound is invalid")
         return cls(
             profile_id=str(values["profile_id"]),
             model=str(values["model"]),
@@ -75,6 +79,7 @@ class PairingProfileMetadata:
             required_node_capability=str(values["required_node_capability"]),
             automatic_discovery=automatic,
             user_pairing_supported=supported,
+            maximum_duration_seconds=maximum,
         )
 
 

@@ -35,6 +35,28 @@ def packet(frame):
     return raw, native[10], native[9] & 63, native[12:12 + length]
 
 
+def initial_record(*, node_id, controller, valve, selector, acknowledged_phase, evidence_id):
+    """Validate one explicit seed and prepare its durable record without IO."""
+    if not isinstance(node_id, str) or not re.fullmatch(r"rp-[0-9a-f]{12}", node_id):
+        raise ValueError("explicit radio node required")
+    for value in (controller, valve):
+        if (not isinstance(value, str) or not re.fullmatch(r"[89a-f][0-9a-f]{7}", value)
+                or value == "80000000"):
+            raise ValueError("explicit paired endpoint required")
+    if controller == valve:
+        raise ValueError("controller and valve must differ")
+    if type(selector) is not int or not 1 <= selector <= 15:
+        raise ValueError("explicit retained selector required")
+    if type(acknowledged_phase) is not int or not 0 <= acknowledged_phase < 63:
+        raise ValueError("explicit acknowledged phase required; wrap not qualified")
+    if not isinstance(evidence_id, str) or not re.fullmatch(r"[0-9a-f]{32}", evidence_id):
+        raise ValueError("pairing evidence reference required")
+    identity = dict(node_id=node_id, controller=controller, valve=valve,
+                    selector=selector, evidence_id=evidence_id, seed_phase=acknowledged_phase)
+    return {"identity": identity, "next_phase": acknowledged_phase + 1,
+            "state": "ready", "transaction": None, "history": []}
+
+
 class ControlJournal:
     def __init__(self, store):
         self.store = store
@@ -47,30 +69,15 @@ class ControlJournal:
 
     def seed(self, *, node_id, controller, valve, selector, acknowledged_phase, evidence_id):
         """Explicit evidence-backed seed, not a restart/rejoin/idle reset."""
-        if not isinstance(node_id, str) or not re.fullmatch(r"rp-[0-9a-f]{12}", node_id):
-            raise ValueError("explicit radio node required")
-        for value in (controller, valve):
-            if (not isinstance(value, str) or not re.fullmatch(r"[89a-f][0-9a-f]{7}", value)
-                    or value == "80000000"):
-                raise ValueError("explicit paired endpoint required")
-        if controller == valve:
-            raise ValueError("controller and valve must differ")
-        if type(selector) is not int or not 1 <= selector <= 15:
-            raise ValueError("explicit retained selector required")
-        if type(acknowledged_phase) is not int or not 0 <= acknowledged_phase < 63:
-            raise ValueError("explicit acknowledged phase required; wrap not qualified")
-        if not isinstance(evidence_id, str) or not re.fullmatch(r"[0-9a-f]{32}", evidence_id):
-            raise ValueError("pairing evidence reference required")
+        record = initial_record(node_id=node_id, controller=controller, valve=valve,
+            selector=selector, acknowledged_phase=acknowledged_phase, evidence_id=evidence_id)
         key = controller + ":" + valve
         records = self._records()
-        identity = dict(node_id=node_id, controller=controller, valve=valve,
-                        selector=selector, evidence_id=evidence_id, seed_phase=acknowledged_phase)
         if key in records:
-            if records[key]["identity"] != identity:
+            if records[key]["identity"] != record["identity"]:
                 raise ValueError("existing association cannot be reseeded or moved implicitly")
             return key  # Reopening the same evidence never resets next_phase.
-        records[key] = {"identity": identity, "next_phase": acknowledged_phase + 1,
-                        "state": "ready", "transaction": None, "history": []}
+        records[key] = record
         self._save(records)
         return key
 

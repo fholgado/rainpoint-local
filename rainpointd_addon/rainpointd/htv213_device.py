@@ -1,8 +1,9 @@
-"""HA-facing controls for an explicitly qualified dry HTV213 association.
+"""HA projection for qualified canary and staged normal HTV213 associations.
 
 The persisted reply owner supplies all RF parameters. HA supplies only an
 outlet and duration; transport success never becomes reported watering. This
-canary adapter does not advertise general HTV213 pairing or battery recovery.
+adapter keeps staged normal controls disabled until model qualification; it
+does not advertise general HTV213 support merely because enrollment is saved.
 """
 from __future__ import annotations
 
@@ -79,8 +80,10 @@ def project(gateway, now=None):
                          owner.CAPABILITY in node.get("capabilities", []) and
                          owner_status.get("state") == "ready" and
                          owner_status.get("command_id") == record["command"]["command_id"])
-        state = {"device_kind": "valve", "rf_control_enabled": True,
-                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "dry_canary",
+        from .htv213_enrollment import USER_PAIRING_SUPPORTED
+        qualified = not record.get("enrollment_id") or USER_PAIRING_SUPPORTED
+        state = {"device_kind": "valve", "rf_control_enabled": qualified,
+                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "normal_enrollment" if record.get("enrollment_id") and qualified else "enrollment_pending_qualification" if record.get("enrollment_id") else "dry_canary",
                  "rf_control_duration_min_minutes": 1,
                  "rf_control_duration_max_minutes": 60 if "htv213_duration_3600" in node.get("capabilities", []) else 2,
                  "rf_control_duration_step_minutes": 1}
@@ -112,13 +115,13 @@ def project(gateway, now=None):
                  "watering_confirmed" if journal["state"] == "open_confirmed" else
                  "confirmed" if journal["state"] == "complete" else journal["state"])
         boundary_active = bool(journal.get("counter_boundary") and not journal["counter_boundary"].get("complete"))
-        start = (connected and not unresolved and not boundary_active and
+        start = (qualified and connected and not unresolved and not boundary_active and
                  watering == [False, False] and
                  (journal["next_phase"] <= 63 or journal.get("counter_boundary", {}).get("complete") is True))
         same_session = (_age(node.get("connected_at"), now) >= age)
-        stop = (connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
+        stop = (qualified and connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
                 and not tx.get("idle") and not overdue)
-        reason = ("Radio unavailable" if not connected else "Command awaiting valve response" if pending else
+        reason = ("Model enrollment/control qualification pending" if not qualified else "Radio unavailable" if not connected else "Command awaiting valve response" if pending else
                   "Valve confirmed idle; completion summary missing; no automatic retry" if missing_summary else
                   "Counter/command requires investigation; no automatic retry" if failed or overdue else
                   "Explicit counter-boundary experiment in progress" if boundary_active else
@@ -133,7 +136,7 @@ def project(gateway, now=None):
             rf_control_overdue=overdue, rf_control_completion_missing=bool(missing_summary),
             rf_retained_command_counter=journal["next_phase"],
             rf_retained_counter_status="Ready" if start else reason or "Watering in progress")
-        devices[device_id] = dict(device_id=device_id, model=MODEL, name=record["name"], area=None,
+        devices[device_id] = dict(device_id=device_id, model=MODEL, name=record["name"], area=record.get("area"),
             available=connected, reporting=connected and 0 <= _age(record.get("last_seen"), now) <= FRESH_SECONDS,
             observed_at=record.get("last_seen"), capabilities=["bounded_valve_control", "forget"], state=state)
     return devices
@@ -189,7 +192,7 @@ def forget(gateway, device_id):
             raise KeyError(device_id)
         key, record = found
         journal = ControlJournal(gateway._store).snapshot(key)
-        if journal["state"] != "complete" or any(r.get("watering") for r in record["ports"].values()):
+        if journal["state"] not in {"ready", "complete"} or any(r.get("watering") for r in record["ports"].values()):
             raise ValueError("finish the active or unresolved valve transaction first")
         records = owner.records(gateway)
         records[key]["revoking"] = True

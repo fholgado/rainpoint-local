@@ -453,6 +453,9 @@ class ESP32NetworkServer:
                     observe(self.gateway, node_id, message)
                     continue
                 if message.get("type") == "htv213_pairing_status":
+                    from .htv213_enrollment_flow import observe as observe_enrollment
+                    if observe_enrollment(self.gateway, node_id, message):
+                        continue
                     from .htv213_pairing import observe
                     observe(self.gateway, node_id, message)
                     continue
@@ -645,6 +648,10 @@ class ESP32NetworkServer:
                     if observer is not None:
                         observer(node_id, message)
                 if message.get("type") == "command_error":
+                    from .htv213_enrollment_flow import observe_error as observe_enrollment_error
+                    with self.gateway._lock:
+                        if observe_enrollment_error(self.gateway, node_id, message):
+                            continue
                     if self.gateway.observe_native_valve_error(node_id, message, now=now):
                         continue
                     from .htv213_control_transport import observe_error as observe_control_error

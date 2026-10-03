@@ -342,6 +342,29 @@ class SQLiteEventStore:
                 (KEY, payload),
             )
 
+    def save_htv213_enrollment(self, expected: dict, updates: dict) -> None:
+        """Commit enrollment, reply ownership and phase seed as one epoch.
+
+        Compare the read snapshots before writing. A stale caller or failed
+        statement cannot leave the new owner with an old command counter.
+        """
+        from .htv213_enrollment import KEY
+        from .htv213_owner import KEY as owner_key
+        from .htv213_control import KEY as control_key
+        keys = {KEY, owner_key, control_key}
+        if set(expected) != keys or not updates or not set(updates) <= keys:
+            raise ValueError("invalid enrollment transaction keys")
+        with self._connection:
+            self._connection.execute("BEGIN IMMEDIATE")
+            for key, value in expected.items():
+                if self.metadata_value(key) != value:
+                    raise RuntimeError("HTV213 enrollment state changed")
+            for key, value in updates.items():
+                self._connection.execute(
+                    "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",
+                    (key, value),
+                )
+
     def save_valve_phase_trial(self, payload: str) -> None:
         """Commit the bounded canary journal or roll back on storage failure."""
         from .valve_phase_trial import KEY

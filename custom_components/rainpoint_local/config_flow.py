@@ -857,7 +857,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         node_choices
                     ),
                     vol.Required("duration_seconds", default=self._pairing_request.get("duration_seconds", 120)): vol.All(
-                        vol.Coerce(int), vol.Range(min=10, max=900)
+                        vol.Coerce(int), vol.Range(min=10, max=self._pairing_profile.maximum_duration_seconds)
                     ),
                 }
             ),

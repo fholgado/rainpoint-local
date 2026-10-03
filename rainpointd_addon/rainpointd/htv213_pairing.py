@@ -12,7 +12,10 @@ CAPABILITY = "htv213_pairing_experiment"
 
 
 def busy(gateway):
-    return time.monotonic() < getattr(gateway, "_htv213_experiment_deadline", 0)
+    from .htv213_enrollment import EnrollmentJournal
+    record = EnrollmentJournal(gateway._store).current() if gateway._store else None
+    return (time.monotonic() < getattr(gateway, "_htv213_experiment_deadline", 0) or
+            bool(record and record["state"] not in {"complete", "failed", "expired", "cancelled"}))
 
 
 def build_command(request, *, controller, companion):
