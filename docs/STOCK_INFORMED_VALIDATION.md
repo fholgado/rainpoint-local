@@ -1,7 +1,8 @@
 # Stock-informed changes: short validation procedure
 
-Source/test work through September 29; **not deployed**. This procedure is
-not another backlog: record acceptance in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
+The original procedure describes the September 29 source checkpoint; dated
+sections retain later deployments and trial evidence. Current acceptance is
+in [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md), not another backlog here.
 Implementation and offline evidence: [improvement plan](../research/STOCK_FIRMWARE_IMPROVEMENT_PLAN.md).
 
 ## Next valve session: keep the questions separate

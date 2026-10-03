@@ -50,8 +50,12 @@ master phase or replaying controls. Each port keeps its own settings; the origin
 canary's previously implicit empty configuration is persisted during upgrade.
 Other models and default production dispatch remain unchanged. Actual RX/TX replay,
 configuration persistence/authentication and public native OPEN/CLOSE/OPEN rehearsals
-are offline evidence only; local battery rejoin still needs a signed candidate and
-physical acceptance. The [roadmap](../PROJECT_ROADMAP.md) tracks those gates.
+were offline evidence at that source checkpoint. Subsequent development control.8
+qualification on Oct 3 verified battery-only saved-association recovery and one
+60-second port-1 command at retained phase 2, with matching acceptance, active/idle
+and elapsed summary; next phase 3, without reseeding. Other models and production
+recovery remain unqualified. See the [RF evidence](RF_CAPTURE_NOTES.md) and
+[roadmap](../PROJECT_ROADMAP.md) for current qualification.
 
 Lifecycle evidence is frozen in
 [`htv213_stock_lifecycle_20260928.json`](fixtures/htv213_stock_lifecycle_20260928.json)
