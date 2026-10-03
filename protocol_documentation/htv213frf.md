@@ -20,6 +20,7 @@ in `03` remains excluded from fresh enrollment. These are exact experimental all
 not a general pairing-flag interpretation. The repeat variant received a
 locally accepted assignment in two dry trials, followed by addressed reports
 and acknowledgements for both ports. Preserve that proven prefix.
+These bytes alone do not distinguish long-press pairing from a boot announcement.
 
 ### Retained reply owner
 
@@ -29,6 +30,9 @@ timing, configuration revision, fourteen-byte settings for each port and known
 empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
 `06/86` answer incoming requests with their full six-bit phase. Unknown settings,
 plans, time context or announcement selectors do not receive guessed replies.
+The current retained assignment filter admits only the captured suffix `03`.
+An announcement ending `07` was received during the reported local battery
+cycle but is rejected by this filter; its recovery behavior remains unqualified.
 
 Assignment uses the incoming announcement selector's carrier, not the saved
 routine selector's carrier. Replies retain the corrected native CRC tail and

@@ -381,7 +381,8 @@ not tasks to mark “done once.”
 - [x] Fix HTV213 idle ownership blocking signed OTA; actual-dispatch regression, 963 CI tests/two skips and both builds pass. Deploy automatically signed control.7 to Test Node B only (Oct 3).
 - [x] Verify development-signed OTA with idle ownership enabled: full signed/hash-verified transfer, reboot, healthy confirmation and restored owner; association/master counter unchanged. Preserve failed partial-download evidence too (Oct 3).
 - [x] Enable and verify HTV213 retained-rejoin configuration echo on Test Node B; association and master counter remain unchanged (Oct 3).
-- [ ] Capture physical HTV213 battery rejoin without pairing mode, then one short dry control; SDR must be connected. Do not infer a counter reset.
+- [x] Capture/diagnose Oct 3 HTV213 recovery failure: boot body ends `07`, but retained replies require `03`; real-builder replay reproduces rejection. No watering or counter change.
+- [ ] Confirm battery-only procedure and qualify known-owner recovery for the observed `07` announcement, then one short dry control. Preserve identity/configuration; do not infer a counter reset.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.

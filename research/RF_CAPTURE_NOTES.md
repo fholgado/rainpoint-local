@@ -8,6 +8,41 @@ keeps chronology and correlation details out of those normative references.
 Raw IQ captures are retained locally and are not committed because they can be
 large and may include unrelated nearby traffic.
 
+## HTV213 local recovery rejection — 2026-10-03
+
+Test Node B ran development-signed control.7 with its durable reply owner and
+retained rejoin enabled. The user was instructed to remove batteries for
+15 seconds and reinstall without pressing a button; insertion was reported.
+Explicit confirmation that no button was pressed remains pending. No fresh
+pairing mode or watering command was started.
+
+The complete receive-only recording is retained privately under
+`captures/htv213-local-rejoin-20261003/20261003-094618/`: 600 seconds, CU8,
+2 Msps, center 433.7 MHz, gain 0.9 dB, 2,400,000,000 bytes. SHA-256:
+`3ac89d818c5fd2fba575854fa971844bfb3840bd71390d34e982d6b43e3605cc`.
+The pre-test baseline and post-test gateway journal are preserved alongside it.
+
+Independent bounded SDR decoding recovered native `01` announcements at
+phases 1, 2, 4, 5, 7 and 8, approximately 93.258–107.338 seconds into the
+recording. Their body was `0b ff 20 05 01 04 3e 07`; decoded windows had no
+ADC-endpoint clipping. The node independently received phases 1, 4 and 7.
+Neither source showed progression to normal addressed reports in that window.
+The gateway retained its association and master counter 2; this says nothing
+about whether the valve retained its own association.
+
+Replaying those three actual RX frames through `htv213Owner::prepareReply`
+with the matching saved association and valid current-time context consistently
+produced no reply. The retained filter requires the final announcement byte
+`03`, while these frames end `07`; selector 11 is already supported. Therefore
+the observed failure is reproducible before RF transmission, not evidence of
+bad reply timing or a rejected valve command. No meaning for the `03`/`07`
+flag difference, counter reset, or accepted recovery reply is established.
+
+The earlier long-press local pairing fixture already contains this same `07`
+body. A recovery correction must remain restricted to the existing owner and
+stored configuration; it must not silently admit unknown devices or reset the
+master phase. Qualification status is in [the roadmap](../PROJECT_ROADMAP.md).
+
 ## Interim reliability review — 2026-09-08
 
 A read-only Mac copy of the HA collector database passed SQLite integrity checking;
