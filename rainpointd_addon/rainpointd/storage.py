@@ -334,8 +334,8 @@ class SQLiteEventStore:
             )
 
     def save_htv213_control_trial(self, payload: str) -> None:
-        """Commit dry-trial reservations before dispatch, or roll back wholly."""
-        from .htv213_control_trial import KEY
+        """Commit HTV213 reservations before dispatch, or roll back wholly."""
+        from .htv213_control import KEY
         with self._connection:
             self._connection.execute(
                 "INSERT OR REPLACE INTO storage_metadata(key, value) VALUES (?, ?)",

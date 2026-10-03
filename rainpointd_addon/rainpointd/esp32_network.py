@@ -446,7 +446,7 @@ class ESP32NetworkServer:
                     self.gateway.observe_native_valve_receipt(node_id, message, now=now)
                     continue
                 if message.get("type") == "htv213_control_status":
-                    from .htv213_control_experiment import observe
+                    from .htv213_control_transport import observe
                     observe(self.gateway, node_id, message)
                     continue
                 if message.get("type") == "htv213_pairing_status":
@@ -644,7 +644,7 @@ class ESP32NetworkServer:
                 if message.get("type") == "command_error":
                     if self.gateway.observe_native_valve_error(node_id, message, now=now):
                         continue
-                    from .htv213_control_experiment import observe_error as observe_control_error
+                    from .htv213_control_transport import observe_error as observe_control_error
                     if observe_control_error(self.gateway, node_id, message):
                         continue
                     from .htv213_pairing import observe_error

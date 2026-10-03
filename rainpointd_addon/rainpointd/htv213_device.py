@@ -10,8 +10,8 @@ import copy
 import json
 from datetime import datetime, timezone
 
-from . import htv213_owner as owner, htv213_control_experiment as control
-from .htv213_control_trial import ControlJournal
+from . import htv213_owner as owner, htv213_control_transport as control
+from .htv213_control import ControlJournal
 
 MODEL = "HTV213FRF"
 FRESH_SECONDS = 1200
@@ -157,7 +157,7 @@ def request(gateway, device_id, action, port, seconds=None):
                 raise ValueError(state["rf_control_start_unavailable_reason"])
             if type(seconds) is not int or not 1 <= seconds <= state["rf_control_duration_max_minutes"] * 60:
                 raise ValueError("duration exceeds the selected radio capability")
-            tx = journal.reserve(key, action=action, port=port, seconds=seconds, dry_confirmed=True)
+            tx = journal.reserve(key, action=action, port=port, seconds=seconds)
             command = copy.deepcopy(record["command"])
             command.update(type="htv213_control_probe_open", command_id=tx["command_id"],
                 local_clock=datetime.now().astimezone().strftime("%Y%m%d%H%M%S"),
@@ -166,7 +166,7 @@ def request(gateway, device_id, action, port, seconds=None):
             if not state["rf_control_available"] or state["rf_control_transaction_state"] != "watering_confirmed":
                 raise ValueError("close requires a confirmed active run on this owner")
             prior = journal.snapshot(key)["transaction"]
-            tx = journal.reserve(key, action=action, port=port, seconds=0, dry_confirmed=True)
+            tx = journal.reserve(key, action=action, port=port, seconds=0)
             command = dict(type="htv213_control_probe_close", command_id=tx["command_id"],
                            open_command_id=prior["command_id"], phase=tx["phase"])
         else:

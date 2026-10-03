@@ -45,7 +45,7 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Prepare normal HTV213 pairing/control/recovery support from the qualified canary; finish the remaining short enrollment/failure checks before enabling it.
+1. Finish normal HTV213 enrollment/ownership integration and short enrollment/failure checks. Ordinary controls now have a separate source core; general support is not enabled.
 2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
 3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
@@ -373,6 +373,7 @@ not tasks to mark “done once.”
 - [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
 - [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
 - [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
+- [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

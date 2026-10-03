@@ -95,6 +95,16 @@ remove experimental operator assumptions rather than copying them into the
 product. Default builds currently omit this runtime, so a merge alone cannot
 make it a general supported model.
 
+The first source-preparation step separates the ordinary
+[`ControlJournal`](../rainpointd_addon/rainpointd/htv213_control.py) and
+[radio transport](../rainpointd_addon/rainpointd/htv213_control_transport.py)
+from experimental counter jumps/CRC retries. HA ownership and controls use
+these shared modules directly. Existing storage keys, records, wire commands,
+canary capability and association-local wrap qualification remain unchanged;
+there is no live migration or firmware change. Temporary-database tests replay
+post-battery control and verify restart, cross-association isolation and old
+trial compatibility. Normal enrollment/model-menu integration remains pending.
+
 Actual production enablement still depends on the existing roadmap's reviewed
 qualification boundaries: reconcile repeat-enrollment/post-configuration
 evidence, complete the remaining dry missing-response/overdue check, and verify

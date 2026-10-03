@@ -11,8 +11,8 @@ import json
 from datetime import datetime, timezone
 
 from . import htv213_pairing
-from .htv213_control_experiment import eligible
-from .htv213_control_trial import ControlJournal, packet
+from .htv213_control_transport import eligible
+from .htv213_control import ControlJournal, packet
 
 KEY = "htv213_reply_owner_v1"
 CAPABILITY = "htv213_routine_owner"
