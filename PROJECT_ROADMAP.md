@@ -89,7 +89,7 @@ physical acceptance; other model handlers remain unfinished.
 Existing pairing prefixes and production startup/counter behavior are unchanged.
 See the [expanded regression audit](research/STOCK_HUB_LOCAL_REGRESSION_AUDIT.md)
 and [replacement-firmware assessment](research/STOCK_HUB_CUSTOM_FIRMWARE_FEASIBILITY.md).
-Recovery branch: `codex/retained-valve-recovery`; earlier research is merged to main. Refine and qualify our existing
+Recovery source is merged to main in PR #31; signed deployment remains pending. Refine and qualify our existing
 firmware first; a stock-hardware port comes afterward. Keep the stock hub intact
 as a reference, and keep vendor images private.
 
@@ -374,6 +374,7 @@ not tasks to mark “done once.”
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
 - [x] Push recovery source for review in PR #31; prepare matched gateway 0.39.15 and protected control.5 signing profile (Oct 3). Deployment remains pending.
 - [x] Keep 0.39.15 gateway documentation aligned with release metadata; CI caught the version-label mismatch and the existing regression confirms the fix (Oct 3).
+- [x] Merge PR #31 after all CI checks pass; submit [control.5 signing run 37118161224](https://github.com/fholgado/rainpoint-local/actions/runs/37118161224) from main commit `036144e` (Oct 3). Approval and deployment remain pending.
 - [ ] Sign/deploy the HTV213 recovery candidate to Test Node B, then verify battery rejoin without pairing mode and one short dry control; no counter reset inferred.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
