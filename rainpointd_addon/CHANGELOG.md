@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.39.15 / Unreleased
+
+- Persist explicit HTV213 per-port configuration and restore it through the
+  existing reply owner. Add opt-in retained battery-rejoin configuration for
+  compatible research firmware without resetting command phases or opening valves.
+- Require the recovery capability and matching configuration acknowledgement;
+  retain existing owner behavior on older firmware. Physical rejoin qualification
+  remains pending; installed one-/four-zone control is unchanged.
+
 ## 0.39.14 / Unreleased
 
 - Add an opt-in native six-bit control adapter with durable command receipts,
