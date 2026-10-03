@@ -23,7 +23,7 @@ and acknowledgements for both ports. Preserve that proven prefix.
 
 ### Retained reply owner
 
-The source-only control candidate adds an opt-in retained owner, separate from
+The experimental control runtime adds an opt-in retained owner, separate from
 fresh enrollment. Its saved association supplies address, routine selector,
 timing, configuration revision, fourteen-byte settings for each port and known
 empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
@@ -39,14 +39,16 @@ Authenticated POST `/api/v1/experiments/htv213/recovery` accepts an existing
 `association_key`, explicit `configuration` (schema in `valve_recovery.py`) and
 boolean `enabled`. It installs configuration through the existing reply owner;
 it does not enroll or water. Nodes require `htv213_retained_rejoin_v1`. Normal
-builds omit this handler; deployed control.4 remains unchanged. Local battery
+builds omit this handler. Local battery
 rejoin is still unqualified until physical testing.
 
-The existing protected **Prepare signed firmware (no publication)** workflow's
-`htv213-recovery` profile builds `0.19.0-htv213-control.5`; the binary checker
-accepts only its two-zone candidate commands and rejects native-phase/other
-research commands. Signing still requires the release approver; no publication
-or deployment occurs as part of the workflow.
+Both signing workflows have an unpublished `htv213-recovery` profile. Release
+signing requires approval; separate development signing is automatic and only
+development-trust radios accept its key. Neither workflow deploys. The binary
+checker excludes other research command profiles; normal production firmware
+excludes this runtime. See [signing boundaries](../docs/FIRMWARE_SIGNING_DESIGN.md).
+Idle retained ownership permits signed OTA without clearing the association;
+an active two-zone control transaction still blocks the update.
 
 The gateway supplies its generated local identity and an exact target factory
 endpoint. Carrier, selector, address, reply delay, power and the independent
@@ -145,8 +147,9 @@ qualify one stock rejoin, not local firmware recovery or every reset branch.
 The opt-in retained-owner builder now replays `81/82/85/86` independently of
 fresh pairing. Assignment TX uses the announcement's qualified selector (11 or
 12), while the payload retains the saved address/selector. Unknown selectors
-stay silent. This is offline preparation only: runtime battery rejoin remains
-disabled, and these replies allocate no master command phase.
+stay silent. Recovery must be explicitly enabled on the existing owner; these
+replies allocate no master command phase. Local battery qualification is tracked
+in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Commands and reported state
 

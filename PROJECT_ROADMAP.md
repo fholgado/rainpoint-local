@@ -378,9 +378,10 @@ not tasks to mark “done once.”
 - [x] Merge development/release signing separation (PR #33); verify automatic [development control.6 signing run](https://github.com/fholgado/rainpoint-local/actions/runs/37121593916) without approval. 963 CI tests pass/two skips; actual OTA trust-isolation and both target builds pass (Oct 3).
 - [x] Deploy matched gateway 0.39.16 and development-only catalog; verify exact source hashes, restored ownership and unchanged counter projections. Garden firmware unchanged (Oct 3).
 - [x] Bootstrap Test Node B with hash-verified development control.6 after USB power cycle; authenticated ownership restored, master counter remains 2. NVS untouched (Oct 3).
-- [x] Fix HTV213 idle ownership blocking signed OTA; actual-dispatch regression, 963 CI tests/two skips and both firmware builds pass, preserving ownership and active-control exclusion (Oct 3; source only).
-- [ ] Verify development-signed OTA on Test Node B with idle ownership enabled; original control.6 live attempt never reached update validation (Oct 3).
-- [ ] Enable HTV213 retained-rejoin replies after bootstrap; verify battery rejoin without pairing mode and one short dry control. Do not infer a counter reset.
+- [x] Fix HTV213 idle ownership blocking signed OTA; actual-dispatch regression, 963 CI tests/two skips and both builds pass. Deploy automatically signed control.7 to Test Node B only (Oct 3).
+- [x] Verify development-signed OTA with idle ownership enabled: full signed/hash-verified transfer, reboot, healthy confirmation and restored owner; association/master counter unchanged. Preserve failed partial-download evidence too (Oct 3).
+- [x] Enable and verify HTV213 retained-rejoin configuration echo on Test Node B; association and master counter remain unchanged (Oct 3).
+- [ ] Capture physical HTV213 battery rejoin without pairing mode, then one short dry control; SDR must be connected. Do not infer a counter reset.
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
@@ -399,7 +400,8 @@ scheduling capture tests rather than treating an old unplugged-device note as cu
 
 ## Deferred migration and backlog
 
-- [ ] Surface correlated radio OTA command rejection as an update failure; periodic idle status hid the control.6 busy rejection (Oct 3).
+- [ ] Preserve OTA correlation across reboot and expose radio command rejection; control.6 idle status hid rejection and reboot drops the command ID (Oct 3).
+- [ ] Investigate Test Node B OTA transfer stalls if repeated; one partial transfer hit the 10-second progress timeout at −76 dBm, later full OTA passed (Oct 3).
 - [ ] Review and finalize the separate [irrigation app requirements](docs/IRRIGATION_APP_REQUIREMENTS.md), including the daily overview and advisory overlap warnings, alongside the [initial UI concepts](docs/irrigation-ui/README.md). Requirements and design work only; implementation waits for product review and does not change the hardware qualification order.
 
 Cloud-to-local migration and a HomGar merge remain deferred until lifecycle,
