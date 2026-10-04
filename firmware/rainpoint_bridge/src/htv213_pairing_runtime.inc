@@ -26,6 +26,8 @@ void reportHtv213() {
     line+=hexString(htv213Session.profile().factory.data(),4); line+="\"";
     line+=",\"notification_accepted\":";
     line+=htv213Session.notificationAccepted() ? "true" : "false";
+    line+=",\"awaiting_confirmation\":";
+    line+=htv213Session.awaitingConfirmation() ? "true" : "false";
     line+=",\"notification_ack_frame\":\"";
     line+=hexString(htv213Session.notificationAck().data(),rainpoint::kFrameBytes); line+="\"";
     line+=",\"completion_frame\":\"";
@@ -134,7 +136,8 @@ void processHtv213(const rainpoint::htv213::Frame& frame,const rainpoint::RadioP
     if (htv213Session.claim(frame,context,millis(),tx)) {
         finishHtv213(primaryRadio.transmitAsync(tx.frame,tx.centerHz,tx.wakeSymbols,false,
             rainpoint::pairingPaTableValue(htv213Power),0x45,
-            packet.receivedAtMicros+htv213Session.profile().replyDelayUs));
+            packet.receivedAtMicros+htv213Session.profile().replyDelayUs,0,
+            rainpoint::htv213::nativeTailSymbol(tx.frame)));
     } else if (!htv213Armed()) {
         restoreScanningAfterPairing(); reportHtv213();
     }
@@ -152,7 +155,8 @@ void pollHtv213() {
     rainpoint::htv213::Transmission tx{};
     if (htv213Session.claimNotification(millis(),tx)) {
         finishHtv213(primaryRadio.transmitAsync(tx.frame,tx.centerHz,tx.wakeSymbols,false,
-            rainpoint::pairingPaTableValue(htv213Power),0x45),true);
+            rainpoint::pairingPaTableValue(htv213Power),0x45,0,0,
+            rainpoint::htv213::nativeTailSymbol(tx.frame)),true);
     } else if (before!=htv213Session.state()) {
         restoreScanningAfterPairing(); reportHtv213();
     }

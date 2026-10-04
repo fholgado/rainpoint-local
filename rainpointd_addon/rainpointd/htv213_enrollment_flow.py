@@ -83,13 +83,16 @@ def snapshot(gateway, *, now=None):
         "failed": "transmitter_failed", "command_rejected": "transmitter_failed",
         "dispatch_failed": "transmitter_failed", "cancelled": "inactive", "expired": "inactive"}
     result = record.get("result") or {}
+    stage = stages.get(state, "pairing_exchange_in_progress")
+    if state == "armed" and record.get("awaiting_confirmation"):
+        stage = "waiting_for_terminal_confirmation"
     profiles = gateway._pairing_snapshot(now=now)["supported_profiles"]
     return dict(available=True, supported_profiles=profiles, transmitter_available=True,
         transmitter_required=True, pairing_nodes=gateway._pairing_nodes(),
         selected_node_id=record["node_id"], active_profile_id=enrollment.PROFILE_ID,
         command_id=record["command"]["command_id"], scoped_cancellation=True,
         transmit_performed=True, active=state not in {"complete", "failed", "expired", "cancelled"},
-        stage=stages.get(state, "pairing_exchange_in_progress"),
+        stage=stage,
         completed_endpoint=result.get("configuration", {}).get("valve_endpoint") if state in {"accepted", "complete"} else None,
         completed_existing_record=(record.get("replacement_key") is not None or
             result.get("association_key") in record.get("revoked_keys", [])),

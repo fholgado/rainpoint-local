@@ -28,6 +28,7 @@ USER_PAIRING_SUPPORTED = False
 # byte 1): HTV145=1, HTV405=6, HCS026=6. Reserve them even before those models
 # are installed; later legacy pairing must not collide with a new HTV213 slot.
 LEGACY_ADDRESSES = frozenset({1, 6})
+CONFIRMATION_WAIT_SECONDS = 600
 
 
 def profile_metadata():
@@ -96,6 +97,34 @@ class EnrollmentProfile:
                     local_clock=clock.strftime("%Y%m%d%H%M%S"), **values)
 
 
+def _configuration_ack(command, status, state):
+    """Validate the configuration exchange before waiting or completing."""
+    command_id = command.get("command_id")
+    if (command.get("type") != "htv213_enrollment_start" or
+            not isinstance(command_id, str) or not re.fullmatch(r"[0-9a-f]{32}", command_id)):
+        raise ValueError("normal enrollment command required")
+    values = parameters(command, controller=command.get("controller_endpoint"),
+                        companion=command.get("companion_endpoint"))
+    if values["notification_phase"] == 63:
+        raise ValueError("normal enrollment requires a seedable notification phase")
+    factory = status.get("factory_endpoint")
+    if (status.get("command_id") != command_id or status.get("state") != state or
+            status.get("notification_accepted") is not True or
+            any(type(status.get(field)) is not int or status[field] != 3
+                for field in ("reports", "settings_sent", "plans_sent")) or
+            not isinstance(factory, str) or not re.fullmatch(r"[0-7][0-9a-f]{7}", factory) or
+            int(factory, 16) == 0):
+        raise ValueError("complete correlated two-port enrollment required")
+    paired = f"{int(factory, 16) | 0x80000000:08x}"
+    ack = packet(status.get("notification_ack_frame"))
+    if (ack is None or ack[0][5:9].hex() != values["controller_endpoint"] or
+            ack[0][9:13].hex() != paired or ack[0][13] & 0x20):
+        raise ValueError("valve-originated enrollment proof required")
+    if ack[1:] != (0xa0, values["notification_phase"], b"\0"):
+        raise ValueError("positive full-phase configuration ACK required")
+    return values, factory, paired, ack
+
+
 def completed_association(*, node_id, command, status):
     """Prepare retained configuration and phase seed from correlated RF proof.
 
@@ -106,31 +135,12 @@ def completed_association(*, node_id, command, status):
     from .valve_recovery import configuration
     if not isinstance(node_id, str) or not re.fullmatch(r"rp-[0-9a-f]{12}", node_id):
         raise ValueError("selected radio node required")
-    command_id = command.get("command_id")
-    if (command.get("type") != "htv213_enrollment_start" or
-            not isinstance(command_id, str) or not re.fullmatch(r"[0-9a-f]{32}", command_id)):
-        raise ValueError("normal enrollment command required")
-    values = parameters(command, controller=command.get("controller_endpoint"),
-                        companion=command.get("companion_endpoint"))
-    if values["notification_phase"] == 63:
-        raise ValueError("normal enrollment requires a seedable notification phase")
-    factory = status.get("factory_endpoint")
-    if (status.get("command_id") != command_id or status.get("state") != "observed" or
-            status.get("notification_accepted") is not True or
-            any(type(status.get(field)) is not int or status[field] != 3
-                for field in ("reports", "settings_sent", "plans_sent")) or
-            not isinstance(factory, str) or not re.fullmatch(r"[0-7][0-9a-f]{7}", factory) or
-            int(factory, 16) == 0):
-        raise ValueError("complete correlated two-port enrollment required")
-    paired = f"{int(factory, 16) | 0x80000000:08x}"
-    ack = packet(status.get("notification_ack_frame"))
+    values, factory, paired, ack = _configuration_ack(command, status, "observed")
+    command_id = command["command_id"]
     report = packet(status.get("completion_frame"))
-    for decoded in (ack, report):
-        if (decoded is None or decoded[0][5:9].hex() != values["controller_endpoint"] or
-                decoded[0][9:13].hex() != paired or decoded[0][13] & 0x20):
-            raise ValueError("valve-originated enrollment proof required")
-    if ack[1:] != (0xa0, values["notification_phase"], b"\0"):
-        raise ValueError("positive full-phase configuration ACK required")
+    if (report is None or report[0][5:9].hex() != values["controller_endpoint"] or
+            report[0][9:13].hex() != paired or report[0][13] & 0x20):
+        raise ValueError("valve-originated enrollment proof required")
     data = report[3]
     if (report[1] != 2 or len(data) != 15 or data[0] != values["assigned_selector"] or
             data[2] not in (1, 2) or data[3] not in (0, 0x21)):
@@ -290,6 +300,7 @@ class EnrollmentJournal:
         self._save(expected, enrollment)
 
     def observe(self, node_id, status, *, now=None):
+        now = now or datetime.now(timezone.utc)
         enrollment, _, _, expected = self._load()
         record = self.current(now)
         if (not record or record["node_id"] != node_id or record["command"]["command_id"] != status.get("command_id")
@@ -309,6 +320,18 @@ class EnrollmentJournal:
                 record.update(state="accepted", proof=copy.deepcopy(status), result=result)
         else:
             record.update(state="cancelled" if state == "disarmed" else state)
+            if (state == "armed" and status.get("awaiting_confirmation") is True
+                    and not record.get("awaiting_confirmation")):
+                try:
+                    _configuration_ack(record["command"], status, "armed")
+                except ValueError:
+                    pass
+                else:
+                    # One deadline per epoch; repeated progress cannot extend
+                    # it. The radio remains authoritative for its own timeout.
+                    record.update(awaiting_confirmation=True,
+                        confirmation_started_at=now.isoformat(),
+                        expires_at=(now + timedelta(seconds=CONFIRMATION_WAIT_SECONDS + 5)).isoformat())
             if state == "failed":
                 record["error"] = "Radio enrollment failed"
         enrollment["sessions"][record["command"]["command_id"]] = record

@@ -152,6 +152,22 @@ int main() {
         report=self.events[0]["frame"]
         self.assertEqual(self.run_ops(ops+[f"frame 25000 {report}","finish 25001 1"])[-1][1],2)
 
+    def test_configured_valve_can_confirm_after_discovery_window(self):
+        ops, _ = self.enrollment()
+        ops[0] = "discover 0"
+        report = self.events[0]["frame"]
+        rows = self.run_ops(ops + ["tick 300000", f"frame 480000 {report}", "finish 480001 1"])
+        self.assertEqual(rows[-3][1], 1, "configured valve must await its routine report")
+        self.assertEqual(rows[-1][1], 2, "actual later report completes enrollment")
+
+    def test_confirmation_wait_expires_and_does_not_admit_another_factory(self):
+        ops, _ = self.enrollment()
+        ops[0] = "discover 0"
+        rows = self.run_ops(ops + [f"frame 300000 {FACTORY}", "tick 700000"])
+        self.assertEqual(rows[-2][0], 0)
+        self.assertEqual(rows[-2][1], 1)
+        self.assertEqual(rows[-1][1:3], [3, 1])
+
     def test_local_pairing5_capture_preserves_both_port_configuration_and_retries(self):
         fixture = json.loads((ROOT / "research/fixtures/htv213_local_pairing_20260930.json").read_text())
         ops = ["arm 0"]

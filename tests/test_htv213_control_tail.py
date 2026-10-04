@@ -41,9 +41,11 @@ int main() {
 '''
         with tempfile.TemporaryDirectory() as directory:
             exe = str(Path(directory) / "tail")
-            result = subprocess.run([compiler,"-std=c++17","-DRAINPOINT_HTV213_CONTROL_EXPERIMENT",
-                "-I"+str(ROOT/"firmware/rainpoint_bridge/include"),"-x","c++","-","-o",exe],
-                input=harness,text=True,capture_output=True)
-            self.assertEqual(result.returncode,0,result.stderr)
-            result = subprocess.run([exe],capture_output=True,text=True)
-            self.assertEqual(result.returncode,0,result.stderr)
+            for feature in ("CONTROL", "PAIRING"):
+                with self.subTest(feature=feature):
+                    result = subprocess.run([compiler,"-std=c++17",f"-DRAINPOINT_HTV213_{feature}_EXPERIMENT",
+                        "-I"+str(ROOT/"firmware/rainpoint_bridge/include"),"-x","c++","-","-o",exe],
+                        input=harness,text=True,capture_output=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    result = subprocess.run([exe],capture_output=True,text=True)
+                    self.assertEqual(result.returncode,0,result.stderr)

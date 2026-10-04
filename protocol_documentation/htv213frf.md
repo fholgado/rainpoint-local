@@ -148,11 +148,17 @@ to Test Node B. Both retained-association dry outlets passed ordinary API
 60-second controls at master phases 5 and 6; this is not proof of a new normal
 enrollment. One automatic discovery trial subsequently verified assignment,
 both-port configuration and a later idle report, but the normal flow expired
-before that report and did not commit the association. Current pairing TX still
-omits the native CRC's final symbol: high-bit assignments fail while zero-bit
-assignments can succeed. Control and retained-owner TX already include it.
-Fix the pairing tail and separate discovery expiry from telemetry confirmation
-before treating normal enrollment as qualified. See [capture-backed diagnosis](../docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)
+before that report and did not commit the association. The control.10 source
+candidate appends the native CRC's final symbol to both pairing TX paths,
+using the same helper as qualified control/retained-owner TX. After a positive
+configuration ACK and both ports' settings/plans, automatic discovery closes
+and a separate ten-minute confirmation wait begins for the bound identity.
+Repeated progress does not extend it. HA displays its existing confirmation
+stage; only a real subsequent valve report permits association/phase commit.
+This wait is an observation budget, not a decoded unit for `timing_raw`.
+Disconnect, cancellation and TX failure still end the session. The older
+explicit research API retains its original overall deadline. Repeat normal
+enrollment on hardware before claiming qualification. See [capture-backed diagnosis](../docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)
 and [the roadmap](../PROJECT_ROADMAP.md).
 
 The observed successful stock association consists of:

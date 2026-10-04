@@ -13,16 +13,7 @@ constexpr unsigned kMaximumTrialSeconds = 3600;
 constexpr unsigned kResponseWindowMs = 1500;
 constexpr unsigned kCompletionGraceMs = 60000;
 
-inline std::uint8_t nativeTailSymbol(const Frame& frame) {
-    const auto payload=htv213::native(frame);
-    std::uint16_t crc=0xa8a8;
-    for (auto value:payload) {
-        crc^=static_cast<std::uint16_t>(value)<<8;
-        for (unsigned bit=0;bit<8;++bit)
-            crc=static_cast<std::uint16_t>((crc<<1)^((crc&0x8000)?0x1021:0));
-    }
-    return crc&1U;
-}
+using htv213::nativeTailSymbol;
 
 inline bool prepareCommand(const Profile& profile, unsigned port, unsigned phase,
                            bool open, unsigned seconds, Transmission& tx) {

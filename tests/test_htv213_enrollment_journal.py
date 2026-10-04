@@ -52,6 +52,38 @@ class EnrollmentJournalTest(unittest.TestCase):
         self.assertEqual(result["ports"], {}, "no invented per-port freshness")
         self.assertEqual(self.store.valve_registry(), [])
 
+    def test_configured_wait_survives_discovery_expiry_and_restart_without_commit(self):
+        now = datetime.now(timezone.utc)
+        self.journal.begin(NODE, self.command, now=now)
+        waiting = {**self.proof, "state": "armed", "awaiting_confirmation": True, "completion_frame": ""}
+        self.assertTrue(self.journal.observe(NODE, waiting, now=now + timedelta(seconds=30)))
+        expires = self.journal.current(now)["expires_at"]
+        self.journal.observe(NODE, waiting, now=now + timedelta(seconds=60))
+        self.assertEqual(self.journal.current(now)["expires_at"], expires, "repeats cannot extend wait")
+        reopened = SQLiteEventStore(self.path)
+        try:
+            journal = enrollment.EnrollmentJournal(reopened)
+            later = now + timedelta(seconds=480)
+            self.assertEqual(journal.current(later)["state"], "armed")
+            self.assertTrue(journal.current(later)["awaiting_confirmation"])
+            self.assertIsNone(reopened.metadata_value(owner.KEY))
+            self.assertIsNone(reopened.metadata_value(CONTROL_KEY))
+            self.assertTrue(journal.observe(NODE, self.proof, now=later))
+            self.assertEqual(journal.current(later)["state"], "accepted")
+        finally:
+            reopened.close()
+
+    def test_incomplete_wait_does_not_extend_discovery(self):
+        now = datetime.now(timezone.utc)
+        self.journal.begin(NODE, self.command, now=now)
+        expires = self.journal.current(now)["expires_at"]
+        for changes in ({"plans_sent": 1}, {"notification_accepted": False},
+                        {"notification_ack_frame": ""}, {"awaiting_confirmation": False}):
+            status = {**self.proof, "state": "armed", "awaiting_confirmation": True, **changes}
+            self.journal.observe(NODE, status, now=now + timedelta(seconds=30))
+            self.assertEqual(self.journal.current(now)["expires_at"], expires)
+        self.assertEqual(self.journal.current(now + timedelta(seconds=480))["state"], "expired")
+
     def test_naming_replay_and_restart_cannot_reset_a_reserved_phase(self):
         self.accepted(); self.complete()
         journal = ControlJournal(self.store)
@@ -196,6 +228,20 @@ class EnrollmentFlowTest(unittest.TestCase):
         self.assertEqual(self.sent[0][1]["device_address"], 2)
         self.assertNotIn("factory_endpoint", self.sent[0][1])
         self.assertEqual(started["active_profile_id"], enrollment.PROFILE_ID)
+
+    def test_configured_wait_uses_native_ha_confirmation_stage(self):
+        started = self.start()
+        proof = {**self.proof, "command_id": started["command_id"],
+                 "state": "armed", "awaiting_confirmation": True, "completion_frame": ""}
+        raw = bytearray.fromhex(proof["notification_ack_frame"])
+        raw[5:9] = bytes.fromhex(self.gateway.rf_identity.controller_endpoint)
+        proof["notification_ack_frame"] = alter(raw.hex())
+        self.assertTrue(flow.observe(self.gateway, NODE, proof))
+        snapshot = self.gateway.pairing()
+        self.assertTrue(snapshot["active"])
+        self.assertEqual(snapshot["stage"], "waiting_for_terminal_confirmation")
+        self.assertEqual(ha_contract.api_models.pairing_progress_action(snapshot), "confirm_device")
+        self.assertIsNone(snapshot["completed_endpoint"])
 
     def test_menu_stays_hidden_until_model_qualification_not_per_user_experiments(self):
         profile = next(p for p in ha_contract.api_models.pairing_profiles(self.gateway.pairing()) if p.profile_id == enrollment.PROFILE_ID)

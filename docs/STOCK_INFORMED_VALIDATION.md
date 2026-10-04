@@ -941,6 +941,26 @@ handling. No association was revoked, re-paired or reseeded. General HA model
 enablement remains pending the existing physical qualification gates in
 [the roadmap](../PROJECT_ROADMAP.md).
 
+### Control.10 source correction — October 4
+
+New tests first reproduced the missing final symbol at the actual pairing
+runtime's TX call sites, and premature expiry in the native session and durable
+gateway journal. Pairing now appends the same computed CRC symbol used by
+qualified HTV213 controls, including the configuration notification. Both
+pairing-only and control builds exercise the actual RMT stream construction.
+
+Automatic enrollment now enters a separate ten-minute confirmation wait once
+the positive configuration ACK and both ports' settings/plans are present.
+The identity remains bound, repeated progress cannot extend the wait, and the
+journal preserves the wait across gateway restart without committing an owner
+or counter. HA uses its existing identity-confirmation stage. The explicit
+research API keeps its original total deadline.
+
+The private replay now consumes the actual phase-17 report from the follow-up
+recording at its captured relative time and reaches `Observed` with masks
+3/3/3 and the positive ACK preserved. That validates the software correction;
+normal enrollment and physical CRC transmission still require the next trial.
+
 The subsequent full-enrollment test exposed a gateway admission blocker before
 any pairing RF: owner-clear used the 32-character owner ID plus `-revoke`, while
 the actual firmware ingress validator accepts only 32 hexadecimal characters.

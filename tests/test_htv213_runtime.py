@@ -27,6 +27,13 @@ class Htv213RuntimeTest(unittest.TestCase):
         runtime = (ROOT / "firmware/rainpoint_bridge/src/htv213_pairing_runtime.inc").read_text()
         driver = (ROOT / "firmware/rainpoint_bridge/src/cc1101.cpp").read_text()
         support = (ROOT / "firmware/rainpoint_bridge/tests/htv213_runtime_probe.cpp").read_text()
+        support = support.replace('"rainpoint_htv213_pairing.h"', '"rainpoint_htv213_control.h"')
+        support = support.replace("unsigned, unsigned, unsigned = 0) {",
+            "unsigned, unsigned, unsigned = 0, unsigned = 0, int tail = -1) {")
+        support = support.replace("commands.push_back(htv213::native(frame)[10]);",
+            "if (tail != htv213Control::nativeTailSymbol(frame)) { "
+            "std::cerr << \"Pairing omitted native CRC tail\"; std::exit(20); }\n"
+            "        commands.push_back(htv213::native(frame)[10]);")
         methods = "\n".join(function(driver, f"bool Cc1101::{name}(") for name in
                             ("setChannel", "setReceiveFrequency", "restoreReceiveChannel"))
         orchestration = "\n".join(function(runtime, signature) for signature in

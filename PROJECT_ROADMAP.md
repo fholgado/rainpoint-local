@@ -381,8 +381,9 @@ not tasks to mark “done once.”
 - [x] Deploy matched enrollment/control candidate and signed control.9 to Test Node B; RF-verify normal-API 60-second runs on both dry ports at phases 5→6, next 7. Garden firmware and associations unchanged ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-normal-control-candidate--october-3)).
 - [x] Fix HTV213 owner-revoke command IDs rejected by firmware; actual-validator regression and 60 tests pass. Deploy gateway fix and verify full-enrollment arming (Oct 3).
 - [x] Retest HTV213 automatic discovery at 0 dBm: assignment, both-port configuration and later idle report verified (Oct 4, address 4). Gateway completion still timed out; this is not full HA enrollment ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)).
-- [ ] Append the native CRC's final symbol to HTV213 pairing replies/notification; IQ confirms high-bit truncation in failed assignments and repeated plan replies. Preserve qualified controls and other models.
-- [ ] Separate HTV213 discovery-window expiry from post-configuration telemetry confirmation; the verified routine report arrived after the five-minute window. Expose the waiting stage in HA, then repeat normal enrollment.
+- [x] Append the native CRC's final symbol to HTV213 pairing replies/notification; actual TX regressions reproduce and fix truncation (Oct 4; source validated).
+- [x] Separate HTV213 discovery expiry from a ten-minute known-device confirmation wait; replay the captured late report and expose HA's confirmation stage (Oct 4; source validated).
+- [ ] Deploy control.10 and repeat normal HTV213 enrollment with RF-verified CRC tail and delayed confirmation.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
@@ -403,6 +404,7 @@ not tasks to mark “done once.”
 - [x] Validate recovery/control fixtures: 968 Python tests pass/two optional skips; native protocol passes (Oct 3).
 - [x] Merge PR #34 after green CI; delete completed recovery/signing branches, preserve unfinished PCB work (Oct 3).
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
+- [ ] Audit HCS026 battery-rejoin captures against current owner/channel recovery, then verify a battery-only cycle without pairing mode; existing transcripts do not qualify extended-silence recovery.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
 - [ ] Qualify HCS012 rainfall increments, accumulation/reset and battery flags against stock-app readings before adding a local model profile.

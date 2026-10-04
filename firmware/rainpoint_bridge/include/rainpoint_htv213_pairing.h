@@ -57,9 +57,20 @@ inline std::array<std::uint8_t, 32> native(const Frame& f) {
     return p;
 }
 
-// Produce the same legacy window as the stock native CRC (seed A8A8).
-// The existing radio transport owns the physical tail. Its omitted last CRC
-// bit and RF timing still require SDR qualification on the new canary.
+// The normalized 304-bit window omits the native CRC's last bit. Every HTV213
+// transmitter must append this symbol, including assignment/configuration.
+inline std::uint8_t nativeTailSymbol(const Frame& frame) {
+    const auto payload=native(frame);
+    std::uint16_t crc=0xa8a8;
+    for (auto value:payload) {
+        crc^=static_cast<std::uint16_t>(value)<<8;
+        for (unsigned bit=0;bit<8;++bit)
+            crc=static_cast<std::uint16_t>((crc<<1)^((crc&0x8000)?0x1021:0));
+    }
+    return crc&1U;
+}
+
+// Produce the normalized window; the caller supplies nativeTailSymbol to TX.
 inline bool encode(const Profile& p, std::uint8_t command, std::uint8_t phase,
                    const std::uint8_t* data, std::size_t length, Frame& frame) {
     if (!valid(p) || phase > 63 || length > 20) return false;
@@ -98,6 +109,9 @@ struct Transmission {
 
 class Session {
 public:
+    // Oct 4 captured confirmation arrived about eight minutes after the
+    // initial reports. This is an observation budget, not a timing_raw unit.
+    static constexpr std::uint32_t kConfirmationWaitMs = 600000;
     bool arm(const Profile& p, std::uint32_t now, std::uint32_t durationMs) {
         if (state_ == State::Armed || !valid(p) || durationMs < 10000 || durationMs > 300000)
             return false;
@@ -118,7 +132,8 @@ public:
     void tick(std::uint32_t now, bool connected = true) {
         if (state_ != State::Armed) return;
         if (!connected) cancel(Failure::Disconnected);
-        else if (now - started_ >= duration_) cancel(Failure::Timeout);
+        else if (waiting_ ? now - confirmationStarted_ >= kConfirmationWaitMs
+                          : now - started_ >= duration_) cancel(Failure::Timeout);
     }
     State state() const { return state_; }
     Failure failure() const { return failure_; }
@@ -128,6 +143,7 @@ public:
     unsigned plansSent() const { return plans_; }
     unsigned repliesSent() const { return replies_; }
     bool notificationAccepted() const { return notificationAccepted_; }
+    bool awaitingConfirmation() const { return state_ == State::Armed && waiting_; }
     const Frame& notificationAck() const { return notificationAck_; }
     const Frame& completionReport() const { return completionReport_; }
     bool notificationResponseWindow(std::uint32_t now) const {
@@ -221,6 +237,9 @@ public:
             case 0x86: plans_ |= 1U << (claimed_.port-1); break;
         }
         if (observedAfterPlans_) state_=State::Observed;
+        else if (discover_ && !waiting_ && reports_ == 3 && settings_ == 3 && plans_ == 3 && notificationAccepted_) {
+            waiting_=true; confirmationStarted_=now;
+        }
     }
 private:
     static bool pairingAnnouncement(const std::array<std::uint8_t,32>& n) {
@@ -240,11 +259,11 @@ private:
     }
     Profile profile_{}; Transmission claimed_{};
     State state_=State::Disarmed; Failure failure_=Failure::None;
-    std::uint32_t started_=0,duration_=0,lastReportAckMs_=0,notificationSentMs_=0;
+    std::uint32_t started_=0,duration_=0,lastReportAckMs_=0,notificationSentMs_=0,confirmationStarted_=0;
     unsigned reports_=0,settings_=0,plans_=0,replies_=0;
     bool pending_=false,assignmentSent_=false,notificationSent_=false;
     bool notificationAccepted_=false,reportAckSent_=false,observedAfterPlans_=false;
-    bool discover_=false;
+    bool discover_=false,waiting_=false;
     Frame notificationAck_{},completionReport_{};
 };
 } // namespace rainpoint::htv213
