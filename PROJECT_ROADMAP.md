@@ -380,6 +380,7 @@ not tasks to mark “done once.”
 - [x] Prepare HTV213 carrier-provisioning interface, legacy/retained slot reservations and staged model-level wrap policy; preserve existing canary records (Oct 3; source only).
 - [x] Deploy matched enrollment/control candidate and signed control.9 to Test Node B; RF-verify normal-API 60-second runs on both dry ports at phases 5→6, next 7. Garden firmware and associations unchanged ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-normal-control-candidate--october-3)).
 - [x] Fix HTV213 owner-revoke command IDs rejected by firmware; actual-validator regression and 60 tests pass. Deploy gateway fix and verify full-enrollment arming (Oct 3).
+- [ ] Retest HTV213 normal enrollment at the proven 0 dBm, holding address 3 and timing unchanged. Oct 3 RF stopped at `01/81`; source default corrected, physical cause unproven ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-normal-enrollment-first-handoff-failure--october-3)).
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

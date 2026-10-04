@@ -953,3 +953,42 @@ fix was hash-verified and rebuilt without reflashing nodes. Authenticated
 reconnect then acknowledged revocation, and Test Node B confirmed the normal
 five-minute enrollment armed. Physical enrollment completion is still pending;
 the new receive-only recording is retained under the same private capture root.
+
+## HTV213 normal-enrollment first-handoff failure — October 3
+
+The user's subsequent attempt failed before addressed port reports, not at the
+final enrollment notification. In private capture
+`captures/htv213-normal-enrollment-20261003/20261003-203315`, factory `01` phase 1
+was followed by a matching `81` assignment approximately **82 ms** later. The
+valve continued factory announcements at later phases rather than producing
+the expected addressed `02`. A deterministic offline replay of that window
+asserts the missing transition and fails. This proves an assignment was emitted
+and decoded by the SDR; it does not prove the valve received or accepted it.
+
+A wider 433.08–434.48 MHz decode around the first handoff found only `01/81`.
+The remaining capture was checked at the three previous analysis centers; its
+decoded frames belonged to other devices. That limited coverage is not proof
+of silence on every carrier. Small clipped sample fractions were present, so
+this recording is not qualified as entirely unclipped. The complete 360-second
+IQ file is **1,440,000,000 bytes**, independently hash-verified and preserved.
+The enrollment terminated with failure and Test Node B disarmed; no second
+attempt, watering command, reset or garden update was performed.
+
+Comparing the ordinary builder with the successful explicit canary exposed two
+recipe differences: address **2 → 3** and power **0 → +10 dBm**. The address
+allocator reserved the revoked canary's slot, whereas the power change came
+from an unqualified default. The original comparison test supplied 0 dBm
+explicitly and therefore never exercised that default. A regression using the
+actual no-override builder failed on power; the source default now preserves
+0 dBm and the regression passes. This is a recipe-parity correction, **not a
+proven physical pairing fix**, and has not been deployed.
+
+Validation passed: **1,036 full-suite Python tests**, 60 focused
+ownership/enrollment tests, native C++ protocol tests and whitespace checks.
+
+The next assisted trial changes only power: keep address 3, calibrated carriers,
+payload parameters and response timing unchanged. Success would support the
+power hypothesis; failure would leave address/re-pair behavior and emitted
+waveform as candidates. Do not combine those changes or promote the model from
+this failure. Physical qualification remains tracked in
+[the roadmap](../PROJECT_ROADMAP.md).

@@ -76,7 +76,9 @@ class EnrollmentProfile:
     notification_phase: int = 2
     reply_delay_us: int = 49000
     notification_delay_ms: int = 1000
-    power_dbm: int = 10
+    # Preserve the successful canary's level when the ordinary journal builds
+    # a recipe without overrides; higher power is not enrollment-qualified.
+    power_dbm: int = 0
 
     def command(self, *, controller, companion, duration_seconds=120, now=None):
         # The ordinary journal seeds the next phase without implicit wrap.

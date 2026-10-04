@@ -49,6 +49,18 @@ class Htv213EnrollmentTest(unittest.TestCase):
         self.assertEqual(explicit["type"], "htv213_pairing_start")
         self.assertEqual(explicit["factory_endpoint"], "11556677")
 
+    def test_default_discovery_recipe_preserves_qualified_canary_power(self):
+        # Ordinary enrollment does not supply a power override. Compare that
+        # actual call pattern, not a fixture that already pins the right value.
+        normal = EnrollmentProfile(address=3, initial_center_hz=434351500,
+                                   routine_center_hz=434241500).command(**self.identity)
+        proven = self.profile.command(**self.identity)
+        ignored = {"command_id", "local_clock", "device_address"}
+        self.assertEqual({k: v for k, v in normal.items() if k not in ignored},
+                         {k: v for k, v in proven.items() if k not in ignored})
+        self.assertEqual(normal["device_address"], 3)
+        self.assertEqual(normal["power_dbm"], 0)
+
     def test_address_and_radio_calibration_are_supplied_not_installation_defaults(self):
         with self.assertRaises(TypeError):
             EnrollmentProfile()
