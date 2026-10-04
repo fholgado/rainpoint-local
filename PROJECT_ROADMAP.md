@@ -388,7 +388,7 @@ not tasks to mark “done once.”
 - [x] Complete HTV213 naming/save: one HA device with two outlets, restored reply owner and ACK-derived next phase 3 verified (Oct 4).
 - [x] Decouple committed HTV213 controls from model-menu visibility; fresh idle/owner checks remain, 1,042 tests pass and gateway delta deployed (Oct 4).
 - [x] Verify committed control.10 enrollment survives gateway rebuild and Test Node B reboot: association/owner restored, next phase remains 3 (Oct 4).
-- [ ] Verify both normal HA outlet controls after the completed control.10 enrollment.
+- [x] Verify both normal HA outlet controls after control.10 enrollment: 60-second dry runs at phases 3/4, RF ACK/active/idle/summary and HA open/closed; next phase 5 (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-normal-ha-outlet-tests--october-4)).
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

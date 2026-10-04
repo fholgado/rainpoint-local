@@ -1165,10 +1165,45 @@ association/owner and next phase 3. The legacy registry was unchanged.
 Fresh port-2 idle reporting resumed, with an independently decoded phase-19
 `02/82` exchange 82 ms apart. Port 1 had not yet reported since the save when
 the first bounded HA check ran, so that check deferred without sending any
-watering. Current normal-enrollment outlet-control qualification remains pending;
-the earlier retained-canary control results are not substituted for it.
+watering. Normal-enrollment outlet controls were subsequently verified below;
+the earlier retained-canary control results are not substituted for them.
 
 Private save receipts remain beside the enrollment capture. Deployment,
 restart and HA evidence are under
 `captures/htv213-control10-normal-controls-20261004/`; the receive-only capture
 `20261004-131438/owner-report-rf.jsonl` contains the post-save owner exchange.
+
+### Control.10 normal HA outlet tests — October 4
+
+After fresh idle reports from both outlets, the ordinary HA valve entities each
+received exactly one 60-second open: port 1 at master phase **3**, followed by
+port 2 at phase **4**. Both produced a positive full-phase `a1`, independent
+active and automatic-idle `02` reports, and a port-specific `04` summary with
+elapsed duration **60 seconds**. HA showed each target open and then closed;
+the other outlet remained idle. The persisted next command phase is **5**.
+No forced counter, repeat open, explicit close, reset or pairing was used.
+
+Independent SDR decoding matched each command to the saved valve/companion
+routes and each response to the saved controller/valve routes. Command-to-ACK
+intervals were **314.5 ms** and **313.5 ms**, respectively. Port 1's summary was
+observed about 2 seconds after idle; port 2's summary was observed about
+**56 seconds after idle**. The latter still completed inside the existing
+completion window; this observation does not establish why its summary arrived
+later or justify assuming completion from elapsed wall-clock time alone.
+
+An earlier check briefly had both outlets eligible, but port 2's report crossed
+the existing 1,200-second freshness limit before dispatch. The helper deferred
+without an open or counter allocation. It waited for new telemetry rather than
+changing that limit; the following check admitted the two successful runs.
+
+Private evidence is under `captures/htv213-control10-normal-controls-20261004/`:
+the per-port attempt, observation and verification receipts; `ha-tests-final.json`;
+and capture `20261004-135026/` with bounded RF decodes and
+`ha-rf-verification.json`. The six-minute capture exited successfully with exactly
+**1,440,000,000 bytes** and an independently verified SHA-256 checksum.
+Decoding used selected command/completion windows on
+three carriers, not uninterrupted all-channel coverage; the maximum decoded
+chunk clipping fraction was about **0.35%**. These are dry-valve protocol/HA
+results, not a measurement of water flow or a general model-support claim.
+Repeat enrollment and physical missing-response qualification remain separate
+gates in the roadmap.
