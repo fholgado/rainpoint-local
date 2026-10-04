@@ -892,3 +892,51 @@ reply ownership restored, both outlets remained closed/ready and next phase 2
 survived without any command replay. Front Yard and Vegetable Garden remained
 authenticated on firmware 0.19.0; the previously offline OTA-test node stayed
 offline. No garden radio was flashed or installed garden valve actuated.
+
+## HTV213 normal-control candidate — October 3
+
+The user approved the matched gateway/Test Node B update and dry tests.
+Gateway source at `4191a9c` was packaged, smoke-tested, copied with all hashes
+verified and rebuilt under existing version `0.39.16`. Configuration backup
+and private source archive preceded deployment. The new authenticated carrier
+provisioning route accepted Test Node B's already measured carrier centers;
+no RF or counter change occurred through that route.
+
+[Development signing run](https://github.com/fholgado/rainpoint-local/actions/runs/37163677322)
+produced `0.19.0-htv213-control.9`. Its publisher signature, source commit,
+size and image hash were verified before OTA. Download verification correlated
+with the dispatched command; the new authenticated connection reported the
+candidate version and healthy confirmation. The previously recorded OTA
+command-ID loss on reboot remains a limitation: the strict observer timed out
+on that missing field, not on a failed update. Separate receipt verification
+correlated the download, candidate boot and healthy connection. Retained owner,
+battery-rejoin configuration, valve identity and next master phase **5** survived.
+
+Both tests used ordinary `/devices/{device_id}/valve/open`, not an experiment
+phase override. Exactly one 60-second open per dry port was sent, without retry
+or close. The existing association supplied the RF profile and retained phase.
+Independent bounded SDR decoding verified each positive full-phase `a1`, active
+report, automatic idle, elapsed-60 summary and phase-echo report replies:
+
+| Dry port / master phase | Positive ACK after open | Idle after open | Summary after open |
+| --- | --- | --- | --- |
+| 1 / 5 | 0.315 s | 62.333 s | 71.371 s |
+| 2 / 6 | 0.315 s | 61.245 s | 98.283 s |
+
+The later port-2 summary was observed, not assumed from elapsed time. Required
+RF windows were unclipped and checksum-valid. Private evidence is under
+`captures/htv213-control9-qualification-20261003/`; its complete 300-second IQ
+recording was independently verified at **1,200,000,000 bytes** with matching
+SHA-256. Final gateway state was both ports idle, ordinary start available,
+reply owner ready and next master phase **7**. Registry and garden firmware
+were unchanged; no installed garden valve command was sent.
+
+The final full Python suite passed **1,034 tests** with no skips; installing
+the private RF analysis dependency enabled the optional decoder checks. Native
+C++ protocol tests and diff whitespace validation also passed.
+
+This verifies the extracted normal control path on a retained canary, **not**
+automatic identity discovery, a fresh enrollment epoch or physical packet-loss
+handling. No association was revoked, re-paired or reseeded. General HA model
+enablement remains pending the existing physical qualification gates in
+[the roadmap](../PROJECT_ROADMAP.md).
