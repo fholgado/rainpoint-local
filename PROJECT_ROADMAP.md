@@ -384,7 +384,8 @@ not tasks to mark “done once.”
 - [x] Append the native CRC's final symbol to HTV213 pairing replies/notification; actual TX regressions reproduce and fix truncation (Oct 4; source validated).
 - [x] Separate HTV213 discovery expiry from a ten-minute known-device confirmation wait; replay the captured late report and expose HA's confirmation stage (Oct 4; source validated).
 - [x] Deploy signed control.10 and matched gateway changes: 1,041 tests, both builds, verified OTA and healthy Test Node B; pairing unarmed (Oct 4).
-- [ ] Repeat normal HTV213 enrollment with RF-verified CRC tail and delayed confirmation.
+- [x] RF-verify control.10 enrollment: corrected CRC tails, both-port configuration and late idle report accepted after 445 seconds; radio disarmed, full capture verified (Oct 4).
+- [ ] Complete HTV213 naming/save and verify the committed association, restored reply owner and ACK-derived control seed.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).

@@ -1092,7 +1092,48 @@ The real phase-17 idle report arrived after the five-minute deadline. The radio
 was disarmed and the gateway reported failed enrollment, so no normal completion
 receipt was produced or association committed. RF assignment/configuration is
 verified; normal HA enrollment is **not** complete. The next implementation
-must fix the CRC tail and distinguish the user pairing/discovery window from
+needed to fix the CRC tail and distinguish the user pairing/discovery window from
 known-device telemetry confirmation, without forcing database proof or silently
 discarding the final-report qualification. Work is tracked in
 [the roadmap](../PROJECT_ROADMAP.md).
+
+### Control.10 RF enrollment verification — October 4
+
+One user-authorized normal discovery attempt on Test Node B completed the
+radio enrollment gate. The user reported success; the gateway entered
+`waiting_for_terminal_confirmation`, then accepted the later report and exposed
+`valve_pairing_completed` with the selected radio disarmed and no error.
+
+Offsets below are seconds from the continuous recording's start:
+
+| Offset | Captured exchange |
+| --- | --- |
+| 105.364 / 105.446 | Phase-1 `01/81`; required final CRC bit 0 transmitted correctly; no immediate progression observed. |
+| 111.424 / 111.506 | Phase-4 `01/81`; required final CRC bit 1 transmitted correctly, followed by addressed reports. |
+| 113.356–115.457 | Both ports' `02/82`, phases 5 and 6. |
+| 116.596 / 116.891 | Configuration `20`, phase 2, and matching positive `a0`. |
+| 119.402–121.513 | Both ports' `05/85`, phases 7 and 8. |
+| 123.355–125.436 | Both ports' `06/86`, phases 9 and 10, without the earlier repeated plan requests. |
+| 570.443 | Addressed port-1 idle `02`, phase 11, remaining/requested seconds both zero; matched the completed endpoint and controller. |
+
+Independent bounded IQ measurements confirmed the final symbol on every
+decoded gateway reply and notification. Required high bits on assignment,
+report ACK, settings and plan replies were observed as 1 across 85–86 matching
+clock phases. One low-bit settings reply had 84 matching phases voting 0 and
+one voting 1; this sampling-edge ambiguity does not erase the strong high-bit
+evidence. The correctly formed first assignment did not advance immediately,
+so the CRC correction does not establish that every first reply is accepted.
+
+The final report arrived **445.007 seconds after the last plan reply**. Its
+acceptance verifies the separate confirmation window on hardware. It does not
+establish universal report timing or the units of the assignment timing field.
+The normal naming/save endpoint has not yet been called: no HTV213 device is
+currently projected, and durable association/owner/counter commit remains a
+separate pending step. No watering was sent during this trial.
+
+Private evidence:
+`captures/htv213-control10-enrollment-20261004/20261004-120555/` contains the
+correlated API receipts, `initial-rf.jsonl`, `confirmation-rf.jsonl`, independent
+`crc-tail-verification.json` and `confirmation-verified.json`. The 960-second
+recording finished at 16:22:07 UTC, has exactly **3,840,000,000 bytes**, and its
+independently recomputed SHA-256 matches the capture manifest. Raw IQ is retained.
