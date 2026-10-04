@@ -1244,5 +1244,6 @@ registry-revoke baselines, arm receipts, observer/terminal receipts, bounded
 RF decodes, `rf-confirmation-verified.json`, normal save receipts and
 `handback-verified.json`. Decoded windows had nonzero clipping (maximum chunk
 fraction about **0.73%**) and covered selected times/carriers only. The full
-capture was still running when association handback was verified; file-integrity
-verification is separate from the completed enrollment evidence.
+960-second capture subsequently exited successfully with exactly
+**3,840,000,000 bytes**; an independent SHA-256 check matched `sha256.txt`.
+Association handback and capture-integrity verification are both complete.

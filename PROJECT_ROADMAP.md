@@ -370,7 +370,7 @@ not tasks to mark “done once.”
 - [x] RF-qualify HTV213 master phases 62→63→0→1: four one-minute runs, full completion evidence and redacted replay; enable wrap only for the qualified association (Sep 30).
 - [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
-- [x] Verify HTV213 post-configuration reports and repeat complete enrollment: control.10 RF-confirmed twice; repeat saves the same HA device and restores ownership with ACK-derived phase 3 (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-repeat-enrollment-and-same-device-handback--october-4)).
+- [x] Verify HTV213 post-configuration reports and repeat complete enrollment: control.10 RF-confirmed twice; same HA device, restored ownership, ACK-derived phase 3 and verified full capture (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-repeat-enrollment-and-same-device-handback--october-4)).
 - [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
 - [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
