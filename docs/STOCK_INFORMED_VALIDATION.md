@@ -940,3 +940,16 @@ automatic identity discovery, a fresh enrollment epoch or physical packet-loss
 handling. No association was revoked, re-paired or reseeded. General HA model
 enablement remains pending the existing physical qualification gates in
 [the roadmap](../PROJECT_ROADMAP.md).
+
+The subsequent full-enrollment test exposed a gateway admission blocker before
+any pairing RF: owner-clear used the 32-character owner ID plus `-revoke`, while
+the actual firmware ingress validator accepts only 32 hexadecimal characters.
+The old mock-only revoke test bypassed that validator. A regression compiling
+the real `validCommandId` against the gateway-generated clear command failed
+before the fix and passed afterward. Clear now uses a fresh UUID command ID,
+with the original owner ID unchanged in `owner_id`; no RF payload or control
+phase changed. All 60 ownership/enrollment tests passed. The one-file gateway
+fix was hash-verified and rebuilt without reflashing nodes. Authenticated
+reconnect then acknowledged revocation, and Test Node B confirmed the normal
+five-minute enrollment armed. Physical enrollment completion is still pending;
+the new receive-only recording is retained under the same private capture root.

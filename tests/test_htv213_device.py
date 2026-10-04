@@ -3,6 +3,9 @@ import copy
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -218,6 +221,23 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertTrue(owner.records(self.gateway)[self.key]['revoked'])
         self.assertEqual(self.journal.snapshot(self.key)['next_phase'],7)
         with self.assertRaises(ValueError): owner.configure(self.gateway,self.request)
+
+    def test_forget_command_passes_actual_firmware_command_id_validation(self):
+        from tests.test_htv213_runtime import function
+        target=self.publish()['device_id']
+        self.gateway.forget_registry_device(target)
+        command=self.sent[-1][1]
+        validator=function((ROOT/'firmware/rainpoint_bridge/src/main.cpp').read_text(),
+                           'bool validCommandId(')
+        source='#include <string>\n#include <cctype>\nusing String=std::string;\n'+validator
+        source+='\nint main() { return validCommandId('+json.dumps(command['command_id'])+') ? 0 : 1; }'
+        with tempfile.TemporaryDirectory() as folder:
+            executable=str(Path(folder)/'command-id')
+            subprocess.run([shutil.which('c++'),'-std=c++17','-x','c++','-','-o',executable],
+                           input=source,text=True,capture_output=True,check=True)
+            result=subprocess.run([executable],capture_output=True)
+        self.assertEqual(result.returncode,0,'owner-clear command must reach firmware dispatch')
+        self.assertEqual(command['owner_id'],self.owner['command_id'])
 
     def test_persistence_failure_does_not_publish_or_dispatch(self):
         with patch.object(self.gateway._store,'save_htv213_owner',side_effect=OSError):

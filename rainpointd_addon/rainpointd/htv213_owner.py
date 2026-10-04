@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import uuid
 from datetime import datetime, timezone
 
 from . import htv213_pairing
@@ -130,7 +131,7 @@ def restore(gateway, node_id):
                 continue
             if record.get("revoking"):
                 gateway._node_command_sender(node_id, {"type": "htv213_owner_clear",
-                    "command_id": record["command"]["command_id"] + "-revoke",
+                    "command_id": uuid.uuid4().hex,
                     "owner_id": record["command"]["command_id"]})
                 continue
             if gateway.endpoint_suppressed(key.split(":")[1]):
