@@ -1207,3 +1207,42 @@ chunk clipping fraction was about **0.35%**. These are dry-valve protocol/HA
 results, not a measurement of water flow or a general model-support claim.
 Repeat enrollment and physical missing-response qualification remain separate
 gates in the roadmap.
+
+### Control.10 repeat enrollment and same-device handback — October 4
+
+After explicit permission to arm, the completed dry test association was retired
+through the normal registry-forget API. The radio acknowledged old-owner
+revocation before the normal enrollment API admitted the same target. The old
+command history is retained by the enrollment journal's replacement path;
+there was no direct database or counter edit. An initial helper request used
+the sensor-only forget route and returned 404 without changing the association;
+the subsequent valve-registry request succeeded. Only one pairing window was
+armed, and no garden devices were changed.
+
+The repeat followed the earlier capture: assignment at announcement phase 1
+did not produce the following exchange; a phase-4 assignment was followed by
+both-port `02/82` at phases 5/6, positive configuration `20/a0` at phase 2,
+both-port settings at phases 7/8, and empty plans at phases 9/10. Do not count
+this as proof that the first sweep always succeeds.
+
+A later port-1 idle `02` at phase 11 completed enrollment **435.97 seconds**
+after the final plan reply. Its `82` followed about **81 ms** later. Independent
+bounded SDR decoding verified exact saved routing, positive configuration ACK,
+both-port reports and the final report. Test Node B disarmed normally.
+
+The normal naming/save API then restored the **same device ID, name and area**,
+one two-outlet device, ready reply ownership and next master phase **3** from
+the positive phase-2 configuration ACK. Pairing became inactive and the legacy
+registry remained unchanged. This is an explicit new enrollment epoch, not an
+inferred counter reset from the phase-11 report. No watering, reset, flash or
+automatic rearm was performed. Physical missing-response qualification remains
+unfinished; this does not enable general production model support.
+
+Private evidence is in
+`captures/htv213-control10-repeat-20261004/20261004-161155/`: original and
+registry-revoke baselines, arm receipts, observer/terminal receipts, bounded
+RF decodes, `rf-confirmation-verified.json`, normal save receipts and
+`handback-verified.json`. Decoded windows had nonzero clipping (maximum chunk
+fraction about **0.73%**) and covered selected times/carriers only. The full
+capture was still running when association handback was verified; file-integrity
+verification is separate from the completed enrollment evidence.
