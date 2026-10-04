@@ -146,7 +146,14 @@ enablement remain withheld by existing physical qualification. The matched
 candidate and development firmware `0.19.0-htv213-control.9` are deployed only
 to Test Node B. Both retained-association dry outlets passed ordinary API
 60-second controls at master phases 5 and 6; this is not proof of a new normal
-enrollment. See [the roadmap](../PROJECT_ROADMAP.md).
+enrollment. One automatic discovery trial subsequently verified assignment,
+both-port configuration and a later idle report, but the normal flow expired
+before that report and did not commit the association. Current pairing TX still
+omits the native CRC's final symbol: high-bit assignments fail while zero-bit
+assignments can succeed. Control and retained-owner TX already include it.
+Fix the pairing tail and separate discovery expiry from telemetry confirmation
+before treating normal enrollment as qualified. See [capture-backed diagnosis](../docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)
+and [the roadmap](../PROJECT_ROADMAP.md).
 
 The observed successful stock association consists of:
 

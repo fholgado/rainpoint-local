@@ -992,3 +992,71 @@ power hypothesis; failure would leave address/re-pair behavior and emitted
 waveform as candidates. Do not combine those changes or promote the model from
 this failure. Physical qualification remains tracked in
 [the roadmap](../PROJECT_ROADMAP.md).
+
+## HTV213 automatic discovery and CRC-tail diagnosis — October 4
+
+The tested one-file gateway power correction was backed up, hash-verified and
+rebuilt; Test Node B remained on signed `0.19.0-htv213-control.9`. The user
+authorized one new five-minute pairing window. Normal allocation preserved
+failed-attempt slots and selected **address 4**, not 3. This was disclosed before
+arming: the trial cannot isolate power as the cause. No new firmware, watering,
+valve reset or garden change was performed.
+
+The user reported success. Bounded SDR decoding independently recovered:
+
+- Phase-7 `01/81` assignment followed by both ports' `02/82`.
+- Hub phase-2 `20`, positive matching `a0` about 295 ms later, and another `02/82`
+  carrying configuration revision 2 before settings requests.
+- Both-port `05/85` and empty `06/86`, including repeated plan requests.
+- A later valve-originated addressed idle `02`, phase 17, after the initial
+  recording and enrollment window had ended.
+
+Private evidence is in `captures/htv213-normal-enrollment-power0-20261004/`.
+The initial 360-second IQ recording is **1,440,000,000 bytes**; the subsequent
+receive-only 240-second recording is **960,000,000 bytes**. Both sizes and hashes
+were independently verified. There was a gap between recordings; do not infer
+silence during it. The later idle report occurred about 628 seconds after the
+first recording began, around 459 seconds after the last initial state report.
+
+### Physical native-CRC defect, not a demonstrated power cure
+
+For each bounded assignment burst, an independent frequency discriminator
+checked the symbol immediately after the normalized 304-bit frame, across all
+clock phases reproducing that frame. Native CRC was calculated separately with
+seed `0xa8a8`; its upper fifteen bits matched the decoded frame.
+
+| Captured reply | Required final CRC bit | Observed following symbol |
+| --- | --- | --- |
+| Oct 3 failed assignments, phases 1/4/7 | 1 / 1 / 1 | 0 / 0 / 0 |
+| Oct 4 assignments, phases 1/4/7 | 1 / 1 / 0 | 0 / 0 / 0 |
+| Oct 4 plan replies, phases 13/14/15/16 | 1 / 0 / 1 / 0 | 0 / 0 / 0 / 0 |
+
+Each burst had 83–85 matching decoder phases, unanimously observing zero in
+that position. The valve advanced after the phase-7 assignment whose required
+bit was zero; earlier high-bit assignments failed at **both** power levels.
+High-bit plan replies were followed by repeated requests and zero-bit replies.
+This is strong capture-backed evidence that the omitted native CRC symbol is
+an acceptance defect, not proof that reducing power fixed it.
+
+The live pairing runtime's two `transmitAsync` call sites omit the explicit
+final symbol. The previously qualified HTV213 control/retained-owner runtime
+already supplies `nativeTailSymbol(frame)`. Do not change those working paths
+or generalize this finding to another model without its wire evidence.
+
+### Completion-window defect remains separate
+
+An offline replay of the actual exchange through the native `Session` reaches
+reports/settings/plans masks **3/3/3** with a positive notification ACK, but
+remains armed. Adding a report after the plans makes it observed; adding the
+same report after expiry does not. This deterministically identifies the
+post-plan report/deadline dependency. It does not justify inventing an RF
+completion receipt from transmitted plan replies.
+
+The real phase-17 idle report arrived after the five-minute deadline. The radio
+was disarmed and the gateway reported failed enrollment, so no normal completion
+receipt was produced or association committed. RF assignment/configuration is
+verified; normal HA enrollment is **not** complete. The next implementation
+must fix the CRC tail and distinguish the user pairing/discovery window from
+known-device telemetry confirmation, without forcing database proof or silently
+discarding the final-report qualification. Work is tracked in
+[the roadmap](../PROJECT_ROADMAP.md).
