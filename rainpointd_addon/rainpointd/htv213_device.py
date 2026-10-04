@@ -13,10 +13,10 @@ import json
 from datetime import datetime, timezone
 
 from . import htv213_owner as owner, htv213_control_transport as control
-from .htv213_control import ControlJournal, wraps
+from .htv213_control import ControlJournal, wraps, SETTLED_STATES, RECOVERY_FRESH_SECONDS
 
 MODEL = "HTV213FRF"
-FRESH_SECONDS = 1200
+FRESH_SECONDS = RECOVERY_FRESH_SECONDS
 
 
 def _age(value, now):
@@ -74,7 +74,7 @@ def project(gateway, now=None):
         journal = ControlJournal(gateway._store).snapshot(key)
         tx = journal.get("transaction") or {}
         age = _age(tx.get("reserved_at"), now)
-        unresolved = journal["state"] not in {"ready", "complete"}
+        unresolved = journal["state"] not in SETTLED_STATES
         node = gateway._nodes.get(record["node_id"], {})
         owner_status = node.get("htv213_owner", {})
         connected = bool(node.get("connected") and node.get("authenticated") and
@@ -122,6 +122,9 @@ def project(gateway, now=None):
                 and not tx.get("idle") and not overdue)
         reason = ("Radio unavailable" if not connected else "Command awaiting valve response" if pending else
                   "Valve confirmed idle; completion summary missing; no automatic retry" if missing_summary else
+                  "Command unconfirmed; waiting for both outlets to report idle; no automatic retry" if (
+                      failed and not tx.get("acknowledged") and tx.get("action") == "open" and
+                      not boundary_active and control.IDLE_RECOVERY_CAPABILITY in node.get("capabilities", [])) else
                   "Counter/command requires investigation; no automatic retry" if failed or overdue else
                   "Explicit counter-boundary experiment in progress" if boundary_active else
                   "Waiting for confirmed idle on both outlets" if not start else None)
@@ -131,7 +134,9 @@ def project(gateway, now=None):
             rf_control_transaction_state=phase, rf_control_transaction_id=tx.get("command_id"),
             rf_control_transaction_action=tx.get("action"), rf_control_transaction_zone=tx.get("port"),
             rf_control_transaction_duration_seconds=tx.get("requested_seconds"),
-            rf_control_transaction_status=reason or "Ready", rf_control_transaction_error=reason if failed or overdue else None,
+            rf_control_transaction_status=reason or ("Both outlets idle; previous command outcome unknown" if
+                journal["state"] == "recovered_idle" else "Ready"),
+            rf_control_transaction_error=reason if failed or overdue else None,
             rf_control_overdue=overdue, rf_control_completion_missing=bool(missing_summary),
             rf_retained_command_counter=journal["next_phase"],
             rf_retained_counter_status="Ready" if start else reason or "Watering in progress")
@@ -191,7 +196,7 @@ def forget(gateway, device_id):
             raise KeyError(device_id)
         key, record = found
         journal = ControlJournal(gateway._store).snapshot(key)
-        if journal["state"] not in {"ready", "complete"} or any(r.get("watering") for r in record["ports"].values()):
+        if journal["state"] not in SETTLED_STATES or any(r.get("watering") for r in record["ports"].values()):
             raise ValueError("finish the active or unresolved valve transaction first")
         records = owner.records(gateway)
         records[key]["revoking"] = True

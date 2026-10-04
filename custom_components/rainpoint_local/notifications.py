@@ -61,6 +61,11 @@ class WateringNotifications:
                 self._emit(device_id, "problem", f"{name}: watering needs attention",
                            "The expected stop has not been confirmed. Inspect the valve; missing "
                            "telemetry does not establish whether it is open or closed.")
+            if (phase == "recovered_idle" and transaction and watering is False and old is not None
+                    and old.get("recovered_transaction") != transaction):
+                self._emit(device_id, "problem", f"{name}: idle recovered",
+                           "Both outlets now report idle. The previous command outcome remains unknown. "
+                           "No command was retried. Check control status before starting a new run.")
             prior_watering = old["watering"] if old else None
             if watering is True and (prior_watering is not True or zone != old["zone"]
                                      or previous_duration != self.durations.get(device_id)):
@@ -79,6 +84,8 @@ class WateringNotifications:
             # later confirmed idle can close it without inventing a transition.
             self.previous[device_id] = {"watering": watering if isinstance(watering, bool) else prior_watering,
                                         "zone": zone, "overdue": overdue,
+                                        "recovered_transaction": transaction if phase == "recovered_idle" else (
+                                            old.get("recovered_transaction") if old else None),
                                         # An ACK can precede the first watering
                                         # report. Only consume its duration once
                                         # watering is observed, not at ACK time.

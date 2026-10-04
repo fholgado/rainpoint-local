@@ -19,6 +19,8 @@ KEY = "htv213_dry_control_trial_v1"
 # Stock generator plus the captured 62/63/0/1 dry trial. Normal enrollment
 # records this model policy, not a fabricated per-association trial result.
 MODEL_PHASE_POLICY = "htv213_modulo64_v1"
+RECOVERY_FRESH_SECONDS = 1200
+SETTLED_STATES = {"ready", "complete", "recovered_idle"}
 
 
 def wraps(record):
@@ -110,7 +112,7 @@ class ControlJournal:
             raise ValueError("counter wrap requires separate qualification")
         prior = record["transaction"]
         if action == "open":
-            if record["state"] not in ("ready", "complete"):
+            if record["state"] not in SETTLED_STATES:
                 raise ValueError("prior command unresolved; no automatic resend or new open")
             duration = seconds
         else:
@@ -143,6 +145,40 @@ class ControlJournal:
         # indeterminate mark; no rollback, duplicate dispatch or inferred close.
         sender(copy.deepcopy(record["identity"]), copy.deepcopy(transaction))
 
+    def recover_idle(self, key, *, node_id, command_id, ports):
+        """Correlated radio release plus independent fresh owner reports.
+
+        Caller verifies the radio's recovery capability and terminal status.
+        This records current idle, NOT the outcome of the unacknowledged open.
+        The attempted phase remains consumed and no command is transmitted.
+        """
+        records = self._records()
+        record = records[key]
+        tx = record.get("transaction") or {}
+        boundary = record.get("counter_boundary") or {}
+        if (record["state"] != "indeterminate" or tx.get("acknowledged") or
+                tx.get("action") != "open" or tx.get("command_id") != command_id or
+                record["identity"]["node_id"] != node_id or
+                (boundary and not boundary.get("complete"))):
+            return False
+        now = datetime.now(timezone.utc)
+        try:
+            attempted = datetime.fromisoformat(tx["reserved_at"])
+            for port in ("1", "2"):
+                report = ports.get(port, {})
+                observed = datetime.fromisoformat(report.get("observed_at"))
+                if (report.get("watering") is not False or report.get("remaining_seconds") != 0 or
+                        report.get("requested_seconds") != 0 or observed <= attempted or
+                        not 0 <= (now - observed).total_seconds() <= RECOVERY_FRESH_SECONDS):
+                    return False
+        except (TypeError, ValueError, KeyError):
+            return False
+        record["state"] = "recovered_idle"
+        tx.update(outcome="unknown", recovered_at=now.isoformat(),
+                  recovery_idle_reports=copy.deepcopy(ports))
+        self._save(records)
+        return True
+
     def observe(self, key, *, node_id, frame):
         """Only authenticated owner traffic should be passed by the caller."""
         decoded = packet(frame)
@@ -155,7 +191,7 @@ class ControlJournal:
         tx = record["transaction"]
         if (node_id != identity["node_id"] or raw[5:9].hex() != identity["controller"]
                 or raw[9:13].hex() != identity["valve"] or tx is None
-                or record["state"] in ("ready", "reserved", "complete")
+                or record["state"] in SETTLED_STATES | {"reserved"}
                 or raw[13] & 0x20):
             return False
         if command == 0xa1:

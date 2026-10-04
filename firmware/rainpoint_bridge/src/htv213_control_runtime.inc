@@ -46,12 +46,13 @@ void reportHtv213Owner(const rainpoint::htv213::Frame* frame=nullptr) {
 bool htv213ControlActive() {
     using S=rainpoint::htv213Control::State;
     const auto state=htv213ControlTrial.state();
-    return state!=S::Idle && state!=S::Complete && state!=S::Cancelled && state!=S::Overdue;
+    return state!=S::Idle && state!=S::Complete && state!=S::Cancelled && state!=S::Overdue &&
+        state!=S::RecoveredIdle;
 }
 
 void reportHtv213Control(const rainpoint::htv213::Frame* frame=nullptr) {
     constexpr const char* names[]={"idle","transmitting","awaiting_response","open_confirmed",
-        "close_awaiting_response","close_confirmed","complete","uncertain","overdue","cancelled"};
+        "close_awaiting_response","close_confirmed","complete","uncertain","overdue","cancelled","recovered_idle"};
     String line="{\"type\":\"htv213_control_status\",\"node_id\":\"";
     line+=wifiTransport.nodeId(); line+="\",\"command_id\":\""; line+=htv213ControlCommandId;
     line+="\",\"state\":\""; line+=names[static_cast<unsigned>(htv213ControlTrial.state())];

@@ -344,6 +344,32 @@ class Htv213ControlTest(unittest.TestCase):
         self.assertEqual(rows[-1][1], 8)  # Late other-port idle cannot turn failure into success.
         self.assertEqual(rows[-1][3:8], [0, 0, 0, 0, 0])
 
+    def test_missing_ack_recovers_only_after_both_fresh_idle_reports(self):
+        idle1 = self.packet(2, last=True)
+        data = bytearray(decode(idle1).data)
+        data[2] = 2
+        idle2 = alter(idle1, data=data)
+        start = ['start 0 1 60 3', 'finish 1 1']
+        for when in (2000, 130000):  # Before and after the overdue deadline.
+            rows = self.run_ops(start + [f'observe {when} {idle1}',
+                f'observe {when+1} {idle2}', 'tick 1400000',
+                f'observe 1400001 {self.packet(0xa1)}'])
+            self.assertNotEqual(rows[2][1], 10)
+            self.assertEqual(rows[3][1], 10)  # RecoveredIdle, not Complete.
+            self.assertEqual(rows[-1][1], 10)  # Late ACK cannot rewrite outcome.
+            self.assertEqual(rows[-1][3:9], [0, 0, 0, 0, 0, 0])
+            self.assertTrue(all(row[-1] == '-' for row in rows[1:]))
+        # Pre-timeout, stale, wrong-owner and active reports cannot release it.
+        other = bytearray.fromhex(idle1); other[8] ^= 1
+        for first, second_at in ((f'observe 10 {idle1}', 2000),
+                                 (f'observe 2000 {idle1}', 1202001),
+                                 (f'observe 2000 {alter(other.hex())}', 2001)):
+            rows = self.run_ops(start + [first, f'observe {second_at} {idle2}'])
+            self.assertNotEqual(rows[-1][1], 10)
+        rows = self.run_ops(start + [f'observe 2000 {idle1}',
+            f'observe 2001 {self.packet(2)}', f'observe 2002 {idle2}'])
+        self.assertNotEqual(rows[-1][1], 10)
+
     def test_wrong_phase_routes_result_shape_and_other_port_do_not_confirm(self):
         ack = self.packet(0xa1)
         data = bytearray(decode(ack).data)

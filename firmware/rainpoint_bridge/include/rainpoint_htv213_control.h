@@ -12,6 +12,7 @@ using Transmission = htv213::Transmission;
 constexpr unsigned kMaximumTrialSeconds = 3600;
 constexpr unsigned kResponseWindowMs = 1500;
 constexpr unsigned kCompletionGraceMs = 60000;
+constexpr unsigned kRecoveryFreshMs = 1200000;
 
 using htv213::nativeTailSymbol;
 
@@ -94,7 +95,7 @@ inline bool prepareReportAck(const Profile& profile, const Frame& frame,
 }
 
 enum class State { Idle, Transmitting, AwaitingResponse, OpenConfirmed, CloseAwaitingResponse,
-                   CloseConfirmed, Complete, Uncertain, Overdue, Cancelled };
+                   CloseConfirmed, Complete, Uncertain, Overdue, Cancelled, RecoveredIdle };
 
 class Trial {
 public:
@@ -122,7 +123,8 @@ public:
             now-responseAt_<kResponseWindowMs;
     }
     void tick(std::uint32_t now) {
-        if (state_==State::Idle || state_==State::Complete || state_==State::Cancelled) return;
+        if (state_==State::Idle || state_==State::Complete || state_==State::Cancelled ||
+            state_==State::RecoveredIdle) return;
         if ((state_==State::AwaitingResponse || state_==State::CloseAwaitingResponse) &&
             now-responseAt_>=kResponseWindowMs) state_=State::Uncertain;
         if (now-started_>=seconds_*1000U+kCompletionGraceMs) state_=State::Overdue;
@@ -131,9 +133,24 @@ public:
     bool observe(const Frame& frame, std::uint32_t now) {
         tick(now);
         if (state_==State::Idle || state_==State::Transmitting || state_==State::Complete ||
-            state_==State::Cancelled || state_==State::Overdue) return false;
+            state_==State::Cancelled || state_==State::RecoveredIdle) return false;
         Observation observation{};
         if (!decode(profile_,frame,observation)) return false;
+        // An unacknowledged open remains an unknown outcome. New reports from
+        // BOTH outlets can establish current idle without inventing acceptance,
+        // a completion summary, a phase reset, or a retry. Only collect after
+        // the response window; active reports invalidate that outlet's idle.
+        if (!openAck_ && !closeSent_ && (state_==State::Uncertain || state_==State::Overdue) &&
+            observation.kind==Kind::State) {
+            const auto index=observation.port-1;
+            recoveryIdle_[index]=observation.mode==0 && observation.remaining==0 && observation.requested==0;
+            recoveryAt_[index]=now;
+            if (recoveryIdle_[0] && recoveryIdle_[1] &&
+                now-recoveryAt_[0]<=kRecoveryFreshMs && now-recoveryAt_[1]<=kRecoveryFreshMs)
+                state_=State::RecoveredIdle;
+            return true;
+        }
+        if (state_==State::Overdue) return false;
         if (observation.kind==Kind::Result) {
             if (observation.phase!=phase_ || observation.requested!=seconds_) return false;
             if (!closeSent_ && observation.mode==0x21 && observation.remaining>0 &&
@@ -171,6 +188,8 @@ private:
     State state_=State::Idle;
     unsigned port_=0,seconds_=0,phase_=0,elapsed_=0;
     std::uint32_t started_=0,responseAt_=0;
+    std::array<std::uint32_t,2> recoveryAt_{};
+    std::array<bool,2> recoveryIdle_{};
     bool closeSent_=false,openAck_=false,closeAck_=false,openReport_=false;
     bool idleSeen_=false,summarySeen_=false;
 };

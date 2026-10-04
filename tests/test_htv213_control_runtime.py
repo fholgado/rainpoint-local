@@ -9,6 +9,7 @@ import unittest
 from tests.test_htv213_runtime import function
 from research.pairing_native_transcripts import decode
 from tests.test_htv213_pairing import REPEAT_FACTORY
+from tests.test_valve_configuration import alter
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -77,6 +78,9 @@ void reportNetworkCommandError(const String&,const char* error) { lastCommandErr
         fixture = json.loads((ROOT / "research/fixtures/htv213_stock_pairing_controls_20260928.json").read_text())
         trial = next(t for t in fixture["trials"] if t["name"] == "zone1_auto60")
         device = [e["frame"] for e in trial["events"] if e["direction"] == "device"]
+        idle1 = next(f for f in device if decode(f).command == 2 and decode(f).data[3] == 0)
+        data = bytearray(decode(idle1).data); data[2] = 2
+        idle2 = alter(idle1, data=data)
         lifecycle = json.loads((ROOT / "research/fixtures/htv213_stock_lifecycle_20260928.json").read_text())
         battery = next(t for t in lifecycle["trials"] if t["name"] == "battery_rejoin")
         announcement = next(e["frame"] for e in battery["events"] if e["direction"] == "device" and
@@ -128,7 +132,9 @@ int main(int argc,char** argv) {
     if (mode=="timeout" || mode=="tx-failure") fakeNow=1501;
     if (mode=="restore-failure") primaryRadio.restoreOk=false;
     const bool rejoin=mode=="rejoin" || mode=="rejoin-boot07";
-    const bool owner=mode=="owner" || rejoin;
+    const bool recovery=mode=="idle-recovery" || mode=="overdue-idle-recovery";
+    const bool owner=mode=="owner" || rejoin || recovery;
+    if (recovery) fakeNow=mode=="idle-recovery" ? 1501 : 130000;
     if (owner) {
         htv213OwnerEnabled=true; htv213OwnerId="test-owner";
         auto& a=htv213RetainedConfiguration;
@@ -142,11 +148,23 @@ int main(int argc,char** argv) {
             a.ports[i].settings={{0x58,2,10,0,30,0,0,0,0,0,0,0,0,0}};
         }
     }
-    if (mode=="accepted" || owner || mode=="restore-failure") {
+    if (mode=="accepted" || (owner && !recovery) || mode=="restore-failure") {
         fakeNow=313;
         processHtv213Control(frame("ACK_FRAME"),rainpoint::RadioPacket{313000});
     }
     pollHtv213Control();
+    if (recovery) {
+        processHtv213Control(frame("IDLE1"),rainpoint::RadioPacket{fakeNow*1000});
+        if (htv213ControlTrial.state()==rainpoint::htv213Control::State::RecoveredIdle) return 24;
+        ++fakeNow;
+        processHtv213Control(frame("IDLE2"),rainpoint::RadioPacket{fakeNow*1000});
+        if (htv213ControlTrial.state()!=rainpoint::htv213Control::State::RecoveredIdle ||
+            htv213ControlActive() || scanning || !htv213OwnerEnabled ||
+            primaryRadio.baseHz!=rainpoint::kReportHz ||
+            primaryRadio.commands!=std::vector<unsigned>({0x21,0x82,0x82})) return 25;
+        if (handleHtv213ControlCommand("firmware_update_start","{}","ota-test")) return 26;
+        return 0; // No automatic retry, close, phase allocation or owner loss.
+    }
     if (mode=="disconnect" || mode=="rf-disabled" || mode=="restore-failure") {
         if (htv213ControlActive() || !scanning) return 4;
     } else {
@@ -191,7 +209,7 @@ int main(int argc,char** argv) {
     }
     return opens==1 ? 0 : 11;
 }
-'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement).replace("BOOT07", REPEAT_FACTORY)
+'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement).replace("BOOT07", REPEAT_FACTORY).replace("IDLE1", idle1).replace("IDLE2", idle2)
         with tempfile.TemporaryDirectory() as directory:
             exe = str(Path(directory) / "runtime")
             result = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
@@ -199,6 +217,7 @@ int main(int argc,char** argv) {
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             for mode in ("ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+                         "idle-recovery", "overdue-idle-recovery",
                          "accepted", "owner", "rejoin", "rejoin-boot07", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
                 with self.subTest(mode=mode):
                     result = subprocess.run([exe, mode], text=True, capture_output=True)

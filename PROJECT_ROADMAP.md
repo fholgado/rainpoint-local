@@ -368,7 +368,8 @@ not tasks to mark “done once.”
 - [x] Prepare opt-in retained-rejoin replies with request-derived carrier and both-port replay; leave deployed responder disabled and pairing unchanged (Sep 30).
 - [x] Independently audit stock master wrap through zero and shared allocation; preserve [evidence](research/HTV213_COUNTER_WRAP_AUDIT.md) (Sep 30).
 - [x] RF-qualify HTV213 master phases 62→63→0→1: four one-minute runs, full completion evidence and redacted replay; enable wrap only for the qualified association (Sep 30).
-- [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
+- [x] Implement HTV213 missing-ACK idle recovery with retained counters and truthful HA status/notifications; source tested, not deployed (Oct 4).
+- [ ] Deploy and dry-test HTV213 missing-response recovery: battery-out failure, both-port idle after reinsertion, then a new next-phase run. Physical loss remains untested.
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [x] Verify HTV213 post-configuration reports and repeat complete enrollment: control.10 RF-confirmed twice; same HA device, restored ownership, ACK-derived phase 3 and verified full capture (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-repeat-enrollment-and-same-device-handback--october-4)).
 - [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.

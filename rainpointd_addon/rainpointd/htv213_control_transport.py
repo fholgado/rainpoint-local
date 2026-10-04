@@ -12,6 +12,7 @@ from .htv213_control import ControlJournal
 
 # Existing deployed capability; do not relabel the protocol during extraction.
 CAPABILITY = "htv213_control_experiment"
+IDLE_RECOVERY_CAPABILITY = "htv213_idle_recovery_v1"
 
 
 def eligible(gateway, node_id):
@@ -51,7 +52,7 @@ def observe(gateway, node_id, message):
             return
         state = message.get("state")
         if state not in {"transmitting", "awaiting_response", "open_confirmed", "close_awaiting_response",
-                         "close_confirmed", "complete", "uncertain", "overdue", "cancelled"}:
+                         "close_confirmed", "complete", "uncertain", "overdue", "cancelled", "recovered_idle"}:
             return
         journal = ControlJournal(gateway._store)
         current = journal.snapshot(owner[2])
@@ -60,8 +61,20 @@ def observe(gateway, node_id, message):
             return  # A fresh enrollment superseded the old in-memory command.
         if isinstance(message.get("frame"), str):
             journal.observe(owner[2], node_id=node_id, frame=message["frame"])
+        if state == "recovered_idle":
+            from . import htv213_owner
+            node = gateway._nodes.get(node_id, {})
+            association = htv213_owner.records(gateway).get(owner[2], {})
+            status = node.get("htv213_owner") or {}
+            if (node.get("connected") and node.get("authenticated") and
+                    IDLE_RECOVERY_CAPABILITY in node.get("capabilities", []) and
+                    not association.get("revoking") and association.get("node_id") == node_id and
+                    status.get("state") == "ready" and
+                    status.get("command_id") == association.get("command", {}).get("command_id")):
+                journal.recover_idle(owner[2], node_id=node_id, command_id=owner[1],
+                                     ports=association.get("ports", {}))
         record = journal.snapshot(owner[2])
-        terminal = state in {"complete", "overdue", "cancelled"}
+        terminal = state in {"complete", "overdue", "cancelled", "recovered_idle"}
         gateway.update_node(node_id, tx_armed=not terminal, htv213_control={
             "command_id": owner[1], "state": record["state"], "node_state": state,
             "phase": record["transaction"]["phase"], "port": record["transaction"]["port"],

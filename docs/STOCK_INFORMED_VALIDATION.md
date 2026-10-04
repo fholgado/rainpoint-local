@@ -1247,3 +1247,35 @@ fraction about **0.73%**) and covered selected times/carriers only. The full
 960-second capture subsequently exited successfully with exactly
 **3,840,000,000 bytes**; an independent SHA-256 check matched `sha256.txt`.
 Association handback and capture-integrity verification are both complete.
+
+### Missing-ACK idle recovery — October 4 (source only)
+
+Preflight for the battery-out test exposed a deterministic dead end: the
+gateway journal required an ACK to accept completion, while the radio had no
+idle-recovery transition. Battery rejoin alone could not release an unanswered
+open. Native and gateway regressions reproduced this before the fix.
+
+The candidate adds `recovered_idle`, distinct from successful completion:
+
+- After its response window, the radio requires valid, fresh idle reports from
+  **both** outlets. Active or stale reports do not establish recovery.
+- The gateway correlates the original command, current authenticated owner and
+  `htv213_idle_recovery_v1` capability, then independently checks both saved RF
+  reports are newer than the attempt and at most 20 minutes old.
+- The old outcome remains **unknown**, without invented ACK/summary evidence.
+  Its phase stays consumed; only a new user request allocates the next phase.
+- HA updates its control status and existing problem notification to explain
+  recovery. No open, close, reset or automatic retry is emitted by recovery.
+
+Replay covers recovery before/after the overdue deadline, late ACKs, retained
+history, wrong identity, partial/stale/active reports, firmware compatibility,
+and the actual radio runtime's receive/ACK path. Acknowledged runs missing a
+summary, unanswered closes, interrupted radio/gateway sessions and unfinished
+counter-boundary experiments are not released by this new path.
+
+Validation: **1,046 Python tests passed**, native protocol test passed, and both
+the default production profile and HTV213/development candidate compiled.
+
+No live test command or deployment accompanied this change. The battery-out
+failure/reinsertion/new-command experiment remains the physical qualification
+gate in [the roadmap](../PROJECT_ROADMAP.md), not an already-proven result.
