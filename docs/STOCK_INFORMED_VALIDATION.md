@@ -961,6 +961,22 @@ recording at its captured relative time and reaches `Observed` with masks
 3/3/3 and the positive ACK preserved. That validates the software correction;
 normal enrollment and physical CRC transmission still require the next trial.
 
+Development signing [run 37211325238](https://github.com/fholgado/rainpoint-local/actions/runs/37211325238)
+passed from source `a2471bd`, including all 1,041 CI tests. Local native protocol,
+production and development builds, and their command-boundary checks passed.
+The matching two-file gateway delta was hash-verified against the prior live
+source, preserved in a private source snapshot and deployed. Managed HA backup
+availability was checked first.
+
+Test Node B received all 1,117,776 signed bytes, reported
+`verified_publisher_and_sha256`, rebooted into `0.19.0-htv213-control.10`, and
+confirmed `gateway_and_radio_healthy` with no pending candidate. The observer's
+post-check encountered a missing version field on an unrelated offline node;
+independent read-only verification confirmed the update without repeating OTA.
+Other radio firmware versions were unchanged. Pairing remained inactive and
+unarmed; no watering command was issued. Private deployment/transfer receipts
+are under `captures/htv213-control10-qualification-20261004/`.
+
 The subsequent full-enrollment test exposed a gateway admission blocker before
 any pairing RF: owner-clear used the 32-character owner ID plus `-revoke`, while
 the actual firmware ingress validator accepts only 32 hexadecimal characters.

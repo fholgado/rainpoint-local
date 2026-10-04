@@ -143,12 +143,12 @@ Slot allocation avoids the frozen legacy slots 1 (HTV145) and 6 (HCS026/HTV405),
 retained same-controller configurations, tombstones and prior assignment attempts.
 It does not modify the other models' proven pairing bytes. General model-menu and control
 enablement remain withheld by existing physical qualification. The matched
-candidate and development firmware `0.19.0-htv213-control.9` are deployed only
-to Test Node B. Both retained-association dry outlets passed ordinary API
+candidate and development firmware `0.19.0-htv213-control.10` are deployed only
+to Test Node B. On control.9, both retained-association dry outlets passed ordinary API
 60-second controls at master phases 5 and 6; this is not proof of a new normal
 enrollment. One automatic discovery trial subsequently verified assignment,
 both-port configuration and a later idle report, but the normal flow expired
-before that report and did not commit the association. The control.10 source
+before that report and did not commit the association. The control.10
 candidate appends the native CRC's final symbol to both pairing TX paths,
 using the same helper as qualified control/retained-owner TX. After a positive
 configuration ACK and both ports' settings/plans, automatic discovery closes

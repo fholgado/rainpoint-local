@@ -383,7 +383,8 @@ not tasks to mark “done once.”
 - [x] Retest HTV213 automatic discovery at 0 dBm: assignment, both-port configuration and later idle report verified (Oct 4, address 4). Gateway completion still timed out; this is not full HA enrollment ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)).
 - [x] Append the native CRC's final symbol to HTV213 pairing replies/notification; actual TX regressions reproduce and fix truncation (Oct 4; source validated).
 - [x] Separate HTV213 discovery expiry from a ten-minute known-device confirmation wait; replay the captured late report and expose HA's confirmation stage (Oct 4; source validated).
-- [ ] Deploy control.10 and repeat normal HTV213 enrollment with RF-verified CRC tail and delayed confirmation.
+- [x] Deploy signed control.10 and matched gateway changes: 1,041 tests, both builds, verified OTA and healthy Test Node B; pairing unarmed (Oct 4).
+- [ ] Repeat normal HTV213 enrollment with RF-verified CRC tail and delayed confirmation.
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
