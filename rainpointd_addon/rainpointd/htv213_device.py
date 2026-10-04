@@ -2,8 +2,9 @@
 
 The persisted reply owner supplies all RF parameters. HA supplies only an
 outlet and duration; transport success never becomes reported watering. This
-adapter keeps staged normal controls disabled until model qualification; it
-does not advertise general HTV213 support merely because enrollment is saved.
+adapter admits committed, RF-confirmed enrollments independently of model-menu
+visibility. Unpublished models can be qualified through the normal controls;
+publishing the pairing profile remains a separate release decision.
 """
 from __future__ import annotations
 
@@ -80,10 +81,8 @@ def project(gateway, now=None):
                          owner.CAPABILITY in node.get("capabilities", []) and
                          owner_status.get("state") == "ready" and
                          owner_status.get("command_id") == record["command"]["command_id"])
-        from .htv213_enrollment import USER_PAIRING_SUPPORTED
-        qualified = not record.get("enrollment_id") or USER_PAIRING_SUPPORTED
-        state = {"device_kind": "valve", "rf_control_enabled": qualified,
-                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "normal_enrollment" if record.get("enrollment_id") and qualified else "enrollment_pending_qualification" if record.get("enrollment_id") else "dry_canary",
+        state = {"device_kind": "valve", "rf_control_enabled": True,
+                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "normal_enrollment" if record.get("enrollment_id") else "dry_canary",
                  "rf_control_duration_min_minutes": 1,
                  "rf_control_duration_max_minutes": 60 if "htv213_duration_3600" in node.get("capabilities", []) else 2,
                  "rf_control_duration_step_minutes": 1}
@@ -115,13 +114,13 @@ def project(gateway, now=None):
                  "watering_confirmed" if journal["state"] == "open_confirmed" else
                  "confirmed" if journal["state"] == "complete" else journal["state"])
         boundary_active = bool(journal.get("counter_boundary") and not journal["counter_boundary"].get("complete"))
-        start = (qualified and connected and not unresolved and not boundary_active and
+        start = (connected and not unresolved and not boundary_active and
                  watering == [False, False] and
                  (journal["next_phase"] <= 63 or wraps(journal)))
         same_session = (_age(node.get("connected_at"), now) >= age)
-        stop = (qualified and connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
+        stop = (connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
                 and not tx.get("idle") and not overdue)
-        reason = ("Model enrollment/control qualification pending" if not qualified else "Radio unavailable" if not connected else "Command awaiting valve response" if pending else
+        reason = ("Radio unavailable" if not connected else "Command awaiting valve response" if pending else
                   "Valve confirmed idle; completion summary missing; no automatic retry" if missing_summary else
                   "Counter/command requires investigation; no automatic retry" if failed or overdue else
                   "Explicit counter-boundary experiment in progress" if boundary_active else

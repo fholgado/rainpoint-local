@@ -220,7 +220,8 @@ class EnrollmentFlowTest(unittest.TestCase):
         result = self.gateway.complete_pairing(endpoint="91556677", name="Two outlets", area="Bench")
         self.assertEqual(result["model"], "HTV213FRF")
         self.assertEqual(result["area"], "Bench")
-        self.assertFalse(result["state"]["rf_control_enabled"])
+        self.assertTrue(result["state"]["rf_control_enabled"])
+        self.assertFalse(result["state"]["rf_control_start_available"])
         self.assertEqual([c["type"] for _, c in self.sent], ["htv213_enrollment_start", "htv213_owner_set"])
         key = self.gateway.rf_identity.controller_endpoint + ":91556677"
         self.assertEqual(ControlJournal(self.gateway._store).snapshot(key)["next_phase"], 3)
@@ -228,6 +229,44 @@ class EnrollmentFlowTest(unittest.TestCase):
         self.assertEqual(self.sent[0][1]["device_address"], 2)
         self.assertNotIn("factory_endpoint", self.sent[0][1])
         self.assertEqual(started["active_profile_id"], enrollment.PROFILE_ID)
+
+    def test_committed_control_is_independent_of_menu_but_requires_owner_and_idle(self):
+        from rainpointd import htv213_device
+        from research.pairing_native_transcripts import decode
+        self.accept()
+        result = self.gateway.complete_pairing(endpoint="91556677", name="Two outlets")
+        target = result["device_id"]
+        key = self.gateway.rf_identity.controller_endpoint + ":91556677"
+        record = owner.records(self.gateway)[key]
+        message = dict(command_id=record["command"]["command_id"], enabled=True,
+                       retained_rejoin_enabled=True, configuration_revision=2)
+        self.sent.clear()
+        with self.assertRaises(ValueError):
+            self.gateway.request_valve_control(device_id=target, action="open", zone=1, duration_seconds=60)
+        owner.observe(self.gateway, NODE, message)
+        with self.assertRaises(ValueError):
+            self.gateway.request_valve_control(device_id=target, action="open", zone=1, duration_seconds=60)
+        raw = bytearray.fromhex(self.proof["completion_frame"])
+        raw[5:9] = bytes.fromhex(self.gateway.rf_identity.controller_endpoint)
+        frame = alter(raw.hex())
+        data = bytearray(decode(frame).data)
+        for port in (1, 2):
+            data[2] = port
+            owner.observe(self.gateway, NODE, {**message, "frame": alter(frame, data=data)})
+            state = htv213_device.project(self.gateway)[target]["state"]
+            self.assertEqual(state["rf_control_start_available"], port == 2)
+        profile = next(p for p in ha_contract.api_models.pairing_profiles(self.gateway.pairing())
+                       if p.profile_id == enrollment.PROFILE_ID)
+        self.assertFalse(profile.user_pairing_supported)
+        self.assertEqual(self.sent, [])
+        self.gateway.request_valve_control(device_id=target, action="open", zone=1, duration_seconds=60)
+        self.assertEqual(len(self.sent), 1)
+        command = self.sent[0][1]
+        self.assertEqual((command["phase"], command["port"], command["seconds"]), (3, 1, 60))
+        state = htv213_device.project(self.gateway)[target]["state"]
+        self.assertTrue(state["rf_control_command_pending"])
+        self.assertFalse(state["rf_control_start_available"])
+        self.assertIsNone(state["zone_1_is_watering"])
 
     def test_configured_wait_uses_native_ha_confirmation_stage(self):
         started = self.start()

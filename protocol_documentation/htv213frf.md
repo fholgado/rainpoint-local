@@ -141,8 +141,11 @@ explicitly provisioned calibrated carriers. Authenticated
 The node/model setup flow uses those saved values without exposing RF fields.
 Slot allocation avoids the frozen legacy slots 1 (HTV145) and 6 (HCS026/HTV405),
 retained same-controller configurations, tombstones and prior assignment attempts.
-It does not modify the other models' proven pairing bytes. General model-menu and control
-enablement remain withheld by existing physical qualification. The matched
+It does not modify the other models' proven pairing bytes. General model-menu
+enablement remains withheld by existing physical qualification. Committed,
+RF-confirmed associations use normal controls independently of menu visibility;
+confirmed reply ownership and fresh idle reports for both outlets are still
+required before starting. The matched
 candidate and development firmware `0.19.0-htv213-control.10` are deployed only
 to Test Node B. On control.9, both retained-association dry outlets passed ordinary API
 60-second controls at master phases 5 and 6; this is not proof of a new normal
@@ -157,8 +160,11 @@ Repeated progress does not extend it. HA displays its existing confirmation
 stage; only a real subsequent valve report permits association/phase commit.
 This wait is an observation budget, not a decoded unit for `timing_raw`.
 Disconnect, cancellation and TX failure still end the session. The older
-explicit research API retains its original overall deadline. Repeat normal
-enrollment on hardware before claiming qualification. See [capture-backed diagnosis](../docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)
+explicit research API retains its original overall deadline. One control.10
+enrollment completed with a report 445 seconds after the final plan reply;
+normal naming/save committed the association and restored its owner with next
+master phase 3. Repeat full enrollment before general model promotion.
+See [capture-backed diagnosis](../docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)
 and [the roadmap](../PROJECT_ROADMAP.md).
 
 The observed successful stock association consists of:

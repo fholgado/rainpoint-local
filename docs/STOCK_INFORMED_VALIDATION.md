@@ -1137,3 +1137,38 @@ correlated API receipts, `initial-rf.jsonl`, `confirmation-rf.jsonl`, independen
 `crc-tail-verification.json` and `confirmation-verified.json`. The 960-second
 recording finished at 16:22:07 UTC, has exactly **3,840,000,000 bytes**, and its
 independently recomputed SHA-256 matches the capture manifest. Raw IQ is retained.
+
+### Control.10 association commit and restart — October 4
+
+The normal `/pairing/complete` naming/save request committed the accepted
+enrollment as one two-outlet test device. The radio confirmed restored reply
+ownership, pairing became inactive, and the next master command phase was **3**
+from the positive configuration ACK at phase 2. The later device-report phase
+11 was not used as a command seed. HA registered 15 entities, including exactly
+two outlet controls and two duration settings. Saving sent no watering command.
+
+The prior projection coupled normal controls to the general model-menu flag,
+which prevented qualification of a newly committed association through the
+normal controls. The projection now treats menu publication separately from
+control of RF-confirmed, atomically committed associations. Owner acknowledgement,
+fresh idle reports on both outlets, duplicate-command suppression and existing
+failure handling remain required. A new real enrollment/owner/report/control
+regression failed before this change and passes afterwards; all **1,042 tests**
+pass. The normal model menu remains unadvertised.
+
+The single-file gateway change was backed up, hash-verified and deployed with
+no radio firmware update. A read immediately after rebuild raced gateway
+startup; a subsequent read-only check verified the persisted association and
+restored owner. A separate single Test Node B reboot also restored the same
+association/owner and next phase 3. The legacy registry was unchanged.
+
+Fresh port-2 idle reporting resumed, with an independently decoded phase-19
+`02/82` exchange 82 ms apart. Port 1 had not yet reported since the save when
+the first bounded HA check ran, so that check deferred without sending any
+watering. Current normal-enrollment outlet-control qualification remains pending;
+the earlier retained-canary control results are not substituted for it.
+
+Private save receipts remain beside the enrollment capture. Deployment,
+restart and HA evidence are under
+`captures/htv213-control10-normal-controls-20261004/`; the receive-only capture
+`20261004-131438/owner-report-rf.jsonl` contains the post-save owner exchange.
