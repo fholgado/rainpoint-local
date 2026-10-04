@@ -1279,3 +1279,30 @@ the default production profile and HTV213/development candidate compiled.
 No live test command or deployment accompanied this change. The battery-out
 failure/reinsertion/new-command experiment remains the physical qualification
 gate in [the roadmap](../PROJECT_ROADMAP.md), not an already-proven result.
+
+### Control.11 deployment and capability admission — October 4
+
+Development signing [run 37234055141](https://github.com/fholgado/rainpoint-local/actions/runs/37234055141)
+passed for firmware source `66888a1` (1,046 CI tests, two optional skips).
+After a current HA/gateway backup, three gateway recovery files and the HA
+notification module were hash-verified and deployed; HA restarted successfully.
+The firmware catalog is loaded at startup: an initial OTA admission request
+preceded its reload and was rejected without dispatch. Reloading the catalog
+made the verified artifact visible.
+
+Test Node B received **1,117,952 bytes** and verified publisher signature and
+SHA-256, but initially failed authentication. The new
+`htv213_idle_recovery_v1` capability was missing from the gateway allowlist.
+A real TCP-handshake regression, deriving capabilities from firmware source,
+reproduced rejection with valid credentials. Adding the exact capability fixed
+it while preserving unknown-capability rejection; **1,047 local tests passed**.
+The single-file gateway correction restored the existing candidate without a
+second firmware transfer or any credential change.
+
+Independent verification confirmed `0.19.0-htv213-control.11`, authenticated
+connection, `gateway_and_radio_healthy`, no pending candidate, ready reply
+owner, the same saved valve, both HA outlets closed and next phase **3**.
+Pairing stayed inactive, no watering was commanded and other radio firmware
+versions were unchanged. Private receipts are in
+`captures/htv213-control11-qualification-20261004/`. This verifies deployment,
+not physical missing-response recovery; batteries remained in the valve.

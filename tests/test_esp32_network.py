@@ -6,6 +6,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import re
 import socket
 import sys
 import tempfile
@@ -137,6 +138,22 @@ class ESP32NetworkTest(unittest.TestCase):
                     self.fail("authenticated test node was not registered")
                 time.sleep(.01)
         return connection, stream, response
+
+    def test_all_firmware_advertised_capabilities_pass_real_authentication(self) -> None:
+        # Derive the capability vocabulary from the real firmware hello rather
+        # than another hand-maintained list that can miss a new candidate flag.
+        source = (ROOT / 'firmware/rainpoint_bridge/src/wifi_transport.cpp').read_text()
+        hello = source.split(r'\"capabilities\":[', 1)[1].split(r'\"tx_armed\":false', 1)[0]
+        capabilities = re.findall(r'\\"([a-z][a-z0-9_]+)\\"', hello)
+        self.assertIn('htv213_idle_recovery_v1', capabilities)
+        for extra, expected in (([], 'node_authenticated'), (['unknown_future_capability'], 'node_rejected')):
+            with self.subTest(extra=extra):
+                connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+                    capabilities=capabilities + extra)
+                try:
+                    self.assertEqual(response['type'], expected)
+                finally:
+                    stream.close(); connection.close()
 
     def test_development_rejoin_firmware_authenticates_with_both_new_capabilities(self) -> None:
         capabilities = ['rx', 'sensor_pairing_tx', 'firmware_update_trial', 'firmware_signed_ota',
