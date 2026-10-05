@@ -1476,3 +1476,36 @@ Second-radio carrier validation was deferred at the user's request. Saved
 per-radio calibration remains required; this promotion adds no universal carrier
 offset or calibration evidence. Alpha 1's published artifacts remain unchanged.
 Signing and test-node rollout are tracked in [the roadmap](../PROJECT_ROADMAP.md).
+
+### Unified candidate deployment and normal HA controls — October 5
+
+Development signing run [37286839651](https://github.com/fholgado/rainpoint-local/actions/runs/37286839651)
+produced **0.20.0-rc.1** from source **13b97c13** using the ordinary unified
+profile plus explicit development trust. Both CI runs passed all checks.
+The image's publisher signature, source revision, catalog copy and firmware
+command boundary were independently verified before OTA.
+
+Gateway **0.39.18** was deployed from the tested eight-file delta, with HA backup
+`bd3c4e68` verified available and a recoverable source copy under
+`/share/rainpoint-local/source-backups/unified-020-20261005`. Gateway restart and
+signed OTA preserved the same saved two-outlet device, registry, ready reply owner
+and next phase **5**. Test Node B confirmed `gateway_and_radio_healthy`, advertised
+`htv213_control_v1`, and advertised neither research pairing nor research control.
+Other radio firmware remained unchanged. HA integration stays at **0.18.5**.
+
+Two **60-second dry runs** through the normal HA valve entities then completed:
+port 1 at full master phase **5**, port 2 at **6**. Independent bounded SDR
+decoding confirms each `21`, positive matching `a1`, target-port active and idle
+`02`, elapsed-60 `04`, and phase-correlated `84`. Acceptance delays were about
+**309 ms**; idle reports arrived **62.95 s** and **61.43 s** after each command.
+The second summary arrived about **117.4 s** after its command, later than its
+first idle; the gateway kept the command pending until actual completion evidence.
+Both HA entities transitioned open → closed, the other outlet stayed idle, and
+the retained next phase is **7**. No open was retried or counter forced.
+
+The **1,440,000,000-byte** receive-only capture completed and its SHA-256 was
+independently checked against the capture receipt. Private evidence is under
+`captures/htv213-unified-020-20261005/`. Some bounded IQ windows contained about
+0.5% clipped samples; this supports validated packets and transaction correlation,
+not precision carrier calibration. Second-radio calibration validation remains
+deferred. The ordinary release-key image still uses protected signing approval.

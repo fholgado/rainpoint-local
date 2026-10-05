@@ -246,7 +246,7 @@ closed or rejected. No timeout, disconnect or restart sends an automatic close.
 Ordinary state/summary acknowledgements echo the valve's phase. The successful
 pairing session and its settings/plan responder are unchanged.
 
-The normalized 304-bit frame omits the final native CRC bit. Experimental
+The normalized 304-bit frame omits the final native CRC bit. HTV213
 commands and acknowledgements append that computed **305th symbol**. Local
 port-1 and port-2 60-second runs and an explicit port-1 stop have matching `a1`,
 idle and summary evidence. Master command phases advanced 3→4→5→6 independently
@@ -256,8 +256,8 @@ the [validation record](../docs/STOCK_INFORMED_VALIDATION.md).
 Retained reply ownership persists the association at the gateway and restores
 configuration only on authenticated node reconnect. It acknowledges addressed
 `02/04` and answers `05/06`; it never resets the command phase or replays an open.
-Battery rejoin is enabled by normal committed enrollment on the qualified
-development runtime, not on standard production radios. Shared multi-device
+Battery rejoin is enabled by normal committed enrollment on unified 0.20.0 and
+qualified control.12 firmware. Shared multi-device
 master allocation remains unqualified; the runtime owns one valve per radio.
 The qualified dry-device HA adapter exposes exactly two outlets and actual
 per-port report state; it must not invent battery percentage or water volume.

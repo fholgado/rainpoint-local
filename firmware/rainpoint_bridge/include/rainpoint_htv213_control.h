@@ -4,7 +4,7 @@
 
 namespace rainpoint::htv213Control {
 
-// Compile-gated dry-trial candidate, never a production authorization.
+// Qualified two-zone control state machine; authorization lives in the caller.
 // The caller must durably reserve each master phase before TX.
 using Profile = htv213::Profile;
 using Frame = htv213::Frame;

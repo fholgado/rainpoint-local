@@ -5,9 +5,9 @@
 
 namespace rainpoint::htv213 {
 
-// Isolated dry-canary enrollment. No water-control builder, implicit identity,
-// boot/rejoin handler, fixed transcript cursor, or production runtime binding.
-constexpr const char* kCapability = "htv213_pairing_experiment";
+// Qualified enrollment with explicitly supplied controller/carrier parameters.
+// Retained rejoin and watering have separate owners and state machines.
+constexpr const char* kCapability = "htv213_auto_identity_pairing";
 using Frame = std::array<std::uint8_t, kFrameBytes>;
 using Endpoint = std::array<std::uint8_t, 4>;
 using Context = valveConfiguration::ReportContext;
