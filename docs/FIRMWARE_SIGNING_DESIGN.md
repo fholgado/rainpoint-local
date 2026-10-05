@@ -220,6 +220,34 @@ so unsigned-bundle reproducibility and signed-bundle authenticity are separate
 tests. No key creation, secret upload, release, or device flash is authorized
 by this design note.
 
+### Release approval from chat
+
+The maintainer may approve a specific release signing run by typing or speaking
+approval in this chat. The agent then submits the environment review through the
+maintainer's authenticated GitHub CLI account. Mobile GitHub approval is optional;
+the required reviewer, protected `main`, disabled administrator bypass and
+GitHub-held signing key remain unchanged. Development signing remains automatic
+under its separate key/environment.
+
+1. Identify the run, profile/version and immutable source commit for the user.
+   Accept a clear approval for that candidate, including a reply to that request;
+   general permission to continue development is not release approval.
+2. Check the run is the repository's release-signing workflow on `main`, its
+   source SHA matches the approved candidate, and `prepare` succeeded. Fetch
+   `/repos/fholgado/rainpoint-local/actions/runs/{run_id}/pending_deployments`
+   and select only `firmware-signing` with `current_user_can_approve: true`.
+3. Submit `POST` to that same endpoint with `environment_ids` containing the
+   selected environment ID, `state: approved`, and a comment stating that the
+   maintainer explicitly approved the identified candidate in chat. Submit
+   only while that review is pending; an already completed run needs no review.
+4. Confirm successful signing, then independently verify the downloaded image,
+   receipt, source SHA, version and signature against the pinned release public
+   key. Report the result. Signing alone does not publish or install firmware.
+
+If GitHub does not permit the authenticated account to review the deployment,
+report that limitation rather than weakening the environment protection.
+See [GitHub's deployment-review API](https://docs.github.com/en/rest/actions/workflow-runs#review-pending-deployments-for-a-workflow-run).
+
 ## Release discovery and version compatibility
 
 GitHub Releases should be the publication and discovery source for released

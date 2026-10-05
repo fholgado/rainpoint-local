@@ -72,6 +72,10 @@ variants.
 
 ## Live-system changes
 
+- Release signing: explicit typed or spoken user approval in this chat authorizes
+  submitting the identified build's GitHub environment review on their behalf.
+  Follow the chat-approval procedure in `docs/FIRMWARE_SIGNING_DESIGN.md`;
+  publication and deployment require their own authorization.
 - Read-only health and evidence collection are safe defaults.
 - Validate add-on or integration changes locally before deployment.
 - Back up live HA configuration before changing it; never commit credentials,
