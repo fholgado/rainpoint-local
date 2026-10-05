@@ -1368,3 +1368,41 @@ Counter 4 remains intact; no follow-up open, forced release, pairing, reset or
 deployment was performed. The reconnect case was outside the earlier
 uninterrupted-session recovery qualification and is now a required fix in
 [the roadmap](../PROJECT_ROADMAP.md).
+
+### Control.12 live restart recovery and normal HA run — October 4 EDT
+
+The matched gateway correction and development-signed
+`0.19.0-htv213-control.12` (source `9cd84b4`) were deployed to Test Node B.
+HA backup `74b431bc` was verified before deployment. The first OTA download
+stalled at 393,216 bytes without activating a candidate; one subsequent OTA
+completed all 1,118,640 bytes with signature/SHA verification and
+`gateway_and_radio_healthy`. Installed garden radio firmware and the saved
+registry remained unchanged. The gateway rebuild and radio OTA reboot exercised
+restoration from durable state, not just the uninterrupted receive path.
+
+After restoration, fresh outlet-1 idle arrived at **01:34:05Z** and outlet-2
+idle at **01:41:25Z** on October 5. The original phase-3 transaction became
+`recovered_idle`, still unacknowledged with unknown original outcome; HA start
+availability returned. The retained next phase stayed **4**. No watering
+command was sent by restoration, and no phase was reset or forced.
+Outlet 1's report and phase-echo acknowledgment were independently SDR-decoded.
+Outlet 2 arrived between the two recordings, so its recovery evidence is the
+authenticated gateway/radio receipt, not independent SDR coverage.
+
+One new user-authorized normal HA request then ran dry outlet 1 for **60 seconds
+at phase 4**. Independent bounded IQ decoding verified the exact command and
+reply routes, native `21`, positive full-phase `a1`, outlet-1 active reports,
+automatic idle and `04` summary. HA was observed open then closed; the journal
+reported complete with ACK, idle and summary, and next phase **5**. Outlet 2
+remained idle. There was no automatic open retry, speculative close, pairing
+or valve reset.
+
+Private evidence: `captures/htv213-control12-qualification-20261005/`, including
+deployment, recovery, HA and independent RF verification receipts. The first
+960-second recording is **3,840,000,000 bytes**; the following 240-second
+recording is **960,000,000 bytes**. Both exact sizes and independently computed
+SHA-256 hashes match their capture receipts; the evidence set is sealed.
+Decoded chunks have some clipping (maximum about 0.38% in the command windows);
+validated frames prove the listed exchanges, not silence outside those windows.
+This qualifies one physical missing-response/restart-recovery path on the dry
+HTV213 canary, not general model enablement or recovery on other valve families.
