@@ -120,3 +120,19 @@ class PhaseTrialBuildTest(unittest.TestCase):
                                              *([option] if option else []), str(path)],
                                             capture_output=True, text=True)
                     self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def test_standard_image_requires_two_zone_runtime_but_rejects_each_probe(self):
+        from tools import check_firmware_boundaries as boundary
+        common = b'\0'.join(boundary.REQUIRED_CAPABILITIES + boundary.VALVE_CONTROL_COMMANDS
+                            + boundary.HTV145_PAIRING_CAPABILITIES + boundary.HTV145_CONTROL_COMMANDS)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'firmware.bin'
+            cases = [(common, 0)]
+            cases += [(common + probe, 1) for probe in boundary.HTV213_PROBE_COMMANDS]
+            cases += [(common.replace(required, b''), 1) for required in
+                      boundary.HTV213_RUNTIME_COMMANDS + boundary.HTV213_ENROLLMENT_COMMANDS]
+            for image, expected in cases:
+                path.write_bytes(image)
+                result = subprocess.run([sys.executable, str(ROOT / 'tools/check_firmware_boundaries.py'),
+                                         str(path)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)

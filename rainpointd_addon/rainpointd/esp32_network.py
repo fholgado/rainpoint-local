@@ -146,6 +146,8 @@ class ESP32NetworkServer:
             "htv213_enrollment_start",
             "htv213_control_probe_open",
             "htv213_control_probe_close",
+            "htv213_control_open",
+            "htv213_control_close",
             "htv213_owner_set",
             "htv213_owner_clear",
             "pairing_start",
@@ -241,6 +243,8 @@ class ESP32NetworkServer:
                 message.get("retained_rejoin_enabled") is True else "htv213_routine_owner")
         elif command_type in {"htv213_control_probe_open", "htv213_control_probe_close"}:
             required_capability = "htv213_control_experiment"
+        elif command_type in {"htv213_control_open", "htv213_control_close"}:
+            required_capability = "htv213_control_v1"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -824,6 +828,7 @@ class ESP32NetworkServer:
                         "htv213_pairing_experiment",
                         "htv213_auto_identity_pairing",
                         "htv213_control_experiment",
+                        "htv213_control_v1",
                         "htv213_idle_recovery_v1",
                         "htv213_idle_recovery_resume_v1",
                         "htv213_routine_owner",

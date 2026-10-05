@@ -1,8 +1,7 @@
 """HTV213 command transport and authenticated radio-status correlation.
 
-Shared by HA controls and research admission. Preserve the current canary wire
-commands, capability and exclusive-node policy until normal model enrollment
-is qualified; extracting this adapter does not enable production support.
+Shared by HA controls and research admission. Select normal wire commands for
+unified firmware and preserve the deployed test-firmware protocol for older nodes.
 Command acceptance always comes from the durable RF journal, not API success.
 """
 from __future__ import annotations
@@ -13,6 +12,16 @@ from .htv213_control import ControlJournal
 # Existing deployed capability; do not relabel the protocol during extraction.
 CAPABILITY = "htv213_control_experiment"
 IDLE_RECOVERY_CAPABILITY = "htv213_idle_recovery_v1"
+NORMAL_CONTROL_CAPABILITY = "htv213_control_v1"
+
+
+def command_type(node, action):
+    """Select ordinary wire commands, retaining compatibility with control.12."""
+    if action not in {"open", "close"}:
+        raise ValueError("unsupported HTV213 control action")
+    prefix = ("htv213_control_" if NORMAL_CONTROL_CAPABILITY in node.get("capabilities", [])
+              else "htv213_control_probe_")
+    return prefix + action
 
 
 def eligible(gateway, node_id):
@@ -20,8 +29,8 @@ def eligible(gateway, node_id):
         raise RuntimeError("persistent registry and node transport required")
     node = next((n for n in gateway.nodes() if n["node_id"] == node_id), {})
     if not (node.get("managed") and node.get("authenticated") and node.get("connected")
-            and CAPABILITY in node.get("capabilities", [])):
-        raise ValueError("selected node needs the HTV213 dry-control canary")
+            and {CAPABILITY, NORMAL_CONTROL_CAPABILITY} & set(node.get("capabilities", []))):
+        raise ValueError("selected node needs compatible HTV213 control firmware")
     if (gateway._store.ack_assignments(node_id) or any(
             v.get("control_node_id") == node_id for v in gateway._store.valve_registry())):
         raise ValueError("dry control requires an unassigned test node")

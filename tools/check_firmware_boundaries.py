@@ -7,9 +7,13 @@ import sys
 from pathlib import Path
 
 
-HTV213_RECOVERY_COMMANDS = (
-    b"htv213_pairing_experiment", b"htv213_pairing_start", b"htv213_pairing_cancel",
-    b"htv213_control_experiment", b"htv213_control_probe_open", b"htv213_control_probe_close",
+HTV213_PROBE_COMMANDS = (
+    b"htv213_pairing_start", b"htv213_control_probe_open", b"htv213_control_probe_close",
+)
+
+HTV213_RUNTIME_COMMANDS = (
+    b"htv213_pairing_cancel", b"htv213_control_v1",
+    b"htv213_control_open", b"htv213_control_close",
     b"htv213_routine_owner", b"htv213_owner_set", b"htv213_owner_clear", b"htv213_duration_3600",
     b"htv213_retained_rejoin_v1",
     b"htv213_idle_recovery_v1", b"htv213_idle_recovery_resume_v1",
@@ -19,7 +23,12 @@ HTV213_ENROLLMENT_COMMANDS = (
     b"htv213_auto_identity_pairing", b"htv213_enrollment_start",
 )
 
-FORBIDDEN_BENCH_COMMANDS = HTV213_RECOVERY_COMMANDS + HTV213_ENROLLMENT_COMMANDS + (
+# Only opt-in images advertise/accept the historical research entry points.
+HTV213_RESEARCH_CAPABILITIES = (b"htv213_pairing_experiment", b"htv213_control_experiment")
+HTV213_RECOVERY_COMMANDS = (HTV213_RUNTIME_COMMANDS + HTV213_PROBE_COMMANDS
+                          + HTV213_RESEARCH_CAPABILITIES)
+
+FORBIDDEN_BENCH_COMMANDS = HTV213_PROBE_COMMANDS + HTV213_RESEARCH_CAPABILITIES + (
     b"hcs026_15a98024_v1", b"hcs026_1bce0024_candidate_v1",
     b"htv145_dry_open_probe", b"htv145_dry_close_probe",
     b"htv145_post_frame_tail_candidate",
@@ -35,7 +44,7 @@ FORBIDDEN_BENCH_COMMANDS = HTV213_RECOVERY_COMMANDS + HTV213_ENROLLMENT_COMMANDS
     b"pairing_invert",
 )
 
-REQUIRED_CAPABILITIES = (
+REQUIRED_CAPABILITIES = HTV213_RUNTIME_COMMANDS + HTV213_ENROLLMENT_COMMANDS + (
     b"configurable_rf_controller_identity",
     b"routine_sensor_ack_tx",
     b"correlated_ack_ownership",
@@ -102,7 +111,7 @@ def main() -> int:
                 print("production firmware contains a development trust anchor")
                 return 1
     leaked = [value.decode() for value in FORBIDDEN_BENCH_COMMANDS if value in firmware and
-              not (htv213_recovery and value in HTV213_RECOVERY_COMMANDS + HTV213_ENROLLMENT_COMMANDS)]
+              not (htv213_recovery and value in HTV213_PROBE_COMMANDS + HTV213_RESEARCH_CAPABILITIES)]
     if not phase_trial:
         leaked.extend(value.decode() for value in PHASE_TRIAL_COMMANDS if value in firmware)
     leaked.extend(

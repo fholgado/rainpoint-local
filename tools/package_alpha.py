@@ -169,7 +169,7 @@ def bundle(destination: Path, *, allow_dirty: bool = False, signature_path: Path
         files[archive.name] = archive.read_bytes()
         stage_release(build / "firmware.bin", staging / "ota", release_id=release_id,
             version=version, summary=f"Unified {version} alpha candidate",
-            notes="Sensors and both valve families. See bundled limitations and compatibility.json.",
+            notes="Sensors and single-, two- and four-zone valves. See bundled limitations and compatibility.json.",
             firmware_variant="unified", signature=signature)
         for item in (staging / "ota").iterdir():
             files[f"ota/{item.name}"] = item.read_bytes()

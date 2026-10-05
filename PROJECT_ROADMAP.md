@@ -376,7 +376,9 @@ not tasks to mark “done once.”
 - [x] Qualify HTV213 enrollment/re-enrollment, both outlets, early stop, phase wrap, battery rejoin and missing-response/restart recovery on the dry test valve (Oct 4 EDT).
 - [x] Expose native HA two-zone pairing for fully capable, calibrated, available radios; preserve the qualified RF path and existing associations (Oct 5; 1,061 tests pass).
 - [x] Deploy gateway 0.39.17 / integration 0.18.5; verify native model-menu/eligibility in the in-app browser, two closed outlets and unchanged phase 5. No re-pairing, watering or radio flash (Oct 5).
-- [ ] Promote qualified HTV213 runtime into ordinary signed firmware while excluding research probes; qualify carrier provisioning on a second radio before general alpha distribution.
+- [x] Include qualified HTV213 runtime in unified 0.20.0; exclude research probes, preserve control.12 compatibility and verify 1,067 tests plus standard/phase/development builds (Oct 5).
+- [ ] Sign unified 0.20.0 and validate the candidate on Test Node B.
+- [ ] Validate carrier provisioning on a second radio (deferred Oct 5 at user request; saved per-radio calibration remains required).
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
 - [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).

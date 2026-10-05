@@ -2,7 +2,8 @@
 
 **Stock reference plus locally verified dry pairing, both-outlet control,
 explicit stop, battery rejoin and missing-response/restart recovery.
-Native HA setup is available on prepared development radios; standard Alpha 1
+Native HA setup is available with unified firmware 0.20.0 / gateway 0.39.18
+(unpublished candidate), or qualified control.12 test firmware. Alpha 1
 firmware does not include this model.**
 The HTV213FRF is one RF device with ports `1` and `2`. Follow
 [common framing](common.md) and the
@@ -26,7 +27,7 @@ These bytes alone do not distinguish long-press pairing from a boot announcement
 
 ### Retained reply owner
 
-The experimental control runtime adds an opt-in retained owner, separate from
+The control runtime adds a retained owner, separate from
 fresh enrollment. Its saved association supplies address, routine selector,
 timing, configuration revision, fourteen-byte settings for each port and known
 empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
@@ -50,14 +51,14 @@ Authenticated POST `/api/v1/experiments/htv213/recovery` accepts an existing
 `association_key`, explicit `configuration` (schema in `valve_recovery.py`) and
 boolean `enabled`. It installs configuration through the existing reply owner;
 it does not enroll or water. Nodes require `htv213_retained_rejoin_v1`. Normal
-builds omit this handler. One local battery-only rejoin is physically verified;
+enrollment saves the same qualified configuration. Battery-only rejoin is physically verified;
 repeat/lifecycle qualification remains tracked in the roadmap.
 
 Both signing workflows have an unpublished `htv213-recovery` profile. Release
 signing requires approval; separate development signing is automatic and only
 development-trust radios accept its key. Neither workflow deploys. The binary
-checker excludes other research command profiles; normal production firmware
-excludes this runtime. See [signing boundaries](../docs/FIRMWARE_SIGNING_DESIGN.md).
+checker excludes research command entry points from ordinary firmware; unified
+0.20.0 includes the qualified runtime. See [signing boundaries](../docs/FIRMWARE_SIGNING_DESIGN.md).
 Idle retained ownership permits signed OTA without clearing the association;
 an active two-zone control transaction still blocks the update.
 
@@ -224,9 +225,11 @@ in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Commands and reported state
 
-The isolated control candidate uses `rainpoint_htv213_control.h` and requires
-both `RAINPOINT_HTV213_PAIRING_EXPERIMENT=1` and
-`RAINPOINT_HTV213_CONTROL_EXPERIMENT=1`. Default firmware excludes it.
+Unified firmware 0.20.0 includes `rainpoint_htv213_control.h` and advertises
+`htv213_control_v1`. Normal HA controls use `htv213_control_open` and
+`htv213_control_close`; older control.12 firmware keeps its deployed wire names.
+Explicit research probes require `RAINPOINT_HTV213_PAIRING_EXPERIMENT=1` and
+`RAINPOINT_HTV213_CONTROL_EXPERIMENT=1` and are excluded from ordinary firmware.
 Authenticated `/api/v1/experiments/htv213/open` and `/close` operate an
 explicitly admitted, unassigned dry-test node only.
 The journal reserves each independent command phase before sending, never

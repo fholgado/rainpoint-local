@@ -59,7 +59,7 @@ int main() { return prepare(434281500,false) && prepare(433801500,false)
                         "-x", "c++", "-", "-o", exe], input=harness, text=True, capture_output=True, check=True)
         subprocess.run([exe], check=True)
 
-    def test_actual_firmware_ingress_gate_admits_only_authenticated_canary_commands(self):
+    def test_actual_ingress_separates_normal_commands_and_opt_in_probes(self):
         source=(ROOT/"firmware/rainpoint_bridge/src/wifi_transport.cpp").read_text()
         gate=source.split("    if (authenticated_ &&\n",1)[1].split(")) {",1)[0]
         harness='''#include <string>
@@ -81,12 +81,16 @@ int main() {
 #else
     constexpr bool controlExpected=false;
 #endif
-    for (const auto* command : {"htv213_pairing_start", "htv213_pairing_cancel", "htv213_enrollment_start"}) {
+    for (const auto* command : {"htv213_pairing_start"}) {
         if (allowed(true,command)!=expected) return 1;
         if (allowed(false,command)) return 2;
     }
     if (!allowed(true,"pairing_start")) return 3;
     if (allowed(true,"unknown_command")) return 4;
+    for (const auto* command : {"htv213_pairing_cancel", "htv213_enrollment_start",
+            "htv213_control_open", "htv213_control_close", "htv213_owner_set", "htv213_owner_clear"}) {
+        if (!allowed(true,command) || allowed(false,command)) return 7;
+    }
     for (const auto* command : {"htv213_control_probe_open", "htv213_control_probe_close"}) {
         if (allowed(true,command)!=controlExpected) return 5;
         if (allowed(false,command)) return 6;

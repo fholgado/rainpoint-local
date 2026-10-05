@@ -277,12 +277,13 @@ void WifiTransport::handleGatewayLine(const String& line) {
          type == "valve_phase_trial_release" || type == "valve_phase_trial_recover" ||
 #endif
 #ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
-         type == "htv213_pairing_start" || type == "htv213_pairing_cancel" ||
-         type == "htv213_enrollment_start" ||
+         type == "htv213_pairing_start" ||
 #endif
+         type == "htv213_pairing_cancel" || type == "htv213_enrollment_start" ||
+         type == "htv213_control_open" || type == "htv213_control_close" ||
+         type == "htv213_owner_set" || type == "htv213_owner_clear" ||
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
          type == "htv213_control_probe_open" || type == "htv213_control_probe_close" ||
-         type == "htv213_owner_set" || type == "htv213_owner_clear" ||
 #endif
          type == "identify_start" || type == "rf_mode_set" ||
          type == "node_reboot"
@@ -353,16 +354,17 @@ void WifiTransport::authenticate(const String& nonce) {
         ",\"retained_sensor_rejoin_channel\""
 #ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
         ",\"htv213_pairing_experiment\""
-        ",\"htv213_auto_identity_pairing\""
 #endif
+        ",\"htv213_auto_identity_pairing\""
+        ",\"htv213_control_v1\""
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
         ",\"htv213_control_experiment\""
+#endif
         ",\"htv213_idle_recovery_v1\""
         ",\"htv213_idle_recovery_resume_v1\""
         ",\"htv213_routine_owner\""
         ",\"htv213_retained_rejoin_v1\""
         ",\"htv213_duration_3600\""
-#endif
         ",\"firmware_update_trial\""
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
         ",\"valve_phase_trial\",\"valve_phase_trial_recovery\",\"valve_phase_trial_ports\",\"valve_native_phase_v1\",\"valve_native_handoff_v1\",\"valve_native_scope_v1\""

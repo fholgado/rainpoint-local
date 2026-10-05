@@ -1,5 +1,5 @@
-// Explicit dry-test transport, compiled out unless BOTH HTV213 experiment
-// flags are enabled. No automatic counter seed, retry, rejoin or startup TX.
+// Qualified two-zone transport. Research command aliases are opt-in only;
+// normal controls use the same RF builder and evidence-driven state machine.
 rainpoint::htv213Control::Trial htv213ControlTrial;
 rainpoint::htv213::Profile htv213ControlProfile{};
 String htv213ControlCommandId, htv213ControlOpenId;
@@ -87,8 +87,16 @@ void transmitHtv213Control(const rainpoint::htv213::Transmission& tx) {
 }
 
 bool handleHtv213ControlCommand(const String& type,const String& command,const String& id) {
-    const bool open=type=="htv213_control_probe_open";
-    const bool close=type=="htv213_control_probe_close";
+    const bool open=type=="htv213_control_open"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_open"
+#endif
+        ;
+    const bool close=type=="htv213_control_close"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_close"
+#endif
+        ;
     const bool owner=type=="htv213_owner_set";
     if (type=="htv213_owner_clear") {
         if (!htv213OwnerEnabled && !htv213ControlActive()) {
@@ -110,7 +118,7 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
             htv213OwnerEnabled=false; reportHtv213Owner();
             htv213ControlTrial.cancel(); restoreHtv213ControlReceiver(); reportHtv213Control(); return false;
         }
-        reportNetworkCommandError(id,"htv213_control_experiment_busy"); return true;
+        reportNetworkCommandError(id,"htv213_control_busy"); return true;
     }
     if (id==htv213ControlCommandId || id==htv213ControlOpenId) {
         reportNetworkCommandError(id,"htv213_control_duplicate"); return true;
@@ -135,7 +143,7 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         htv213ControlCommandId=id; transmitHtv213Control(tx); return true;
     }
     if (htv213ControlActive()) {
-        reportNetworkCommandError(id,"htv213_control_experiment_busy"); return true;
+        reportNetworkCommandError(id,"htv213_control_busy"); return true;
     }
     rainpoint::htv213::Profile p{};
     rainpoint::PairingLocalDateTime clock{};

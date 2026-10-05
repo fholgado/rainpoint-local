@@ -1,5 +1,5 @@
-// Included only by the opt-in dry-test build, inside main.cpp's namespace.
-// No production valve/sensor session or ownership table is shared.
+// Normal two-zone enrollment, inside main.cpp's namespace. The explicit
+// factory-identity research entry point remains excluded from standard builds.
 rainpoint::htv213::Session htv213Session;
 String htv213CommandId;
 rainpoint::PairingLocalDateTime htv213Clock{};
@@ -55,7 +55,11 @@ bool handleHtv213Command(const String& type,const String& command,const String& 
         return true;
     }
     const bool discover=type=="htv213_enrollment_start";
-    if (type!="htv213_pairing_start" && !discover) {
+    bool start=discover;
+#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
+    start=start || type=="htv213_pairing_start";
+#endif
+    if (!start) {
         if (!htv213Armed()) return false;
         // Cancellation must unwind before a radio mode change or reboot.
         if (type=="rf_mode_set" || type=="node_reboot") {

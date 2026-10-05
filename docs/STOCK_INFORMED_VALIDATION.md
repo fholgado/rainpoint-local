@@ -1446,3 +1446,33 @@ This verifies native UI exposure and preservation of the existing association,
 not a new physical enrollment. Standard Alpha 1 firmware still excludes the
 HTV213 runtime; ordinary signed-firmware integration and second-radio carrier
 qualification remain explicit release gates in [the roadmap](../PROJECT_ROADMAP.md).
+
+### Unified firmware two-zone promotion — October 5
+
+Unified firmware **0.20.0** now includes the qualified HTV213 enrollment,
+routine owner, retained battery rejoin, bounded controls and observation-only
+idle recovery. Gateway **0.39.18** selects `htv213_control_open/close` when the
+radio advertises `htv213_control_v1`; older control.12 radios retain their
+existing command names and durable journal. Ordinary images exclude explicit
+factory-identity pairing probes, control probes, phase-trial commands and
+development trust. The experimental build flags enable only the additional
+research entry points; ordinary enrollment/control share the proven RF builders.
+
+The native CRC tail is available to the qualified HTV213 callers in the standard
+driver. Other models retain the existing default stream. Actual dispatcher,
+waveform, authenticated socket and temporary-database regressions verify normal
+open/close, phase preservation, older-firmware compatibility and rejection of
+research admission before a phase reservation on standard radios.
+
+The final full suite passed **1,067 tests**. Native protocol tests and
+standard, phase-trial and development-recovery PlatformIO builds passed their
+respective command/trust boundary checks. Standard flash use is **1,111,145 /
+1,310,720 bytes**; RAM is **54,712 / 327,680 bytes**. This is source/build
+qualification, not an on-air test of a newly installed image. A read-only live
+check found the existing two-zone valve idle at next phase **5**, with all three
+active radios connected, authenticated and disarmed.
+
+Second-radio carrier validation was deferred at the user's request. Saved
+per-radio calibration remains required; this promotion adds no universal carrier
+offset or calibration evidence. Alpha 1's published artifacts remain unchanged.
+Signing and test-node rollout are tracked in [the roadmap](../PROJECT_ROADMAP.md).

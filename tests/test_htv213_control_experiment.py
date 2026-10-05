@@ -43,6 +43,16 @@ class Htv213ControlExperimentTest(unittest.TestCase):
         with self.assertRaises(ValueError): experiment.start(self.gateway, self.request)
         with self.assertRaises(ValueError): self.gateway.start_pairing()
 
+    def test_standard_runtime_rejects_research_before_consuming_a_phase(self):
+        from rainpointd.htv213_control_transport import NORMAL_CONTROL_CAPABILITY
+        capabilities = self.gateway._nodes[NODE]['capabilities']
+        self.gateway.update_node(NODE, capabilities=[c for c in capabilities
+            if c != experiment.CAPABILITY] + [NORMAL_CONTROL_CAPABILITY])
+        with self.assertRaisesRegex(ValueError, 'excludes HTV213 research'):
+            experiment.start(self.gateway, self.request)
+        self.assertEqual(self.sent, [])
+        self.assertFalse(hasattr(self.gateway, '_htv213_control_owner'))
+
     def test_old_firmware_owned_node_and_registered_valve_are_rejected(self):
         self.gateway.update_node(NODE, capabilities=["htv213_pairing_experiment"])
         with self.assertRaises(ValueError): experiment.start(self.gateway, self.request)

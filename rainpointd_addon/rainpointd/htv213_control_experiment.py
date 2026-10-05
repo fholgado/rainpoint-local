@@ -11,6 +11,8 @@ def start(gateway, request):
     with gateway._lock:
         node_id = request.get("node_id")
         node = eligible(gateway, node_id)
+        if CAPABILITY not in node.get("capabilities", []):
+            raise ValueError("selected firmware excludes HTV213 research probes")
         if (type(request.get("seconds")) is int and request["seconds"] > 120
                 and "htv213_duration_3600" not in node.get("capabilities", [])):
             raise ValueError("radio firmware does not support the requested duration")
@@ -68,7 +70,9 @@ def start(gateway, request):
 def close(gateway, request):
     with gateway._lock:
         node_id = request.get("node_id")
-        eligible(gateway, node_id)
+        node = eligible(gateway, node_id)
+        if CAPABILITY not in node.get("capabilities", []):
+            raise ValueError("selected firmware excludes HTV213 research probes")
         owner = getattr(gateway, "_htv213_control_owner", None)
         if not owner or owner[:2] != (node_id, request.get("open_command_id")):
             raise ValueError("close must match the current dry open")

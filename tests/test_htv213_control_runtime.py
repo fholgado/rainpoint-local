@@ -65,17 +65,19 @@ String jsonStringField(const String& command,const char* key) {
     const String k=key;
     if(k=="recovery_command_id") return command=="malformed" ? "bad" :
         command=="resume" ? String(32,'a') : "";
+    if(k=="open_command_id") return "normal-open";
     if(k=="factory_endpoint") return "11556677";
     if(k=="controller_endpoint") return "a2446688";
     if(k=="companion_endpoint") return "22446688";
     if(k=="port_1_settings" || k=="port_2_settings") return String("58020a001e00")+String(16,'0');
     return "20261004100000";
 }
-bool jsonLongField(const String&,const char* key,long& value) {
+bool jsonLongField(const String& command,const char* key,long& value) {
     const String k=key;
     if(k=="port" || k=="recovery_port") value=1;
     else if(k=="seconds" || k=="recovery_seconds") value=60;
     else if(k=="recovery_phase") value=3;
+    else if(k=="phase") value=command=="close" ? 4 : 3;
     else if(k=="assigned_selector") value=11;
     else if(k=="initial_center_hz") value=434397000;
     else if(k=="routine_center_hz") value=434287000;
@@ -132,6 +134,25 @@ int main(int argc,char** argv) {
     p.initialHz=434397000; p.routineHz=434287000;
     p.replyDelayUs=49000; p.notificationDelayMs=1000;
     rainpoint::htv213::Transmission tx{};
+    if (mode=="normal-dispatch" || mode=="blocked-probes") {
+        if (mode=="blocked-probes") {
+            for(const auto* command:{"htv213_control_probe_open","htv213_control_probe_close"})
+                if(handleHtv213ControlCommand(command,"{}","probe")) return 35;
+            return primaryRadio.commands.empty() ? 0 : 36;
+        }
+        if(!handleHtv213ControlCommand("htv213_control_open","{}","normal-open") ||
+           !lastCommandError.empty() || primaryRadio.commands!=std::vector<unsigned>({0x21}) ||
+           htv213ControlTrial.phase()!=3) return 37;
+        fakeNow=313;
+        processHtv213Control(frame("ACK_FRAME"),rainpoint::RadioPacket{313000});
+        const char* activeFrames[]={REPORT_FRAMES};
+        processHtv213Control(frame(activeFrames[0]),rainpoint::RadioPacket{314000});
+        fakeNow=35000;
+        if(!handleHtv213ControlCommand("htv213_control_close","close","normal-close") ||
+           !lastCommandError.empty() || primaryRadio.commands.back()!=0x21 ||
+           htv213ControlTrial.phase()!=4) return 38;
+        return 0;
+    }
     if (mode=="resume-reconnect" || mode=="resume-reboot" || mode=="resume-invalid") {
         // Actual owner dispatcher must restore observation without an open.
         if(mode=="resume-reconnect") {
@@ -177,7 +198,7 @@ int main(int argc,char** argv) {
     if (mode=="ota-active-owner" || mode=="ota-active-no-owner") {
         htv213OwnerEnabled=mode=="ota-active-owner";
         if (!handleHtv213ControlCommand("firmware_update_start","{}","ota-test") ||
-            lastCommandError!="htv213_control_experiment_busy" || !htv213ControlActive() ||
+            lastCommandError!="htv213_control_busy" || !htv213ControlActive() ||
             htv213ControlTrial.phase()!=3 || !primaryRadio.commands.empty()) return 23;
         return 0;
     }
@@ -276,7 +297,7 @@ int main(int argc,char** argv) {
                 "-I"+str(ROOT / "firmware/rainpoint_bridge/include"), "-x", "c++", "-", "-o", exe],
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for mode in ("ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+            for mode in ("normal-dispatch", "blocked-probes", "ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
                          "resume-reconnect", "resume-reboot", "resume-invalid",
                          "idle-recovery", "overdue-idle-recovery",
                          "accepted", "owner", "rejoin", "rejoin-boot07", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):

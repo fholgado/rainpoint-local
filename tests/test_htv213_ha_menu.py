@@ -22,6 +22,15 @@ class MenuPolicyTest(unittest.TestCase):
         return next(p for p in self.gateway.pairing()["supported_profiles"]
                     if p["profile_id"] == enrollment.PROFILE_ID)
 
+    def test_standard_firmware_eligibility_needs_no_research_capability(self):
+        node = self.gateway._nodes[NODE]
+        capabilities = [c for c in node['capabilities']
+            if c not in {'htv213_pairing_experiment', 'htv213_control_experiment'}]
+        self.gateway.update_node(NODE, capabilities=capabilities + ['htv213_control_v1'])
+        self.assertIn(NODE, self.profile()['eligible_node_ids'])
+        self.gateway.update_node(NODE, capabilities=capabilities)
+        self.assertNotIn(NODE, self.profile()['eligible_node_ids'])
+
     def test_every_required_capability_is_enforced_by_catalog_and_start(self):
         before = self.gateway._store.metadata_value(enrollment.KEY)
         for capability in flow.REQUIRED_CAPABILITIES:
@@ -34,7 +43,7 @@ class MenuPolicyTest(unittest.TestCase):
         self.assertEqual(self.gateway._store.metadata_value(enrollment.KEY), before)
 
     def test_htv213_only_radio_is_listed_without_a_legacy_pairing_capability(self):
-        self.gateway.update_node(NODE, capabilities=sorted(flow.REQUIRED_CAPABILITIES))
+        self.gateway.update_node(NODE, capabilities=sorted(flow.REQUIRED_CAPABILITIES) + ['htv213_control_v1'])
         self.assertEqual(self.profile()["eligible_node_ids"], [NODE])
 
     def test_missing_calibration_or_disconnected_radio_stays_visible_but_unselectable(self):

@@ -154,7 +154,7 @@ def request(gateway, device_id, action, port, seconds=None):
         key, record = found
         if type(port) is not int or port not in (1, 2):
             raise ValueError("HTV213 has exactly two outlets")
-        control.eligible(gateway, record["node_id"])
+        node = control.eligible(gateway, record["node_id"])
         if gateway.pairing().get("active") or gateway._ack_ownership.snapshot():
             raise ValueError("finish pairing or ownership changes before valve control")
         state = project(gateway)[device_id]["state"]
@@ -166,7 +166,7 @@ def request(gateway, device_id, action, port, seconds=None):
                 raise ValueError("duration exceeds the selected radio capability")
             tx = journal.reserve(key, action=action, port=port, seconds=seconds)
             command = copy.deepcopy(record["command"])
-            command.update(type="htv213_control_probe_open", command_id=tx["command_id"],
+            command.update(type=control.command_type(node, "open"), command_id=tx["command_id"],
                 local_clock=datetime.now().astimezone().strftime("%Y%m%d%H%M%S"),
                 port=port, seconds=seconds, phase=tx["phase"])
         elif action == "close":
@@ -174,7 +174,7 @@ def request(gateway, device_id, action, port, seconds=None):
                 raise ValueError("close requires a confirmed active run on this owner")
             prior = journal.snapshot(key)["transaction"]
             tx = journal.reserve(key, action=action, port=port, seconds=0)
-            command = dict(type="htv213_control_probe_close", command_id=tx["command_id"],
+            command = dict(type=control.command_type(node, "close"), command_id=tx["command_id"],
                            open_command_id=prior["command_id"], phase=tx["phase"])
         else:
             raise ValueError("unsupported valve action")

@@ -9,19 +9,21 @@ from __future__ import annotations
 import re
 
 from . import htv213_enrollment as enrollment, htv213_owner as owner
-from .htv213_control_transport import CAPABILITY as control_capability, IDLE_RECOVERY_CAPABILITY
+from .htv213_control_transport import (
+    CAPABILITY as control_capability, NORMAL_CONTROL_CAPABILITY, IDLE_RECOVERY_CAPABILITY)
 
 
 REQUIRED_CAPABILITIES = frozenset({enrollment.CAPABILITY, owner.CAPABILITY,
-    owner.REJOIN_CAPABILITY, owner.IDLE_RESUME_CAPABILITY, control_capability,
-    IDLE_RECOVERY_CAPABILITY, "htv213_pairing_experiment", "htv213_duration_3600"})
+    owner.REJOIN_CAPABILITY, owner.IDLE_RESUME_CAPABILITY,
+    IDLE_RECOVERY_CAPABILITY, "htv213_duration_3600"})
 
 
 def node_unavailable_reason(gateway, node):
     """One read-only eligibility policy shared by HA choices and admission."""
     if not (node.get("managed") and node.get("authenticated") and node.get("connected")
             and node.get("protocol_version") == 2
-            and REQUIRED_CAPABILITIES <= set(node.get("capabilities", []))):
+            and REQUIRED_CAPABILITIES <= set(node.get("capabilities", []))
+            and {control_capability, NORMAL_CONTROL_CAPABILITY} & set(node.get("capabilities", []))):
         return "selected radio needs matching HTV213 enrollment and recovery firmware"
     node_id = node["node_id"]
     if gateway._store is None:

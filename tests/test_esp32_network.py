@@ -279,6 +279,30 @@ class ESP32NetworkTest(unittest.TestCase):
         finally:
             stream.close(); connection.close()
 
+    def test_htv213_normal_control_requires_distinct_capability(self):
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=['rx', 'sensor_pairing_tx', 'htv213_control_v1'])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            for action in ('open', 'close'):
+                command = dict(type='htv213_control_' + action, command_id='ordinary-' + action)
+                self.server.send_command(NODE_A, command)
+                self.assertEqual(command, json.loads(stream.readline()))
+                with self.assertRaisesRegex(ValueError, 'capability'):
+                    self.server.send_command(NODE_A, dict(type='htv213_control_probe_' + action,
+                                                          command_id='probe-' + action))
+        finally:
+            stream.close(); connection.close()
+        connection, stream, response = self._connect(NODE_B, TOKEN_B, protocol_version=2,
+            capabilities=['rx', 'sensor_pairing_tx', 'htv213_control_experiment'])
+        try:
+            for action in ('open', 'close'):
+                with self.assertRaisesRegex(ValueError, 'capability'):
+                    self.server.send_command(NODE_B, dict(type='htv213_control_' + action,
+                                                          command_id='ordinary-' + action))
+        finally:
+            stream.close(); connection.close()
+
     def test_htv213_dry_control_transport_capability_and_error_correlation(self):
         from rainpointd.htv213_control_trial import ControlJournal
         connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,

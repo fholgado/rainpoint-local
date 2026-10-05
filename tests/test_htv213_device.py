@@ -108,6 +108,30 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertTrue(device.project(self.gateway)[target]['state']['rf_control_command_pending'])
         self.assertEqual(self.journal.snapshot(self.key)['next_phase'], 8)
 
+    def test_normal_firmware_uses_non_probe_open_and_close_without_changing_phases(self):
+        capabilities = self.gateway._nodes[NODE]['capabilities']
+        self.gateway.update_node(NODE, capabilities=[c for c in capabilities
+            if c not in {'htv213_pairing_experiment', 'htv213_control_experiment'}] + ['htv213_control_v1'])
+        target = self.publish()['device_id']
+        device.request(self.gateway, target, 'open', 1, 60)
+        self.assertEqual(self.sent[-1][1]['type'], 'htv213_control_open')
+        self.assertEqual(self.sent[-1][1]['phase'], 7)
+        self.replay_report(0xa1)
+        self.replay_report(2)
+        device.request(self.gateway, target, 'close', 1)
+        self.assertEqual(self.sent[-1][1]['type'], 'htv213_control_close')
+        self.assertEqual(self.sent[-1][1]['phase'], 8)
+        self.assertEqual(self.journal.snapshot(self.key)['next_phase'], 9)
+
+    def test_older_test_firmware_keeps_its_deployed_command_names(self):
+        target = self.publish()['device_id']
+        device.request(self.gateway, target, 'open', 1, 60)
+        self.assertEqual(self.sent[-1][1]['type'], 'htv213_control_probe_open')
+        self.replay_report(0xa1)
+        self.replay_report(2)
+        device.request(self.gateway, target, 'close', 1)
+        self.assertEqual(self.sent[-1][1]['type'], 'htv213_control_probe_close')
+
     def replay_report(self, command, *, idle=False):
         event = next(e for e in self.events if e['direction'] == 'device' and
                      decode(e['frame']).command == command and
