@@ -143,8 +143,11 @@ class ESP32NetworkServer:
             "valve_phase_trial_open", "valve_phase_trial_release", "valve_phase_trial_status", "valve_phase_trial_recover",
             "htv213_pairing_start",
             "htv213_pairing_cancel",
+            "htv213_enrollment_start",
             "htv213_control_probe_open",
             "htv213_control_probe_close",
+            "htv213_control_open",
+            "htv213_control_close",
             "htv213_owner_set",
             "htv213_owner_clear",
             "pairing_start",
@@ -233,11 +236,15 @@ class ESP32NetworkServer:
             required_capability = "htv145_commissioning"
         elif command_type in {"htv213_pairing_start", "htv213_pairing_cancel"}:
             required_capability = "htv213_pairing_experiment"
+        elif command_type == "htv213_enrollment_start":
+            required_capability = "htv213_auto_identity_pairing"
         elif command_type in {"htv213_owner_set", "htv213_owner_clear"}:
             required_capability = ("htv213_retained_rejoin_v1" if
                 message.get("retained_rejoin_enabled") is True else "htv213_routine_owner")
         elif command_type in {"htv213_control_probe_open", "htv213_control_probe_close"}:
             required_capability = "htv213_control_experiment"
+        elif command_type in {"htv213_control_open", "htv213_control_close"}:
+            required_capability = "htv213_control_v1"
         elif command_type.startswith("htv145_control_"):
             required_capability = "htv145_control_tx_candidate"
         elif command_type.startswith("valve_control_"):
@@ -446,10 +453,13 @@ class ESP32NetworkServer:
                     self.gateway.observe_native_valve_receipt(node_id, message, now=now)
                     continue
                 if message.get("type") == "htv213_control_status":
-                    from .htv213_control_experiment import observe
+                    from .htv213_control_transport import observe
                     observe(self.gateway, node_id, message)
                     continue
                 if message.get("type") == "htv213_pairing_status":
+                    from .htv213_enrollment_flow import observe as observe_enrollment
+                    if observe_enrollment(self.gateway, node_id, message):
+                        continue
                     from .htv213_pairing import observe
                     observe(self.gateway, node_id, message)
                     continue
@@ -642,9 +652,13 @@ class ESP32NetworkServer:
                     if observer is not None:
                         observer(node_id, message)
                 if message.get("type") == "command_error":
+                    from .htv213_enrollment_flow import observe_error as observe_enrollment_error
+                    with self.gateway._lock:
+                        if observe_enrollment_error(self.gateway, node_id, message):
+                            continue
                     if self.gateway.observe_native_valve_error(node_id, message, now=now):
                         continue
-                    from .htv213_control_experiment import observe_error as observe_control_error
+                    from .htv213_control_transport import observe_error as observe_control_error
                     if observe_control_error(self.gateway, node_id, message):
                         continue
                     from .htv213_pairing import observe_error
@@ -812,7 +826,11 @@ class ESP32NetworkServer:
                         "correlated_ack_ownership",
                         "retained_sensor_rejoin_channel",
                         "htv213_pairing_experiment",
+                        "htv213_auto_identity_pairing",
                         "htv213_control_experiment",
+                        "htv213_control_v1",
+                        "htv213_idle_recovery_v1",
+                        "htv213_idle_recovery_resume_v1",
                         "htv213_routine_owner",
                         "htv213_retained_rejoin_v1",
                         "htv213_duration_3600",

@@ -137,7 +137,7 @@ jobs:
                      if '-phase-trial.' in descriptor['version'] else
                      'Experimental two-zone retained rejoin; dry research node and matching gateway only. Not for general rollout.'
                      if '-htv213-control.' in descriptor['version'] else
-                     'Unified sensors and valves; use the matching gateway release.'),
+                     'Unified sensors and single-, two- and four-zone valves; requires gateway 0.39.18 or later. Two-zone enrollment requires a dedicated radio with saved carrier calibration.'),
               firmware_variant='unified', signature=envelope)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

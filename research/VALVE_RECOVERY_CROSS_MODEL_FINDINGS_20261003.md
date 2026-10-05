@@ -95,6 +95,38 @@ remove experimental operator assumptions rather than copying them into the
 product. Default builds currently omit this runtime, so a merge alone cannot
 make it a general supported model.
 
+The first source-preparation step separates the ordinary
+[`ControlJournal`](../rainpointd_addon/rainpointd/htv213_control.py) and
+[radio transport](../rainpointd_addon/rainpointd/htv213_control_transport.py)
+from experimental counter jumps/CRC retries. HA ownership and controls use
+these shared modules directly. Existing storage keys, records, wire commands,
+canary capability and association-local wrap qualification remain unchanged;
+there is no live migration or firmware change. Temporary-database tests replay
+post-battery control and verify restart, cross-association isolation and old
+trial compatibility. General model-menu enablement remains pending.
+
+The next source step adds automatic factory-identity discovery to the same
+pairing state machine. Native replay reproduces targeted assignment/carrier and
+configuration replies; wrong-model announcements are ignored and the first
+matching identity is frozen. A normal enrollment recipe hides research inputs
+from callers and validates actual positive configuration ACK/post-configuration
+report receipts before preparing retained configuration and an ACK-based phase
+seed. The source-prepared journal now commits enrollment proof, reply ownership
+and that seed together. Re-pair archives the old epoch only after acknowledged
+owner revocation; duplicate completion and reconnects never reseed counters.
+The existing native HA start/status/cancel/naming contract is bound to this
+journal, including persisted progress after restart and model-specific window
+limits. An authenticated node-scoped interface now provisions measured carriers
+without RF or counter changes. New HTV213 slots avoid the frozen legacy slots,
+same-controller retained configurations, tombstones and prior attempts; it does
+not rewrite the other models' pairing recipes. Normal enrollment records staged
+modulo-64 model policy without fabricating a per-association boundary trial;
+old canary records retain their qualification policy.
+Candidate and default build checks keep this runtime out of production; no
+radio has been updated for this source step. Offline replay is not a new
+physical enrollment qualification. Normal controls/model-menu enablement remains
+part of promotion, not inferred from these tests.
+
 Actual production enablement still depends on the existing roadmap's reviewed
 qualification boundaries: reconcile repeat-enrollment/post-configuration
 evidence, complete the remaining dry missing-response/overdue check, and verify

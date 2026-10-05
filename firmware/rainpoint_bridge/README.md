@@ -5,7 +5,7 @@ RainPoint Local. One node receives RainPoint RF telemetry, performs bounded
 HCS026 soil-sensor pairing and recovery, sends acknowledgements only for
 gateway-assigned sensors, and installs integrity-checked OTA updates.
 
-The unified build includes sensor pairing/ACKs, HTV405 and HTV145 enrollment,
+The unified build includes sensor pairing/ACKs, HTV405, HTV145 and HTV213 enrollment,
 bounded valve controls, and verified OTA. Actuation requires an authenticated
 gateway and association-specific endpoints. HTV145 uses the validated
 counter-2/selector-6 recipe; partial association supports its current controls.
@@ -61,6 +61,10 @@ power before changing wires.
   observation-only anomaly. No speculative startup close is sent.
 - OTA retains hash verification, boot health and rollback behavior. Firmware and
   configuration updates remain independently authorized operations.
+- HTV213 uses a dedicated radio with saved carrier calibration. Normal commands
+  advertise `htv213_control_v1` and use the qualified two-outlet runtime,
+  six-bit command phases, retained battery rejoin and idle recovery. Research
+  probes remain available only in explicitly enabled test builds.
 
 ## Build, flash, and monitor
 
@@ -72,9 +76,13 @@ python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The firmware version is `0.19.0`. Both valve families are always included;
+The firmware version is `0.20.0` (unpublished candidate). All three valve families are included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
+Use gateway 0.39.18 or later so normal two-zone commands authenticate and route
+correctly. The existing control.12 test image remains compatible with this gateway.
+Second-radio calibration validation is deferred in the roadmap; retain each
+radio's saved calibration when updating.
 Historical captures remain regression fixtures; preserve a verified rollback
 artifact until the new image has passed field checks.
 

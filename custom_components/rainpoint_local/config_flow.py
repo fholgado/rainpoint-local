@@ -780,10 +780,16 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         try:
             progress = await self._client().pairing()
+            # Refresh on every display/submit: firmware, calibration or radio
+            # ownership may have changed since the model was selected.
+            current = {p.profile_id: p for p in pairing_profiles(progress)}
+            self._pairing_profile = current[self._pairing_profile.profile_id]
+            if not self._pairing_profile.user_pairing_supported:
+                raise APIModelError("selected model is no longer advertised for pairing")
         except RainPointLocalCannotConnect:
             errors["base"] = "cannot_connect"
             progress = {}
-        except RainPointLocalInvalidResponse:
+        except (APIModelError, KeyError, RainPointLocalInvalidResponse):
             errors["base"] = "invalid_response"
             progress = {}
         capability = self._pairing_profile.required_node_capability
@@ -796,6 +802,8 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             if isinstance(node, dict)
             and isinstance(node.get("node_id"), str)
             and capability in node.get("capabilities", [])
+            and (self._pairing_profile.eligible_node_ids is None
+                 or node["node_id"] in self._pairing_profile.eligible_node_ids)
             and not (
                 self._pairing_profile.device_category == "sensor"
                 and int(node.get("routine_ack_assigned_sensors") or 0)
@@ -803,12 +811,15 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
             )
         }
         if not self._pairing_nodes and not errors:
-            errors["base"] = "no_pairing_node"
-        if user_input is not None and not self._pairing_reviewed:
+            errors["base"] = ("no_prepared_two_zone_radio"
+                              if self._pairing_profile.model == "HTV213FRF" else "no_pairing_node")
+        if user_input is not None and str(user_input.get("node_id", "")) not in self._pairing_nodes:
+            errors.setdefault("base", "no_pairing_node")
+        if user_input is not None and not errors and not self._pairing_reviewed:
             self._pairing_request = dict(user_input)
             return await self.async_step_pairing_review()
         self._pairing_reviewed = False
-        if user_input is not None:
+        if user_input is not None and not errors:
             node_id = str(user_input.get("node_id", ""))
             if node_id not in self._pairing_nodes:
                 errors["base"] = "no_pairing_node"
@@ -857,7 +868,7 @@ class RainPointLocalOptionsFlow(config_entries.OptionsFlow):
                         node_choices
                     ),
                     vol.Required("duration_seconds", default=self._pairing_request.get("duration_seconds", 120)): vol.All(
-                        vol.Coerce(int), vol.Range(min=10, max=900)
+                        vol.Coerce(int), vol.Range(min=10, max=self._pairing_profile.maximum_duration_seconds)
                     ),
                 }
             ),

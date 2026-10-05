@@ -363,6 +363,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 node_prefix = f"{base}/nodes/"
                 node_suffix = parsed.path[len(node_prefix) :] if node_path else ""
                 node_id, separator, node_action = node_suffix.rpartition("/")
+                if separator and node_action == "htv213-calibration":
+                    if set(body) != {"initial_center_hz", "routine_center_hz"}:
+                        raise ValueError("provide the two measured HTV213 carrier centers")
+                    result = self.server.gateway.configure_htv213_radio(node_id,
+                        initial_center_hz=body["initial_center_hz"],
+                        routine_center_hz=body["routine_center_hz"])
+                    self._json(200, result)
+                    return
                 if separator and node_action == "identify":
                     result = self.server.gateway.identify_radio_node(
                         node_id,

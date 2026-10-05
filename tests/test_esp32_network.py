@@ -6,6 +6,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import re
 import socket
 import sys
 import tempfile
@@ -138,6 +139,23 @@ class ESP32NetworkTest(unittest.TestCase):
                 time.sleep(.01)
         return connection, stream, response
 
+    def test_all_firmware_advertised_capabilities_pass_real_authentication(self) -> None:
+        # Derive the capability vocabulary from the real firmware hello rather
+        # than another hand-maintained list that can miss a new candidate flag.
+        source = (ROOT / 'firmware/rainpoint_bridge/src/wifi_transport.cpp').read_text()
+        hello = source.split(r'\"capabilities\":[', 1)[1].split(r'\"tx_armed\":false', 1)[0]
+        capabilities = re.findall(r'\\"([a-z][a-z0-9_]+)\\"', hello)
+        self.assertIn('htv213_idle_recovery_v1', capabilities)
+        self.assertIn('htv213_idle_recovery_resume_v1', capabilities)
+        for extra, expected in (([], 'node_authenticated'), (['unknown_future_capability'], 'node_rejected')):
+            with self.subTest(extra=extra):
+                connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+                    capabilities=capabilities + extra)
+                try:
+                    self.assertEqual(response['type'], expected)
+                finally:
+                    stream.close(); connection.close()
+
     def test_development_rejoin_firmware_authenticates_with_both_new_capabilities(self) -> None:
         capabilities = ['rx', 'sensor_pairing_tx', 'firmware_update_trial', 'firmware_signed_ota',
                         'firmware_development_ota', 'htv213_pairing_experiment',
@@ -235,6 +253,55 @@ class ESP32NetworkTest(unittest.TestCase):
                 self.server.send_command(NODE_B,{"type":"htv213_pairing_start","command_id":"not-capable"})
         finally:
             stream.close();connection.close()
+
+    def test_htv213_discovery_requires_its_distinct_authenticated_capability(self):
+        from rainpointd.htv213_enrollment import CAPABILITY, EnrollmentProfile
+        command = EnrollmentProfile(address=2, initial_center_hz=434351500,
+            routine_center_hz=434241500).command(
+                controller=self.gateway.rf_identity.controller_endpoint,
+                companion=self.gateway.rf_identity.companion_endpoint)
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+                                              capabilities=['rx', 'sensor_pairing_tx', CAPABILITY])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            self.server.send_command(NODE_A, command)
+            self.assertEqual(command, json.loads(stream.readline()))
+            self.assertNotIn('factory_endpoint', command)
+            self.assertEqual(self.gateway._store.valve_registry(), [])
+        finally:
+            stream.close(); connection.close()
+        connection, stream, response = self._connect(NODE_B, TOKEN_B, protocol_version=2,
+                                              capabilities=['rx', 'sensor_pairing_tx', 'htv213_pairing_experiment'])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            with self.assertRaisesRegex(ValueError, 'capability'):
+                self.server.send_command(NODE_B, command)
+        finally:
+            stream.close(); connection.close()
+
+    def test_htv213_normal_control_requires_distinct_capability(self):
+        connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,
+            capabilities=['rx', 'sensor_pairing_tx', 'htv213_control_v1'])
+        try:
+            self.assertEqual(response['type'], 'node_authenticated')
+            for action in ('open', 'close'):
+                command = dict(type='htv213_control_' + action, command_id='ordinary-' + action)
+                self.server.send_command(NODE_A, command)
+                self.assertEqual(command, json.loads(stream.readline()))
+                with self.assertRaisesRegex(ValueError, 'capability'):
+                    self.server.send_command(NODE_A, dict(type='htv213_control_probe_' + action,
+                                                          command_id='probe-' + action))
+        finally:
+            stream.close(); connection.close()
+        connection, stream, response = self._connect(NODE_B, TOKEN_B, protocol_version=2,
+            capabilities=['rx', 'sensor_pairing_tx', 'htv213_control_experiment'])
+        try:
+            for action in ('open', 'close'):
+                with self.assertRaisesRegex(ValueError, 'capability'):
+                    self.server.send_command(NODE_B, dict(type='htv213_control_' + action,
+                                                          command_id='ordinary-' + action))
+        finally:
+            stream.close(); connection.close()
 
     def test_htv213_dry_control_transport_capability_and_error_correlation(self):
         from rainpointd.htv213_control_trial import ControlJournal
@@ -723,6 +790,7 @@ class ESP32NetworkTest(unittest.TestCase):
                 "hcs026_auto_v1",
                 "htv145_auto_candidate_v1",
                 "htv405_auto_candidate_v1",
+                "htv213_auto_candidate_v1",
             ],
             [item["profile_id"] for item in started["supported_profiles"]],
         )

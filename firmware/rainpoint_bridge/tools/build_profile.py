@@ -1,4 +1,4 @@
-"""One production firmware with sensor and both valve families enabled."""
+"""Unified sensors and three valve families; research aliases remain opt-in."""
 from __future__ import annotations
 
 import os

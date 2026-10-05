@@ -21,6 +21,28 @@ spec.loader.exec_module(api_models)
 
 
 class APIModelsTest(unittest.TestCase):
+    def test_pairing_radio_eligibility_is_optional_but_strict_when_present(self):
+        payload = dict(profile_id="two", model="HTV213FRF", device_category="valve",
+            display_name="Two outlets", required_node_capability="two",
+            automatic_discovery=True, user_pairing_supported=True)
+        parse = api_models.PairingProfileMetadata.from_payload
+        self.assertIsNone(parse(payload).eligible_node_ids)
+        self.assertEqual(parse({**payload, "eligible_node_ids":[]}).eligible_node_ids, ())
+        self.assertEqual(parse({**payload, "eligible_node_ids":["node"]}).eligible_node_ids, ("node",))
+        for value in (None, True, "node", ["node", "node"], [1], [""], [{}]):
+            with self.subTest(value=value), self.assertRaises(api_models.APIModelError):
+                parse({**payload, "eligible_node_ids":value})
+
+    def test_model_specific_pairing_duration_bound_and_legacy_default(self):
+        profile = dict(profile_id="two", model="HTV213FRF", device_category="valve",
+            display_name="Two-zone valve", required_node_capability="two_pairing",
+            automatic_discovery=True, user_pairing_supported=False)
+        self.assertEqual(api_models.PairingProfileMetadata.from_payload(profile).maximum_duration_seconds, 900)
+        self.assertEqual(api_models.PairingProfileMetadata.from_payload({**profile, "maximum_duration_seconds": 300}).maximum_duration_seconds, 300)
+        for value in (True, 0, 901, "300"):
+            with self.assertRaises(api_models.APIModelError):
+                api_models.PairingProfileMetadata.from_payload({**profile, "maximum_duration_seconds": value})
+
     def test_sensor_events_update_without_poll_and_valves_require_snapshot(self):
         devices={"soil":{"model":"HCS026FRF", "last_event_id":4, "name":"Garden", "state":{"soil_moisture_percent":20}}}
         event={"event_type":"device_observation", "device_id":"soil", "model":"HCS026FRF", "event_id":5,

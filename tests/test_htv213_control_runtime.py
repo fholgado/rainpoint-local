@@ -9,6 +9,7 @@ import unittest
 from tests.test_htv213_runtime import function
 from research.pairing_native_transcripts import decode
 from tests.test_htv213_pairing import REPEAT_FACTORY
+from tests.test_valve_configuration import alter
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -60,13 +61,46 @@ struct Authorizations { unsigned activeCount() { return 0; } } routineAckAuthori
 bool htv145OwnsReports() { return false; }
 bool htv145Pending() { return false; }
 struct Probe { bool commandPendingConfirmation=false, openQueued=false, closeQueued=false; } valveControlProbe;
-String jsonStringField(const String&,const char*) { return ""; }
-bool jsonLongField(const String&,const char*,long&) { return false; }
-bool jsonBoolField(const String&,const char*,bool&) { return false; }
-bool parseRawHexEndpoint(const String&,std::array<std::uint8_t,4>&) { return false; }
-bool parsePairingLocalDateTime(const String&,rainpoint::PairingLocalDateTime&) { return false; }
+String jsonStringField(const String& command,const char* key) {
+    const String k=key;
+    if(k=="recovery_command_id") return command=="malformed" ? "bad" :
+        command=="resume" ? String(32,'a') : "";
+    if(k=="open_command_id") return "normal-open";
+    if(k=="factory_endpoint") return "11556677";
+    if(k=="controller_endpoint") return "a2446688";
+    if(k=="companion_endpoint") return "22446688";
+    if(k=="port_1_settings" || k=="port_2_settings") return String("58020a001e00")+String(16,'0');
+    return "20261004100000";
+}
+bool jsonLongField(const String& command,const char* key,long& value) {
+    const String k=key;
+    if(k=="port" || k=="recovery_port") value=1;
+    else if(k=="seconds" || k=="recovery_seconds") value=60;
+    else if(k=="recovery_phase") value=3;
+    else if(k=="phase") value=command=="close" ? 4 : 3;
+    else if(k=="assigned_selector") value=11;
+    else if(k=="initial_center_hz") value=434397000;
+    else if(k=="routine_center_hz") value=434287000;
+    else if(k=="reply_delay_us") value=49000;
+    else if(k=="power_dbm") value=0;
+    else if(k=="device_address" || k=="notification_phase" || k=="configuration_revision") value=2;
+    else if(k=="timing_raw") value=480;
+    else if(k=="notification_delay_ms") value=1000;
+    else return false;
+    return true;
+}
+bool jsonBoolField(const String&,const char*,bool& value) { value=true; return true; }
+bool parseRawHexEndpoint(const String& text,std::array<std::uint8_t,4>& out) {
+    for(unsigned i=0;i<4;++i) out[i]=std::stoul(text.substr(i*2,2),nullptr,16);
+    return true;
+}
+bool parsePairingLocalDateTime(const String&,rainpoint::PairingLocalDateTime& out) {
+    out={2026,10,4,10,0,0}; return true;
+}
 void reportNetworkCommandError(const String&,const char* error) { lastCommandError=error; }
 '''
+        support += function((ROOT / "firmware/rainpoint_bridge/src/main.cpp").read_text(),
+                            "bool validCommandId(")
         support = support.replace("bool enterIdle() {", "bool prepareTransmit() { return true; }\n"
             "    bool cacheTransmitFrequency(unsigned) { return true; }\n    bool enterIdle() {")
         support += "\n".join(function(source, signature) for signature in (
@@ -77,6 +111,9 @@ void reportNetworkCommandError(const String&,const char* error) { lastCommandErr
         fixture = json.loads((ROOT / "research/fixtures/htv213_stock_pairing_controls_20260928.json").read_text())
         trial = next(t for t in fixture["trials"] if t["name"] == "zone1_auto60")
         device = [e["frame"] for e in trial["events"] if e["direction"] == "device"]
+        idle1 = next(f for f in device if decode(f).command == 2 and decode(f).data[3] == 0)
+        data = bytearray(decode(idle1).data); data[2] = 2
+        idle2 = alter(idle1, data=data)
         lifecycle = json.loads((ROOT / "research/fixtures/htv213_stock_lifecycle_20260928.json").read_text())
         battery = next(t for t in lifecycle["trials"] if t["name"] == "battery_rejoin")
         announcement = next(e["frame"] for e in battery["events"] if e["direction"] == "device" and
@@ -97,6 +134,54 @@ int main(int argc,char** argv) {
     p.initialHz=434397000; p.routineHz=434287000;
     p.replyDelayUs=49000; p.notificationDelayMs=1000;
     rainpoint::htv213::Transmission tx{};
+    if (mode=="normal-dispatch" || mode=="blocked-probes") {
+        if (mode=="blocked-probes") {
+            for(const auto* command:{"htv213_control_probe_open","htv213_control_probe_close"})
+                if(handleHtv213ControlCommand(command,"{}","probe")) return 35;
+            return primaryRadio.commands.empty() ? 0 : 36;
+        }
+        if(!handleHtv213ControlCommand("htv213_control_open","{}","normal-open") ||
+           !lastCommandError.empty() || primaryRadio.commands!=std::vector<unsigned>({0x21}) ||
+           htv213ControlTrial.phase()!=3) return 37;
+        fakeNow=313;
+        processHtv213Control(frame("ACK_FRAME"),rainpoint::RadioPacket{313000});
+        const char* activeFrames[]={REPORT_FRAMES};
+        processHtv213Control(frame(activeFrames[0]),rainpoint::RadioPacket{314000});
+        fakeNow=35000;
+        if(!handleHtv213ControlCommand("htv213_control_close","close","normal-close") ||
+           !lastCommandError.empty() || primaryRadio.commands.back()!=0x21 ||
+           htv213ControlTrial.phase()!=4) return 38;
+        return 0;
+    }
+    if (mode=="resume-reconnect" || mode=="resume-reboot" || mode=="resume-invalid") {
+        // Actual owner dispatcher must restore observation without an open.
+        if(mode=="resume-reconnect") {
+            htv213ControlTrial.start(p,1,60,3,0,tx);
+            transmitHtv213Control(tx);
+            htv213OwnerEnabled=true; htv213OwnerId="test-owner";
+            fakeNow=130000; pollHtv213Control();
+            wifiTransport.allowed=false; pollHtv213Control();
+            wifiTransport.allowed=true;
+        }
+        const auto before=primaryRadio.commands.size();
+        handleHtv213ControlCommand("htv213_owner_set",mode=="resume-invalid" ? "malformed" : "resume","test-owner");
+        if(mode=="resume-invalid") return lastCommandError=="invalid_htv213_idle_recovery" &&
+            primaryRadio.commands.size()==before && !htv213OwnerEnabled ? 0 : 30;
+        if(!lastCommandError.empty() || primaryRadio.commands.size()!=before ||
+           htv213ControlTrial.state()!=rainpoint::htv213Control::State::Overdue ||
+           htv213ControlCommandId!=String(32,'a') || htv213ControlTrial.phase()!=3) return 31;
+        processHtv213Control(frame("IDLE1"),rainpoint::RadioPacket{fakeNow*1000});
+        if(htv213ControlTrial.state()==rainpoint::htv213Control::State::RecoveredIdle) return 32;
+        ++fakeNow;
+        processHtv213Control(frame("IDLE2"),rainpoint::RadioPacket{fakeNow*1000});
+        if(htv213ControlTrial.state()!=rainpoint::htv213Control::State::RecoveredIdle ||
+           htv213ControlTrial.openAcknowledged() || htv213ControlTrial.summaryReceived() ||
+           htv213ControlActive() || scanChannels || !htv213OwnerEnabled ||
+           primaryRadio.commands.size()!=before+2) return 33;
+        for(unsigned i=before;i<primaryRadio.commands.size();++i)
+            if(primaryRadio.commands[i]!=0x82) return 34;
+        return 0;
+    }
     if (mode=="ota-idle-owner" || mode=="ota-no-owner") {
         htv213OwnerEnabled=mode=="ota-idle-owner";
         htv213OwnerId="test-owner";
@@ -113,7 +198,7 @@ int main(int argc,char** argv) {
     if (mode=="ota-active-owner" || mode=="ota-active-no-owner") {
         htv213OwnerEnabled=mode=="ota-active-owner";
         if (!handleHtv213ControlCommand("firmware_update_start","{}","ota-test") ||
-            lastCommandError!="htv213_control_experiment_busy" || !htv213ControlActive() ||
+            lastCommandError!="htv213_control_busy" || !htv213ControlActive() ||
             htv213ControlTrial.phase()!=3 || !primaryRadio.commands.empty()) return 23;
         return 0;
     }
@@ -128,7 +213,9 @@ int main(int argc,char** argv) {
     if (mode=="timeout" || mode=="tx-failure") fakeNow=1501;
     if (mode=="restore-failure") primaryRadio.restoreOk=false;
     const bool rejoin=mode=="rejoin" || mode=="rejoin-boot07";
-    const bool owner=mode=="owner" || rejoin;
+    const bool recovery=mode=="idle-recovery" || mode=="overdue-idle-recovery";
+    const bool owner=mode=="owner" || rejoin || recovery;
+    if (recovery) fakeNow=mode=="idle-recovery" ? 1501 : 130000;
     if (owner) {
         htv213OwnerEnabled=true; htv213OwnerId="test-owner";
         auto& a=htv213RetainedConfiguration;
@@ -142,11 +229,23 @@ int main(int argc,char** argv) {
             a.ports[i].settings={{0x58,2,10,0,30,0,0,0,0,0,0,0,0,0}};
         }
     }
-    if (mode=="accepted" || owner || mode=="restore-failure") {
+    if (mode=="accepted" || (owner && !recovery) || mode=="restore-failure") {
         fakeNow=313;
         processHtv213Control(frame("ACK_FRAME"),rainpoint::RadioPacket{313000});
     }
     pollHtv213Control();
+    if (recovery) {
+        processHtv213Control(frame("IDLE1"),rainpoint::RadioPacket{fakeNow*1000});
+        if (htv213ControlTrial.state()==rainpoint::htv213Control::State::RecoveredIdle) return 24;
+        ++fakeNow;
+        processHtv213Control(frame("IDLE2"),rainpoint::RadioPacket{fakeNow*1000});
+        if (htv213ControlTrial.state()!=rainpoint::htv213Control::State::RecoveredIdle ||
+            htv213ControlActive() || scanning || !htv213OwnerEnabled ||
+            primaryRadio.baseHz!=rainpoint::kReportHz ||
+            primaryRadio.commands!=std::vector<unsigned>({0x21,0x82,0x82})) return 25;
+        if (handleHtv213ControlCommand("firmware_update_start","{}","ota-test")) return 26;
+        return 0; // No automatic retry, close, phase allocation or owner loss.
+    }
     if (mode=="disconnect" || mode=="rf-disabled" || mode=="restore-failure") {
         if (htv213ControlActive() || !scanning) return 4;
     } else {
@@ -191,14 +290,16 @@ int main(int argc,char** argv) {
     }
     return opens==1 ? 0 : 11;
 }
-'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement).replace("BOOT07", REPEAT_FACTORY)
+'''.replace("ACK_FRAME", device[0]).replace("REPORT_FRAMES", ",".join(json.dumps(f) for f in device[1:])).replace("ANNOUNCEMENT", announcement).replace("BOOT07", REPEAT_FACTORY).replace("IDLE1", idle1).replace("IDLE2", idle2)
         with tempfile.TemporaryDirectory() as directory:
             exe = str(Path(directory) / "runtime")
             result = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
                 "-I"+str(ROOT / "firmware/rainpoint_bridge/include"), "-x", "c++", "-", "-o", exe],
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for mode in ("ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+            for mode in ("normal-dispatch", "blocked-probes", "ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+                         "resume-reconnect", "resume-reboot", "resume-invalid",
+                         "idle-recovery", "overdue-idle-recovery",
                          "accepted", "owner", "rejoin", "rejoin-boot07", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):
                 with self.subTest(mode=mode):
                     result = subprocess.run([exe, mode], text=True, capture_output=True)

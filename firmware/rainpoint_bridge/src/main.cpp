@@ -24,13 +24,9 @@
 #include "rainpoint_phase_canary.h"
 #include "rainpoint_native_receipt.h"
 #endif
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
 #include "rainpoint_htv213_pairing.h"
-#endif
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
 #include "rainpoint_htv213_control.h"
 #include "rainpoint_htv213_owner.h"
-#endif
 
 #ifndef RAINPOINT_STATUS_LED_PIN
 #error "RAINPOINT_STATUS_LED_PIN must identify the board status LED"
@@ -2151,12 +2147,8 @@ void pollIdentify() {
     }
 }
 
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
 #include "htv213_pairing_runtime.inc"
-#endif
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
 #include "htv213_control_runtime.inc"
-#endif
 
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
 #include "valve_phase_runtime.inc"
@@ -2204,12 +2196,8 @@ void handleNetworkCommand() {
     if (handleNativeValveCommand(type,command,commandId)) return;
     if (handleValvePhaseCommand(type,command,commandId)) return;
 #endif
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
     if (handleHtv213ControlCommand(type,command,commandId)) return;
-#endif
     if (handleHtv213Command(type,command,commandId)) return;
-#endif
     if (type == "rf_mode_set") {
         const String mode = jsonStringField(command, "mode");
         if (mode == "normal") {
@@ -3371,20 +3359,16 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         observeValvePhase(frame);
     }
 #endif
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
     if (&radio==&primaryRadio && (htv213ControlActive() || htv213OwnerEnabled)) {
         processHtv213Control(frame,packet);
         printPacket(name,frame,packet,radio);
         return;
     }
-#endif
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
     if (&radio==&primaryRadio && htv213Armed()) {
         processHtv213(frame,packet);
         printPacket(name,frame,packet,radio);
         return;
     }
-#endif
     bool htv405PairingReplyRestoredReceive = false;
     bool valveProbeTransmitted = false;
     if (&radio == &primaryRadio) {
@@ -3835,9 +3819,7 @@ void loop() {
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
         if (nativeValveGuard.locked()) reportNativeValveReceipt();
 #endif
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
         if (htv213CommandId.length()) reportHtv213();
-#endif
     }
     if (nodeRestartPending) {
         delay(250);
@@ -3856,12 +3838,8 @@ void loop() {
     pollIdentify();
     handleSerialCommand();
     pollRadio("primary", primaryRadio);
-#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
     pollHtv213();
-#endif
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
     pollHtv213Control();
-#endif
     pollValveProbeResponseListener();
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
     pollValvePhase();

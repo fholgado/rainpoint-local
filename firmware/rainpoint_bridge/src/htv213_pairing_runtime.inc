@@ -1,5 +1,5 @@
-// Included only by the opt-in dry-test build, inside main.cpp's namespace.
-// No production valve/sensor session or ownership table is shared.
+// Normal two-zone enrollment, inside main.cpp's namespace. The explicit
+// factory-identity research entry point remains excluded from standard builds.
 rainpoint::htv213::Session htv213Session;
 String htv213CommandId;
 rainpoint::PairingLocalDateTime htv213Clock{};
@@ -22,6 +22,16 @@ void reportHtv213() {
     line+=",\"plans_sent\":"; line+=htv213Session.plansSent();
     line+=",\"replies_sent\":"; line+=htv213Session.repliesSent();
     line+=",\"failure\":"; line+=static_cast<unsigned>(htv213Session.failure());
+    line+=",\"factory_endpoint\":\"";
+    line+=hexString(htv213Session.profile().factory.data(),4); line+="\"";
+    line+=",\"notification_accepted\":";
+    line+=htv213Session.notificationAccepted() ? "true" : "false";
+    line+=",\"awaiting_confirmation\":";
+    line+=htv213Session.awaitingConfirmation() ? "true" : "false";
+    line+=",\"notification_ack_frame\":\"";
+    line+=hexString(htv213Session.notificationAck().data(),rainpoint::kFrameBytes); line+="\"";
+    line+=",\"completion_frame\":\"";
+    line+=hexString(htv213Session.completionReport().data(),rainpoint::kFrameBytes); line+="\"";
     line+="}"; emitLine(line);
 }
 
@@ -44,7 +54,12 @@ bool handleHtv213Command(const String& type,const String& command,const String& 
         else { htv213Session.cancel(); restoreScanningAfterPairing(); reportHtv213(); }
         return true;
     }
-    if (type!="htv213_pairing_start") {
+    const bool discover=type=="htv213_enrollment_start";
+    bool start=discover;
+#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
+    start=start || type=="htv213_pairing_start";
+#endif
+    if (!start) {
         if (!htv213Armed()) return false;
         // Cancellation must unwind before a radio mode change or reboot.
         if (type=="rf_mode_set" || type=="node_reboot") {
@@ -62,7 +77,8 @@ bool handleHtv213Command(const String& type,const String& command,const String& 
     rainpoint::htv213::Profile p{};
     long duration,address,selector,timing,phase,initial,routine,delayUs,notificationDelay,power;
     rainpoint::PairingLocalDateTime clock{};
-    if (!parseRawHexEndpoint(jsonStringField(command,"factory_endpoint"),p.factory) ||
+    if ((discover ? jsonStringField(command,"factory_endpoint").length()!=0 :
+            !parseRawHexEndpoint(jsonStringField(command,"factory_endpoint"),p.factory)) ||
         !parseRawHexEndpoint(jsonStringField(command,"controller_endpoint"),p.controller) ||
         !parseRawHexEndpoint(jsonStringField(command,"companion_endpoint"),p.companion) ||
         !parsePairingLocalDateTime(jsonStringField(command,"local_clock"),clock) ||
@@ -84,10 +100,11 @@ bool handleHtv213Command(const String& type,const String& command,const String& 
     // Captured empty stock defaults: no schedules or linked moisture sensor.
     // These are raw configuration fields, not the manual watering duration.
     p.settings={{0x58,2,10,0,30,0,0,0,0,0,0,0,0,0}};
-    if (!rainpoint::htv213::valid(p) || !primaryRadio.prepareTransmit() ||
+    if (!(discover ? rainpoint::htv213::validTransport(p) : rainpoint::htv213::valid(p)) || !primaryRadio.prepareTransmit() ||
         !primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,12)) ||
         !primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,11)) ||
-        !htv213Session.arm(p,millis(),duration*1000U)) {
+        !(discover ? htv213Session.armDiscovery(p,millis(),duration*1000U) :
+            htv213Session.arm(p,millis(),duration*1000U))) {
         reportNetworkCommandError(id,"htv213_prepare_failed"); return true;
     }
     // The radio has two fast-hop slots. Both possible assignment carriers
@@ -123,7 +140,8 @@ void processHtv213(const rainpoint::htv213::Frame& frame,const rainpoint::RadioP
     if (htv213Session.claim(frame,context,millis(),tx)) {
         finishHtv213(primaryRadio.transmitAsync(tx.frame,tx.centerHz,tx.wakeSymbols,false,
             rainpoint::pairingPaTableValue(htv213Power),0x45,
-            packet.receivedAtMicros+htv213Session.profile().replyDelayUs));
+            packet.receivedAtMicros+htv213Session.profile().replyDelayUs,0,
+            rainpoint::htv213::nativeTailSymbol(tx.frame)));
     } else if (!htv213Armed()) {
         restoreScanningAfterPairing(); reportHtv213();
     }
@@ -141,7 +159,8 @@ void pollHtv213() {
     rainpoint::htv213::Transmission tx{};
     if (htv213Session.claimNotification(millis(),tx)) {
         finishHtv213(primaryRadio.transmitAsync(tx.frame,tx.centerHz,tx.wakeSymbols,false,
-            rainpoint::pairingPaTableValue(htv213Power),0x45),true);
+            rainpoint::pairingPaTableValue(htv213Power),0x45,0,0,
+            rainpoint::htv213::nativeTailSymbol(tx.frame)),true);
     } else if (before!=htv213Session.state()) {
         restoreScanningAfterPairing(); reportHtv213();
     }

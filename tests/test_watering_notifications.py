@@ -90,6 +90,22 @@ class WateringNotificationTest(unittest.TestCase):
         self.assertIn("confirmed idle", self.publish.call_args.args[0])
         self.assertIn("summary", self.publish.call_args.args[0])
 
+    def test_recovered_idle_updates_problem_once_without_claiming_run_success(self):
+        self.snapshot(None, rf_control_transaction_state='failed', rf_control_transaction_id='missing')
+        self.snapshot(False, rf_control_transaction_state='recovered_idle', rf_control_transaction_id='missing')
+        self.assertEqual(self.publish.call_count, 2)
+        self.assertIn('outcome remains unknown', self.publish.call_args.args[0])
+        self.assertIn('No command was retried', self.publish.call_args.args[0])
+        self.assertEqual(self.publish.call_args.kwargs['notification_id'], 'rainpoint_local_entry_valve_problem')
+        self.snapshot(False, rf_control_transaction_state='recovered_idle', rf_control_transaction_id='missing')
+        self.assertEqual(self.publish.call_count, 2)
+        # Restarting HA establishes history, not a new recovery notification.
+        publish = Mock()
+        module.WateringNotifications('entry', publish).observe({'valve': {
+            'model': 'HTV213FRF', 'state': {'is_watering': False,
+            'rf_control_transaction_state': 'recovered_idle', 'rf_control_transaction_id': 'missing'}}})
+        publish.assert_not_called()
+
     def test_new_manual_run_does_not_reuse_old_requested_duration(self):
         values = {"rf_control_transaction_id": "old", "rf_control_transaction_state": "confirmed",
                   "rf_control_transaction_duration_seconds": 1260}

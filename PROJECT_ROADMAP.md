@@ -45,7 +45,7 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Prepare normal HTV213 pairing/control/recovery support from the qualified canary; finish the remaining short enrollment/failure checks before enabling it.
+1. Finish short HTV213 physical qualification, then promote its normal setup/control path. HA flow and atomic enrollment/re-pair persistence are source-prepared; general support is not enabled.
 2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
 3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
@@ -323,7 +323,7 @@ not tasks to mark “done once.”
 - [x] Trace configuration revisions and fourteen-byte valve settings; distinguish asynchronous settings arrival from fixed pairing stages ([evidence](research/STOCK_HUB_CONFIGURATION_LIFECYCLE.md), Sep 28).
 - [x] Trace saved associations, known rejoin and three direct sequence-generator callers; no periodic reset established ([evidence](research/STOCK_HUB_ASSOCIATION_PERSISTENCE.md), Sep 28).
 - [x] Add offline semantic trace analysis and capture-backed retry/missing-response checks; 708 tests passed, two optional NumPy skips, native protocol passed (Sep 28). No device acceptance implied.
-- [ ] Audit local enrollment durability under storage failures; inject save/restart failures before changing admission behavior.
+- [ ] Audit remaining models' enrollment durability under save/restart failures; HTV213 atomic rollback and pending-proof restart tests pass.
 - [ ] Qualify valve settings units and notification triggers with controlled one-field changes; keep proven pairing prefixes frozen.
 - [ ] Resolve later sequence restoration/reset rules and HTV405 terminal descriptors; boot clear alone does not explain overnight failures.
 - [x] Capture HTV213 stock enrollment and both-zone automatic stops; verify 60/120-second RF commands, replies and summaries ([evidence](research/HTV213_STOCK_CAPTURE_FINDINGS_20260928.md), Sep 28).
@@ -368,11 +368,34 @@ not tasks to mark “done once.”
 - [x] Prepare opt-in retained-rejoin replies with request-derived carrier and both-port replay; leave deployed responder disabled and pairing unchanged (Sep 30).
 - [x] Independently audit stock master wrap through zero and shared allocation; preserve [evidence](research/HTV213_COUNTER_WRAP_AUDIT.md) (Sep 30).
 - [x] RF-qualify HTV213 master phases 62→63→0→1: four one-minute runs, full completion evidence and redacted replay; enable wrap only for the qualified association (Sep 30).
-- [ ] Qualify HTV213 missing-response/overdue handling on dry hardware; offline replay passes, physical loss remains untested.
+- [x] Deploy HTV213 missing-ACK idle recovery, matched authentication capability and HA status/notifications; control.11 healthy, phase 3 retained, 1,047 tests pass (Oct 4).
+- [x] Implement observation-only HTV213 unresolved-open restoration across reconnect/reboot; reproduce owner-restore state loss, qualify fresh both-port idle/no-retry path offline (Oct 4). Deployment and live release remain below.
+- [x] Qualify HTV213 control.12 recovery across gateway/radio restart: fresh both-port idle releases unknown phase 3 without retry; normal HA phase-4/60s run RF-complete, next phase 5 (Oct 4 EDT).
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
-- [ ] Verify HTV213 post-configuration reports and repeat complete enrollment before promotion. Stock gateway off; ask before arming.
-- [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
-- [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
+- [x] Verify HTV213 post-configuration reports and repeat complete enrollment: control.10 RF-confirmed twice; same HA device, restored ownership, ACK-derived phase 3 and verified full capture (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-repeat-enrollment-and-same-device-handback--october-4)).
+- [x] Qualify HTV213 enrollment/re-enrollment, both outlets, early stop, phase wrap, battery rejoin and missing-response/restart recovery on the dry test valve (Oct 4 EDT).
+- [x] Expose native HA two-zone pairing for fully capable, calibrated, available radios; preserve the qualified RF path and existing associations (Oct 5; 1,061 tests pass).
+- [x] Deploy gateway 0.39.17 / integration 0.18.5; verify native model-menu/eligibility in the in-app browser, two closed outlets and unchanged phase 5. No re-pairing, watering or radio flash (Oct 5).
+- [x] Include qualified HTV213 runtime in unified 0.20.0; exclude research probes, preserve control.12 compatibility and verify 1,067 tests plus standard/phase/development builds (Oct 5).
+- [x] Sign/deploy unified 0.20.0-rc.1 on Test Node B with gateway 0.39.18; RF-verify both one-minute HA runs at phases 5→6, next 7 (Oct 5).
+- [ ] Prepare release-key-signed unified 0.20.0 through the protected signing workflow.
+- [ ] Validate carrier provisioning on a second radio (deferred Oct 5 at user request; saved per-radio calibration remains required).
+- [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
+- [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
+- [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).
+- [x] Bind HTV213 to native HA pairing progress/cancel/naming; test authentication, failure, restart and model-specific duration limits (Oct 3; source only).
+- [x] Prepare HTV213 carrier-provisioning interface, legacy/retained slot reservations and staged model-level wrap policy; preserve existing canary records (Oct 3; source only).
+- [x] Deploy matched enrollment/control candidate and signed control.9 to Test Node B; RF-verify normal-API 60-second runs on both dry ports at phases 5→6, next 7. Garden firmware and associations unchanged ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-normal-control-candidate--october-3)).
+- [x] Fix HTV213 owner-revoke command IDs rejected by firmware; actual-validator regression and 60 tests pass. Deploy gateway fix and verify full-enrollment arming (Oct 3).
+- [x] Retest HTV213 automatic discovery at 0 dBm: assignment, both-port configuration and later idle report verified (Oct 4, address 4). Gateway completion still timed out; this is not full HA enrollment ([evidence](docs/STOCK_INFORMED_VALIDATION.md#htv213-automatic-discovery-and-crc-tail-diagnosis--october-4)).
+- [x] Append the native CRC's final symbol to HTV213 pairing replies/notification; actual TX regressions reproduce and fix truncation (Oct 4; source validated).
+- [x] Separate HTV213 discovery expiry from a ten-minute known-device confirmation wait; replay the captured late report and expose HA's confirmation stage (Oct 4; source validated).
+- [x] Deploy signed control.10 and matched gateway changes: 1,041 tests, both builds, verified OTA and healthy Test Node B; pairing unarmed (Oct 4).
+- [x] RF-verify control.10 enrollment: corrected CRC tails, both-port configuration and late idle report accepted after 445 seconds; radio disarmed, full capture verified (Oct 4).
+- [x] Complete HTV213 naming/save: one HA device with two outlets, restored reply owner and ACK-derived next phase 3 verified (Oct 4).
+- [x] Decouple committed HTV213 controls from model-menu visibility; fresh idle/owner checks remain, 1,042 tests pass and gateway delta deployed (Oct 4).
+- [x] Verify committed control.10 enrollment survives gateway rebuild and Test Node B reboot: association/owner restored, next phase remains 3 (Oct 4).
+- [x] Verify both normal HA outlet controls after control.10 enrollment: 60-second dry runs at phases 3/4, RF ACK/active/idle/summary and HA open/closed; next phase 5 (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-normal-ha-outlet-tests--october-4)).
 - [x] Wire opt-in HTV213 retained replies to explicit durable per-port configuration; replay real RX/TX, restore after reconnect and keep master counters unchanged (Oct 3; source only).
 - [x] Add unpublished `htv213-recovery` signing profile and production/cross-profile exclusion tests; retain protected human approval (Oct 3; source only).
 - [x] Validate recovery source: 956 tests/two optional skips, native protocol and candidate/default firmware builds pass; no live changes (Oct 3).
@@ -393,6 +416,7 @@ not tasks to mark “done once.”
 - [x] Validate recovery/control fixtures: 968 Python tests pass/two optional skips; native protocol passes (Oct 3).
 - [x] Merge PR #34 after green CI; delete completed recovery/signing branches, preserve unfinished PCB work (Oct 3).
 - [ ] Add other model recovery handlers after model-specific retained-assignment captures; preserve proven enrollment.
+- [ ] Audit HCS026 battery-rejoin captures against current owner/channel recovery, then verify a battery-only cycle without pairing mode; existing transcripts do not qualify extended-silence recovery.
 - [ ] Isolate whether startup `20` kind 1 changes valve counter acceptance; restart trace shows correlation, not causation.
 - [x] Capture HCS012ARF first boot and stock-app pairing: checksum-valid OOK reports retain the same ID, zero rain and battery OK (Sep 28); local support remains unqualified.
 - [ ] Qualify HCS012 rainfall increments, accumulation/reset and battery flags against stock-app readings before adding a local model profile.

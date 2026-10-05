@@ -6,11 +6,16 @@ import time
 import uuid
 from datetime import datetime
 
+from .htv213_enrollment import parameters
+
 CAPABILITY = "htv213_pairing_experiment"
 
 
 def busy(gateway):
-    return time.monotonic() < getattr(gateway, "_htv213_experiment_deadline", 0)
+    from .htv213_enrollment import EnrollmentJournal
+    record = EnrollmentJournal(gateway._store).current() if gateway._store else None
+    return (time.monotonic() < getattr(gateway, "_htv213_experiment_deadline", 0) or
+            bool(record and record["state"] not in {"complete", "failed", "expired", "cancelled"}))
 
 
 def build_command(request, *, controller, companion):
@@ -19,28 +24,9 @@ def build_command(request, *, controller, companion):
     factory = request.get("factory_endpoint", "")
     if not isinstance(factory, str) or not re.fullmatch(r"[0-7][0-9a-f]{7}", factory) or int(factory,16)==0:
         raise ValueError("an exact factory endpoint is required")
-    from .rf_identity import controller_endpoint_for
-    if controller_endpoint_for(companion) != controller:
-        raise ValueError("invalid local controller identity")
-    bounds = {
-        "duration_seconds": (10,300), "device_address": (1,255),
-        "assigned_selector": (1,15), "timing_raw": (1,65535),
-        "notification_phase": (1,63), "initial_center_hz": (433000000,435000000),
-        "routine_center_hz": (433000000,435000000),
-        "reply_delay_us": (20000,150000), "notification_delay_ms": (500,5000),
-    }
-    values = {}
-    for key,(low,high) in bounds.items():
-        value=request.get(key)
-        if type(value) is not int or not low <= value <= high:
-            raise ValueError(f"explicit bounded {key} is required")
-        values[key]=value
-    power=request.get("power_dbm")
-    if type(power) is not int or power not in {-30,-20,-15,-10,-6,0,5,7,10}:
-        raise ValueError("explicit supported power_dbm is required")
+    values = parameters(request, controller=controller, companion=companion)
     return {"type":"htv213_pairing_start", "command_id":uuid.uuid4().hex,
-            "factory_endpoint":factory, "controller_endpoint":controller,
-            "companion_endpoint":companion, "power_dbm":power,
+            "factory_endpoint":factory,
             "local_clock":datetime.now().astimezone().strftime("%Y%m%d%H%M%S"),
             **values}
 

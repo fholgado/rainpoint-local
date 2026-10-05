@@ -5,9 +5,9 @@
 
 namespace rainpoint::htv213 {
 
-// Isolated dry-canary enrollment. No water-control builder, implicit identity,
-// boot/rejoin handler, fixed transcript cursor, or production runtime binding.
-constexpr const char* kCapability = "htv213_pairing_experiment";
+// Qualified enrollment with explicitly supplied controller/carrier parameters.
+// Retained rejoin and watering have separate owners and state machines.
+constexpr const char* kCapability = "htv213_auto_identity_pairing";
 using Frame = std::array<std::uint8_t, kFrameBytes>;
 using Endpoint = std::array<std::uint8_t, 4>;
 using Context = valveConfiguration::ReportContext;
@@ -33,11 +33,10 @@ inline std::uint32_t assignmentReplyHz(const Profile& p, std::uint8_t requestedS
     return hz >= 433000000 && hz <= 435000000 ? static_cast<std::uint32_t>(hz) : 0;
 }
 
-inline bool valid(const Profile& p) {
+inline bool validTransport(const Profile& p) {
     auto controller = p.companion;
     controller[0] |= 128;
-    return valveConfiguration::nonzero(p.factory) && !(p.factory[0] & 128) &&
-        valveConfiguration::nonzero(p.companion) &&
+    return valveConfiguration::nonzero(p.companion) &&
         !(p.companion[0] & 128) && controller == p.controller &&
         p.address > 0 && p.selector > 0 && p.selector <= 15 && p.timingRaw > 0 &&
         p.notificationPhase > 0 && p.notificationPhase <= 63 &&
@@ -47,6 +46,10 @@ inline bool valid(const Profile& p) {
         p.notificationDelayMs >= 500 && p.notificationDelayMs <= 5000;
 }
 
+inline bool valid(const Profile& p) {
+    return valveConfiguration::nonzero(p.factory) && !(p.factory[0] & 128) && validTransport(p);
+}
+
 inline std::array<std::uint8_t, 32> native(const Frame& f) {
     std::array<std::uint8_t, 32> p{};
     for (std::size_t i=0; i<p.size(); ++i)
@@ -54,9 +57,20 @@ inline std::array<std::uint8_t, 32> native(const Frame& f) {
     return p;
 }
 
-// Produce the same legacy window as the stock native CRC (seed A8A8).
-// The existing radio transport owns the physical tail. Its omitted last CRC
-// bit and RF timing still require SDR qualification on the new canary.
+// The normalized 304-bit window omits the native CRC's last bit. Every HTV213
+// transmitter must append this symbol, including assignment/configuration.
+inline std::uint8_t nativeTailSymbol(const Frame& frame) {
+    const auto payload=native(frame);
+    std::uint16_t crc=0xa8a8;
+    for (auto value:payload) {
+        crc^=static_cast<std::uint16_t>(value)<<8;
+        for (unsigned bit=0;bit<8;++bit)
+            crc=static_cast<std::uint16_t>((crc<<1)^((crc&0x8000)?0x1021:0));
+    }
+    return crc&1U;
+}
+
+// Produce the normalized window; the caller supplies nativeTailSymbol to TX.
 inline bool encode(const Profile& p, std::uint8_t command, std::uint8_t phase,
                    const std::uint8_t* data, std::size_t length, Frame& frame) {
     if (!valid(p) || phase > 63 || length > 20) return false;
@@ -95,11 +109,22 @@ struct Transmission {
 
 class Session {
 public:
+    // Oct 4 captured confirmation arrived about eight minutes after the
+    // initial reports. This is an observation budget, not a timing_raw unit.
+    static constexpr std::uint32_t kConfirmationWaitMs = 600000;
     bool arm(const Profile& p, std::uint32_t now, std::uint32_t durationMs) {
         if (state_ == State::Armed || !valid(p) || durationMs < 10000 || durationMs > 300000)
             return false;
         *this = Session{}; profile_ = p; started_ = now; duration_ = durationMs;
         state_ = State::Armed; return true;
+    }
+    bool armDiscovery(const Profile& p, std::uint32_t now, std::uint32_t durationMs) {
+        // Only an explicitly opened enrollment window may discover an owner.
+        // Ordinary arm() continues to require the exact supplied endpoint.
+        if (state_ == State::Armed || valveConfiguration::nonzero(p.factory) ||
+            !validTransport(p) || durationMs < 10000 || durationMs > 300000) return false;
+        *this = Session{}; profile_ = p; started_ = now; duration_ = durationMs;
+        discover_ = true; state_ = State::Armed; return true;
     }
     void cancel(Failure why = Failure::Cancelled) {
         if (state_ == State::Armed) { state_ = State::Failed; failure_ = why; pending_ = false; }
@@ -107,7 +132,8 @@ public:
     void tick(std::uint32_t now, bool connected = true) {
         if (state_ != State::Armed) return;
         if (!connected) cancel(Failure::Disconnected);
-        else if (now - started_ >= duration_) cancel(Failure::Timeout);
+        else if (waiting_ ? now - confirmationStarted_ >= kConfirmationWaitMs
+                          : now - started_ >= duration_) cancel(Failure::Timeout);
     }
     State state() const { return state_; }
     Failure failure() const { return failure_; }
@@ -117,6 +143,9 @@ public:
     unsigned plansSent() const { return plans_; }
     unsigned repliesSent() const { return replies_; }
     bool notificationAccepted() const { return notificationAccepted_; }
+    bool awaitingConfirmation() const { return state_ == State::Armed && waiting_; }
+    const Frame& notificationAck() const { return notificationAck_; }
+    const Frame& completionReport() const { return completionReport_; }
     bool notificationResponseWindow(std::uint32_t now) const {
         return state_ == State::Armed && notificationSent_ && !notificationAccepted_ &&
             now - notificationSentMs_ < 750;
@@ -128,23 +157,22 @@ public:
         const auto n = native(frame);
         if (n[0] != 0x51 || (n[11] & 31) > 20) return false;
         const auto command = n[10];
-        auto paired = profile_.factory; paired[0] |= 128;
         const Endpoint broadcast{{128,0,0,0}};
-        const bool factory = routes(frame, broadcast, profile_.factory);
+        auto candidate = profile_;
+        if (discover_ && !valveConfiguration::nonzero(candidate.factory)) {
+            for (unsigned i=0; i<4; ++i) candidate.factory[i] = frame[9+i];
+            if (!valid(candidate) || !routes(frame,broadcast,candidate.factory) ||
+                !pairingAnnouncement(n) || !context.timeKnown) return false;
+        }
+        auto paired = candidate.factory; paired[0] |= 128;
+        const bool factory = routes(frame, broadcast, candidate.factory);
         const bool addressed = routes(frame, profile_.controller, paired);
         valveConfiguration::Reply reply{};
         if (factory && command == 1 && (n[11] & 31) == 8 && reports_ == 0) {
             // Exact observed explicit-pairing variants, not a universal flag
             // mask. Repeat long-press after stock association changed both the
             // selector and final byte. Retained-rejoin byte 03 stays separate.
-            const std::array<std::uint8_t,8> shape{{12,255,32,5,1,4,62,5}};
-            const std::array<std::uint8_t,8> repeatShape{{11,255,32,5,1,4,62,7}};
-            bool initialMatch=true, repeatMatch=true;
-            for (unsigned i=0; i<8; ++i) {
-                initialMatch = initialMatch && n[12+i] == shape[i];
-                repeatMatch = repeatMatch && n[12+i] == repeatShape[i];
-            }
-            if (!initialMatch && !repeatMatch) return false;
+            if (!pairingAnnouncement(n)) return false;
             if (!context.timeKnown) return false;
             reply.command=0x81; reply.phase=n[9]&63; reply.length=11;
             reply.data[0]=0x0a; reply.data[1]=profile_.address; reply.data[2]=profile_.selector;
@@ -154,7 +182,9 @@ public:
         } else if (addressed && assignmentSent_) {
             if (command == 0xa0) {
                 if (notificationSent_ && (n[9]&63)==profile_.notificationPhase &&
-                    (n[11]&31)==1 && n[12]==0) notificationAccepted_=true;
+                    (n[11]&31)==1 && n[12]==0) {
+                    notificationAccepted_=true; notificationAck_=frame;
+                }
                 return false;
             }
             valveConfiguration::Association a{};
@@ -170,14 +200,17 @@ public:
                 reports_ |= 1U << (reply.port-1);
                 // A later device report, not our last 86, supplies progression
                 // evidence. Operational authorization still needs dry control.
-                if (plans_ == 3 && settings_ == 3 && notificationAccepted_) observedAfterPlans_=true;
+                if (plans_ == 3 && settings_ == 3 && notificationAccepted_) {
+                    observedAfterPlans_=true; completionReport_=frame;
+                }
             } else if (!notificationAccepted_) return false;
         } else return false;
         if (replies_ >= 64) { cancel(Failure::ReplyLimit); return false; }
         out = {};
-        if (!encode(profile_,reply.command,reply.phase,reply.data.data(),reply.length,out.frame)) return false;
-        out.centerHz = factory ? assignmentReplyHz(profile_,n[12]) : profile_.routineHz;
+        if (!encode(candidate,reply.command,reply.phase,reply.data.data(),reply.length,out.frame)) return false;
+        out.centerHz = factory ? assignmentReplyHz(candidate,n[12]) : candidate.routineHz;
         out.command=reply.command; out.port=reply.port;
+        profile_ = candidate; // Freeze only after a valid assignment is constructed.
         pending_=true; claimed_=out; return true;
     }
     bool claimNotification(std::uint32_t now, Transmission& out) {
@@ -204,17 +237,33 @@ public:
             case 0x86: plans_ |= 1U << (claimed_.port-1); break;
         }
         if (observedAfterPlans_) state_=State::Observed;
+        else if (discover_ && !waiting_ && reports_ == 3 && settings_ == 3 && plans_ == 3 && notificationAccepted_) {
+            waiting_=true; confirmationStarted_=now;
+        }
     }
 private:
+    static bool pairingAnnouncement(const std::array<std::uint8_t,32>& n) {
+        if (n[10] != 1 || (n[11] & 31) != 8) return false;
+        const std::array<std::uint8_t,8> initial{{12,255,32,5,1,4,62,5}};
+        const std::array<std::uint8_t,8> repeat{{11,255,32,5,1,4,62,7}};
+        bool initialMatch=true, repeatMatch=true;
+        for (unsigned i=0; i<8; ++i) {
+            initialMatch = initialMatch && n[12+i] == initial[i];
+            repeatMatch = repeatMatch && n[12+i] == repeat[i];
+        }
+        return initialMatch || repeatMatch;
+    }
     static bool routes(const Frame& f, const Endpoint& a, const Endpoint& b) {
         for (unsigned i=0;i<4;++i) if (f[5+i]!=a[i] || f[9+i]!=b[i]) return false;
         return true;
     }
     Profile profile_{}; Transmission claimed_{};
     State state_=State::Disarmed; Failure failure_=Failure::None;
-    std::uint32_t started_=0,duration_=0,lastReportAckMs_=0,notificationSentMs_=0;
+    std::uint32_t started_=0,duration_=0,lastReportAckMs_=0,notificationSentMs_=0,confirmationStarted_=0;
     unsigned reports_=0,settings_=0,plans_=0,replies_=0;
     bool pending_=false,assignmentSent_=false,notificationSent_=false;
     bool notificationAccepted_=false,reportAckSent_=false,observedAfterPlans_=false;
+    bool discover_=false,waiting_=false;
+    Frame notificationAck_{},completionReport_{};
 };
 } // namespace rainpoint::htv213

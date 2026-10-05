@@ -892,3 +892,620 @@ reply ownership restored, both outlets remained closed/ready and next phase 2
 survived without any command replay. Front Yard and Vegetable Garden remained
 authenticated on firmware 0.19.0; the previously offline OTA-test node stayed
 offline. No garden radio was flashed or installed garden valve actuated.
+
+## HTV213 normal-control candidate — October 3
+
+The user approved the matched gateway/Test Node B update and dry tests.
+Gateway source at `4191a9c` was packaged, smoke-tested, copied with all hashes
+verified and rebuilt under existing version `0.39.16`. Configuration backup
+and private source archive preceded deployment. The new authenticated carrier
+provisioning route accepted Test Node B's already measured carrier centers;
+no RF or counter change occurred through that route.
+
+[Development signing run](https://github.com/fholgado/rainpoint-local/actions/runs/37163677322)
+produced `0.19.0-htv213-control.9`. Its publisher signature, source commit,
+size and image hash were verified before OTA. Download verification correlated
+with the dispatched command; the new authenticated connection reported the
+candidate version and healthy confirmation. The previously recorded OTA
+command-ID loss on reboot remains a limitation: the strict observer timed out
+on that missing field, not on a failed update. Separate receipt verification
+correlated the download, candidate boot and healthy connection. Retained owner,
+battery-rejoin configuration, valve identity and next master phase **5** survived.
+
+Both tests used ordinary `/devices/{device_id}/valve/open`, not an experiment
+phase override. Exactly one 60-second open per dry port was sent, without retry
+or close. The existing association supplied the RF profile and retained phase.
+Independent bounded SDR decoding verified each positive full-phase `a1`, active
+report, automatic idle, elapsed-60 summary and phase-echo report replies:
+
+| Dry port / master phase | Positive ACK after open | Idle after open | Summary after open |
+| --- | --- | --- | --- |
+| 1 / 5 | 0.315 s | 62.333 s | 71.371 s |
+| 2 / 6 | 0.315 s | 61.245 s | 98.283 s |
+
+The later port-2 summary was observed, not assumed from elapsed time. Required
+RF windows were unclipped and checksum-valid. Private evidence is under
+`captures/htv213-control9-qualification-20261003/`; its complete 300-second IQ
+recording was independently verified at **1,200,000,000 bytes** with matching
+SHA-256. Final gateway state was both ports idle, ordinary start available,
+reply owner ready and next master phase **7**. Registry and garden firmware
+were unchanged; no installed garden valve command was sent.
+
+The final full Python suite passed **1,034 tests** with no skips; installing
+the private RF analysis dependency enabled the optional decoder checks. Native
+C++ protocol tests and diff whitespace validation also passed.
+
+This verifies the extracted normal control path on a retained canary, **not**
+automatic identity discovery, a fresh enrollment epoch or physical packet-loss
+handling. No association was revoked, re-paired or reseeded. General HA model
+enablement remains pending the existing physical qualification gates in
+[the roadmap](../PROJECT_ROADMAP.md).
+
+### Reconnect recovery restoration — control.12 source
+
+The matched gateway/radio change restores **observation**, not transmission,
+from the durable unresolved-open journal. Only a current matching owner with
+`htv213_idle_recovery_resume_v1` receives the prior command ID, attempted phase,
+outlet and duration as fields on ordinary owner configuration. Acknowledged
+commands, closes, completed transactions, unfinished boundary experiments and
+changed identity/enrollment epochs do not qualify. No counter is seeded or
+advanced during restoration.
+
+The radio reconstructs an overdue, unacknowledged observation context without
+building or transmitting an open. Both idle reports must arrive anew after
+restoration; the existing independent gateway freshness and command-correlation
+checks still govern release. Prior outcome stays unknown, and only a new user
+request can reserve the next phase. This also works after a radio/OTA reboot
+or loss of the gateway's in-memory transport correlation.
+
+Regression coverage runs the actual owner command dispatcher and receive path
+for reconnect, reboot and malformed context, plus the gateway restore → fresh
+both-outlet reports → recovered-idle → new-next-phase request sequence. The
+suite passed **1,050 tests**; the native protocol test and control.12 candidate
+build passed. Real capability-handshake and firmware-boundary checks include
+the new development-only capability. Live restoration and the next run remain
+separate qualifications, not implied by these offline results.
+
+### Control.10 source correction — October 4
+
+New tests first reproduced the missing final symbol at the actual pairing
+runtime's TX call sites, and premature expiry in the native session and durable
+gateway journal. Pairing now appends the same computed CRC symbol used by
+qualified HTV213 controls, including the configuration notification. Both
+pairing-only and control builds exercise the actual RMT stream construction.
+
+Automatic enrollment now enters a separate ten-minute confirmation wait once
+the positive configuration ACK and both ports' settings/plans are present.
+The identity remains bound, repeated progress cannot extend the wait, and the
+journal preserves the wait across gateway restart without committing an owner
+or counter. HA uses its existing identity-confirmation stage. The explicit
+research API keeps its original total deadline.
+
+The private replay now consumes the actual phase-17 report from the follow-up
+recording at its captured relative time and reaches `Observed` with masks
+3/3/3 and the positive ACK preserved. That validates the software correction;
+normal enrollment and physical CRC transmission still require the next trial.
+
+Development signing [run 37211325238](https://github.com/fholgado/rainpoint-local/actions/runs/37211325238)
+passed from source `a2471bd`, including all 1,041 CI tests. Local native protocol,
+production and development builds, and their command-boundary checks passed.
+The matching two-file gateway delta was hash-verified against the prior live
+source, preserved in a private source snapshot and deployed. Managed HA backup
+availability was checked first.
+
+Test Node B received all 1,117,776 signed bytes, reported
+`verified_publisher_and_sha256`, rebooted into `0.19.0-htv213-control.10`, and
+confirmed `gateway_and_radio_healthy` with no pending candidate. The observer's
+post-check encountered a missing version field on an unrelated offline node;
+independent read-only verification confirmed the update without repeating OTA.
+Other radio firmware versions were unchanged. Pairing remained inactive and
+unarmed; no watering command was issued. Private deployment/transfer receipts
+are under `captures/htv213-control10-qualification-20261004/`.
+
+The subsequent full-enrollment test exposed a gateway admission blocker before
+any pairing RF: owner-clear used the 32-character owner ID plus `-revoke`, while
+the actual firmware ingress validator accepts only 32 hexadecimal characters.
+The old mock-only revoke test bypassed that validator. A regression compiling
+the real `validCommandId` against the gateway-generated clear command failed
+before the fix and passed afterward. Clear now uses a fresh UUID command ID,
+with the original owner ID unchanged in `owner_id`; no RF payload or control
+phase changed. All 60 ownership/enrollment tests passed. The one-file gateway
+fix was hash-verified and rebuilt without reflashing nodes. Authenticated
+reconnect then acknowledged revocation, and Test Node B confirmed the normal
+five-minute enrollment armed. Physical enrollment completion is still pending;
+the new receive-only recording is retained under the same private capture root.
+
+## HTV213 normal-enrollment first-handoff failure — October 3
+
+The user's subsequent attempt failed before addressed port reports, not at the
+final enrollment notification. In private capture
+`captures/htv213-normal-enrollment-20261003/20261003-203315`, factory `01` phase 1
+was followed by a matching `81` assignment approximately **82 ms** later. The
+valve continued factory announcements at later phases rather than producing
+the expected addressed `02`. A deterministic offline replay of that window
+asserts the missing transition and fails. This proves an assignment was emitted
+and decoded by the SDR; it does not prove the valve received or accepted it.
+
+A wider 433.08–434.48 MHz decode around the first handoff found only `01/81`.
+The remaining capture was checked at the three previous analysis centers; its
+decoded frames belonged to other devices. That limited coverage is not proof
+of silence on every carrier. Small clipped sample fractions were present, so
+this recording is not qualified as entirely unclipped. The complete 360-second
+IQ file is **1,440,000,000 bytes**, independently hash-verified and preserved.
+The enrollment terminated with failure and Test Node B disarmed; no second
+attempt, watering command, reset or garden update was performed.
+
+Comparing the ordinary builder with the successful explicit canary exposed two
+recipe differences: address **2 → 3** and power **0 → +10 dBm**. The address
+allocator reserved the revoked canary's slot, whereas the power change came
+from an unqualified default. The original comparison test supplied 0 dBm
+explicitly and therefore never exercised that default. A regression using the
+actual no-override builder failed on power; the source default now preserves
+0 dBm and the regression passes. This is a recipe-parity correction, **not a
+proven physical pairing fix**, and has not been deployed.
+
+Validation passed: **1,036 full-suite Python tests**, 60 focused
+ownership/enrollment tests, native C++ protocol tests and whitespace checks.
+
+The next assisted trial changes only power: keep address 3, calibrated carriers,
+payload parameters and response timing unchanged. Success would support the
+power hypothesis; failure would leave address/re-pair behavior and emitted
+waveform as candidates. Do not combine those changes or promote the model from
+this failure. Physical qualification remains tracked in
+[the roadmap](../PROJECT_ROADMAP.md).
+
+## HTV213 automatic discovery and CRC-tail diagnosis — October 4
+
+The tested one-file gateway power correction was backed up, hash-verified and
+rebuilt; Test Node B remained on signed `0.19.0-htv213-control.9`. The user
+authorized one new five-minute pairing window. Normal allocation preserved
+failed-attempt slots and selected **address 4**, not 3. This was disclosed before
+arming: the trial cannot isolate power as the cause. No new firmware, watering,
+valve reset or garden change was performed.
+
+The user reported success. Bounded SDR decoding independently recovered:
+
+- Phase-7 `01/81` assignment followed by both ports' `02/82`.
+- Hub phase-2 `20`, positive matching `a0` about 295 ms later, and another `02/82`
+  carrying configuration revision 2 before settings requests.
+- Both-port `05/85` and empty `06/86`, including repeated plan requests.
+- A later valve-originated addressed idle `02`, phase 17, after the initial
+  recording and enrollment window had ended.
+
+Private evidence is in `captures/htv213-normal-enrollment-power0-20261004/`.
+The initial 360-second IQ recording is **1,440,000,000 bytes**; the subsequent
+receive-only 240-second recording is **960,000,000 bytes**. Both sizes and hashes
+were independently verified. There was a gap between recordings; do not infer
+silence during it. The later idle report occurred about 628 seconds after the
+first recording began, around 459 seconds after the last initial state report.
+
+### Physical native-CRC defect, not a demonstrated power cure
+
+For each bounded assignment burst, an independent frequency discriminator
+checked the symbol immediately after the normalized 304-bit frame, across all
+clock phases reproducing that frame. Native CRC was calculated separately with
+seed `0xa8a8`; its upper fifteen bits matched the decoded frame.
+
+| Captured reply | Required final CRC bit | Observed following symbol |
+| --- | --- | --- |
+| Oct 3 failed assignments, phases 1/4/7 | 1 / 1 / 1 | 0 / 0 / 0 |
+| Oct 4 assignments, phases 1/4/7 | 1 / 1 / 0 | 0 / 0 / 0 |
+| Oct 4 plan replies, phases 13/14/15/16 | 1 / 0 / 1 / 0 | 0 / 0 / 0 / 0 |
+
+Each burst had 83–85 matching decoder phases, unanimously observing zero in
+that position. The valve advanced after the phase-7 assignment whose required
+bit was zero; earlier high-bit assignments failed at **both** power levels.
+High-bit plan replies were followed by repeated requests and zero-bit replies.
+This is strong capture-backed evidence that the omitted native CRC symbol is
+an acceptance defect, not proof that reducing power fixed it.
+
+The live pairing runtime's two `transmitAsync` call sites omit the explicit
+final symbol. The previously qualified HTV213 control/retained-owner runtime
+already supplies `nativeTailSymbol(frame)`. Do not change those working paths
+or generalize this finding to another model without its wire evidence.
+
+### Completion-window defect remains separate
+
+An offline replay of the actual exchange through the native `Session` reaches
+reports/settings/plans masks **3/3/3** with a positive notification ACK, but
+remains armed. Adding a report after the plans makes it observed; adding the
+same report after expiry does not. This deterministically identifies the
+post-plan report/deadline dependency. It does not justify inventing an RF
+completion receipt from transmitted plan replies.
+
+The real phase-17 idle report arrived after the five-minute deadline. The radio
+was disarmed and the gateway reported failed enrollment, so no normal completion
+receipt was produced or association committed. RF assignment/configuration is
+verified; normal HA enrollment is **not** complete. The next implementation
+needed to fix the CRC tail and distinguish the user pairing/discovery window from
+known-device telemetry confirmation, without forcing database proof or silently
+discarding the final-report qualification. Work is tracked in
+[the roadmap](../PROJECT_ROADMAP.md).
+
+### Control.10 RF enrollment verification — October 4
+
+One user-authorized normal discovery attempt on Test Node B completed the
+radio enrollment gate. The user reported success; the gateway entered
+`waiting_for_terminal_confirmation`, then accepted the later report and exposed
+`valve_pairing_completed` with the selected radio disarmed and no error.
+
+Offsets below are seconds from the continuous recording's start:
+
+| Offset | Captured exchange |
+| --- | --- |
+| 105.364 / 105.446 | Phase-1 `01/81`; required final CRC bit 0 transmitted correctly; no immediate progression observed. |
+| 111.424 / 111.506 | Phase-4 `01/81`; required final CRC bit 1 transmitted correctly, followed by addressed reports. |
+| 113.356–115.457 | Both ports' `02/82`, phases 5 and 6. |
+| 116.596 / 116.891 | Configuration `20`, phase 2, and matching positive `a0`. |
+| 119.402–121.513 | Both ports' `05/85`, phases 7 and 8. |
+| 123.355–125.436 | Both ports' `06/86`, phases 9 and 10, without the earlier repeated plan requests. |
+| 570.443 | Addressed port-1 idle `02`, phase 11, remaining/requested seconds both zero; matched the completed endpoint and controller. |
+
+Independent bounded IQ measurements confirmed the final symbol on every
+decoded gateway reply and notification. Required high bits on assignment,
+report ACK, settings and plan replies were observed as 1 across 85–86 matching
+clock phases. One low-bit settings reply had 84 matching phases voting 0 and
+one voting 1; this sampling-edge ambiguity does not erase the strong high-bit
+evidence. The correctly formed first assignment did not advance immediately,
+so the CRC correction does not establish that every first reply is accepted.
+
+The final report arrived **445.007 seconds after the last plan reply**. Its
+acceptance verifies the separate confirmation window on hardware. It does not
+establish universal report timing or the units of the assignment timing field.
+The normal naming/save endpoint has not yet been called: no HTV213 device is
+currently projected, and durable association/owner/counter commit remains a
+separate pending step. No watering was sent during this trial.
+
+Private evidence:
+`captures/htv213-control10-enrollment-20261004/20261004-120555/` contains the
+correlated API receipts, `initial-rf.jsonl`, `confirmation-rf.jsonl`, independent
+`crc-tail-verification.json` and `confirmation-verified.json`. The 960-second
+recording finished at 16:22:07 UTC, has exactly **3,840,000,000 bytes**, and its
+independently recomputed SHA-256 matches the capture manifest. Raw IQ is retained.
+
+### Control.10 association commit and restart — October 4
+
+The normal `/pairing/complete` naming/save request committed the accepted
+enrollment as one two-outlet test device. The radio confirmed restored reply
+ownership, pairing became inactive, and the next master command phase was **3**
+from the positive configuration ACK at phase 2. The later device-report phase
+11 was not used as a command seed. HA registered 15 entities, including exactly
+two outlet controls and two duration settings. Saving sent no watering command.
+
+The prior projection coupled normal controls to the general model-menu flag,
+which prevented qualification of a newly committed association through the
+normal controls. The projection now treats menu publication separately from
+control of RF-confirmed, atomically committed associations. Owner acknowledgement,
+fresh idle reports on both outlets, duplicate-command suppression and existing
+failure handling remain required. A new real enrollment/owner/report/control
+regression failed before this change and passes afterwards; all **1,042 tests**
+pass. The normal model menu remains unadvertised.
+
+The single-file gateway change was backed up, hash-verified and deployed with
+no radio firmware update. A read immediately after rebuild raced gateway
+startup; a subsequent read-only check verified the persisted association and
+restored owner. A separate single Test Node B reboot also restored the same
+association/owner and next phase 3. The legacy registry was unchanged.
+
+Fresh port-2 idle reporting resumed, with an independently decoded phase-19
+`02/82` exchange 82 ms apart. Port 1 had not yet reported since the save when
+the first bounded HA check ran, so that check deferred without sending any
+watering. Normal-enrollment outlet controls were subsequently verified below;
+the earlier retained-canary control results are not substituted for them.
+
+Private save receipts remain beside the enrollment capture. Deployment,
+restart and HA evidence are under
+`captures/htv213-control10-normal-controls-20261004/`; the receive-only capture
+`20261004-131438/owner-report-rf.jsonl` contains the post-save owner exchange.
+
+### Control.10 normal HA outlet tests — October 4
+
+After fresh idle reports from both outlets, the ordinary HA valve entities each
+received exactly one 60-second open: port 1 at master phase **3**, followed by
+port 2 at phase **4**. Both produced a positive full-phase `a1`, independent
+active and automatic-idle `02` reports, and a port-specific `04` summary with
+elapsed duration **60 seconds**. HA showed each target open and then closed;
+the other outlet remained idle. The persisted next command phase is **5**.
+No forced counter, repeat open, explicit close, reset or pairing was used.
+
+Independent SDR decoding matched each command to the saved valve/companion
+routes and each response to the saved controller/valve routes. Command-to-ACK
+intervals were **314.5 ms** and **313.5 ms**, respectively. Port 1's summary was
+observed about 2 seconds after idle; port 2's summary was observed about
+**56 seconds after idle**. The latter still completed inside the existing
+completion window; this observation does not establish why its summary arrived
+later or justify assuming completion from elapsed wall-clock time alone.
+
+An earlier check briefly had both outlets eligible, but port 2's report crossed
+the existing 1,200-second freshness limit before dispatch. The helper deferred
+without an open or counter allocation. It waited for new telemetry rather than
+changing that limit; the following check admitted the two successful runs.
+
+Private evidence is under `captures/htv213-control10-normal-controls-20261004/`:
+the per-port attempt, observation and verification receipts; `ha-tests-final.json`;
+and capture `20261004-135026/` with bounded RF decodes and
+`ha-rf-verification.json`. The six-minute capture exited successfully with exactly
+**1,440,000,000 bytes** and an independently verified SHA-256 checksum.
+Decoding used selected command/completion windows on
+three carriers, not uninterrupted all-channel coverage; the maximum decoded
+chunk clipping fraction was about **0.35%**. These are dry-valve protocol/HA
+results, not a measurement of water flow or a general model-support claim.
+Repeat enrollment and physical missing-response qualification remain separate
+gates in the roadmap.
+
+### Control.10 repeat enrollment and same-device handback — October 4
+
+After explicit permission to arm, the completed dry test association was retired
+through the normal registry-forget API. The radio acknowledged old-owner
+revocation before the normal enrollment API admitted the same target. The old
+command history is retained by the enrollment journal's replacement path;
+there was no direct database or counter edit. An initial helper request used
+the sensor-only forget route and returned 404 without changing the association;
+the subsequent valve-registry request succeeded. Only one pairing window was
+armed, and no garden devices were changed.
+
+The repeat followed the earlier capture: assignment at announcement phase 1
+did not produce the following exchange; a phase-4 assignment was followed by
+both-port `02/82` at phases 5/6, positive configuration `20/a0` at phase 2,
+both-port settings at phases 7/8, and empty plans at phases 9/10. Do not count
+this as proof that the first sweep always succeeds.
+
+A later port-1 idle `02` at phase 11 completed enrollment **435.97 seconds**
+after the final plan reply. Its `82` followed about **81 ms** later. Independent
+bounded SDR decoding verified exact saved routing, positive configuration ACK,
+both-port reports and the final report. Test Node B disarmed normally.
+
+The normal naming/save API then restored the **same device ID, name and area**,
+one two-outlet device, ready reply ownership and next master phase **3** from
+the positive phase-2 configuration ACK. Pairing became inactive and the legacy
+registry remained unchanged. This is an explicit new enrollment epoch, not an
+inferred counter reset from the phase-11 report. No watering, reset, flash or
+automatic rearm was performed. Physical missing-response qualification remains
+unfinished; this does not enable general production model support.
+
+Private evidence is in
+`captures/htv213-control10-repeat-20261004/20261004-161155/`: original and
+registry-revoke baselines, arm receipts, observer/terminal receipts, bounded
+RF decodes, `rf-confirmation-verified.json`, normal save receipts and
+`handback-verified.json`. Decoded windows had nonzero clipping (maximum chunk
+fraction about **0.73%**) and covered selected times/carriers only. The full
+960-second capture subsequently exited successfully with exactly
+**3,840,000,000 bytes**; an independent SHA-256 check matched `sha256.txt`.
+Association handback and capture-integrity verification are both complete.
+
+### Missing-ACK idle recovery — October 4 (source only)
+
+Preflight for the battery-out test exposed a deterministic dead end: the
+gateway journal required an ACK to accept completion, while the radio had no
+idle-recovery transition. Battery rejoin alone could not release an unanswered
+open. Native and gateway regressions reproduced this before the fix.
+
+The candidate adds `recovered_idle`, distinct from successful completion:
+
+- After its response window, the radio requires valid, fresh idle reports from
+  **both** outlets. Active or stale reports do not establish recovery.
+- The gateway correlates the original command, current authenticated owner and
+  `htv213_idle_recovery_v1` capability, then independently checks both saved RF
+  reports are newer than the attempt and at most 20 minutes old.
+- The old outcome remains **unknown**, without invented ACK/summary evidence.
+  Its phase stays consumed; only a new user request allocates the next phase.
+- HA updates its control status and existing problem notification to explain
+  recovery. No open, close, reset or automatic retry is emitted by recovery.
+
+Replay covers recovery before/after the overdue deadline, late ACKs, retained
+history, wrong identity, partial/stale/active reports, firmware compatibility,
+and the actual radio runtime's receive/ACK path. Acknowledged runs missing a
+summary, unanswered closes, interrupted radio/gateway sessions and unfinished
+counter-boundary experiments are not released by this new path.
+
+Validation: **1,046 Python tests passed**, native protocol test passed, and both
+the default production profile and HTV213/development candidate compiled.
+
+No live test command or deployment accompanied this change. The battery-out
+failure/reinsertion/new-command experiment remains the physical qualification
+gate in [the roadmap](../PROJECT_ROADMAP.md), not an already-proven result.
+
+### Control.11 deployment and capability admission — October 4
+
+Development signing [run 37234055141](https://github.com/fholgado/rainpoint-local/actions/runs/37234055141)
+passed for firmware source `66888a1` (1,046 CI tests, two optional skips).
+After a current HA/gateway backup, three gateway recovery files and the HA
+notification module were hash-verified and deployed; HA restarted successfully.
+The firmware catalog is loaded at startup: an initial OTA admission request
+preceded its reload and was rejected without dispatch. Reloading the catalog
+made the verified artifact visible.
+
+Test Node B received **1,117,952 bytes** and verified publisher signature and
+SHA-256, but initially failed authentication. The new
+`htv213_idle_recovery_v1` capability was missing from the gateway allowlist.
+A real TCP-handshake regression, deriving capabilities from firmware source,
+reproduced rejection with valid credentials. Adding the exact capability fixed
+it while preserving unknown-capability rejection; **1,047 local tests passed**.
+The single-file gateway correction restored the existing candidate without a
+second firmware transfer or any credential change.
+
+Independent verification confirmed `0.19.0-htv213-control.11`, authenticated
+connection, `gateway_and_radio_healthy`, no pending candidate, ready reply
+owner, the same saved valve, both HA outlets closed and next phase **3**.
+Pairing stayed inactive, no watering was commanded and other radio firmware
+versions were unchanged. Private receipts are in
+`captures/htv213-control11-qualification-20261004/`. This verifies deployment,
+not physical missing-response recovery; batteries remained in the valve.
+
+### Control.11 battery-out test and reconnect gap — October 4
+
+With the dry test valve's batteries removed, ordinary HA admission lacked
+fresh idle reports. The user explicitly authorized the existing diagnostic
+admission instead. One 60-second outlet-1 request reserved phase **3** from the
+unchanged saved association; no readiness flags or counters were overridden.
+SDR decoding confirmed native `21`, phase 3, the target valve and companion
+route. No matching ACK was observed in that bounded interval. The radio
+reported uncertain, then overdue; HA showed failed and disabled new starts.
+The retained next phase became **4**, with no automatic retry.
+
+The batteries were restored roughly three hours later. Authenticated gateway
+receipts at 00:42:42Z and 00:42:44Z on October 5 showed both outlets idle, and
+both HA entities became closed. Recovery nevertheless remained blocked.
+Between the command and rejoin, gateway authentications increased from one to
+three while node uptime continued: the radio reconnected without rebooting.
+
+An offline reproduction using the actual C++ runtime dispatch/receive code
+isolated the failure: a same-owner `htv213_owner_set` restores reply ownership
+but unconditionally replaces `htv213ControlTrial` with an idle object. Later
+reports reach ordinary telemetry, but no pending command remains in the radio
+to produce correlated `recovered_idle`. The gateway correctly retains the
+unresolved durable transaction. The reproduction fails after owner restore
+(trial state 0); an in-memory-only counterfactual preserving the trial passes
+the same both-port idle/no-retry assertions. This is diagnostic evidence, not
+a deployed fix; simply skipping every owner reset is not a sufficient policy
+for changed owners, enrollment epochs, restarts or acknowledged transactions.
+
+Private evidence: `captures/htv213-control11-missing-response-20261004/20261004-172851/`.
+The original 900-second capture is **3,600,000,000 bytes** and its independent
+SHA-256 check matches `sha256.txt`. It ended before battery reinsertion:
+rejoin evidence is gateway RF receipts, not an independent SDR recording.
+Counter 4 remains intact; no follow-up open, forced release, pairing, reset or
+deployment was performed. The reconnect case was outside the earlier
+uninterrupted-session recovery qualification and is now a required fix in
+[the roadmap](../PROJECT_ROADMAP.md).
+
+### Control.12 live restart recovery and normal HA run — October 4 EDT
+
+The matched gateway correction and development-signed
+`0.19.0-htv213-control.12` (source `9cd84b4`) were deployed to Test Node B.
+HA backup `74b431bc` was verified before deployment. The first OTA download
+stalled at 393,216 bytes without activating a candidate; one subsequent OTA
+completed all 1,118,640 bytes with signature/SHA verification and
+`gateway_and_radio_healthy`. Installed garden radio firmware and the saved
+registry remained unchanged. The gateway rebuild and radio OTA reboot exercised
+restoration from durable state, not just the uninterrupted receive path.
+
+After restoration, fresh outlet-1 idle arrived at **01:34:05Z** and outlet-2
+idle at **01:41:25Z** on October 5. The original phase-3 transaction became
+`recovered_idle`, still unacknowledged with unknown original outcome; HA start
+availability returned. The retained next phase stayed **4**. No watering
+command was sent by restoration, and no phase was reset or forced.
+Outlet 1's report and phase-echo acknowledgment were independently SDR-decoded.
+Outlet 2 arrived between the two recordings, so its recovery evidence is the
+authenticated gateway/radio receipt, not independent SDR coverage.
+
+One new user-authorized normal HA request then ran dry outlet 1 for **60 seconds
+at phase 4**. Independent bounded IQ decoding verified the exact command and
+reply routes, native `21`, positive full-phase `a1`, outlet-1 active reports,
+automatic idle and `04` summary. HA was observed open then closed; the journal
+reported complete with ACK, idle and summary, and next phase **5**. Outlet 2
+remained idle. There was no automatic open retry, speculative close, pairing
+or valve reset.
+
+Private evidence: `captures/htv213-control12-qualification-20261005/`, including
+deployment, recovery, HA and independent RF verification receipts. The first
+960-second recording is **3,840,000,000 bytes**; the following 240-second
+recording is **960,000,000 bytes**. Both exact sizes and independently computed
+SHA-256 hashes match their capture receipts; the evidence set is sealed.
+Decoded chunks have some clipping (maximum about 0.38% in the command windows);
+validated frames prove the listed exchanges, not silence outside those windows.
+This qualifies one physical missing-response/restart-recovery path on the dry
+HTV213 canary, not general model enablement or recovery on other valve families.
+
+### Native HA two-zone menu rollout — October 5
+
+Gateway **0.39.17** and integration **0.18.5** expose HTV213FRF through the
+existing Configure → Add a RainPoint device → Valves flow. Radio selection and
+server admission share eligibility: authenticated/managed protocol-v2 radio,
+complete control.12-equivalent enrollment/control/recovery capabilities, saved
+per-radio carrier calibration and no existing device ownership. HA refreshes
+eligibility on display and submission; older gateways retain capability-only
+selection for their existing profiles. No extra wizard, RF-parameter form or
+per-user control experiments are required.
+
+The full suite passed **1,061 tests**, including real gateway admission/catalog
+checks and native HA callbacks for review, stale eligibility and withdrawn
+models. The native C++ protocol test passed; no firmware source changed.
+Backup `bd3c4e68` was verified to contain both `homeassistant.tar.gz` and
+`local_rainpointd.tar.gz`. Deployed runtime hashes matched the tested package;
+HA configuration validation passed before restart.
+
+The previous live integration still contained the already-retired wizard.
+Installing the consistent tracked package removed that sidebar entry; the old
+package is recoverable under
+`/share/rainpoint-local/source-backups/native-ha-20261005/` and in the backup.
+The existing owner-cleanup diagnostics added four node entities; the device
+count remained 13.
+
+In-app-browser verification showed integration version 0.18.5, the HTV213FRF
+model, Next navigation and the prepared-radio explanation. Test Node B is
+correctly excluded from a **new** enrollment because it already owns the saved
+test valve. The dialog was closed without arming. API checks independently
+confirmed exactly two closed HA valve controls with 1–60-minute limits, unchanged
+next phase **5**, unchanged registry/control transaction identities and all
+radio firmware versions unchanged. No pairing, watering, RF calibration change
+or radio update occurred during this rollout.
+
+Private deployment/HA receipts are in `captures/htv213-native-ha-menu-20261005/`.
+This verifies native UI exposure and preservation of the existing association,
+not a new physical enrollment. Standard Alpha 1 firmware still excludes the
+HTV213 runtime; ordinary signed-firmware integration and second-radio carrier
+qualification remain explicit release gates in [the roadmap](../PROJECT_ROADMAP.md).
+
+### Unified firmware two-zone promotion — October 5
+
+Unified firmware **0.20.0** now includes the qualified HTV213 enrollment,
+routine owner, retained battery rejoin, bounded controls and observation-only
+idle recovery. Gateway **0.39.18** selects `htv213_control_open/close` when the
+radio advertises `htv213_control_v1`; older control.12 radios retain their
+existing command names and durable journal. Ordinary images exclude explicit
+factory-identity pairing probes, control probes, phase-trial commands and
+development trust. The experimental build flags enable only the additional
+research entry points; ordinary enrollment/control share the proven RF builders.
+
+The native CRC tail is available to the qualified HTV213 callers in the standard
+driver. Other models retain the existing default stream. Actual dispatcher,
+waveform, authenticated socket and temporary-database regressions verify normal
+open/close, phase preservation, older-firmware compatibility and rejection of
+research admission before a phase reservation on standard radios.
+
+The final full suite passed **1,067 tests**. Native protocol tests and
+standard, phase-trial and development-recovery PlatformIO builds passed their
+respective command/trust boundary checks. Standard flash use is **1,111,145 /
+1,310,720 bytes**; RAM is **54,712 / 327,680 bytes**. This is source/build
+qualification, not an on-air test of a newly installed image. A read-only live
+check found the existing two-zone valve idle at next phase **5**, with all three
+active radios connected, authenticated and disarmed.
+
+Second-radio carrier validation was deferred at the user's request. Saved
+per-radio calibration remains required; this promotion adds no universal carrier
+offset or calibration evidence. Alpha 1's published artifacts remain unchanged.
+Signing and test-node rollout are tracked in [the roadmap](../PROJECT_ROADMAP.md).
+
+### Unified candidate deployment and normal HA controls — October 5
+
+Development signing run [37286839651](https://github.com/fholgado/rainpoint-local/actions/runs/37286839651)
+produced **0.20.0-rc.1** from source **13b97c13** using the ordinary unified
+profile plus explicit development trust. Both CI runs passed all checks.
+The image's publisher signature, source revision, catalog copy and firmware
+command boundary were independently verified before OTA.
+
+Gateway **0.39.18** was deployed from the tested eight-file delta, with HA backup
+`bd3c4e68` verified available and a recoverable source copy under
+`/share/rainpoint-local/source-backups/unified-020-20261005`. Gateway restart and
+signed OTA preserved the same saved two-outlet device, registry, ready reply owner
+and next phase **5**. Test Node B confirmed `gateway_and_radio_healthy`, advertised
+`htv213_control_v1`, and advertised neither research pairing nor research control.
+Other radio firmware remained unchanged. HA integration stays at **0.18.5**.
+
+Two **60-second dry runs** through the normal HA valve entities then completed:
+port 1 at full master phase **5**, port 2 at **6**. Independent bounded SDR
+decoding confirms each `21`, positive matching `a1`, target-port active and idle
+`02`, elapsed-60 `04`, and phase-correlated `84`. Acceptance delays were about
+**309 ms**; idle reports arrived **62.95 s** and **61.43 s** after each command.
+The second summary arrived about **117.4 s** after its command, later than its
+first idle; the gateway kept the command pending until actual completion evidence.
+Both HA entities transitioned open → closed, the other outlet stayed idle, and
+the retained next phase is **7**. No open was retried or counter forced.
+
+The **1,440,000,000-byte** receive-only capture completed and its SHA-256 was
+independently checked against the capture receipt. Private evidence is under
+`captures/htv213-unified-020-20261005/`. Some bounded IQ windows contained about
+0.5% clipped samples; this supports validated packets and transaction correlation,
+not precision carrier calibration. Second-radio calibration validation remains
+deferred. The ordinary release-key image still uses protected signing approval.

@@ -1,5 +1,5 @@
-// Explicit dry-test transport, compiled out unless BOTH HTV213 experiment
-// flags are enabled. No automatic counter seed, retry, rejoin or startup TX.
+// Qualified two-zone transport. Research command aliases are opt-in only;
+// normal controls use the same RF builder and evidence-driven state machine.
 rainpoint::htv213Control::Trial htv213ControlTrial;
 rainpoint::htv213::Profile htv213ControlProfile{};
 String htv213ControlCommandId, htv213ControlOpenId;
@@ -46,12 +46,13 @@ void reportHtv213Owner(const rainpoint::htv213::Frame* frame=nullptr) {
 bool htv213ControlActive() {
     using S=rainpoint::htv213Control::State;
     const auto state=htv213ControlTrial.state();
-    return state!=S::Idle && state!=S::Complete && state!=S::Cancelled && state!=S::Overdue;
+    return state!=S::Idle && state!=S::Complete && state!=S::Cancelled && state!=S::Overdue &&
+        state!=S::RecoveredIdle;
 }
 
 void reportHtv213Control(const rainpoint::htv213::Frame* frame=nullptr) {
     constexpr const char* names[]={"idle","transmitting","awaiting_response","open_confirmed",
-        "close_awaiting_response","close_confirmed","complete","uncertain","overdue","cancelled"};
+        "close_awaiting_response","close_confirmed","complete","uncertain","overdue","cancelled","recovered_idle"};
     String line="{\"type\":\"htv213_control_status\",\"node_id\":\"";
     line+=wifiTransport.nodeId(); line+="\",\"command_id\":\""; line+=htv213ControlCommandId;
     line+="\",\"state\":\""; line+=names[static_cast<unsigned>(htv213ControlTrial.state())];
@@ -86,8 +87,16 @@ void transmitHtv213Control(const rainpoint::htv213::Transmission& tx) {
 }
 
 bool handleHtv213ControlCommand(const String& type,const String& command,const String& id) {
-    const bool open=type=="htv213_control_probe_open";
-    const bool close=type=="htv213_control_probe_close";
+    const bool open=type=="htv213_control_open"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_open"
+#endif
+        ;
+    const bool close=type=="htv213_control_close"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_close"
+#endif
+        ;
     const bool owner=type=="htv213_owner_set";
     if (type=="htv213_owner_clear") {
         if (!htv213OwnerEnabled && !htv213ControlActive()) {
@@ -109,7 +118,7 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
             htv213OwnerEnabled=false; reportHtv213Owner();
             htv213ControlTrial.cancel(); restoreHtv213ControlReceiver(); reportHtv213Control(); return false;
         }
-        reportNetworkCommandError(id,"htv213_control_experiment_busy"); return true;
+        reportNetworkCommandError(id,"htv213_control_busy"); return true;
     }
     if (id==htv213ControlCommandId || id==htv213ControlOpenId) {
         reportNetworkCommandError(id,"htv213_control_duplicate"); return true;
@@ -134,7 +143,7 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         htv213ControlCommandId=id; transmitHtv213Control(tx); return true;
     }
     if (htv213ControlActive()) {
-        reportNetworkCommandError(id,"htv213_control_experiment_busy"); return true;
+        reportNetworkCommandError(id,"htv213_control_busy"); return true;
     }
     rainpoint::htv213::Profile p{};
     rainpoint::PairingLocalDateTime clock{};
@@ -194,13 +203,26 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         power!=htv213ControlPower || (owner && id!=htv213OwnerId))) {
         reportNetworkCommandError(id,"htv213_revoke_owner_before_reconfiguration"); return true;
     }
+    rainpoint::htv213Control::Trial restoredTrial;
+    const String recoveryId=owner ? jsonStringField(command,"recovery_command_id") : String{};
+    if (recoveryId.length()) {
+        long recoveryPhase=0,recoveryPort=0,recoverySeconds=0;
+        if (!validCommandId(recoveryId) || recoveryId==id ||
+            !jsonLongField(command,"recovery_phase",recoveryPhase) || recoveryPhase<0 || recoveryPhase>63 ||
+            !jsonLongField(command,"recovery_port",recoveryPort) || recoveryPort<1 || recoveryPort>2 ||
+            !jsonLongField(command,"recovery_seconds",recoverySeconds) || recoverySeconds<1 ||
+            recoverySeconds>rainpoint::htv213Control::kMaximumTrialSeconds ||
+            !restoredTrial.resumeIdleRecovery(p,recoveryPort,recoverySeconds,recoveryPhase,millis())) {
+            reportNetworkCommandError(id,"invalid_htv213_idle_recovery"); return true;
+        }
+    }
     if (!rainpoint::htv213::valid(p) || !primaryRadio.prepareTransmit() ||
         (owner && rejoin && (!primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,12)) ||
                             !primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,11)))) ||
         !primaryRadio.restoreReceiveChannel(0)) {
         reportNetworkCommandError(id,"htv213_control_prepare_failed"); return true;
     }
-    htv213ControlTrial=rainpoint::htv213Control::Trial{};
+    htv213ControlTrial=restoredTrial;
     if (!owner && !htv213ControlTrial.start(p,port,seconds,phase,millis(),tx)) {
         reportNetworkCommandError(id,"htv213_control_start_failed"); return true;
     }
@@ -210,7 +232,12 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         htv213RetainedConfiguration=retained;
         htv213RetainedRejoinEnabled=rejoin;
         htv213OwnerEnabled=true; htv213OwnerId=id; scanChannels=false;
-        reportHtv213Owner(); return true; // Reply ownership is not an RF command.
+        reportHtv213Owner();
+        if (recoveryId.length()) {
+            htv213ControlCommandId=recoveryId; htv213ControlOpenId=recoveryId;
+            reportHtv213Control();
+        }
+        return true; // Reply ownership/recovery never transmits an open.
     }
     htv213ControlCommandId=id; htv213ControlOpenId=id;
     scanChannels=false;

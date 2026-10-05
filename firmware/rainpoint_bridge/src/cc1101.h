@@ -63,10 +63,8 @@ public:
         std::uint8_t paTableValue = 0x60,
         std::uint8_t deviationRegister = 0x45,
         std::uint32_t startAtMicros = 0,
-        std::uint16_t postFrameLowHoldMicros = 0
-#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
-        , std::int8_t finalSymbol = -1
-#endif
+        std::uint16_t postFrameLowHoldMicros = 0,
+        std::int8_t finalSymbol = -1
     );
     bool transmitClocked(
         const std::array<std::uint8_t, kFrameBytes>& frame,

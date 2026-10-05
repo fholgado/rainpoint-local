@@ -150,8 +150,13 @@ tests prove encoding and bookkeeping only.
 [`ControlJournal`](../rainpointd_addon/rainpointd/htv213_control_trial.py) currently
 keys records by `controller:valve` and retains the above-63 guard for unqualified
 associations. Only a completed boundary audit enables modulo-64 allocation.
-This is an association-local experimental policy, **not the stock allocator
-contract**. Before claiming stock-compatible multi-device
+This is the existing canary's association-local experimental policy, **not the stock allocator
+contract**. Oct 3 source preparation adds a separate staged model policy for
+normal enrollment: the same modulo-64 transition, starting from actual ACK
+evidence, without manufacturing a completed per-association trial. The normal
+model remains disabled pending existing physical qualification. Canaries keep
+their saved records unchanged; offline traversal is bookkeeping evidence, not
+a new physical boundary test. Before claiming stock-compatible multi-device
 allocation, review a controller-scoped durable allocator spanning relevant
 master builders, while keeping association-specific transaction matching and
 echoed report replies separate. Do not silently change allocation scope or

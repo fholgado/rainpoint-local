@@ -1,8 +1,10 @@
-"""HA-facing controls for an explicitly qualified dry HTV213 association.
+"""HA projection for qualified canary and staged normal HTV213 associations.
 
 The persisted reply owner supplies all RF parameters. HA supplies only an
 outlet and duration; transport success never becomes reported watering. This
-canary adapter does not advertise general HTV213 pairing or battery recovery.
+adapter admits committed, RF-confirmed enrollments independently of model-menu
+visibility. Unpublished models can be qualified through the normal controls;
+publishing the pairing profile remains a separate release decision.
 """
 from __future__ import annotations
 
@@ -10,11 +12,11 @@ import copy
 import json
 from datetime import datetime, timezone
 
-from . import htv213_owner as owner, htv213_control_experiment as control
-from .htv213_control_trial import ControlJournal
+from . import htv213_owner as owner, htv213_control_transport as control
+from .htv213_control import ControlJournal, wraps, SETTLED_STATES, RECOVERY_FRESH_SECONDS
 
 MODEL = "HTV213FRF"
-FRESH_SECONDS = 1200
+FRESH_SECONDS = RECOVERY_FRESH_SECONDS
 
 
 def _age(value, now):
@@ -72,7 +74,7 @@ def project(gateway, now=None):
         journal = ControlJournal(gateway._store).snapshot(key)
         tx = journal.get("transaction") or {}
         age = _age(tx.get("reserved_at"), now)
-        unresolved = journal["state"] not in {"ready", "complete"}
+        unresolved = journal["state"] not in SETTLED_STATES
         node = gateway._nodes.get(record["node_id"], {})
         owner_status = node.get("htv213_owner", {})
         connected = bool(node.get("connected") and node.get("authenticated") and
@@ -80,7 +82,7 @@ def project(gateway, now=None):
                          owner_status.get("state") == "ready" and
                          owner_status.get("command_id") == record["command"]["command_id"])
         state = {"device_kind": "valve", "rf_control_enabled": True,
-                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "dry_canary",
+                 "rf_control_node_id": record["node_id"], "rf_control_qualification": "normal_enrollment" if record.get("enrollment_id") else "dry_canary",
                  "rf_control_duration_min_minutes": 1,
                  "rf_control_duration_max_minutes": 60 if "htv213_duration_3600" in node.get("capabilities", []) else 2,
                  "rf_control_duration_step_minutes": 1}
@@ -114,12 +116,15 @@ def project(gateway, now=None):
         boundary_active = bool(journal.get("counter_boundary") and not journal["counter_boundary"].get("complete"))
         start = (connected and not unresolved and not boundary_active and
                  watering == [False, False] and
-                 (journal["next_phase"] <= 63 or journal.get("counter_boundary", {}).get("complete") is True))
+                 (journal["next_phase"] <= 63 or wraps(journal)))
         same_session = (_age(node.get("connected_at"), now) >= age)
         stop = (connected and same_session and not boundary_active and journal["state"] == "open_confirmed"
                 and not tx.get("idle") and not overdue)
         reason = ("Radio unavailable" if not connected else "Command awaiting valve response" if pending else
                   "Valve confirmed idle; completion summary missing; no automatic retry" if missing_summary else
+                  "Command unconfirmed; waiting for both outlets to report idle; no automatic retry" if (
+                      failed and not tx.get("acknowledged") and tx.get("action") == "open" and
+                      not boundary_active and control.IDLE_RECOVERY_CAPABILITY in node.get("capabilities", [])) else
                   "Counter/command requires investigation; no automatic retry" if failed or overdue else
                   "Explicit counter-boundary experiment in progress" if boundary_active else
                   "Waiting for confirmed idle on both outlets" if not start else None)
@@ -129,11 +134,13 @@ def project(gateway, now=None):
             rf_control_transaction_state=phase, rf_control_transaction_id=tx.get("command_id"),
             rf_control_transaction_action=tx.get("action"), rf_control_transaction_zone=tx.get("port"),
             rf_control_transaction_duration_seconds=tx.get("requested_seconds"),
-            rf_control_transaction_status=reason or "Ready", rf_control_transaction_error=reason if failed or overdue else None,
+            rf_control_transaction_status=reason or ("Both outlets idle; previous command outcome unknown" if
+                journal["state"] == "recovered_idle" else "Ready"),
+            rf_control_transaction_error=reason if failed or overdue else None,
             rf_control_overdue=overdue, rf_control_completion_missing=bool(missing_summary),
             rf_retained_command_counter=journal["next_phase"],
             rf_retained_counter_status="Ready" if start else reason or "Watering in progress")
-        devices[device_id] = dict(device_id=device_id, model=MODEL, name=record["name"], area=None,
+        devices[device_id] = dict(device_id=device_id, model=MODEL, name=record["name"], area=record.get("area"),
             available=connected, reporting=connected and 0 <= _age(record.get("last_seen"), now) <= FRESH_SECONDS,
             observed_at=record.get("last_seen"), capabilities=["bounded_valve_control", "forget"], state=state)
     return devices
@@ -147,7 +154,7 @@ def request(gateway, device_id, action, port, seconds=None):
         key, record = found
         if type(port) is not int or port not in (1, 2):
             raise ValueError("HTV213 has exactly two outlets")
-        control.eligible(gateway, record["node_id"])
+        node = control.eligible(gateway, record["node_id"])
         if gateway.pairing().get("active") or gateway._ack_ownership.snapshot():
             raise ValueError("finish pairing or ownership changes before valve control")
         state = project(gateway)[device_id]["state"]
@@ -157,17 +164,17 @@ def request(gateway, device_id, action, port, seconds=None):
                 raise ValueError(state["rf_control_start_unavailable_reason"])
             if type(seconds) is not int or not 1 <= seconds <= state["rf_control_duration_max_minutes"] * 60:
                 raise ValueError("duration exceeds the selected radio capability")
-            tx = journal.reserve(key, action=action, port=port, seconds=seconds, dry_confirmed=True)
+            tx = journal.reserve(key, action=action, port=port, seconds=seconds)
             command = copy.deepcopy(record["command"])
-            command.update(type="htv213_control_probe_open", command_id=tx["command_id"],
+            command.update(type=control.command_type(node, "open"), command_id=tx["command_id"],
                 local_clock=datetime.now().astimezone().strftime("%Y%m%d%H%M%S"),
                 port=port, seconds=seconds, phase=tx["phase"])
         elif action == "close":
             if not state["rf_control_available"] or state["rf_control_transaction_state"] != "watering_confirmed":
                 raise ValueError("close requires a confirmed active run on this owner")
             prior = journal.snapshot(key)["transaction"]
-            tx = journal.reserve(key, action=action, port=port, seconds=0, dry_confirmed=True)
-            command = dict(type="htv213_control_probe_close", command_id=tx["command_id"],
+            tx = journal.reserve(key, action=action, port=port, seconds=0)
+            command = dict(type=control.command_type(node, "close"), command_id=tx["command_id"],
                            open_command_id=prior["command_id"], phase=tx["phase"])
         else:
             raise ValueError("unsupported valve action")
@@ -189,7 +196,7 @@ def forget(gateway, device_id):
             raise KeyError(device_id)
         key, record = found
         journal = ControlJournal(gateway._store).snapshot(key)
-        if journal["state"] != "complete" or any(r.get("watering") for r in record["ports"].values()):
+        if journal["state"] not in SETTLED_STATES or any(r.get("watering") for r in record["ports"].values()):
             raise ValueError("finish the active or unresolved valve transaction first")
         records = owner.records(gateway)
         records[key]["revoking"] = True

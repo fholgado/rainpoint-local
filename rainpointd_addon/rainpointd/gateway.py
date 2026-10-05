@@ -6043,6 +6043,9 @@ class Gateway:
     def pairing(self, *, now: datetime | None = None) -> dict[str, Any]:
         """Return HCS026 enrollment progress and available radio nodes."""
         with self._lock:
+            from . import htv213_enrollment_flow
+            if htv213_enrollment_flow.selected(self):
+                return htv213_enrollment_flow.snapshot(self, now=now)
             if self._pairing is None:
                 return {
                     "active": False,
@@ -6069,6 +6072,13 @@ class Gateway:
         now: datetime | None = None,
     ) -> dict[str, Any]:
         """Open enrollment and optionally arm one authenticated radio node."""
+        from . import htv213_enrollment, htv213_enrollment_flow
+        if profile_id == htv213_enrollment.PROFILE_ID:
+            if valve_route is not None or companion_endpoint is not None or known_rejoin or power_dbm is not None:
+                raise ValueError("normal HTV213 enrollment uses the gateway-owned RF recipe")
+            with self._lock:
+                return htv213_enrollment_flow.start(self, node_id=node_id,
+                    duration_seconds=duration_seconds, factory_endpoint=factory_endpoint, now=now)
         if not 10 <= duration_seconds <= 900:
             raise ValueError("duration_seconds must be between 10 and 900")
         if power_dbm is not None:
@@ -6268,6 +6278,9 @@ class Gateway:
     def stop_pairing(self, *, command_id: str | None = None) -> dict[str, Any]:
         """Close the current pairing window and disarm its selected node."""
         with self._lock:
+            from . import htv213_enrollment_flow
+            if htv213_enrollment_flow.selected(self):
+                return htv213_enrollment_flow.cancel(self, command_id)
             if self._pairing is None:
                 raise RuntimeError("persistent pairing state is unavailable")
             if command_id is not None and command_id != self._active_pairing_command_id:
@@ -6407,6 +6420,7 @@ class Gateway:
                 automatic_hcs026_profile_metadata(),
                 automatic_htv145_profile_metadata(),
                 automatic_htv405_profile_metadata(),
+                *self._htv213_pairing_profiles(),
             ],
             "transmitter_available": bool(pairing_nodes),
             "transmitter_required": True,
@@ -6602,6 +6616,11 @@ class Gateway:
     ) -> dict[str, Any]:
         """Persist metadata for the device proven by the active RF session."""
         with self._lock:
+            from . import htv213_enrollment_flow
+            if htv213_enrollment_flow.selected(self) or (
+                    self._store is not None and self._pairing is not None and
+                    htv213_enrollment_flow.completed_request(self, endpoint.strip().lower())):
+                return htv213_enrollment_flow.complete(self, endpoint=endpoint.strip().lower(), name=name, area=area)
             valve_profile = self._active_pairing_profile_id in {
                 AUTOMATIC_HTV145_PROFILE_ID,
                 AUTOMATIC_HTV405_PROFILE_ID,
@@ -6791,6 +6810,24 @@ class Gateway:
             observed = datetime.now(timezone.utc)
         self._pairing.observe(fields, now=observed)
 
+    def configure_htv213_radio(self, node_id: str, *, initial_center_hz: int, routine_center_hz: int) -> dict[str, Any]:
+        """Save explicitly measured carriers; normal HA users need no RF fields."""
+        from .htv213_enrollment import EnrollmentJournal
+        with self._lock:
+            if self._store is None or not any(n["node_id"] == node_id for n in self._store.radio_nodes()):
+                raise ValueError("managed radio node required")
+            EnrollmentJournal(self._store).configure_radio(node_id,
+                initial_center_hz=initial_center_hz, routine_center_hz=routine_center_hz)
+            return dict(node_id=node_id, model="HTV213FRF", initial_center_hz=initial_center_hz,
+                        routine_center_hz=routine_center_hz)
+
+    def _htv213_pairing_profiles(self) -> list[dict[str, Any]]:
+        from .htv213_enrollment import profile_metadata
+        from .htv213_enrollment_flow import node_unavailable_reason
+        return [{**profile_metadata(), "eligible_node_ids": [
+            n["node_id"] for n in self._pairing_nodes()
+            if node_unavailable_reason(self, n) is None]}]
+
     def _pairing_nodes(self) -> list[dict[str, Any]]:
         """Return connected protocol-v2 nodes advertising any pairing family."""
         if self._node_command_sender is None:
@@ -6812,6 +6849,7 @@ class Gateway:
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
+                        "htv213_auto_identity_pairing",
                     )
                 )
             ):

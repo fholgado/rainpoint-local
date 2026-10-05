@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.39.18 / Unreleased
+
+- Support unified firmware 0.20.0 with ordinary HTV213 enrollment, two-outlet
+  controls, retained rejoin and observation-only recovery. Select normal control
+  commands by radio capability; control.12 nodes keep their existing protocol.
+- Standard firmware excludes research pairing/control probes and development
+  signing keys. Saved carrier calibration is still required; second-radio
+  calibration validation is deferred.
+
+## 0.39.17 / Unreleased
+
+- Offer HTV213FRF in native HA pairing on prepared, dedicated radios. Check
+  complete enrollment/recovery capabilities, saved carrier calibration and
+  ownership before showing a radio and again before starting pairing.
+- Preserve the qualified RF recipe, durable pairing proof, two-outlet controls,
+  retained phase and observation-only missing-response recovery. No automatic
+  re-pairing, counter reset or per-user experimental unlock is required.
+- Standard Alpha 1 firmware still excludes HTV213; this is not a firmware release
+  or an automatic promotion of installed radio nodes.
+
+## Integration 0.18.5 / Unreleased
+
+- Show HTV213FRF in the native model menu, explain unprepared radios and refresh
+  radio eligibility before review/arming. Preserve the normal Back/Next flow,
+  confirmation wait and two-outlet entities; no new wizard or automatic pairing.
+
 ## 0.39.16 / Unreleased
 
 - Separate unattended development signing from protected production signing;

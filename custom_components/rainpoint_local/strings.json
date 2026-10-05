@@ -187,6 +187,7 @@
       "invalid_auth": "The gateway registry token is incorrect",
       "invalid_response": "The gateway returned an incompatible response",
       "no_pairing_node": "No authenticated pairing-capable local radio node is connected",
+      "no_prepared_two_zone_radio": "Two-zone pairing requires a connected dedicated radio with matching HTV213 recovery firmware, saved carrier calibration and no existing device assignments. Standard alpha firmware does not yet include this model. Existing valves do not need to be paired again.",
       "pairing_failed": "The selected radio node could not start this model's pairing exchange",
       "sensor_not_found": "The selected sensor is no longer available",
       "confirmation_required": "Confirm that the physical sensor is not reset by this action",

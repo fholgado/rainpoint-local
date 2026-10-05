@@ -1,8 +1,10 @@
 # HTV213FRF two-zone valve protocol
 
 **Stock reference plus locally verified dry pairing, both-outlet control,
-explicit stop and one battery-only recovery with subsequent control.
-General production support remains unqualified.**
+explicit stop, battery rejoin and missing-response/restart recovery.
+Native HA setup is available with unified firmware 0.20.0 / gateway 0.39.18
+(unpublished candidate), or qualified control.12 test firmware. Alpha 1
+firmware does not include this model.**
 The HTV213FRF is one RF device with ports `1` and `2`. Follow
 [common framing](common.md) and the
 [capture evidence](../research/HTV213_STOCK_CAPTURE_FINDINGS_20260928.md).
@@ -25,7 +27,7 @@ These bytes alone do not distinguish long-press pairing from a boot announcement
 
 ### Retained reply owner
 
-The experimental control runtime adds an opt-in retained owner, separate from
+The control runtime adds a retained owner, separate from
 fresh enrollment. Its saved association supplies address, routine selector,
 timing, configuration revision, fourteen-byte settings for each port and known
 empty plans. `01/81` returns that association; `02/82`, `05/85` and page-zero
@@ -49,14 +51,14 @@ Authenticated POST `/api/v1/experiments/htv213/recovery` accepts an existing
 `association_key`, explicit `configuration` (schema in `valve_recovery.py`) and
 boolean `enabled`. It installs configuration through the existing reply owner;
 it does not enroll or water. Nodes require `htv213_retained_rejoin_v1`. Normal
-builds omit this handler. One local battery-only rejoin is physically verified;
+enrollment saves the same qualified configuration. Battery-only rejoin is physically verified;
 repeat/lifecycle qualification remains tracked in the roadmap.
 
 Both signing workflows have an unpublished `htv213-recovery` profile. Release
 signing requires approval; separate development signing is automatic and only
 development-trust radios accept its key. Neither workflow deploys. The binary
-checker excludes other research command profiles; normal production firmware
-excludes this runtime. See [signing boundaries](../docs/FIRMWARE_SIGNING_DESIGN.md).
+checker excludes research command entry points from ordinary firmware; unified
+0.20.0 includes the qualified runtime. See [signing boundaries](../docs/FIRMWARE_SIGNING_DESIGN.md).
 Idle retained ownership permits signed OTA without clearing the association;
 an active two-zone control transaction still blocks the update.
 
@@ -113,6 +115,57 @@ hub TX out of the trial and ask the user before arming. Qualification and
 promotion gates remain in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Enrollment
+
+Source preparation adds authenticated `htv213_enrollment_start` under the same
+experimental build flag, advertised by `htv213_auto_identity_pairing`. The
+gateway recipe supplies an available address, local identities and calibrated
+carriers; it does not require a known factory ID. During an explicitly armed
+window, firmware binds the first checksum-valid broadcast with either captured
+body `0cff200501043e05` or `0bff200501043e07`. The identity then stays fixed for
+that window. Assignment bytes, carrier selection, phase echo and configuration
+replies are unchanged from targeted pairing.
+
+Completion receipts contain the actual positive full-phase `a0` and a later
+post-configuration `02`, after both ports' settings and plans were sent. The
+normal enrollment module validates those receipts and atomically saves the
+enrollment proof, retained reply ownership and control seed from the acknowledged
+hub phase, not the device-report phase. Re-pair requires prior acknowledged
+owner revocation; the new epoch archives old control history before seeding its
+counter. Duplicate naming requests, ordinary reconnects and battery reports
+do not reseed counters or replay enrollment.
+
+The flow uses HA's existing model/radio selection, review, progress, cancellation
+and naming screens. Pending completion proof survives a gateway restart;
+retained configuration is sent only after the association commits. Gateway
+0.39.17 / integration 0.18.5 expose the model and select only authenticated,
+managed radios with all enrollment, control, retained-rejoin and control.12
+idle-recovery capabilities. The radio must be dedicated and have no existing
+device assignments; visiting the menu never revokes an owner. A saved working
+valve needs no re-pairing. Explicit re-pair still requires acknowledged old-owner
+revocation before enrollment.
+
+Radios require individually provisioned calibrated carriers. Authenticated
+`POST /api/v1/nodes/{node_id}/htv213-calibration` saves the measured integer
+`initial_center_hz` and `routine_center_hz`; it sends no RF and changes no counter.
+The node/model setup flow uses those saved values without exposing RF fields.
+Slot allocation avoids the frozen legacy slots 1 (HTV145) and 6 (HCS026/HTV405),
+retained same-controller configurations, tombstones and prior assignment attempts.
+It does not modify the other models' proven pairing bytes. Committed,
+RF-confirmed associations use normal controls independently of menu visibility;
+confirmed reply ownership and fresh idle reports for both outlets are required
+before starting. All HTV213 transmit paths append the native CRC's final symbol.
+After a positive
+configuration ACK and both ports' settings/plans, automatic discovery closes
+and a separate ten-minute confirmation wait begins for the bound identity.
+Repeated progress does not extend it. HA displays its existing confirmation
+stage; only a real subsequent valve report permits association/phase commit.
+This wait is an observation budget, not a decoded unit for `timing_raw`.
+Disconnect, cancellation and TX failure still end the session. The older
+explicit research API retains its original overall deadline. Initial and repeat
+full enrollment, same-device naming/save and ACK-derived next phase 3 have been
+verified. Historical timing/failure evidence remains in the
+[validation record](../docs/STOCK_INFORMED_VALIDATION.md)
+and [the roadmap](../PROJECT_ROADMAP.md).
 
 The observed successful stock association consists of:
 
@@ -172,9 +225,11 @@ in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Commands and reported state
 
-The isolated control candidate uses `rainpoint_htv213_control.h` and requires
-both `RAINPOINT_HTV213_PAIRING_EXPERIMENT=1` and
-`RAINPOINT_HTV213_CONTROL_EXPERIMENT=1`. Default firmware excludes it.
+Unified firmware 0.20.0 includes `rainpoint_htv213_control.h` and advertises
+`htv213_control_v1`. Normal HA controls use `htv213_control_open` and
+`htv213_control_close`; older control.12 firmware keeps its deployed wire names.
+Explicit research probes require `RAINPOINT_HTV213_PAIRING_EXPERIMENT=1` and
+`RAINPOINT_HTV213_CONTROL_EXPERIMENT=1` and are excluded from ordinary firmware.
 Authenticated `/api/v1/experiments/htv213/open` and `/close` operate an
 explicitly admitted, unassigned dry-test node only.
 The journal reserves each independent command phase before sending, never
@@ -191,7 +246,7 @@ closed or rejected. No timeout, disconnect or restart sends an automatic close.
 Ordinary state/summary acknowledgements echo the valve's phase. The successful
 pairing session and its settings/plan responder are unchanged.
 
-The normalized 304-bit frame omits the final native CRC bit. Experimental
+The normalized 304-bit frame omits the final native CRC bit. HTV213
 commands and acknowledgements append that computed **305th symbol**. Local
 port-1 and port-2 60-second runs and an explicit port-1 stop have matching `a1`,
 idle and summary evidence. Master command phases advanced 3→4→5→6 independently
@@ -201,9 +256,9 @@ the [validation record](../docs/STOCK_INFORMED_VALIDATION.md).
 Retained reply ownership persists the association at the gateway and restores
 configuration only on authenticated node reconnect. It acknowledges addressed
 `02/04` and answers `05/06`; it never resets the command phase or replays an open.
-Battery rejoin is explicitly enabled on the qualified development test owner,
-not on production radios. General HA pairing-menu support,
-multi-device master allocation and recovery from unconfirmed commands remain separate gates.
+Battery rejoin is enabled by normal committed enrollment on unified 0.20.0 and
+qualified control.12 firmware. Shared multi-device
+master allocation remains unqualified; the runtime owns one valve per radio.
 The qualified dry-device HA adapter exposes exactly two outlets and actual
 per-port report state; it must not invent battery percentage or water volume.
 Both outlets have also completed HA-driven dry runs after owner restoration:
@@ -217,8 +272,8 @@ wrap. Report phases must never reseed the command journal.
 
 Static stock firmware uses one shared master allocator with wire sequence
 `1..63,0,1`; see the [independent audit](../research/HTV213_COUNTER_WRAP_AUDIT.md).
-This differs from the observed report sequence. The normal local journal stops
-before wrap for unqualified associations. A once-only, explicitly authorized dry
+This differs from the observed report sequence. Legacy canary records stop
+before wrap unless their boundary audit is complete. A once-only, explicitly authorized dry
 boundary probe preserves the true starting phase and records deliberate
 62→63→0→1 attempts; every next attempt requires the previous ACK, idle and
 summary. An unanswered attempt blocks the sequence rather than reseeding it.
@@ -233,6 +288,14 @@ Qualified associations persist and increment the next phase modulo 64; ordinary
 report phases still cannot reseed it. See
 `research/fixtures/htv213_local_counter_boundary_20260930.json`.
 
+Source-prepared normal enrollment records model policy `htv213_modulo64_v1`:
+increment modulo 64 from the real ACK-based seed, with no jump, reset or per-user
+boundary experiment. This applies the stock generator and qualified local
+transition to the staged model; it does not fabricate a completed trial for each
+new association or prove other hardware versions. HA radio eligibility still
+requires matching capabilities and saved calibration. Old canary records and other
+valve models retain their existing policy; uncertain sends remain reserved.
+
 An attempted open supersedes pre-command idle on its target outlet: until a new
 report, current state is unknown, not closed. Missing command confirmation
 blocks new opens. An acknowledged run without stop evidence is overdue after
@@ -240,6 +303,14 @@ the bounded completion deadline; an observed stop with a missing summary is a
 different completion error, not evidence that watering continues. Neither error
 automatically transmits a retry or close. Genuine later evidence may reconcile
 the original transaction without consuming another phase.
+
+An unresolved, unacknowledged open survives gateway/radio reconnect by restoring
+only its observation context from the durable journal. On control.12-capable
+radios, fresh idle reports from **both** outlets release it as `recovered_idle`;
+the original outcome remains unknown and the already-reserved phase stays used.
+Neither restoration nor recovery transmits an open or close. Only a subsequent
+explicit request uses the next phase. This path is qualified across a gateway
+rebuild and radio reboot, followed by a successful ordinary HA run.
 
 Native `21` open data is:
 
