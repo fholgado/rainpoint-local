@@ -1406,3 +1406,43 @@ Decoded chunks have some clipping (maximum about 0.38% in the command windows);
 validated frames prove the listed exchanges, not silence outside those windows.
 This qualifies one physical missing-response/restart-recovery path on the dry
 HTV213 canary, not general model enablement or recovery on other valve families.
+
+### Native HA two-zone menu rollout — October 5
+
+Gateway **0.39.17** and integration **0.18.5** expose HTV213FRF through the
+existing Configure → Add a RainPoint device → Valves flow. Radio selection and
+server admission share eligibility: authenticated/managed protocol-v2 radio,
+complete control.12-equivalent enrollment/control/recovery capabilities, saved
+per-radio carrier calibration and no existing device ownership. HA refreshes
+eligibility on display and submission; older gateways retain capability-only
+selection for their existing profiles. No extra wizard, RF-parameter form or
+per-user control experiments are required.
+
+The full suite passed **1,061 tests**, including real gateway admission/catalog
+checks and native HA callbacks for review, stale eligibility and withdrawn
+models. The native C++ protocol test passed; no firmware source changed.
+Backup `bd3c4e68` was verified to contain both `homeassistant.tar.gz` and
+`local_rainpointd.tar.gz`. Deployed runtime hashes matched the tested package;
+HA configuration validation passed before restart.
+
+The previous live integration still contained the already-retired wizard.
+Installing the consistent tracked package removed that sidebar entry; the old
+package is recoverable under
+`/share/rainpoint-local/source-backups/native-ha-20261005/` and in the backup.
+The existing owner-cleanup diagnostics added four node entities; the device
+count remained 13.
+
+In-app-browser verification showed integration version 0.18.5, the HTV213FRF
+model, Next navigation and the prepared-radio explanation. Test Node B is
+correctly excluded from a **new** enrollment because it already owns the saved
+test valve. The dialog was closed without arming. API checks independently
+confirmed exactly two closed HA valve controls with 1–60-minute limits, unchanged
+next phase **5**, unchanged registry/control transaction identities and all
+radio firmware versions unchanged. No pairing, watering, RF calibration change
+or radio update occurred during this rollout.
+
+Private deployment/HA receipts are in `captures/htv213-native-ha-menu-20261005/`.
+This verifies native UI exposure and preservation of the existing association,
+not a new physical enrollment. Standard Alpha 1 firmware still excludes the
+HTV213 runtime; ordinary signed-firmware integration and second-radio carrier
+qualification remain explicit release gates in [the roadmap](../PROJECT_ROADMAP.md).
