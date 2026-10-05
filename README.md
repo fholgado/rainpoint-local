@@ -23,10 +23,13 @@ behavior; alpha does not mean those remaining tests have already passed.
 | HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
 | HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised experimental use; battery unavailable; no water-usage capability |
 | HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
-| HTV213FRF (release candidate) | Native HA pairing, two-outlet controls, retained battery/restart recovery | Unified 0.20.0 candidate and gateway 0.39.18; dedicated radio with saved calibration; Alpha 1 remains unchanged |
+| HTV213FRF (firmware alpha) | Native HA pairing, two-outlet controls, retained battery/restart recovery | Unified 0.20.0 and gateway 0.39.18; dedicated radio with saved calibration; Alpha 1 remains unchanged |
 
 Read [device communication references](protocol_documentation/) for packet rules
 and [the roadmap](PROJECT_ROADMAP.md) for remaining qualification work.
+
+For an existing installation with a two-zone valve, give your agent the
+[two-zone update and testing guide](docs/TWO_ZONE_ALPHA_TESTING.md).
 
 ## Install on Home Assistant OS
 

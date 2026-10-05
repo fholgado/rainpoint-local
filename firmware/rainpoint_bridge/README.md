@@ -76,7 +76,7 @@ python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The firmware version is `0.20.0` (unpublished candidate). All three valve families are included;
+The firmware version is `0.20.0` ([firmware alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0)). All three valve families are included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
 Use gateway 0.39.18 or later so normal two-zone commands authenticate and route

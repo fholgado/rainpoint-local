@@ -3,7 +3,7 @@
 **Stock reference plus locally verified dry pairing, both-outlet control,
 explicit stop, battery rejoin and missing-response/restart recovery.
 Native HA setup is available with unified firmware 0.20.0 / gateway 0.39.18
-(unpublished candidate), or qualified control.12 test firmware. Alpha 1
+(firmware alpha), or qualified control.12 test firmware. Alpha 1
 firmware does not include this model.**
 The HTV213FRF is one RF device with ports `1` and `2`. Follow
 [common framing](common.md) and the

@@ -49,7 +49,7 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Finish short HTV213 physical qualification, then promote its normal setup/control path. HA flow and atomic enrollment/re-pair persistence are source-prepared; general support is not enabled.
+1. Collect independent HTV213 firmware-alpha update, prepared-radio pairing and two-outlet control reports; second-radio carrier qualification remains deferred locally.
 2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
 3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
@@ -384,6 +384,7 @@ not tasks to mark “done once.”
 - [x] Sign/deploy unified 0.20.0-rc.1 on Test Node B with gateway 0.39.18; RF-verify both one-minute HA runs at phases 5→6, next 7 (Oct 5).
 - [x] Verify release-key-signed unified 0.20.0 from protected run 37289662174: signature, receipt, source SHA, OTA catalog and production boundaries pass (Oct 5). Unpublished; no device update.
 - [x] OTA release-key 0.20.0 to Test Node B; confirm healthy boot, removed development trust, same two-outlet HA device and ready owner/phase 7 (Oct 5). Garden radios unchanged; no watering or calibration test.
+- [x] Publish [signed 0.20.0 firmware alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0) with receipt-matched USB/OTA/source assets and [agent update/test guide](docs/TWO_ZONE_ALPHA_TESTING.md); eight uploaded assets readback-verified (Oct 5).
 - [ ] Validate carrier provisioning on a second radio (deferred Oct 5 at user request; saved per-radio calibration remains required).
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
