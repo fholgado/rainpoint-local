@@ -6822,8 +6822,11 @@ class Gateway:
                         routine_center_hz=routine_center_hz)
 
     def _htv213_pairing_profiles(self) -> list[dict[str, Any]]:
-        from .htv213_enrollment import CAPABILITY, profile_metadata
-        return [profile_metadata()] if any(CAPABILITY in n.get("capabilities", []) for n in self._pairing_nodes()) else []
+        from .htv213_enrollment import profile_metadata
+        from .htv213_enrollment_flow import node_unavailable_reason
+        return [{**profile_metadata(), "eligible_node_ids": [
+            n["node_id"] for n in self._pairing_nodes()
+            if node_unavailable_reason(self, n) is None]}]
 
     def _pairing_nodes(self) -> list[dict[str, Any]]:
         """Return connected protocol-v2 nodes advertising any pairing family."""
@@ -6846,6 +6849,7 @@ class Gateway:
                         "valve_pairing_tx_candidate",
                         "htv405_auto_identity_pairing",
                         "htv145_pairing_tx_candidate",
+                        "htv213_auto_identity_pairing",
                     )
                 )
             ):

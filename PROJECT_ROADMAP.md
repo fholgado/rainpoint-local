@@ -373,8 +373,10 @@ not tasks to mark “done once.”
 - [x] Qualify HTV213 control.12 recovery across gateway/radio restart: fresh both-port idle releases unknown phase 3 without retry; normal HA phase-4/60s run RF-complete, next phase 5 (Oct 4 EDT).
 - [ ] After HTV213 qualification, audit other device transmit paths for the omitted native CRC bit; do not change proven production paths speculatively.
 - [x] Verify HTV213 post-configuration reports and repeat complete enrollment: control.10 RF-confirmed twice; same HA device, restored ownership, ACK-derived phase 3 and verified full capture (Oct 4; [evidence](docs/STOCK_INFORMED_VALIDATION.md#control10-repeat-enrollment-and-same-device-handback--october-4)).
-- [ ] Complete HTV213 lifecycle qualification before HA model-menu or operational support; routine ACK and one battery-recovery/control path are verified.
-- [ ] Prepare normal HTV213 model pairing/control/recovery integration from the qualified canary; preserve its proven RF path.
+- [x] Qualify HTV213 enrollment/re-enrollment, both outlets, early stop, phase wrap, battery rejoin and missing-response/restart recovery on the dry test valve (Oct 4 EDT).
+- [x] Expose native HA two-zone pairing for fully capable, calibrated, available radios; preserve the qualified RF path and existing associations (Oct 5; source implemented).
+- [ ] Deploy/verify gateway 0.39.17 and integration 0.18.5 model-menu/radio eligibility; do not re-pair or water existing devices.
+- [ ] Promote qualified HTV213 runtime into ordinary signed firmware while excluding research probes; qualify carrier provisioning on a second radio before general alpha distribution.
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
 - [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).

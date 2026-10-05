@@ -766,6 +766,7 @@ class ESP32NetworkTest(unittest.TestCase):
                 "hcs026_auto_v1",
                 "htv145_auto_candidate_v1",
                 "htv405_auto_candidate_v1",
+                "htv213_auto_candidate_v1",
             ],
             [item["profile_id"] for item in started["supported_profiles"]],
         )

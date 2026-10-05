@@ -46,6 +46,7 @@ class PairingProfileMetadata:
     automatic_discovery: bool
     user_pairing_supported: bool
     maximum_duration_seconds: int = 900
+    eligible_node_ids: tuple[str, ...] | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> PairingProfileMetadata:
@@ -71,6 +72,13 @@ class PairingProfileMetadata:
         maximum = payload.get("maximum_duration_seconds", 900)
         if type(maximum) is not int or not 10 <= maximum <= 900:
             raise APIModelError("pairing profile duration bound is invalid")
+        eligible = payload.get("eligible_node_ids")
+        if "eligible_node_ids" in payload and (
+            not isinstance(eligible, list)
+            or any(not isinstance(node, str) or not node for node in eligible)
+            or len(set(eligible)) != len(eligible)
+        ):
+            raise APIModelError("pairing profile eligible radios are invalid")
         return cls(
             profile_id=str(values["profile_id"]),
             model=str(values["model"]),
@@ -80,6 +88,7 @@ class PairingProfileMetadata:
             automatic_discovery=automatic,
             user_pairing_supported=supported,
             maximum_duration_seconds=maximum,
+            eligible_node_ids=None if eligible is None else tuple(eligible),
         )
 
 

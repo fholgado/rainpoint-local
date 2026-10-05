@@ -23,6 +23,7 @@ behavior; alpha does not mean those remaining tests have already passed.
 | HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
 | HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised experimental use; battery unavailable; no water-usage capability |
 | HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
+| HTV213FRF (development) | Native HA pairing, two-outlet controls, retained battery/restart recovery | Dedicated, calibrated radio with control.12-equivalent capabilities; not included in Alpha 1 firmware |
 
 Read [device communication references](protocol_documentation/) for packet rules
 and [the roadmap](PROJECT_ROADMAP.md) for remaining qualification work.

@@ -9,6 +9,12 @@ This alpha supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone
 valves and HTV405FRF four-zone valves. A stock RainPoint gateway, cloud account
 and SDR are not required. Cloud-device migration is not automatic.
 
+HTV213FRF two-zone support is a separate development rollout, not part of this
+pinned Alpha 1 install. The updated HA pairing menu requires a dedicated radio
+with the qualified recovery firmware and individually saved RF calibration;
+do not flash ordinary Alpha 1 firmware expecting two-zone support. See the
+[two-zone requirements](protocol_documentation/htv213frf.md#enrollment).
+
 ## 1. Agent: confirm the setup
 
 Ask for the user's HA address, device models and available hardware:

@@ -22,8 +22,9 @@ from .rf_identity import controller_endpoint_for
 CAPABILITY = "htv213_auto_identity_pairing"
 PROFILE_ID = "htv213_auto_candidate_v1"
 KEY = "htv213_enrollment_v1"
-# Existing roadmap qualification still precedes general model-menu promotion.
-USER_PAIRING_SUPPORTED = False
+# Qualified on control.12; gateway eligibility still requires this radio's
+# complete firmware capabilities, calibration and exclusive ownership slot.
+USER_PAIRING_SUPPORTED = True
 # The unchanged legacy assignment recipes encode these slots (native 81 data
 # byte 1): HTV145=1, HTV405=6, HCS026=6. Reserve them even before those models
 # are installed; later legacy pairing must not collide with a new HTV213 slot.

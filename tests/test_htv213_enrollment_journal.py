@@ -194,7 +194,8 @@ class EnrollmentFlowTest(unittest.TestCase):
         self.addCleanup(self.gateway.close)
         self.gateway.register_radio_node(node_id=NODE, token="ab" * 32, name="Dry test", area=None)
         self.capabilities = ["rx", "sensor_pairing_tx", "configurable_rf_controller_identity", enrollment.CAPABILITY,
-            owner.CAPABILITY, owner.REJOIN_CAPABILITY, "htv213_control_experiment", "htv213_pairing_experiment"]
+            owner.CAPABILITY, owner.REJOIN_CAPABILITY, "htv213_control_experiment", "htv213_pairing_experiment",
+            owner.IDLE_RESUME_CAPABILITY, "htv213_idle_recovery_v1", "htv213_duration_3600"]
         self.gateway.update_node(NODE, connected=True, authenticated=True, protocol_version=2, tx_armed=False, capabilities=self.capabilities)
         self.gateway.configure_htv213_radio(NODE, initial_center_hz=434351500, routine_center_hz=434241500)
         self.sent = []
@@ -255,9 +256,10 @@ class EnrollmentFlowTest(unittest.TestCase):
             owner.observe(self.gateway, NODE, {**message, "frame": alter(frame, data=data)})
             state = htv213_device.project(self.gateway)[target]["state"]
             self.assertEqual(state["rf_control_start_available"], port == 2)
-        profile = next(p for p in ha_contract.api_models.pairing_profiles(self.gateway.pairing())
-                       if p.profile_id == enrollment.PROFILE_ID)
-        self.assertFalse(profile.user_pairing_supported)
+        with patch.object(enrollment, "USER_PAIRING_SUPPORTED", False):
+            profile = next(p for p in ha_contract.api_models.pairing_profiles(self.gateway.pairing())
+                           if p.profile_id == enrollment.PROFILE_ID)
+            self.assertFalse(profile.user_pairing_supported)
         self.assertEqual(self.sent, [])
         self.gateway.request_valve_control(device_id=target, action="open", zone=1, duration_seconds=60)
         self.assertEqual(len(self.sent), 1)
@@ -282,9 +284,10 @@ class EnrollmentFlowTest(unittest.TestCase):
         self.assertEqual(ha_contract.api_models.pairing_progress_action(snapshot), "confirm_device")
         self.assertIsNone(snapshot["completed_endpoint"])
 
-    def test_menu_stays_hidden_until_model_qualification_not_per_user_experiments(self):
+    def test_qualified_menu_uses_prepared_radios_not_per_user_experiments(self):
         profile = next(p for p in ha_contract.api_models.pairing_profiles(self.gateway.pairing()) if p.profile_id == enrollment.PROFILE_ID)
-        self.assertFalse(profile.user_pairing_supported)
+        self.assertTrue(profile.user_pairing_supported)
+        self.assertEqual(profile.eligible_node_ids, (NODE,))
         self.assertEqual(profile.maximum_duration_seconds, 300)
         self.assertNotIn("dry_valve_confirmed", self.start())
 
@@ -405,7 +408,7 @@ class EnrollmentFlowTest(unittest.TestCase):
 
 class NativeEnrollmentProgressTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.fixture = EnrollmentFlowTest("test_menu_stays_hidden_until_model_qualification_not_per_user_experiments")
+        self.fixture = EnrollmentFlowTest("test_qualified_menu_uses_prepared_radios_not_per_user_experiments")
         self.fixture.setUp(); self.addCleanup(self.fixture.doCleanups)
 
     async def poll(self, progress):

@@ -1,15 +1,41 @@
 """Bind HTV213 enrollment to the existing gateway/HA pairing contract.
 
-No additional wizard or watering. The profile remains unadvertised as supported
-until the roadmap's physical qualification is complete. Radio carrier profiles
-are explicitly provisioned, not copied from an installation-default endpoint.
+No additional wizard or watering. Only fully capable, explicitly calibrated
+radios with an available ownership slot can enroll this model. Carrier profiles
+are not copied from an installation-default endpoint.
 """
 from __future__ import annotations
 
 import re
 
 from . import htv213_enrollment as enrollment, htv213_owner as owner
-from .htv213_control_transport import CAPABILITY as control_capability
+from .htv213_control_transport import CAPABILITY as control_capability, IDLE_RECOVERY_CAPABILITY
+
+
+REQUIRED_CAPABILITIES = frozenset({enrollment.CAPABILITY, owner.CAPABILITY,
+    owner.REJOIN_CAPABILITY, owner.IDLE_RESUME_CAPABILITY, control_capability,
+    IDLE_RECOVERY_CAPABILITY, "htv213_pairing_experiment", "htv213_duration_3600"})
+
+
+def node_unavailable_reason(gateway, node):
+    """One read-only eligibility policy shared by HA choices and admission."""
+    if not (node.get("managed") and node.get("authenticated") and node.get("connected")
+            and node.get("protocol_version") == 2
+            and REQUIRED_CAPABILITIES <= set(node.get("capabilities", []))):
+        return "selected radio needs matching HTV213 enrollment and recovery firmware"
+    node_id = node["node_id"]
+    if gateway._store is None:
+        return "persistent pairing registry required"
+    if (gateway._store.ack_assignments(node_id)
+            or any(v.get("control_node_id") == node_id for v in gateway._store.valve_registry())
+            or any(r["node_id"] == node_id and r.get("revoked") is not True
+                   for r in owner.records(gateway).values())):
+        return "selected radio already owns a device; a dedicated available radio is required"
+    try:
+        enrollment.EnrollmentJournal(gateway._store).profile(node_id, 2)
+    except ValueError:
+        return "selected radio has no saved HTV213 carrier calibration"
+    return None
 
 
 def selected(gateway):
@@ -37,15 +63,11 @@ def start(gateway, *, node_id, duration_seconds, factory_endpoint=None, now=None
     if type(duration_seconds) is not int or not 10 <= duration_seconds <= 300:
         raise ValueError("HTV213 enrollment duration must be 10–300 seconds")
     node = next((n for n in gateway.nodes() if n["node_id"] == node_id), {})
-    required = {enrollment.CAPABILITY, owner.CAPABILITY, owner.REJOIN_CAPABILITY,
-                control_capability, "htv213_pairing_experiment"}
-    if not (node.get("managed") and node.get("authenticated") and node.get("connected")
-            and node.get("protocol_version") == 2 and required <= set(node.get("capabilities", []))):
-        raise ValueError("selected radio needs matching HTV213 enrollment firmware")
+    reason = node_unavailable_reason(gateway, node)
+    if reason:
+        raise ValueError(reason)
     if gateway._pairing.status(now=now).get("active") or busy(gateway) or gateway._ack_ownership.snapshot() or any(n.get("tx_armed") for n in gateway.nodes()):
         raise ValueError("finish active pairing, control or ownership changes")
-    if gateway._store.ack_assignments(node_id) or any(v.get("control_node_id") == node_id for v in gateway._store.valve_registry()):
-        raise ValueError("selected radio is assigned to another device family")
     saved = owner.records(gateway)
     replacement_key = None
     if factory_endpoint:

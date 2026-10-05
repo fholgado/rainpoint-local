@@ -16,8 +16,9 @@ class DiscoveryContractTest(unittest.TestCase):
         gateway = Gateway(storage_path=str(Path(temporary.name) / "registry.sqlite3"))
         self.addCleanup(gateway.close)
         profiles = api_models.pairing_profiles(gateway.pairing())
-        self.assertEqual({"HCS026FRF", "HTV145FRF", "HTV405FRF"}, {p.model for p in profiles})
+        self.assertEqual({"HCS026FRF", "HTV145FRF", "HTV213FRF", "HTV405FRF"}, {p.model for p in profiles})
         self.assertTrue(all(p.automatic_discovery and p.user_pairing_supported for p in profiles))
+        self.assertEqual(next(p.eligible_node_ids for p in profiles if p.model == "HTV213FRF"), ())
         self.assertEqual([], gateway.devices())
         self.assertEqual([], gateway.nodes())
 
