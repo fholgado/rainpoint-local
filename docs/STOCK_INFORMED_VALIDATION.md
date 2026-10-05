@@ -1528,5 +1528,73 @@ unchanged. No watering, pairing, phase adjustment or calibration test occurred.
 Private readback/OTA receipts are under
 `captures/htv213-production-020-20261005/`. This qualifies production-image OTA
 handback, not an additional RF control trial or second-radio calibration.
-The signed artifact remains unpublished; Alpha 1 is unchanged. Explicit chat
-approval is now supported without relaxing the protected signing environment.
+The signed artifact was subsequently published as the
+[0.20.0 firmware alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0);
+the original Alpha 1 artifacts are unchanged. Explicit chat approval is supported
+without relaxing the protected signing environment.
+
+### Replacement radio carrier trial October 5
+
+A same-batch spare CC1101 on Test Node B, running release-key firmware **0.20.0**,
+reproduced the original radio's frequency offset. Nominal settings produced
+three correlated assignment replies at phases 1, 4 and 7, but the valve kept
+announcing rather than proceeding to configuration.
+
+| Reply frequency setting | Measured wake center | Outcome |
+| --- | --- | --- |
+| 434,241,500 Hz | 434,196,125–434,196,187.5 Hz | Assignment replies; no configuration progression |
+| 434,287,000 Hz | 434,241,500 Hz | Assignment accepted; full configuration and later completion |
+
+The measurements use eight-millisecond windows inside the 320-symbol wake
+at 20 ksymbols/s. Those windows were not clipped; the corrected wake's tone
+spacing was 80 kHz. These are relative measurements from the same SDR, not
+absolute calibration against a frequency standard. The result supports reusing
+the **+45.5 kHz** correction on this spare, not a universal hardware correction.
+
+The corrected trial includes both-port `02/82`, positive configuration `a0`
+at master phase **2**, settings `05/85`, empty plans `06/86`, and an independently
+decoded later `02` completion. Normal naming/save restored the same gateway
+device ID and name, a ready reply owner, and ACK-derived next phase **3**.
+The legacy registry and installed garden devices were unchanged.
+
+Both pairing recordings completed at **3,840,000,000 bytes** and passed independent
+SHA-256 checks. Private evidence is in `captures/htv213-nominal-spare-20261005/`
+and `captures/htv213-corrected-spare-20261005/`. The nominal trial's reported Mac
+sleep did not prevent recovery of the three assignment exchanges; it is not
+evidence that the measured carrier offset was caused by sleep. The corrected
+recording used idle-sleep prevention.
+
+Changing profiles after restoring the original owner rejected the first nominal
+arm; rebooting the test node allowed it to arm. The driver has two cached TX
+frequency slots, and clearing ownership does not invalidate those slots. That
+is a concrete cache-refresh suspect, distinct from the on-air carrier offset.
+
+The saved owner starts with empty per-port telemetry, discarding the known state
+in the completion report. Normal HA start was initially unavailable. After both
+outlets supplied fresh idle reports, three dry tests through normal HA entities
+completed without a retry or forced counter:
+
+- Outlet 1: phase **3**, 60 seconds; positive `a1`, active/idle `02`, elapsed-60
+  `04` and matching `84`. Idle arrived 62.54 seconds after command sync.
+- Outlet 2: phase **4**, 60 seconds; the same independent RF evidence. Idle
+  arrived after 61.93 seconds.
+- Outlet 1: phase **5**, 120-second request, followed by explicit close at
+  phase **6**. Positive close `a1`, idle, elapsed-22 summary and matching `84`
+  confirmed the early stop.
+
+The SDR recovered exactly the four target `21` commands and positive full-phase
+ACKs, with acceptance delays of about **305–315 ms**. HA reflected open/closed,
+the other outlet remained idle, original duration settings were restored, and
+the retained next phase is **7**. Private control evidence is under
+`captures/htv213-corrected-spare-controls-20261005/`. Other nodes and installed
+garden valves were not commanded or updated.
+
+The **1,920,000,000-byte** control capture completed and passed an independent
+SHA-256 check against its receipt. Final gateway readback confirmed both outlets
+idle, normal start available, pairing inactive and ready authenticated ownership
+on firmware **0.20.0**.
+
+This qualifies the existing corrected recipe on a same-batch replacement radio.
+It does not require a long soak or establish sensor coexistence. Manual carrier
+setup, shared receive/ACK dispatch and preservation of completion telemetry are
+tracked separately in [the roadmap](../PROJECT_ROADMAP.md).
