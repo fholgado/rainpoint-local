@@ -99,6 +99,17 @@ enum class State { Idle, Transmitting, AwaitingResponse, OpenConfirmed, CloseAwa
 
 class Trial {
 public:
+    // Restore an unknown open for observation only. No packet construction,
+    // transmission, inferred ACK, replay or phase allocation occurs here.
+    bool resumeIdleRecovery(const Profile& profile, unsigned port, unsigned seconds,
+                            unsigned phase, std::uint32_t now) {
+        if (state_!=State::Idle || !htv213::valid(profile) || port<1 || port>2 ||
+            seconds<1 || seconds>kMaximumTrialSeconds || phase>63) return false;
+        profile_=profile; port_=port; seconds_=seconds; phase_=phase;
+        started_=now-seconds*1000U-kCompletionGraceMs;
+        state_=State::Overdue;
+        return true;
+    }
     bool start(const Profile& profile, unsigned port, unsigned seconds, unsigned phase,
                std::uint32_t now, Transmission& tx) {
         if (state_!=State::Idle || !prepareCommand(profile,port,phase,true,seconds,tx)) return false;

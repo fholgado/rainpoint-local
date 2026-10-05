@@ -18,6 +18,7 @@ from .htv213_control import ControlJournal, packet
 KEY = "htv213_reply_owner_v1"
 CAPABILITY = "htv213_routine_owner"
 REJOIN_CAPABILITY = "htv213_retained_rejoin_v1"
+IDLE_RESUME_CAPABILITY = "htv213_idle_recovery_resume_v1"
 
 
 def reply_configuration(command):
@@ -155,6 +156,25 @@ def restore(gateway, node_id):
                 apply_reply_configuration(record["command"], config, rejoin)
                 gateway._store.save_htv213_owner(json.dumps(saved, sort_keys=True))
             command["local_clock"] = datetime.now().astimezone().strftime("%Y%m%d%H%M%S")
+            # Resume observation from the durable journal, including after a
+            # reboot. This is owner configuration, never an open replay. The
+            # radio must collect new idle reports from BOTH outlets.
+            control = ControlJournal(gateway._store)._records().get(key, {})
+            identity = control.get("identity", {})
+            tx = control.get("transaction") or {}
+            boundary = control.get("counter_boundary") or {}
+            if (IDLE_RESUME_CAPABILITY in node.get("capabilities", []) and
+                    control.get("state") == "indeterminate" and tx.get("action") == "open" and
+                    tx.get("acknowledged") is False and not (boundary and not boundary.get("complete")) and
+                    identity.get("node_id") == node_id and
+                    identity.get("controller") == config["controller_endpoint"] and
+                    identity.get("valve") == config["valve_endpoint"] and
+                    identity.get("selector") == config["selector"] and
+                    (not record.get("enrollment_id") or
+                     record["enrollment_id"] == identity.get("evidence_id"))):
+                command.update(recovery_command_id=tx["command_id"], recovery_phase=tx["phase"],
+                               recovery_port=tx["port"], recovery_seconds=tx["requested_seconds"])
+                gateway._htv213_control_owner = (node_id, tx["command_id"], key)
             gateway.update_node(node_id, htv213_owner={"state": "pending", "command_id": command["command_id"]})
             gateway._node_command_sender(node_id, command)
 

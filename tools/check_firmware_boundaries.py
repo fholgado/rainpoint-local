@@ -12,6 +12,7 @@ HTV213_RECOVERY_COMMANDS = (
     b"htv213_control_experiment", b"htv213_control_probe_open", b"htv213_control_probe_close",
     b"htv213_routine_owner", b"htv213_owner_set", b"htv213_owner_clear", b"htv213_duration_3600",
     b"htv213_retained_rejoin_v1",
+    b"htv213_idle_recovery_v1", b"htv213_idle_recovery_resume_v1",
 )
 
 HTV213_ENROLLMENT_COMMANDS = (

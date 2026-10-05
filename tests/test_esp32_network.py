@@ -146,6 +146,7 @@ class ESP32NetworkTest(unittest.TestCase):
         hello = source.split(r'\"capabilities\":[', 1)[1].split(r'\"tx_armed\":false', 1)[0]
         capabilities = re.findall(r'\\"([a-z][a-z0-9_]+)\\"', hello)
         self.assertIn('htv213_idle_recovery_v1', capabilities)
+        self.assertIn('htv213_idle_recovery_resume_v1', capabilities)
         for extra, expected in (([], 'node_authenticated'), (['unknown_future_capability'], 'node_rejected')):
             with self.subTest(extra=extra):
                 connection, stream, response = self._connect(NODE_A, TOKEN_A, protocol_version=2,

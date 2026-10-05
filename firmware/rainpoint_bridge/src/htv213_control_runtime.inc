@@ -195,13 +195,26 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         power!=htv213ControlPower || (owner && id!=htv213OwnerId))) {
         reportNetworkCommandError(id,"htv213_revoke_owner_before_reconfiguration"); return true;
     }
+    rainpoint::htv213Control::Trial restoredTrial;
+    const String recoveryId=owner ? jsonStringField(command,"recovery_command_id") : String{};
+    if (recoveryId.length()) {
+        long recoveryPhase=0,recoveryPort=0,recoverySeconds=0;
+        if (!validCommandId(recoveryId) || recoveryId==id ||
+            !jsonLongField(command,"recovery_phase",recoveryPhase) || recoveryPhase<0 || recoveryPhase>63 ||
+            !jsonLongField(command,"recovery_port",recoveryPort) || recoveryPort<1 || recoveryPort>2 ||
+            !jsonLongField(command,"recovery_seconds",recoverySeconds) || recoverySeconds<1 ||
+            recoverySeconds>rainpoint::htv213Control::kMaximumTrialSeconds ||
+            !restoredTrial.resumeIdleRecovery(p,recoveryPort,recoverySeconds,recoveryPhase,millis())) {
+            reportNetworkCommandError(id,"invalid_htv213_idle_recovery"); return true;
+        }
+    }
     if (!rainpoint::htv213::valid(p) || !primaryRadio.prepareTransmit() ||
         (owner && rejoin && (!primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,12)) ||
                             !primaryRadio.cacheTransmitFrequency(rainpoint::htv213::assignmentReplyHz(p,11)))) ||
         !primaryRadio.restoreReceiveChannel(0)) {
         reportNetworkCommandError(id,"htv213_control_prepare_failed"); return true;
     }
-    htv213ControlTrial=rainpoint::htv213Control::Trial{};
+    htv213ControlTrial=restoredTrial;
     if (!owner && !htv213ControlTrial.start(p,port,seconds,phase,millis(),tx)) {
         reportNetworkCommandError(id,"htv213_control_start_failed"); return true;
     }
@@ -211,7 +224,12 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         htv213RetainedConfiguration=retained;
         htv213RetainedRejoinEnabled=rejoin;
         htv213OwnerEnabled=true; htv213OwnerId=id; scanChannels=false;
-        reportHtv213Owner(); return true; // Reply ownership is not an RF command.
+        reportHtv213Owner();
+        if (recoveryId.length()) {
+            htv213ControlCommandId=recoveryId; htv213ControlOpenId=recoveryId;
+            reportHtv213Control();
+        }
+        return true; // Reply ownership/recovery never transmits an open.
     }
     htv213ControlCommandId=id; htv213ControlOpenId=id;
     scanChannels=false;

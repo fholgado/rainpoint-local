@@ -941,6 +941,31 @@ handling. No association was revoked, re-paired or reseeded. General HA model
 enablement remains pending the existing physical qualification gates in
 [the roadmap](../PROJECT_ROADMAP.md).
 
+### Reconnect recovery restoration — control.12 source
+
+The matched gateway/radio change restores **observation**, not transmission,
+from the durable unresolved-open journal. Only a current matching owner with
+`htv213_idle_recovery_resume_v1` receives the prior command ID, attempted phase,
+outlet and duration as fields on ordinary owner configuration. Acknowledged
+commands, closes, completed transactions, unfinished boundary experiments and
+changed identity/enrollment epochs do not qualify. No counter is seeded or
+advanced during restoration.
+
+The radio reconstructs an overdue, unacknowledged observation context without
+building or transmitting an open. Both idle reports must arrive anew after
+restoration; the existing independent gateway freshness and command-correlation
+checks still govern release. Prior outcome stays unknown, and only a new user
+request can reserve the next phase. This also works after a radio/OTA reboot
+or loss of the gateway's in-memory transport correlation.
+
+Regression coverage runs the actual owner command dispatcher and receive path
+for reconnect, reboot and malformed context, plus the gateway restore → fresh
+both-outlet reports → recovered-idle → new-next-phase request sequence. The
+suite passed **1,050 tests**; the native protocol test and control.12 candidate
+build passed. Real capability-handshake and firmware-boundary checks include
+the new development-only capability. Live restoration and the next run remain
+separate qualifications, not implied by these offline results.
+
 ### Control.10 source correction — October 4
 
 New tests first reproduced the missing final symbol at the actual pairing
@@ -1306,3 +1331,40 @@ Pairing stayed inactive, no watering was commanded and other radio firmware
 versions were unchanged. Private receipts are in
 `captures/htv213-control11-qualification-20261004/`. This verifies deployment,
 not physical missing-response recovery; batteries remained in the valve.
+
+### Control.11 battery-out test and reconnect gap — October 4
+
+With the dry test valve's batteries removed, ordinary HA admission lacked
+fresh idle reports. The user explicitly authorized the existing diagnostic
+admission instead. One 60-second outlet-1 request reserved phase **3** from the
+unchanged saved association; no readiness flags or counters were overridden.
+SDR decoding confirmed native `21`, phase 3, the target valve and companion
+route. No matching ACK was observed in that bounded interval. The radio
+reported uncertain, then overdue; HA showed failed and disabled new starts.
+The retained next phase became **4**, with no automatic retry.
+
+The batteries were restored roughly three hours later. Authenticated gateway
+receipts at 00:42:42Z and 00:42:44Z on October 5 showed both outlets idle, and
+both HA entities became closed. Recovery nevertheless remained blocked.
+Between the command and rejoin, gateway authentications increased from one to
+three while node uptime continued: the radio reconnected without rebooting.
+
+An offline reproduction using the actual C++ runtime dispatch/receive code
+isolated the failure: a same-owner `htv213_owner_set` restores reply ownership
+but unconditionally replaces `htv213ControlTrial` with an idle object. Later
+reports reach ordinary telemetry, but no pending command remains in the radio
+to produce correlated `recovered_idle`. The gateway correctly retains the
+unresolved durable transaction. The reproduction fails after owner restore
+(trial state 0); an in-memory-only counterfactual preserving the trial passes
+the same both-port idle/no-retry assertions. This is diagnostic evidence, not
+a deployed fix; simply skipping every owner reset is not a sufficient policy
+for changed owners, enrollment epochs, restarts or acknowledged transactions.
+
+Private evidence: `captures/htv213-control11-missing-response-20261004/20261004-172851/`.
+The original 900-second capture is **3,600,000,000 bytes** and its independent
+SHA-256 check matches `sha256.txt`. It ended before battery reinsertion:
+rejoin evidence is gateway RF receipts, not an independent SDR recording.
+Counter 4 remains intact; no follow-up open, forced release, pairing, reset or
+deployment was performed. The reconnect case was outside the earlier
+uninterrupted-session recovery qualification and is now a required fix in
+[the roadmap](../PROJECT_ROADMAP.md).

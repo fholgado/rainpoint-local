@@ -76,6 +76,54 @@ class Htv213OwnerTest(unittest.TestCase):
         self.assertEqual(self.gateway._nodes[NODE]['htv213_owner']['state'],'ready')
         self.assertEqual(ControlJournal(self.gateway._store).snapshot(self.key)['next_phase'],4)
 
+    def test_reconnect_restores_unknown_open_observation_not_transmission(self):
+        owner.configure(self.gateway, self.request)
+        self.gateway._nodes[NODE]['capabilities'] += ['htv213_idle_recovery_resume_v1']
+        result = control.start(self.gateway, self.request)
+        journal = ControlJournal(self.gateway._store)
+        before = journal.snapshot(self.key)
+        self.gateway._htv213_control_owner = None  # Includes a gateway restart.
+        self.sent.clear()
+        owner.restore(self.gateway, NODE)
+        self.assertEqual(len(self.sent), 1)
+        command = self.sent[0][1]
+        self.assertEqual(command['type'], 'htv213_owner_set')
+        self.assertEqual(command['recovery_command_id'], result['command_id'])
+        self.assertEqual(command['recovery_phase'], before['transaction']['phase'])
+        self.assertEqual(command['recovery_port'], before['transaction']['port'])
+        self.assertEqual(command['recovery_seconds'], before['transaction']['requested_seconds'])
+        self.assertEqual(journal.snapshot(self.key), before)
+        self.assertEqual(self.gateway._htv213_control_owner, (NODE, result['command_id'], self.key))
+
+    def test_reconnect_does_not_resume_ineligible_transaction_or_identity(self):
+        owner.configure(self.gateway, self.request)
+        control.start(self.gateway, self.request)
+        journal = ControlJournal(self.gateway._store)
+        baseline = journal._records()
+        for case in ('old_firmware', 'acked', 'close', 'complete', 'boundary', 'node', 'selector', 'route', 'epoch'):
+            with self.subTest(case=case):
+                records = copy.deepcopy(baseline)
+                record = records[self.key]
+                self.gateway._nodes[NODE]['capabilities'] = [control.CAPABILITY, owner.CAPABILITY,
+                    'htv213_idle_recovery_resume_v1']
+                if case == 'old_firmware': self.gateway._nodes[NODE]['capabilities'].pop()
+                elif case == 'acked': record['transaction']['acknowledged'] = True
+                elif case == 'close': record['transaction']['action'] = 'close'
+                elif case == 'complete': record['state'] = 'complete'
+                elif case == 'boundary': record['counter_boundary'] = {'complete': False}
+                elif case == 'node': record['identity']['node_id'] = 'rp-000000000099'
+                elif case == 'selector': record['identity']['selector'] = 12
+                elif case == 'route': record['identity']['controller'] = 'aabbccdd'
+                elif case == 'epoch':
+                    owners = owner.records(self.gateway)
+                    owners[self.key]['enrollment_id'] = '0' * 32
+                    self.gateway._store.save_htv213_owner(json.dumps(owners))
+                journal._save(records)
+                self.sent.clear()
+                owner.restore(self.gateway, NODE)
+                self.assertNotIn('recovery_command_id', self.sent[-1][1])
+                self.assertEqual(journal._records(), records)
+
     def recovery_request(self):
         self.gateway.update_node(NODE, capabilities=[control.CAPABILITY, owner.CAPABILITY, owner.REJOIN_CAPABILITY])
         config = copy.deepcopy(owner.records(self.gateway)[self.key]['configuration'])

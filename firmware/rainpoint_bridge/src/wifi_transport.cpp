@@ -358,6 +358,7 @@ void WifiTransport::authenticate(const String& nonce) {
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
         ",\"htv213_control_experiment\""
         ",\"htv213_idle_recovery_v1\""
+        ",\"htv213_idle_recovery_resume_v1\""
         ",\"htv213_routine_owner\""
         ",\"htv213_retained_rejoin_v1\""
         ",\"htv213_duration_3600\""

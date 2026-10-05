@@ -156,6 +156,12 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertEqual(len(self.sent), 1)
 
     def test_missing_ack_recovers_after_new_both_outlet_idle_without_resending(self):
+        self.check_missing_ack_recovery(reconnect=False)
+
+    def test_missing_ack_recovery_survives_lost_gateway_runtime_and_radio_reboot(self):
+        self.check_missing_ack_recovery(reconnect=True)
+
+    def check_missing_ack_recovery(self, *, reconnect):
         from rainpointd import htv213_control_transport as transport
         self.gateway._nodes[NODE]['capabilities'].append('htv213_idle_recovery_v1')
         target = self.publish()['device_id']
@@ -163,6 +169,15 @@ class Htv213DeviceTest(unittest.TestCase):
         tx = self.journal.snapshot(self.key)['transaction']
         transport.observe(self.gateway, NODE, dict(command_id=tx['command_id'], state='uncertain'))
         self.assertEqual(device.project(self.gateway)[target]['state']['rf_control_transaction_state'], 'failed')
+        if reconnect:
+            self.gateway._nodes[NODE]['capabilities'].append(owner.IDLE_RESUME_CAPABILITY)
+            self.gateway._htv213_control_owner = None
+            self.gateway.update_node(NODE, htv213_control=None)
+            owner.restore(self.gateway, NODE)
+            restored = self.sent[-1][1]
+            self.assertEqual(restored['type'], 'htv213_owner_set')
+            self.assertEqual(restored['recovery_command_id'], tx['command_id'])
+            self.assertFalse(device.project(self.gateway)[target]['state']['rf_control_start_available'])
         trials = json.loads((ROOT/'research/fixtures/htv213_local_outlet_stop_20260930.json').read_text())['trials']
         for port in (1, 2):
             event = next(e for trial in trials for e in trial['events']
@@ -183,7 +198,7 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertFalse(state['is_watering'])
         self.assertEqual(self.journal.snapshot(self.key)['next_phase'], 8)
         self.assertFalse(self.journal.snapshot(self.key)['transaction']['acknowledged'])
-        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(len(self.sent), 2 if reconnect else 1)
         self.assertIn('unknown', state['rf_control_transaction_status'])
         self.assertFalse(self.gateway._nodes[NODE]['tx_armed'])
         self.assertEqual(self.gateway._htv213_experiment_deadline, 0)
@@ -193,7 +208,7 @@ class Htv213DeviceTest(unittest.TestCase):
         self.assertEqual(ControlJournal(self.gateway._store).snapshot(self.key)['state'], 'recovered_idle')
         # Only a new user action emits another open, with the next phase.
         device.request(self.gateway, target, 'open', 2, 60)
-        self.assertEqual(len(self.sent), 2)
+        self.assertEqual(len(self.sent), 3 if reconnect else 2)
         self.assertEqual(self.sent[-1][1]['phase'], 8)
         prior = self.journal.snapshot(self.key)['history'][-1]
         self.assertFalse(prior['acknowledged'])
