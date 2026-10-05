@@ -1509,3 +1509,24 @@ independently checked against the capture receipt. Private evidence is under
 0.5% clipped samples; this supports validated packets and transaction correlation,
 not precision carrier calibration. Second-radio calibration validation remains
 deferred. The ordinary release-key image still uses protected signing approval.
+
+### Release-key production image handback — October 5
+
+Protected signing run [37289662174](https://github.com/fholgado/rainpoint-local/actions/runs/37289662174)
+produced unified **0.20.0** from **f1090330**. Independent verification checked
+the release-key signature, build receipt, source SHA, application bytes, OTA
+catalog copy and production command/trust boundaries before installation.
+
+One OTA to Test Node B received **1,117,376 bytes**, verified publisher/hash,
+rebooted and confirmed `gateway_and_radio_healthy`. Development-key trust and
+research probe capabilities are absent. The same saved two-outlet HA device,
+ready reply owner and retained next phase **7** survived gateway catalog reload
+and radio reboot; both HA valve entities read back closed. Gateway **0.39.18**
+and integration **0.18.5** remain deployed. Installed garden radio firmware is
+unchanged. No watering, pairing, phase adjustment or calibration test occurred.
+
+Private readback/OTA receipts are under
+`captures/htv213-production-020-20261005/`. This qualifies production-image OTA
+handback, not an additional RF control trial or second-radio calibration.
+The signed artifact remains unpublished; Alpha 1 is unchanged. Explicit chat
+approval is now supported without relaxing the protected signing environment.
