@@ -383,6 +383,7 @@ not tasks to mark “done once.”
 - [x] Include qualified HTV213 runtime in unified 0.20.0; exclude research probes, preserve control.12 compatibility and verify 1,067 tests plus standard/phase/development builds (Oct 5).
 - [x] Sign/deploy unified 0.20.0-rc.1 on Test Node B with gateway 0.39.18; RF-verify both one-minute HA runs at phases 5→6, next 7 (Oct 5).
 - [x] Verify release-key-signed unified 0.20.0 from protected run 37289662174: signature, receipt, source SHA, OTA catalog and production boundaries pass (Oct 5). Unpublished; no device update.
+- [x] OTA release-key 0.20.0 to Test Node B; confirm healthy boot, removed development trust, same two-outlet HA device and ready owner/phase 7 (Oct 5). Garden radios unchanged; no watering or calibration test.
 - [ ] Validate carrier provisioning on a second radio (deferred Oct 5 at user request; saved per-radio calibration remains required).
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
