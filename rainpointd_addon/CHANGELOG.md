@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.39.19 / Unreleased
+
+- Use HTV213 default carriers with optional overrides; remove manual tuning
+  from normal setup. Retain actual completion telemetry and its observation time.
+- Support shared-radio firmware 0.21.0, eight independent HTV213 associations,
+  per-association reply readiness and command/status correlation. Preserve
+  existing counters and require acknowledged revocation for same-valve replacement.
+
+## Integration 0.18.6 / Unreleased
+
+- Replace dedicated/calibrated-radio setup advice with compatible-firmware
+  guidance. Existing sensors can stay paired while adding a two-zone valve.
+
 ## 0.39.18 / Unreleased
 
 - Support unified firmware 0.20.0 with ordinary HTV213 enrollment, two-outlet

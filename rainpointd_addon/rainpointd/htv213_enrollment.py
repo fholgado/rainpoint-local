@@ -1,7 +1,7 @@
 """Model-specific HTV213 enrollment parameters, without research admission.
 
-HA supplies a node/model; the gateway resolves an unused address and this
-radio's calibrated centers before building the command. Firmware discovers
+HA supplies a node/model; the gateway resolves an unused address and the default
+carriers or this radio's optional overrides before building the command. Firmware discovers
 the factory endpoint from a matching announcement. The journal validates RF
 completion and atomically saves enrollment, reply ownership and the control
 seed. It never sends RF or authorizes watering; model qualification remains
@@ -30,6 +30,11 @@ USER_PAIRING_SUPPORTED = True
 # are installed; later legacy pairing must not collide with a new HTV213 slot.
 LEGACY_ADDRESSES = frozenset({1, 6})
 CONFIRMATION_WAIT_SECONDS = 600
+# Empirical alpha defaults: full pairing and controls verified on two radios.
+# These are transport settings, not an installation RF identity or a claim that
+# every CC1101 oscillator has the same offset. Explicit overrides remain valid.
+DEFAULT_INITIAL_CENTER_HZ = 434397000
+DEFAULT_ROUTINE_CENTER_HZ = 434287000
 
 
 def profile_metadata():
@@ -158,7 +163,9 @@ def completed_association(*, node_id, command, status):
     seed = dict(node_id=node_id, controller=values["controller_endpoint"], valve=paired,
                 selector=values["assigned_selector"], acknowledged_phase=ack[2], evidence_id=command_id)
     return dict(association_key=values["controller_endpoint"] + ":" + paired,
-                configuration=config, control_seed=seed)
+                configuration=config, control_seed=seed,
+                completion_state=dict(port=data[2], watering=data[3] == 0x21,
+                    remaining_seconds=remaining, requested_seconds=requested, phase=report[2]))
 
 
 class EnrollmentJournal:
@@ -193,7 +200,7 @@ class EnrollmentJournal:
             raise ValueError("selected radio node required")
         if (type(initial_center_hz) is not int or not 433110000 <= initial_center_hz <= 435000000
                 or type(routine_center_hz) is not int or not 433000000 <= routine_center_hz <= 435000000):
-            raise ValueError("explicit calibrated radio carriers required")
+            raise ValueError("bounded radio carrier overrides required")
         enrollment, _, _, expected = self._load()
         current = self.current()
         if current and current["state"] not in {"complete", "failed", "expired", "cancelled"}:
@@ -204,7 +211,8 @@ class EnrollmentJournal:
     def profile(self, node_id, address):
         values = self._load()[0]["radios"].get(node_id)
         if values is None:
-            raise ValueError("selected radio has no saved HTV213 carrier calibration")
+            values = dict(initial_center_hz=DEFAULT_INITIAL_CENTER_HZ,
+                          routine_center_hz=DEFAULT_ROUTINE_CENTER_HZ)
         return EnrollmentProfile(address=address, **values)
 
     def address(self, controller, *, replacement_key=None):
@@ -255,7 +263,7 @@ class EnrollmentJournal:
             record["state"] = "expired"
         return record
 
-    def begin(self, node_id, command, *, replacement_key=None, now=None):
+    def begin(self, node_id, command, *, replacement_key=None, now=None, shared_radio=False):
         now = now or datetime.now(timezone.utc)
         # Reuse the recipe validation, including a seedable notification phase.
         if command.get("type") != "htv213_enrollment_start" or not re.fullmatch(r"[0-9a-f]{32}", str(command.get("command_id", ""))):
@@ -271,15 +279,21 @@ class EnrollmentJournal:
             raise ValueError("another enrollment is active")
         if command["command_id"] in enrollment["sessions"]:
             raise ValueError("enrollment command ID already attempted")
-        if any(r["node_id"] == node_id and r.get("revoked") is not True for r in owners.values()):
+        existing = [r for r in owners.values() if r["node_id"] == node_id and r.get("revoked") is not True]
+        if type(shared_radio) is not bool:
+            raise ValueError("explicit radio ownership mode required")
+        if existing and not shared_radio:
             raise ValueError("revoke the old reply owner before enrollment")
+        from .htv213_control_transport import OWNER_CAPACITY
+        if len(existing) >= OWNER_CAPACITY:
+            raise ValueError("radio association capacity reached")
         if replacement_key is not None:
             old = owners.get(replacement_key)
             if not old or old.get("revoking") is not True or old.get("revoked") is not True:
                 raise ValueError("re-pair requires acknowledged old-owner revocation")
         record = dict(node_id=node_id, command=copy.deepcopy(command), state="requested",
             started_at=now.isoformat(), expires_at=(now + timedelta(seconds=command["duration_seconds"] + 5)).isoformat(),
-            replacement_key=replacement_key,
+            replacement_key=replacement_key, shared_radio=shared_radio,
             revoked_keys=[key for key, old in owners.items() if old.get("revoking") is True and old.get("revoked") is True])
         enrollment["sessions"][command["command_id"]] = record
         enrollment["current"] = command["command_id"]
@@ -318,7 +332,8 @@ class EnrollmentJournal:
             except ValueError as error:
                 record.update(state="failed", error=str(error))
             else:
-                record.update(state="accepted", proof=copy.deepcopy(status), result=result)
+                record.update(state="accepted", proof=copy.deepcopy(status), result=result,
+                              proof_observed_at=now.isoformat())
         else:
             record.update(state="cancelled" if state == "disarmed" else state)
             if (state == "armed" and status.get("awaiting_confirmation") is True
@@ -367,17 +382,29 @@ class EnrollmentJournal:
             if (not explicit_repair or not old or
                     old.get("revoking") is not True or old.get("revoked") is not True):
                 raise ValueError("existing association requires explicit revoked-owner re-pair")
-        if any(k != key and r["node_id"] == node_id and r.get("revoked") is not True for k, r in owners.items()):
+        others = [r for k, r in owners.items() if k != key and r["node_id"] == node_id and r.get("revoked") is not True]
+        if others and not record.get("shared_radio"):
             raise ValueError("radio acquired another reply owner")
+        from .htv213_control_transport import OWNER_CAPACITY
+        if len(others) >= OWNER_CAPACITY:
+            raise ValueError("radio association capacity reached")
         if old:
             record["replaced"] = dict(owner=copy.deepcopy(old), control=copy.deepcopy(controls.get(key)))
         command = {**record["command"], "factory_endpoint": config["factory_endpoint"],
                    "type": "htv213_owner_set", "port": 1, "seconds": 60}
         apply_reply_configuration(command, config, True)
-        owner = dict(node_id=node_id, command=command, ports={}, configuration=config,
+        ports = {}
+        observed_at = record.get("proof_observed_at")
+        if observed_at:
+            report = dict(result["completion_state"])
+            port = report.pop("port")
+            ports[str(port)] = dict(report, observed_at=observed_at)
+        owner = dict(node_id=node_id, command=command, ports=ports, configuration=config,
             enrollment_id=command_id, evidence_command_id=command_id,
             device_id=old.get("device_id") if old and old.get("device_id") else "local-htv213-" + config["valve_endpoint"],
             name=name.strip(), area=area.strip() if area is not None else None)
+        if observed_at:
+            owner["last_seen"] = observed_at
         owners[key] = owner
         controls[key] = initial_record(**result["control_seed"])
         controls[key]["phase_policy"] = MODEL_PHASE_POLICY

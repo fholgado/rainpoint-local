@@ -1,17 +1,48 @@
 // Qualified two-zone transport. Research command aliases are opt-in only;
 // normal controls use the same RF builder and evidence-driven state machine.
-rainpoint::htv213Control::Trial htv213ControlTrial;
-rainpoint::htv213::Profile htv213ControlProfile{};
-String htv213ControlCommandId, htv213ControlOpenId;
-rainpoint::PairingLocalDateTime htv213ControlClock{};
-std::uint32_t htv213ControlClockAt=0;
-std::int8_t htv213ControlPower=0;
-bool htv213ControlListening=false;
-unsigned htv213ControlAcks=0;
-bool htv213OwnerEnabled=false;
-bool htv213RetainedRejoinEnabled=false;
-rainpoint::valveConfiguration::Association htv213RetainedConfiguration{};
-String htv213OwnerId;
+struct Htv213RadioOwner {
+    rainpoint::htv213Control::Trial trial;
+    rainpoint::htv213::Profile profile{};
+    String commandId, openId, ownerId;
+    rainpoint::PairingLocalDateTime clock{};
+    std::uint32_t clockAt=0;
+    std::int8_t power=0;
+    bool listening=false, enabled=false, rejoin=false;
+    unsigned acks=0;
+    rainpoint::valveConfiguration::Association retained{};
+};
+std::array<Htv213RadioOwner,8> htv213Owners{};
+std::size_t selectedHtv213Owner=0;
+Htv213RadioOwner& htv213Owner() { return htv213Owners[selectedHtv213Owner]; }
+struct Htv213OwnerSelection {
+    std::size_t previous=selectedHtv213Owner;
+    explicit Htv213OwnerSelection(std::size_t index) { selectedHtv213Owner=index; }
+    ~Htv213OwnerSelection() { selectedHtv213Owner=previous; }
+};
+// The qualified orchestration operates on one selected association. Only the
+// command dispatcher, packet router and poller select a different record.
+#define htv213ControlTrial htv213Owner().trial
+#define htv213ControlProfile htv213Owner().profile
+#define htv213ControlCommandId htv213Owner().commandId
+#define htv213ControlOpenId htv213Owner().openId
+#define htv213ControlClock htv213Owner().clock
+#define htv213ControlClockAt htv213Owner().clockAt
+#define htv213ControlPower htv213Owner().power
+#define htv213ControlListening htv213Owner().listening
+#define htv213ControlAcks htv213Owner().acks
+#define htv213OwnerEnabled htv213Owner().enabled
+#define htv213RetainedRejoinEnabled htv213Owner().rejoin
+#define htv213RetainedConfiguration htv213Owner().retained
+#define htv213OwnerId htv213Owner().ownerId
+
+bool htv213AnyOwners() {
+    for (const auto& owner:htv213Owners) if(owner.enabled) return true;
+    return false;
+}
+bool htv213AnyControlActive() {
+    for (const auto& owner:htv213Owners) if(owner.trial.active()) return true;
+    return false;
+}
 
 bool parseHtv213Settings(const String& text, std::array<std::uint8_t,14>& settings) {
     if (text.length()!=settings.size()*2) return false;
@@ -44,10 +75,18 @@ void reportHtv213Owner(const rainpoint::htv213::Frame* frame=nullptr) {
 }
 
 bool htv213ControlActive() {
-    using S=rainpoint::htv213Control::State;
-    const auto state=htv213ControlTrial.state();
-    return state!=S::Idle && state!=S::Complete && state!=S::Cancelled && state!=S::Overdue &&
-        state!=S::RecoveredIdle;
+    return htv213ControlTrial.active();
+}
+
+bool htv213OwnsFrame(const rainpoint::htv213::Frame& frame) {
+    return (htv213ControlActive() || htv213OwnerEnabled) &&
+        rainpoint::htv213Control::frameForProfile(htv213ControlProfile, frame);
+}
+
+std::uint32_t htv213ResponseCenterHz() {
+    for (const auto& owner:htv213Owners)
+        if(owner.listening && owner.trial.listening(millis())) return owner.profile.routineHz;
+    return 0;
 }
 
 void reportHtv213Control(const rainpoint::htv213::Frame* frame=nullptr) {
@@ -56,7 +95,7 @@ void reportHtv213Control(const rainpoint::htv213::Frame* frame=nullptr) {
     String line="{\"type\":\"htv213_control_status\",\"node_id\":\"";
     line+=wifiTransport.nodeId(); line+="\",\"command_id\":\""; line+=htv213ControlCommandId;
     line+="\",\"state\":\""; line+=names[static_cast<unsigned>(htv213ControlTrial.state())];
-    line+="\",\"tx_armed\":"; line+=htv213ControlActive() ? "true" : "false";
+    line+="\",\"tx_armed\":"; line+=htv213AnyControlActive() ? "true" : "false";
     line+=",\"phase\":"; line+=htv213ControlTrial.phase();
     if (frame) {
         constexpr char digits[]="0123456789abcdef";
@@ -70,7 +109,7 @@ void reportHtv213Control(const rainpoint::htv213::Frame* frame=nullptr) {
 void restoreHtv213ControlReceiver() {
     htv213ControlListening=false;
     if (!primaryRadio.restoreReceiveChannel(0)) htv213ControlTrial.cancel();
-    if (!htv213ControlActive() && !htv213OwnerEnabled) restoreScanningAfterPairing();
+    if (!htv213AnyControlActive() && !htv213AnyOwners()) restoreScanningAfterPairing();
 }
 
 void transmitHtv213Control(const rainpoint::htv213::Transmission& tx) {
@@ -113,22 +152,25 @@ bool handleHtv213ControlCommand(const String& type,const String& command,const S
         // idle OTA reach the shared signed-update validator, retaining this
         // owner until reboot; the gateway restores it after authentication.
         if (type=="firmware_update_start" && !htv213ControlActive()) return false;
-        if (!htv213ControlActive() && !htv213OwnerEnabled) return false;
         if (type=="rf_mode_set" || type=="node_reboot") {
             htv213OwnerEnabled=false; reportHtv213Owner();
             htv213ControlTrial.cancel(); restoreHtv213ControlReceiver(); reportHtv213Control(); return false;
         }
-        reportNetworkCommandError(id,"htv213_control_busy"); return true;
+        if (type=="firmware_update_start" && htv213ControlActive()) {
+            reportNetworkCommandError(id,"htv213_control_busy"); return true;
+        }
+        // Shared operation is serialized by the main response-window arbiter;
+        // ownership alone must not intercept other authenticated device work.
+        return false;
     }
     if (id==htv213ControlCommandId || id==htv213ControlOpenId) {
         reportNetworkCommandError(id,"htv213_control_duplicate"); return true;
     }
     if (!wifiTransport.authenticated() || !radiosHealthy || !rfMaintenance.transmitAllowed() ||
         htv213Armed() || currentPairingState()==rainpoint::PairingSessionState::Armed ||
-        routineAckAuthorizations.activeCount() || htv405RoutineAckAuthorizations.activeCount() ||
-        htv145OwnsReports() || htv145Pending() || valveControlProbe.commandPendingConfirmation ||
+        htv145Pending() || valveControlProbe.commandPendingConfirmation ||
         valveControlProbe.openQueued || valveControlProbe.closeQueued) {
-        reportNetworkCommandError(id,"htv213_requires_idle_unassigned_node"); return true;
+        reportNetworkCommandError(id,"htv213_requires_idle_radio"); return true;
     }
     long phase=0;
     if (!owner && (!jsonLongField(command,"phase",phase) || phase<0 || phase>63)) {
@@ -289,4 +331,70 @@ void pollHtv213Control() {
     if (htv213ControlListening && !htv213ControlTrial.listening(millis())) restoreHtv213ControlReceiver();
     if (!htv213ControlActive()) restoreHtv213ControlReceiver();
     if (before!=htv213ControlTrial.state()) reportHtv213Control();
+}
+
+bool dispatchHtv213ControlCommand(const String& type,const String& command,const String& id) {
+    const bool owner=type=="htv213_owner_set",clear=type=="htv213_owner_clear";
+    const bool close=type=="htv213_control_close"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_close"
+#endif
+        ;
+    const bool open=type=="htv213_control_open"
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        || type=="htv213_control_probe_open"
+#endif
+        ;
+    if (!owner && !clear && !close && !open) {
+        if(type=="firmware_update_start" && htv213AnyControlActive()) {
+            reportNetworkCommandError(id,"htv213_control_busy"); return true;
+        }
+        if(type=="rf_mode_set" || type=="node_reboot") {
+            for(std::size_t i=0;i<htv213Owners.size();++i) {
+                Htv213OwnerSelection selected(i);
+                handleHtv213ControlCommand(type,command,id);
+            }
+        }
+        return false;
+    }
+    if((owner || open || close) && htv213ResponseCenterHz()) {
+        reportNetworkCommandError(id,"radio_busy_with_other_valve"); return true;
+    }
+    std::size_t index=htv213Owners.size(),available=htv213Owners.size();
+    rainpoint::htv213::Endpoint factory{},controller{};
+    if((owner || open) &&
+        (!parseRawHexEndpoint(jsonStringField(command,"factory_endpoint"),factory) ||
+         !parseRawHexEndpoint(jsonStringField(command,"controller_endpoint"),controller))) {
+        reportNetworkCommandError(id,"invalid_htv213_control_profile"); return true;
+    }
+    for(std::size_t i=0;i<htv213Owners.size();++i) {
+        const auto& record=htv213Owners[i];
+        if((clear && record.ownerId==jsonStringField(command,"owner_id")) ||
+           (close && record.openId==jsonStringField(command,"open_command_id")) ||
+           ((owner || open) && record.profile.factory==factory && record.profile.controller==controller)) {
+            index=i;break;
+        }
+        if(!record.enabled && !record.trial.active() && available==htv213Owners.size()) available=i;
+    }
+    if(index==htv213Owners.size() && (owner || open || clear)) index=available;
+    if(index==htv213Owners.size()) {
+        reportNetworkCommandError(id,"htv213_owner_missing_or_capacity"); return true;
+    }
+    Htv213OwnerSelection selected(index);
+    return handleHtv213ControlCommand(type,command,id);
+}
+
+bool dispatchHtv213Frame(const rainpoint::htv213::Frame& frame,const rainpoint::RadioPacket& packet) {
+    for(std::size_t i=0;i<htv213Owners.size();++i) {
+        Htv213OwnerSelection selected(i);
+        if(htv213OwnsFrame(frame)) { processHtv213Control(frame,packet); return true; }
+    }
+    return false;
+}
+
+void pollHtv213Owners() {
+    for(std::size_t i=0;i<htv213Owners.size();++i) {
+        Htv213OwnerSelection selected(i);
+        pollHtv213Control();
+    }
 }

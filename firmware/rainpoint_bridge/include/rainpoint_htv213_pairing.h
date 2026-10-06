@@ -146,6 +146,20 @@ public:
     bool awaitingConfirmation() const { return state_ == State::Armed && waiting_; }
     const Frame& notificationAck() const { return notificationAck_; }
     const Frame& completionReport() const { return completionReport_; }
+    bool matchesFrame(const Frame& frame) const {
+        if (state_ != State::Armed || !hasSync(frame) || !hasOrdinaryTrailer(frame)) return false;
+        const auto n = native(frame);
+        if (n[0] != 0x51) return false;
+        const Endpoint broadcast{{128,0,0,0}};
+        auto candidate = profile_;
+        if (discover_ && !valveConfiguration::nonzero(candidate.factory)) {
+            for (unsigned i=0; i<4; ++i) candidate.factory[i] = frame[9+i];
+            return valid(candidate) && routes(frame, broadcast, candidate.factory) && pairingAnnouncement(n);
+        }
+        auto paired = candidate.factory; paired[0] |= 128;
+        return routes(frame, profile_.controller, paired) ||
+            (routes(frame, broadcast, candidate.factory) && pairingAnnouncement(n));
+    }
     bool notificationResponseWindow(std::uint32_t now) const {
         return state_ == State::Armed && notificationSent_ && !notificationAccepted_ &&
             now - notificationSentMs_ < 750;

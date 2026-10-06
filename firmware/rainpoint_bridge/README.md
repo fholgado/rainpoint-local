@@ -61,7 +61,8 @@ power before changing wires.
   observation-only anomaly. No speculative startup close is sent.
 - OTA retains hash verification, boot health and rollback behavior. Firmware and
   configuration updates remain independently authorized operations.
-- HTV213 uses a dedicated radio with saved carrier calibration. Normal commands
+- HTV213 shares a radio with sensors and other valves, with eight retained
+  HTV213 associations and optional carrier overrides. Normal commands
   advertise `htv213_control_v1` and use the qualified two-outlet runtime,
   six-bit command phases, retained battery rejoin and idle recovery. Research
   probes remain available only in explicitly enabled test builds.
@@ -76,13 +77,13 @@ python tools/check_firmware_boundaries.py \
   firmware/rainpoint_bridge/.pio/build/rainpoint_bridge/firmware.bin
 ```
 
-The firmware version is `0.20.0` ([firmware alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0)). All three valve families are included;
+The firmware version is `0.21.0` ([firmware alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)). All three valve families are included;
 there is no HTV145 feature flag or separate image. `RAINPOINT_FIRMWARE_VERSION`
 may label a reproducible artifact. Retired experiment flags are rejected.
-Use gateway 0.39.18 or later so normal two-zone commands authenticate and route
+Use gateway 0.39.19 or later so shared two-zone commands authenticate and route
 correctly. The existing control.12 test image remains compatible with this gateway.
-Second-radio calibration validation is deferred in the roadmap; retain each
-radio's saved calibration when updating.
+Default carriers were validated on the original and a same-batch spare radio;
+existing carrier overrides are retained when updating.
 Historical captures remain regression fixtures; preserve a verified rollback
 artifact until the new image has passed field checks.
 

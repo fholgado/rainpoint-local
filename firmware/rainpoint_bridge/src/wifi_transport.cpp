@@ -202,7 +202,9 @@ void WifiTransport::poll() {
         }
         return;
     }
-    while (client_.available()) {
+    // Leave complete commands in TCP when the bounded queue is full. Mixed
+    // sensor/valve ownership restoration can arrive as one larger burst.
+    while (client_.available() && pendingCommandCount_ < pendingCommands_.size()) {
         const char value = static_cast<char>(client_.read());
         ++networkBytesReceived_;
         if (value == '\n') {
@@ -357,6 +359,7 @@ void WifiTransport::authenticate(const String& nonce) {
 #endif
         ",\"htv213_auto_identity_pairing\""
         ",\"htv213_control_v1\""
+        ",\"htv213_shared_radio_v1\""
 #ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
         ",\"htv213_control_experiment\""
 #endif

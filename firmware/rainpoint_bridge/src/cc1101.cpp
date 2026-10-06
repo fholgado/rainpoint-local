@@ -399,7 +399,10 @@ bool Cc1101::cacheTransmitFrequency(std::uint32_t centerFrequencyHz) {
         }
     }
     if (destination == nullptr) {
-        return false;
+        // A profile change must not require rebooting an otherwise healthy
+        // radio. Rotate a bounded cache; uncached transmissions still use the
+        // normal calibration path. Replace an entry only after success below.
+        destination = &cachedTransmitFrequencies_[nextCachedTransmitFrequency_];
     }
 
     const std::uint8_t receiveChannel = channel_;
@@ -426,6 +429,9 @@ bool Cc1101::cacheTransmitFrequency(std::uint32_t centerFrequencyHz) {
         calibration1,
         true,
     };
+    nextCachedTransmitFrequency_ =
+        (static_cast<std::size_t>(destination - cachedTransmitFrequencies_.data()) + 1) %
+        cachedTransmitFrequencies_.size();
     return true;
 }
 

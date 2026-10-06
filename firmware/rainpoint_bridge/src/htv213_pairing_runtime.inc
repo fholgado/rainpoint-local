@@ -8,6 +8,14 @@ std::int8_t htv213Power=0;
 bool htv213ListeningForNotification=false;
 
 bool htv213Armed() { return htv213Session.state()==rainpoint::htv213::State::Armed; }
+bool htv213PairingOwnsFrame(const rainpoint::htv213::Frame& frame) {
+    return htv213Session.matchesFrame(frame);
+}
+
+std::uint32_t htv213PairingResponseCenterHz() {
+    return htv213ListeningForNotification && htv213Session.notificationResponseWindow(millis()) ?
+        htv213Session.profile().routineHz : 0;
+}
 
 void reportHtv213() {
     using State=rainpoint::htv213::State;
@@ -65,14 +73,16 @@ bool handleHtv213Command(const String& type,const String& command,const String& 
         if (type=="rf_mode_set" || type=="node_reboot") {
             htv213Session.cancel(); restoreScanningAfterPairing(); reportHtv213(); return false;
         }
-        reportNetworkCommandError(id,"htv213_experiment_busy"); return true;
+        if (type=="firmware_update_start") {
+            reportNetworkCommandError(id,"htv213_experiment_busy"); return true;
+        }
+        return false;
     }
     if (!wifiTransport.authenticated() || !radiosHealthy || !rfMaintenance.transmitAllowed() ||
         htv213Armed() || currentPairingState()==rainpoint::PairingSessionState::Armed ||
-        routineAckAuthorizations.activeCount() || htv405RoutineAckAuthorizations.activeCount() ||
-        htv145OwnsReports() || htv145Pending() || valveControlProbe.commandPendingConfirmation ||
+        htv145Pending() || valveControlProbe.commandPendingConfirmation ||
         valveControlProbe.openQueued || valveControlProbe.closeQueued) {
-        reportNetworkCommandError(id,"htv213_requires_idle_unassigned_node"); return true;
+        reportNetworkCommandError(id,"htv213_requires_idle_radio"); return true;
     }
     rainpoint::htv213::Profile p{};
     long duration,address,selector,timing,phase,initial,routine,delayUs,notificationDelay,power;

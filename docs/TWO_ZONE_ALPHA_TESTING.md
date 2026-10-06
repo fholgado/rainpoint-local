@@ -4,8 +4,8 @@ Give this guide to the agent updating an existing RainPoint Local installation
 for an **HTV213FRF** two-zone valve. The agent handles software updates and
 checks; the user handles the valve button, batteries and visual confirmation.
 
-Use [firmware 0.20.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0)
-with **gateway 0.39.18** and **integration 0.18.5**. This is a firmware alpha,
+Use [firmware 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
+with **gateway 0.39.19** and **integration 0.18.6**. This is a firmware alpha,
 not a replacement for the pinned [Alpha 1](ALPHA_1.md) stack. Other two-zone
 models are not qualified by this release.
 
@@ -15,13 +15,13 @@ models are not qualified by this release.
    Confirm a classic ESP32/CC1101 node and wait until all watering is finished.
    Take an HA backup including the gateway data and retain the existing catalog.
    Preserve credentials, gateway identity, associations and counters.
-2. Download `rainpoint-radio-0.20.0.zip`, `rainpoint-source.tar.gz`,
+2. Download `rainpoint-radio-0.21.0.zip`, `rainpoint-source.tar.gz`,
    `compatibility.json` and `SHA256SUMS` from the release. Check the downloaded
    assets against `SHA256SUMS`, then extract the radio ZIP and verify its internal
    checksums too (`shasum -a 256 -c SHA256SUMS` on macOS). Do not rebuild the
-   signed application or select `firmware-v0.20.0` as an integration in HACS.
-3. Update the existing gateway through HA's app store to **0.39.18**. Use HACS
-   for integration **0.18.5** if offered. Otherwise use the release's matched
+   signed application or select a firmware-only tag as an integration in HACS.
+3. Update the existing gateway through HA's app store to **0.39.19**. Use HACS
+   for integration **0.18.6** if offered. Otherwise use the release's matched
    source archive: copy its `custom_components/rainpoint_local` into HA's
    configuration directory after backing up the old component, then restart HA.
    The archive also contains `addons/rainpointd` for a pinned local gateway
@@ -31,12 +31,12 @@ models are not qualified by this release.
 4. Stage the radio ZIP's `ota/` files under
    `/share/rainpoint-local/firmware/` on HA. With an existing catalog, merge the
    new offer using `tools/stage_firmware_release.py` from the
-   [signed source tag](https://github.com/fholgado/rainpoint-local/tree/firmware-v0.20.0):
+   [signed source tag](https://github.com/fholgado/rainpoint-local/tree/firmware-v0.21.0):
    use the bundled release ID/version, `--firmware-variant unified` and
    `--signature firmware-signature.json`. Keep previous offers and copy the
    referenced `.bin` before replacing `catalog.json`. Check the gateway's
    `firmware_catalog_path` points there, then restart the gateway while idle.
-5. Install **0.20.0** through the selected radio's HA Update entity. Update one
+5. Install **0.21.0** through the selected radio's HA Update entity. Update one
    radio at a time. Confirm the new version, authenticated connection, healthy
    OTA confirmation and restored device ownership. A completed download alone
    is not success. Existing working associations do not need re-pairing.
@@ -49,20 +49,19 @@ routine OTA path.
 
 ## Agent check two zone radio readiness
 
-This alpha needs **one dedicated radio per HTV213 valve**, with no other device
-assignments and a saved carrier calibration for that physical radio. Firmware
-0.20.0 supplies the required normal pairing/control capabilities. Check HA's
-radio selection before asking the user to press the valve button.
+Firmware **0.21.0** supports sensors and valves on the same radio, including
+up to **eight HTV213 associations** per radio. Keep working sensor associations;
+there is no dedicated-radio requirement or manual tuning prerequisite.
+Check that the updated radio is connected and selectable in HA before asking
+the user to press the valve button. Older radio firmware needs updating to use
+shared ownership.
 
-If HA reports no prepared two-zone radio, check connection, firmware, existing
-assignments and calibration. Updating firmware does not create calibration.
-An uncalibrated radio needs maintainer-assisted measurement/provisioning before
-pairing; independent second-radio calibration is still alpha test work. Do not
-copy another radio's frequency correction or reset a working association.
-The authenticated provisioning API is
-`POST /api/v1/nodes/{node_id}/htv213-calibration`, with measured integer-Hz
-`initial_center_hz` and `routine_center_hz`; it saves the profile without pairing
-or watering. See the [carrier definition](../protocol_documentation/htv213frf.md#local-dry-test-candidate).
+The default carriers were tested on two radios. Existing overrides remain
+effective; unusual hardware can use the optional authenticated
+`POST /api/v1/nodes/{node_id}/htv213-calibration` with integer-Hz
+`initial_center_hz` and `routine_center_hz`. This changes the recipe for future
+enrollment, not a working valve's saved association. Use RF diagnostics if
+tuning is needed, not repeated pairing or forced counters.
 
 ## User pair the valve
 
@@ -70,7 +69,7 @@ Turn off the stock RainPoint gateway. Test with the valve disconnected from
 water, or visually check that each outlet really opens and closes.
 
 In HA, open **Settings → Devices & services → RainPoint Local → Configure →
-Add a RainPoint device → Valves → HTV213FRF**. Select the prepared radio, review
+Add a RainPoint device → Valves → HTV213FRF**. Select the compatible radio, review
 and start pairing **before** performing the valve's long-press pairing gesture.
 The valve's success indication is only the first step: HA may wait up to ten
 minutes for its later confirmation report. Leave the radio powered and finish
@@ -97,6 +96,11 @@ HA's built-in watering/problem notifications should appear by default. Phone
 forwarding is optional. Completion can lag the physical stop while a final
 valve report arrives; record the delay rather than send duplicate starts.
 These first tests need no two-experiment unlock or 72-hour wait.
+
+For a shared radio, also confirm its existing sensors continue updating before
+and after valve control. Pairing the valve should not require re-pairing sensors
+or change another valve's association. Report any stale readings or wrong-target
+behavior alongside the valve results.
 
 Optional next session: with both outlets idle and the radio left powered, remove
 and reinsert only the valve batteries. Wait for fresh reports and try one

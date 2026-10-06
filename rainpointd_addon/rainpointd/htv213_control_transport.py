@@ -13,6 +13,26 @@ from .htv213_control import ControlJournal
 CAPABILITY = "htv213_control_experiment"
 IDLE_RECOVERY_CAPABILITY = "htv213_idle_recovery_v1"
 NORMAL_CONTROL_CAPABILITY = "htv213_control_v1"
+SHARED_RADIO_CAPABILITY = "htv213_shared_radio_v1"
+OWNER_CAPACITY = 8
+
+
+def remember(gateway, node_id, command_id, association_key):
+    owners = getattr(gateway, "_htv213_control_owners", {})
+    owners = {key: value for key, value in owners.items() if value != association_key}
+    owners[(node_id, command_id)] = association_key
+    gateway._htv213_control_owners = owners
+    gateway._htv213_control_owner = (node_id, command_id, association_key)
+
+
+def response_owner(gateway, node_id, command_id):
+    if not isinstance(command_id, str):
+        return None
+    key = getattr(gateway, "_htv213_control_owners", {}).get((node_id, command_id))
+    if key:
+        return node_id, command_id, key
+    legacy = getattr(gateway, "_htv213_control_owner", None)
+    return legacy if legacy and legacy[:2] == (node_id, command_id) else None
 
 
 def command_type(node, action):
@@ -31,16 +51,17 @@ def eligible(gateway, node_id):
     if not (node.get("managed") and node.get("authenticated") and node.get("connected")
             and {CAPABILITY, NORMAL_CONTROL_CAPABILITY} & set(node.get("capabilities", []))):
         raise ValueError("selected node needs compatible HTV213 control firmware")
-    if (gateway._store.ack_assignments(node_id) or any(
-            v.get("control_node_id") == node_id for v in gateway._store.valve_registry())):
-        raise ValueError("dry control requires an unassigned test node")
+    if (SHARED_RADIO_CAPABILITY not in node.get("capabilities", []) and
+            (gateway._store.ack_assignments(node_id) or any(
+             v.get("control_node_id") == node_id for v in gateway._store.valve_registry()))):
+        raise ValueError("update radio firmware to share HTV213 control with other devices")
     return node
 
 
 def dispatch(gateway, node_id, key, tx, command, lease_seconds):
     gateway._htv213_experiment_deadline = time.monotonic() + lease_seconds
     gateway._htv213_experiment_owner = (node_id, tx["command_id"])
-    gateway._htv213_control_owner = (node_id, tx["command_id"], key)
+    remember(gateway, node_id, tx["command_id"], key)
     status = {"command_id": tx["command_id"], "state": "reserved", "phase": tx["phase"],
               "port": tx["port"], "operational": False}
     gateway.update_node(node_id, htv213_control=status)
@@ -56,8 +77,8 @@ def dispatch(gateway, node_id, key, tx, command, lease_seconds):
 
 def observe(gateway, node_id, message):
     with gateway._lock:
-        owner = getattr(gateway, "_htv213_control_owner", None)
-        if not owner or owner[:2] != (node_id, message.get("command_id")):
+        owner = response_owner(gateway, node_id, message.get("command_id"))
+        if not owner:
             return
         state = message.get("state")
         if state not in {"transmitting", "awaiting_response", "open_confirmed", "close_awaiting_response",
@@ -74,7 +95,7 @@ def observe(gateway, node_id, message):
             from . import htv213_owner
             node = gateway._nodes.get(node_id, {})
             association = htv213_owner.records(gateway).get(owner[2], {})
-            status = node.get("htv213_owner") or {}
+            status = htv213_owner.node_status(node, association)
             if (node.get("connected") and node.get("authenticated") and
                     IDLE_RECOVERY_CAPABILITY in node.get("capabilities", []) and
                     not association.get("revoking") and association.get("node_id") == node_id and
@@ -84,7 +105,8 @@ def observe(gateway, node_id, message):
                                      ports=association.get("ports", {}))
         record = journal.snapshot(owner[2])
         terminal = state in {"complete", "overdue", "cancelled", "recovered_idle"}
-        gateway.update_node(node_id, tx_armed=not terminal, htv213_control={
+        armed = message.get("tx_armed")
+        gateway.update_node(node_id, tx_armed=armed if type(armed) is bool else not terminal, htv213_control={
             "command_id": owner[1], "state": record["state"], "node_state": state,
             "phase": record["transaction"]["phase"], "port": record["transaction"]["port"],
             "operational": False, "acknowledged": record["transaction"]["acknowledged"],
@@ -97,8 +119,8 @@ def observe(gateway, node_id, message):
 def observe_error(gateway, node_id, message):
     """Expose rejection without reclaiming an attempted phase or enabling retry."""
     with gateway._lock:
-        owner = getattr(gateway, "_htv213_control_owner", None)
-        if not owner or owner[:2] != (node_id, message.get("command_id")):
+        owner = response_owner(gateway, node_id, message.get("command_id"))
+        if not owner:
             return False
         prior = gateway._nodes.get(node_id, {}).get("htv213_control", {})
         gateway.update_node(node_id, htv213_control={**prior, "node_state": "command_rejected"})

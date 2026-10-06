@@ -5,16 +5,15 @@ Local. The agent installs the software, flashes the firmware and checks the
 connection. You assemble the radio, enter Wi-Fi details, press its confirmation
 button and pair your devices through Home Assistant.
 
-This alpha supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone
-valves and HTV405FRF four-zone valves. A stock RainPoint gateway, cloud account
+This alpha supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone,
+HTV213FRF two-zone and HTV405FRF four-zone valves. A stock RainPoint gateway, cloud account
 and SDR are not required. Cloud-device migration is not automatic.
 
 HTV213FRF two-zone support is included in the
-[unified firmware 0.20.0 alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.20.0)
-with gateway 0.39.18, separate from this pinned Alpha 1 install. Existing testers
+[unified firmware 0.21.0 alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
+with gateway 0.39.19. Existing testers
 should use the [agent update and test guide](docs/TWO_ZONE_ALPHA_TESTING.md).
-The HA pairing menu requires a dedicated radio with saved RF calibration.
-Second-radio calibration testing is deferred. See the
+Sensors and valves can share an updated radio; tuning is optional. See the
 [two-zone requirements](protocol_documentation/htv213frf.md#enrollment).
 
 ## 1. Agent: confirm the setup
@@ -31,12 +30,11 @@ Use authorized HA/browser access to do the installation. Ask the user only for
 actions requiring their credentials, physical input or access you do not have.
 Take an HA backup first.
 
-Use [Alpha 1](docs/ALPHA_1.md): gateway **0.39.0**, integration **0.18.0** and
-signed firmware **0.19.0**. Record all three installed versions. The release tag
-is **`v0.18.0-alpha.1`**; component version numbers remain independent.
-The app repository follows `main`, so check its offered gateway version against
-this combination before installing. For a pinned source install, use the source
-package on the release and the [bundle guide](docs/ALPHA_BUNDLE.md).
+Use gateway **0.39.19**, integration **0.18.6** and signed firmware **0.21.0**.
+Record all three versions; their version numbers are independent. The app
+repository follows `main`. The firmware release includes the matched source
+package for a pinned install; see the [bundle guide](docs/ALPHA_BUNDLE.md).
+The original [Alpha 1](docs/ALPHA_1.md) remains an archived baseline.
 
 ### Quick BOM (per radio node)
 
@@ -83,9 +81,10 @@ Start the app and enable start-on-boot.
 ### HA integration
 
 In HACS, add the same URL under **Custom repositories**, choose **Integration**,
-and download **RainPoint Local**, selecting **`v0.18.0-alpha.1`** in the version
-selector (enable prereleases if necessary). Do not select the firmware-only
-`firmware-v0.19.0` tag or `main` for a pinned Alpha 1 installation.
+and download **RainPoint Local 0.18.6** (enable prereleases if necessary).
+Select the integration release, not a firmware-only tag. If HACS does not offer
+the matched version, use the firmware release's source archive as described in
+the [agent update guide](docs/TWO_ZONE_ALPHA_TESTING.md).
 Arrange the HA restart with the user, then
 accept the discovered gateway in **Settings → Devices & services**.
 
@@ -107,8 +106,8 @@ Have the user wire the unpowered board using the
 CC1101 power is **3.3 V, not 5 V**. GDO0 is required; GDO2 is unused and optional.
 Ask them to attach the antenna and connect the ESP32 by USB.
 
-For Alpha 1, download **`rainpoint-radio-0.19.0.zip`** from the
-[release](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1),
+Download **`rainpoint-radio-0.21.0.zip`** from the
+[firmware release](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0),
 verify its checksums and follow the included README's first-USB-flash command.
 This uses the approved signed build without compiling it again.
 
@@ -173,9 +172,10 @@ Mobile forwarding is optional; see [notifications](docs/ALPHA_NOTIFICATIONS.md).
 
 ## Limits and updates
 
-HTV405 battery is not decoded and it has no water-volume capability. Alpha 1
-firmware supports up to eight HTV145 associations per radio, sharing a custom
-gateway identity. Older firmware retains its one-valve-per-radio limit.
+HTV405 battery is not decoded and it has no water-volume capability. Current
+firmware supports eight HTV145 and eight HTV213 associations per radio, sharing
+a custom gateway identity with sensors and other valves. Older firmware needs
+updating to support shared HTV213 ownership.
 Battery-change recovery and stock/local coexistence still need qualification.
 Use a trusted LAN; see [security details](SECURITY.md) and the
 [roadmap](PROJECT_ROADMAP.md) for full alpha limitations.

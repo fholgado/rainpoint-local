@@ -829,6 +829,7 @@ class ESP32NetworkServer:
                         "htv213_auto_identity_pairing",
                         "htv213_control_experiment",
                         "htv213_control_v1",
+                        "htv213_shared_radio_v1",
                         "htv213_idle_recovery_v1",
                         "htv213_idle_recovery_resume_v1",
                         "htv213_routine_owner",
