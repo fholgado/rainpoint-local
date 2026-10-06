@@ -20,7 +20,11 @@ models are not qualified by this release.
    assets against `SHA256SUMS`, then extract the radio ZIP and verify its internal
    checksums too (`shasum -a 256 -c SHA256SUMS` on macOS). Do not rebuild the
    signed application or select a firmware-only tag as an integration in HACS.
-3. Update the existing gateway through HA's app store to **0.39.19**. Use HACS
+3. Update the existing gateway through HA's app store to **0.39.19** and confirm
+   that version is running **before updating any radio**. Gateway 0.39.18 can
+   transfer the image but rejects 0.21.0's new shared-radio capability, leaving
+   the radio disconnected. A catalog's hardware compatibility is not proof of
+   gateway compatibility. Use HACS
    for integration **0.18.6** if offered. Otherwise use the release's matched
    source archive: copy its `custom_components/rainpoint_local` into HA's
    configuration directory after backing up the old component, then restart HA.

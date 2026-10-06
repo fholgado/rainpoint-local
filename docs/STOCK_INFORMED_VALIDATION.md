@@ -1665,7 +1665,24 @@ losing its gateway connection. Healthy boot confirmation did not arrive within
 five minutes. No second OTA or watering command was sent.
 
 A gateway restart tested connection recovery without reflashing. The last
-known LAN address answered ping, but this does not identify the running image
-or establish a successful boot. Power-cycle/boot diagnostics are needed before
-claiming a completed update or choosing another firmware action. Private
-observations are under `captures/front-production-021-20261005/`.
+known LAN address answered ping, but this did not identify the running image
+or establish a successful boot. The user power-cycled the radio; it still did
+not authenticate to gateway 0.39.18.
+
+The installed gateway's actual authentication code reproduced the blocker with
+synthetic credentials: its existing capability list authenticated, adding only
+`htv213_shared_radio_v1` caused rejection, and the released 0.39.19 code accepted
+the same hello. The real socket regression using the firmware's advertised
+capabilities passed. Hardware/signature admission for OTA had not guaranteed
+that the candidate's hello would be accepted; the gateway-first prerequisite
+was missed during this deployment.
+
+With user approval and a fresh HA configuration/gateway backup, the nine-file
+released gateway delta was hash-verified against the installed 0.39.18 baseline
+and updated to **0.39.19**. The already-flashed front radio authenticated as
+**0.21.0**, reported `confirmed` / `gateway_and_radio_healthy`, and cleared its
+pending-candidate flag without a second OTA. Registry associations, other radio
+firmware and valve counters were unchanged; the front HTV145 retained **129**
+and normal start became available. No watering, pairing or RF probe command was
+sent. Private observations are under
+`captures/front-production-021-20261005/`, including `gateway-03919-recovery/`.
