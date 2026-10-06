@@ -1628,3 +1628,24 @@ reports, correct open/close routing, isolated revocation, response-window expiry
 and command-queue backpressure. This is source/replay qualification; the earlier
 spare-radio pairing/controls above remain the physical RF evidence. Mixed-device
 field feedback is a separate alpha outcome, not an invented completed soak.
+
+### Shared radio alpha publication October 5
+
+[Firmware 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
+and [integration 0.18.6](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.6)
+are public prereleases from commit
+`ff3ad1571c26278e1ce66a655cafcf5864a91a61`. The firmware release includes the
+matched gateway **0.39.19** and integration source archive, signed USB/OTA bundle
+and [agent update guide](TWO_ZONE_ALPHA_TESTING.md).
+
+Protected signing succeeded after the maintainer's explicit chat approval.
+Independent checks verified the production signature, source/version receipt,
+USB support-image hashes and partition layout, production boundaries and an
+isolated packaged-gateway smoke test. All eight uploaded assets were downloaded
+and matched byte-for-byte before publication; both tags resolve to the reviewed
+commit. The signed application is **1,122,176 bytes**, SHA-256
+`6f327aaad098d5bff0ba6fc94c29d1cccd308dd82d113eeea55711b0b768c5ee`.
+
+Publication did not update installed radios or HA. Physical mixed-device
+feedback remains open; the same-batch spare's pairing/control qualification and
+the source/replay evidence above retain their stated scope.
