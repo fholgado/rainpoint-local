@@ -49,8 +49,18 @@ class EnrollmentJournalTest(unittest.TestCase):
         self.assertEqual(result["device_id"], "local-htv213-91556677")
         self.assertEqual(result["area"], "Bench")
         self.assertTrue(result["command"]["retained_rejoin_enabled"])
-        self.assertEqual(result["ports"], {}, "no invented per-port freshness")
+        self.assertEqual(set(result["ports"]), {"1"}, "retain only the RF-confirmed outlet")
+        self.assertIs(result["ports"]["1"]["watering"], False)
+        self.assertEqual(result["ports"]["1"]["observed_at"], self.journal.current()["proof_observed_at"])
         self.assertEqual(self.store.valve_registry(), [])
+
+    def test_naming_preserves_completion_observation_time_not_save_time(self):
+        observed = datetime.now(timezone.utc) - timedelta(minutes=25)
+        self.journal.begin(NODE, self.command, now=observed - timedelta(seconds=1))
+        self.assertTrue(self.journal.observe(NODE, self.proof, now=observed))
+        result = self.complete()
+        self.assertEqual(result["ports"]["1"]["observed_at"], observed.isoformat())
+        self.assertNotIn("2", result["ports"])
 
     def test_configured_wait_survives_discovery_expiry_and_restart_without_commit(self):
         now = datetime.now(timezone.utc)
@@ -291,10 +301,7 @@ class EnrollmentFlowTest(unittest.TestCase):
         self.assertEqual(profile.maximum_duration_seconds, 300)
         self.assertNotIn("dry_valve_confirmed", self.start())
 
-    def test_no_calibration_old_firmware_and_unmanaged_or_owned_node_do_not_send(self):
-        self.gateway._store.set_metadata_value(enrollment.KEY, '{"radios":{},"sessions":{},"current":null}')
-        with self.assertRaisesRegex(ValueError, "calibration"): self.start()
-        self.gateway.configure_htv213_radio(NODE, initial_center_hz=434351500, routine_center_hz=434241500)
+    def test_old_firmware_and_owned_legacy_node_do_not_send(self):
         self.gateway.update_node(NODE, capabilities=["rx", "sensor_pairing_tx"])
         with self.assertRaises(ValueError): self.start()
         self.gateway.update_node(NODE, capabilities=self.capabilities)

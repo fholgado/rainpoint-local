@@ -76,7 +76,7 @@ def project(gateway, now=None):
         age = _age(tx.get("reserved_at"), now)
         unresolved = journal["state"] not in SETTLED_STATES
         node = gateway._nodes.get(record["node_id"], {})
-        owner_status = node.get("htv213_owner", {})
+        owner_status = owner.node_status(node, record)
         connected = bool(node.get("connected") and node.get("authenticated") and
                          owner.CAPABILITY in node.get("capabilities", []) and
                          owner_status.get("state") == "ready" and
@@ -103,7 +103,9 @@ def project(gateway, now=None):
         state["active_zone"] = next((p for p in (1, 2) if state[f"zone_{p}_is_watering"]), None)
         # Never infer close from elapsed wall-clock time or an API return.
         state["valve_state"] = "watering" if state["is_watering"] is True else "idle" if state["is_watering"] is False else "unknown"
-        rejected = (node.get("htv213_control") or {}).get("node_state") in {"command_rejected", "uncertain", "cancelled", "overdue"}
+        control_status = node.get("htv213_control") or {}
+        rejected = (control_status.get("command_id") == tx.get("command_id") and
+                    control_status.get("node_state") in {"command_rejected", "uncertain", "cancelled", "overdue"})
         pending = unresolved and not tx.get("acknowledged") and age < 10 and connected and not rejected
         failed = unresolved and not tx.get("acknowledged") and not pending
         deadline_passed = unresolved and age > tx.get("requested_seconds", 0) + 65

@@ -46,15 +46,18 @@ class MenuPolicyTest(unittest.TestCase):
         self.gateway.update_node(NODE, capabilities=sorted(flow.REQUIRED_CAPABILITIES) + ['htv213_control_v1'])
         self.assertEqual(self.profile()["eligible_node_ids"], [NODE])
 
-    def test_missing_calibration_or_disconnected_radio_stays_visible_but_unselectable(self):
+    def test_radio_without_manual_tuning_uses_defaults_and_disconnect_still_blocks(self):
         self.gateway._store.set_metadata_value(enrollment.KEY, '{"radios":{},"sessions":{},"current":null}')
         self.assertTrue(self.profile()["user_pairing_supported"])
-        self.assertEqual(self.profile()["eligible_node_ids"], [])
-        with self.assertRaisesRegex(ValueError, "calibration"):
-            self.fixture.start()
+        self.assertEqual(self.profile()["eligible_node_ids"], [NODE])
+        self.fixture.start()
+        command = self.fixture.sent[0][1]
+        # Independently SDR-qualified default on the original and spare radio.
+        self.assertEqual(command["initial_center_hz"], 434397000)
+        self.assertEqual(command["routine_center_hz"], 434287000)
         self.gateway.update_node(NODE, connected=False)
         self.assertEqual(self.profile()["eligible_node_ids"], [])
-        self.assertEqual(self.fixture.sent, [])
+        self.assertEqual(len(self.fixture.sent), 1)
 
     def test_other_family_assignment_excludes_node_without_changing_it(self):
         with patch.object(self.gateway._store, "ack_assignments", return_value=[{}]):
@@ -62,6 +65,13 @@ class MenuPolicyTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "already owns"):
                 self.fixture.start()
         self.assertEqual(self.fixture.sent, [])
+
+    def test_shared_firmware_can_enroll_without_revoking_sensor_ack_owner(self):
+        self.gateway.update_node(NODE, capabilities=self.fixture.capabilities + ['htv213_shared_radio_v1'])
+        with patch.object(self.gateway._store, "ack_assignments", return_value=[{"node_id": NODE}]):
+            self.assertEqual(self.profile()["eligible_node_ids"], [NODE])
+            self.fixture.start()
+        self.assertEqual([command['type'] for _, command in self.fixture.sent], ['htv213_enrollment_start'])
 
     def test_saved_valve_is_not_revoked_or_repaired_by_visiting_menu(self):
         self.fixture.accept()

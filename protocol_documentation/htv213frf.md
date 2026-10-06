@@ -2,7 +2,7 @@
 
 **Stock reference plus locally verified dry pairing, both-outlet control,
 explicit stop, battery rejoin and missing-response/restart recovery.
-Native HA setup is available with unified firmware 0.20.0 / gateway 0.39.18
+Shared-radio HA setup is available with unified firmware 0.21.0 / gateway 0.39.19
 (firmware alpha), or qualified control.12 test firmware. Alpha 1
 firmware does not include this model.**
 The HTV213FRF is one RF device with ports `1` and `2`. Follow
@@ -116,9 +116,9 @@ promotion gates remain in [the roadmap](../PROJECT_ROADMAP.md).
 
 ## Enrollment
 
-Source preparation adds authenticated `htv213_enrollment_start` under the same
-experimental build flag, advertised by `htv213_auto_identity_pairing`. The
-gateway recipe supplies an available address, local identities and calibrated
+Standard firmware supports authenticated `htv213_enrollment_start`, advertised
+by `htv213_auto_identity_pairing`. The gateway recipe supplies an available
+address, local identities and default or optionally overridden
 carriers; it does not require a known factory ID. During an explicitly armed
 window, firmware binds the first checksum-valid broadcast with either captured
 body `0cff200501043e05` or `0bff200501043e07`. The identity then stays fixed for
@@ -137,17 +137,26 @@ do not reseed counters or replay enrollment.
 The flow uses HA's existing model/radio selection, review, progress, cancellation
 and naming screens. Pending completion proof survives a gateway restart;
 retained configuration is sent only after the association commits. Gateway
-0.39.17 / integration 0.18.5 expose the model and select only authenticated,
+0.39.19 / integration 0.18.6 expose the model and select only authenticated,
 managed radios with all enrollment, control, retained-rejoin and control.12
-idle-recovery capabilities. The radio must be dedicated and have no existing
-device assignments; visiting the menu never revokes an owner. A saved working
+idle-recovery capabilities. Firmware advertising `htv213_shared_radio_v1`
+supports sensors, other valve families and eight independent HTV213 associations
+on one radio. Older firmware must be updated before sharing. Visiting the menu
+never revokes an owner. A saved working
 valve needs no re-pairing. Explicit re-pair still requires acknowledged old-owner
 revocation before enrollment.
 
-Radios require individually provisioned calibrated carriers. Authenticated
-`POST /api/v1/nodes/{node_id}/htv213-calibration` saves the measured integer
+Default carrier settings are 434397000 Hz (selector-12 reference) and 434287000 Hz
+(selector-11/routine), empirically verified on two radios. Manual tuning is
+optional, not a pairing prerequisite. Authenticated
+`POST /api/v1/nodes/{node_id}/htv213-calibration` saves explicit integer
 `initial_center_hz` and `routine_center_hz`; it sends no RF and changes no counter.
-The node/model setup flow uses those saved values without exposing RF fields.
+The node/model setup flow preserves overrides without exposing RF fields.
+Saving enrollment retains the actual completion outlet report with its original
+observation time; it does not invent freshness for the other outlet. Shared
+firmware routes packets by association, serializes RF transmissions and resumes
+bounded response listeners after another device's ACK. Reconnect configuration
+bursts apply TCP backpressure rather than dropping commands at queue capacity.
 Slot allocation avoids the frozen legacy slots 1 (HTV145) and 6 (HCS026/HTV405),
 retained same-controller configurations, tombstones and prior assignment attempts.
 It does not modify the other models' proven pairing bytes. Committed,
@@ -293,7 +302,7 @@ increment modulo 64 from the real ACK-based seed, with no jump, reset or per-use
 boundary experiment. This applies the stock generator and qualified local
 transition to the staged model; it does not fabricate a completed trial for each
 new association or prove other hardware versions. HA radio eligibility still
-requires matching capabilities and saved calibration. Old canary records and other
+requires matching capabilities, not manual calibration. Old canary records and other
 valve models retain their existing policy; uncertain sends remain reserved.
 
 An attempted open supersedes pre-command idle on its target outlet: until a new

@@ -885,6 +885,15 @@ bool rfCommandMayTransmit(const String& type) {
     if (type == "pairing_start" ||
         type == "routine_ack_configure" ||
         type == "htv405_routine_ack_configure" ||
+        type == "htv213_enrollment_start" ||
+#ifdef RAINPOINT_HTV213_PAIRING_EXPERIMENT
+        type == "htv213_pairing_start" ||
+#endif
+        type == "htv213_control_open" || type == "htv213_control_close" ||
+#ifdef RAINPOINT_HTV213_CONTROL_EXPERIMENT
+        type == "htv213_control_probe_open" || type == "htv213_control_probe_close" ||
+#endif
+        type == "htv213_owner_set" ||
         type == "firmware_update_start") {
         return true;
     }
@@ -2150,6 +2159,38 @@ void pollIdentify() {
 #include "htv213_pairing_runtime.inc"
 #include "htv213_control_runtime.inc"
 
+// A report ACK is a serialized, blocking radio transmit. It restores the base
+// RX configuration; resume an existing short response listener afterward,
+// without extending its deadline or allocating another command phase.
+std::uint32_t radioResponseCenterHz() {
+    if (const auto hz = htv213ResponseCenterHz()) return hz;
+    if (const auto hz = htv213PairingResponseCenterHz()) return hz;
+    for (const auto& owner : htv145Owners) {
+        if (owner.pending && owner.listeningOnCommandCarrier &&
+            static_cast<std::int32_t>(owner.immediateResponseDeadlineMs - millis()) > 0)
+            return owner.centerHz;
+    }
+    if (valveControlProbe.responseListenActive &&
+        static_cast<std::int32_t>(valveControlProbe.responseListenUntilMs - millis()) > 0)
+        return valveProbeCenterHz();
+    return 0;
+}
+
+void restoreRadioResponseReceiver() {
+    const auto hz = radioResponseCenterHz();
+    if (hz && !primaryRadio.setReceiveFrequency(hz)) {
+        reportNetworkCommandError("receiver", "response_receiver_restore_failed");
+    }
+}
+
+bool radioResponseAllowsCommand(const String& type) {
+    return !radioResponseCenterHz() || !rfCommandMayTransmit(type);
+}
+
+struct RadioResponseRestore {
+    ~RadioResponseRestore() { restoreRadioResponseReceiver(); }
+};
+
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
 #include "valve_phase_runtime.inc"
 #include "native_valve_runtime.inc"
@@ -2192,11 +2233,16 @@ void handleNetworkCommand() {
         reportNetworkCommandError("invalid", "invalid_command_id");
         return;
     }
+    RadioResponseRestore resumeExistingResponse;
+    if (!radioResponseAllowsCommand(type)) {
+        reportNetworkCommandError(commandId, "radio_busy_with_other_valve");
+        return;
+    }
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
     if (handleNativeValveCommand(type,command,commandId)) return;
     if (handleValvePhaseCommand(type,command,commandId)) return;
 #endif
-    if (handleHtv213ControlCommand(type,command,commandId)) return;
+    if (dispatchHtv213ControlCommand(type,command,commandId)) return;
     if (handleHtv213Command(type,command,commandId)) return;
     if (type == "rf_mode_set") {
         const String mode = jsonStringField(command, "mode");
@@ -3359,13 +3405,14 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         observeValvePhase(frame);
     }
 #endif
-    if (&radio==&primaryRadio && (htv213ControlActive() || htv213OwnerEnabled)) {
-        processHtv213Control(frame,packet);
+    if (&radio==&primaryRadio && dispatchHtv213Frame(frame,packet)) {
+        restoreRadioResponseReceiver();
         printPacket(name,frame,packet,radio);
         return;
     }
-    if (&radio==&primaryRadio && htv213Armed()) {
+    if (&radio==&primaryRadio && htv213Armed() && htv213PairingOwnsFrame(frame)) {
         processHtv213(frame,packet);
+        restoreRadioResponseReceiver();
         printPacket(name,frame,packet,radio);
         return;
     }
@@ -3705,6 +3752,7 @@ void pollRadio(const char* name, rainpoint::Cc1101& radio) {
         // Keep the separately qualified HTV145 receive sequence unchanged.
         radio.recoverReceive();
     }
+    if (&radio == &primaryRadio) restoreRadioResponseReceiver();
     printPacket(name, frame, packet, radio);
 }
 
@@ -3839,7 +3887,7 @@ void loop() {
     handleSerialCommand();
     pollRadio("primary", primaryRadio);
     pollHtv213();
-    pollHtv213Control();
+    pollHtv213Owners();
     pollValveProbeResponseListener();
 #ifdef RAINPOINT_VALVE_PHASE_EXPERIMENT
     pollValvePhase();
@@ -3854,7 +3902,7 @@ void loop() {
         // its bounded reply; nodes without assignments continue broad scans.
         const bool ownsTelemetryAcks = routineAckAuthorizations.activeCount() > 0 ||
             htv405RoutineAckAuthorizations.activeCount() > 0
-            || htv145OwnsReports()
+            || htv145OwnsReports() || htv213AnyOwners()
             ;
         if (ownsTelemetryAcks &&
             primaryRadio.channel() != kHcs026TelemetryChannel) {

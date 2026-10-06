@@ -1598,3 +1598,33 @@ This qualifies the existing corrected recipe on a same-batch replacement radio.
 It does not require a long soak or establish sensor coexistence. Manual carrier
 setup, shared receive/ACK dispatch and preservation of completion telemetry are
 tracked separately in [the roadmap](../PROJECT_ROADMAP.md).
+
+### Shared radio release implementation October 5
+
+Firmware **0.21.0**, gateway **0.39.19** and integration **0.18.6** remove manual
+tuning and dedicated-radio prerequisites for normal HTV213 setup. The default
+carriers use the original/spare-radio recipe; explicit overrides and existing
+associations remain intact. Older firmware retains compatibility but needs
+updating before it can share ownership.
+
+Firmware keeps eight independent HTV213 runtime records. Commands resolve the
+factory/controller pair or linked open/owner ID; reports resolve their exact
+association. Unrelated frames continue to the established sensor and other-valve
+handlers. Serialized RF transmission, short response-window admission and RX
+restoration prevent another device's ACK from stranding the pending listener.
+The 16-entry rotating frequency cache replaces successful calibrations without
+rebooting; configuration bursts leave excess commands in TCP until queue space
+is available.
+
+The gateway retains per-association readiness and control correlation. Shared
+enrollment is explicitly capability-negotiated and recorded in its epoch;
+same-valve replacement still requires acknowledged revocation and archives old
+commands. Adding another valve preserves existing counter records. Completion
+state uses only the reported outlet and original RF observation time.
+
+The complete **1,077-test** suite, native protocol executable and production
+ESP32 build passed. Actual-source C++ replays cover eight owners, interleaved
+reports, correct open/close routing, isolated revocation, response-window expiry
+and command-queue backpressure. This is source/replay qualification; the earlier
+spare-radio pairing/controls above remain the physical RF evidence. Mixed-device
+field feedback is a separate alpha outcome, not an invented completed soak.

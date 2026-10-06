@@ -16,6 +16,21 @@ constexpr unsigned kRecoveryFreshMs = 1200000;
 
 using htv213::nativeTailSymbol;
 
+// Packet routing is by the retained association, never by radio ownership
+// alone. Other device families must still reach their normal ACK handlers.
+inline bool frameForProfile(const Profile& profile, const Frame& frame) {
+    if (!htv213::valid(profile) || !hasSync(frame) || !hasOrdinaryTrailer(frame)) return false;
+    const auto n = htv213::native(frame);
+    if (n[0] != 0x51) return false;
+    auto paired = profile.factory; paired[0] |= 128;
+    bool addressed = true, factory = n[10] == 1;
+    for (unsigned i = 0; i < 4; ++i) {
+        addressed = addressed && frame[5+i] == profile.controller[i] && frame[9+i] == paired[i];
+        factory = factory && frame[5+i] == (i == 0 ? 128 : 0) && frame[9+i] == profile.factory[i];
+    }
+    return addressed || factory;
+}
+
 inline bool prepareCommand(const Profile& profile, unsigned port, unsigned phase,
                            bool open, unsigned seconds, Transmission& tx) {
     tx = {};
@@ -99,6 +114,10 @@ enum class State { Idle, Transmitting, AwaitingResponse, OpenConfirmed, CloseAwa
 
 class Trial {
 public:
+    bool active() const {
+        return state_ != State::Idle && state_ != State::Complete && state_ != State::Cancelled &&
+            state_ != State::Overdue && state_ != State::RecoveredIdle;
+    }
     // Restore an unknown open for observation only. No packet construction,
     // transmission, inferred ACK, replay or phase allocation occurs here.
     bool resumeIdleRecovery(const Profile& profile, unsigned port, unsigned seconds,

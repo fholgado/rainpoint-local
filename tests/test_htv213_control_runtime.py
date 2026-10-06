@@ -44,6 +44,8 @@ std::int8_t htv213ControlPower=0;
 bool htv213ControlListening=false, scanning=false;
 unsigned htv213ControlAcks=0, reports=0;
 bool htv213OwnerEnabled=false;
+bool htv213AnyOwners() { return htv213OwnerEnabled; }
+bool htv213AnyControlActive() { return htv213ControlTrial.active(); }
 bool htv213RetainedRejoinEnabled=false;
 rainpoint::valveConfiguration::Association htv213RetainedConfiguration{};
 std::string htv213OwnerId;
@@ -57,8 +59,9 @@ String htv213ControlCommandId, htv213ControlOpenId, lastCommandError;
 bool radiosHealthy=true, scanChannels=false;
 bool htv213Armed() { return false; }
 rainpoint::PairingSessionState currentPairingState() { return rainpoint::PairingSessionState::Disarmed; }
-struct Authorizations { unsigned activeCount() { return 0; } } routineAckAuthorizations, htv405RoutineAckAuthorizations;
-bool htv145OwnsReports() { return false; }
+unsigned otherAckOwners=0;
+struct Authorizations { unsigned activeCount() { return otherAckOwners; } } routineAckAuthorizations, htv405RoutineAckAuthorizations;
+bool htv145OwnsReports() { return otherAckOwners!=0; }
 bool htv145Pending() { return false; }
 struct Probe { bool commandPendingConfirmation=false, openQueued=false, closeQueued=false; } valveControlProbe;
 String jsonStringField(const String& command,const char* key) {
@@ -134,7 +137,14 @@ int main(int argc,char** argv) {
     p.initialHz=434397000; p.routineHz=434287000;
     p.replyDelayUs=49000; p.notificationDelayMs=1000;
     rainpoint::htv213::Transmission tx{};
-    if (mode=="normal-dispatch" || mode=="blocked-probes") {
+    if (mode=="authorize-sensor-idle") {
+        htv213OwnerEnabled=true;htv213OwnerId="test-owner";
+        if(handleHtv213ControlCommand("routine_ack_authorize","{}","sensor-owner") ||
+           !htv213OwnerEnabled || !primaryRadio.commands.empty()) return 39;
+        return 0;
+    }
+    if (mode=="normal-dispatch" || mode=="shared-normal-dispatch" || mode=="blocked-probes") {
+        if(mode=="shared-normal-dispatch") otherAckOwners=2;
         if (mode=="blocked-probes") {
             for(const auto* command:{"htv213_control_probe_open","htv213_control_probe_close"})
                 if(handleHtv213ControlCommand(command,"{}","probe")) return 35;
@@ -297,7 +307,7 @@ int main(int argc,char** argv) {
                 "-I"+str(ROOT / "firmware/rainpoint_bridge/include"), "-x", "c++", "-", "-o", exe],
                 input=support, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for mode in ("normal-dispatch", "blocked-probes", "ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
+            for mode in ("normal-dispatch", "shared-normal-dispatch", "authorize-sensor-idle", "blocked-probes", "ota-idle-owner", "ota-no-owner", "ota-active-owner", "ota-active-no-owner",
                          "resume-reconnect", "resume-reboot", "resume-invalid",
                          "idle-recovery", "overdue-idle-recovery",
                          "accepted", "owner", "rejoin", "rejoin-boot07", "timeout", "disconnect", "rf-disabled", "restore-failure", "tx-failure"):

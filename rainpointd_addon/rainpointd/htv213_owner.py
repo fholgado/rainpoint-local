@@ -12,13 +12,32 @@ import uuid
 from datetime import datetime, timezone
 
 from . import htv213_pairing
-from .htv213_control_transport import eligible
+from .htv213_control_transport import eligible, SHARED_RADIO_CAPABILITY
 from .htv213_control import ControlJournal, packet
 
 KEY = "htv213_reply_owner_v1"
 CAPABILITY = "htv213_routine_owner"
 REJOIN_CAPABILITY = "htv213_retained_rejoin_v1"
 IDLE_RESUME_CAPABILITY = "htv213_idle_recovery_resume_v1"
+
+
+def node_status(node, record):
+    identifier = record["command"]["command_id"]
+    if SHARED_RADIO_CAPABILITY not in node.get("capabilities", []):
+        return node.get("htv213_owner") or {}
+    return (node.get("htv213_owners") or {}).get(identifier) or node.get("htv213_owner") or {}
+
+
+def publish_node_status(gateway, node_id, status):
+    # Keep the legacy last-status projection, but associate readiness with the
+    # exact owner ID so restoring a second valve cannot hide the first one.
+    node = gateway._nodes.get(node_id, {})
+    ids = {r["command"]["command_id"] for r in records(gateway).values()
+           if r["node_id"] == node_id and r.get("revoked") is not True}
+    statuses = {key: value for key, value in (node.get("htv213_owners") or {}).items() if key in ids}
+    if status["command_id"] in ids:
+        statuses[status["command_id"]] = status
+    gateway.update_node(node_id, htv213_owner=status, htv213_owners=statuses)
 
 
 def reply_configuration(command):
@@ -72,8 +91,9 @@ def configure_recovery(gateway, request):
         if (gateway.endpoint_suppressed(config["valve_endpoint"]) or
                 ControlJournal(gateway._store).snapshot(key)["state"] != "complete" or
                 htv213_pairing.busy(gateway) or node.get("tx_armed") or
-                gateway._store.ack_assignments(node_id) or any(
-                    r.get("control_node_id") == node_id for r in gateway._store.valve_registry())):
+                (SHARED_RADIO_CAPABILITY not in node.get("capabilities", []) and
+                 (gateway._store.ack_assignments(node_id) or any(
+                    r.get("control_node_id") == node_id for r in gateway._store.valve_registry())))):
             raise ValueError("idle exclusive reply owner required")
         record["configuration"] = config
         apply_reply_configuration(command, config, enabled)
@@ -138,8 +158,11 @@ def restore(gateway, node_id):
             if gateway.endpoint_suppressed(key.split(":")[1]):
                 continue
             # Never restore an owner onto a node subsequently assigned elsewhere.
-            if (gateway._store.ack_assignments(node_id) or any(
-                    r.get("control_node_id") == node_id for r in gateway._store.valve_registry())):
+            if (SHARED_RADIO_CAPABILITY not in node.get("capabilities", []) and
+                    (gateway._store.ack_assignments(node_id) or any(
+                     r.get("control_node_id") == node_id for r in gateway._store.valve_registry()))):
+                publish_node_status(gateway, node_id, dict(state="unsupported_shared_radio",
+                                    command_id=record["command"]["command_id"]))
                 continue
             command = copy.deepcopy(record["command"])
             config = record.get("configuration") or reply_configuration({**command, "node_id": node_id})
@@ -174,8 +197,9 @@ def restore(gateway, node_id):
                      record["enrollment_id"] == identity.get("evidence_id"))):
                 command.update(recovery_command_id=tx["command_id"], recovery_phase=tx["phase"],
                                recovery_port=tx["port"], recovery_seconds=tx["requested_seconds"])
-                gateway._htv213_control_owner = (node_id, tx["command_id"], key)
-            gateway.update_node(node_id, htv213_owner={"state": "pending", "command_id": command["command_id"]})
+                from .htv213_control_transport import remember
+                remember(gateway, node_id, tx["command_id"], key)
+            publish_node_status(gateway, node_id, {"state": "pending", "command_id": command["command_id"]})
             gateway._node_command_sender(node_id, command)
 
 
@@ -195,6 +219,7 @@ def observe(gateway, node_id, message):
             if not enabled:
                 record["revoked"] = True
                 gateway._store.save_htv213_owner(json.dumps(saved, sort_keys=True))
+                publish_node_status(gateway, node_id, dict(state="disabled", command_id=message["command_id"]))
             return
         if REJOIN_CAPABILITY in node.get("capabilities", []) and (
                 message.get("retained_rejoin_enabled") is not record["command"].get("retained_rejoin_enabled", False) or
@@ -226,6 +251,6 @@ def observe(gateway, node_id, message):
             status.update(last_seen=now, ports=copy.deepcopy(record["ports"]))
         else:
             status.update(ports=copy.deepcopy(record["ports"]))
-        gateway.update_node(node_id, htv213_owner=status)
+        publish_node_status(gateway, node_id, status)
         if record.get("device_id"):
             gateway.notify_node_update(node_id, "htv213_report")

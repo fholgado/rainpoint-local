@@ -1,7 +1,7 @@
 """Bind HTV213 enrollment to the existing gateway/HA pairing contract.
 
-No additional wizard or watering. Only fully capable, explicitly calibrated
-radios with an available ownership slot can enroll this model. Carrier profiles
+No additional wizard or watering. Fully capable radios with an available
+ownership slot can enroll this model. Optional carrier profiles
 are not copied from an installation-default endpoint.
 """
 from __future__ import annotations
@@ -10,7 +10,8 @@ import re
 
 from . import htv213_enrollment as enrollment, htv213_owner as owner
 from .htv213_control_transport import (
-    CAPABILITY as control_capability, NORMAL_CONTROL_CAPABILITY, IDLE_RECOVERY_CAPABILITY)
+    CAPABILITY as control_capability, NORMAL_CONTROL_CAPABILITY, IDLE_RECOVERY_CAPABILITY,
+    SHARED_RADIO_CAPABILITY, OWNER_CAPACITY)
 
 
 REQUIRED_CAPABILITIES = frozenset({enrollment.CAPABILITY, owner.CAPABILITY,
@@ -28,15 +29,15 @@ def node_unavailable_reason(gateway, node):
     node_id = node["node_id"]
     if gateway._store is None:
         return "persistent pairing registry required"
-    if (gateway._store.ack_assignments(node_id)
+    existing = [r for r in owner.records(gateway).values()
+                if r["node_id"] == node_id and r.get("revoked") is not True]
+    shared = SHARED_RADIO_CAPABILITY in node.get("capabilities", [])
+    if not shared and (gateway._store.ack_assignments(node_id)
             or any(v.get("control_node_id") == node_id for v in gateway._store.valve_registry())
-            or any(r["node_id"] == node_id and r.get("revoked") is not True
-                   for r in owner.records(gateway).values())):
-        return "selected radio already owns a device; a dedicated available radio is required"
-    try:
-        enrollment.EnrollmentJournal(gateway._store).profile(node_id, 2)
-    except ValueError:
-        return "selected radio has no saved HTV213 carrier calibration"
+            or existing):
+        return "selected radio already owns a device; update its firmware to share the radio"
+    if len(existing) >= OWNER_CAPACITY:
+        return "selected radio has reached its HTV213 association capacity"
     return None
 
 
@@ -83,7 +84,8 @@ def start(gateway, *, node_id, duration_seconds, factory_endpoint=None, now=None
     command = journal.profile(node_id, address).command(
         controller=gateway.rf_identity.controller_endpoint, companion=gateway.rf_identity.companion_endpoint,
         duration_seconds=duration_seconds, now=now)
-    journal.begin(node_id, command, replacement_key=replacement_key, now=now)
+    journal.begin(node_id, command, replacement_key=replacement_key, now=now,
+                  shared_radio=SHARED_RADIO_CAPABILITY in node.get("capabilities", []))
     gateway._pairing.start(duration_seconds, now=now)
     gateway._active_pairing_node_id = node_id
     gateway._active_pairing_command_id = command["command_id"]
@@ -181,6 +183,8 @@ def complete(gateway, *, endpoint, name, area=None):
     node = gateway._nodes.get(node_id, {})
     if not (node.get("connected") and node.get("authenticated")):
         raise ValueError("selected radio is unavailable")
+    if record.get("shared_radio") and SHARED_RADIO_CAPABILITY not in node.get("capabilities", []):
+        raise ValueError("restore shared-radio firmware before saving this enrollment")
     if gateway.endpoint_suppressed(endpoint):
         raise ValueError("valve endpoint is suppressed")
     was_complete = record["state"] == "complete"
@@ -192,6 +196,8 @@ def complete(gateway, *, endpoint, name, area=None):
         key = record["result"]["association_key"]
         if prior_control and prior_control[2] == key:
             gateway._htv213_control_owner = None
+        gateway._htv213_control_owners = {identity: association for identity, association in
+            getattr(gateway, "_htv213_control_owners", {}).items() if association != key}
         try:
             owner.restore(gateway, node_id)
         except (ConnectionError, KeyError, RuntimeError, ValueError):

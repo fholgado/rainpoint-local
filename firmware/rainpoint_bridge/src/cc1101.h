@@ -90,7 +90,7 @@ public:
 
 private:
     static constexpr std::uint32_t kSpiHz = 4'000'000;
-    static constexpr std::size_t kMaximumCachedTransmitFrequencies = 2;
+    static constexpr std::size_t kMaximumCachedTransmitFrequencies = 16;
 
     struct CachedFrequencyCalibration {
         std::uint32_t centerFrequencyHz = 0;
@@ -135,6 +135,7 @@ private:
         CachedFrequencyCalibration,
         kMaximumCachedTransmitFrequencies
     > cachedTransmitFrequencies_{};
+    std::size_t nextCachedTransmitFrequency_ = 0;
     std::uint32_t packetCount_ = 0;
     std::uint32_t overflowCount_ = 0;
     std::uint32_t recoveryCount_ = 0;
