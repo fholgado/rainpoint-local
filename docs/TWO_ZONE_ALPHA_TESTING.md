@@ -5,8 +5,8 @@ for an **HTV213FRF** two-zone valve. The agent handles software updates and
 checks; the user handles the valve button, batteries and visual confirmation.
 
 Use [firmware 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
-with **gateway 0.39.19** and **integration 0.18.6**. This is a firmware alpha,
-not a replacement for the pinned [Alpha 1](ALPHA_1.md) stack. Other two-zone
+with **gateway 0.39.19** and **integration 0.18.6**: the current
+[Alpha 2 stack](ALPHA_2.md). Alpha 1 remains an archived baseline. Other two-zone
 models are not qualified by this release.
 
 ## Agent update the existing installation

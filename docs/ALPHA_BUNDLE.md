@@ -1,11 +1,13 @@
 # Alpha bundle: flashing, updating and rollback
 
-[Alpha 1](ALPHA_1.md) is the first published stack prerelease: gateway **0.39.0**,
-integration **0.18.0**, firmware **0.19.0**. Download its source archive and
-radio ZIP from the release page; they are separate assets, not one combined ZIP.
-Read the release's `compatibility.json` for both the stack source commit and
-original signed firmware commit. Physical acceptance still in progress is
-documented in the roadmap and release notes for alpha testers.
+[Alpha 2](ALPHA_2.md) is the current stack prerelease: gateway **0.39.19**,
+integration **0.18.6**, firmware **0.21.0**. Download the source archive and
+radio ZIP from the [firmware release](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0);
+they are separate assets, not one combined ZIP. HACS uses the
+[integration release v0.18.6](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.6).
+Read `compatibility.json` for the matched versions and source revision.
+[Alpha 1](ALPHA_1.md) remains an archived release; do not mix its assets with
+Alpha 2 USB parts. Physical acceptance is recorded in the roadmap.
 
 The local `tools/package_alpha.py` output remains an **unpublished candidate**
 until separately approved and published. A bundle marked `source_dirty: true`
@@ -31,7 +33,7 @@ For pinned gateway installation instead of the app repository's moving default
 branch, an agent can copy the extracted `addons/rainpointd` directory into HA's
 `/addons/rainpointd`, reload the app store and install the local gateway app.
 Do not also install a second gateway from the repository. HACS can install the
-integration at the Alpha 1 tag; alternatively copy the extracted
+integration at `v0.18.6` with prereleases enabled; alternatively copy the extracted
 `custom_components/rainpoint_local` into HA's configuration directory and restart
 HA. Back up any existing source/configuration before replacing it. Normal new
 users should prefer the two-store flow in the getting-started guide.
@@ -67,7 +69,7 @@ No serial port is opened by the packaging or verification commands themselves.
 
 ### One-time plaintext-to-TLS cutover
 
-Alpha 1 requires matching TLS-capable gateway, integration and
+Both alphas require matching TLS-capable gateway, integration and
 radio firmware. This migration is **not** the routine rolling update described
 below. Qualify on a spare node first. Back up the gateway database and credentials
 before schema 25 is opened; an old gateway requires restoring that backup.
@@ -92,6 +94,9 @@ or use a deliberate USB upgrade; a TLS connection alone does not establish
 publisher-signature enforcement.
 
 First back up the HA gateway app and retain the previous bundle/catalog.
+For Alpha 2, update the gateway to **0.39.19** and confirm it is running before
+updating any radio; gateway 0.39.18 rejects 0.21.0's new capability on reconnect.
+Update the integration to **0.18.6** separately.
 Use the version combination in the release's `compatibility.json`, update while valves are
 idle, and update one radio at a time. Copy the **contents** of `ota/` to
 `/share/rainpoint-local/firmware/` on HA: the `catalog.json` and the `.bin` it
@@ -127,6 +132,10 @@ database. Restoring software cannot undo a device's RF re-pairing. Check physica
 valve state before restoring operation; never rely on a stale dashboard alone.
 
 ## Maintainer preparation (source checkout)
+
+Start with the [agent release playbook](RELEASE_PLAYBOOK.md). It requires
+documentation updates before source is frozen and after publication; the
+commands below only prepare artifacts and do not complete a release.
 
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge \

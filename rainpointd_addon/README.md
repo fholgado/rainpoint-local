@@ -1,8 +1,10 @@
 # RainPoint Local Gateway app
 
-Experimental local gateway service for the RainPoint Local Home Assistant
-integration. Verified single-zone associations support bounded HA controls. Supervised
-HTV405 control requires its explicit beta option. Both use the standard firmware
-and persisted association-specific endpoints.
+Alpha 2 local gateway service for the RainPoint Local Home Assistant integration.
+Use gateway **0.39.19**, integration **0.18.6** and signed firmware **0.21.0**
+for sensors and single-, two- and four-zone valves. Normal controls use saved
+associations and device confirmation; no research enable switch is required.
+Update the gateway before any radio firmware update.
 
-See [DOCS.md](DOCS.md) for configuration and current limitations.
+See [Alpha 2](../docs/ALPHA_2.md) for downloads and limitations, and
+[DOCS.md](DOCS.md) for configuration.

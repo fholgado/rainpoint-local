@@ -1,5 +1,8 @@
 # Alpha 1
 
+Archived release baseline. Use [Alpha 2](ALPHA_2.md) for current installation
+and update instructions; the versions and limitations below describe Alpha 1.
+
 Released September 12, 2026 as
 [`v0.18.0-alpha.1`](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1).
 This is the first public alpha of the complete RainPoint Local stack, separate
@@ -24,7 +27,8 @@ not need a reflash, re-pair or database reset merely to adopt the alpha label.
 
 ## Get started
 
-Follow [Getting started](../GETTING_STARTED.md) with an agent: install the gateway
+For the original release procedure, follow [Getting started at the Alpha 1 tag](https://github.com/fholgado/rainpoint-local/blob/v0.18.0-alpha.1/GETTING_STARTED.md)
+with an agent: install the gateway
 and integration, wire/flash the radio, configure Wi-Fi and adopt it in HA. Then
 pair sensors or valves in HA. Use HA OS with Core 2026.7.0 or newer and the classic 4 MB
 ESP32 reference hardware. Both aarch64 and amd64 gateway builds are declared;

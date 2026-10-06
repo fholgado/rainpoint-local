@@ -70,6 +70,14 @@ variants.
   revoke the old owner before the new owner can transmit.
 - Keep experimental RF probes compiled out of production firmware.
 
+## Releases
+
+- For release preparation, signing, publication or release relabeling, read and
+  follow [the agent release playbook](docs/RELEASE_PLAYBOOK.md) before acting.
+- Documentation review/update is required for every public release: include it
+  in the candidate, then commit/push the verified publication record. Release
+  work is incomplete until current guides and release pages agree.
+
 ## Live-system changes
 
 - Release signing: explicit typed or spoken user approval in this chat authorizes

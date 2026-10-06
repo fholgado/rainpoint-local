@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.39.19 / Unreleased
+## 0.39.19 / Alpha 2 / 2026-10-05
 
 - Use HTV213 default carriers with optional overrides; remove manual tuning
   from normal setup. Retain actual completion telemetry and its observation time.
@@ -8,7 +8,7 @@
   per-association reply readiness and command/status correlation. Preserve
   existing counters and require acknowledged revocation for same-valve replacement.
 
-## Integration 0.18.6 / Unreleased
+## Integration 0.18.6 / Alpha 2 / 2026-10-05
 
 - Replace dedicated/calibrated-radio setup advice with compatible-firmware
   guidance. Existing sensors can stay paired while adding a two-zone valve.

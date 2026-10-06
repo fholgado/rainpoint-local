@@ -2,7 +2,7 @@
 
 The single live checklist remains [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md).
 This document separates reproducible package checks from an actual new-user
-installation. [Alpha 1](ALPHA_1.md) is available for external testing; publishing
+installation. [Alpha 2](ALPHA_2.md) is available for external testing; publishing
 it does not mark HACS, HA OS or radio adoption independently accepted.
 
 ## Post-Alpha 1 backend qualification — September 12

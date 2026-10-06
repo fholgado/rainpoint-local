@@ -6,13 +6,14 @@ associations, ACK ownership, counters, and safety; the HA integration exposes
 telemetry and qualified controls. Normal operation does not need the vendor cloud
 or an SDR.
 
-**Alpha 1 is available — sensors and both valve families.**
+**Alpha 2 is available — sensors and single-, two- and four-zone valves.**
 Start with [Getting started: agent-assisted setup](GETTING_STARTED.md).
 Give the guide to your agent to install the gateway and integration, help flash
 your radio, and hand you off to device pairing in Home Assistant.
-Download [Alpha 1 (`v0.18.0-alpha.1`)](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1).
-Use gateway **0.39.0**, HA integration **0.18.0** and signed radio firmware
-**0.19.0** together. See [release notes and known limitations](docs/ALPHA_1.md).
+Use gateway **0.39.19**, HA integration **0.18.6** and signed radio firmware
+**0.21.0** together. Download the [firmware and matched gateway source](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
+and [HACS integration](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.6).
+Update the gateway before any radio. See [Alpha 2 release notes and limitations](docs/ALPHA_2.md).
 We're inviting builders to help validate fresh installs and device lifecycle
 behavior; alpha does not mean those remaining tests have already passed.
 
@@ -23,7 +24,7 @@ behavior; alpha does not mean those remaining tests have already passed.
 | HCS02x / HCS026FRF | Pair, recover, moisture, categorical battery, persistent ACK owner | Full lifecycle/coexistence soak remains open |
 | HTV405FRF | Local pairing, four zones, 1–60 minute controls, ACKs, idle counter sync | Supervised experimental use; battery unavailable; no water-usage capability |
 | HTV145FRF | State, duration, usage, categorical battery, bounded HA controls/ACKs/sync | Verified partial association; field qualification ongoing |
-| HTV213FRF (firmware alpha) | Native HA pairing, two-outlet controls, retained battery/restart recovery | Unified 0.21.0 and gateway 0.39.19; shared radio, up to eight HTV213 associations; optional tuning |
+| HTV213FRF | Native HA pairing, two-outlet controls, retained battery/restart recovery | Alpha 2; shared radio, up to eight HTV213 associations; optional tuning; mixed-device field feedback ongoing |
 
 Read [device communication references](protocol_documentation/) for packet rules
 and [the roadmap](PROJECT_ROADMAP.md) for remaining qualification work.
@@ -56,11 +57,11 @@ comes from device responses or independent telemetry, not command intent.
 
 Valve actuation requires a supported paired device and a capable, available owner;
 no research switch or mandatory two-run unlock is required. Counter readiness and
-device-response confirmation still apply. Both valve families expose counter
+device-response confirmation still apply. Single- and four-zone valves expose counter
 status and morning synchronization settings. Each single-zone association has
 its own control, duration and persisted counter state.
 
-Both families enforce bounded durations, command spacing, and durable command
+All three valve families enforce bounded durations, command spacing, and durable command
 reservations. Startup and missing telemetry never send a speculative close.
 Unknown counters block ordinary control until explicit recovery is confirmed.
 
@@ -88,7 +89,9 @@ environment; production must exclude experimental transmit paths.
 | Need | Document |
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
-| Alpha 1 versions, downloads and known limitations | [Alpha 1](docs/ALPHA_1.md) |
+| Current versions, downloads and known limitations | [Alpha 2](docs/ALPHA_2.md) |
+| Agent release preparation, documentation and publication | [Release playbook](docs/RELEASE_PLAYBOOK.md) |
+| Original release baseline | [Archived Alpha 1](docs/ALPHA_1.md) |
 | Node parts and Amazon shopping links | [Quick BOM](GETTING_STARTED.md#quick-bom-per-radio-node) |
 | Fresh installation tests without household devices | [Isolated HA testing](docs/ISOLATED_HA_TESTING.md) |
 | Packet layouts, ACKs, counters | [Protocol references](protocol_documentation/) |
