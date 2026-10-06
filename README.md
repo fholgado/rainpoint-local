@@ -90,6 +90,7 @@ environment; production must exclude experimental transmit paths.
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
 | Current versions, downloads and known limitations | [Alpha 2](docs/ALPHA_2.md) |
+| Agent release preparation, documentation and publication | [Release playbook](docs/RELEASE_PLAYBOOK.md) |
 | Original release baseline | [Archived Alpha 1](docs/ALPHA_1.md) |
 | Node parts and Amazon shopping links | [Quick BOM](GETTING_STARTED.md#quick-bom-per-radio-node) |
 | Fresh installation tests without household devices | [Isolated HA testing](docs/ISOLATED_HA_TESTING.md) |

@@ -108,6 +108,7 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 
 - [x] Publish [Alpha 1](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1): gateway 0.39.0, integration 0.18.0, signed firmware 0.19.0.
 - [x] Document Alpha 2 as the current release; align downloads, setup, testing and gateway-first upgrades, retaining Alpha 1 history (Oct 6).
+- [x] Add an agent release playbook with mandatory candidate/publication documentation checks; link it from contributor instructions (Oct 6).
 - [x] Publish source/USB/OTA artifacts, checksums, compatibility metadata and rollback instructions.
 - [x] Add the agent-assisted guide, hardware BOM and separate app-store/HACS installation paths.
 - [x] Declare HACS prerelease selection, codeowners, branding and redacted issue reporting.

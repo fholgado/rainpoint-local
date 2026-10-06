@@ -133,6 +133,10 @@ valve state before restoring operation; never rely on a stale dashboard alone.
 
 ## Maintainer preparation (source checkout)
 
+Start with the [agent release playbook](RELEASE_PLAYBOOK.md). It requires
+documentation updates before source is frozen and after publication; the
+commands below only prepare artifacts and do not complete a release.
+
 ```sh
 pio run --project-dir firmware/rainpoint_bridge --environment rainpoint_bridge \
   --target release_receipt
