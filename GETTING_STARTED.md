@@ -5,12 +5,12 @@ Local. The agent installs the software, flashes the firmware and checks the
 connection. You assemble the radio, enter Wi-Fi details, press its confirmation
 button and pair your devices through Home Assistant.
 
-This alpha supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone,
+Alpha 2 supports HCS02x/HCS026FRF moisture sensors, HTV145FRF single-zone,
 HTV213FRF two-zone and HTV405FRF four-zone valves. A stock RainPoint gateway, cloud account
 and SDR are not required. Cloud-device migration is not automatic.
 
 HTV213FRF two-zone support is included in the
-[unified firmware 0.21.0 alpha](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
+[Alpha 2 firmware 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
 with gateway 0.39.19. Existing testers
 should use the [agent update and test guide](docs/TWO_ZONE_ALPHA_TESTING.md).
 Sensors and valves can share an updated radio; tuning is optional. See the
@@ -31,10 +31,13 @@ actions requiring their credentials, physical input or access you do not have.
 Take an HA backup first.
 
 Use gateway **0.39.19**, integration **0.18.6** and signed firmware **0.21.0**.
+Confirm gateway 0.39.19 is running before updating any radio; gateway 0.39.18
+can transfer the image but rejects its new capability when the radio reconnects.
 Record all three versions; their version numbers are independent. The app
 repository follows `main`. The firmware release includes the matched source
 package for a pinned install; see the [bundle guide](docs/ALPHA_BUNDLE.md).
-The original [Alpha 1](docs/ALPHA_1.md) remains an archived baseline.
+See [Alpha 2 release notes](docs/ALPHA_2.md). The original
+[Alpha 1](docs/ALPHA_1.md) remains an archived baseline.
 
 ### Quick BOM (per radio node)
 
@@ -176,12 +179,14 @@ HTV405 battery is not decoded and it has no water-volume capability. Current
 firmware supports eight HTV145 and eight HTV213 associations per radio, sharing
 a custom gateway identity with sensors and other valves. Older firmware needs
 updating to support shared HTV213 ownership.
-Battery-change recovery and stock/local coexistence still need qualification.
+HTV213 battery-change recovery is verified on the dry test valve; other valve
+models and stock/local coexistence still need qualification. Mixed-device field
+feedback is welcome; shared operation has source/replay coverage.
 Use a trusted LAN; see [security details](SECURITY.md) and the
 [roadmap](PROJECT_ROADMAP.md) for full alpha limitations.
 Operational connections now require matching TLS-capable gateway, integration
 and firmware versions. Initial Wi-Fi/adoption setup still requires a trusted
-network. Do not mix Alpha 1 with the earlier plaintext transport.
+network. Neither alpha supports mixing with the earlier plaintext transport.
 
 Updates are separate: app store for the gateway, HACS for the integration and
 HA's radio Update entity once an agent/maintainer has staged a compatible

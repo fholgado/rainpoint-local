@@ -6,9 +6,9 @@ list. [PROJECT_ROADMAP.md](../PROJECT_ROADMAP.md) remains the sole live status
 checklist. Fresh-install evidence belongs in
 [ALPHA_INSTALL_VALIDATION.md](ALPHA_INSTALL_VALIDATION.md).
 
-September 12 publication update: [Alpha 1](ALPHA_1.md), `v0.18.0-alpha.1`, is the
-stack prerelease for HACS selection (integration 0.18.0). The separate
-`firmware-v0.19.0` release distributes radio binaries; it is not the integration
+October 5 publication update: [Alpha 2](ALPHA_2.md) uses `v0.18.6` for HACS
+selection (integration 0.18.6), with gateway 0.39.19. The separate
+`firmware-v0.21.0` release distributes radio binaries; it is not the integration
 install target. Use HACS's Download/Redownload version selector and opt into
 prereleases as needed. The current repository remains in source-tree mode;
 HACS does not consume the attached gateway source archive or radio ZIP.

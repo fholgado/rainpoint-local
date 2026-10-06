@@ -37,7 +37,7 @@
 
 Build procedure: [bounded phase trial](docs/VALVE_PHASE_TRIAL.md).
 
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-06
 
 This is the only live checklist. Completed implementation does not imply physical
 qualification. Detailed history and proof are in the
@@ -49,7 +49,7 @@ Carrier exception (Sep 14): Rev A's radio rows are reversed. Keep it unpowered
 with a directly plugged radio. Rev B passes CAD/pin checks; physical acceptance
 is pending. See `hardware/rainpoint_carrier/REV_A_REWORK.md` for salvage checks.
 
-1. Collect mixed-device feedback on published firmware 0.21.0, gateway 0.39.19 and integration 0.18.6.
+1. Collect mixed-device feedback on [Alpha 2](docs/ALPHA_2.md): firmware 0.21.0, gateway 0.39.19 and integration 0.18.6.
 2. Capture retained battery recovery for HTV405, then HTV145; reuse shared replies, not HTV213 startup bytes ([comparison](research/VALVE_RECOVERY_CROSS_MODEL_FINDINGS_20261003.md)).
 3. Qualify native command-phase restart/lifecycle behavior on HTV145/HTV405 before changing production allocation. No new 72-hour baseline is required.
 
@@ -107,6 +107,7 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 ### Alpha cohort preparation
 
 - [x] Publish [Alpha 1](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.0-alpha.1): gateway 0.39.0, integration 0.18.0, signed firmware 0.19.0.
+- [x] Document Alpha 2 as the current release; align downloads, setup, testing and gateway-first upgrades, retaining Alpha 1 history (Oct 6).
 - [x] Publish source/USB/OTA artifacts, checksums, compatibility metadata and rollback instructions.
 - [x] Add the agent-assisted guide, hardware BOM and separate app-store/HACS installation paths.
 - [x] Declare HACS prerelease selection, codeowners, branding and redacted issue reporting.
@@ -126,8 +127,8 @@ requires a change. Command intent and transmitted ACKs are not device confirmati
 - [ ] Qualify multiple physical single-zone valves on one node; eight slots are implemented. **Hardware.**
 - [ ] Record independent-house reporting, watering duration/stops and overnight recovery. **Tester.**
 
-Alpha 1 is available now; the remaining acceptance items do not block participation.
-[Known limitations](docs/ALPHA_1.md) distinguish supported features from unproven behavior.
+Alpha 2 is available now; the remaining acceptance items do not block participation.
+[Known limitations](docs/ALPHA_2.md) distinguish supported features from unproven behavior.
 
 ## Established baseline
 
