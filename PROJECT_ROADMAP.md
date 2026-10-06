@@ -394,6 +394,7 @@ not tasks to mark “done once.”
 - [ ] Collect physical mixed-device feedback for 0.21.0; no 72-hour wait or per-user experiment unlock.
 - [ ] Identify the common configured-versus-measured carrier offset mechanism; this does not block alpha defaults/overrides.
 - [x] Publish [signed 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0) and [integration 0.18.6](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.6), with matched gateway 0.39.19; eight assets readback-verified, previous releases and garden firmware unchanged (Oct 5).
+- [ ] Confirm front-radio 0.21.0 boot after its verified OTA transfer; gateway reconnection stalled, power-cycle/boot diagnostics needed. Other radios and watering were not commanded (Oct 5).
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
 - [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).

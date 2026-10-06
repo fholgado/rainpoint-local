@@ -1649,3 +1649,23 @@ commit. The signed application is **1,122,176 bytes**, SHA-256
 Publication did not update installed radios or HA. Physical mixed-device
 feedback remains open; the same-batch spare's pairing/control qualification and
 the source/replay evidence above retain their stated scope.
+
+### Front radio OTA attempt October 5
+
+The user approved updating only Front Yard Radio Node from signed
+`0.19.0-phase-trial.2` to production **0.21.0**. All valves were idle and pairing
+inactive. Gateway **0.39.18** supports its existing devices and the signed OTA
+contract; gateway/integration source and the other radios were left unchanged.
+
+The signed image and build receipt passed independent verification. Catalog
+staging preserved previous releases, registry assignments and valve counters;
+the existing HA configuration backup was verified. The front radio reported
+**1,122,176 bytes**, `ready_to_reboot` and `verified_publisher_and_sha256` before
+losing its gateway connection. Healthy boot confirmation did not arrive within
+five minutes. No second OTA or watering command was sent.
+
+A gateway restart tested connection recovery without reflashing. The last
+known LAN address answered ping, but this does not identify the running image
+or establish a successful boot. Power-cycle/boot diagnostics are needed before
+claiming a completed update or choosing another firmware action. Private
+observations are under `captures/front-production-021-20261005/`.
