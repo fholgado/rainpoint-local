@@ -1649,3 +1649,40 @@ commit. The signed application is **1,122,176 bytes**, SHA-256
 Publication did not update installed radios or HA. Physical mixed-device
 feedback remains open; the same-batch spare's pairing/control qualification and
 the source/replay evidence above retain their stated scope.
+
+### Front radio OTA attempt October 5
+
+The user approved updating only Front Yard Radio Node from signed
+`0.19.0-phase-trial.2` to production **0.21.0**. All valves were idle and pairing
+inactive. Gateway **0.39.18** supports its existing devices and the signed OTA
+contract; gateway/integration source and the other radios were left unchanged.
+
+The signed image and build receipt passed independent verification. Catalog
+staging preserved previous releases, registry assignments and valve counters;
+the existing HA configuration backup was verified. The front radio reported
+**1,122,176 bytes**, `ready_to_reboot` and `verified_publisher_and_sha256` before
+losing its gateway connection. Healthy boot confirmation did not arrive within
+five minutes. No second OTA or watering command was sent.
+
+A gateway restart tested connection recovery without reflashing. The last
+known LAN address answered ping, but this did not identify the running image
+or establish a successful boot. The user power-cycled the radio; it still did
+not authenticate to gateway 0.39.18.
+
+The installed gateway's actual authentication code reproduced the blocker with
+synthetic credentials: its existing capability list authenticated, adding only
+`htv213_shared_radio_v1` caused rejection, and the released 0.39.19 code accepted
+the same hello. The real socket regression using the firmware's advertised
+capabilities passed. Hardware/signature admission for OTA had not guaranteed
+that the candidate's hello would be accepted; the gateway-first prerequisite
+was missed during this deployment.
+
+With user approval and a fresh HA configuration/gateway backup, the nine-file
+released gateway delta was hash-verified against the installed 0.39.18 baseline
+and updated to **0.39.19**. The already-flashed front radio authenticated as
+**0.21.0**, reported `confirmed` / `gateway_and_radio_healthy`, and cleared its
+pending-candidate flag without a second OTA. Registry associations, other radio
+firmware and valve counters were unchanged; the front HTV145 retained **129**
+and normal start became available. No watering, pairing or RF probe command was
+sent. Private observations are under
+`captures/front-production-021-20261005/`, including `gateway-03919-recovery/`.

@@ -394,6 +394,7 @@ not tasks to mark “done once.”
 - [ ] Collect physical mixed-device feedback for 0.21.0; no 72-hour wait or per-user experiment unlock.
 - [ ] Identify the common configured-versus-measured carrier offset mechanism; this does not block alpha defaults/overrides.
 - [x] Publish [signed 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0) and [integration 0.18.6](https://github.com/fholgado/rainpoint-local/releases/tag/v0.18.6), with matched gateway 0.39.19; eight assets readback-verified, previous releases and garden firmware unchanged (Oct 5).
+- [x] Confirm front 0.21.0 after matched gateway 0.39.19 update: authenticated, healthy, ownership/counter 129 restored; other radio firmware unchanged, no watering (Oct 5).
 - [x] Separate HTV213 ordinary control journal/transport from experimental probes; preserve stored phases, pending commands and wire behavior (Oct 3; source only).
 - [x] Prepare HTV213 automatic identity discovery and normal enrollment recipe; validate RF completion receipts and ACK-based control seed without registering devices or deploying (Oct 3; source only).
 - [x] Save HTV213 enrollment proof, reply ownership and ACK-based seed atomically; archive revoked re-pair epochs and preserve counters on duplicate completion/reconnect (Oct 3; source only).
@@ -450,6 +451,7 @@ scheduling capture tests rather than treating an old unplugged-device note as cu
 
 - [x] Fix control.8 CI network-test races: await registered-node readiness and keep the handoff peer connected through assertions. Both deterministic regressions fail before/pass after; production code unchanged (Oct 3).
 - [ ] Preserve OTA correlation across reboot and expose radio command rejection; control.6 idle status hid rejection and reboot drops the command ID (Oct 3).
+- [ ] Check gateway compatibility before offering radio firmware; 0.39.18 admitted 0.21.0 OTA but rejected its new hello capability (Oct 5).
 - [ ] Investigate Test Node B OTA transfer stalls if repeated; one partial transfer hit the 10-second progress timeout at −76 dBm, later full OTA passed (Oct 3).
 - [ ] Review and finalize the separate [irrigation app requirements](docs/IRRIGATION_APP_REQUIREMENTS.md), including the daily overview and advisory overlap warnings, alongside the [initial UI concepts](docs/irrigation-ui/README.md). Requirements and design work only; implementation waits for product review and does not change the hardware qualification order.
 
