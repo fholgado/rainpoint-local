@@ -38,6 +38,7 @@ release links while the candidate is unpublished.
 |---|---|
 | Release notes, such as `docs/ALPHA_2.md` | Label, component versions, downloads, changes, limitations, upgrade order and short tester instructions. Create a new note for a new stack label; keep previous notes historical. |
 | `README.md` and `GETTING_STARTED.md` | Current release links/versions, support table, prerequisites and installation path. |
+| `docs/ALPHA_UPGRADE.md` and `docs/ALPHA_UPGRADE_AGENT.md` | User and agent upgrade paths, supported starting versions, component order, preserved state, verification and recovery. Review for every alpha, even when unchanged. |
 | `docs/ALPHA_BUNDLE.md` and `docs/TWO_ZONE_ALPHA_TESTING.md` | Asset names, pinned source, OTA staging, gateway-first updates and relevant testing steps. |
 | Gateway/firmware guides and `rainpointd_addon/CHANGELOG.md` | Changed capabilities, options and release status; remove superseded setup restrictions. |
 | `PROJECT_ROADMAP.md` | Completed work and remaining qualification, using this sole live checklist. |
@@ -48,12 +49,21 @@ dry valves or visually verify opening and closing; retain default HA
 notifications and optional phone forwarding. Add only tests warranted by the
 change, not a new mandatory soak or per-user experimental unlock.
 
+Each alpha release note needs a short upgrade section naming supported starting
+alphas, changed components and target versions, update order and any user
+actions or migrations. Link both upgrade guides and state whether working
+devices need re-pairing. When a stack label only names existing versions, say
+which users can skip installation because they already have them.
+
 Check local links, anchors, component-version consistency and `git diff --check`.
 Check the actual archive contents against the documented downloads: root docs
 are not automatically included in `rainpoint-source.tar.gz`, and the radio ZIP
 has an explicit documentation list in `tools/package_alpha.py`. Include the
 release note and needed install/test instructions in the published assets or
-provide working links to them at the release source tag.
+provide working links to them at the release source tag. Future radio bundles
+include both upgrade guides; check they are present and their release links
+resolve. For already-published assets, link newer documentation without
+replacing binaries or moving tags.
 
 **Done when:** every applicable documentation row is updated or explicitly
 reviewed as unchanged, and users have a complete install/update path.
@@ -106,7 +116,8 @@ intended prerelease/latest status, rather than relying on defaults.
 
 Create the release with reviewed notes from step 2. Include the compatible
 component versions, upgrade order, verified feature scope, known limitations,
-source/tag links, checksums and tester guide. Publish HACS integration and
+source/tag links, checksums, both user and agent upgrade guides, and tester
+instructions. Publish HACS integration and
 firmware releases separately when both are in scope; link them to each other.
 Upload only the verified asset set and verify tag targets against the recorded
 source, accounting explicitly for any reused firmware from another commit.
@@ -143,7 +154,7 @@ Publication does not install anything. When deployment is authorized, back up
 live HA configuration, let watering finish and update the compatible gateway
 before radios. Confirm its running version first. Update the integration
 separately, preserve existing OTA offers, and update one radio at a time using
-the [OTA procedure](ALPHA_BUNDLE.md#routine-updates-after-all-components-support-tls-and-signed-ota).
+the [agent upgrade procedure](ALPHA_UPGRADE_AGENT.md).
 
 Confirm authenticated reconnection, healthy OTA completion and restored
 ownership/counters. A completed transfer is not a healthy boot. Keep working

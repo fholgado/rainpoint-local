@@ -9,6 +9,10 @@ Read `compatibility.json` for the matched versions and source revision.
 [Alpha 1](ALPHA_1.md) remains an archived release; do not mix its assets with
 Alpha 2 USB parts. Physical acceptance is recorded in the roadmap.
 
+For routine alpha upgrades, start with the [user guide](ALPHA_UPGRADE.md) or
+[agent procedure](ALPHA_UPGRADE_AGENT.md). This reference covers artifact
+verification, legacy migration and recovery.
+
 The local `tools/package_alpha.py` output remains an **unpublished candidate**
 until separately approved and published. A bundle marked `source_dirty: true`
 is a developer preview and must not be distributed. Do not confuse a locally

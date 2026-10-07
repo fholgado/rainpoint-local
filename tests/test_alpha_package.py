@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import zipfile
 
-from tools.package_alpha import collect_firmware, OFFSETS, write_archive
+from tools.package_alpha import collect_documentation, collect_firmware, OFFSETS, write_archive
 
 
 class AlphaPackageTest(unittest.TestCase):
@@ -97,6 +97,18 @@ class AlphaPackageTest(unittest.TestCase):
         self.assertEqual(first.read_bytes(), second.read_bytes())
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(["LICENSE", "usb/firmware.bin"], archive.namelist())
+
+    def test_radio_bundle_includes_user_and_agent_upgrade_guides(self):
+        files = collect_documentation()
+        expected = ("docs/ALPHA_UPGRADE.md", "docs/ALPHA_UPGRADE_AGENT.md",
+                    "docs/ALPHA_2.md", "docs/TWO_ZONE_ALPHA_TESTING.md")
+        archive_path = self.build / "documentation.zip"
+        write_archive(archive_path, files)
+        with zipfile.ZipFile(archive_path) as archive:
+            for name in expected:
+                with self.subTest(name=name):
+                    self.assertTrue(files[name].startswith(b"# "))
+                    self.assertEqual(files[name], archive.read(name))
 
 
 if __name__ == "__main__":

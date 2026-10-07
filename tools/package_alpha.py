@@ -109,6 +109,19 @@ def json_bytes(value) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
 
 
+def collect_documentation() -> dict[str, bytes]:
+    """Include upgrade instructions with every future radio bundle."""
+    paths = ("GETTING_STARTED.md", "SECURITY.md", "LICENSE", "NODE_ONBOARDING.md",
+             "PROJECT_ROADMAP.md", "firmware/rainpoint_bridge/README.md",
+             "rainpointd_addon/DOCS.md", "docs/ALPHA_BUNDLE.md",
+             "docs/ALPHA_2.md", "docs/ALPHA_UPGRADE.md", "docs/ALPHA_UPGRADE_AGENT.md",
+             "docs/TWO_ZONE_ALPHA_TESTING.md", "docs/ALPHA_NOTIFICATIONS.md",
+             "docs/FIRMWARE_SIGNING_DESIGN.md", "docs/RELEASE_PLAYBOOK.md",
+             "blueprints/automation/rainpoint_local/stale_report.yaml",
+             "blueprints/automation/rainpoint_local/valve_attention.yaml")
+    return {name: (ROOT / name).read_bytes() for name in paths}
+
+
 def bundle(destination: Path, *, allow_dirty: bool = False, signature_path: Path | None = None) -> dict:
     if destination.exists():
         raise ValueError("output already exists; use a new artifact path")
@@ -153,13 +166,7 @@ def bundle(destination: Path, *, allow_dirty: bool = False, signature_path: Path
     if signature is not None:
         files["firmware-signature.json"] = json_bytes(signature)
     files["compatibility.json"] = json_bytes(metadata)
-    for name in ("GETTING_STARTED.md", "SECURITY.md", "LICENSE", "NODE_ONBOARDING.md",
-                 "PROJECT_ROADMAP.md", "firmware/rainpoint_bridge/README.md",
-                 "rainpointd_addon/DOCS.md", "docs/ALPHA_BUNDLE.md",
-                 "docs/ALPHA_NOTIFICATIONS.md",
-                 "blueprints/automation/rainpoint_local/stale_report.yaml",
-                 "blueprints/automation/rainpoint_local/valve_attention.yaml"):
-        files[name] = (ROOT / name).read_bytes()
+    files.update(collect_documentation())
     files["FLASH_AND_UPDATE.md"] = (ROOT / "docs/ALPHA_BUNDLE.md").read_bytes()
     with tempfile.TemporaryDirectory(prefix="rainpoint-alpha-") as temporary:
         staging = Path(temporary)
