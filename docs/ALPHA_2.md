@@ -41,7 +41,11 @@ is optional. No research switch, two-run unlock or 72-hour wait is required.
 ## Install or update
 
 For a new installation, give an agent [Getting started](../GETTING_STARTED.md).
-For an existing installation, use the [agent update and short testing guide](TWO_ZONE_ALPHA_TESTING.md).
+For an existing installation, use the [user upgrade guide](ALPHA_UPGRADE.md)
+or give your agent the [upgrade procedure](ALPHA_UPGRADE_AGENT.md). If adding an
+HTV213, follow the [two-zone pairing and short tests](TWO_ZONE_ALPHA_TESTING.md).
+These upgrade guides were added after publication; the original Alpha 2 assets
+remain unchanged. Use the linked repository guides with those downloads.
 
 Update and confirm **gateway 0.39.19 before any radio firmware update**. Gateway
 0.39.18 can deliver 0.21.0 but rejects its new shared-radio capability on
@@ -49,6 +53,16 @@ reconnect. Update the integration separately, then stage the signed OTA catalog
 and update one radio at a time. Confirm the new version, authenticated connection,
 healthy boot and restored ownership; a completed download alone is not success.
 Working devices do not need re-pairing just because software was updated.
+
+### Upgrading from Alpha 1
+
+Update all three components from the Alpha 1 baseline: gateway 0.39.0,
+integration 0.18.0 and signed firmware 0.19.0. Use the Alpha 2 versions above,
+gateway first. Existing adopted radios use signed OTA; no USB flash, Wi-Fi
+setup, re-adoption or device re-pairing is required. The agent stages the radio
+offer, and the user checks normal sensor reports and valve operation afterward.
+Earlier plaintext/pre-signing installations need the separate
+[migration procedure](ALPHA_BUNDLE.md#ota-for-an-already-adopted-node).
 
 Use the classic ESP32/CC1101 reference hardware and HA OS with Core 2026.7.0 or
 newer. The [bundle guide](ALPHA_BUNDLE.md) covers pinned installs and recovery.

@@ -29,8 +29,10 @@ behavior; alpha does not mean those remaining tests have already passed.
 Read [device communication references](protocol_documentation/) for packet rules
 and [the roadmap](PROJECT_ROADMAP.md) for remaining qualification work.
 
-For an existing installation with a two-zone valve, give your agent the
-[two-zone update and testing guide](docs/TWO_ZONE_ALPHA_TESTING.md).
+Already installed? Follow the [user upgrade guide](docs/ALPHA_UPGRADE.md), or
+give your agent the [upgrade procedure](docs/ALPHA_UPGRADE_AGENT.md).
+For a newly added two-zone valve, also use the
+[two-zone pairing and testing guide](docs/TWO_ZONE_ALPHA_TESTING.md).
 
 ## Install on Home Assistant OS
 
@@ -90,6 +92,8 @@ environment; production must exclude experimental transmit paths.
 |---|---|
 | Agent-assisted installation, flashing and HA pairing | [Getting started](GETTING_STARTED.md) |
 | Current versions, downloads and known limitations | [Alpha 2](docs/ALPHA_2.md) |
+| Update an existing installation | [User upgrade guide](docs/ALPHA_UPGRADE.md) |
+| Agent downloads, OTA staging and upgrade verification | [Agent upgrade procedure](docs/ALPHA_UPGRADE_AGENT.md) |
 | Agent release preparation, documentation and publication | [Release playbook](docs/RELEASE_PLAYBOOK.md) |
 | Original release baseline | [Archived Alpha 1](docs/ALPHA_1.md) |
 | Node parts and Amazon shopping links | [Quick BOM](GETTING_STARTED.md#quick-bom-per-radio-node) |

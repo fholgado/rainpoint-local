@@ -80,6 +80,8 @@ variants.
 
 ## Live-system changes
 
+- For alpha upgrades of an existing installation, read and follow
+  [the agent upgrade procedure](docs/ALPHA_UPGRADE_AGENT.md).
 - Release signing: explicit typed or spoken user approval in this chat authorizes
   submitting the identified build's GitHub environment review on their behalf.
   Follow the chat-approval procedure in `docs/FIRMWARE_SIGNING_DESIGN.md`;

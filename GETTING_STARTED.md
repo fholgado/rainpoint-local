@@ -12,7 +12,9 @@ and SDR are not required. Cloud-device migration is not automatic.
 HTV213FRF two-zone support is included in the
 [Alpha 2 firmware 0.21.0](https://github.com/fholgado/rainpoint-local/releases/tag/firmware-v0.21.0)
 with gateway 0.39.19. Existing testers
-should use the [agent update and test guide](docs/TWO_ZONE_ALPHA_TESTING.md).
+should use the [agent upgrade procedure](docs/ALPHA_UPGRADE_AGENT.md) and
+[user upgrade guide](docs/ALPHA_UPGRADE.md), then the
+[two-zone pairing tests](docs/TWO_ZONE_ALPHA_TESTING.md) if adding that valve.
 Sensors and valves can share an updated radio; tuning is optional. See the
 [two-zone requirements](protocol_documentation/htv213frf.md#enrollment).
 
@@ -87,7 +89,7 @@ In HACS, add the same URL under **Custom repositories**, choose **Integration**,
 and download **RainPoint Local 0.18.6** (enable prereleases if necessary).
 Select the integration release, not a firmware-only tag. If HACS does not offer
 the matched version, use the firmware release's source archive as described in
-the [agent update guide](docs/TWO_ZONE_ALPHA_TESTING.md).
+the [agent upgrade procedure](docs/ALPHA_UPGRADE_AGENT.md).
 Arrange the HA restart with the user, then
 accept the discovered gateway in **Settings → Devices & services**.
 
@@ -194,6 +196,9 @@ HA's radio Update entity once an agent/maintainer has staged a compatible
 Unsigned build previews are not OTA releases. Fresh USB installs include the
 public verification key; upgrading a pre-signing node needs the maintainer's
 controlled bootstrap procedure first.
+
+For each alpha upgrade, use the [user guide](docs/ALPHA_UPGRADE.md) or
+[agent procedure](docs/ALPHA_UPGRADE_AGENT.md). Keep working devices paired.
 
 ## Report issues
 

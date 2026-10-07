@@ -11,45 +11,11 @@ models are not qualified by this release.
 
 ## Agent update the existing installation
 
-1. Record installed versions, radio hardware and existing device assignments.
-   Confirm a classic ESP32/CC1101 node and wait until all watering is finished.
-   Take an HA backup including the gateway data and retain the existing catalog.
-   Preserve credentials, gateway identity, associations and counters.
-2. Download `rainpoint-radio-0.21.0.zip`, `rainpoint-source.tar.gz`,
-   `compatibility.json` and `SHA256SUMS` from the release. Check the downloaded
-   assets against `SHA256SUMS`, then extract the radio ZIP and verify its internal
-   checksums too (`shasum -a 256 -c SHA256SUMS` on macOS). Do not rebuild the
-   signed application or select a firmware-only tag as an integration in HACS.
-3. Update the existing gateway through HA's app store to **0.39.19** and confirm
-   that version is running **before updating any radio**. Gateway 0.39.18 can
-   transfer the image but rejects 0.21.0's new shared-radio capability, leaving
-   the radio disconnected. A catalog's hardware compatibility is not proof of
-   gateway compatibility. Use HACS
-   for integration **0.18.6** if offered. Otherwise use the release's matched
-   source archive: copy its `custom_components/rainpoint_local` into HA's
-   configuration directory after backing up the old component, then restart HA.
-   The archive also contains `addons/rainpointd` for a pinned local gateway
-   install when the app store does not offer the required version. Update the
-   existing installation; do not start a second gateway. See the
-   [source installation details](ALPHA_BUNDLE.md#verify-before-use).
-4. Stage the radio ZIP's `ota/` files under
-   `/share/rainpoint-local/firmware/` on HA. With an existing catalog, merge the
-   new offer using `tools/stage_firmware_release.py` from the
-   [signed source tag](https://github.com/fholgado/rainpoint-local/tree/firmware-v0.21.0):
-   use the bundled release ID/version, `--firmware-variant unified` and
-   `--signature firmware-signature.json`. Keep previous offers and copy the
-   referenced `.bin` before replacing `catalog.json`. Check the gateway's
-   `firmware_catalog_path` points there, then restart the gateway while idle.
-5. Install **0.21.0** through the selected radio's HA Update entity. Update one
-   radio at a time. Confirm the new version, authenticated connection, healthy
-   OTA confirmation and restored device ownership. A completed download alone
-   is not success. Existing working associations do not need re-pairing.
-
-For a new board only, use the ZIP's first-USB-flash instructions and normal
-Wi-Fi/adoption flow. Do not write its complete USB layout over an adopted node
-as a routine update. Older plaintext or pre-signing firmware needs the
-[migration procedure](ALPHA_BUNDLE.md#ota-for-an-already-adopted-node), not this
-routine OTA path.
+Follow the [agent alpha upgrade procedure](ALPHA_UPGRADE_AGENT.md) for version
+inventory, verified assets, gateway-first updates, signed OTA staging and
+per-radio confirmation. Give the user the [upgrade guide](ALPHA_UPGRADE.md).
+Keep working associations; proceed below only for new two-zone pairing or
+agreed control checks. New boards use [Getting started](../GETTING_STARTED.md).
 
 ## Agent check two zone radio readiness
 
